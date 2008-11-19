@@ -118,7 +118,6 @@ sig
   val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
 
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
-  val seq : tail_computation sem * tail_computation sem -> tail_computation sem
 
   val xml : value sem * value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
@@ -393,8 +392,7 @@ struct
            M.bind children
              (fun children ->
                 let attrs = StringMap.from_alist attrs in                    
-                  lift (`XmlNode (name, attrs, children), `Primitive `XmlItem)))
-
+                  lift (`XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
     let field_types =
@@ -589,9 +587,6 @@ struct
                 let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
-  let seq (s, s') =
-    bind s (fun _ -> s')
-
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
       bind s (fun v -> lift (`TApp (v, tyargs), t))
@@ -755,19 +750,16 @@ struct
                                            "XML forest literals cannot have attributes"))
                   else
                     cofv
-                      (I.concat (instantiate "Nil" [`Type Types.xml_type],
-                                 instantiate "Concat" [`Type Types.xml_type; `Type mbt],
+                      (I.concat (instantiate "Nil" [`Type (`Primitive `XmlItem)],
+                                 instantiate "Concat" [`Type (`Primitive `XmlItem); `Type mbt],
                                  List.map ev children))
                 else
                   let attrs = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
                   let body =
-                    I.apply_pure
-                      (instantiate "Cons" [`Type (`Primitive `XmlItem); `Type mbt],
-                       [I.xml (instantiate "Nil" [`Type Types.char_type],
-                               instantiate "Concat" [`Type Types.char_type; `Type mbt],
-                               tag, attrs, children);
-                        instantiate "Nil" [`Type (`Primitive `XmlItem)]])
+                         I.xml (instantiate "Nil" [`Type Types.char_type],
+                                instantiate "Concat" [`Type Types.char_type; `Type mbt],
+                                tag, attrs, children)
                   in
                     begin
                       match attrexp with
@@ -776,7 +768,9 @@ struct
                             cofv (I.apply_pure (instantiate_mb "addAttributes", [body; ev e]))
                     end
           | `TextNode name ->
-              I.apply (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)])
+              cofv
+                (I.apply_pure
+                   (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
               (* These things should all have been desugared already *)
           | `Spawn _
@@ -828,7 +822,7 @@ struct
                         ((ft, f, scope), (tyvars, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | `Exp e' ->
-                    I.seq (ec e', eval_bindings scope env bs e)
+                    I.comp env (`Any, ev e', eval_bindings scope env bs e)
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
@@ -864,29 +858,6 @@ struct
 
   and evalv env e =
     I.value_of_comp (eval env e)
-
-  (* TODO: work out the right thing to do with global bindings *)
-  let rec get_global_names : binding list -> nenv =
-    fun defs ->
-      List.fold_left
-        (fun nenv ->
-           function
-             | `Let ((x, (_xt, x_name, _)), _) ->
-                 Env.String.bind nenv (x_name, x)
-             | `Fun ((f, (_ft, f_name, _)), _, _) ->
-                 Env.String.bind nenv (f_name, f)
-             | `Rec defs ->
-                 List.fold_left
-                   (fun nenv ((f, (_ft, f_name, scope)), _, _) ->
-                      match scope with
-                        | _ -> Env.String.bind nenv (f_name, f)
-                        | `Local -> nenv)
-                   nenv defs
-             | `Alien ((f, (_ft, f_name, _)), _) ->
-                 Env.String.bind nenv (f_name, f)
-             | _ -> nenv)
-        NEnv.empty
-        defs
 
   (* Given a program, return a triple consisting of:
      
@@ -937,7 +908,7 @@ struct
 
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
-    (*    Debug.print (Sugartypes.Show_program.show (bindings, body));*)
+(*        Debug.print (Sugartypes.Show_program.show (bindings, body)); *)
     let body =
       match body with
         | None -> (`RecordLit ([], None), dp)

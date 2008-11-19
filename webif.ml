@@ -2,19 +2,29 @@
 
 open Performance
 open Utility
-open Value
 
 type query_params = (string * Value.t) list deriving (Show)
 
-type web_request = ContInvoke of continuation * query_params
-                   | ExprEval of Ir.tail_computation * env
-                   | ClientReturn of continuation * Value.t
-                   | RemoteCall of Value.t * Value.t list
-                   | CallMain
-                       deriving (Show)
+type web_request =
+    ExprEval of Ir.tail_computation * Value.env
+  | ClientReturn of Value.continuation * Value.t
+  | RemoteCall of Value.t * Value.t list
+  | CallMain
+      deriving (Show)
 
 (* Does at least one of the functions have to run on the client? *)
-let is_client_program program = false
+let is_client_program : Ir.program -> bool =
+  fun (bs, main) ->
+    List.exists
+      (function
+         | `Fun (_, _, `Client)
+         | `Alien (_, "javascript") -> true
+         | `Rec defs ->
+             List.exists
+               (fun (_, _, location) -> location = `Client)
+               defs
+         | _ -> false)
+      bs
 
 let serialize_call_to_client (continuation, name, arg) = 
   Json.jsonize_call continuation name arg
@@ -44,21 +54,10 @@ let decode_continuation (cont : string) : Value.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let is_special_param (k, _) =
-  List.mem k ["_cont"; "_k"; "_jsonArgs"]
+  List.mem k ["_k"; "_jsonArgs"]
 
 let string_dict_to_charlist_dict =
   alistmap Value.string_as_charlist
-
-(* ContInvoke doesn't appear to be used any more *)
-(* Extract continuation from the parameters passed in over CGI.*)
-let contin_invoke_req (valenv, nenv, tyenv) program params =
-  let pickled_continuation = List.assoc "_cont" params in
-  let params = List.filter (not -<- is_special_param) params in
-  let params = string_dict_to_charlist_dict params in
-  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
-    (* TBD: create a debug setting for printing webif modes. *)
-(*     Debug.print("Invoking " ^ string_of_cont(unmarshal_continuation valenv program pickled_continuation)); *)
-    ContInvoke (unmarshal_continuation unmarshal_envs pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req (valenv, nenv, tyenv) program params =
@@ -73,11 +72,18 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
       | `RecFunction ([(f, (_xs, _body))], locals, _) as v ->
-          let json_args =
-            try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
-                   | `Record fields -> fields
-                   | _ -> assert false) 
-            with NotFound _ -> [] in
+          let json_env =
+            if List.mem_assoc "_jsonArgs" params then
+              match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
+                | `Record fields ->
+                       List.fold_left
+                         (fun env (name, v) ->
+                            Value.bind (int_of_string name) (v, `Local) env)
+                         Value.empty_env
+                         fields
+                | _ -> assert false
+            else
+              Value.empty_env in
 
           (* we don't need to pass the args in here as they are read using the environment
              function *)
@@ -91,8 +97,7 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
           (*               (`Variable (Env.String.lookup nenv "Nil")) in *)
 
 
-          (* TODO: add json_args to environment? *)
-          let env = Value.bind f (v, `Local) locals in
+          let env = Value.shadow (Value.bind f (v, `Local) locals) ~by:json_env in
             ExprEval (`Apply (`Variable f, []), env)
       | _ -> assert false
 
@@ -104,9 +109,6 @@ let is_func_appln params =
 
 let is_client_call_return params = 
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
-
-let is_contin_invocation params = 
-  List.mem_assoc "_cont" params
 
 let is_expr_request = List.exists is_special_param
         
@@ -134,15 +136,8 @@ let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (
     (bs @ [`Let (xb, ([], body))],
      `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]))
 
-let perform_request 
-    (valenv, nenv, tyenv)
-    (globals, (locals, main)) (* original source: only used for generating js *)
-    req =
-  match req with
-    | ContInvoke (cont, params) ->
-        Lib.print_http_response [("Content-type", "text/html")]
-          (Value.string_of_value 
-             (Evalir.apply_cont_safe cont valenv (`Record params)))
+let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original source *) =
+  function
     | ExprEval(expr, locals) ->        
         let env = Value.shadow valenv ~by:locals in
         let v = snd (Evalir.run_program env (wrap_with_render_page (nenv, tyenv) ([], expr))) in
@@ -162,11 +157,16 @@ let perform_request
     | CallMain -> 
         Lib.print_http_response [("Content-type", "text/html")] 
           (if is_client_program (globals @ locals, main) then
-             assert false
+             let program = (globals @ locals, main) in
+             Debug.print "Running client program";
+             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+             let closures = Ir.ClosureTable.program tenv program in
+               Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
 (*             Irtojs.generate_program_page Lib.typing_env (List.map fst globals) program *)
            else
 (*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
              let program = wrap_with_render_page (nenv, tyenv) (locals, main) in
+             Debug.print "Running server program";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 (*                  Debug.print ("tenv domain: "^Env.Int.fold (fun name _ s -> s ^ string_of_int name ^ "\n") tenv "\n"); *)
              let closures = Ir.ClosureTable.program tenv (globals @ (fst program), snd program) in
@@ -190,8 +190,6 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) (globals, (
           get_remote_call_args lookup cgi_args
         else if is_client_call_return cgi_args then
           client_return_req cgi_args
-        else if (is_contin_invocation cgi_args) then
-          contin_invoke_req (valenv, nenv, tyenv) (globals @ locals, main) cgi_args
         else if (is_expr_request cgi_args) then
           expr_eval_req (valenv, nenv, tyenv) (globals @ locals, main) cgi_args
         else

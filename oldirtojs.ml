@@ -3,8 +3,16 @@
     JavaScript generation.
 *)
 
-open Utility
+open Num
+open List
 
+open Pickle
+open Utility
+open Syntax
+open Ir
+
+let optimising = Basicsettings.Js.optimise
+let elim_dead_defs = Basicsettings.Js.elim_dead_defs
 let js_lib_url = Basicsettings.Js.lib_url
 let js_pretty_print = Basicsettings.Js.pp
 
@@ -16,8 +24,8 @@ type code = | Var    of string
             | DeclareVar of string * code option
             | Fn     of (string list * code)
 
-            | LetFun of ((string * string list * code * Ir.location) * code)
-            | LetRec of ((string * string list * code * Ir.location) list * code)
+            | LetFun of ((string * string list * code * location) * code)
+            | LetRec of ((string * string list * code * location) list * code)
             | Call   of (code * code list)
             | Unop   of (string * code)
             | Binop  of (code * string * code)
@@ -32,17 +40,86 @@ type code = | Var    of string
             | Die    of (string)
             | Ret    of code
             | Nothing
-  deriving (Show)
+  deriving (Show, Rewriter)
+module RewriteCode = Rewrite_code
 
 
-(* IR variable environment *)
-module VEnv = Env.Int
+module MaybeUseful =
+struct
+  let rec freevars = 
+    let fv = freevars in
+    let module S = StringSet in function
+      | Var x               -> S.singleton x
+      | Fn (args, body)     -> S.diff (fv body) (S.from_list args)
+      | Call (func, args)   -> S.union (fv func) (S.union_all (map fv args))
+      | Unop (_, body)      -> fv body
+      | Binop (l, _, r)     -> S.union (fv l) (fv r)
+      | If (a, b, c)        -> S.union (S.union (fv a) (fv b)) (fv c)
+      | Dict terms          -> S.union_all (map (snd ->- fv) terms)
+      | Lst terms           -> S.union_all (map fv terms)
+      | Bind (var, e, body) -> S.union (fv e) (S.remove var (fv body))
+      | Seq (l, r)          -> S.union (fv l) (fv r)
+      | Lit _ 
+      | Die _ 
+      | Nothing             -> S.empty
+      | _ -> assert false
 
-(* type of environments mapping IR variables to source variables *)
-type venv = string VEnv.t
+  (* "Blind" (non-capture-avoiding) renaming *)
+  let rec rename' renamer = function
+    | Var x -> Var (renamer x)
+    | Fn(args, body) -> Fn(map renamer args, rename' renamer body)
+    | Call(func, args) -> Call(rename' renamer func,
+                               map (rename' renamer) args)
+    | Unop(op, body) -> Unop (op, rename' renamer body)
+    | Binop(lhs, op, rhs) -> Binop(rename' renamer lhs, op,
+                                   rename' renamer rhs)
+    | If(test, yes, no) ->  If(rename' renamer test,
+                               rename' renamer yes,
+                               rename' renamer no)
+    | Dict(terms) -> Dict(alistmap (rename' renamer) terms)
+    | Lst(terms) -> Lst(map (rename' renamer) terms)
+    | Bind(name, expr, body) -> Bind(renamer name, rename' renamer expr, 
+                                     rename' renamer body)
+    | Seq(first, second) -> Seq(rename' renamer first,
+                                rename' renamer second)
+    | Ret e -> Ret (rename' renamer e)
+    | simple_expr -> simple_expr
+  and rename renamer body = rename' renamer body
+end
+
+let concat_lits : RewriteCode.rewriter = 
+  let stringp s = Str.string_match (Str.regexp "^[\"']") s 0 in
+
+  let join_strings l r = 
+    (Str.string_before l (String.length l - 1))  ^ (Str.string_after r 1)
+      in
+  function
+    (* This rewrite looks very suspicious. Surely string literals are
+       string literals! In which case this rewrite would appear to be
+       unsound.
+    *)
+    | Call (Var "LINKS.concat", [Lit l; Lit r]) when stringp l && stringp r -> Some (Lit (join_strings l r))
+
+    (* Inline LINKS.concat when one argument is known to be a string *)
+    | Call (Var "LINKS.concat", [(Lit lit as l); r])
+    | Call (Var "LINKS.concat", [l; (Binop (Lit lit, _, _) as r)])
+    | Call (Var "LINKS.concat", [l; (Lit lit as r)]) when stringp lit -> Some (Binop (l, "+", r))
+
+    (* Merge literal lists *)
+    | Call (Var "LINKS.concat", [Lst l; Lst r]) -> Some (Lst (l @ r))
+    | _ -> None
+
+let concat_lits = RewriteCode.bottomup concat_lits
+
+let optimise e = 
+  if Settings.get_value optimising then
+    from_option e 
+      (RewriteCode.all [concat_lits] e)
+  else e
+
 
 (*
-  Runtime required (JavaScript functions used should be documented here)
+  Runtime required (any JavaScript functions used /must/ be documented here!)
 
   LINKS.concat(a, b)
      concatenate two sequences: either strings or lists
@@ -59,11 +136,15 @@ type venv = string VEnv.t
     precondition: r and s have disjoint labels 
   LINKS.project(record, label)
     project a field of a record
-  LINKS.erase(record, label)
+  LINKS.remove(record, label)
     return a record like "record" but without the field labeled "label"
 
   _start(tree)
     Replace the current page with `tree'.
+  _registerFormAction(continuation)
+    Register a continuation function; return an id.
+  _continuations
+    Table of continuation functions, indexed by id.
 
   Also, any `builtin' functions from Library.value_env.
  *)
@@ -77,7 +158,7 @@ struct
   let rec show code =
     let show_func name (Fn (vars, body)) = 
       "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }" 
-    and arglist args = String.concat ", " (List.map show args) 
+    and arglist args = String.concat ", " (map show args) 
     and paren = function
       | Var _
       | Lit _
@@ -119,7 +200,7 @@ struct
             "if (" ^ show cond ^ ") {" ^ show e1 ^ "} else {" ^ show e2 ^ "}"
         | Case (v, cases, default) ->
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
-        | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
+        | Dict (elems) -> "{" ^ String.concat ", " (map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Lst [] -> "[]"
         | Lst elems -> "[" ^ arglist elems ^ "]"
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
@@ -191,7 +272,7 @@ struct
         | Call (Var "tl", [list;kappa]) -> 
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
         | Call (fn, args) -> maybe_parenise fn ^^ 
-            (PP.arglist (List.map show args))
+            (PP.arglist (map show args))
         | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
         | If (cond, c1, c2) ->
@@ -206,11 +287,11 @@ struct
                         (braces ((show_cases v cases) ^+^ (show_default v default))))
         | Dict (elems) -> 
             PP.braces (hsep (punctuate ","
-                               (List.map (fun (name, value) -> 
+                               (map (fun (name, value) -> 
                                        group (PP.text "'" ^^ PP.text name ^^ 
                                                 PP.text "':" ^^ show value)) 
                                   elems)))
-        | Lst elems -> brackets(hsep(punctuate "," (List.map show elems)))
+        | Lst elems -> brackets(hsep(punctuate "," (map show elems)))
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
@@ -235,7 +316,7 @@ let string_js_quote s =
 let strlit s = Lit (string_js_quote s)
 let chrlit ch = Lit(string_js_quote(string_of_char ch))
 (** [chrlistlit] produces a JS literal for the representation of a Links string. *)
-let chrlistlit s  = Lst(List.map chrlit (explode s))
+let chrlistlit s  = Lst(map chrlit (explode s))
 
 (* Specialness:
 
@@ -258,11 +339,10 @@ let inline_script file = (* makes debugging with firebug easier *)
     really_input file_in file_contents 0 file_len;
     "  <script type='text/javascript'>" ^file_contents^ "</script>"
 
-module Arithmetic :
+module Binop :
 sig
   val is : string -> bool
   val js_name : string -> string
-  val gen : (code * string * code) -> code
 end =
 struct
   let builtin_ops =
@@ -274,178 +354,54 @@ struct
         "*",  "*"  ;
         "*.", "*"  ;
         "/",  "/"  ;
-        "/.", "/"  ]
-
-  let is x = StringMap.mem x builtin_ops
-  let js_name op = StringMap.find op builtin_ops
-  let gen (l, op, r) =
-    match op with
-      | "/" -> Call (Var "Math.floor", [Binop (l, js_name op, r)])
-      | _ -> Binop(l, js_name op, r)
-end
-
-module Comparison :
-sig
-  val is : string -> bool
-  val js_name : string -> string
-  val gen : (code * string * code) -> code
-end =
-struct
-  (* these binops could be used for primitive types: Int, Bool, Char,
-     String *)
-  let binops =
-    StringMap.from_alist
-      [ "==", "==" ;
+        "/.", "/"  ;
+        "==", "==" ;
         "<>", "!=" ;
         "<",  "<"  ;
         ">",  ">"  ;
         "<=", "<=" ;
         ">=", ">=" ]
-      
-  (* these names should be used for non-primitive types *)
-  let funs =
-    StringMap.from_alist
-      [ "==", "LINKS.eq"  ;
-        "<>", "LINKS.neq" ;
-        "<",  "LINKS.lt"  ;
-        ">",  "LINKS.gt"  ;
-        "<=", "LINKS.lte" ;
-        ">=", "LINKS.gte" ]
 
-  let is x = StringMap.mem x funs
-  let js_name op = StringMap.find op funs
-  let gen (l, op, r) =
-    match op with
-      | "<>" -> Unop("!", Call (Var "LINKS.eq", [l; r]))
-          (* HACK
-
-             This is technically wrong, but as we haven't implemented
-             LINKS.lt, etc., it is enough to get the demos working.
-
-             Ideally we want to compile to the builtin operators
-             whenever we know that the argument types are primitive
-             and the general functions otherwise. This would
-             necessitate making the JS compiler type-aware.
-          *)
-      | "<" | ">" | "<=" | ">=" ->
-          Binop(l, op, r)         
-      | _ ->  Call(Var (js_name op), [l; r])
+  let is x = StringMap.mem x builtin_ops
+  let js_name op = StringMap.find op builtin_ops
 end
 
-(* This transformation is supposed to pre-pickle any continuations
-   that might need to be invoked from the client.
+let comparison_name = function
+  |`Less   -> "<"
+  |`LessEq -> "<="
+  |`Equal  -> "=="
+  |`NotEq  -> "!="
 
-   As it is currently implemented it is rather brittle. It only works
-   if the call to pickleCont is of the form:
+let href_rewrite typing_env globals : RewriteSyntax.rewriter = function
+  | Apply (Variable ("pickleCont",_), 
+           [Abstr ([], e, _) as abs], data) as exp ->
+(* WARNING (SL):
 
-   let f () = e in C[pickleCont f]
-
-   where \().e is the continuation, and C[...] is a one-holed context.
-
-   As we cannot jsonise functions, it also requires that any
-   free-local variables in e are structural.
-
-   To implement this functionality properly would probably require
-   closure-converting the IR.
+   I'm not at all convinced that the correct globals are being passed in here.
 *)
-module FixPickles :
-sig
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
 
-  val bindings : envs -> Ir.binding list -> Ir.binding list
-  val program : envs -> Ir.program -> Ir.program
-end
-  =
-struct
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
+      let fv = StringSet.diff (freevars e) globals in
+      let `T (_,_,Some label) = expression_data e in
+      let pickled_label = Result.marshal_result (`RecFunction (["f",abs], [], "f")) in
+      (* correct the type of stringifyB64 *)
+      let stringifyB64 = set_node_datatype (Variable ("stringifyB64", data),
+                                            DesugarDatatypes.read ~aliases:typing_env.Types.tycon_env "(a) -> String") in
+      (* BUG: some of the other expressions still have the wrong type *)
+      let json_args = Apply (stringifyB64,
+                             [Record_intro (StringSet.fold 
+                                              (fun k r -> StringMap.add k (Variable (k, data)) r)
+                                              fv StringMap.empty,
+                                            None, data)], data) in
+        Some (Concat (Constant (`String (pickled_label^ "&_jsonArgs="), data),
+                      json_args, data))
+  | _ -> None
 
-  class visitor (closures, nenv, venv, tenv) =
-  object (o)
-    inherit Ir.Transform.visitor(tenv) as super
-      
-    val fun_env = VEnv.empty
-      
-    val nenv = nenv
-    val venv = venv
+let fixup_hrefs typing_env globals e = from_option e (RewriteSyntax.bottomup (href_rewrite typing_env globals) e)
 
-    val closures = closures
+let fixup_hrefs_def typing_env globals = function
+  | Define (name, b,l,t) -> Define (name, fixup_hrefs typing_env globals b, l, t)
+  | d -> d
 
-    method bind_name b =
-      let name = Var.name_of_binder b in
-      let var = Var.var_of_binder b in
-      let nenv =
-        if name = "" then nenv
-        else Env.String.bind nenv (name, var) in
-      let venv = VEnv.bind venv (var, name) in
-        {< nenv = nenv; venv = venv >}
-
-    method bind_fun f lam =
-      {< fun_env = VEnv.bind fun_env (f, lam) >}      
-
-    method super_binding b = super#binding b
-
-    method binding b =
-      match b with
-        | `Fun (f, lam, _location) ->
-            let o = o#bind_fun (Var.var_of_binder f) lam in
-              o#super_binding b
-        | `Rec defs ->
-            let o =
-              List.fold_right
-                (fun (f, lam, _location) o -> o#bind_fun (Var.var_of_binder f) lam)
-                defs
-                o
-            in
-              o#super_binding b
-        | _ -> super#binding b
-
-    method binder b =
-      let b, o = super#binder b in
-        b, o#bind_name b
-
-    method tail_computation =
-      fun e ->
-        match e with
-          | `Apply (`TApp (`Variable v, _), [cont])
-          | `Apply (`Variable v, [cont]) when VEnv.lookup venv v = "pickleCont" ->
-              let f =
-                match cont with
-                  | `TApp (`Variable f, _)
-                  | `Variable f -> f
-                  | v -> failwith ("don't know how to pickle this value on the client: "^Ir.Show_value.show v) in
-              let e, t, o = super#tail_computation e in
-              let stringifyB64 = `Variable (Env.String.lookup nenv "stringifyB64") in
-              let concat = `Variable (Env.String.lookup nenv "Concat") in
-
-              let lam = 
-                let _tyvars, xsb, body = VEnv.lookup fun_env f in
-                  (List.map Var.var_of_binder xsb, body) in
-              let fv = IntMap.find f closures in
-
-              let func = Value.marshal_value (`RecFunction ([f, lam], Value.with_closures Value.empty_env closures, f)) in
-              let json_args =
-                let fields =
-                  IntSet.fold
-                    (fun x fields ->
-                       StringMap.add (string_of_int x) (`Variable x) fields)
-                    fv
-                    StringMap.empty
-                in
-                  `ApplyPure (stringifyB64,
-                              [`Extend (fields, None)])
-              in
-                `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
-          | e -> super#tail_computation e
-  end
-
-  let bindings envs bindings =
-    let bindings, _ = (new visitor envs)#bindings bindings in
-      bindings
-
-  let program envs program =
-    let program, _, _ = (new visitor envs)#program program in
-      program
-end
 
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
@@ -454,8 +410,395 @@ let cps_prims = ["recv"; "sleep"; "spawnWait"]
 
 (** {0 Code generation} *)
 
+(* generate a JavaScript name from a binder *)
+let name_binder (x, info) =
+  match info with
+    | (_, "", `Local) -> (x, "_" ^ string_of_int x)
+    | (_, name, `Local) when (Str.string_match (Str.regexp "^_g[0-9]") name 0) ->
+        (x, "_" ^ string_of_int x) (* make the generated names slightly less ridiculous in some cases *)
+    | (_, name, `Local) -> (x, name ^ "_" ^ string_of_int x)
+    | (_, name, `Global) -> (x, name)
 
-module Symbols =
+module Env' :
+sig
+  type env = string IntMap.t
+    deriving (Show)
+    
+  val empty : env
+  val extend : env -> (var * string) list -> env
+  val lookup : env -> var -> string
+end =
+struct
+  type env = string IntMap.t
+    deriving (Show)
+
+  let empty = IntMap.empty
+  let extend env bs =
+    List.fold_left (fun env (x,v) ->
+                      IntMap.add x v env)
+      env bs
+  let lookup env x = IntMap.find x env
+end
+
+
+let bind_continuation kappa body =
+  match kappa with
+    | Var _ -> body kappa
+    | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
+
+
+let apply_yielding (f, args) =
+  Call(Var "_yield", f :: args)
+
+let callk_yielding kappa arg =
+  Call(Var "_yieldCont", [kappa; arg]) 
+
+
+(** generate
+    Generate javascript code for a Links expression
+    
+    With CPS transform, result of generate is always : (a -> w) -> b
+*)
+let rec generate_value env : value -> code =
+  let gv v = generate_value env v in
+    function
+      | `Constant c ->
+          begin
+            match c with
+              | `Int v  -> Lit (string_of_num v)
+              | `Float v    ->
+                  let s = string_of_float v in
+                  let n = String.length s in
+                    (* strip any trailing '.' *)
+                    if n > 1 && (s.[n-1] = '.') then
+                      Lit (String.sub s 0 (n-1))
+                    else
+                      Lit s
+              | `Bool v  -> Lit (string_of_bool v)
+              | `Char v     -> chrlit v
+              | `String v   -> chrlistlit v
+          end
+      | `Variable var ->
+          (* HACK *)
+          begin
+            match (Env'.lookup env var) with
+              | "ConcatMap" -> Var ("LINKS.accum")
+              | name ->
+                  if name = "/" then
+                    Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa")
+                          (Call (Var "Math.floor", [Binop(Var "x", "/", Var "y")])))
+                  else if Binop.is name then
+                    Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Binop(Var "x", Binop.js_name name, Var "y")))
+                  else
+                    Var name
+          end
+      | `Extend (field_map, rest) ->
+          let dict =
+            Dict
+              (StringMap.fold
+                 (fun name v dict ->
+                    (name, gv v) :: dict)
+                 field_map [])
+          in
+            begin
+              match rest with
+                | None -> dict
+                | Some v ->
+                    Call (Var "LINKS.union", [gv v; dict])
+            end
+      | `Project (name, v) ->
+          Call (Var "LINKS.project", [gv v; strlit name])
+      | `Erase (name, v) ->
+          Call (Var "LINKS.erase", [gv v; strlit name])
+      | `Inject (name, v, _t) ->
+          Dict [("_label", strlit name);
+                ("_value", gv v)]
+
+      (* erase polymorphism *)
+      | `TAbs (_, v)
+      | `TApp (v, _) -> gv v
+
+      | `Comparison (v, `Equal, w) ->
+          Call(Var "LINKS.eq", [gv v; gv w])
+      | `Comparison (v, `NotEq, w) ->
+          Unop("!", Call (Var "LINKS.eq", [gv v; gv w]))
+      | `Comparison (v, op, w) ->
+          Binop(gv v, comparison_name op, gv w)
+      | `XmlNode (name, attributes, children) ->
+          generate_xml env name attributes children
+
+      | `ApplyPure (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
+          Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)
+      | `ApplyPure (`Variable op, [v]) when Env'.lookup env op = "negate" || Env'.lookup env op = "negatef" ->
+          Unop("-", gv v)
+      | `ApplyPure (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
+          && not (mem (Env'.lookup env f) cps_prims)
+          && Library.primitive_location (Env'.lookup env f) <> `Server 
+          ->
+          Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)
+      | `ApplyPure (v, vs) ->
+          Call (gv v, List.map gv vs)
+
+      | `Coerce (v, _) ->
+          gv v
+
+and generate_xml env tag attrs children =
+    Call(Var "LINKS.XML",
+         [strlit tag;
+          Dict (StringMap.fold (fun name v bs -> (name, generate_value env v) :: bs) attrs []);
+          Lst (List.map (generate_value env) children)])
+
+let generate_remote_call f_name xs_names =
+  Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
+       [strlit f_name; Dict (
+          List.map2
+            (fun n v -> string_of_int n, Var v) 
+            (Utility.fromTo 1 (1 + List.length xs_names))
+            xs_names
+        )])
+
+let rec generate_tail_computation env : tail_computation -> code -> code = fun tc kappa ->
+  let gv v = generate_value env v in
+  let gc c kappa = snd (generate_computation env c kappa) in
+    match tc with
+      | `Return v ->           
+          callk_yielding kappa (gv v)
+      | `Apply (`Variable op, [l; r]) when Env'.lookup env op = "/" ->
+          callk_yielding kappa (Call (Var "Math.floor", [Binop (gv l, Binop.js_name (Env'.lookup env op), gv r)]))
+      | `Apply (`Variable op, [l; r]) when Binop.is (Env'.lookup env op) ->
+          callk_yielding kappa (Binop (gv l, Binop.js_name (Env'.lookup env op), gv r))
+      | `Apply (`Variable f, vs) when Library.is_primitive (Env'.lookup env f)
+          && not (mem (Env'.lookup env f) cps_prims)
+          && Library.primitive_location (Env'.lookup env f) <> `Server 
+          ->
+          Call (kappa, [Call (Var ("_" ^ (Env'.lookup env f)), List.map gv vs)])
+      | `Apply (v, vs) ->
+          apply_yielding (gv v, [Lst (map gv vs); kappa])
+      | `Special special ->
+          generate_special env special kappa
+      | `Case (v, cases, default) ->
+          let v = gv v in
+          let k, x = 
+            match v with
+              | Var x -> (fun e -> e), x
+              | _ ->
+                  let x = gensym ~prefix:"x" () in
+                    (fun e -> Bind (x, v, e)), x
+          in
+            bind_continuation kappa
+              (fun kappa ->
+                 let gen_cont (xb, c) =
+                   let (x, x_name) = name_binder xb in
+                     x_name, (snd (generate_computation (Env'.extend env [(x, x_name)]) c kappa)) in
+                 let cases = StringMap.map gen_cont cases in
+                 let default = opt_map gen_cont default in
+                   k (Case (x, cases, default)))
+      | `If (v, c1, c2) ->
+          bind_continuation kappa
+            (fun kappa ->
+               If (gv v, gc c1 kappa, gc c2 kappa))
+
+and generate_special env : special -> code -> code = fun sp kappa ->
+  let gv v = generate_value env v in
+    match sp with
+      | `App (f, vs) ->
+          Call (Var "_yield",
+                Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
+      | `Wrong _ -> Die "Internal Error: Pattern matching failed"
+      | `Database v ->
+          callk_yielding kappa (Dict [("_db", gv v)])
+      | `Query _ ->
+          failwith ("Cannot (yet?) generate JavaScript code for `Query")
+      | `Table (db, table_name, (readtype, writetype)) ->
+          callk_yielding kappa
+            (Dict [("_table",
+                    Dict [("db", gv db);
+                          ("name", gv table_name);
+                          ("row",
+                           strlit (Types.string_of_datatype (readtype)))])])
+      | `CallCC v ->
+          bind_continuation kappa
+            (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
+
+and generate_computation env : computation -> code -> (Env'.env * code) = fun (bs, tc) kappa -> 
+  let rec gbs env c =
+    function
+      | [] ->
+          env, c (generate_tail_computation env tc kappa)
+      | b :: bs -> 
+          let env, c' = generate_binding env b in
+            gbs env (c -<- c') bs
+  in
+    gbs env (fun code -> code) bs
+
+and generate_binding env : binding -> (Env'.env * (code -> code)) = fun binding ->
+  match binding with
+    | `Let (b, (_, `Return v)) ->
+        let (x, x_name) = name_binder b in
+        let env' = Env'.extend env [(x, x_name)] in
+          (env',
+           fun code ->
+             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
+    | `Let (b, (_, tc)) ->
+        let (x, x_name) = name_binder b in
+        let env' = Env'.extend env [(x, x_name)] in
+          env', (fun code -> generate_tail_computation env tc (Fn ([x_name], code)))
+    | `Fun (fb, (_, xsb, body), location) ->
+        let (f, f_name) = name_binder fb in
+        let bs = List.map name_binder xsb in
+        let xs, xs_names = List.split bs in
+        let body_env = Env'.extend env bs in
+        let env' = Env'.extend env [(f, f_name)] in
+          (env',
+           fun code ->
+             let body =
+               match location with
+                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                 | `Server -> generate_remote_call f_name xs_names
+                 | `Native -> failwith ("Not implemented native calls yet")
+             in
+               LetFun
+                 ((f_name,
+                   xs_names @ ["__kappa"],
+                   body,
+                   location),
+                  code))        
+    | `Rec defs ->
+        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
+        let env' = Env'.extend env fs in
+          (env',
+           fun code ->
+             LetRec
+               (List.fold_right
+                  (fun (fb, (_, xsb, body), location) (defs, code) ->
+                     let (f, f_name) = name_binder fb in
+                     let bs = List.map name_binder xsb in
+                     let _, xs_names = List.split bs in
+                     let body_env = Env'.extend env (fs @ bs) in
+                     let body =
+                       match location with
+                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                         | `Server -> generate_remote_call f_name xs_names
+                         | `Native -> failwith ("Not implemented native calls yet")
+                     in
+                       (f_name,
+                        xs_names @ ["__kappa"],
+                        body,
+                        location) :: defs, code)
+                  defs ([], code)))
+    | `Module _
+    | `Alien _
+    | `Alias _ -> env, (fun code -> code)
+
+and generate_declaration env
+    : binding -> (Env'.env * (code -> code)) = fun binding ->
+  match binding with
+    | `Let (b, (_, `Return v)) ->
+        let (x, x_name) = name_binder b in
+        let env' = Env'.extend env [(x, x_name)] in
+          (env',
+           fun code ->
+             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
+    | `Let (b, (_, tc)) ->
+        if Settings.get_value (Basicsettings.allow_impure_defs) then
+          let (x, x_name) = name_binder b in
+          let env' = Env'.extend env [(x, x_name)] in
+            (env',
+             fun code ->
+               Seq (DeclareVar (x_name, None), code))
+        else
+          failwith "Top-level definitions must be values"
+    | `Fun (fb, (_, xsb, body), location) ->
+        let (f, f_name) = name_binder fb in
+        let bs = List.map name_binder xsb in
+        let xs, xs_names = List.split bs in
+        let body_env = Env'.extend env bs in
+        let env' = Env'.extend env [(f, f_name)] in
+          (env',
+           fun code ->
+             let body =
+               match location with
+                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                 | `Server -> generate_remote_call f_name xs_names
+                 | `Native -> failwith ("Not implemented native calls yet")
+             in
+               LetFun
+                 ((f_name,
+                   xs_names @ ["__kappa"],
+                   body,
+                   location),
+                  code))        
+    | `Rec defs ->
+        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
+        let env' = Env'.extend env fs in
+          (env',
+           fun code ->
+             LetRec
+               (List.fold_right
+                  (fun (fb, (_, xsb, body), location) (defs, code) ->
+                     let (f, f_name) = name_binder fb in
+                     let bs = List.map name_binder xsb in
+                     let _, xs_names = List.split bs in
+                     let body_env = Env'.extend env (fs @ bs) in
+                     let body =
+                       match location with
+                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                         | `Server -> generate_remote_call f_name xs_names
+                         | `Native -> failwith ("Not implemented native calls yet")
+                     in
+                       (f_name,
+                        xs_names @ ["__kappa"],
+                        body,
+                        location) :: defs, code)
+                  defs ([], code)))
+    | `Module _
+    | `Alien _
+    | `Alias _ -> env, (fun code -> code)
+
+
+and generate_definition env
+    : binding -> code -> code =
+  function
+    | `Let (_, (_, `Return _)) -> (fun code -> code)
+    | `Let (b, (_, tc)) ->
+        let (x, x_name) = name_binder b in
+          (fun code ->
+             generate_tail_computation env tc
+               (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
+    | `Fun _
+    | `Rec _
+    | `Module _
+    | `Alien _
+    | `Alias _ -> (fun code -> code)
+
+and generate_defs env : binding list -> (Env'.env * (code -> code)) =
+  fun bs ->
+    let rec declare env c =
+      function
+        | [] -> env, c
+        | b :: bs ->
+            let env, c' = generate_declaration env b in
+              declare env (c -<- c') bs in
+    let env, with_declarations = declare env (fun code -> code) bs in
+    let rec define c =
+      function
+        | [] -> c
+        | b :: bs ->
+            let c' = generate_definition env b in
+              define (c -<- c') bs
+    in
+      if Settings.get_value Basicsettings.allow_impure_defs then
+        env, fun code -> with_declarations (define (fun code -> code) bs code)
+      else
+        env, with_declarations
+
+and generate_program env : computation -> (Env'.env * code) = fun c ->
+  generate_computation env c (Var "_start")
+
+module Symbols :
+sig
+  val rename : Syntax.program -> Syntax.program
+end =
 struct
   let words =
     CharMap.from_alist
@@ -509,402 +852,38 @@ struct
         (* TBD: it would be better if this split to chunks maximally matching
            (\w+)|(\W)
            then we would not split apart words in partly-symbolic idents. *)
-    else if List.mem name js_keywords then
+    else if mem name js_keywords then
       "_" ^ name (* FIXME: this could conflict with Links names. *)
-    else name  
+    else name
+      
+  let rename_expression exp = 
+    from_option exp
+      (RewriteSyntax.bottomup
+         (function
+            | Variable (name, d) -> Some (Variable (wordify name, d))
+            | Let (name, rhs, body, d) -> 
+                Some (Let (wordify name, rhs, body, d))
+            | Rec (bindings, body, d) -> 
+                let rename_expression (nm, body, t) = (wordify nm, body, t) in
+                  Some (Rec (List.map rename_expression bindings, body, d))
+            | _ -> None)
+         exp)
+
+  let rec rename_def def =
+    match def with
+      | Define (name, b, l, t) -> 
+          Define (wordify name, rename_expression b, l, t)
+      | Alien (name, _, _, _) when has_symbols name ->
+          assert false (* symbols shouldn't appear in types or foreign functions *)
+      | Module (name, defs, data) ->
+          Module (name, opt_map (fun defs -> List.map rename_def defs) defs, data)
+      | _ -> def
+
+  let rename_program (Program(defs, expr)) = 
+    Program(List.map rename_def defs, rename_expression expr)
+
+  let rename = rename_program
 end
-
-(* generate a JavaScript name from a binder *)
-let name_binder (x, info) =
-  let name =
-    match info with
-      | (_, "", `Local) -> "_" ^ string_of_int x
-      | (_, name, `Local) when (Str.string_match (Str.regexp "^_g[0-9]") name 0) ->
-          "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
-      | (_, name, `Local) -> name ^ "_" ^ string_of_int x
-      | (_, name, `Global) -> name
-  in
-    x, Symbols.wordify name
-
-let bind_continuation kappa body =
-  match kappa with
-    | Var _ -> body kappa
-    | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
-
-
-let apply_yielding (f, args) =
-  Call(Var "_yield", f :: args)
-
-let callk_yielding kappa arg =
-  Call(Var "_yieldCont", [kappa; arg]) 
-
-(** generate
-    Generate javascript code for a Links expression
-    
-    With CPS transform, result of generate is always : (a -> w) -> b
-*)
-let rec generate_value env : Ir.value -> code =
-  let gv v = generate_value env v in
-    function
-      | `Constant c ->
-          begin
-            match c with
-              | `Int v  -> Lit (Num.string_of_num v)
-              | `Float v    ->
-                  let s = string_of_float v in
-                  let n = String.length s in
-                    (* strip any trailing '.' *)
-                    if n > 1 && (s.[n-1] = '.') then
-                      Lit (String.sub s 0 (n-1))
-                    else
-                      Lit s
-              | `Bool v  -> Lit (string_of_bool v)
-              | `Char v     -> chrlit v
-              | `String v   -> chrlistlit v
-          end
-      | `Variable var ->
-          (* HACK *)
-          let name = VEnv.lookup env var in
-            if Arithmetic.is name then
-              Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Arithmetic.gen (Var "x", name, Var "y")))
-            else if Comparison.is name then
-              Var (Comparison.js_name name)
-            else
-              Var name
-      | `Extend (field_map, rest) ->
-          let dict =
-            Dict
-              (StringMap.fold
-                 (fun name v dict ->
-                    (name, gv v) :: dict)
-                 field_map [])
-          in
-            begin
-              match rest with
-                | None -> dict
-                | Some v ->
-                    Call (Var "LINKS.union", [gv v; dict])
-            end
-      | `Project (name, v) ->
-          Call (Var "LINKS.project", [gv v; strlit name])
-      | `Erase (name, v) ->
-          Call (Var "LINKS.erase", [gv v; strlit name])
-      | `Inject (name, v, _t) ->
-          Dict [("_label", strlit name);
-                ("_value", gv v)]
-
-      (* erase polymorphism *)
-      | `TAbs (_, v)
-      | `TApp (v, _) -> gv v
-
-      | `XmlNode (name, attributes, children) ->
-          generate_xml env name attributes children
-
-      | `ApplyPure (f, vs) ->
-          let f =
-            match f with
-              | `TApp (f, _) -> f
-              | f -> f
-          in
-            begin
-              match f with
-                | `Variable f ->
-                    let f_name = VEnv.lookup env f in
-                      begin
-                        match vs with
-                          | [l; r] when Arithmetic.is f_name ->
-                              Arithmetic.gen (gv l, f_name, gv r)
-                          | [l; r] when Comparison.is f_name ->
-                              Comparison.gen (gv l, f_name, gv r)
-                          | [v] when f_name = "negate" || f_name = "negatef" ->
-                              Unop ("-", gv v)
-                          | _ ->
-                              if Library.is_primitive f_name
-                                && not (List.mem f_name cps_prims)
-                                && Library.primitive_location f_name <> `Server 
-                              then
-                                Call (Var ("_" ^ f_name), List.map gv vs)
-                              else
-                                Call (gv (`Variable f), List.map gv vs)
-                      end
-                | _ ->
-                    Call (gv f, List.map gv vs)                      
-            end
-      | `Coerce (v, _) ->     
-          gv v
-      | `Comparison _ -> assert false
-
-and generate_xml env tag attrs children =
-  Call(Var "LINKS.XML",
-       [strlit tag;
-        Dict (StringMap.fold (fun name v bs -> (name, generate_value env v) :: bs) attrs []);
-        Lst (List.map (generate_value env) children)])
-
-let generate_remote_call f_name xs_names =
-  Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
-       [strlit f_name; Dict (
-          List.map2
-            (fun n v -> string_of_int n, Var v) 
-            (Utility.fromTo 1 (1 + List.length xs_names))
-            xs_names
-        )])
-
-let rec generate_tail_computation env : Ir.tail_computation -> code -> code = fun tc kappa ->
-  let gv v = generate_value env v in
-  let gc c kappa = snd (generate_computation env c kappa) in
-    match tc with
-      | `Return v ->           
-          callk_yielding kappa (gv v)
-      | `Apply (f, vs) ->
-            let f =
-              match f with
-                | `TApp (f, _) -> f
-                | f -> f
-            in
-              begin
-                match f with
-                  | `Variable f ->
-                      let f_name = VEnv.lookup env f in
-                        begin
-                          match vs with
-                            | [l; r] when Arithmetic.is f_name ->
-                                callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
-                            | [l; r] when Comparison.is f_name ->
-                                callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
-                            | [v] when f_name = "negate" || f_name = "negatef" ->
-                                callk_yielding kappa (Unop ("-", gv v))
-                            | _ ->
-                                if Library.is_primitive f_name
-                                  && not (List.mem f_name cps_prims)
-                                  && Library.primitive_location f_name <> `Server 
-                                then
-                                  Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
-                                else
-                                  apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
-                        end
-                  | _ ->
-                      apply_yielding (gv f, [Lst (List.map gv vs); kappa])
-              end
-      | `Special special ->
-          generate_special env special kappa
-      | `Case (v, cases, default) ->
-          let v = gv v in
-          let k, x = 
-            match v with
-              | Var x -> (fun e -> e), x
-              | _ ->
-                  let x = gensym ~prefix:"x" () in
-                    (fun e -> Bind (x, v, e)), x
-          in
-            bind_continuation kappa
-              (fun kappa ->
-                 let gen_cont (xb, c) =
-                   let (x, x_name) = name_binder xb in
-                     x_name, (snd (generate_computation (VEnv.bind env (x, x_name)) c kappa)) in
-                 let cases = StringMap.map gen_cont cases in
-                 let default = opt_map gen_cont default in
-                   k (Case (x, cases, default)))
-      | `If (v, c1, c2) ->
-          bind_continuation kappa
-            (fun kappa ->
-               If (gv v, gc c1 kappa, gc c2 kappa))
-
-and generate_special env : Ir.special -> code -> code = fun sp kappa ->
-  let gv v = generate_value env v in
-    match sp with
-      | `App (f, vs) ->
-          Call (Var "_yield",
-                Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
-      | `Wrong _ -> Die "Internal Error: Pattern matching failed"
-      | `Database v ->
-          callk_yielding kappa (Dict [("_db", gv v)])
-      | `Query _ ->
-          failwith ("Cannot (yet?) generate JavaScript code for `Query")
-      | `Table (db, table_name, (readtype, writetype)) ->
-          callk_yielding kappa
-            (Dict [("_table",
-                    Dict [("db", gv db);
-                          ("name", gv table_name);
-                          ("row",
-                           strlit (Types.string_of_datatype (readtype)))])])
-      | `CallCC v ->
-          bind_continuation kappa
-            (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
-
-and generate_computation env : Ir.computation -> code -> (venv * code) = fun (bs, tc) kappa -> 
-  let rec gbs env c =
-    function
-      | [] ->
-          env, c (generate_tail_computation env tc kappa)
-      | b :: bs -> 
-          let env, c' = generate_binding env b in
-            gbs env (c -<- c') bs
-  in
-    gbs env (fun code -> code) bs
-
-and generate_binding env : Ir.binding -> (venv * (code -> code)) = fun binding ->
-  match binding with
-    | `Let (b, (_, `Return v)) ->
-        let (x, x_name) = name_binder b in
-        let env' = VEnv.bind env (x, x_name) in
-          (env',
-           fun code ->
-             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
-    | `Let (b, (_, tc)) ->
-        let (x, x_name) = name_binder b in
-        let env' = VEnv.bind env (x, x_name) in
-          env', (fun code -> generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun (fb, (_, xsb, body), location) ->
-        let (f, f_name) = name_binder fb in
-        let bs = List.map name_binder xsb in
-        let xs, xs_names = List.split bs in
-        let body_env = List.fold_left VEnv.bind env bs in
-        let env' = VEnv.bind env (f, f_name) in
-          (env',
-           fun code ->
-             let body =
-               match location with
-                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
-                 | `Server -> generate_remote_call f_name xs_names
-                 | `Native -> failwith ("Not implemented native calls yet")
-             in
-               LetFun
-                 ((f_name,
-                   xs_names @ ["__kappa"],
-                   body,
-                   location),
-                  code))        
-    | `Rec defs ->
-        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
-        let env' = List.fold_left VEnv.bind env fs in
-          (env',
-           fun code ->
-             LetRec
-               (List.fold_right
-                  (fun (fb, (_, xsb, body), location) (defs, code) ->
-                     let (f, f_name) = name_binder fb in
-                     let bs = List.map name_binder xsb in
-                     let _, xs_names = List.split bs in
-                     let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-                     let body =
-                       match location with
-                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
-                         | `Server -> generate_remote_call f_name xs_names
-                         | `Native -> failwith ("Not implemented native calls yet")
-                     in
-                       (f_name,
-                        xs_names @ ["__kappa"],
-                        body,
-                        location) :: defs, code)
-                  defs ([], code)))
-    | `Module _
-    | `Alien _
-    | `Alias _ -> env, (fun code -> code)
-
-and generate_declaration env
-    : Ir.binding -> (venv * (code -> code)) = fun binding ->
-  match binding with
-    | `Let (b, (_, `Return v)) ->
-        let (x, x_name) = name_binder b in
-        let env' = VEnv.bind env (x, x_name) in
-          (env',
-           fun code ->
-             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
-    | `Let (b, (_, tc)) ->
-        if Settings.get_value (Basicsettings.allow_impure_defs) then
-          let (x, x_name) = name_binder b in
-          let env' = VEnv.bind env (x, x_name) in
-            (env',
-             fun code ->
-               Seq (DeclareVar (x_name, None), code))
-        else
-          failwith "Top-level definitions must be values"
-    | `Fun (fb, (_, xsb, body), location) ->
-        let (f, f_name) = name_binder fb in
-        let bs = List.map name_binder xsb in
-        let xs, xs_names = List.split bs in
-        let body_env = List.fold_left VEnv.bind env bs in
-        let env' = VEnv.bind env (f, f_name) in
-          (env',
-           fun code ->
-             let body =
-               match location with
-                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
-                 | `Server -> generate_remote_call f_name xs_names
-                 | `Native -> failwith ("Not implemented native calls yet")
-             in
-               LetFun
-                 ((f_name,
-                   xs_names @ ["__kappa"],
-                   body,
-                   location),
-                  code))        
-    | `Rec defs ->
-        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
-        let env' = List.fold_left VEnv.bind env fs in
-          (env',
-           fun code ->
-             LetRec
-               (List.fold_right
-                  (fun (fb, (_, xsb, body), location) (defs, code) ->
-                     let (f, f_name) = name_binder fb in
-                     let bs = List.map name_binder xsb in
-                     let _, xs_names = List.split bs in
-                     let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-                     let body =
-                       match location with
-                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
-                         | `Server -> generate_remote_call f_name xs_names
-                         | `Native -> failwith ("Not implemented native calls yet")
-                     in
-                       (f_name,
-                        xs_names @ ["__kappa"],
-                        body,
-                        location) :: defs, code)
-                  defs ([], code)))
-    | `Module _
-    | `Alien _
-    | `Alias _ -> env, (fun code -> code)
-
-
-and generate_definition env
-    : Ir.binding -> code -> code =
-  function
-    | `Let (_, (_, `Return _)) -> (fun code -> code)
-    | `Let (b, (_, tc)) ->
-        let (x, x_name) = name_binder b in
-          (fun code ->
-             generate_tail_computation env tc
-               (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
-    | `Fun _
-    | `Rec _
-    | `Module _
-    | `Alien _
-    | `Alias _ -> (fun code -> code)
-
-and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
-  fun bs ->
-    let rec declare env c =
-      function
-        | [] -> env, c
-        | b :: bs ->
-            let env, c' = generate_declaration env b in
-              declare env (c -<- c') bs in
-    let env, with_declarations = declare env (fun code -> code) bs in
-    let rec define c =
-      function
-        | [] -> c
-        | b :: bs ->
-            let c' = generate_definition env b in
-              define (c -<- c') bs
-    in
-      if Settings.get_value Basicsettings.allow_impure_defs then
-        env, fun code -> with_declarations (define (fun code -> code) bs code)
-      else
-        env, with_declarations
-
-and generate_program env : Ir.program -> (venv * code) = fun c ->
-  generate_computation env c (Var "_start")
 
 let script_tag body = 
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
@@ -939,9 +918,9 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   _startTimer();" ^ body ^ ";
   </script>")
     
-let wrap_with_server_stubs (code : code) : code = 
-  let server_library_funcs = (List.filter (fun (name,_) -> 
-                                             Library.primitive_location name = `Server)
+let wrap_with_server_stubs code = 
+  let server_library_funcs = (filter (fun (name,_) -> 
+                                        Library.primitive_location name =`Server)
                                 (StringMap.to_alist !Library.value_env)) in
 
   let rec some_vars = function 
@@ -957,7 +936,7 @@ let wrap_with_server_stubs (code : code) : code =
                           [(name, args, generate_remote_call name args)])
       server_library_funcs
   in
-    List.fold_right 
+    fold_right 
       (fun (name, args, body) code ->
          LetFun
            ((name,
@@ -968,50 +947,73 @@ let wrap_with_server_stubs (code : code) : code =
       prim_server_calls
       code
 
-let initialise_envs (nenv, tyenv) =
-  let dt = DesugarDatatypes.read ~aliases:tyenv.Types.tycon_env in
 
-  (* TODO:
+let preprocess_program typing_env global_names program =
+  let (Program (defs, body)) =
+    if Settings.get_value optimising then
+      Optimiser.inline (Optimiser.inline (Optimiser.inline program)) 
+    else program in
+
+  (* 
+     QUESTION:
      
-     - add stringifyB64 to lib.ml as a built-in function?
-     - get rid of ConcatMap here?
+     How are we supposed to know that the collection of names passed
+     to fixup_hrefs_def is correct?
   *)
-  let tyenv =
-    {Types.var_env = 
-        Env.String.bind
-          (Env.String.bind tyenv.Types.var_env
-             ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
-          ("stringifyB64", dt "(a) -> String");
-     Types.tycon_env = tyenv.Types.tycon_env} in
-  let nenv =
-    Env.String.bind
-      (Env.String.bind nenv
-         ("ConcatMap", Var.fresh_raw_var ()))
-      ("stringifyB64", Var.fresh_raw_var ()) in
+  let defs = List.map (fixup_hrefs_def typing_env
+                         (StringSet.from_list
+                            (Syntax.defined_names defs @ 
+                               Library.primitive_names @ global_names))) defs in
 
-  let venv =
-    Env.String.fold
-      (fun name v venv -> VEnv.bind venv (v, name))
-      nenv
-      VEnv.empty in
-  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-    (nenv, venv, tenv)
-     
-let generate_program_page ?(onload = "") (closures, nenv, tyenv) program =
-  let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let program = FixPickles.program (closures, nenv, venv, tenv) program in
-  let _, code = generate_program venv program in
-  let code = wrap_with_server_stubs code in
+  (*  
+      The following transformation may or may not be helpful. We can defer
+      thinking about it until after we get rid of the expression datatype.
+  *)
+  let program = rewrite_program
+    (Syntax.RewriteSyntax.all [Sqlcompile.Prepare.NormalizeProjections.normalize_projections])
+    (Program (defs, body))
+  in
+    Symbols.rename program
+
+let make_initial_env typing_env =
+  let dt = DesugarDatatypes.read ~aliases:typing_env.Types.tycon_env in
+    Compileir.make_initial_env
+      {Types.var_env = 
+          (Env.String.bind
+             (Env.String.bind typing_env.Types.var_env
+                ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
+             ("stringifyB64", dt "(a) -> String"));
+      Types.tycon_env = Env.String.empty}
+
+let compile_ir ?(elim=false) typing_env global_names program =
+  let program = preprocess_program typing_env global_names program in
+
+  let env, tenv = make_initial_env typing_env in
+
+  let ((bindings, _) as e, _) = Compileir.compile_program (env, tenv) program in 
+  let ((bindings, _) as e) =
+    if elim then
+      Ir.ElimDeadDefs.program tenv e
+    else
+      e in
+
+  let env, _ = Compileir.add_globals_to_env (env, tenv) bindings in
+  let env' = Compileir.invert_env env in
+    e, env'
+
+let generate_program_page ?(onload = "") tyenv global_names (Program (defs, _) as program) = 
+  let e, env = compile_ir ~elim:true tyenv global_names program in
+  let _, code = generate_program env e in
+  let code = optimise(wrap_with_server_stubs code) in
     (make_boiler_page
        ~body:(show code)
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
        [])
 
-let generate_program_defs (closures, nenv, tyenv) bs =
-  let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
-  let _, code = generate_defs venv bs in
+let generate_program_defs typing_env global_names defs root_names =
+  let (bindings, _), env = compile_ir typing_env global_names (Program (defs, Syntax.unit_expression Syntax.no_expr_data)) in
+  let _, code = generate_defs env bindings in
     [show (code Nothing)]
 
-(* let generate_program_defs global_names defs root_names = *)
-(*   generate_program_defs Library.typing_env global_names defs root_names *)
+let generate_program_defs global_names defs root_names =
+  generate_program_defs Library.typing_env global_names defs root_names

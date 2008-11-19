@@ -122,10 +122,11 @@ SOURCES = $(OPC)                		\
           sugartoir.mli sugartoir.ml            \
           oldloader.mli oldloader.ml            \
           loader.mli loader.ml                  \
-          irtojs.mli irtojs.ml                  \
+          oldirtojs.mli oldirtojs.ml            \
           interpreter.mli interpreter.ml 	\
           linksregex.ml                         \
           lib.mli lib.ml                        \
+          irtojs.ml                             \
           evalir.ml                             \
           oldwebif.mli oldwebif.ml           	\
           webif.mli webif.ml                    \

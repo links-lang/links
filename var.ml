@@ -31,7 +31,6 @@ let fresh_var : var_info -> binder * var =
     let (var, info) = fresh_binder info in
       (var, info), var
 
-
 let info_type (t, _, _) = t
 let info_of_type t = (t, "", `Local)
 
@@ -46,12 +45,7 @@ let type_of_binder (var, (t, _, _)) = t
 let name_of_binder (_, (_, name, _)) = name
 let scope_of_binder (_, (_, _, scope)) = scope
 
-let var_of_tybinder (_, b) = var_of_binder b
-let type_of_tybinder (_, b) = type_of_binder b
-let name_of_tybinder (_, b) = name_of_binder b
-let scope_of_tybinder (_, b) = scope_of_binder b
-
-(* create a copy of a type environment mapping vars (= ints) to datatypes
+(* create a copy of a type environment mapping vars (= ints) to types
    instead of strings to types
 *)
 let varify_env (nenv, tenv) : Types.datatype Env.Int.t =

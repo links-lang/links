@@ -186,8 +186,8 @@ let client_call_impl globals name cont (args:Result.result list) =
         let start_script = "LINKS.invokeClientCall(_start, JSON.parseB64Safe(\"" ^ callPkg ^ "\"))" in
         let Program (defs, _) = !program_source in
           Library.print_http_response ["Content-type", "text/html"]
-            (Irtojs.make_boiler_page ~onload:start_script
-               (Irtojs.generate_program_defs globals defs (StringSet.singleton name)))
+            (Oldirtojs.make_boiler_page ~onload:start_script
+               (Oldirtojs.generate_program_defs globals defs (StringSet.singleton name)))
           ; exit 0
       end
     else begin

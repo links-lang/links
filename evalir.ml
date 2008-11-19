@@ -183,17 +183,19 @@ module Eval = struct
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
     | `XmlNode (tag, attrs, children) ->
-        let children = 
-          List.fold_right 
+        let children =
+          List.fold_right
             (fun v children ->
                let v = value env v in
                  List.map Value.unbox_xml (Value.unbox_list v) @ children)
             children [] in
-        let children = (StringMap.fold 
-                          (fun name v attrs ->
-                             Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
-                          attrs children) in
-          `XML (Value.Node (tag, children))
+        let children =
+          StringMap.fold 
+            (fun name v attrs ->
+               Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
+            attrs children
+        in
+          Value.box_list [Value.box_xml (Value.Node (tag, children))]
     | `ApplyPure (f, args) ->
         begin
           try (

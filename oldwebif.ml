@@ -233,7 +233,7 @@ let perform_request
     | CallMain -> 
         Library.print_http_response [("Content-type", "text/html")] 
           (if is_client_program program then             
-             Irtojs.generate_program_page Library.typing_env (List.map fst globals) program
+             Oldirtojs.generate_program_page Library.typing_env (List.map fst globals) program
            else
              begin
                let _env, rslt = Interpreter.run_program globals [] (wrap_with_render_page tyenv (Syntax.Program([], main))) in

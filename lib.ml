@@ -1254,7 +1254,7 @@ let apply_pfun name args =
     | Some #Value.t -> failwith("Attempt to apply primitive non-function (" ^
                                  name^")")
     | Some (`PFun p) -> p args
-    | None -> assert false
+    | None -> Debug.print ("Undefined primitive function " ^ name); assert false
 
 let is_primitive name = List.mem_assoc name env
 

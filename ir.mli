@@ -29,6 +29,7 @@ type constant = Constant.constant
   deriving (Show)
 
 type location = Syntax.location
+  deriving (Show)
 
 (* INVARIANT: all IR binders should have unique names *)
 
