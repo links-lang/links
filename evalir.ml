@@ -26,9 +26,15 @@ module Eval = struct
        | Some v -> Some v
        | None -> Some (Lib.primitive_stub (Lib.primitive_name var))
 
-  let client_call : string -> Value.continuation -> Value.t list -> 'a =
-    fun _ _ _ -> assert false
-
+   let serialize_call_to_client (continuation, name, arg) = 
+     Json.jsonize_call continuation name arg
+       
+   let client_call : string -> Value.continuation -> Value.t list -> 'a =
+     fun name cont args ->
+       let call_package = Utility.base64encode (serialize_call_to_client (cont, name, args)) in
+         Library.print_http_response ["Content-type", "text/plain"] call_package;
+         exit 0
+      
   let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
   module Q =
@@ -237,8 +243,11 @@ module Eval = struct
                   computation env cont body
             | None -> eval_error "Error looking up recursive function definition"
         end
-    | `PrimitiveFunction n, ps -> apply_cont cont env (apply_prim n ps)
-    | `ClientFunction name, ps -> client_call name cont ps
+    | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
+    | `ClientFunction name, args ->
+(*         Debug.print ("calling client function: "^name); *)
+(*         Debug.print ("args: "^mapstrcat "," Value.string_of_value args); *)
+        client_call name cont args
     | `Continuation c,     [p] -> apply_cont c env p
     | `Continuation _,      _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -260,7 +269,7 @@ module Eval = struct
 (*               Debug.print ("var: "^string_of_int var); *)
               tail_computation env (((Var.scope_of_binder b, var, env, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-(*               Debug.print ("client f: "^string_of_int f); *)
+              Debug.print ("client f: "^string_of_int f);
               computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
 (*               Debug.print ("f: "^string_of_int f); *)
@@ -269,6 +278,19 @@ module Eval = struct
                              (`RecFunction ([f, (List.map fst args, body)], env, f),
                               Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Rec defs ->
+              (* partition the defs into client defs and non-client defs *)
+              let client_defs, defs =
+                List.partition (function
+                                  | (_fb, _lam, (`Client | `Native)) -> true
+                                  | _ -> false) defs in
+
+              (* add the client defs to the environment *)
+              let env =
+                List.fold_left
+                  (fun env ((f, _) as fb, _lam, _location) ->
+                     Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env)
+                  env client_defs in
+
               let bindings = List.map (fun ((f,_), (_, args, body), _) ->
                                          f, (List.map fst args, body)) defs in
               let env = 

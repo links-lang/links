@@ -1208,10 +1208,10 @@ let venv =
     Env.Int.empty   
 
 let value_env = 
-  ref (List.fold_right
-         (fun (name, (p, _, _)) env -> Env.Int.bind env (Env.String.lookup nenv name, impl p))
-         env
-         Env.Int.empty)
+  List.fold_right
+    (fun (name, (p, _, _)) env -> Env.Int.bind env (Env.String.lookup nenv name, impl p))
+    env
+    Env.Int.empty
 
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
@@ -1243,18 +1243,24 @@ let primitive_stub (name : string) : Value.t =
   match Env.String.find nenv name with
     | Some var ->
         begin
-          match Env.Int.lookup (!value_env) var with
+          match Env.Int.lookup (value_env) var with
             | Some (#Value.t as r) -> r
-            | _ -> `PrimitiveFunction name
+            | Some _ -> `PrimitiveFunction name
+            | None -> `ClientFunction name
         end
-    | None  -> `ClientFunction name
+    | None -> assert false
 
 let apply_pfun name args = 
-  match Env.Int.lookup (!value_env) (Env.String.lookup nenv name) with
-    | Some #Value.t -> failwith("Attempt to apply primitive non-function (" ^
-                                 name^")")
-    | Some (`PFun p) -> p args
-    | None -> Debug.print ("Undefined primitive function " ^ name); assert false
+  match Env.String.find nenv name with
+    | Some var ->
+        begin
+          match Env.Int.lookup (value_env) var with
+            | Some (#Value.t as r) ->
+                failwith("Attempt to apply primitive non-function (" ^ name ^ ")")
+            | Some (`PFun p) -> p args
+            | None -> assert false
+        end
+    | None -> assert false
 
 let is_primitive name = List.mem_assoc name env
 

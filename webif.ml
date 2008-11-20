@@ -145,12 +145,14 @@ let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original
             (Value.string_of_value v)               
     | ClientReturn(cont, value) ->
 (*        Interpreter.has_client_context := true;*)
+        Debug.print ("client return");
         let result_json = (Json.jsonize_value 
                              (Evalir.apply_cont_safe cont valenv value)) in
         Lib.print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode result_json)
     | RemoteCall(func, args) ->
 (*        Interpreter.has_client_context := true;*)
+        Debug.print ("client ->- server call");
         let result = Evalir.apply_safe valenv (func, args) in
 	  Lib.print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode (Json.jsonize_value result))
@@ -162,7 +164,6 @@ let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv program in
                Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
-(*             Irtojs.generate_program_page Lib.typing_env (List.map fst globals) program *)
            else
 (*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
              let program = wrap_with_render_page (nenv, tyenv) (locals, main) in
@@ -184,7 +185,11 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) (globals, (
       else
         Cgi.parse_args () in
       Lib.cgi_parameters := cgi_args;
-      let lookup = Lib.primitive_stub in
+      let lookup name =
+        let var = Env.String.lookup nenv name in
+          match Value.lookup var valenv with
+            | Some v -> v
+            | None -> Lib.primitive_stub name in
       let request =
         if is_remote_call cgi_args then
           get_remote_call_args lookup cgi_args
