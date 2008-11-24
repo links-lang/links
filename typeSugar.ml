@@ -64,6 +64,7 @@ struct
     | `InfixAppl _
     | `Spawn _
     | `SpawnWait _
+    | `Db _
     | `FnAppl _
     | `Switch _
     | `Receive _
@@ -1363,9 +1364,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pid_type = Types.fresh_type_variable () in
             let () = unify ~handle:Gripers.spawn_wait_process
               ((uexp_pos p, pid_type), no_pos (`Application (Types.mailbox, [Types.fresh_type_variable()]))) in
-            let p = type_check (bind_var context  (mailbox, pid_type)) p in
+            let p = type_check (bind_var context (mailbox, pid_type)) p in
               unify ~handle:Gripers.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p, Some pid_type), return_type
+        | `Db (p, _) ->
+            let p = tc p in
+              `Db (erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type context.var_env in

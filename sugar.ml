@@ -980,6 +980,7 @@ module Desugarer =
                (`FnAppl ((`Var "spawn", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
            | `SpawnWait (e, _) -> desugar 
                (`FnAppl ((`Var "spawnWait", pos'), [`FunLit (None, ([[]], e)),  pos']), pos')
+           | `Db (e, _) -> desugar e
            | `Section (`FloatMinus) -> Variable ("-.", pos)
            | `Section (`Minus) -> Variable ("-", pos)
            | `Section (`Project name) -> (let var = unique_name () in

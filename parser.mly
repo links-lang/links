@@ -59,7 +59,7 @@ let datatype d = d, None
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE DB WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY IDENTITY
 %token ESCAPE
@@ -309,6 +309,7 @@ postfix_expression:
 | block                                                        { `Block $1, pos () }
 | SPAWN block                                                  { `Spawn ((`Block $2, pos()), None), pos () }
 | SPAWNWAIT block                                              { `SpawnWait ((`Block $2, pos()), None), pos () }
+| DB block                                                     { `Db ((`Block $2, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 

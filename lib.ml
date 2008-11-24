@@ -24,7 +24,6 @@ let alias_env : Types.tycon_environment =
       "DomNode" , `Abstract Types.dom_node;
     ]
 
-
 let alias_env : Types.tycon_environment =
   AliasEnv.bind alias_env
     ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
@@ -1041,7 +1040,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (`Server (p2 (fun s r ->
         let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = unbox_string s in
-	let regex = assert false (*Regex.compile_ocaml re*) in
+	let regex = Regex.compile_ocaml re in
 	match (Str.string_match regex string 0) with
 	 false -> `List []
 	| _ -> 
@@ -1061,7 +1060,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (`Server (p2 (fun s r ->
         let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-	let regex = assert false (*Regex.compile_ocaml re *)in
+	let regex = Regex.compile_ocaml re in
 	match (Str.string_match regex string 0) with
 	 false -> `List []
 	| _ -> 
@@ -1081,7 +1080,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   ("stilde",	
    (`Server (p2 (fun s r ->
 	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in 
-	let (regex, tmpl) = assert false (*Regex.compile_ocaml l, t*) in
+	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
     datatype "(String, Regex) -> String",

@@ -29,17 +29,17 @@ let is_client_program : Ir.program -> bool =
 let serialize_call_to_client (continuation, name, arg) = 
   Json.jsonize_call continuation name arg
 
-let untuple r =
-  let rec un n accum list = 
-    match List.partition (fst ->- (=) (string_of_int n)) list with
-      | [_,item], rest -> un (n+1) (item::accum) rest
-      | [], [] -> List.rev accum
-      | _ -> assert false
-  in match r with
-    | `Record args -> un 1 [] args
-    | _ -> assert false
-
 let get_remote_call_args lookup cgi_args = 
+  let untuple r =
+    let rec un n accum list = 
+      match List.partition (fst ->- (=) (string_of_int n)) list with
+        | [_,item], rest -> un (n+1) (item::accum) rest
+        | [], [] -> List.rev accum
+        | _ -> assert false
+    in match r with
+      | `Record args -> un 1 [] args
+      | _ -> assert false in
+
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
   let args = untuple (Json.parse_json args) in
@@ -102,9 +102,6 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
       | _ -> assert false
 
 let is_remote_call params =
-  List.mem_assoc "__name" params && List.mem_assoc "__args" params
-
-let is_func_appln params =
   List.mem_assoc "__name" params && List.mem_assoc "__args" params
 
 let is_client_call_return params = 

@@ -164,6 +164,7 @@ let keywords = [
  "case"     , CASE;
  "client"   , CLIENT; 
  "database" , DATABASE;
+ "db"       , DB;
  "delete"   , DELETE;
  "else"     , ELSE; 
  "escape"   , ESCAPE; 

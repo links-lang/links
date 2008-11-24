@@ -772,6 +772,7 @@ struct
                 (I.apply_pure
                    (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
+          | `Db (e, _) -> ec e
               (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _

@@ -208,6 +208,9 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, body, body_type) = o#phrase body in
           let o = o#with_mb outer_mb in
             (o, `SpawnWait (body, Some inner_mb), body_type)
+      | `Db (body, Some t) ->
+          let (o, body, _) = o#phrase body in
+            (o, (`Db (body, Some t)), t)
       | `ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
             (o, `ListLit (es, Some t), Types.make_list_type t)

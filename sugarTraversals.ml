@@ -149,6 +149,7 @@ class map =
       | `FunLit (_x, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x_i1)
       | `Spawn (_x, _x_i1) -> let _x = o#phrase _x in `Spawn (_x, _x_i1)
       | `SpawnWait (_x, _x_i1) -> let _x = o#phrase _x in `SpawnWait (_x, _x_i1)
+      | `Db (_x, _x_i1) -> let _x = o#phrase _x in `Db (_x, _x_i1)
       | `ListLit (_x, _x_i1) ->
           let _x = o#list (fun o -> o#phrase) _x in `ListLit (_x, _x_i1)
       | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
@@ -630,6 +631,7 @@ class fold =
       | `FunLit (_x, _x_i1) -> let o = o#funlit _x_i1 in o
       | `Spawn (_x, _x_i1) -> let o = o#phrase _x in o
       | `SpawnWait (_x, _x_i1) -> let o = o#phrase _x in o
+      | `Db (_x, _x_i1) -> let o = o#phrase _x in o
       | `ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
       | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#list (fun o -> o#iterpatt) _x in
@@ -1087,6 +1089,7 @@ class fold_map =
       | `FunLit (_x, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x_i1)))
       | `Spawn (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`Spawn (_x, _x_i1)))
       | `SpawnWait (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`SpawnWait (_x, _x_i1)))
+      | `Db (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`Db (_x, _x_i1)))
       | `ListLit (_x, _x_i1) ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`ListLit (_x, _x_i1)))
       | `RangeLit ((_x_i1, _x_i2)) ->

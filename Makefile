@@ -126,7 +126,7 @@ SOURCES = $(OPC)                		\
           interpreter.mli interpreter.ml 	\
           linksregex.ml                         \
           lib.mli lib.ml                        \
-          irtojs.ml                             \
+          irtojs.mli irtojs.ml                  \
           evalir.ml                             \
           oldwebif.mli oldwebif.ml           	\
           webif.mli webif.ml                    \
