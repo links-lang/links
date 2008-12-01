@@ -616,7 +616,6 @@ and generate_special env : special -> code -> code = fun sp kappa ->
                           ("name", gv table_name);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
-      | `For (xb, source, body) -> assert false
       | `Query e -> assert false
       | `CallCC v ->
           bind_continuation kappa

@@ -73,10 +73,9 @@ and binding =
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
-  | `Database of value
+  | `Database of value 
   | `SqlQuery of SqlQuery.sqlQuery
   | `Table of (value * value * (Types.datatype * Types.datatype))
-  | `For of binder * value * computation
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
@@ -526,11 +525,6 @@ struct
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in
               `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
-        | `For (xb, source, body) ->
-            let source, _, o = o#value source in
-            let xb, o = o#binder xb in
-            let body, t, o = o#computation body in
-              `For (xb, source, body), t, o
         | `Query (range, e, t) ->
             let range, o =
               o#optionu

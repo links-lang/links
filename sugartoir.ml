@@ -131,7 +131,6 @@ sig
 
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
-  val comprehension : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
@@ -587,16 +586,6 @@ struct
     in
       M.bind (rec_binding defs) rest
 
-  let comprehension env (p, source, body) =
-    let source_type = sem_type source in
-    let elem_type = TypeUtils.element_type source_type in
-    let xb, x = Var.fresh_var_of_type elem_type in
-      bind source
-        (fun source ->
-           let body_type = sem_type body in
-           let body = CompilePatterns.let_pattern env p (`Variable x, elem_type) (reify body, body_type) in
-             reflect ([], (`Special (`For (xb, source, body)), body_type)))
-
   let switch env (v, cases, t) =
     let cases =
       List.map
@@ -731,11 +720,6 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-
-          | `Iteration ([`List (p, source)], body, None, None) ->
-(*               Debug.print ("for: " ^ Sugartypes.Show_phrasenode.show (`Iteration ([`List (p, source)], body, None, None))); *)
-              let p, penv = CompilePatterns.desugar_pattern `Local p in
-                I.comprehension env (p, ev source, eval (env ++ penv) body)
 
           | `Switch (e, cases, Some t) ->
 (*               Debug.print ("switch: "^Sugartypes.Show_phrasenode.show (`Switch (e, cases, Some t))); *)

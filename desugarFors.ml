@@ -43,69 +43,6 @@ open Sugartypes
     (q; qs)_v = (q_v, qs_v)
 *)
 
-(*
-Alternative: just desugar to unary fors
-
-    [[ for (p1 <- t1, ... pk <- tk)
-        where c
-         e ]]
-  ==
-    for (p1 <- t1)
-     ... 
-    for (pk <- tk)
-      if (c) {e} else {[]}
-
-    [[ for (p1 <- t1, ... pk <- tk)
-         e ]]
-  ==
-    for (p1 <- t1)
-     ... 
-    for (pk <- tk)
-      e
-
-
-    | `Iteration (generators, body, filter, None) ->
-        (* alternative desugaring to unary fors *)
-        let o, generators =
-          let iterpatt o =
-            function
-              | `List (p, e) ->
-                  let (o, e, _) = o#phrase e in
-                  let (o, p) = o#pattern p in
-                    o, `List (p, e)
-              | `Table (p, e) ->
-                  let (o, e, t) = o#phrase e in
-                  let (o, p) = o#pattern p in
-
-                  let r = `Type (TypeUtils.table_read_type t) in
-                  let w = `Type (TypeUtils.table_write_type t) in
-                  let mb = `Type (o#lookup_mb ()) in
-
-                  let e = `FnAppl ((`TAppl ((`Var ("asList"), dp), [r; mb; w]), dp), [e]), dp in
-                    o, (`List (p, e))
-          in
-            TransformSugar.listu o iterpatt generators in
-        let o, body, t = o#phrase body in
-
-        let elem_type = TypeUtils.element_type t in
-          
-        let body : phrase =
-          match filter with
-            | None -> body
-            | Some condition ->
-                `Conditional (condition, body, (`ListLit ([], Some elem_type), dp)), dp in
-        let e, _ =
-          List.fold_right
-            (fun generator body ->
-               `Iteration ([generator], body, None, None), dp)
-            generators
-            body                   
-        in
-          (o, e, t)
-
-
-*)
-
 let dp = Sugartypes.dummy_position
 
 (*

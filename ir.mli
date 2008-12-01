@@ -68,7 +68,6 @@ and special =
   | `Database of value
   | `SqlQuery of SqlQuery.sqlQuery
   | `Table of value * value * (Types.datatype * Types.datatype)
-  | `For of binder * value * computation
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of value ]
 and computation = binding list * tail_computation
