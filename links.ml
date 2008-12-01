@@ -74,11 +74,6 @@ let load_prelude () =
   let () = Lib.prelude_tyenv := Some tyenv in
   let () = Lib.prelude_nenv := Some nenv in
 
-    (* TODO:
-
-        - bump the variable counters
-    *)
-
   let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) globals in
   let valenv = Evalir.run_defs (Value.with_closures Value.empty_env closures) globals in
   let envs =
@@ -89,6 +84,7 @@ let load_prelude () =
     globals, envs
 
 let to_evaluate = Oldlinks.to_evaluate
+let to_precompile = Oldlinks.to_precompile
 let config_file = Oldlinks.config_file
 let options = Oldlinks.options
 
@@ -113,8 +109,8 @@ let main () =
       let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
         (* TBD: accumulate type/value environment so that "interact" has access *)
 
-      (*   let () = Utility.for_each !to_precompile (Loader.precompile_cache (snd prelude_envs)) in *)
-      (*   let () = if !to_precompile <> [] then Settings.set_value interacting false in *)
+      let () = Utility.for_each !to_precompile (Loader.precompile_cache (nenv, tyenv)) in
+      let () = if !to_precompile <> [] then Settings.set_value interacting false in
           
       let () = Utility.for_each !file_list (run_file prelude envs) in
         ()

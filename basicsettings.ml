@@ -55,3 +55,8 @@ let database_args = Settings.add_string("database_args", "", `User)
     function. When [false], functions are simply printed as "fun" *)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
+(* caching *)
+let cache_directory = 
+  Settings.add_string ("cache_directory", "", `User)
+let use_cache = Settings.add_bool("use_cache", true, `System)
+let make_cache = Settings.add_bool("make_cache", true, `System)

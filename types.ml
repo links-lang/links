@@ -128,11 +128,11 @@ module Env = Env.String
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
-
 let fresh_raw_variable : unit -> int =
   function () -> 
     incr type_variable_counter; !type_variable_counter
 
+let get_variable_counter () = !type_variable_counter
 let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
 
 (* Caveat: Map.fold behaves differently between Ocaml 3.08.3 and 3.08.4

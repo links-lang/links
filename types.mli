@@ -110,8 +110,8 @@ val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
 val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
 (** Fresh type variables *)
+val type_variable_counter : int ref
 val fresh_raw_variable : unit -> int
-
 val bump_variable_counter : int -> unit
 
 (** type variable construction *)

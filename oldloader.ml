@@ -42,11 +42,8 @@ let unmarshal_cache_file cachefile : (Types.typing_environment * Syntax.program)
 let read_cache_file cachename = 
   call_with_open_infile cachename ~binary:true unmarshal_cache_file
 
-let cache_directory_setting = 
-  Settings.add_string ("cache_directory", "", `User)
-
 let cachefile_path filename = 
-  let cachedir = Settings.get_value cache_directory_setting in
+  let cachedir = Settings.get_value Basicsettings.cache_directory in
     match cachedir with
       | "" -> filename  ^ ".cache" (* Use current dir, no fancy filename  *)
       | cachedir ->                (* Use given dir, put hash in filename *)
