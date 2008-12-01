@@ -31,8 +31,6 @@ open Ir
   - move `Section, `UnaryAppl, most of `InfixAppl, `RangeLit,
   `ListLit to frontend desugaring transformations
   - check that we're doing the right thing with tyvars
-  - implement desugar_expression
-  - compile record erasure to `Coerce and remove `Erase from the IR 
 *)
 
 (* If we implemented comparisons as primitive functions then their
@@ -124,8 +122,6 @@ sig
 
   val project : value sem * name -> value sem
   val update : value sem * (name * value sem) list -> value sem
-(* erase? *)
-  val erase :  name * value sem * datatype -> value sem
 
   val coerce : value sem * datatype -> value sem
 
@@ -437,18 +433,6 @@ struct
         fields in
     let t = TypeUtils.record_without (sem_type s) names in
       record (fields, Some (coerce (s, t)))
-
-  (* TODO:
-
-     Get rid of `Erase and use `Coerce instead once we have got rid of Syntax.
-
-     We will need to be a bit careful about compiling coercions though, because
-     ignoring them breaks non-parametric operations such as the version of
-     equality currently implemented in Links.
-  *)
-  let erase (name, s, t) =
-    bind s (fun v -> lift (`Erase (name, v), t))
-
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))

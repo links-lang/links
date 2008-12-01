@@ -171,11 +171,27 @@ module Eval = struct
                 `Record (List.rev
                            (StringMap.fold 
                               (fun label v fs ->
-                                 if List.mem_assoc label fs then 
-                                   eval_error
-                                     "Error adding fields: label %s already present"
-                                     label
-                                 else (label,value env v)::fs)
+                                 if List.mem_assoc label fs then
+                                   (label, value env v) :: (List.remove_assoc label fs)
+                                     (* HACK:
+                                        
+                                        Currently record erasure is
+                                        being compiled to `Coerce, but
+                                        `Coerce is being compiled to a
+                                        no-op. This would be fine
+                                        except functions such as
+                                        equality are not parametric in
+                                        Links, so it will break
+                                        equality.
+
+                                        As long as `Coerce is a no-op
+                                        it makes sense to disable this
+                                        error. *)
+(*                                    eval_error *)
+(*                                      "Error adding fields: label %s already present" *)
+(*                                      label *)
+                                 else
+                                   (label, value env v)::fs)
                               fields
                               fs))
             | _ -> eval_error "Error adding fields: non-record"

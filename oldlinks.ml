@@ -220,8 +220,6 @@ let evaluate_string_in envs v =
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
-let to_evaluate : string list ref = ref []
-
 let load_prelude() = 
   let prelude_types, (Syntax.Program (prelude_syntax, _) as prelude_program) =
     (Errors.display_fatal
@@ -251,37 +249,8 @@ let load_prelude() =
     (prelude_compiled, Types.extend_typing_environment Library.typing_env prelude_types) in
     prelude_syntax, prelude_envs
 
-let run_tests tests () = 
-  begin
-    Test.run tests;
-    exit 0
-  end
-
-let config_file   : string option ref = ref None
-let to_precompile : string list ref   = ref []
-
-let options : opt list = 
-  let set setting value = Some (fun () -> Settings.set_value setting value) in
-  [
-    ('d',     "debug",               set Debug.debugging_enabled true, None);
-    ('w',     "web-mode",            set web_mode true,                None);
-    ('O',     "optimize",            set Optimiser.optimising true,    None);
-    (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set printing_types false,         None);
-    ('p',     "print-ir",            set pretty_print_ir true,         None);
-    ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
-    (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
-    (noshort, "dump",                None,
-     Some(fun filename -> Oldloader.print_cache filename;  
-            Settings.set_value interacting false));
-    (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
-    (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
-    (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
-    (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
-    (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None);
-    (noshort, "pp",                  None,                             Some (Settings.set_value pp));
-    (noshort, "ir",                  set ir true,                      Some (fun v -> Settings.parse_and_set ("ir", v)));
-    ]
+let to_evaluate : string list ref = ref []
+let to_precompile : string list ref = ref []
 
 let main file_list =
   let prelude_syntax, prelude_envs = load_prelude() in

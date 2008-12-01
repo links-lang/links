@@ -874,6 +874,45 @@ let unify ~pos ~(handle:Gripers.griper) ((_,ltype as t1), (_,rtype as t2)) =
       Unify.Failure error ->
         handle ~pos ~t1 ~t2 ~error
 
+(** check for duplicate names in a list of pattern *)
+let check_for_duplicate_names : Sugartypes.position -> pattern list -> unit = fun pos ps ->
+  let add name binder binderss =
+    if StringMap.mem name binderss then
+      let (count, binders) = StringMap.find name binderss in
+        StringMap.add name (count+1, binder::binders) binderss
+    else
+      StringMap.add name (1, [binder]) binderss in   
+      
+  let rec gather binderss ((p : patternnode), pos) =
+    match p with
+      | `Any -> binderss
+      | `Nil -> binderss
+      | `Cons (p, q) ->
+          let binderss = gather binderss p in gather binderss q
+      | `List ps ->
+          List.fold_right (fun p binderss -> gather binderss p) ps binderss
+      | `Variant (_, p) ->
+          opt_app (fun p -> gather binderss p) binderss p
+      | `Negative _ -> binderss
+      | `Record (ps, p) ->
+          let binderss = List.fold_right (fun (_, p) binderss -> gather binderss p) ps binderss in
+            opt_app (fun p -> gather binderss p) binderss p
+      | `Tuple ps ->
+          List.fold_right (fun p binderss -> gather binderss p) ps binderss
+      | `Constant _ -> binderss
+      | `Variable ((name, _, _) as binder) ->
+          add name binder binderss
+      | `As (((name, _, _) as binder), p) ->
+          let binderss = gather binderss p in
+            add name binder binderss
+      | `HasType (p, _) -> gather binderss p in
+
+  let binderss =
+    List.fold_left gather StringMap.empty ps in
+  let dups = StringMap.filter (fun (i, _) -> i > 1) binderss in
+    if not (StringMap.is_empty dups) then
+      Gripers.duplicate_names_in_pattern pos
+
 let type_pattern closed : pattern -> pattern * Types.environment * Types.datatype =
   let make_singleton_row =
     match closed with
@@ -889,43 +928,6 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
     List.fold_right
        (fun name fields ->
           StringMap.add name (`Present (Types.fresh_type_variable ())) fields) names StringMap.empty in
-
-  let check_for_duplicate_names : pattern -> unit = fun (p, pos) ->
-    let add name binder binderss =
-      if StringMap.mem name binderss then
-        let (count, binders) = StringMap.find name binderss in
-          StringMap.add name (count+1, binder::binders) binderss
-      else
-        StringMap.add name (1, [binder]) binderss in   
-      
-    let rec gather binderss ((p : patternnode), pos) =
-      match p with
-        | `Any -> binderss
-        | `Nil -> binderss
-        | `Cons (p, q) ->
-            let binderss = gather binderss p in gather binderss q
-        | `List ps ->
-            List.fold_right (fun p binderss -> gather binderss p) ps binderss
-        | `Variant (_, p) ->
-            opt_app (fun p -> gather binderss p) binderss p
-        | `Negative _ -> binderss
-        | `Record (ps, p) ->
-            let binderss = List.fold_right (fun (_, p) binderss -> gather binderss p) ps binderss in
-              opt_app (fun p -> gather binderss p) binderss p
-        | `Tuple ps ->
-            List.fold_right (fun p binderss -> gather binderss p) ps binderss
-        | `Constant _ -> binderss
-        | `Variable ((name, _, _) as binder) ->
-            add name binder binderss
-        | `As (((name, _, _) as binder), p) ->
-            let binderss = gather binderss p in
-              add name binder binderss
-        | `HasType (p, _) -> gather binderss p in
-    let binderss = gather StringMap.empty (p, pos) in
-    let dups = StringMap.filter (fun (i, _) -> i > 1) binderss
-    in
-      if not (StringMap.is_empty dups) then
-        Gripers.duplicate_names_in_pattern pos in
 
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
@@ -1046,7 +1048,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
       (p, pos'), env, (outer_type, inner_type)
   in
     fun pattern ->
-      let _ = check_for_duplicate_names pattern in
+      let () = check_for_duplicate_names (snd pattern) [pattern] in
       let pos, env, (outer_type, _) = type_pattern pattern in
         pos, env, outer_type
 
@@ -1196,6 +1198,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let ps = List.map tc ps in
               `TupleLit (List.map erase ps), Types.make_tuple_type (List.map typ ps)
         | `RecordLit (fields, rest) ->
+            (* TODO: check that there are no duplicates in fields *)
             let fields, field_env, absent_field_env = 
               List.fold_right
                 (fun (label, e) (fields, field_env, absent_field_env) ->
@@ -1247,6 +1250,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [typ e])
             end
         | `FunLit (_, (pats, body)) ->
+            let () = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
             let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
             let {var_env = env'} = List.fold_left fold_in_envs context pats in
@@ -1585,16 +1589,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                                    (l, `Present fieldtype))));
               `Projection (erase r, l), fieldtype
         | `With (r, fields) ->
-            let r = tc r
-            and fields = alistmap tc fields in
-            let rtype = typ r 
-            and fields_type =
-              `Record (List.fold_right
-                         (fun (lab, _) row ->
-                            Types.row_with (lab, `Present (Types.fresh_type_variable ())) row)
-                         fields (Types.make_empty_open_row ())) in
-              unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type);
-              `With (erase r, alistmap erase fields), rtype
+            let r = tc r in
+            let fields = alistmap tc fields in
+
+            let () =
+              let fields_type =
+                `Record (List.fold_right
+                           (fun (lab, _) row ->
+                              Types.row_with (lab, `Present (Types.fresh_type_variable ())) row)
+                           fields (Types.make_empty_open_row ())) in
+                unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type) in
+            let (rfields, row_var), _ = Types.unwrap_row (TypeUtils.extract_row (typ r)) in
+            let rfields =
+              StringMap.mapi
+                (fun name t ->
+                   if List.mem_assoc name fields then
+                     `Present (snd (List.assoc name fields))
+                   else t)
+                rfields
+            in
+              `With (erase r, alistmap erase fields), `Record (rfields, row_var)
         | `TypeAnnotation (e, (_, Some t as dt)) ->
             let e = tc e in
               unify ~handle:Gripers.type_annotation (pos_and_typ e, no_pos t);
@@ -1672,7 +1686,8 @@ and type_binding : context -> binding -> binding * context =
           in
             `Val (tyvars, pat, body, location, datatype), 
           {var_env = penv; tycon_env = Env.empty}
-      | `Fun (((name,_,pos), (_, (pats, body)), location, t) as def) ->
+      | `Fun (((name,_,fpos), (_, (pats, body)), location, t) as def) ->
+          let () = check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
 
           (* Check that any annotation matches the shape of the function *)
@@ -1698,7 +1713,7 @@ and type_binding : context -> binding -> binding * context =
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
           let ft = Instantiate.freshen_quantifiers ft in            
-            (`Fun ((name, Some ft, pos),
+            (`Fun ((name, Some ft, fpos),
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
              {empty_context with var_env = Env.bind Env.empty (name, ft)})
@@ -1719,6 +1734,7 @@ and type_binding : context -> binding -> binding * context =
             List.fold_left
               (fun (inner_env, patss) ((name,_,_), (_, (pats, body)), _, t, pos) ->
 (*                  Debug.print ("A("^name^")"); *)
+                 let () = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
                  let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
                  let inner =
