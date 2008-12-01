@@ -71,13 +71,11 @@ let fresh_pid =
     the only kind of lists that are allowed to be inserted into databases
     are strings
 *)
-let value_as_string db = assert false
-(*
+let value_as_string db =
   function
     | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
     | `List ([])  -> "\'\'"
     | (a) -> string_of_value a
-*)
 
 let cond_from_field db (k, v) =
   "("^ k ^" = "^ value_as_string db v ^")"
@@ -233,7 +231,8 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
 
-let prelude_env = ref None (* :-( *)
+let prelude_tyenv = ref None (* :-( *)
+let prelude_nenv = ref None (* :-( *)
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+/) PURE;
@@ -405,6 +404,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p2 (fun x xs ->
          box_list (x :: (unbox_list xs))),
    datatype "(a, [a]) -> [a]",
+   PURE);
+
+  "Singleton",
+  (p1 (fun x ->
+         box_list [x]),
+   datatype "(a) -> [a]",
    PURE);
 
   "Concat",
@@ -903,8 +908,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   and vss = row_values db rows
                   in
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                    failwith "not implemented insertrows"
-(*                    (Database.execute_insert (table_name, field_names, vss) db)*)
+                   (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w]) -> ()",
   IMPURE);
@@ -922,8 +926,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                    failwith "not implemented insertReturning"
-(*                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)*)
+                   (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w], String) -> Int",
   IMPURE);
@@ -941,8 +944,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ^ " where " ^ single_match db (links_fst row)
                                in
                                  prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
-                                 failwith "not implemented updaterows";
-(*                                 ignore (Database.execute_command query_string db)*))
+                                 ignore (Database.execute_command query_string db))
                     rows;
                   `Record [])),
    datatype "(TableHandle(r, w), [(r, w)]) -> ()",
@@ -958,8 +960,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   let query_string = "delete from " ^ table_name ^ " where " ^ condition
                   in
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
-                    failwith "not implemented deleterows";
-(*                    (Database.execute_command query_string db)*)
+                    (Database.execute_command query_string db)
               | _ -> failwith "Internal error: delete row from non-database")),
    datatype "(TableHandle(r, w), [r]) -> ()",
   IMPURE);
@@ -1159,7 +1160,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "dumpTypes",
   (`Server (p1 (fun code ->
                   try
-                    let ts = DumpTypes.program (val_of (!prelude_env)) (unbox_string code) in
+                    let ts = DumpTypes.program (val_of (!prelude_tyenv)) (unbox_string code) in
                       
                     let line ({Lexing.pos_lnum=l}, _, _) = l in
                     let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in

@@ -158,7 +158,7 @@ and phrasenode = [
 | `FunLit           of ((Types.datatype * Types.datatype) list) option * funlit
 | `Spawn            of phrase * Types.datatype option
 | `SpawnWait        of phrase * Types.datatype option
-| `Db               of phrase * Types.datatype option
+| `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
@@ -283,7 +283,6 @@ struct
 
     | `Spawn (p, _)
     | `SpawnWait (p, _)
-    | `Db (p, _)
     | `TAppl (p, _)
     | `FormBinding (p, _)
     | `Projection (p, _)
@@ -294,6 +293,9 @@ struct
 
     | `ListLit (ps, _)
     | `TupleLit ps -> union_map phrase ps
+
+    | `Query (None, p, _) -> phrase p
+    | `Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]
 
     | `Escape ((v,_,_), p) -> diff (phrase p) (singleton v)
     | `FormletPlacement (p1, p2, p3)

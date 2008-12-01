@@ -365,7 +365,7 @@ struct
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
   let table_query (query, t) =
-    lift (`Special (`Query query), t)
+    lift (`Special (`SqlQuery query), t)
   let table_handle (database, table, ts, t) =
     bind database
       (fun database ->

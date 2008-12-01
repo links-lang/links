@@ -873,7 +873,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (*                 | `Database (db, _) -> db *)
   (*                 | _ -> assert false in *)
   (*             let query = unbox_string query in *)
-  (*               Database.execute_untyped_select query db)), *)
+  (*               Olddatabase.execute_untyped_select query db)), *)
   (*    datatype "(Database, String) -> [[String]]", *)
   (*    IMPURE); *)
 
@@ -887,7 +887,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   and vss = row_values db rows
                   in
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                    (Database.execute_insert (table_name, field_names, vss) db)
+                    (Olddatabase.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w]) -> ()",
   IMPURE);
@@ -905,7 +905,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+                    (Olddatabase.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w), [w], String) -> Int",
   IMPURE);
@@ -923,7 +923,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ^ " where " ^ single_match db (links_fst row)
                                in
                                  prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string);
-                                 ignore (Database.execute_command query_string db))
+                                 ignore (Olddatabase.execute_command query_string db))
                     rows;
                   `Record [])),
    datatype "(TableHandle(r, w), [(r, w)]) -> ()",
@@ -939,7 +939,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   let query_string = "delete from " ^ table_name ^ " where " ^ condition
                   in
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
-                    (Database.execute_command query_string db)
+                    (Olddatabase.execute_command query_string db)
               | _ -> failwith "Internal error: delete row from non-database")),
    datatype "(TableHandle(r, w), [r]) -> ()",
   IMPURE);

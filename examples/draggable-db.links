@@ -55,9 +55,14 @@ fun itemsTable() server {
 }
 
 fun load() server {
-  for (var item <-- itemsTable())
-    orderby (item.i)
-    [item.name]
+  var t = itemsTable();
+  var items =
+    query {
+      for (var item <-- t)
+       orderby ((1=item.i))
+        [(name=item.name)]
+    };
+  map ((.name), items)
 }
 
 fun save(itemsList) server {

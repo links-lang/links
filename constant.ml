@@ -14,3 +14,11 @@ let constant_type = function
   | `Bool _   -> `Primitive `Bool
   | `Char _   -> `Primitive `Char
   | `String _ ->  Types.string_type
+
+let string_of_constant =
+  function
+    | `Bool value -> string_of_bool value
+    | `Int value -> Num.string_of_num value
+    | `Char c -> "'"^ Char.escaped c ^"'" 
+    | `String s -> "\"" ^ s ^ "\""
+    | `Float value   -> string_of_float value

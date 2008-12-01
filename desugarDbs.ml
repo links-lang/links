@@ -8,15 +8,18 @@ open Utility
   -->
     let
       t = e
+      rows = query {for (p as r <-- t) where b [r]}
     in
-      deleterows (t, for (p as r <- t) where b [r])
+      deleterows (t, rows)
 
     update (p <- e) where b set (l1=e1, ..., lk=ek)
   -->
     let
       t = e
+      rows = query {for (p as r <-- t) where b [r]}
+      row_pairs = for (p as r <- rows) [(r, (l1=e1, ..., lk=ek))]
     in
-      updaterows (t, for (p as r <- t) where b [(r, (l1=e1, ..., lk=ek))])
+      updaterows (t, row_pairs)
 
     insert table values rows
   -->
@@ -51,8 +54,12 @@ object (o : 'self_type)
         let o, condition, _ = TransformSugar.option o (fun o -> o#phrase) condition in
 
         let rows : Sugartypes.phrase =
-          `Iteration ([`Table ((`As (rb, pattern), dp), t)],
-                      (`ListLit ([r], Some (Types.make_list_type read_type)), dp), condition, None), dp in
+          let rows_type = Types.make_list_type read_type in
+            `Query
+              (None,
+               (`Iteration ([`Table ((`As (rb, pattern), dp), t)],
+                            (`ListLit ([r], Some read_type), dp), condition, None), dp),
+               Some rows_type), dp in
         let e : Sugartypes.phrasenode =
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
@@ -89,16 +96,23 @@ object (o : 'self_type)
                ts
                StringMap.empty) in
 
-        let body_type = Types.make_list_type (Types.make_tuple_type [read_type; update_type]) in
+        let rows =
+          `Query (None,
+                  (`Iteration ([`Table ((`As (rb, pattern), dp), t)],
+                               (`ListLit ([r], Some read_type), dp), condition, None), dp),
+                  Some (Types.make_list_type (read_type))), dp in
+
+        let pair_type = Types.make_tuple_type [read_type; update_type] in
 
         let body = 
           (`ListLit
              ([(`TupleLit
                   [r;
-                   (`RecordLit (fields, None), dp)]), dp], Some body_type)), dp in
+                   (`RecordLit (fields, None), dp)]), dp], Some pair_type)), dp in
          
         let row_pairs =
-          `Iteration ([`Table ((`As (rb, pattern), dp), t)], body, condition, None), dp in
+          `Iteration ([`List ((`As (rb, pattern), dp), rows)], body, None, None), dp in
+
         let e =
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],

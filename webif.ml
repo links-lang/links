@@ -44,6 +44,7 @@ let get_remote_call_args lookup cgi_args =
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
   let args = untuple (Json.parse_json args) in
   let func = lookup fname in
+    Debug.print ("client --> server call: "^fname);
     RemoteCall(func, args)
 
 let decode_continuation (cont : string) : Value.continuation =
@@ -133,7 +134,7 @@ let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (
     (bs @ [`Let (xb, ([], body))],
      `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]))
 
-let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original source *) =
+let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) (* original source *) =
   function
     | ExprEval(expr, locals) ->        
         let env = Value.shadow valenv ~by:locals in
@@ -141,15 +142,12 @@ let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original
           Lib.print_http_response [("Content-type", "text/html")]
             (Value.string_of_value v)               
     | ClientReturn(cont, value) ->
-(*        Interpreter.has_client_context := true;*)
         Debug.print ("client return");
         let result_json = (Json.jsonize_value 
                              (Evalir.apply_cont_safe cont valenv value)) in
         Lib.print_http_response [("Content-type", "text/plain")]
           (Utility.base64encode result_json)
     | RemoteCall(func, args) ->
-(*        Interpreter.has_client_context := true;*)
-        Debug.print ("client ->- server call");
         let result = Evalir.apply_safe valenv (func, args) in
 	  Lib.print_http_response [("Content-type", "text/plain")]
             (Utility.base64encode (Json.jsonize_value result))
@@ -173,8 +171,23 @@ let perform_request  (valenv, nenv, tyenv) (globals, (locals, main)) (* original
              let _env, v = Evalir.run_program valenv program in
                Value.string_of_value v)
 
-let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) (globals, (locals, main)) = 
+let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude filename =
   try 
+(*    let (valenv, nenv, tyenv) = envs in*)
+    let () = Debug.print ("Loading: "^filename^"...") in
+    let (nenv', tyenv'), (globals, (locals, main), _t) =
+      Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
+    let () = Debug.print ("...loaded") in
+(*    let () = Debug.print ("program: "^Ir.Show_program.show (globals @ locals, main)) in *)
+    let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) (globals @ locals, main) in
+
+    let valenv = Evalir.run_defs (Value.with_closures valenv closures) globals in
+
+    let valenv, nenv, tyenv  =
+      (valenv,
+       Env.String.extend nenv nenv',
+       Types.extend_typing_environment tyenv tyenv') in
+    let globals = prelude @ globals in
     let cgi_args =
       if is_multipart () then
         List.map (fun (name, {Cgi.value=value}) ->
@@ -208,5 +221,5 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) (globals, (
     | exc -> Lib.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request envs (globals, main) =
-  Errors.display (lazy (serve_request envs (globals, main)))
+let serve_request envs prelude filename =
+  Errors.display (lazy (serve_request envs prelude filename))

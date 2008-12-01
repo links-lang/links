@@ -164,7 +164,6 @@ let keywords = [
  "case"     , CASE;
  "client"   , CLIENT; 
  "database" , DATABASE;
- "db"       , DB;
  "delete"   , DELETE;
  "else"     , ELSE; 
  "escape"   , ESCAPE; 
@@ -187,6 +186,7 @@ let keywords = [
  "orderby"  , ORDERBY;
  "op"       , OP; 
  "page"     , PAGE;
+ "query"    , QUERY;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING; 

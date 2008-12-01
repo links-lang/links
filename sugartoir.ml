@@ -129,6 +129,9 @@ sig
 
   val coerce : value sem * datatype -> value sem
 
+  val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
+
+  val comprehension : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
@@ -486,6 +489,18 @@ struct
 
   let alien (x_info, language, rest) =
     M.bind (alien_binding (x_info, language)) rest
+
+  let query (range, s) =
+    let bs, e = reify s in
+      match range with
+        | None ->
+            lift (`Special (`Query (None, (bs, e), sem_type s)), sem_type s)
+        | Some (limit, offset) ->
+            bind limit
+              (fun limit ->
+                 bind offset
+                   (fun offset ->                      
+                      lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))           
    
   let comp env (p, s, body) =
     let vt = sem_type s in
@@ -571,6 +586,16 @@ struct
         defs
     in
       M.bind (rec_binding defs) rest
+
+  let comprehension env (p, source, body) =
+    let source_type = sem_type source in
+    let elem_type = TypeUtils.element_type source_type in
+    let xb, x = Var.fresh_var_of_type elem_type in
+      bind source
+        (fun source ->
+           let body_type = sem_type body in
+           let body = CompilePatterns.let_pattern env p (`Variable x, elem_type) (reify body, body_type) in
+             reflect ([], (`Special (`For (xb, source, body)), body_type)))
 
   let switch env (v, cases, t) =
     let cases =
@@ -691,7 +716,7 @@ struct
                    (List.map (fun (name, e) -> (name, ev e)) fields,
                     opt_map ev rest))
           | `Projection (e, name) ->
-(*              Debug.print ("projection: "^Sugartypes.Show_phrasenode.show (`Projection (e, name)));*)
+(*              Debug.print ("projection: "^Sugartypes.Show_phrasenode.show (`Projection (e, name))); *)
               cofv (I.project (ev e, name))
           | `With (e, fields) ->
               cofv (I.update
@@ -706,6 +731,12 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
+
+          | `Iteration ([`List (p, source)], body, None, None) ->
+(*               Debug.print ("for: " ^ Sugartypes.Show_phrasenode.show (`Iteration ([`List (p, source)], body, None, None))); *)
+              let p, penv = CompilePatterns.desugar_pattern `Local p in
+                I.comprehension env (p, ev source, eval (env ++ penv) body)
+
           | `Switch (e, cases, Some t) ->
 (*               Debug.print ("switch: "^Sugartypes.Show_phrasenode.show (`Switch (e, cases, Some t))); *)
               let cases =
@@ -772,7 +803,8 @@ struct
                 (I.apply_pure
                    (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
-          | `Db (e, _) -> ec e
+          | `Query (range, e, _) ->
+              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
               (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _
@@ -917,7 +949,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*           Debug.print (Ir.Show_program.show r); *)
+(*          Debug.print (Ir.Show_program.show r);*)
           r, I.sem_type s
 end
 

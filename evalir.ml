@@ -159,22 +159,27 @@ module Eval = struct
     | `Constant `String s -> Value.box_string s
     | `Constant `Float f -> `Float f
     | `Variable var ->
-        (match lookup_var var env with
-           | Some v -> v
-           | _      -> eval_error "Variable not found: %d" var)
+        begin
+          match lookup_var var env with
+            | Some v -> v
+            | _      -> eval_error "Variable not found: %d" var
+        end
     | `Extend (fields, r) -> 
-        (match opt_app (value env) (`Record []) r with
-           | `Record fs ->
-               `Record (StringMap.fold 
-                          (fun label v fs ->
-                             if List.mem_assoc label fs then 
-                               eval_error
-                                 "Error adding fields: label %s already present"
-                                 label
-                             else (label,value env v)::fs)
-                          fields
-                          fs)
-           | _          -> eval_error "Error adding fields: non-record")
+        begin
+          match opt_app (value env) (`Record []) r with
+            | `Record fs ->
+                `Record (List.rev
+                           (StringMap.fold 
+                              (fun label v fs ->
+                                 if List.mem_assoc label fs then 
+                                   eval_error
+                                     "Error adding fields: label %s already present"
+                                     label
+                                 else (label,value env v)::fs)
+                              fields
+                              fs))
+            | _ -> eval_error "Error adding fields: non-record"
+        end
     | `Project (label, r) ->
         (match value env r with
            | `Record fields when List.mem_assoc label fields ->
@@ -322,17 +327,43 @@ module Eval = struct
              | _              -> eval_error "Conditional was not a boolean")
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
-    | `Database v                 -> `Database (db_connect (value env v))
-    | `Query q                    -> do_query env q
+    | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
+    | `SqlQuery q                 -> do_query env q
     | `Table (db, name, (readtype, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->
-               `Table ((db, params), Value.unbox_string name, row)
+               apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
            | _ -> eval_error "Error evaluating table handle")
+    | `For (xb, source, body) ->
+        assert false
+    | `Query (range, e, _t) ->
+(*         Debug.print ("t: "^Types.string_of_datatype t); *)
+        let range =
+          match range with
+            | None -> None
+            | Some (limit, offset) ->
+                Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
+        let result =
+          match Query.compile env (range, e) with
+            | None -> computation env cont e
+            | Some (db, q, t) ->
+                let fields =
+                  let fields, _ = Types.flatten_row (TypeUtils.extract_row t) in
+                    StringMap.fold
+                      (fun name t fields->
+                         match t with
+                           | `Present t -> (name, t)::fields
+                           | `Absent -> assert false)
+                      fields
+                      []
+                in
+                  Database.execute_select fields q db
+        in
+          apply_cont cont env result
     | `CallCC f                   -> 
         apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 
-    fun env -> computation env Value.toplevel_cont (*(assert false : Value.continuation)*)
+    fun env -> computation env Value.toplevel_cont
 end
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =

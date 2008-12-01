@@ -64,7 +64,7 @@ struct
     | `InfixAppl _
     | `Spawn _
     | `SpawnWait _
-    | `Db _
+    | `Query _
     | `FnAppl _
     | `Switch _
     | `Receive _
@@ -1367,9 +1367,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let p = type_check (bind_var context (mailbox, pid_type)) p in
               unify ~handle:Gripers.spawn_wait_return (no_pos return_type, no_pos (typ p));
               `SpawnWait (erase p, Some pid_type), return_type
-        | `Db (p, _) ->
+        | `Query (range, p, _) ->
+            let range =
+              opt_map (fun (limit, offset) ->
+                         let limit = tc limit in
+                           unify ~handle:Gripers.range_bound (pos_and_typ limit, no_pos Types.int_type);
+                           let offset = tc offset in
+                             unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type);
+                             (erase limit, erase offset)) range in
             let p = tc p in
-              `Db (erase p, Some (typ p)), typ p
+              `Query (range, erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->
             let mbtype = Types.fresh_type_variable () in
             let boxed_mbtype = mailbox_type context.var_env in

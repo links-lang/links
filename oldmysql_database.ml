@@ -1,3 +1,4 @@
+open Result
 open Mysql
 
 let string_of_error_code = function
@@ -196,7 +197,7 @@ let string_of_error_code = function
 | Wrong_value_count_on_row         -> "Wrong value count on row"
 | Yes                              -> "Yes"
 
-class otherfield (thing : Mysql.dbty) : Value.otherfield =
+class otherfield (thing : Mysql.dbty) : Result.otherfield =
 object
   method show = pretty_type thing
 end
@@ -209,13 +210,13 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   in
     List.rev (obtain [])
 
-class mysql_result (result : result) db = object
-  inherit Value.dbvalue
+class mysql_result (result: result) db = object
+  inherit dbresult
   val rows = ref None
-  method status : Value.db_status = 
+  method status : db_status = 
     match status db with 
-      | StatusOK | StatusEmpty -> `QueryOk
-      | StatusError c          -> `QueryError (string_of_error_code c)
+      | StatusOK | StatusEmpty -> QueryOk
+      | StatusError c          -> QueryError (string_of_error_code c)
   method nfields : int = 
     fields result
   method fname  n : string = 
@@ -235,10 +236,10 @@ class mysql_result (result : result) db = object
 end
 
 class mysql_database spec = object(self)
-  inherit Value.database
+  inherit database
   val connection = connect spec
   method driver_name () = "mysql"
-  method exec query : Value.dbvalue = 
+  method exec query : dbresult = 
     try
       new mysql_result (exec connection query) connection
     with
@@ -267,4 +268,4 @@ let parse_args (args : string) : db =
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
 let driver_name = "mysql"
-let _ = Value.register_driver (driver_name, fun args -> new mysql_database (parse_args args), Value.reconstruct_db_string (driver_name, args))
+let _ = register_driver (driver_name, fun args -> new mysql_database (parse_args args), reconstruct_db_string (driver_name, args))

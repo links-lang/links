@@ -718,7 +718,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `Query _ ->
+      | `SqlQuery _ ->
           failwith ("Cannot (yet?) generate JavaScript code for `Query")
       | `Table (db, table_name, (readtype, writetype)) ->
           callk_yielding kappa
@@ -727,6 +727,8 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                           ("name", gv table_name);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
+      | `For (xb, source, body) -> assert false
+      | `Query e -> assert false
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))

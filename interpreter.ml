@@ -165,7 +165,7 @@ let do_query globals locals (query : SqlQuery.sqlQuery) =
     
     prerr_endline("RUNNING QUERY:\n" ^ query_string);
     let t = Unix.gettimeofday() in
-    let result = Database.execute_select result_types query_string db in
+    let result = Olddatabase.execute_select result_types query_string db in
       Debug.print("Query took : " ^ 
                     string_of_float((Unix.gettimeofday() -. t)) ^ "s");
       result

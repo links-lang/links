@@ -12,7 +12,7 @@ let print_value rtype value =
                  else "")
 
 (** optimise and evaluate a program *)
-let process_program ?(printer=print_value) (valenv, typingenv, nenv) (program, t) =
+let process_program ?(printer=print_value) (valenv, nenv, typingenv) (program, t) =
   (* TODO: the optimise part *)
 (*
   print_string ((Ir.Show_program.show program)^"\n");
@@ -25,12 +25,12 @@ let process_program ?(printer=print_value) (valenv, typingenv, nenv) (program, t
     (valenv, typingenv, nenv), v
 
 (* Read Links source code, then optimise and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) =
+let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
     handle_errors (measure "parse" parse (nenv, tyenv) ->- process_program envs)
 
 (* Read Links source code and pretty-print the IR *)
-let print_ir ?(handle_errors=Errors.display_fatal) parse (_, tyenv, nenv as envs) =
-  let printer (valenv, typingenv, nenv) (program, t) =
+let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+  let printer (valenv, nenv, typingenv) (program, t) =
     print_endline (Ir.Show_program.show program ^ "\n");
     print_endline (Ir.string_of_ir (Compileir.invert_env nenv) program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
@@ -44,19 +44,7 @@ let run_file prelude envs filename =
       ((globals @ locals, main), t)
   in
     if Settings.get_value web_mode then
-      let (valenv, tyenv, nenv) = envs in
-      let (nenv', tyenv'), (globals, (locals, main), _t) =
-        Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
-      let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) (globals @ locals, main) in
-
-      let valenv = Evalir.run_defs (Value.with_closures valenv closures) globals in
-
-      let envs =
-        (valenv,
-         Env.String.extend nenv nenv',
-         Types.extend_typing_environment tyenv tyenv')
-      in
-        Webif.serve_request envs (prelude @ globals, (locals, main))
+      Webif.serve_request envs prelude filename
     else
       if Settings.get_value pretty_print_ir then
         print_ir parse_and_desugar envs filename
@@ -83,12 +71,12 @@ let load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
        Loader.load_file (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)) in
-  let () = Lib.prelude_env := Some tyenv in
+  let () = Lib.prelude_tyenv := Some tyenv in
+  let () = Lib.prelude_nenv := Some nenv in
 
     (* TODO:
 
         - bump the variable counters
-        - run the prelude (need to implement evalir first)
     *)
 
   let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) globals in
@@ -120,7 +108,7 @@ let main () =
     begin
       let prelude, (valenv, nenv, tyenv) = load_prelude () in
 
-      let envs = (valenv, tyenv, nenv) in
+      let envs = (valenv, nenv, tyenv) in
       
       let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
         (* TBD: accumulate type/value environment so that "interact" has access *)

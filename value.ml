@@ -2,6 +2,8 @@
 open Num
 open Utility
 
+exception Runtime_error of string
+
 class type otherfield = 
 object 
   method show : string
@@ -13,7 +15,7 @@ module Show_otherfield = Show.ShowDefaults(
     let format formatter obj = Format.pp_print_string formatter (obj # show)
   end)
 
-type db_status = QueryOk | QueryError of string
+type db_status = [ `QueryOk | `QueryError of string ]
   deriving (Show)
 
 class virtual dbvalue = object
@@ -88,6 +90,15 @@ let parse_db_string : string -> (string * string) =
 and reconstruct_db_string : (string * string) -> string =
   fun (x,y) -> x ^ ":" ^ y
 
+class null_database =
+object
+  inherit database
+  method driver_name () = "null"
+  method exec query : dbvalue = assert false
+  method escape_string = assert false
+end
+
+let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))
 
 
 type binop = [ 

@@ -4,6 +4,8 @@
 open Utility
 open PP
 
+type num = Num.num
+
 type scope = Var.scope
   deriving (Show, Pickle)
 (* term variables *)
@@ -72,8 +74,10 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value
-  | `Query of SqlQuery.sqlQuery
+  | `SqlQuery of SqlQuery.sqlQuery
   | `Table of (value * value * (Types.datatype * Types.datatype))
+  | `For of binder * value * computation
+  | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show, Pickle)  
@@ -117,6 +121,10 @@ sig
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
+    method optionu :
+      'a.
+      ('self_type -> 'a -> ('a * 'self_type)) ->
+      'a option -> 'a option * 'self_type
     method option :
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
@@ -331,6 +339,18 @@ struct
         | `String _ -> c, string_type, o
         | `Float _ -> c, float_type, o
 
+
+    method optionu :
+      'a.
+      ('self_type -> 'a -> ('a * 'self_type)) ->
+      'a option -> 'a option * 'self_type =
+      fun f v ->
+        match v with
+          | None -> None, o
+          | Some v ->
+              let v, o = f o v in
+                Some v, o
+
     method option :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -491,7 +511,7 @@ struct
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `Query q ->
+        | `SqlQuery q ->
             let row =
 	      (List.fold_right
 	         (fun (expr, alias) env ->
@@ -501,11 +521,26 @@ struct
                       | _ -> assert(false) (* can't handle other kinds of expressions *))
 	         q.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
             let t =  `Application (Types.list, [`Record row]) in
-              `Query q, t, o
+              `SqlQuery q, t, o
         | `Table (db, table_name, (rt, wt)) ->
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in
               `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
+        | `For (xb, source, body) ->
+            let source, _, o = o#value source in
+            let xb, o = o#binder xb in
+            let body, t, o = o#computation body in
+              `For (xb, source, body), t, o
+        | `Query (range, e, t) ->
+            let range, o =
+              o#optionu
+                (fun o (limit, offset) ->
+                   let limit, _, o = o#value limit in
+                   let offset, _, o = o#value offset in
+                     (limit, offset), o)
+                range in
+            let e, t, o = o#computation e in
+              `Query (range, e, t), t, o
         | `CallCC v ->
             let v, t, o = o#value v in
               `CallCC v, deconstruct return_type t, o

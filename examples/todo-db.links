@@ -10,13 +10,13 @@ fun showList() server {
       <button type="submit">Add item</button>
     </form>
     <table>
-     {for (var item <-- items)
-       <tr><td>{stringToXml(item.name)}</td>
-           <td><form l:action="{remove(item.name)}" method="POST">
-                <button type="submit">Done</button>
-               </form>
-           </td>
-       </tr>}
+     {for (var item <- query {asList(items)})
+        <tr><td>{stringToXml(item.name)}</td>
+            <td><form l:action="{remove(item.name)}" method="POST">
+                 <button type="submit">Done</button>
+                </form>
+            </td>
+        </tr>}
      </table>
     </body>
   </html>

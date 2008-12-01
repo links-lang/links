@@ -31,7 +31,7 @@ type constant = Constant.constant
 type location = Syntax.location
   deriving (Show)
 
-(* INVARIANT: all IR binders should have unique names *)
+(* INVARIANT: all IR binders have unique names *)
 
 type value =
   [ `Constant of constant
@@ -66,8 +66,10 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value
-  | `Query of SqlQuery.sqlQuery
+  | `SqlQuery of SqlQuery.sqlQuery
   | `Table of value * value * (Types.datatype * Types.datatype)
+  | `For of binder * value * computation
+  | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show, Pickle)
@@ -104,6 +106,10 @@ sig
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
+    method optionu :
+      'a.
+      ('self_type -> 'a -> ('a * 'self_type)) ->
+      'a option -> 'a option * 'self_type
     method option :
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->

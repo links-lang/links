@@ -1,10 +1,12 @@
 (*pp deriving *)
 (* Values and environments *)
 
+exception Runtime_error of string
+
 class type otherfield
  = object method show : string end
 
-type db_status = QueryOk | QueryError of string
+type db_status = [ `QueryOk | `QueryError of string ]
 
 class virtual dbvalue :
   object

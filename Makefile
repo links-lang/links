@@ -17,7 +17,7 @@ ifdef SQLITE3_LIBDIR
 endif
 
 ifdef MYSQL_LIBDIR
-   DB_CODE    += mysql_database.ml
+   DB_CODE    += oldmysql_database.ml mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
@@ -102,13 +102,12 @@ SOURCES = $(OPC)                		\
           sugar.mli sugar.ml    		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
-          $(DB_CODE)            		\
-          database.mli database.ml 		\
           inference.mli inference.ml 		\
           oldjsonparse.mly         		\
           oldjsonlex.mll           		\
           oldjson.ml               		\
           oldlinksregex.ml                      \
+          olddatabase.mli olddatabase.ml        \
           library.mli library.ml 		\
           optimiser.mli optimiser.ml    	\
           var.ml                                \
@@ -123,10 +122,13 @@ SOURCES = $(OPC)                		\
           oldloader.mli oldloader.ml            \
           loader.mli loader.ml                  \
           oldirtojs.mli oldirtojs.ml            \
+          $(DB_CODE)            		\
           interpreter.mli interpreter.ml 	\
           linksregex.ml                         \
+          database.mli database.ml 		\
           lib.mli lib.ml                        \
           irtojs.mli irtojs.ml                  \
+          query.ml                              \
           evalir.ml                             \
           oldwebif.mli oldwebif.ml           	\
           webif.mli webif.ml                    \
