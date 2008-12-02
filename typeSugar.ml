@@ -1198,7 +1198,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let ps = List.map tc ps in
               `TupleLit (List.map erase ps), Types.make_tuple_type (List.map typ ps)
         | `RecordLit (fields, rest) ->
-            (* TODO: check that there are no duplicates in fields *)
+            let _ =
+              (* check that each label only occurs once *)
+              List.fold_left
+                (fun labels (name, _) ->
+                   if StringSet.mem name labels then
+                     Gripers.die pos ("Duplicate labels (" ^ name ^ ") in record.")
+                   else
+                     StringSet.add name labels)
+                StringSet.empty fields in
             let fields, field_env, absent_field_env = 
               List.fold_right
                 (fun (label, e) (fields, field_env, absent_field_env) ->
