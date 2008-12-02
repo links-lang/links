@@ -35,7 +35,7 @@ let var_of_binder (x, _) = x
 type constant = Constant.constant
   deriving (Show, Pickle)
 
-type location = Syntax.location
+type location = Sugartypes.location
   deriving (Show, Pickle)
 
 type value =
@@ -51,8 +51,6 @@ type value =
 
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
-  (* should really be implemented as constants *)
-  | `Comparison of (value * Syntaxutils.comparison * value)
 
   | `Coerce of (value * Types.datatype)
   ]
@@ -74,7 +72,6 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value 
-  | `SqlQuery of SqlQuery.sqlQuery
   | `Table of (value * value * (Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of (value) ]
@@ -180,12 +177,12 @@ object (o : 'self_type)
       | `Float x -> string_of_float x
     in text s
 
-  method comparison : Syntaxutils.comparison -> doc = fun cmp ->
-    match cmp with
-      | `Less -> text "<"
-      | `LessEq -> text "<="
-      | `Equal -> text "=="
-      | `NotEq -> text "!="
+(*   method comparison : Syntaxutils.comparison -> doc = fun cmp -> *)
+(*     match cmp with *)
+(*       | `Less -> text "<" *)
+(*       | `LessEq -> text "<=" *)
+(*       | `Equal -> text "==" *)
+(*       | `NotEq -> text "!=" *)
 
   method value : value -> doc = fun v ->
     match v with 
@@ -210,10 +207,11 @@ object (o : 'self_type)
       | `XmlNode _ -> text "XMLNODE"
       | `ApplyPure (v, vl) ->
           group (nest 2 (parens (o#value v ^| (doc_join o#value vl))))
-      | `Comparison (v1, cmp, v2) -> 
-          group (
-            nest 2 (
-              group (o#value v1 ^| o#comparison cmp) ^| o#value v2))
+(* Comparisons are now desugared as primitive functions *)
+(*       | `Comparison (v1, cmp, v2) ->  *)
+(*           group ( *)
+(*             nest 2 ( *)
+(*               group (o#value v1 ^| o#comparison cmp) ^| o#value v2)) *)
       | `Coerce _ -> text "COERCE"
           
   method tail_computation : tail_computation -> doc = fun tc ->
@@ -451,11 +449,6 @@ struct
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `ApplyPure (f, args), deconstruct return_type ft, o
-        | `Comparison (v, op, w) ->
-            let v, _, o = o#value v in
-            let w, _, o = o#value w in
-              `Comparison (v, op, w), bool_type, o
-            (* TODO: get rid of comparison *)
         | `Coerce (v, t) ->
             let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
@@ -510,17 +503,6 @@ struct
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `SqlQuery q ->
-            let row =
-	      (List.fold_right
-	         (fun (expr, alias) env ->
-                    match expr with 
-                      | `F field -> 
-                          StringMap.add alias (`Present field.SqlQuery.ty) env
-                      | _ -> assert(false) (* can't handle other kinds of expressions *))
-	         q.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
-            let t =  `Application (Types.list, [`Record row]) in
-              `SqlQuery q, t, o
         | `Table (db, table_name, (rt, wt)) ->
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in

@@ -37,11 +37,7 @@ struct
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-      ->- after_typing
-        (if Settings.get_value Basicsettings.ir then
-           (DesugarFuns.desugar_funs tyenv)#program ->- snd3
-         else
-           fun x -> x))
+      ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
         program
 
   let interactive =
@@ -58,9 +54,5 @@ struct
       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
       ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
-      ->- after_typing
-        (if Settings.get_value Basicsettings.ir then
-           (DesugarFuns.desugar_funs tyenv)#sentence ->- snd
-         else
-           fun x -> x))
+      ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd))
 end

@@ -37,13 +37,6 @@ val db_connect : string -> string -> database * string
 val parse_db_string : string -> string * string
 val reconstruct_db_string : string * string -> string
 
-type binop = [ 
-| Syntaxutils.comparison
-| `Union
-| `App
-| `RecExt of string
-| `MkTableHandle of Types.row ]
-
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)

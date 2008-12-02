@@ -28,7 +28,7 @@ type language = string
 type constant = Constant.constant
   deriving (Show)
 
-type location = Syntax.location
+type location = Sugartypes.location
   deriving (Show)
 
 (* INVARIANT: all IR binders have unique names *)
@@ -46,7 +46,6 @@ type value =
 
   | `XmlNode of name * value name_map * value list
   | `ApplyPure of value * value list
-  | `Comparison of value * Syntaxutils.comparison * value    (* should really be implemented as constants *)
 
   | `Coerce of value * Types.datatype
   ]
@@ -66,7 +65,6 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value
-  | `SqlQuery of SqlQuery.sqlQuery
   | `Table of value * value * (Types.datatype * Types.datatype)
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of value ]

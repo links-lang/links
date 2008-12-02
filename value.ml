@@ -100,15 +100,6 @@ end
 
 let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))
 
-
-type binop = [ 
-| Syntaxutils.comparison
-| `Union
-| `App
-| `RecExt of string
-| `MkTableHandle of Types.row ]
-  deriving (Show)
-
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)

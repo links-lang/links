@@ -145,8 +145,6 @@ module Eval = struct
             | TopLevel (_, v) -> atomic := false; v
         end
     | `Coerce (v, t) -> value env v
-    (* TODO: replace comparisons with primitive functions *)
-    | `Comparison _ -> assert false
 
   and apply cont env : Value.t * Value.t list -> Value.t = function
     | `RecFunction (recs, locals, n), ps -> 
@@ -278,7 +276,6 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `SqlQuery q                 -> assert false (* this is going to go *)
     | `Table (db, name, (readtype, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->

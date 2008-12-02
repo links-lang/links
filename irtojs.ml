@@ -65,7 +65,7 @@ type venv = string VEnv.t
   _start(tree)
     Replace the current page with `tree'.
 
-  Also, any `builtin' functions from Library.value_env.
+  Also, any `builtin' functions from Lib.value_env.
  *)
 
 (* Ugly printer for JavaScript code *)
@@ -491,7 +491,7 @@ struct
                     ]
 
   let has_symbols name =
-    not (Library.is_primitive name) &&
+    not (Lib.is_primitive name) &&
       List.exists (not -<- Utility.Char.isWord) (explode name)
 
   let wordify name = 
@@ -619,9 +619,9 @@ let rec generate_value env : Ir.value -> code =
                           | [v] when f_name = "negate" || f_name = "negatef" ->
                               Unop ("-", gv v)
                           | _ ->
-                              if Library.is_primitive f_name
+                              if Lib.is_primitive f_name
                                 && not (List.mem f_name cps_prims)
-                                && Library.primitive_location f_name <> `Server 
+                                && Lib.primitive_location f_name <> `Server 
                               then
                                 Call (Var ("_" ^ f_name), List.map gv vs)
                               else
@@ -632,7 +632,6 @@ let rec generate_value env : Ir.value -> code =
             end
       | `Coerce (v, _) ->     
           gv v
-      | `Comparison _ -> assert false
 
 and generate_xml env tag attrs children =
   Call(Var "LINKS.XML",
@@ -674,9 +673,9 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code = fu
                             | [v] when f_name = "negate" || f_name = "negatef" ->
                                 callk_yielding kappa (Unop ("-", gv v))
                             | _ ->
-                                if Library.is_primitive f_name
+                                if Lib.is_primitive f_name
                                   && not (List.mem f_name cps_prims)
-                                  && Library.primitive_location f_name <> `Server 
+                                  && Lib.primitive_location f_name <> `Server 
                                 then
                                   Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
                                 else
@@ -718,8 +717,6 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `SqlQuery _ ->
-          failwith ("Cannot (yet?) generate JavaScript code for `Query")
       | `Table (db, table_name, (readtype, writetype)) ->
           callk_yielding kappa
             (Dict [("_table",
@@ -941,9 +938,21 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   </script>")
     
 let wrap_with_server_stubs (code : code) : code = 
-  let server_library_funcs = (List.filter (fun (name,_) -> 
-                                             Library.primitive_location name = `Server)
-                                (StringMap.to_alist !Library.value_env)) in
+  let server_library_funcs =
+    List.rev
+      (Env.Int.fold
+         (fun var v funcs ->
+            let name = Lib.primitive_name var in
+              if Lib.primitive_location name = `Server then
+                (name, v)::funcs
+              else
+                funcs)
+         (Lib.value_env) []) in
+
+(*     List.filter *)
+(*       (fun (name,_) ->  *)
+(*          Lib.primitive_location name = `Server) *)
+(*       (StringMap.to_alist !Lib.value_env)) in *)
 
   let rec some_vars = function 
       0 -> []      
@@ -951,7 +960,7 @@ let wrap_with_server_stubs (code : code) : code =
     
   let prim_server_calls =
     concat_map (fun (name, _) -> 
-                  match Library.primitive_arity name with
+                  match Lib.primitive_arity name with
                         None -> []
                     | Some arity ->
                         let args = some_vars arity in

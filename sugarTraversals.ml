@@ -48,13 +48,6 @@ class map =
         let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
         let _x_i2 = o#position _x_i2 in (_x, _x_i1, _x_i2)
       
-    method sentence' : sentence' -> sentence' =
-      function
-      | `Definitions _x ->
-          let _x = o#list (fun o -> o#unknown) _x in `Definitions _x
-      | `Expression _x -> let _x = o#unknown _x in `Expression _x
-      | `Directive _x -> let _x = o#directive _x in `Directive _x
-      
     method sentence : sentence -> sentence =
       function
       | `Definitions _x ->
@@ -545,12 +538,6 @@ class fold =
         let o = o#option (fun o -> o#unknown) _x_i1 in
         let o = o#position _x_i2 in o
 
-    method sentence' : sentence' -> 'self_type =
-      function
-      | `Definitions _x -> let o = o#list (fun o -> o#unknown) _x in o
-      | `Expression _x -> let o = o#unknown _x in o
-      | `Directive _x -> let o = o#directive _x in o
-      
     method sentence : sentence -> 'self_type =
       function
       | `Definitions _x -> let o = o#list (fun o -> o#binding) _x in o
@@ -996,14 +983,6 @@ class fold_map =
       fun (_x, _x_i1) ->
         let (o, _x_i1) = o#unary_op _x_i1 in (o, (_x, _x_i1))
 
-    method sentence' : sentence' -> ('self_type * sentence') =
-      function
-      | `Definitions _x ->
-          let (o, _x) = o#list (fun o -> o#unknown) _x
-          in (o, (`Definitions _x))
-      | `Expression _x -> let (o, _x) = o#unknown _x in (o, (`Expression _x))
-      | `Directive _x -> let (o, _x) = o#directive _x in (o, (`Directive _x))
-      
     method sentence : sentence -> ('self_type * sentence) =
       function
       | `Definitions _x ->

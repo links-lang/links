@@ -41,8 +41,8 @@ let rec directives
        (fun _ ->
           StringSet.iter (fun n ->
                        Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (Env.String.lookup Library.type_env n)))
-            (Env.String.domain Library.type_env)),
+                         n (Types.string_of_datatype (Env.String.lookup Lib.type_env n)))
+            (Env.String.domain Lib.type_env)),
      "list builtin functions and values");
 
     "quit",
@@ -53,7 +53,7 @@ let rec directives
         StringSet.iter (fun k ->
                 Printf.fprintf stderr " %-16s : %s\n"
                   k (Types.string_of_datatype (Env.String.lookup typeenv k)))
-          (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Library.type_env));
+          (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Lib.type_env));
         envs),
      "display the current type environment");
 
@@ -100,7 +100,7 @@ let rec directives
                            let ttype = Types.string_of_datatype t' in
                            let fresh_envs = Types.make_fresh_envs t' in
                            let t' = Instantiate.datatype fresh_envs t' in 
-                             Inference.unify (t,t');
+                             Unify.datatypes (t,t');
                              Printf.fprintf stderr " %s : %s\n" id ttype
                          end with _ -> ()))
                 (Env.String.domain tenv)
@@ -283,7 +283,7 @@ let load_prelude () =
 
 let run_tests tests () = 
   begin
-    Test.run tests;
+(*    Test.run tests;*)
     exit 0
   end
 
@@ -296,22 +296,20 @@ let options : opt list =
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web-mode",            set web_mode true,                None);
-    ('O',     "optimize",            set Optimiser.optimising true,    None);
+(*    ('O',     "optimize",            set Optimiser.optimising true,    None);*)
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('p',     "print-ir",            set pretty_print_ir true,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
-     Some(fun filename -> Oldloader.print_cache filename;  
+     Some(fun filename -> Loader.print_cache filename;  
             Settings.set_value interacting false));
     (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
-    (noshort, "test",                Some (fun _ -> SqlcompileTest.test(); exit 0),     None);
-    (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None);
-    (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None);
-    (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None);
+(*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
+(*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
+(*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
     (noshort, "pp",                  None,                             Some (Settings.set_value pp));
-    (noshort, "ir",                  set ir true,                      Some (fun v -> Settings.parse_and_set ("ir", v)));
     ]
 
 let main () =
@@ -326,27 +324,18 @@ let main () =
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
 
-  if Settings.get_value ir then
-    begin
-      let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
-      
-      let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
-        (* TBD: accumulate type/value environment so that "interact" has access *)
+  let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
+    
+  let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
+    (* TBD: accumulate type/value environment so that "interact" has access *)
 
-      let () = Utility.for_each !to_precompile (Loader.precompile_cache (nenv, tyenv)) in
-      let () = if !to_precompile <> [] then Settings.set_value interacting false in
+  let () = Utility.for_each !to_precompile (Loader.precompile_cache (nenv, tyenv)) in
+  let () = if !to_precompile <> [] then Settings.set_value interacting false in
           
-      let () = Utility.for_each !file_list (run_file prelude envs) in       
-        if Settings.get_value interacting then
-          let () = print_endline (Settings.get_value welcome_note) in
-            interact envs
-    end
-  else
-    begin
-      Oldlinks.to_evaluate := !to_evaluate;
-      Oldlinks.to_precompile := !to_precompile;
-      Oldlinks.main file_list
-    end
-      
+  let () = Utility.for_each !file_list (run_file prelude envs) in       
+    if Settings.get_value interacting then
+      let () = print_endline (Settings.get_value welcome_note) in
+        interact envs
+
 let _ =
   main ()

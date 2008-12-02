@@ -71,8 +71,9 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-type location = Syntax.location
-    deriving (Show)
+type location = [`Client | `Server | `Native | `Unknown]
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
+
 type datatype = 
   | TypeVar         of name
   | RigidTypeVar    of name
@@ -218,10 +219,6 @@ and directive = string * string list
 and sentence = [ 
 | `Definitions of binding list
 | `Expression  of phrase
-| `Directive   of directive ]
-and sentence' = [ 
-| `Definitions of Syntax.untyped_definition list
-| `Expression  of Syntax.untyped_expression
 | `Directive   of directive ]
     deriving (Show)
 

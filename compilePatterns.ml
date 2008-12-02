@@ -27,12 +27,12 @@ type pattern = [
     deriving (Show)
 
 module Const = struct
-  type t = Syntax.constant
+  type t = Constant.constant
   let compare = Pervasives.compare
-  module Show_t = Syntax.Show_constant
+  module Show_t = Constant.Show_constant
 end
 
-module type CONSTSET = Set with type elt = Syntax.constant
+module type CONSTSET = Set with type elt = Constant.constant
 module ConstSet = Set.Make(Const)
 module ConstMap = Map.Make(Const)
 

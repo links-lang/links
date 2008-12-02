@@ -24,7 +24,6 @@ class map :
     method unary_op        : unary_op -> unary_op
     method tyunary_op      : tyarg list * unary_op -> tyarg list * unary_op
     method binder          : binder -> binder
-    method sentence'       : sentence' -> sentence'
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
     method row_var         : row_var -> row_var
@@ -85,7 +84,6 @@ class fold :
     method unary_op        : unary_op -> 'self
     method tyunary_op      : tyarg list * unary_op -> 'self
     method binder          : binder -> 'self
-    method sentence'       : sentence' -> 'self
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
     method row_var         : row_var -> 'self
@@ -171,7 +169,6 @@ object ('self)
   method row_var         : row_var -> 'self * row_var
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
-  method sentence'       : sentence' -> 'self * sentence'
   method string          : name -> 'self * name
   method unary_op        : unary_op -> 'self * unary_op
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)

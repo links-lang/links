@@ -146,8 +146,7 @@ let instantiate : environment -> string -> type_arg list * datatype =
       try
         Env.String.lookup env var
       with NotFound _ ->
-        raise (Errors.UndefinedVariable ("Variable '"^ var ^
-                                         "' does not refer to a declaration"))
+        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
     in
       instantiate_typ t
         

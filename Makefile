@@ -17,7 +17,7 @@ ifdef SQLITE3_LIBDIR
 endif
 
 ifdef MYSQL_LIBDIR
-   DB_CODE    += oldmysql_database.ml mysql_database.ml
+   DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
@@ -61,29 +61,25 @@ SOURCES = $(OPC)                		\
           settings.mli settings.ml 		\
           basicsettings.ml                      \
           debug.mli debug.ml    		\
-          rewrite.ml            		\
           performance.mli performance.ml	\
           graph.ml                              \
           types.mli types.ml 	                \
           constant.ml                           \
-          syntaxutils.ml                        \
-          sqlQuery.ml               		\
           sourceCode.ml                         \
-          syntax.mli syntax.ml        		\
-          sqlcompile.ml                         \
           regex.ml                              \
-          result.mli result.ml         		\
           sugartypes.ml                         \
           parser.mly            		\
           lexer.mli lexer.mll         		\
-          errors.mli errors.ml                  \
-          parse.mli parse.ml    		\
-          instantiate.mli instantiate.ml        \
 	  typeUtils.mli typeUtils.ml            \
+          instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
-          callgraph.ml					\
+          var.ml                                \
+          ir.mli ir.ml                          \
+          value.mli value.ml                    \
+          errors.mli errors.ml                  \
+          parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
 	  resolvePositions.mli resolvePositions.ml	\
@@ -99,44 +95,29 @@ SOURCES = $(OPC)                		\
           desugarProcesses.mli desugarProcesses.ml      \
           desugarInners.mli desugarInners.ml            \
           typeSugar.mli typeSugar.ml			\
-          sugar.mli sugar.ml    		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
-          inference.mli inference.ml 		\
-          oldjsonparse.mly         		\
-          oldjsonlex.mll           		\
-          oldjson.ml               		\
-          oldlinksregex.ml                      \
-          olddatabase.mli olddatabase.ml        \
-          library.mli library.ml 		\
-          optimiser.mli optimiser.ml    	\
-          var.ml                                \
-          ir.mli ir.ml                          \
           compilePatterns.ml                    \
-          value.mli value.ml                    \
           jsonparse.mly         		\
           jsonlex.mll           		\
           json.ml                               \
-          compileir.ml                          \
-          sugartoir.mli sugartoir.ml            \
-          oldloader.mli oldloader.ml            \
-          loader.mli loader.ml                  \
-          oldirtojs.mli oldirtojs.ml            \
-          $(DB_CODE)            		\
-          interpreter.mli interpreter.ml 	\
-          linksregex.ml                         \
           database.mli database.ml 		\
+          linksregex.ml                         \
           lib.mli lib.ml                        \
+          sugartoir.mli sugartoir.ml            \
+          loader.mli loader.ml                  \
+          $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
           query.ml                              \
           evalir.ml                             \
-          oldwebif.mli oldwebif.ml           	\
           webif.mli webif.ml                    \
-          test.ml                               \
-          tests.ml                              \
-          sqlcompileTest.ml                     \
-          oldlinks.ml                           \
           links.ml              		\
+
+# TODO: get these working again
+#
+#          test.ml                               \
+#          tests.ml                              \
+
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

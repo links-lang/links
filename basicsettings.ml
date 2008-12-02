@@ -20,7 +20,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\ | |   /  \\  \\
  | |___| | |\\ \\  | |\\ \\ _\\  \\
  |_____|_|_| \\___|_| \\_|____/
-Welcome to Links version 0.5 (Murrayfield)", `System)
+Welcome to Links version 0.5 (Murrayfield) - alpha", `System)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
@@ -40,9 +40,6 @@ end
 
 (* Installed preprocessor *)
 let pp = Settings.add_string("preprocessor", "", `System)
-
-(* whether to use the new IR in the frontend *)
-let ir = Settings.add_bool("ir", false, `User)
 
 (* Whether to print the IR rather than run it *)
 let pretty_print_ir = Settings.add_bool("pretty_print_ir", false, `User)

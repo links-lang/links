@@ -33,12 +33,9 @@ open Ir
   - check that we're doing the right thing with tyvars
 *)
 
-(* If we implemented comparisons as primitive functions then their
-   desugaring could be moved to a frontend transformation.
-
-   Similarly, it would be nice to use primitive functions to construct
-   XML nodes and table handles. Then they could also be moved to a
-   frontend transformation.
+(* It would be nice to use primitive functions to construct XML nodes
+   and table handles. Then they could be moved to a frontend
+   transformation.
 
    We should either use escape in the frontend and IR or call/cc in
    the frontend and IR. What we do at the moment (escape in the
@@ -112,8 +109,6 @@ sig
   val apply : (value sem * (value sem) list) -> tail_computation sem
   val apply_pure : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
-    (* comparison? *)
-  val comparison : (value sem * Syntaxutils.comparison * value sem) -> value sem
 
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
 
@@ -455,10 +450,6 @@ struct
     bind s (fun v ->
               lift (`Case (v, StringMap.empty, None), t))
 
-  let comparison (s, c, s') =
-    bind s (fun v ->
-              bind s' (fun v' -> lift (`Comparison (v, c, v'), Types.bool_type)))
-
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
 
@@ -641,7 +632,7 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "!"), e1, e2) ->
               I.apply (instantiate "send" tyargs, [ev e1; ev e2])
-          | `InfixAppl ((tyargs, `Name n), e1, e2) when Library.is_pure_primitive n -> 
+          | `InfixAppl ((tyargs, `Name n), e1, e2) when Lib.is_pure_primitive n -> 
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name n), e1, e2) -> 
               I.apply (instantiate n tyargs, [ev e1; ev e2])
@@ -659,13 +650,13 @@ struct
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | `UnaryAppl ((_tyargs, `FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | `UnaryAppl ((tyargs, `Name n), e) when Library.is_pure_primitive n ->
+          | `UnaryAppl ((tyargs, `Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | `UnaryAppl ((tyargs, `Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | `FnAppl ((`Var f, _), es) when Library.is_pure_primitive f ->
+          | `FnAppl ((`Var f, _), es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
-          | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Library.is_pure_primitive f ->
+          | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) ->
 (*              Debug.print ("fnappl: "^Sugartypes.Show_phrase.show e);*)
