@@ -9,7 +9,7 @@ object
   method show : string
 end
 
-module Show_otherfield = Show.ShowDefaults(
+module Show_otherfield = Show.Defaults(
   struct
     type a = otherfield
     let format formatter obj = Format.pp_print_string formatter (obj # show)
@@ -41,20 +41,29 @@ class virtual database = object(self)
 end
 
 module Eq_database = Eq.Eq_mutable(struct type a = database end)
-module Typeable_database = Typeable.Primitive_typeable(struct type t = database end)
+module Typeable_database 
+  : Typeable.Typeable with type a = database = 
+  Typeable.Defaults
+    (struct
+       type a = database
+       let type_rep = Typeable.TypeRep.mkFresh "database" []
+     end)
+
 module Show_database = Show_unprintable (struct type a = database end)
 
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
    deserialisation *)
-module Pickle_database = Pickle.Pickle_unpicklable (struct type a = database let tname = "Value.database" end)
-module Shelve_database : Shelve.Shelve with type a = database = 
-struct
-  module Typeable = Typeable_database
-  module Eq = Eq_database
-  type a = database
-  let shelve _ = failwith "shelve database nyi"
-end
+module Dump_database = Dump.Dump_undumpable (struct type a = database let tname = "Value.database" end)
+module Pickle_database : Pickle.Pickle with type a = database = 
+  Pickle.Defaults(
+    struct
+      module T = Typeable_database
+      module E = Eq_database
+      type a = database
+      let pickle _ = failwith "pickle database nyi"
+      let unpickle _ = failwith "unpickle database nyi"
+    end)
 
 type db_constructor = string -> (database * string)
 
@@ -104,7 +113,7 @@ type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Pickle, Eq, Shelve)
+    deriving (Typeable, Show, Eq, Dump, Pickle)
 
 let is_attr = function
   | Attr _ -> true
@@ -131,7 +140,7 @@ and string_of_item : xmlitem -> string =
                      ^ "</" ^ tag ^ ">")
 
 type table = (database * string) * string * Types.row
-  deriving (Show, Pickle)    
+  deriving (Show, Typeable, Eq, Pickle)    
 
 type primitive_value_basis =  [
 | `Bool of bool
@@ -141,13 +150,13 @@ type primitive_value_basis =  [
 | `Int of num
 | `XML of xmlitem 
 | `NativeString of string ]
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 type primitive_value = [
 | primitive_value_basis
 | `Database of (database * string)
 ]
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
         
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
@@ -160,14 +169,14 @@ and t = [
 | `ClientFunction of string
 | `Continuation of continuation ]
 and env = (t * Ir.scope) Utility.intmap * Ir.closures
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 (* compressed types for more efficient pickling *)
 type compressed_primitive_value = [
 | primitive_value_basis
 | `Database of string
 ]
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 type compressed_continuation = (Ir.var * compressed_env) list
 and compressed_t = [
@@ -180,7 +189,7 @@ and compressed_t = [
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
   function
@@ -493,7 +502,7 @@ let links_project name = function
   | _ -> failwith ("Match failure in record projection")
 
 let marshal_continuation (c : continuation) : string = 
-  let pickle = Pickle_compressed_continuation.pickleS (compress_continuation c) in
+  let pickle = Pickle_compressed_continuation.to_string (compress_continuation c) in
     Debug.print("marshalled continuation size: " ^
                   string_of_int(String.length pickle));
     if (String.length pickle > 4096) then (
@@ -508,7 +517,7 @@ let marshal_value : t -> string =
      Debug.print "marshalling value";
      let compressed_v = compress_t v in
      let r =
-       (compress_t ->- Pickle_compressed_t.pickleS ->- base64encode)(v) in
+       (compress_t ->- Pickle_compressed_t.to_string ->- base64encode)(v) in
        Debug.print "marshalled value";
        r)
 
@@ -516,12 +525,12 @@ exception UnrealizableContinuation
 
 let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
   base64decode
-  ->- Pickle_compressed_continuation.unpickleS
+  ->- Pickle_compressed_continuation.from_string
   ->- (uncompress_continuation envs)
 
 let unmarshal_value envs : string -> t =
   base64decode
-  ->- Pickle_compressed_t.unpickleS
+  ->- Pickle_compressed_t.from_string
   ->- (uncompress_t envs)
 
 let minimize _ = assert false

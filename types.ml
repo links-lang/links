@@ -3,7 +3,7 @@ open Utility
 
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show)
 
 (* type var sets *)
 module TypeVarSet = Utility.IntSet
@@ -12,31 +12,30 @@ module TypeVarSet = Utility.IntSet
 module TypeVarMap = Utility.IntMap
 
 (* points *)
-type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
+type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Pickle, Show)
 
 (* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
-module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString ]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Pickle)
 
 type 't meta_type_var_basis =
     [ `Flexible of int
     | `Rigid of int
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Typeable, Pickle)
 
 type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Typeable, Pickle)
 
 module Abstype =
 struct
   type t = { id    : string ;
              name  : string ;
              arity : int }
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Typeable, Pickle)
   let make name arity = 
     let id = Utility.gensym ~prefix:"abstype:" () in
       { id    = id ;
@@ -89,10 +88,10 @@ and meta_row_var   = (row meta_row_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+    deriving (Eq, Show, Typeable, Pickle)
 
 type datatype = typ
-  deriving (Eq, Pickle, Typeable, Shelve)
+  deriving (Eq, Typeable, Pickle)
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -925,11 +924,11 @@ let string_of_row_var row_var =
     | Some s -> s
 
 module Show_datatype =
-  Show.ShowDefaults(struct
-                      type a = datatype
-                      let format fmt a = 
-                        Format.pp_print_string fmt (string_of_datatype a)
-                    end)
+  Show.Defaults(struct
+                  type a = datatype
+                  let format fmt a = 
+                    Format.pp_print_string fmt (string_of_datatype a)
+                end)
 
 type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
     deriving (Show)
@@ -948,14 +947,14 @@ let extend_typing_environment
 
 type type_arg = 
     [ `Type of datatype | `Row of row ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+      deriving (Eq, Typeable, Show, Pickle)
 
 let string_of_environment env =
-  let module M = Env.Show_t(Show.ShowDefaults(struct
-                                                type a = datatype
-                                                let format fmt a = 
-                                                  Format.pp_print_string fmt (string_of_datatype a)
-                                              end)) in
+  let module M = Env.Show_t(Show.Defaults(struct
+                                            type a = datatype
+                                            let format fmt a = 
+                                              Format.pp_print_string fmt (string_of_datatype a)
+                                          end)) in
     M.show env
 
 let string_of_typing_environment {var_env=env} = string_of_environment env

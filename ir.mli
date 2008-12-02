@@ -2,11 +2,11 @@
 (** Monadic IR *)
 
 type scope = Var.scope
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 (* term variables *)
 type var = Var.var
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 type var_info = Var.var_info
   deriving (Show)
 type binder = Var.binder
@@ -69,14 +69,14 @@ and special =
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of value ]
 and computation = binding list * tail_computation
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 val letm : binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 
 type program = computation
-  deriving (Show, Pickle)
+  deriving (Show, Typeable, Eq, Pickle)
 
 val is_atom : value -> bool
 
@@ -149,7 +149,7 @@ sig
 end
 
 type closures = Utility.intset Utility.intmap
-    deriving (Show, Pickle)
+    deriving (Show, Typeable, Eq, Pickle)
 
 module ClosureTable :
 sig

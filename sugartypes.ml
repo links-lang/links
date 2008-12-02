@@ -49,7 +49,7 @@ let string_of_binop =
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
-module Show_position = Show.ShowDefaults(
+module Show_position = Show.Defaults(
 struct
   type a = position
   let format formatter _ = Format.pp_print_string formatter "..."
@@ -72,7 +72,7 @@ type tyarg = Types.type_arg
 *)
 
 type location = [`Client | `Server | `Native | `Unknown]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Eq, Typeable, Show, Dump, Pickle)
 
 type datatype = 
   | TypeVar         of name

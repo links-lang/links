@@ -10,7 +10,7 @@
 (* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
 
 type 'a stringmap = 'a Utility.StringMap.t
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show)
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
@@ -29,15 +29,15 @@ type 't meta_type_var_basis =
     | `Rigid of int
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Pickle, Typeable)
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show, Pickle, Typeable)
 
 module Abstype :
 sig
-  type t deriving (Eq, Show, Pickle, Typeable, Shelve)
+  type t deriving (Eq, Show, Pickle, Typeable)
   val make  : string -> int -> t
   val arity : t -> int
   val name  : t -> string
@@ -69,13 +69,13 @@ and meta_row_var = (row meta_row_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+      deriving (Eq, Typeable, Show, Pickle)
 
 val type_var_number : quantifier -> int
 
 type type_arg = 
     [ `Type of datatype | `Row of row ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+      deriving (Eq, Typeable, Show, Pickle)
 
 type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
 
