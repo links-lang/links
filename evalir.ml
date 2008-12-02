@@ -32,127 +32,39 @@ module Eval = struct
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
        let call_package = Utility.base64encode (serialize_call_to_client (cont, name, args)) in
-         Library.print_http_response ["Content-type", "text/plain"] call_package;
+         Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
       
   let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
-  module Q =
-  struct
-    (** Substitutes values for the variables in a query, and performs
-        interpolation in LIKE expressions. *)
-    let rec normalise_query (env:Value.env) (db:Value.database) 
-        (qry:SqlQuery.sqlQuery) : SqlQuery.sqlQuery =
+  (** {0 Scheduling} *)
 
-      let normalise_like_expression (l : SqlQuery.like_expr): SqlQuery.like_expr = 
-        let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
-        let rec nle =
-          function
-            | `Var x -> `Str (quote (Value.unbox_string (Value.find (int_of_string x) env)))
-            | (`Percent | `Str _) as l -> l
-            | `Seq ls -> `Seq (List.map nle ls)
-        in
-          nle l
-      in
-      let rec normalise_expression : SqlQuery.sqlexpr -> SqlQuery.sqlexpr = function
-        | `V name -> begin
-            try
-              match Value.find (int_of_string name) env with
-                | `Bool true -> `True
-                | `Bool false -> `False
-                | `Int value -> `N value
-                | `List (`Char _::_) as c  
-                  -> `Str (db # escape_string (Value.unbox_string c))
-                | `List ([]) -> `Str ""
-                | `Char c -> `Str (String.make 1 c)
-                | v -> failwith("Internal error: variable " ^ name ^ 
-                                  " in query "^ SqlQuery.string_of_query qry ^ 
-                                  " had unexpected type at runtime: " ^ 
-                                  Value.string_of_value v)
-            with NotFound _ -> failwith ("Internal error: undefined query variable '"^
-                                           name^"'")
-          end
-        | `Op (symbol, left, right) ->
-            `Op(symbol, normalise_expression left, normalise_expression right)
-        | `Not expr ->
-            `Not(normalise_expression expr)
-        | `Like(lhs, regex) -> 
-            `Like(normalise_expression lhs,
-                  normalise_like_expression regex)
-        | expr -> expr
-      in
-      let normalise_tables =
-        List.map (function 
-               | `TableVar(var, alias) ->
-                   (match Value.find (int_of_string var) env with
-                        `Table(_, tableName, _) -> `TableName(tableName, alias)
-                      | _ -> failwith "Internal Error: table source was not a table!")
-               | `TableName (name, alias) -> `TableName(name, alias)
-               | `SubQuery _ ->
-                   failwith "Not implemented subqueries yet"
-            ) 
-      in {qry with
-            SqlQuery.tabs = normalise_tables qry.SqlQuery.tabs;
-            SqlQuery.cond = List.map normalise_expression qry.SqlQuery.cond;
-            (* TBD: allow variables as the from/most values, normalise them here. *)
-        SqlQuery.from = qry.SqlQuery.from;
-        SqlQuery.most = qry.SqlQuery.most}
+  (* could bundle these together with [globals] to get a global
+     'interpreter state' that we'd then thread through the whole
+     interpreter, making it re-entrant. *)
+  let process_steps = ref 0
+  let switch_granularity = 5
+  let atomic = ref false
 
-    exception NoSuchField of string
+  let rec switch_context env = 
+    if not (Queue.is_empty Lib.suspended_processes) then 
+      let (cont, value), pid = Queue.pop Lib.suspended_processes in
+        Lib.current_pid := pid;
+        apply_cont cont env value
+    else exit 0
 
-    let query_result_types (query : SqlQuery.sqlQuery)
-        : (string * Types.datatype) list =
-      try 
-        concat_map
-          (function
-               (`F field, alias) -> 
-                 [alias, field.SqlQuery.ty]
-             | (expr, _alias) -> failwith("Internal error: no type info for sql expression " 
-                                          ^ SqlQuery.string_of_expression expr))
-          query.SqlQuery.cols
-      with NoSuchField field ->
-        failwith ("Field " ^ field ^ " from " ^ 
-                    SqlQuery.string_of_query query)
+  and scheduler env state stepf = 
+    incr process_steps;
+    if (!process_steps mod switch_granularity == 0) then 
+      begin
+        process_steps := 0;
+        Queue.push (state, !Lib.current_pid) Lib.suspended_processes;
+        switch_context env
+      end
+    else
+      stepf()
 
-    let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t = fun env query ->
-      let get_database : SqlQuery.sqlQuery -> Value.database = fun query ->
-        let vars = concat_map (function
-                                 | `TableVar (var, _) -> [int_of_string var]
-                                 | _ -> []) query.SqlQuery.tabs in
-        let dbs = 
-          List.map (fun var -> 
-                 match Value.find var env with
-                   | `Table((db, _params), _table_name, _row) -> db
-                   | _ -> assert false) vars in
-          
-          assert (dbs <> []);
-          
-          if(not (all_equiv (=) dbs)) then
-            failwith ("Cannot join across different databases");
-          
-          List.hd(dbs) in
-
-      let db = get_database query in
-        (* TBD: factor this stuff out into a module that processes
-           queries *)
-      let result_types = query_result_types query in
-      let query_string = SqlQuery.string_of_query (normalise_query env db query) in
-        
-        prerr_endline("RUNNING QUERY:\n" ^ query_string);
-        let t = Unix.gettimeofday() in
-        let result = assert false in
-(*        let result = Database.execute_select result_types query_string db in*)
-          Debug.print("Query took : " ^ 
-                        string_of_float((Unix.gettimeofday() -. t)) ^ "s");
-          (*result*) assert false
-  end
-
-  let do_query : Value.env -> SqlQuery.sqlQuery -> Value.t = Q.do_query
-
-  let switch_context _ = 
-    assert false
-
-  let rec value env : Ir.value -> Value.t = function
+  and value env : Ir.value -> Value.t = function
     | `Constant `Bool b -> `Bool b
     | `Constant `Int n -> `Int n
     | `Constant `Char c -> `Char c
@@ -226,12 +138,13 @@ module Eval = struct
     | `ApplyPure (f, args) ->
         begin
           try (
+            atomic := true;
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
-            | TopLevel (_, v) -> v
-        end           
-    | `Coerce (v, _) -> value env v
+            | TopLevel (_, v) -> atomic := false; v
+        end
+    | `Coerce (v, t) -> value env v
     (* TODO: replace comparisons with primitive functions *)
     | `Comparison _ -> assert false
 
@@ -257,6 +170,23 @@ module Eval = struct
                   computation env cont body
             | None -> eval_error "Error looking up recursive function definition"
         end
+    | `PrimitiveFunction "recv", [] ->
+        (* If there are any messages, take the first one and
+           apply the continuation to it.  Otherwise, suspend
+           the continuation (in the blocked_processes table)
+           and let the scheduler choose a different thread.
+        *)
+        let mqueue = Hashtbl.find Lib.messages !Lib.current_pid in
+          if not (Queue.is_empty mqueue) then
+            apply_cont cont env (Queue.pop mqueue)
+          else
+            begin
+              let recv = (`Local, Var.dummy_var, env, ([], `Apply (`Variable (Env.String.lookup Lib.nenv "recv"), []))) in
+                Hashtbl.add Lib.blocked_processes
+                  !Lib.current_pid
+                  ((recv::cont, `Record []), !Lib.current_pid);
+              switch_context env
+            end
     | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
     | `ClientFunction name, args ->
 (*         Debug.print ("calling client function: "^name); *)
@@ -267,13 +197,17 @@ module Eval = struct
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont env v : Value.t =
-    match cont with
-      | [] (* when !Library.current_pid == Library.main_process_pid *) ->
-          raise (TopLevel (Value.globals env, v))
-(*      | [] -> switch_context env *)
-      | (scope, var, locals, comp)::cont ->
-          let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-            computation env cont comp
+    let stepf() = 
+      match cont with
+        | [] when !atomic || !Lib.current_pid == Lib.main_process_pid ->
+            raise (TopLevel (Value.globals env, v))
+        | [] -> switch_context env
+        | (scope, var, locals, comp)::cont ->
+            let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
+              computation env cont comp
+    in
+      scheduler env (cont, v) stepf
+
   and computation env cont (binders, tailcomp) : Value.t =
 (*    Debug.print ("comp: "^Ir.Show_program.show (binders, tailcomp));*)
     match binders with
@@ -322,7 +256,7 @@ module Eval = struct
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
     | `Return v      -> apply_cont cont env (value env v)
-    | `Apply (f, ps) -> 
+    | `Apply (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont s
     | `Case (v, cases, default) -> 
@@ -344,7 +278,7 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `SqlQuery q                 -> do_query env q
+    | `SqlQuery q                 -> assert false (* this is going to go *)
     | `Table (db, name, (readtype, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->

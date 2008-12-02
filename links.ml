@@ -193,11 +193,12 @@ let interact envs =
           | `Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let defs, nenv = Sugartoir.desugar_definitions (nenv, tenv) defs in
+(*                 Debug.print ("defs: "^Ir.Show_computation.show (defs, `Return (`Extend (StringMap.empty, None)))); *)
                 `Definitions (defs, nenv)
           | `Expression e     ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let e = Sugartoir.desugar_expression (nenv, tenv) e in
-(*                Debug.print (Ir.Show_computation.show e);*)
+(*                Debug.print ("e: "^Ir.Show_computation.show e); *)
                 `Expression (e, t)
           | `Directive d      -> `Directive d
         in

@@ -13,8 +13,10 @@ type var_info = Types.datatype * string * scope
 type binder = var * var_info
   deriving (Show, Pickle)
 
+let dummy_var = 0
+
 (* Generation of fresh variables *)
-let variable_counter = ref 0
+let variable_counter = ref dummy_var
 
 let fresh_raw_var : unit -> var =
   fun () ->
