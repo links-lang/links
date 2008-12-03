@@ -44,6 +44,7 @@ struct
   let arity { arity = arity } = arity
   let name  { name  = name  } = name
   let compare l r = String.compare l.id r.id
+  let eq l r = (l.id=r.id)
 end
 
 let mailbox  = {
@@ -729,7 +730,7 @@ let rec string_of_datatype' : TypeVarSet.t -> string IntMap.t -> datatype -> str
 (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
         | `Alias ((s,[]), t) ->  s
         | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map sd ts) ^")"
-        | `Application (l, [elems]) when Abstype.Eq_t.eq l list ->  "["^ sd elems ^"]"
+        | `Application (l, [elems]) when Abstype.eq l list ->  "["^ sd elems ^"]"
         | `Application (s, []) -> Abstype.name s
         | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map sd ts) ^")"
 

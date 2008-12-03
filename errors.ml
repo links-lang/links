@@ -114,7 +114,7 @@ let rec format_exception_html = function
   | MistypedSendError(pos, fexpr, fntype, pexpr,
                       ([`Application(mbtc, [mbType]); msgType] as paramtypes),
                       mb)
-      when Types.Abstype.Eq_t.eq mbtc Types.mailbox ->
+      when Types.Abstype.eq mbtc Types.mailbox ->
       let msg = "The expressions <code class=\"typeError\">" ^ 
         mapstrcat "\n" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
         "</code> have type <code class=\"typeError\">" ^ 

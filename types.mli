@@ -42,6 +42,7 @@ sig
   val arity : t -> int
   val name  : t -> string
   val compare : t -> t -> int
+  val eq : t -> t -> bool
 end
 
 val mailbox  : Abstype.t 

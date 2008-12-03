@@ -841,7 +841,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
       | `Application (l, [t]) 
-          when Types.Abstype.Eq_t.eq l Types.list ->
+          when Types.Abstype.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
               | `Variable _ | `Any -> [p]

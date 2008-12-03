@@ -18,7 +18,7 @@ let value_of_db_string (value:string) t =
     | `Alias (("String", _), _) -> Value.string_as_charlist value
         (* BUG: we should be more principled about detecting strings *)
     | `Application (l, [`Primitive `Char]) 
-        when Types.Abstype.Eq_t.eq l Types.list ->
+        when Types.Abstype.eq l Types.list ->
         Value.string_as_charlist value
     | `Primitive `Int  -> Value.box_int (num_of_string value)
     | `Primitive `Float -> (if value = "" then Value.box_float 0.00      (* HACK HACK *)
