@@ -28,7 +28,7 @@ ifdef POSTGRESQL_LIBDIR
    DB_LIBS    += postgresql
 endif
 
-DERIVING_DIR=deriving-0.1.1
+DERIVING_DIR=deriving
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
@@ -39,7 +39,7 @@ OCAMLC := ocamlc.opt
 # (it doesn't exist for all OCaml installations)
 OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
-PATH := $(PATH):$(DERIVING_DIR)/syntax
+PATH := $(PATH):deriving/syntax
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v

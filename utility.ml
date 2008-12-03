@@ -99,19 +99,19 @@ end
 
 module String = struct
   include String
-  module Show_t =Show.Show_string
+  module Show_t = Primitives.Show_string
 end
 
 module Int = struct
   type t = int
   let compare = Pervasives.compare
-  module Show_t = Show.Show_int
+  module Show_t = Primitives.Show_int
 end
 
 module Char = 
 struct
   include Char
-  module Show_t = Show.Show_char
+  module Show_t = Primitives.Show_char
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
   let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
   let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
@@ -259,71 +259,47 @@ type 'a stringmap = 'a StringMap.t
     deriving (Show)
 
 module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Defaults (struct
+Typeable.Typeable_defaults(struct
   type a = A.a stringmap
-  let type_rep = 
-    (*Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])*)
-    Typeable.TypeRep.mkFresh "stringmap"  [A.type_rep]
-
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
 end)
-module Dump_stringmap (A : Dump.Dump) : Dump.Dump with type a = A.a stringmap  = Dump.Dump_undumpable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
 module Functor_stringmap = StringMap.Functor_t
-module Eq_stringmap (E : Eq.Eq) : Eq.Eq with type a = E.a stringmap = Eq.Eq_map_s_t (E)(StringMap)
-module Pickle_stringmap (S : Pickle.Pickle) : Pickle.Pickle with type a = S.a stringmap = 
-  Pickle.Defaults(
-    struct
-      module T = Typeable_stringmap(S.T)
-      module E = Eq_stringmap(S.E)
-      type a = S.a stringmap
-      let pickle  _ = failwith "pickle stringmap nyi"
-      let unpickle   _ = failwith "unpickle stringmap nyi"
-    end)
+module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
+module Shelve_stringmap (S : Shelve.Shelve) = 
+struct
+  module Typeable = Typeable_stringmap(S.Typeable)
+  module Eq = Eq_stringmap(S.Eq)
+  type a = S.a stringmap
+  let shelve  _ = failwith "shelve stringmap nyi"
+end
 
 type intset = IntSet.t
     deriving (Show)
 type 'a intmap = 'a IntMap.t
     deriving (Show)
 
-module Eq_intset : Eq.Eq with type a = intset = Eq.Eq_set_s_t (IntSet)
-module Typeable_intset : Typeable.Typeable with type a = intset
-  = 
-Typeable.Defaults (struct
-  type a = intset
-  let type_rep = 
-    Typeable.TypeRep.mkFresh "intset"  []
-end)
-
-module Dump_intset = Dump.Dump_undumpable (struct type a = intset let tname ="intset" end)
-module Pickle_intset : Pickle.Pickle with type a = intset = 
-  Pickle.Defaults(
-    struct
-      module T = Typeable_intset
-      module E = Eq_intset
-      type a = intset
-      let pickle  _ = failwith "pickle intset nyi"
-      let unpickle   _ = failwith "unpickle intset nyi"
-    end)
-
+module Pickle_intset = Pickle.Pickle_unpicklable (struct type a = intset let tname ="intset" end)
 
 module Typeable_intmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a intmap = 
-Typeable.Defaults(struct
+Typeable.Typeable_defaults(struct
   type a = A.a intmap
-  let type_rep = Typeable.TypeRep.mkFresh "intmap" [A.type_rep]
+  let typeRep = 
+    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
+    in fun _ -> t
 end)
-module Dump_intmap (A : Dump.Dump) = Dump.Dump_undumpable (struct type a = A.a intmap let tname ="intmap"  end)
+module Pickle_intmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a intmap let tname ="intmap"  end)
 module Functor_intmap = IntMap.Functor_t
 module Eq_intmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(IntMap)
-module Pickle_intmap (S : Pickle.Pickle)
-  : Pickle.Pickle with type a = S.a intmap
- = 
-  Pickle.Defaults(
-    struct
-      module T = Typeable_intmap(S.T)
-      module E = Eq_intmap(S.E)
-      type a = S.a intmap
-      let pickle  _ = failwith "pickle intmap nyi"
-      let unpickle  _ = failwith "unpickle intmap nyi"
-    end)
+module Shelve_intmap (S : Shelve.Shelve) = 
+struct
+  module Typeable = Typeable_intmap(S.Typeable)
+  module Eq = Eq_intmap(S.Eq)
+  type a = S.a intmap
+  let shelve  _ = failwith "shelve intmap nyi"
+end
 
 (** {1 Lists} *)
 module ListUtils = 
@@ -332,7 +308,7 @@ struct
     let rec aux f t result = 
       if f = t then result
       else aux (f+1) t (f::result)
-    in if (t) < f then raise (Invalid_argument "fromTo")
+    in if t < f then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
 
   (** map with index *)
@@ -669,7 +645,7 @@ let mem_assoc3 key : ('a * 'b * 'c) list -> bool =
 
 (** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b
-  deriving (Show, Eq, Typeable, Dump, Pickle)
+  deriving (Show, Eq, Typeable, Pickle, Shelve)
 
 let inLeft l = Left l
 let inRight r = Right r

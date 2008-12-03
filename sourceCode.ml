@@ -71,14 +71,7 @@ object (self)
 end
 
 type lexpos = Lexing.position 
-module Typeable_lexpos 
-  : Typeable.Typeable with type a = lexpos = 
-  Typeable.Defaults
-    (struct
-       type a = lexpos
-       let type_rep = Typeable.TypeRep.mkFresh "lexpos" []
-     end)
-                                             
+module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
 module Eq_lexpos : Eq.Eq with type a = lexpos = 
 struct
   type a = lexpos
@@ -88,14 +81,7 @@ module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
 module Show_lexpos = Show.Show_unprintable (LexposType)
 (*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
 
-module Typeable_source_code 
-  : Typeable.Typeable with type a = source_code = 
-  Typeable.Defaults
-    (struct
-       type a = source_code
-       let type_rep = Typeable.TypeRep.mkFresh "source_code" []
-     end)
-
+module Typeable_source_code = Typeable.Primitive_typeable(struct type t = source_code end)
 module Eq_source_code : Eq.Eq with type a = source_code = 
 struct
   type a = source_code

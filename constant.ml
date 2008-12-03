@@ -6,7 +6,7 @@ type constant =
     | `String of string
     | `Bool   of bool
     | `Char   of char ]
-      deriving (Eq, Typeable, Show, Dump, Pickle)
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let constant_type = function
   | `Float _  -> `Primitive `Float
