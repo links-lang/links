@@ -1,6 +1,6 @@
 built:
 	cd syntax && make
-	cd lib && make ncl bcl
+	cd lib && make -k ncl bcl
 
 clean:
 	cd syntax && make clean

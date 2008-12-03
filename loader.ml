@@ -1,51 +1,89 @@
 open Utility
 open Performance
 
-let `T (pos, dt, _) = Syntax.no_expr_data
+type envs = Var.var Env.String.t * Types.typing_environment
+type program = Ir.binding list * Ir.computation * Types.datatype
 
-let identity x = x
+(** Marshal an IR program to a file along with naming and typing
+    environments and the fresh variable counters.
+*)
+let write_program filename envs program : unit =
+  let var_counters = (!Types.type_variable_counter, !Var.variable_counter) in
+    call_with_open_outfile filename ~binary:true
+      (fun filename ->
+         Marshal.to_channel filename
+           ((envs, program, var_counters) : envs * program * (int * int))
+           [])
 
-let expunge_source_pos =
-  (Syntax.Functor_expression'.map
-     (fun (`T (_,_,l)) -> `T (pos, dt, l)))
+(** Unmarshal an IR program from a file along with naming and typing
+    environments and the fresh variable counters.
+*)
+let read_program filename : (envs * program) = 
+  let envs, program, (tc, vc) =
+    call_with_open_infile filename ~binary:true Marshal.from_channel
+  in
+    Types.type_variable_counter := tc;
+    Var.variable_counter := vc;
+    envs, program
 
-let expunge_all_source_pos =
-  Syntax.transform_program expunge_source_pos
+(** Read source code from a file, parse, infer types and desugar to
+    the IR *)
+let read_file_source (filename:string) (nenv, tyenv) =
+  let sugar, pos_context =
+    lazy (Parse.parse_file Parse.program filename) <|measure_as|> "parse" in
+  let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
+  let globals, main, nenv = Sugartoir.desugar_program (nenv, Var.varify_env (nenv, tyenv.Types.var_env)) program in
+    (nenv, tenv), (globals, main, t)
 
-let newer f1 f2 = 
-   ((Unix.stat f1).Unix.st_mtime > (Unix.stat f2).Unix.st_mtime) 
-  
-let make_cache = true
+let cachefile_path filename = 
+  let cachedir = Settings.get_value Basicsettings.cache_directory in
+    match cachedir with
+      | "" -> filename  ^ ".cache" (* Use current dir, no fancy filename  *)
+      | cachedir ->                (* Use given dir, put hash in filename *)
+          let path_hash = base64encode(Digest.string (absolute_path filename)) in
+          let cache_filename = (Filename.basename filename) ^ "-" ^ 
+                                 path_hash ^ ".cache" in
+            Filename.concat cachedir cache_filename
+    
+exception No_cache
 
-let read_file_cache : string -> (Types.typing_environment * Syntax.program) = fun filename ->
-  let cachename = filename ^ ".cache" in
-    try
-      if make_cache && newer cachename filename then
-        call_with_open_infile cachename ~binary:true
-          (fun cachefile ->
-             (Marshal.from_channel cachefile 
-                : (Types.typing_environment * Syntax.program)))
-          (* (OCaml manual recommends putting a type signature on unmarshal 
-             calls; not clear whether this actually helps. It seems we get 
-             a segfault if the marhsaled data is not the right type.) *)
-      else
-        (Debug.print("No precompiled " ^ filename);
-         raise (Sys_error "Precompiled source file out of date."))
-    with (Sys_error _| Unix.Unix_error _) ->
-      let program = measure "parse" (Parse.parse_file Parse.program) filename in
-      let env, program = measure "type" (Inference.type_program Library.typing_env) program in
-      let program = measure "optimise" Optimiser.optimise_program (env, program) in
-      let program = Syntax.labelize program
-      in 
-	(try (* try to write to the cache *)
-           call_with_open_outfile cachename ~binary:true
-             (fun cachefile ->
-                Marshal.to_channel cachefile 
-                  (env, expunge_all_source_pos program)
-                  [Marshal.Closures])
-	 with _ -> ()) (* Ignore errors writing the cache file *);
-        env, program
-  
-let dump_cached filename =
-   let env, program = read_file_cache filename in
-     print_string (Syntax.labelled_string_of_program program)
+(** Load a source file, parse, infer types and desugar to the IR. If
+    the result has already been cached, then just use that instead.
+    If not, then cache the result.
+*)
+let load_file : envs -> string -> (envs * program) = 
+  fun envs infile ->
+    let cachename = cachefile_path infile in
+    let result = 
+      try
+        if not (Settings.get_value Basicsettings.use_cache) then None else
+          if newer cachename infile then
+            Some (read_program cachename)
+          else
+            raise No_cache
+      with (No_cache | Sys_error _| Unix.Unix_error _) ->
+        Debug.print("No valid cache for " ^ infile);
+        None
+    in
+      match result with
+          Some (envs, program) -> envs, program
+        | None ->
+            (* Read & process the source *)
+            let envs, program = read_file_source infile envs in
+              if (Settings.get_value Basicsettings.make_cache) then
+                (try  (* to write to the cache *)
+                   write_program cachename envs program
+                 with _ -> ()) (* Ignore errors writing the cache file *);
+              envs, program
+
+(** Loads a named file and prints it as syntax; may use the cache or
+    the original file, as per the caching policy. *)
+let print_cache filename =
+   let _envs, (globals, (locals, main), _t) = read_program filename in
+     print_string (Ir.Show_program.show (globals @ locals, main))
+
+(** precompile a cache file *)
+let precompile_cache envs infile : unit =
+  let outfile = infile ^ ".cache" in
+  let envs, program = read_file_source infile envs in
+    write_program outfile envs program

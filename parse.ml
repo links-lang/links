@@ -7,110 +7,29 @@ open Lexing
    occurs.
 *)
 
-type source_code = {
-  (* offsets of line start positions in `text' *)
-  lines : (int, int) Hashtbl.t;
-  (* the text itself *)
-  text : Buffer.t;
-}
+type 'a grammar = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a
 
-(* Initial estimates for input size *)
-let default_lines = 100
-and default_chars = 8000
-
-let trim_initial_newline s =
-  let len = String.length s in
-  if len > 0 && s.[0] == '\n' then StringLabels.sub s ~pos:1 ~len:(len-1)
-  else s
-
-let code_create () =
-  let tbl = Hashtbl.create default_lines in
-    Hashtbl.add tbl 0 0;
-    {lines = tbl; text = Buffer.create default_chars}
-
-(* Return the portion of soure code that falls between two positions *)
-let extract_substring
-    (code : source_code)
-    (start : position)
-    (finish : position) : string =
-  if start == dummy_pos || finish == dummy_pos then
-    "*** DUMMY POSITION ****"
-  else
-    Buffer.sub code.text start.pos_cnum (finish.pos_cnum - start.pos_cnum)
-
-(* Return some lines of the source code *)
-let extract_line_range
-    (code : source_code)
-    (startline : int)
-    (finishline : int) : string =
-  try 
-    let start  = Hashtbl.find code.lines startline
-    and finish = (if finishline == Hashtbl.length code.lines
-                  then (* handle the last line of input *)
-                    Buffer.length code.text
-                  else
-                    Hashtbl.find code.lines finishline)
-    in
-      trim_initial_newline (Buffer.sub code.text (start) (finish - start))
-  with Not_found -> "<unknown>"
-
-(* Return one line of the source code *)
-let extract_line
-    (code : source_code)
-    (line : int) : string =
-  extract_line_range code (line-1) line
-      
-(* Given a function `infun' as required by Lexing.from_function,
-   return another such function that stores the text read in `code'.
-*)
-let parse_into
-    (code : source_code)
-    (infun : string -> int -> int) : string -> int -> int =
-  fun buffer nchars ->
-    let nchars = infun buffer nchars in
-      List.iter (fun linepos ->
-                  Hashtbl.add code.lines 
-                    (Hashtbl.length code.lines)
-                    (linepos + Buffer.length code.text))
-        (Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
-      Buffer.add_substring code.text buffer 0 nchars;
-      nchars
-
-(* Retrieve the last line of source code read. *)
-let find_line (code : source_code) (pos : position) : (string * int) =
-  (extract_line code pos.pos_lnum, 
-   pos.pos_cnum - Hashtbl.find code.lines (pos.pos_lnum -1) - 1)
-
-(* Create a `lookup function' that given start and finish positions
-   returns an Syntax.position
-*)
-let lookup code =
-  fun (start, finish) ->
-    (start, 
-     extract_line code start.pos_lnum,
-     extract_substring code start finish)
-
-type 'a parser_ = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a
-type ('a,'b) desugarer = (source_code -> 'a -> 'b)
+class source_code = SourceCode.source_code
 
 (* Read and parse Links source code from the source named `name' via
    the function `infun'.
 *)
-let read : parse:('intermediate parser_)
-        -> desugarer:('intermediate, 'result) desugarer
+let read : context:Lexer.lexer_context
+        -> ?nlhook:(unit -> unit)
+        -> parse:('intermediate grammar)
         -> infun:(string -> int -> int)
         -> name:string
-        -> ?nlhook:(unit -> unit)
-        -> 'result =
-fun ~parse ~desugarer ~infun ~name ?nlhook ->
-  let code = code_create () in
-  let lexbuf = {(from_function (parse_into code infun))
+        -> 'result * source_code =
+fun ~context ?nlhook ~parse ~infun ~name ->
+  let code = new source_code in
+  let lexbuf = {(from_function (code#parse_into infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
     try
-      desugarer code (parse (Lexer.lexer (fromOption identity nlhook)) lexbuf)
+      let p = parse (Lexer.lexer context ~newline_hook:(from_option identity nlhook)) lexbuf in
+        (p, code)
     with 
       | Parsing.Parse_error -> 
-          let line, column = find_line code lexbuf.lex_curr_p in
+          let line, column = code#find_line lexbuf.lex_curr_p in
             raise
               (Errors.RichSyntaxError
                  {Errors.filename = name;
@@ -118,14 +37,14 @@ fun ~parse ~desugarer ~infun ~name ?nlhook ->
                   Errors.message = "";
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
-      | Sugar.ConcreteSyntaxError (msg, (start, finish)) ->
+      | Sugartypes.ConcreteSyntaxError (msg, (start, finish, _)) ->
           let linespec = 
             if start.pos_lnum = finish.pos_lnum 
             then string_of_int start.pos_lnum
             else (string_of_int start.pos_lnum  ^ "..."
                   ^ string_of_int finish.pos_lnum) in
-          let line = extract_line_range code (start.pos_lnum-1) finish.pos_lnum in
-          let _, column = find_line code finish in
+          let line = code#extract_line_range (start.pos_lnum-1) finish.pos_lnum in
+          let _, column = code#find_line finish in
             raise 
               (Errors.RichSyntaxError
                  {Errors.filename = name;
@@ -134,7 +53,7 @@ fun ~parse ~desugarer ~infun ~name ?nlhook ->
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^"})
       | Lexer.LexicalError (lexeme, position) ->
-          let line, column = find_line code position in
+          let line, column = code#find_line position in
             raise
               (Errors.RichSyntaxError
                  {Errors.filename = name;
@@ -146,48 +65,42 @@ fun ~parse ~desugarer ~infun ~name ?nlhook ->
 (* Given an input channel, return a function suitable for input to
    Lexing.from_function that reads characters from the channel.
 *)
-let reader_of_channel channel =
-  fun buffer nchars -> input channel buffer 0 nchars
-
+let reader_of_channel channel buffer = input channel buffer 0
+  
 (* Given a string, return a function suitable for input to
    Lexing.from_function that reads characters from the string.
 *)
-let reader_of_string string = 
+let reader_of_string ?pp string = 
+  let string = match pp with
+    | None -> string
+    | Some command -> Utility.filter_through ~command string in
   let current_pos = ref 0 in
     fun buffer nchars ->
       let nchars = min nchars (String.length string - !current_pos) in
-	StringLabels.blit ~src:string ~src_pos:!current_pos ~dst:buffer ~dst_pos:0 ~len:nchars;
-	current_pos := !current_pos + nchars;
-	nchars
+        StringLabels.blit ~src:string ~src_pos:!current_pos ~dst:buffer ~dst_pos:0 ~len:nchars;
+        current_pos := !current_pos + nchars;
+        nchars
 
-type ('result, 'intermediate) grammar = {
-    desugar : ('intermediate, 'result) desugarer;
-    parse : 'intermediate parser_
-  }
+let interactive : Sugartypes.sentence grammar = Parser.interactive
+let program : (Sugartypes.binding list * Sugartypes.phrase option) grammar = Parser.file
+let datatype : Sugartypes.datatype grammar = Parser.just_datatype
 
-let interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar = { 
-    desugar = 
-    (fun code s -> match s with 
-       | `Definitions phrases -> `Definitions (Sugar.desugar_definitions (lookup code) phrases)
-       | `Expression phrase   -> `Expression (Sugar.desugar_expression (lookup code) phrase)
-       | `Directive directive -> `Directive directive);
-    parse =  Parser.interactive
-  }
-  
-let program : (Syntax.untyped_program,
-               (Sugartypes.phrase list * Sugartypes.phrase option)) grammar = {
-  desugar = (fun code (defs, body) ->
-               let pos = lookup code in
-                 Syntax.Program
-                   (Sugar.desugar_definitions pos defs,
-                    opt_app (Sugar.desugar_expression pos) (Syntax.unit_expression (`U Syntax.dummy_position)) body));
-  parse = Parser.file
-}
+let normalize_pp = function
+  | "" -> None
+  | pp -> Some pp
 
-let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
-    desugar =  (fun _ -> Sugar.desugar_datatype);
-    parse = Parser.just_datatype
-  }
+(* We parse in a "context", which at the moment means the set of
+   operator precedences, but more generally is an environment with
+   respect to which any parse-time resolution takes place.
+*)
+type context = Lexer.lexer_context
+let fresh_context = Lexer.fresh_context
+
+let normalize_context = function
+  | None -> fresh_context ()
+  | Some c -> c
+
+let default_preprocessor () = (Settings.get_value Basicsettings.pp) 
 
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs. 
@@ -197,11 +110,27 @@ let datatype : (Types.assumption, Sugartypes.datatype) grammar = {
     intercept and retain the code that has been read (in order to give
     better error messages).
 **)
-let parse_string grammar string =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_string string) ~name:"<string>" ?nlhook:None
+let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar string =
+  let pp = normalize_pp pp
+  and context = normalize_context context in 
+    read ?nlhook:None ~parse:grammar ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
 
-let parse_channel ?interactive grammar (channel, name) =
-  read ~parse:grammar.parse ~desugarer:grammar.desugar ~infun:(reader_of_channel channel) ~name:name ?nlhook:interactive
+let parse_channel ?interactive ?in_context:context grammar (channel, name) =
+  let context = normalize_context context in
+    read ?nlhook:interactive ~parse:grammar ~infun:(reader_of_channel channel) ~name:name ~context
 
-let parse_file grammar filename =
-  parse_channel grammar (open_in filename, filename)
+let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
+  match normalize_pp pp with
+    | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
+    | Some pp ->
+        Utility.call_with_open_infile filename
+          (fun channel ->
+             let context = normalize_context context in
+             read ~nlhook:ignore
+                  ~parse:grammar
+                  ~infun:(reader_of_string ~pp (String.concat "\n" (Utility.lines channel)))
+                  ~name:filename 
+                  ~context)
+
+type position_context = SourceCode.source_code
+

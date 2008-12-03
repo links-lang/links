@@ -9,7 +9,7 @@ open List
 (* Utility function for hashtables *)
 let hashfind_dflt table elem def = 
   try Hashtbl.find table elem
-  with Not_found -> def
+  with NotFound _ -> def
 
 (** Crazy notation for hashtable updates. Suggestions are welcomed.
 
@@ -23,9 +23,7 @@ let hashfind_dflt table elem def =
 let ( *->!) table k v = Hashtbl.replace table k v
 (* let ($) op arg = op arg*)
 
-let ( *-> ) table k default =
-  try Hashtbl.find table k
-  with Not_found -> default
+let ( *-> ) = hashfind_dflt
 let (|->) op arg = op arg
 
 
@@ -69,29 +67,29 @@ let reverse = List.rev
 (** Depth-first search *)
 let dfs nodes edges = 
   let nnodes = List.length nodes in
-  let color = Hashtbl.create nnodes 
-  and parent = Hashtbl.create nnodes 
-  and discover = Hashtbl.create nnodes 
-  and finish = Hashtbl.create nnodes in
+  let color = Hashtbl.create nnodes in
+  let parent = Hashtbl.create nnodes in
+  let discover = Hashtbl.create nnodes in
+  let finish = Hashtbl.create nnodes in
+  List.iter (fun u ->
+               Hashtbl.add color u `white;
+               Hashtbl.add parent u None;
+            ) nodes;
+  let time = ref 0 in
+  let rec dfs_visit u = 
+    Hashtbl.replace color u `grey;
+    Hashtbl.replace discover u (incr time; !time);
+    List.iter (fun (_, v) -> if Hashtbl.find color v = `white 
+               then (Hashtbl.replace parent v (Some u);
+                     dfs_visit v))
+      (List.filter ((=) u -<- fst) edges);
+    Hashtbl.replace color u `black ;
+    Hashtbl.replace finish u (incr time; !time)
+  in
     List.iter (fun u ->
-		 Hashtbl.add color u `white;
-		 Hashtbl.add parent u None;
-              ) nodes;
-    let time = ref 0 in
-    let rec dfs_visit u = 
-      Hashtbl.replace color u `grey;
-      Hashtbl.replace discover u (incr time; !time);
-      List.iter (fun (_, v) -> if Hashtbl.find color v = `white 
-                 then (Hashtbl.replace parent v (Some u);
-                       dfs_visit v))
-        (List.filter ((=) u -<- fst) edges);
-      Hashtbl.replace color u `black ;
-      Hashtbl.replace finish u (incr time; !time)
-    in
-      List.iter (fun u ->
-		   if Hashtbl.find color u = `white
-		   then dfs_visit u) nodes;
-      (finish, discover, parent)
+		 if Hashtbl.find color u = `white
+		 then dfs_visit u) nodes;
+    (finish, discover, parent)
 
 (* CLR 23.4 *)
 let topological_sort' nodes edges = 
@@ -141,41 +139,41 @@ let flatten_forest nodes : 'a list list=
 let cmp_snd_desc (_,y1) (_,y2) = (- compare y1 y2)
 
 (* CLR 23.5 *)
-let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) = 
+let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) : 'a list list = 
   let f, _, _ = dfs nodes edges in 
   let edges_reversed = transpose_edges edges in
   let nodes_sorted = (map fst (List.sort cmp_snd_desc (hashtbl_as_alist f))) in
   let _, _, p = (dfs nodes_sorted edges_reversed) in
     flatten_forest (hashtbl_as_alist p)
 
-(** [topo_sort_cliques]: given a graph in adjacency-list
-    representation, find all the cliques and topologically sort them;
-    return the result as a list of cliques, the cliques represented as the
+(** [topo_sort_sccs]: given a graph in adjacency-list
+    representation, find all the sccs and topologically sort them;
+    return the result as a list of sccs, the sccs represented as the
     list of their members. *)
-let topo_sort_cliques (adj_list : (string * string list) list) : string list list =
+let topo_sort_sccs (adj_list : ('a * 'a list) list) : 'a list list =
   (* [adj_list] is an alist, mapping each node to the
      list of nodes it points to, like so:
      [(u, [v; w; ...]);
       (v, [u; s; t; ...])] 
   *)
-  (* [clique_of cliques]: lookup (in [cliques]) the clique that [v] belongs to *)
-  let clique_of cliques v = List.find (List.mem v) cliques in
-    
+  (* [scc_of sccs]: lookup (in [sccs]) the scc that [v] belongs to *)
+  let scc_of sccs v = List.find (List.mem v) sccs in
+
   let nodes = map fst adj_list in
     (*  unfold adj_list: let `edges' be the list of all 
         (u, v) where (u, v) is an edge in the graph *)
   let edges = unroll_edges adj_list in
-  let cliques = strongly_connected_components nodes edges in
-    (* Now, for each clique, find the nodes that it points to: *)
-  let clique_innodes = 
+  let sccs = strongly_connected_components nodes edges in
+    (* Now, for each scc, find the nodes that it points to: *)
+  let scc_innodes = 
     map2alist (fun nodes -> concat_map_uniq (lookup_in adj_list) nodes) 
-      cliques in
-    (* Map each such node to its clique, so that we have, for each
-       clique, the list of cliques that it points to: *)
-  let clique_innodes = 
-    alistmap (fun calls -> map (clique_of cliques) calls) clique_innodes in
+      sccs in
+    (* Map each such node to its scc, so that we have, for each
+       scc, the list of sccs that it points to: *)
+  let scc_innodes = 
+    alistmap (fun calls -> map (scc_of sccs) calls) scc_innodes in
     (* Now unroll that to get a list of pairs (U, V) where U and V are
-       cliques and there is an edge from U to V *)
-  let clique_edges = unroll_edges clique_innodes in
-    let result = reverse (topological_sort cliques clique_edges) in
-      result
+       sccs and there is an edge from U to V *)
+  let scc_edges = unroll_edges scc_innodes in
+  let result = reverse (topological_sort sccs scc_edges) in
+    result

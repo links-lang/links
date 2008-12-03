@@ -28,7 +28,7 @@ ifdef POSTGRESQL_LIBDIR
    DB_LIBS    += postgresql
 endif
 
-DERIVING_DIR=deriving
+DERIVING_DIR=deriving-0.1.1
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
@@ -39,9 +39,9 @@ OCAMLC := ocamlc.opt
 # (it doesn't exist for all OCaml installations)
 OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
-PATH := $(PATH):deriving/syntax
+PATH := $(PATH):$(DERIVING_DIR)/syntax
 
-#OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2
+#OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
 OCAMLFLAGS=-dtypes -w Ae
@@ -51,51 +51,73 @@ OCAMLDOCFLAGS=-pp deriving
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli getopt.ml getopt.mli PP.ml
+OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
+      getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                		\
+          notfound.ml				\
           utility.ml            		\
+          env.mli env.ml                        \
           settings.mli settings.ml 		\
           basicsettings.ml                      \
           debug.mli debug.ml    		\
-          rewrite.ml            		\
-          performance.ml        		\
-          graph.ml              		\
+          performance.mli performance.ml	\
+          graph.ml                              \
           types.mli types.ml 	                \
-          query.mli query.ml          		\
-          sql.mli sql.ml               		\
-          syntax.mli syntax.ml        		\
+          constant.ml                           \
+          sourceCode.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
-          sugar.mli sugar.ml    		\
-          result.mli result.ml         		\
-          errors.mli errors.ml                  \
-          sql_transform.mli sql_transform.ml	\
           parser.mly            		\
-          $(DB_CODE)            		\
-          database.mli database.ml 		\
-          lexer.mll             		\
+          lexer.mli lexer.mll         		\
+	  typeUtils.mli typeUtils.ml            \
+          instantiate.mli instantiate.ml        \
+          generalise.mli generalise.ml          \
+          typevarcheck.mli typevarcheck.ml      \
+          unify.mli unify.ml                    \
+          var.ml                                \
+          ir.mli ir.ml                          \
+          value.mli value.ml                    \
+          errors.mli errors.ml                  \
           parse.mli parse.ml    		\
+          sugarTraversals.mli  sugarTraversals.ml	\
+          desugarDatatypes.mli desugarDatatypes.ml      \
+	  resolvePositions.mli resolvePositions.ml	\
+          refineBindings.mli refineBindings.ml		\
+          desugarLAttributes.mli desugarLAttributes.ml	\
+          transformSugar.mli transformSugar.ml          \
+          desugarPages.mli desugarPages.ml		\
+          desugarFormlets.mli desugarFormlets.ml        \
+          desugarRegexes.mli desugarRegexes.ml		\
+          desugarFors.mli desugarFors.ml                \
+          desugarDbs.mli desugarDbs.ml                  \
+          desugarFuns.mli desugarFuns.ml                \
+          desugarProcesses.mli desugarProcesses.ml      \
+          desugarInners.mli desugarInners.ml            \
+          typeSugar.mli typeSugar.ml			\
+          frontend.ml                           \
+	  dumpTypes.ml                          \
+          compilePatterns.ml                    \
           jsonparse.mly         		\
           jsonlex.mll           		\
-          json.ml               		\
-          callgraph.ml                          \
-          instantiate.mli instantiate.ml        \
-          typevarcheck.mli typevarcheck.ml      \
-          inference.mli inference.ml 		\
+          json.ml                               \
+          database.mli database.ml 		\
           linksregex.ml                         \
-          library.mli library.ml 		\
-          optimiser.mli optimiser.ml    	\
-          js.mli js.ml          		\
-          interpreter.mli interpreter.ml 	\
-          rewriterules.ml                       \
-          loader.ml                             \
-          webif.mli webif.ml           		\
-          test.ml                               \
-          tests.ml                              \
+          lib.mli lib.ml                        \
+          sugartoir.mli sugartoir.ml            \
+          loader.mli loader.ml                  \
+          $(DB_CODE)            		\
+          irtojs.mli irtojs.ml                  \
+          query.ml                              \
+          evalir.ml                             \
+          webif.mli webif.ml                    \
           links.ml              		\
-          ir.mli                                \
-          compileir.ml                          \
+
+# TODO: get these working again
+#
+#          test.ml                               \
+#          tests.ml                              \
+
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links
@@ -136,6 +158,10 @@ quick-help:
 
 docs-clean:
 	cd doc && make clean
+
+prelude.links.cache: prelude.links links
+	@echo "Pre-compiling prelude..."
+	@./links -e 'print("Prelude compiled OK.")'
 
 cache-clean:
 	-rm -f prelude.links.cache

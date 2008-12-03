@@ -1,18 +1,31 @@
 (** Interface to the parser.*)
 
-type ('result, 'intermediate) grammar
+type 'result grammar
 
 (* Grammar for types *)
-val datatype    :  (Types.assumption, Sugartypes.datatype) grammar
+val datatype    :  Sugartypes.datatype grammar
 (* Grammar for interactive shell *)
-val interactive : (Sugartypes.sentence', Sugartypes.sentence) grammar
+val interactive : Sugartypes.sentence grammar
 (* Grammar for programs stored in files etc. *)
-val program : (Syntax.untyped_program,
-               (Sugartypes.phrase list * Sugartypes.phrase option)) grammar
+val program : (Sugartypes.binding list * Sugartypes.phrase option) grammar
 
+type context
+val fresh_context : unit -> context
 
-val parse_string  : ('a,'b) grammar -> string -> 'a
-val parse_file    : ('a,'b) grammar -> string -> 'a
-val parse_channel : ?interactive:(unit -> unit) -> ('a,'b) grammar -> (in_channel * string) -> 'a
+type position_context = SourceCode.source_code
 
-            
+val parse_string  : ?pp:string
+                  -> ?in_context:context
+                  -> 'a grammar
+                  -> string
+                  -> 'a * position_context
+val parse_file    : ?pp:string
+                  -> ?in_context:context
+                  -> 'a grammar
+                  -> string
+                  -> 'a * position_context
+val parse_channel : ?interactive:(unit -> unit)
+                  -> ?in_context:context
+                  -> 'a grammar
+                  -> (in_channel * string) 
+                  -> 'a * position_context

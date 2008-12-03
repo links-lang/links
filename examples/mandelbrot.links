@@ -1,6 +1,6 @@
 # adapted from http://www.timestretch.com/FractalBenchmark.html
 
-var bailout = 16.;
+var bailout = 16.0;
 var max_iterations = 200;
 
 # process associated with a canvas.  Receive Point messages and render
@@ -83,15 +83,16 @@ fun iterate(colour) client {
 
 var colours = ["red", "green", "blue", "black", "orange", "purple"];
 
-<html>
- <body>
-  <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"
-	style="display: block">
-    {for (var colour <- colours)
-       <option>{stringToXml(colour)}</option>}
-  </select>
-  <div id="body"/>
- </body>
-</html>
+page
+ <html>
+  <body>
+   <select l:onchange="{ignore(spawn{iterate(getTargetValue(event))})}"
+ 	style="display: block">
+     {for (var colour <- colours)
+        <option>{stringToXml(colour)}</option>}
+   </select>
+   <div id="body"/>
+  </body>
+ </html>
 
 

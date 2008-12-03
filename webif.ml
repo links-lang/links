@@ -2,104 +2,52 @@
 
 open Performance
 open Utility
-open Result
 
-(*
- Whether to cache programs after the optimization phase
-*)
-let cache_programs = Settings.add_bool ("cache_programs", false, `User)
+type query_params = (string * Value.t) list deriving (Show)
 
-type query_params = (string * result) list deriving (Show)
-
-type web_request = ExprEval of Syntax.expression * environment
-                 | ClientReturn of continuation * result
-                 | RemoteCall of result * result list
-                 | CallMain
-                     deriving (Show)
+type web_request =
+    ExprEval of Ir.tail_computation * Value.env
+  | ClientReturn of Value.continuation * Value.t
+  | RemoteCall of Value.t * Value.t list
+  | CallMain
+      deriving (Show)
 
 (* Does at least one of the functions have to run on the client? *)
-let is_client_program (Syntax.Program (defs, _) as program) =
-  let is_client_def = function
-    | Syntax.Define (_, _, `Client, _) -> true
-    | _ -> false 
-  and toplevels = (concat_map 
-                     (function
-                        | Syntax.Define (n, _, _, _) -> [n]
-                        | _ -> [])) defs
-  and is_client_prim p = 
-    try Library.primitive_location p = `Client
-    with Not_found -> false in
-  let freevars = StringSet.elements (Syntax.freevars_program program) in
-  let prims = List.filter (not -<- flip List.mem toplevels) freevars
-  in 
-    List.exists is_client_def defs || List.exists is_client_prim prims
-
-let with_prelude prelude (Syntax.Program (defs, body)) =
-  Syntax.Program (prelude @ defs, body)
-
-(* Read in and optimise the program *)
-let read_and_optimise_program prelude typenv filename = 
-  let program = lazy(Parse.parse_file Parse.program filename)
-    <|measure_as|> "parse" in
-  let tenv, program = lazy(Inference.type_program typenv program)
-    <|measure_as|> "type" in
-  let tenv, program = 
-    (* The prelude is already optimized (via loader.ml) so we don't run 
-       it through again. *)
-    tenv, with_prelude prelude (lazy((Optimiser.optimise_program(tenv, program)))
-       <|measure_as|> "optimise") in
-  let tenv, program = tenv, Syntax.labelize program in
-    tenv, program
-              
-let read_and_optimise_program prelude env arg 
-    : Types.typing_environment * Syntax.program
-  = 
-  if Settings.get_value cache_programs then
-    Loader.read_file_cache arg
-  else
-    read_and_optimise_program prelude env arg
+let is_client_program : Ir.program -> bool =
+  fun (bs, main) ->
+    List.exists
+      (function
+         | `Fun (_, _, `Client)
+         | `Alien (_, "javascript") -> true
+         | `Rec defs ->
+             List.exists
+               (fun (_, _, location) -> location = `Client)
+               defs
+         | _ -> false)
+      bs
 
 let serialize_call_to_client (continuation, name, arg) = 
   Json.jsonize_call continuation name arg
 
-let untuple r =
-  let rec un n accum list = 
-    match List.partition (fst ->- (=) (string_of_int n)) list with
-      | [_,item], rest -> un (n+1) (item::accum) rest
-      | [], [] -> List.rev accum
-      | _ -> assert false
-  in match r with
-    | `Record args -> un 1 [] args
-    | _ -> assert false
+let get_remote_call_args lookup cgi_args = 
+  let untuple r =
+    let rec un n accum list = 
+      match List.partition (fst ->- (=) (string_of_int n)) list with
+        | [_,item], rest -> un (n+1) (item::accum) rest
+        | [], [] -> List.rev accum
+        | _ -> assert false
+    in match r with
+      | `Record args -> un 1 [] args
+      | _ -> assert false in
 
-let stubify_client_funcs globals (Syntax.Program(defs,body) as program) : Result.environment = 
-  Interpreter.program_source := program;
-  let is_server_fun = function
-    | Syntax.Define (_, _, (`Server|`Unknown), _) -> true
-    | Syntax.Define (_, _, (`Client|`Native), _) -> false
-    | Syntax.Alien ("javascript", _, _, _) -> false
-    | Syntax.Alias _ -> true
-  in 
-  let server_defs, client_defs = List.partition is_server_fun defs in
-  let client_env =
-    List.map (function
-                 | Syntax.Define (name, _, _, _)
-                 | Syntax.Alien (_, name, _, _) -> 
-                     (name, `ClientFunction name))
-      client_defs in
-    match server_defs with 
-        [] -> []
-      | server_defs -> (* evaluate the definitions to get Result.result values. *)
-          Interpreter.run_defs globals [] server_defs
-            @ client_env
-
-let get_remote_call_args env cgi_args = 
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
   let args = untuple (Json.parse_json args) in
-    RemoteCall(List.assoc fname env, args)
+  let func = lookup fname in
+    Debug.print ("client --> server call: "^fname);
+    RemoteCall(func, args)
 
-let decode_continuation (cont : string) : Result.continuation =
+let decode_continuation (cont : string) : Value.continuation =
   let fixup_cont = 
   (* At some point, '+' gets replaced with ' ' in our base64-encoded
      string.  Here we put it back as it was. *)
@@ -110,35 +58,51 @@ let is_special_param (k, _) =
   List.mem k ["_k"; "_jsonArgs"]
 
 let string_dict_to_charlist_dict =
-  alistmap Result.string_as_charlist
+  alistmap Value.string_as_charlist
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
-let expr_eval_req valenv program params =
-  let data = Syntax.no_expr_data in
-  let mkStringPair (l, r) =
-    Syntax.Record_intro (StringMap.from_alist 
-                           [("1", Syntax.Constant (Syntax.String l, data));
-                            ("2", Syntax.Constant (Syntax.String r, data))], 
-                         None, data) in
-    match Result.unmarshal_result (rng valenv) program  (List.assoc "_k" params) with
-      | `RecFunction ([(_,f)],locals,_) ->
-          let json_args = try (match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
-                                 | `Record fields -> fields
-                                 | _ -> assert false) 
-          with Not_found -> [] in
-          let env = List.filter (not -<- is_special_param) params in
-          let env = (List.fold_right
-                       (fun pair env -> 
-                          Syntax.Concat (Syntax.List_of (mkStringPair pair, data),
-                                         env, data))
-                       env (Syntax.Nil data))
-          in ExprEval (Syntax.Apply (f, [env], data), locals @ json_args)
+let expr_eval_req (valenv, nenv, tyenv) program params =
+  let string_pair (l, r) =
+    `Extend
+      (StringMap.from_alist [("1", `Constant (`String l));
+                             ("2", `Constant (`String r))],
+       None) in
+  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+  let closures = Ir.ClosureTable.program tenv program in
+  let valenv = Value.with_closures valenv (closures) in
+  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
+    match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
+      | `RecFunction ([(f, (_xs, _body))], locals, _) as v ->
+          let json_env =
+            if List.mem_assoc "_jsonArgs" params then
+              match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
+                | `Record fields ->
+                       List.fold_left
+                         (fun env (name, v) ->
+                            Value.bind (int_of_string name) (v, `Local) env)
+                         Value.empty_env
+                         fields
+                | _ -> assert false
+            else
+              Value.empty_env in
+
+          (* we don't need to pass the args in here as they are read using the environment
+             function *)
+
+          (*           let params = List.filter (not -<- is_special_param) params in *)            
+          (*           let args = *)
+          (*             List.fold_right *)
+          (*               (fun pair env -> *)
+          (*                  `ApplyPure (`Variable (Env.String.lookup nenv "Cons"), [string_pair pair; env])) *)
+          (*               params *)
+          (*               (`Variable (Env.String.lookup nenv "Nil")) in *)
+
+
+          let env = Value.shadow (Value.bind f (v, `Local) locals) ~by:json_env in
+            ExprEval (`Apply (`Variable f, []), env)
       | _ -> assert false
 
 let is_remote_call params =
-  List.mem_assoc "__name" params && List.mem_assoc "__args" params
-
-let is_func_appln params =
   List.mem_assoc "__name" params && List.mem_assoc "__args" params
 
 let is_client_call_return params = 
@@ -147,7 +111,7 @@ let is_client_call_return params =
 let is_expr_request = List.exists is_special_param
         
 let client_return_req cgi_args = 
-  let continuation = decode_continuation(List.assoc "__continuation" cgi_args) in
+  let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
   let arg = Json.parse_json_b64 (List.assoc "__result" cgi_args) in
     ClientReturn(continuation, arg)
 
@@ -159,84 +123,103 @@ let error_page body =
     error_page_stylesheet ^ 
     "\n  </head>\n  <body>" ^ 
     body ^ 
-    "\n  </body></html>"
+    "\n  </body></html>\n"
 
 let is_multipart () =
   ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
-let perform_request 
-    program (* orig. src.: only used for gen'ing js *)
-    globals main req =
-  match req with
-    | ExprEval(expr, env) ->
-        (* This assertion failing indicates that not everything needed
-           was serialized into the link: *)
-        assert(Syntax.is_closed_wrt expr 
-                 (StringSet.from_list (dom globals @ dom env @ dom (fst Library.typing_env))));
-          Library.print_http_response [("Content-type", "text/html")]
-            (Result.string_of_result 
-               (snd (Interpreter.run_program globals env (Syntax.Program ([], expr)))))
+let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (bs, body) =
+  let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
+    (bs @ [`Let (xb, ([], body))],
+     `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]))
+
+let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) (* original source *) =
+  function
+    | ExprEval(expr, locals) ->        
+        let env = Value.shadow valenv ~by:locals in
+        let v = snd (Evalir.run_program env (wrap_with_render_page (nenv, tyenv) ([], expr))) in
+          Lib.print_http_response [("Content-type", "text/html")]
+            (Value.string_of_value v)               
     | ClientReturn(cont, value) ->
-        Interpreter.has_client_context := true;
-        let result_json = (Json.jsonize_result 
-                             (Interpreter.apply_cont_safe globals cont value)) in
-        Library.print_http_response [("Content-type", "text/plain")]
-          (Utility.base64encode 
-             result_json)
+        Debug.print ("client return");
+        let result_json = (Json.jsonize_value 
+                             (Evalir.apply_cont_safe cont valenv value)) in
+        Lib.print_http_response [("Content-type", "text/plain")]
+          (Utility.base64encode result_json)
     | RemoteCall(func, args) ->
-
-        Interpreter.has_client_context := true;
-        let args = List.rev args in
-        let cont, value = 
-          ApplyCont(Result.empty_env, args) :: toplevel_cont, func
-        in
-	  Library.print_http_response [("Content-type", "text/plain")]
-            (Utility.base64encode
-               (Json.jsonize_result
-                  (Interpreter.apply_cont_safe globals cont value)))
+        let result = Evalir.apply_safe valenv (func, args) in
+	  Lib.print_http_response [("Content-type", "text/plain")]
+            (Utility.base64encode (Json.jsonize_value result))
     | CallMain -> 
-        Library.print_http_response [("Content-type", "text/html")] 
-          (if is_client_program program then
-             catch_notfound_l "generate_program"
-               (lazy(Js.generate_program program))
-           else 
-             let _env, rslt = Interpreter.run_program globals [] (Syntax.Program ([], main)) in
-               Result.string_of_result rslt)
+        Lib.print_http_response [("Content-type", "text/html")] 
+          (if is_client_program (globals @ locals, main) then
+             let program = (globals @ locals, main) in
+             Debug.print "Running client program";
+             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+             let closures = Ir.ClosureTable.program tenv program in
+               Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
+           else
+(*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
+             let program = wrap_with_render_page (nenv, tyenv) (locals, main) in
+             Debug.print "Running server program";
+             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+(*                  Debug.print ("tenv domain: "^Env.Int.fold (fun name _ s -> s ^ string_of_int name ^ "\n") tenv "\n"); *)
+             let closures = Ir.ClosureTable.program tenv (globals @ (fst program), snd program) in
+(*                  Debug.print ("closures: "^Ir.Show_closures.show closures); *)              
+             let valenv = Value.with_closures valenv (closures) in
+             let _env, v = Evalir.run_program valenv program in
+               Value.string_of_value v)
 
-let serve_request prelude (valenv, typenv) filename = 
+let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude filename =
   try 
-    let _, (Syntax.Program (defs, main) as program) =
-      read_and_optimise_program prelude typenv filename in
-    let defs = Utility.catch_notfound_l "stubifying" 
-      (lazy (stubify_client_funcs valenv program)) in
+(*    let (valenv, nenv, tyenv) = envs in*)
+    let () = Debug.print ("Loading: "^filename^"...") in
+    let (nenv', tyenv'), (globals, (locals, main), _t) =
+      Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
+    let () = Debug.print ("...loaded") in
+(*    let () = Debug.print ("program: "^Ir.Show_program.show (globals @ locals, main)) in *)
+    let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) (globals @ locals, main) in
+
+    let valenv = Evalir.run_defs (Value.with_closures valenv closures) globals in
+
+    let valenv, nenv, tyenv  =
+      (valenv,
+       Env.String.extend nenv nenv',
+       Types.extend_typing_environment tyenv tyenv') in
+    let globals = prelude @ globals in
     let cgi_args =
       if is_multipart () then
         List.map (fun (name, {Cgi.value=value}) ->
                     (name, value)) (Cgi.parse_multipart_args ())
       else
         Cgi.parse_args () in
-      Library.cgi_parameters := cgi_args;
-    let request = 
-      if is_remote_call cgi_args then
-        get_remote_call_args defs cgi_args
-      else if is_client_call_return cgi_args then
-        client_return_req cgi_args
-      else if (is_expr_request cgi_args) then
-        expr_eval_req valenv program cgi_args
-      else
-        CallMain
-    in
-      Utility.catch_notfound_l "performing request"
-        (lazy (perform_request program (defs @ valenv) main request))
+      Lib.cgi_parameters := cgi_args;
+      let lookup name =
+        let var = Env.String.lookup nenv name in
+          match Value.lookup var valenv with
+            | Some v -> v
+            | None -> Lib.primitive_stub name in
+      let request =
+        if is_remote_call cgi_args then
+          get_remote_call_args lookup cgi_args
+        else if is_client_call_return cgi_args then
+          client_return_req cgi_args
+        else if (is_expr_request cgi_args) then
+          expr_eval_req (valenv, nenv, tyenv) (globals @ locals, main) cgi_args
+        else
+          CallMain
+      in
+        perform_request (valenv, nenv, tyenv) (globals, (locals, main)) request
   with
       (* FIXME: errors need to be handled differently
-         btwn. user-facing and remote-call modes. *)
-      Failure msg -> prerr_endline msg;
-        Library.print_http_response [("Content-type", "text/html; charset=utf-8")] 
-        (error_page (Errors.format_exception_html (Failure msg)))
-    | exc -> Library.print_http_response [("Content-type", "text/html; charset=utf-8")]
+         between user-facing and remote-call modes. *)
+      Failure msg as e -> 
+        prerr_endline msg;
+        Lib.print_http_response [("Content-type", "text/html; charset=utf-8")] 
+          (error_page (Errors.format_exception_html e))
+    | exc -> Lib.print_http_response [("Content-type", "text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
-let serve_request envs filename =
-  Errors.display (lazy (serve_request envs filename))
+let serve_request envs prelude filename =
+  Errors.display (lazy (serve_request envs prelude filename))

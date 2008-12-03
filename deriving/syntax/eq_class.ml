@@ -1,112 +1,120 @@
-(*pp camlp4of *)
-module InContext (L : Base.Loc) =
-struct
-  open Base
-  open Utils
-  open Type
-  open Camlp4.PreCast
-  include Base.InContext(L)
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
 
-  let classname = "Eq"
+open Deriving
+include Deriving.Struct_utils(struct let classname="Eq" let defaults = "Eq_defaults" end)
 
-  let lprefix = "l" and rprefix = "r"
+let currentp currents = function
+| None -> false
+| Some (_, s) -> List.mem_assoc s currents
 
-  let wildcard_failure = <:match_case< _ -> false >>
+let module_name currents = function
+| None -> assert false
+| Some (_, s) -> List.assoc s currents
 
-  let tup ctxt ts mexpr exp = 
-      match ts with
-        | [t] -> 
-            <:module_expr< struct type a = $atype_expr ctxt (`Tuple ts)$
-                                  let eq l r = let module M = $exp ctxt t$ 
-                                   in $mexpr$ l r end >>
-        | ts ->
-            let _, (lpatt, rpatt), expr = 
-              List.fold_right
-                (fun t (n, (lpatt, rpatt), expr) ->
-                   let lid = Printf.sprintf "l%d" n and rid = Printf.sprintf "r%d" n in
-                     (n+1,
-                      (Ast.PaCom (loc,<:patt< $lid:lid$ >>, lpatt),
-                       Ast.PaCom (loc,<:patt< $lid:rid$ >>, rpatt)),
-                      <:expr< let module M = $exp ctxt t$ 
-                              in $mexpr$ $lid:lid$ $lid:rid$ && $expr$ >>))
-                ts
-                (0, (<:patt< >>, <:patt< >>), <:expr< true >>)
-            in 
-              <:module_expr< struct type a = $atype_expr ctxt (`Tuple ts)$
-                                    let eq $Ast.PaTup (loc, lpatt)$ $Ast.PaTup (loc, rpatt)$ = $expr$ end >>
+let gen_printer =
+  let current default (t:MLast.ctyp) gen ({loc=loc;currents=currents} as ti) c = 
+    let lt = ltype_of_ctyp t in
+    if currentp currents lt then 
+      <:module_expr< $uid:(module_name currents lt)$ >>
+    else default t gen ti c
+  in 
+  gen_module_expr
+    ~tyapp:(current gen_app)
+    ~tylid:(current gen_lid)
+    ~tyrec:gen_other 
+    ~tysum:gen_other
+    ~tyvrn:gen_other
+
+let gen_printers ({loc=loc} as ti) tuplel tupler params = 
+ let m = (List.fold_left
+            (fun s param -> <:module_expr< $s$ $param$ >>)
+            <:module_expr< $uid:Printf.sprintf "Eq_%d" (List.length params)$ >>
+            (List.map (gen_printer ti) params)) in
+   <:expr< let module S = $m$ in S.eq $tuplel$ $tupler$ >>
+
+(* Generate a printer for each constructor parameter *)
+let gen_case ti (loc, name, params) =
+  match params with
+    | []  ->  <:patt< ($uid:name$, $uid:name$) >>, None, <:expr< True >>
+    | [p] ->  <:patt< ($uid:name$ l, $uid:name$ r) >>, 
+                None, 
+              <:expr< let module M = $gen_printer ti p$ in M.eq l r >>
+    | ps  -> let names = List.map (fun n -> 
+                                     let l, r = Printf.sprintf "l%d" n, Printf.sprintf "r%d" n in
+                                       (<:patt< $lid:l$ >>, <:patt< $lid:r$ >>, <:expr< $lid:l$ >>, <:expr< $lid:r$ >>))
+                                  (range 0 (List.length ps - 1)) in 
+             let pattl = <:patt< ( $list:List.map (fun (l,_,_,_)->l) names$)>>
+             and pattr = <:patt< ( $list:List.map (fun (_,r,_,_)->r) names$)>>
+             and exprl = <:expr< ( $list:List.map (fun (_,_,l,_)->l) names$)>>
+             and exprr = <:expr< ( $list:List.map (fun (_,_,_,r)->r) names$)>> in
+        (<:patt< ($uid:name$ $pattl$, $uid:name$ $pattr$) >>,
+         None,
+         gen_printers ti exprl exprr params)
+
+let wildcard_failure loc = <:patt<_>>, None, <:expr< False>>
+
+(* Generate the format function, the meat of the thing. *)
+let gen_eq_sum ({loc=loc} as ti) ctors = 
+  let matches = (List.map (gen_case ti) ctors) @ [wildcard_failure loc] in
+<:str_item< 
+   value rec eq l r = match (l, r) with
+       [ $list:matches$ ]
+>>
+
+let gen_eq_record ({loc=loc}as ti) fields = 
+  let matches = List.fold_right
+    (fun (loc,k,mutablep,v) rest -> 
+       if mutablep then 
+         <:expr<  (l.$lid:k$) == (r.$lid:k$) && $rest$ >>
+       else 
+       <:expr< let module M = $gen_printer ti v$
+               in M.eq (l.$lid:k$) (r.$lid:k$) && $rest$ >>) 
+    fields
+    <:expr< True >> in
+  <:str_item< value rec eq l r = $matches$ >>
+
+let gen_polycase ({loc=loc} as ti) = function
+| MLast.RfTag (name, _ (* what is this? *), params') ->
+    (* label + params *)
+    begin match params' with 
+      | []  -> <:patt< (`$uid:name$, `$uid:name$) >>, None, <:expr< True >>
+      | [x] -> <:patt< (`$uid:name$ l, `$uid:name$ r) >>, 
+               None,
+               <:expr< let module M = $gen_printer ti x$ in M.eq l r>>
+      | _   -> assert false
+    end
+
+| MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
+    (<:patt< ((#$[tname]$ as l), (#$[tname]$ as r)) >>),
+    None, 
+    (<:expr< let module M = $gen_printer ti ctyp$ in M.eq l r>>)
+
+| MLast.RfInh ctyp -> 
+    let lvar, Some lguard, lexpr = cast_pattern ti ctyp ~param:"l" 
+    and rvar, Some rguard, rexpr = cast_pattern ti ctyp ~param:"r" in
+      (<:patt< ($lvar$, $rvar$) >>,
+       Some <:expr< $lguard$ && $rguard$ >>,
+       <:expr< let module M = $gen_printer ti ctyp$ in
+               M.eq $lexpr$ $rexpr$ >>)
 
 
-  let instance = object (self)
-    inherit make_module_expr ~classname ~allow_private:true
+let gen_eq_polyv ({loc=loc} as ti) (row,_) =
+  let matches = List.map (gen_polycase ti) row @ [wildcard_failure loc] in
+<:str_item< 
+  value rec eq l r = match (l, r) with  [ $list:matches$ ]
+>>
 
-  method tuple ctxt ts = tup ctxt ts <:expr< M.eq >> (self#expr)
-    
-  method polycase ctxt : Type.tagspec -> Ast.match_case = function
-    | Tag (name, None) -> <:match_case< `$name$, `$name$ -> true >>
-    | Tag (name, Some e) -> <:match_case< 
-        `$name$ l, `$name$ r -> 
-           $mproject (self#expr ctxt e) "eq"$ l r >>
-    | Extends t -> 
-        let lpatt, lguard, lcast = cast_pattern ctxt ~param:"l" t in
-        let rpatt, rguard, rcast = cast_pattern ctxt ~param:"r" t in
-          <:match_case<
-            ($lpatt$, $rpatt$) when $lguard$ && $rguard$ ->
-            $mproject (self#expr ctxt t) "eq"$ $lcast$ $rcast$ >>
-  
-  method case ctxt : Type.summand -> Ast.match_case = 
-    fun (name,args) ->
-      match args with 
-        | [] -> <:match_case< ($uid:name$, $uid:name$) -> true >>
-        | _ -> 
-            let nargs = List.length args in
-            let lpatt, lexpr = tuple ~param:"l" nargs
-            and rpatt, rexpr = tuple ~param:"r" nargs in
-              <:match_case<
-                ($uid:name$ $lpatt$, $uid:name$ $rpatt$) ->
-                   $mproject (self#expr ctxt (`Tuple args)) "eq"$ $lexpr$ $rexpr$ >> 
-              
-  method field ctxt : Type.field -> Ast.expr = function
-    | (name, ([], t), `Immutable) -> <:expr<
-        $mproject (self#expr ctxt t) "eq"$ $lid:lprefix ^ name$ $lid:rprefix ^ name$ >>
-    | (_, _, `Mutable) -> assert false
-    | f -> raise (Underivable ("Eq cannot be derived for record types with polymorphic fields")) 
+let gen_module_expr ti = 
+  gen_module_expr ti
+    ~tyrec:(fun _ _ ti fields -> apply_defaults ti (gen_eq_record ti fields))
+    ~tysum:(fun _ _ ti ctors -> apply_defaults ti (gen_eq_sum ti ctors))
+    ~tyvrn:(fun _ _ ti row -> apply_defaults ti (gen_eq_polyv ti row))
+    ti.rtype
 
-  method sum ?eq ctxt decl summands =
-    let wildcard = match summands with [_] -> [] | _ -> [ <:match_case< _ -> false >>] in
-  <:module_expr< 
-      struct type a = $atype ctxt decl$
-             let eq l r = match l, r with 
-                          $list:List.map (self#case ctxt) summands @ wildcard$
-  end >>
-
-  method record ?eq ctxt decl fields = 
-    if List.exists (function (_,_,`Mutable) -> true | _ -> false) fields then
-       <:module_expr< struct type a = $atype ctxt decl$ let eq = (==) end >>
-    else
-    let lpatt = record_pattern ~prefix:"l" fields
-    and rpatt = record_pattern ~prefix:"r" fields 
-    and expr = 
-      List.fold_right
-        (fun f e -> <:expr< $self#field ctxt f$ && $e$ >>)
-        fields
-        <:expr< true >>
-    in <:module_expr< struct type a = $atype ctxt decl$
-                             let eq $lpatt$ $rpatt$ = $expr$ end >>
-
-  method variant ctxt decl (spec, tags) = 
-    <:module_expr< struct type a = $atype ctxt decl$
-                          let eq l r = match l, r with
-                                       $list:List.map (self#polycase ctxt) tags$
-                                       | _ -> false end >>
+let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
+let _ = 
+  begin
+    instantiators := ("Eq", gen_instances):: !instantiators;
+    sig_instantiators := ("Eq", Sig_utils.gen_sigs "Eq"):: !sig_instantiators;
   end
-end
-
-let _ = Base.register "Eq" 
-  ((fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-         ~default_module:"Defaults" ()),
-   (fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in
-        M.gen_sigs ~context ~decls ~classname:M.classname))
-

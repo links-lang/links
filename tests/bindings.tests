@@ -1,7 +1,7 @@
 Lexical scoping at top-level
-x = 3; fun y(a) { x + a }; x = 4; y(10)
-stderr : @..*
-exit : 1
+var x = 3; fun y(a) { x + a } var x = 4; y(10)
+stdout : 13 : Int
+exit : 0
 
 Nested scopes
 { var x = 3; ({ var x = 4; x }, x)}
@@ -46,10 +46,6 @@ Closures where the environment contains a closure from a different scope
 fun add(x,y){x+y} fun baz(z, w) {z + w} fun foo(f, x) { fun bar(y) { f(3, y) } bar(x) } foo(add,4)
 stdout : 7 : Int
 exit : 0
-
-handle HTML with VAR -> HANDLER construction
-handle <html>{ignore(handler); <body/>}</html> with r -> r
-stdout : @<html>.*</html> : Xml
 
 No value recursion
 fun f() { g() } var x = f(); fun g() { x }

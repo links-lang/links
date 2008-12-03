@@ -30,8 +30,7 @@
 
     Information about a class consists of an integer weight (the number of elements in the class) and of the class's descriptor. *)
 
-type dummy_type_to_pull_names_into_scope = int
-  deriving (Typeable, Show, Dump)
+open Show
 
 type 'a point = {
   mutable link: 'a link
@@ -46,7 +45,6 @@ and 'a info = {
 } deriving (Eq, Typeable, Pickle)
 
 module Show_point (A : Show) = Show_unprintable (struct type a = A.a point  end)
-module Dump_point (A : Dump) = Dump_undumpable (struct type a = A.a point let tname ="point"  end)
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
 let fresh desc = {

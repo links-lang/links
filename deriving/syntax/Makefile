@@ -1,41 +1,43 @@
-OCAMLMAKEFILE = ../OCamlMakefile
+# $Id: Makefile,v 1.12 2002/02/04 10:21:44 ddr Exp $
 
-OCAMLC     = ocamlc.opt
-OCAMLOPT   = ocamlopt.opt
-OCAMLDEP   = ocamldep.opt
-ANNOTATE   = yes
-PPFLAGS    = -loc loc
-USE_CAMLP4 = yes
-LIBS       = camlp4lib unix
+OCAMLC   = ocamlc.opt
+CAMLP4   = "camlp4o -loc loc "
+OCAMLOPT = ocamlopt.opt
+OCAMLDEP = ocamldep
+LIBDIR = $(shell ocamlc -where)
+CAMLP4DIR = $(shell camlp4 -where)
 
-CAMLP4_PRE_NOPRINTER = 
+OCAMLFLAGS=-w Aef
 
-CAMLP4_PREFILES = Camlp4Parsers/Camlp4OCamlRevisedParser.cmo \
-                  Camlp4Parsers/Camlp4OCamlParser.cmo        \
-                  Camlp4Printers/Camlp4AutoPrinter.cmo
-CAMLP4_POSTFILES = Camlp4Bin.cmo
-CAMLP4_NATIVE_PREFILES=$(CAMLP4_PREFILES:.cmo=.cmx)
-CAMLP4_NATIVE_POSTFILES=$(CAMLP4_POSTFILES:.cmo=.cmx)
+DERIVERS=eq_class typeable_class pickle_class shelve_class show_class enum_class bounded_class functor_class rewriter_class
 
-SOURCES = id.ml                 \
-          utils.ml              \
-          type.ml               \
-          base.ml               \
-          extend.ml             \
-          show_class.ml         \
-          dump_class.ml         \
-          enum_class.ml         \
-          bounded_class.ml      \
-          eq_class.ml           \
-          typeable_class.ml     \
-          functor_class.ml      \
-          pickle_class.ml       \
+DERIVER_SRCS=$(addsuffix .ml,$(DERIVERS))
+DERIVER_OBJS=$(addsuffix .cmo,$(DERIVERS))
+OBJS=deriving.cmo $(DERIVER_OBJS)
+NOBJS=deriving.cmx $(addsuffix .cmx,$(DERIVERS))
 
-RESULT = deriving
+all: byte opt deriving
+byte: $(OBJS)
+opt: $(OBJS)
 
-all: exe
+# Create a custom native camlp4 that incorporates the deriving
+# extension.
+#
+# This is less flexible than loading the bytecode files into the
+# standard camlp4, but (consequently) runs much faster.
+deriving: $(OBJS)
+	$(OCAMLOPT) -linkall -o $@ -I $(CAMLP4DIR) odyl.cmxa camlp4.cmxa pa_o.cmx pa_op.cmx pr_dump.cmx $(NOBJS) camlp4/odyl.cmx 
 
-include $(OCAMLMAKEFILE)
+clean:
+	rm -f *.cm[oix] *.o deriving
 
-exe: $(IMPL_CMO)
-	$(OCAMLC) -linkall $(ALL_LDFLAGS) $(CAMLP4_PREFILES) $(IMPL_CMO) -o deriving $(CAMLP4_POSTFILES)
+depend:
+	$(OCAMLDEP) -pp $(CAMLP4) *.ml* > .depend
+
+$(OBJS): %.cmo: %.ml
+	$(OCAMLC) $(OCAMLFLAGS) -pp $(CAMLP4) -I +camlp4 -c $<
+	$(OCAMLOPT) $(OCAMLFLAGS) -pp $(CAMLP4) -I +camlp4 -c $<
+
+.SUFFIXES: .mli .ml .cmi .cmo .cmx
+
+-include .depend

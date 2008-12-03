@@ -1,6 +1,6 @@
 module type Monad =
   sig
-    type +'a m
+    type 'a m
     val return : 'a -> 'a m
     val fail : string -> 'a m
     val ( >>= ) : 'a m -> ('a -> 'b m) -> 'b m
@@ -16,11 +16,11 @@ module type MonadPlus =
 
 module MonadDefault
   (M : sig
-         type +'a m
+         type 'a m
          val return : 'a -> 'a m
          val fail : string -> 'a m
          val ( >>= ) : 'a m -> ('a -> 'b m) -> 'b m
-       end) : Monad with type +'a m = 'a M.m
+       end) : Monad with type 'a m = 'a M.m
 
 module Monad_option : MonadPlus with type 'a m = 'a option
 module Monad_list : MonadPlus with type 'a m = 'a list

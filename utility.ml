@@ -1,6 +1,8 @@
 (*pp deriving *)
 (**** Various utility functions ****)
 
+open Notfound
+
 let fst3(x, _, _) = x
 let snd3(_, y, _) = y
 let thd3(_, _, z) = z
@@ -23,6 +25,12 @@ struct
 end    
 include Functional
 
+(** {0 Simulating infix function words (a la Haskell backticks)} *)
+
+(** left-associative *)
+let ( <| ) arg f = f arg
+let ( |> ) f arg = f arg
+
 (* Maps and sets *)
 module type OrderedShow = sig
   type t
@@ -31,12 +39,20 @@ module type OrderedShow = sig
     with type a = t
 end
 
-exception NotFound of string
-
 module type Map = 
 sig
   include Map.S
   exception Not_disjoint of key * string
+
+  val singleton : key -> 'a -> 'a t 
+  (** create a singleton map *)
+
+  val filter : ('a -> bool) -> 'a t -> 'a t
+  (** filter by value *)
+
+  val filteri : (key -> 'a -> bool) -> 'a t -> 'a t
+  (** filter by key and value *)
+
   val for_all : ('a -> bool) -> 'a t -> bool
   (** return true if p holds for all values in the range of m *)
 
@@ -50,19 +66,26 @@ sig
   (** construct a map from an association list *)
 
   val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
-  (** construct a new map from two existing maps *)
+  (** contruct a list from a map *)
+
+  val megamap : (key * 'a -> key * 'b) -> 'a t -> 'b t
 
   val pop : key -> 'a t -> ('a * 'a t)
   (** remove the item with the given key from the map and return the remainder. *)
-
   val lookup : key -> 'a t -> 'a option
   (** as `find', but return an option instead of raising an exception *)
 
   val union_disjoint : 'a t -> 'a t -> 'a t
   (** disjoint union *)
 
+  val union_all : ('a t) list -> 'a t
+  (** disjoint union of a list of maps *)
+
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
+
+  val split : ('a * 'b) t -> ('a t * 'b t)
+  (** split a pair map into a pair of maps *)
 
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
@@ -76,13 +99,27 @@ end
 
 module String = struct
   include String
-  module Show_t = Primitives.Show_string
+  module Show_t =Show.Show_string
 end
 
 module Int = struct
   type t = int
   let compare = Pervasives.compare
-  module Show_t = Primitives.Show_int
+  module Show_t = Show.Show_int
+end
+
+module Char = 
+struct
+  include Char
+  module Show_t = Show.Show_char
+  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
+  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
+  let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
+  let isLower = function 'a'..'z' -> true | _ -> false
+  let isUpper = function 'A'..'Z' -> true | _ -> false
+  let isDigit = function '0'..'9' -> true | _ -> false
+  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
+  let isBlank = function ' '|'\t' -> true | _ -> false
 end
 
 module Map :
@@ -97,9 +134,22 @@ struct
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
 
+    let singleton i v =
+      add i v empty
+
+    let filter f map =
+      fold (fun name v map ->
+              if f v then add name v map
+              else map) map empty
+
+    let filteri f map =
+      fold (fun name v map ->
+              if f name v then add name v map
+              else map) map empty
+
     let find elem map = 
       try find elem map 
-      with Not_found -> raise (NotFound (Ord.Show_t.show elem))
+      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem))
       
     let for_all p m =
       fold (fun _ v b -> b && p v) m true
@@ -116,6 +166,8 @@ struct
     let from_alist l =
       List.fold_right (uncurry add) l empty 
         
+    let megamap f m = fold (fun k v -> uncurry add (f (k, v))) m empty
+
     let pop item map = 
       (find item map, remove item map)
         
@@ -132,7 +184,14 @@ struct
            else
              add k v r) b a
 
+    let union_all ms = List.fold_right union_disjoint ms empty
+
     let superimpose a b = fold add b a
+
+    let split m =
+      fold
+        (fun i (v1, v2) (m1, m2) -> (add i v1 m1, add i v2 m2))
+        m (empty, empty)
 
     let partition f m =
       fold
@@ -185,33 +244,86 @@ struct
 end
 
 module type INTSET = Set with type elt = int
-module IntSet : INTSET = Set.Make(Int)
+module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
 
+module type CHARSET = Set with type elt = char
+module CharSet : CHARSET = Set.Make(Char)
+module CharMap = Map.Make(Char)
+
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
 
 module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Typeable_defaults(struct
+Typeable.Defaults (struct
   type a = A.a stringmap
-  let typeRep = 
-    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
-    in fun _ -> t
+  let type_rep = 
+    (*Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])*)
+    Typeable.TypeRep.mkFresh "stringmap"  [A.type_rep]
+
 end)
-module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
+module Dump_stringmap (A : Dump.Dump) : Dump.Dump with type a = A.a stringmap  = Dump.Dump_undumpable (struct type a = A.a stringmap let tname ="stringmap"  end)
 module Functor_stringmap = StringMap.Functor_t
-module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
-module Shelve_stringmap (S : Shelve.Shelve) = 
-struct
-  module Typeable = Typeable_stringmap(S.Typeable)
-  module Eq = Eq_stringmap(S.Eq)
-  type a = S.a stringmap
-  let shelve  _ = failwith "shelve stringmap nyi"
-end
+module Eq_stringmap (E : Eq.Eq) : Eq.Eq with type a = E.a stringmap = Eq.Eq_map_s_t (E)(StringMap)
+module Pickle_stringmap (S : Pickle.Pickle) : Pickle.Pickle with type a = S.a stringmap = 
+  Pickle.Defaults(
+    struct
+      module T = Typeable_stringmap(S.T)
+      module E = Eq_stringmap(S.E)
+      type a = S.a stringmap
+      let pickle  _ = failwith "pickle stringmap nyi"
+      let unpickle   _ = failwith "unpickle stringmap nyi"
+    end)
+
+type intset = IntSet.t
+    deriving (Show)
+type 'a intmap = 'a IntMap.t
+    deriving (Show)
+
+module Eq_intset : Eq.Eq with type a = intset = Eq.Eq_set_s_t (IntSet)
+module Typeable_intset : Typeable.Typeable with type a = intset
+  = 
+Typeable.Defaults (struct
+  type a = intset
+  let type_rep = 
+    Typeable.TypeRep.mkFresh "intset"  []
+end)
+
+module Dump_intset = Dump.Dump_undumpable (struct type a = intset let tname ="intset" end)
+module Pickle_intset : Pickle.Pickle with type a = intset = 
+  Pickle.Defaults(
+    struct
+      module T = Typeable_intset
+      module E = Eq_intset
+      type a = intset
+      let pickle  _ = failwith "pickle intset nyi"
+      let unpickle   _ = failwith "unpickle intset nyi"
+    end)
+
+
+module Typeable_intmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a intmap = 
+Typeable.Defaults(struct
+  type a = A.a intmap
+  let type_rep = Typeable.TypeRep.mkFresh "intmap" [A.type_rep]
+end)
+module Dump_intmap (A : Dump.Dump) = Dump.Dump_undumpable (struct type a = A.a intmap let tname ="intmap"  end)
+module Functor_intmap = IntMap.Functor_t
+module Eq_intmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(IntMap)
+module Pickle_intmap (S : Pickle.Pickle)
+  : Pickle.Pickle with type a = S.a intmap
+ = 
+  Pickle.Defaults(
+    struct
+      module T = Typeable_intmap(S.T)
+      module E = Eq_intmap(S.E)
+      type a = S.a intmap
+      let pickle  _ = failwith "pickle intmap nyi"
+      let unpickle  _ = failwith "unpickle intmap nyi"
+    end)
 
 (** {1 Lists} *)
 module ListUtils = 
@@ -220,8 +332,17 @@ struct
     let rec aux f t result = 
       if f = t then result
       else aux (f+1) t (f::result)
-    in if (f > t) then raise (Invalid_argument "fromTo")
+    in if (t) < f then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
+
+  (** map with index *)
+  let mapIndex (f : 'a -> int -> 'b) : 'a list -> 'b list =
+    let rec mi i =
+      function
+        | [] -> []
+        | (x :: xs) -> f x i :: mi (i+1) xs
+    in
+      mi 0
 
   (** [all_equiv rel list]: given an equiv. rel'n [rel], determine
       whether all elements of [list] are equivalent. *)
@@ -251,17 +372,19 @@ struct
   (** [groupByPred pred] partitions [list] into chunks where all
       elements in the chunk give the same value under [pred]. *)
   let groupByPred pred list = 
-  let rec group state result = function
-    | [] -> List.rev (List.map List.rev result)
-    | x::etc -> let predx = pred x in
-      let new_result = (if (predx = state) then
+    let rec group state result = function
+      | [] -> List.rev (List.map List.rev result)
+      | x::etc -> let predx = pred x in
+        let new_result = (if (predx = state) then
                             (x::List.hd result) :: List.tl result
-                        else
+                          else
                             [x] :: result)
-      in
-        group predx new_result etc
-  in if (list == []) then [] else  group (pred (List.hd list)) [] list
-      
+        in
+          group predx new_result etc
+    in match list with
+      | [] -> []
+      | hd::_ -> group (pred hd) [] list
+
   (** [groupByPred']: Alternate implementation of groupByPred. *)
   let groupByPred' pred : 'a list -> 'a list list = 
     let rec group = function
@@ -286,11 +409,11 @@ struct
       snd (unsnoc l)
     with Invalid_argument _ -> invalid_arg "last"
     
-  (** [butlast list]: Return a copy of the list with the last element removed. *)
-  let butlast l = 
+  (** [curtail list]: Return a copy of the list with the last element removed. *)
+  let curtail l = 
     try
       fst (unsnoc l)
-    with Invalid_argument _ -> invalid_arg "butlast"
+    with Invalid_argument _ -> invalid_arg "curtail"
 
   let difference list1 list2 = 
     List.filter (fun x -> not (List.mem x list2)) list1
@@ -346,25 +469,21 @@ struct
   let push_front f list = list := f :: !list
 end
 include ListUtils
+
   
 (** {1 Association-list utilities} *)
 module AList = 
 struct
-  let rec rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = fun value ->
-    function
-      | (k, v) :: _ when eq v value -> k
-      | _ :: rest -> rassoc_eq eq value rest
-      | [] -> raise Not_found
-          
+  let rassoc_eq eq : 'b -> ('a * 'b) list -> 'a = 
+    fun value l -> 
+      try fst (List.find (snd ->- eq value) l)
+      with NotFound _ -> not_found "rassoc_eq" value
+
   let rassoc i l = rassoc_eq (=) i l
   and rassq i l = rassoc_eq (==) i l
     
-  let rec rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
-    fun value ->
-      function
-        | (_, v) :: rest when eq v value -> rest
-        | other :: rest -> other :: rremove_assoc_eq eq value rest
-        | [] -> []
+  let rremove_assoc_eq eq : 'b -> ('a * 'b) list -> ('a * 'b) list = 
+    fun value -> List.filter (not -<- eq value -<- snd)
           
   let rremove_assoc i l = rremove_assoc_eq (=) i l
   and rremove_assq i l = rremove_assoc_eq (==) i l
@@ -376,8 +495,8 @@ struct
       new alist *)
   let alistmap f = List.map (cross identity f)
 
-  let alistmapstrcat glue f = 
-    (List.map (fun (k, v) -> k ^ " => " ^ f v))
+  let show_fgraph ?(glue=", ") f = 
+    (List.map (fun x -> x ^ " => " ^ f x))
     ->- (String.concat glue) 
     
   (** alistmap' produces an alist by applying f to each element of the
@@ -391,7 +510,7 @@ struct
   let map2alist f list = List.map (fun x -> (x, f x)) list
   let graph_func = map2alist
 
-  let rng alist = List.map snd alist
+  let range alist = List.map snd alist
   let dom alist = List.map fst alist
 
 end
@@ -418,6 +537,11 @@ struct
       else explode' (string.[n] :: list) (n + 1) string
     in List.rev -<- (explode' [] 0)
       
+  let is_numeric str = 
+    List.for_all
+      (fun ch -> ch <|List.mem|> ['0';'1';'2';'3';'4';'5';'6';'7';'8';'9']) 
+      (explode str)
+
   let implode : char list -> string = 
     (String.concat "") -<- (List.map (String.make 1))
 
@@ -428,7 +552,7 @@ struct
     let rec aux offset occurrences = 
       try let index = String.index_from s offset c in
             aux (index + 1) (index :: occurrences)
-      with Not_found -> occurrences
+      with NotFound _ -> occurrences
     in List.rev (aux 0 [])
       
   let mapstrcat glue f list = String.concat glue (List.map f list)
@@ -443,8 +567,17 @@ struct
       else
         try ignore (Str.search_forward (Str.regexp_string is) s (slen - ilen));
           true
-        with Not_found -> 
-          false
+        with NotFound _ -> false
+
+  let count c str = 
+    let count = ref 0 in
+      begin
+        String.iter (function
+                       | c' when c = c' -> incr count
+                       | _              -> ()) 
+          str;
+        !count
+      end
 end
 include StringUtils
 
@@ -456,6 +589,8 @@ let groupingsToString : ('a -> string) -> 'a list list -> string =
     mapstrcat "; " (mapstrcat ", " f)
 
 let numberp s = try ignore (int_of_string s); true with _ -> false
+
+(** {0 File I/O utilities} *)
 
 let lines (channel : in_channel) : string list = 
   let input () = 
@@ -483,19 +618,56 @@ let call_with_open_infile,
       (fun x ?(binary=false) -> call (if binary then open_out_bin else open_out) close_out x))
 
 let process_output : string -> string
-  = String.concat "\n" -<- lines -<- Unix.open_process_in
+  = fun proc ->
+    let fd = Unix.open_process_in proc in
+      try 
+        let lines = lines fd in
+        let rv = String.concat "\n" lines in
+          close_in_noerr fd;
+          rv
+      with e ->
+        close_in_noerr fd;
+        raise e
+
+let filter_through : command:string -> string -> string =
+  fun ~command string ->
+    let filename, fd = Filename.open_temp_file "pp" ".links" in
+    let () = output_string fd string in
+    let () = close_out fd in
+    let sh = Printf.sprintf "%s < %s" command filename in 
+    let filtered = process_output sh in
+      Sys.remove filename;
+      filtered
+
+(** Is f1 strictly newer than f2, in terms of modification time? *)
+let newer f1 f2 = 
+   ((Unix.stat f1).Unix.st_mtime > (Unix.stat f2).Unix.st_mtime) 
+
+(** Given a path name, possibly relative to CWD, return an absolute
+    path to the same file. *)
+let absolute_path filename = 
+  if Filename.is_relative filename then
+    Filename.concat (Sys.getcwd()) filename
+  else filename
+
+(** Is the UID of the process is the same as that of the file's owner? *)
+let getuid_owns file = 
+  Unix.getuid() == (Unix.stat file).Unix.st_uid
+
+
 
 (** [lookup_in alist] is a function that looks up its argument in [alist] *)
 let lookup_in alist x = List.assoc x alist
 
 (** lookup is like assoc but uses option types instead of
-   exceptions to signal absence *)
-let lookup k alist = try Some (List.assoc k alist) with Not_found -> None
+    exceptions to signal absence *)
+let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
 
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
 
-(*** either type ***)
+
+(** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
@@ -538,11 +710,11 @@ module EitherMonad = Monad.MonadPlusUtils(
 module OptionUtils = 
 struct
   exception EmptyOption
-  let valOf = function
+  let val_of = function
     | Some x -> x
     | None -> raise EmptyOption
         
-  let isSome = function
+  let is_some = function
     | None -> false
     | Some _ -> true
         
@@ -554,7 +726,13 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
-  let fromOption default = function
+  let opt_split = function
+    | None -> None, None
+    | Some (x, y) -> Some x, Some y
+
+  let opt_iter f = opt_map f ->- ignore
+
+  let from_option default = function
     | None -> default
     | Some x -> x
 
@@ -563,13 +741,13 @@ struct
       | None -> p
       | Some x -> x  
 (*
-  [NOTE][SL]
+  NOTE:
   
   The following equations hold
 
             opt_map f = opt_app (fun x -> Some (f x)) None
-           fromOption = opt_app (fun x -> x)
-    perhaps_apply f p = fromOption p (f p)
+           from_option = opt_app (fun x -> x)
+    perhaps_apply f p = from_option p (f p)
                       = opt_app (fun x -> x) p (f p)
 
   I've left the explicit definitions because they are more perspicuous
@@ -585,27 +763,18 @@ struct
 end
 include OptionUtils
 
-module Char = 
-struct
-  include Char
-  let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
-  let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
-  let isLower = function 'a'..'z' -> true | _ -> false
-  let isUpper = function 'A'..'Z' -> true | _ -> false
-  let isDigit = function '0'..'9' -> true | _ -> false
-  let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
-  let isBlank = function ' '|'\t' -> true | _ -> false
-end
+(** {0 Character Encoding} **)
 
-(*** character encoding ***)
+(** Read a three-digit octal escape sequence and return the
+    corresponding char *)
 
-(* Read a three-digit octal escape sequence and return the
-   corresponding char *)
 let read_octal c =
   let octal_char = function
     | '0' -> 0 | '1' -> 1 | '2' -> 2 | '3' -> 3
     | '4' -> 4 | '5' -> 5 | '6' -> 6 | '7' -> 7 | _ -> invalid_arg "read_octal"
-  in Char.chr ((octal_char c.[0]) * 64 + (octal_char c.[1]) * 8 + (octal_char c.[2]))
+  in Char.chr((octal_char c.[0]) * 64 +
+              (octal_char c.[1]) * 8 +
+              (octal_char c.[2]))
 
 let read_hex c =
   let hex_char = function
@@ -619,8 +788,8 @@ let read_hex c =
     | 'f' | 'F' -> 15 | _ -> invalid_arg "read_hex"
   in Char.chr ((hex_char c.[0]) * 16 + (hex_char c.[1]))
 
-(* Handle escape sequences in string literals.
-
+(**Handle escape sequences in string literals.*)
+(*
    I would describe them here but the O'Caml lexer gets too confused,
    even though they're in a comment.
 
@@ -641,12 +810,12 @@ let decode_escapes s =
         | "\\n" -> "\n"
         | "\\r" -> "\r"
         | "\\t" -> "\t"
-        | other when other.[1] = 'x' || other.[1] = 'X' -> String.make 1 (read_hex (String.sub other 2 2)) 
+        | other when other.[1] = 'x' || other.[1] = 'X' ->
+            String.make 1 (read_hex (String.sub other 2 2)) 
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Str.global_substitute escape_regexp unquoter s
 
-(** xml_escape
-    xml_unescape
+(** [xml_escape], [xml_unescape]
     Escape/unescape for XML escape sequences (e.g. &amp;)
 *)
 let xml_escape s = 
@@ -657,15 +826,15 @@ let xml_unescape s =
   Str.global_replace (Str.regexp "&amp;") "&"
     (Str.global_replace (Str.regexp "&lt;") "<" s)
 
-(* base64 *)
+(** (0 base64 Routines) *)
 let base64decode s = 
   try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
   with Invalid_argument "Netencoding.Base64.decode" 
       -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
 
-and base64encode = Netencoding.Base64.encode
+let base64encode = Netencoding.Base64.encode
 
-(*** ocaml versions ***)
+(** (0 Ocaml Version Comparison) ***)
 let ocaml_version_number = (List.map int_of_string
                               (split_string Sys.ocaml_version '.'))
 
@@ -677,8 +846,8 @@ let rec version_atleast a b =
     | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
-(* Any two calls to `gensym' return distinct strings.  The optional
-   `prefix' argument can be used to supply a prefix for the string.
+(** Any two calls to [gensym] return distinct strings.  The optional
+    [prefix] argument can be used to supply a prefix for the string.
 *)
 let gensym = 
   let counter = ref 0 in
@@ -688,9 +857,10 @@ let gensym =
         pref ^ "_g" ^ string_of_int !counter
       end
 
-(** gensyms a new symbol for each item in the list and returns the
-    pairs of each item with its new name.
-    The "graph" of the gensym function, if you will.
+(** gensym a new symbol for each item in the list and return the pairs
+    of each item with its new name, always using the optional [prefix]
+    argument as the prefix if given. The "graph" of the gensym function, 
+    if you will.
 *)
 let pair_fresh_names ?prefix:pfx list = 
   graph_func
@@ -699,31 +869,57 @@ let pair_fresh_names ?prefix:pfx list =
        | None     -> (fun _ -> gensym ()))
     list 
 
+(** Given a list of names, generate a fresh name for each and pair the
+    old name with the new one. *)
 let refresh_names = 
   graph_func (fun x -> gensym ~prefix:x ())
 
+(** Return [true] if any element of the given list is [true] *)
 let any_true = List.exists identity
 
+(** {0 System interaction} *)
+
+(** Get an environment variable, return [Some x] if it is defined as
+    x, or [None] if it is not in the environment. *)
 let getenv : string -> string option =
   fun name ->
     try Some (Sys.getenv name)
-    with Not_found -> None
+    with NotFound _ -> None
 
-(* {0 Exception-handling helpers} *)
-
-let catch_notfound msg f a =
-  try
-    f a
-  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
-
-let catch_notfound_l msg e =
-  try
-    Lazy.force e
-  with Not_found -> failwith ("Internal error: Not_found caught ("^msg^")")
+(** Initialise the random number generator *)
+let _ = Random.self_init()
 
 
-(** {0 Simulating infix function words (a la Haskell backticks)} *)
+(* This is unpleasant, but we can't just say "include Notfound"
+   because of name clashes.
+*)
+module Buffer = Notfound.Buffer
+module Hashtbl = Notfound.Hashtbl
+module List = Notfound.List
+module ListLabels = Notfound.ListLabels
+module MoreLabels = Notfound.MoreLabels
+module Str = Notfound.Str
+module StringLabels = Notfound.StringLabels
+module Sys = Notfound.Sys
+module Unix = Notfound.Unix
+module UnixLabels = Notfound.UnixLabels
 
-(** left-associative *)
-let ( <| ) arg f = f arg
-let ( |> ) f arg = f arg
+exception NotFound = Notfound.NotFound
+
+(* HACK:
+
+   This functionality should really be provided by the Num module and
+   it certainly shouldn't have to be implemented like this!
+   
+   Note that this function:
+     - fails if the input is not a number
+     - drops the fractional part of the input
+*)
+let num_of_float f =
+  let s = string_of_float f in
+    match s with
+      | "nan" | "inf" | "-inf" -> failwith "Not a number"
+      | _ ->
+          let i = String.index s '.' in
+          let s = String.sub s 0 i in
+            Num.num_of_string s

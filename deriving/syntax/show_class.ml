@@ -1,106 +1,122 @@
-(*pp camlp4of *)
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
 
-module InContext (L : Base.Loc) =
-struct
-  open Base
-  open Utils
-  open Type
-  open Camlp4.PreCast
-  include Base.InContext(L)
-  
-  let classname = "Show"
-    
-  let wrap (ctxt:Base.context) (decl : Type.decl) matches = <:module_expr< 
-  struct type a = $atype ctxt decl$
-         let format formatter = function $list:matches$ end >>
-    
-  let in_a_box box e =
-    <:expr< 
-      Format.$lid:box$ formatter 0;
-      $e$;
-      Format.pp_close_box formatter () >>
+open Deriving
+include Deriving.Struct_utils(struct let classname="Show" let defaults = "ShowDefaults" end)
 
-  let in_hovbox = in_a_box "pp_open_hovbox" and in_box = in_a_box "pp_open_box"
+let currentp currents = function
+| None -> false
+| Some (_, s) -> List.mem_assoc s currents
+
+let module_name currents = function
+| None -> assert false
+| Some (_, s) -> List.assoc s currents
+
+(* Generate a printer for each constructor parameter *)
+let gen_printer =
+  let current default (t:MLast.ctyp) gen ({loc=loc;currents=currents} as ti) c = 
+    let lt = ltype_of_ctyp t in
+    if currentp currents lt then 
+      <:module_expr< $uid:(module_name currents lt)$ >>
+    else default t gen ti c
+  in 
+  gen_module_expr
+    ~tyapp:(current gen_app)
+    ~tylid:(current gen_lid)
+    ~tyrec:gen_other 
+    ~tysum:gen_other
+    ~tyvrn:gen_other
+
+let gen_printers ({loc=loc} as ti) tuple params = 
+ let m = (List.fold_left
+            (fun s param -> <:module_expr< $s$ $param$ >>)
+            <:module_expr< $uid:Printf.sprintf "Show_%d" (List.length params)$ >>
+            (List.map (gen_printer ti) params)) in
+   <:expr< let module S = $m$ in S.format formatter $tuple$ >>
+
+(* Generate an individual case clause for the format function. 
+case:
+     | $(Ctor-name) $(params) -> 
+         Format.pp_print_string formatter $(Ctor-name + space)
+         let module S = Show_$(|params|) $(modularized_param_types) in
+             S.format formatter $(params)
+*)
+let gen_case ti (loc, name, params') =
+  let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                  params' (range 0 (List.length params' - 1))) in
+  let patt = (List.fold_left 
+                (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< $uid:name$>> params) in
+  let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+  in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                               Format.pp_print_string formatter $str:name$;
+                               Format.pp_print_break formatter 1 2;
+                               $gen_printers ti tuple params'$;
+                               Format.pp_close_box formatter () } >>)
 
 
-  let instance = object (self)
-    inherit make_module_expr ~classname ~allow_private:true
-    
-    method polycase ctxt : Type.tagspec -> Ast.match_case = function
-      | Tag (name, None) -> 
-          <:match_case< `$uid:name$ -> 
-                        Format.pp_print_string formatter $str:"`" ^ name ^" "$ >>
-      | Tag (name, Some e) ->
-          <:match_case< `$uid:name$ x ->
-                         $in_hovbox <:expr< 
-                            Format.pp_print_string formatter $str:"`" ^ name ^" "$;
-                            $mproject (self#expr ctxt e) "format"$ formatter x >>$ >>
-      | Extends t -> 
-          let patt, guard, cast = cast_pattern ctxt t in
-            <:match_case<
-              $patt$ when $guard$ -> 
-              $in_hovbox <:expr< $mproject (self#expr ctxt t) "format"$ formatter $cast$ >>$ >>
+(* Generate the format function, the meat of the thing. *)
+let gen_format_sum ctors ({loc=loc} as ti) = <:str_item< 
+   value rec format formatter = 
+             fun [ $list:List.map (gen_case ti) ctors$ ]
+>>
 
-    method nargs ctxt (exprs : (name * Type.expr) list) : Ast.expr =
-      match exprs with
-        | [id,t] -> 
-              <:expr< $mproject (self#expr ctxt t) "format"$ formatter $lid:id$ >>
-        | exprs ->
-            let fmt = 
-              "@[<hov 1>("^ String.concat ",@;" (List.map (fun _ -> "%a") exprs) ^")@]" in
-              List.fold_left
-                (fun f (id, t) ->
-                   <:expr< $f$ $mproject (self#expr ctxt t) "format"$ $lid:id$ >>)
-                <:expr< Format.fprintf formatter $str:fmt$ >>
-                exprs
+let gen_format_record fields ({loc=loc}as ti) = 
+  let showfields = List.map2 (fun (loc,k,_(* what is this? *),v) endp ->
+                                let sep = if endp then <:expr< () >>
+                                else <:expr< Format.pp_print_string formatter "; " >> in
+                                <:expr< let module S = $gen_printer ti v$ in
+                                            do { Format.pp_open_box formatter 0;
+                                                 Format.pp_print_string formatter $str:k ^ "="$; 
+                                                 S.format formatter obj.$lid:k$ ; 
+                                                 $sep$;
+                                                 Format.pp_close_box formatter ()
+                                               } >>) 
+    fields (endmarker fields) in
+<:str_item<
+   value format formatter obj = do {
+      Format.pp_print_char formatter '{';
+      do { $list:showfields$ };
+      Format.pp_print_char formatter '}';
+   }
+>>
 
-    method tuple ctxt args = 
-      let n = List.length args in
-      let tpatt, _ = tuple n in
-      <:module_expr< Defaults (struct type a = $atype_expr ctxt (`Tuple args)$
-                            let format formatter $tpatt$ = 
-                              $self#nargs ctxt 
-                                (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ end) >>
+let gen_polycase ({loc=loc} as ti) = function
+| MLast.RfTag (name, _ (* what is this? *), params') ->
+    let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                    params' (range 0 (List.length params' - 1))) in
+    let patt = (List.fold_left 
+                  (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< `$name$>> params) in
+      (let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+       in (patt, None, <:expr< do { Format.pp_open_hovbox formatter 0;
+                                    Format.pp_print_string formatter $str:"`" ^ name ^" "$; 
+				    $gen_printers ti tuple params'$;
+                                    Format.pp_close_box formatter () } >>))
+| MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp) -> 
+    (<:patt< (# $[tname]$ as $lid:tname$) >>, None, 
+    <:expr< let module S = $gen_printer ti ctyp$ in S.format formatter $lid:tname$ >>)
+| MLast.RfInh ctyp -> let var, guard, expr = cast_pattern ti ctyp ~param:"x" in
+    (var, guard, 
+     <:expr< let module S = $gen_printer ti ctyp$ in 
+                S.format formatter $expr$ >>)
 
-    method case ctxt : Type.summand -> Ast.match_case = 
-      fun (name, args) ->
-        match args with 
-          | [] -> <:match_case< $uid:name$ -> Format.pp_print_string formatter $str:name$ >>
-          | _ -> 
-              let patt, exp = tuple (List.length args) in
-                <:match_case<
-                  $uid:name$ $patt$ ->
-                  $in_hovbox <:expr<
-                    Format.pp_print_string formatter $str:name$;
-                Format.pp_print_break formatter 1 2;
-                $self#nargs ctxt (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ >>$ >>
-    
-    method field ctxt : Type.field -> Ast.expr = function
-      | (name, ([], t), _) -> <:expr< Format.pp_print_string formatter $str:name ^ " = "$;
-                                      $mproject (self#expr ctxt t) "format"$ formatter $lid:name$ >>
-      | f -> raise (Underivable ("Show cannot be derived for record types with polymorphic fields")) 
+let gen_format_polyv (row,_) ({loc=loc} as ti) = <:str_item< 
+   value rec format formatter = fun [ $list:List.map (gen_polycase ti) row$ ]
+>>
 
-    method sum ?eq ctxt decl summands = wrap ctxt decl (List.map (self#case ctxt) summands)
+(* TODO: merge with gen_printer *)
+let gen_module_expr ({loc=loc} as ti) = 
+  let wrapper f ti data = apply_defaults ti (f data ti) in
+  let s = gen_module_expr ti
+    ~tyrec:(fun _ _ -> wrapper gen_format_record)
+    ~tysum:(fun _ _ -> wrapper gen_format_sum)
+    ~tyvrn:(fun _ _ -> wrapper gen_format_polyv) ti.rtype
+  in
+    <:module_expr< struct include $s$; value format f = format f; end >>
+      
+let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
 
-    method record ?eq ctxt decl fields = wrap ctxt decl [ <:match_case<
-      $record_pattern fields$ -> $in_hovbox
-       <:expr<
-          Format.pp_print_char formatter '{';
-          $List.fold_left1
-            (fun l r -> <:expr< $l$; Format.pp_print_string formatter "; "; $r$ >>)
-            (List.map (self#field ctxt) fields)$;
-          Format.pp_print_char formatter '}'; >>$ >>]
-
-    method variant ctxt decl (_,tags) = wrap ctxt decl (List.map (self#polycase ctxt) tags
-                                                        @ [ <:match_case< _ -> assert false >> ])
+let _ = 
+  begin
+    instantiators := ("Show", gen_instances):: !instantiators;
+    sig_instantiators := ("Show", Sig_utils.gen_sigs "Show"):: !sig_instantiators;
   end
-end
-
-let _ = Base.register "Show" 
-  ((fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in   
-        M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-          ~default_module:"Defaults" ()),
-   (fun (loc, context, decls) ->
-      let module M = InContext(struct let loc = loc end) in
-        M.gen_sigs ~classname:M.classname ~context ~decls))

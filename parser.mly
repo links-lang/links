@@ -4,22 +4,37 @@ open Utility
 open List
 open Sugartypes
 
-let ensure_match (start, finish) (opening : string) (closing : string) = function
-  | result when opening = closing -> result
-  | _ -> raise (Sugar.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                           (start, finish)))
+(* Generation of fresh type variables *)
+      
+let type_variable_counter = ref 0
+  
+let fresh_type_variable : unit -> datatype =
+  function () -> 
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
 
-let pos () = Parsing.symbol_start_pos (), Parsing.symbol_end_pos ()
+let ensure_match (start, finish, _) (opening : string) (closing : string) = function
+  | result when opening = closing -> result
+  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
+                                     (start, finish, None)))
+
+let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos (), None
 
 let default_fixity = Num.num_of_int 9
 
-let annotate (signame, datatype) ((name, _, _) as defbit, dpos) =
-  if signame <> name then 
-    raise (Sugar.ConcreteSyntaxError
-             ("Signature for `" ^ signame ^ "' should precede definition of `"
-              ^ signame ^ "', not `"^ name ^"'.",
-              pos ()));
-  `TypeAnnotation ((`Definition defbit, dpos),datatype), pos()
+let annotate (signame, datatype) : _ -> binding = 
+  let checksig (signame, _) name =
+    if signame <> name then 
+      raise (ConcreteSyntaxError
+               ("Signature for `" ^ signame ^ "' should precede definition of `"
+                ^ signame ^ "', not `"^ name ^"'.",
+                pos ())) in
+    function
+      | `Fun ((name, bpos), phrase, location, dpos) ->
+          let _ = checksig signame name in
+            `Fun ((name, None, bpos), ([], phrase), location, Some datatype), dpos
+      | `Var (((name, bpos), phrase, location), dpos) ->
+          let _ = checksig signame name in
+            `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
 let parseRegexFlags f =
   let rec asList f i l = 
@@ -28,22 +43,25 @@ let parseRegexFlags f =
     else
       asList f (i+1) ((String.get f i)::l) in
     List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
+
+let datatype d = d, None
+
 %}
 
 %token END
 %token EQ IN 
-%token FUN RARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP
+%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN
+%token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
 %token LPAREN RPAREN
-%token LBRACE RBRACE ELBRACE LQUOTE RQUOTE
+%token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW HANDLE WHERE FORMLET
-%token COMMA VBAR DOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
-%token UPDATE DELETE INSERT VALUES SET
-%token READONLY
+%token FOR LARROW LLARROW WHERE FORMLET PAGE
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token UPDATE DELETE INSERT VALUES SET RETURNING
+%token READONLY IDENTITY
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -56,7 +74,7 @@ let parseRegexFlags f =
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN SIG
+%token MU ALIEN SIG INCLUDE
 %token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -80,17 +98,27 @@ let parseRegexFlags f =
 %start interactive
 %start file
 
-%type <Sugartypes.phrase list * Sugartypes.phrase option> file
+%type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
-%type <Sugartypes.regex'> regex_pattern_alternate
-%type <Sugartypes.regex' list> regex_pattern_sequence
-%type <Sugartypes.ppattern> pattern
+%type <Sugartypes.regex> regex_pattern_alternate
+%type <Sugartypes.regex> regex_pattern
+%type <Sugartypes.regex list> regex_pattern_sequence
+%type <Sugartypes.pattern> pattern
+%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
+%type <Sugartypes.phrase> postfix_expression
+%type <Sugartypes.phrase> primary_expression
+%type <Sugartypes.phrase> atomic_expression
+%type <Sugartypes.constant * Sugartypes.position> constant
+%type <(string * Sugartypes.phrase list) list> attr_list
+%type <Sugartypes.phrase list> attr_val
+%type <Sugartypes.binding> binding
 
 %%
 
 interactive:
+| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -99,9 +127,9 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| declarations exp END                                          { $1, Some $2 }
-| exp END                                                       { [], Some $1 }
-| declarations END                                              { $1, None }
+| preamble declarations exp END                                { $1 @ $2, Some $3 }
+| preamble exp END                                             { $1, Some $2 }
+| preamble declarations END                                    { $1 @ $2, None }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -119,58 +147,77 @@ arg:
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 
+var:
+| VARIABLE                                                     { $1, pos() }
+
+preamble:
+| preamble_declaration preamble                                { $1 :: $2 }
+| /* empty */                                                  { [] }
+
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration { $1 }
-| nofun_declaration { $1 }
+| fun_declaration                                              { $1 }
+| nofun_declaration                                            { $1 }
+
+preamble_declaration:
+| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
-| ALIEN VARIABLE VARIABLE COLON datatype SEMICOLON             { `Foreign ($2, $3, $5), pos() }
+| ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
+                                                                   `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (fromOption default_fixity $2)) $3; 
-                                                                   (`InfixDecl, pos()) }
-| tlvarbinding SEMICOLON                                       { let d, pos = $1 in `Definition d, pos }
-| signature tlvarbinding SEMICOLON                             { annotate $1 $2 }
+                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
+                                                                   (`Infix, pos()) }
+| tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
+                                                                 in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
+| signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
 fun_declarations:
-| fun_declarations fun_declaration { $1 @ [$2] }
-| fun_declaration { [$1] }
+| fun_declarations fun_declaration                             { $1 @ [$2] }
+| fun_declaration                                              { [$1] }
+
+fun_declaration:
+| tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
+                                                                 in `Fun ((d, None, dpos),([],p),l,None), pos }
+| signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
 
-fun_declaration:
-| tlfunbinding                                                 { let d, pos = $1 in `Definition d, pos }
-| signature tlfunbinding                                       { annotate $1 $2 }
+prefixop:
+| PREFIXOP                                                     { $1, pos() }
+
+postfixop:
+| POSTFIXOP                                                    { $1, pos() }
 
 tlfunbinding:
-| FUN VARIABLE arg_lists perhaps_location block                { ($2, (`FunLit (Some $2, $3, $5), pos()), $4), pos() }
-| OP pattern op pattern perhaps_location block                 { ($3, (`FunLit (Some $3, [[$2; $4]], $6), pos()), $5), pos() }
-| OP PREFIXOP pattern perhaps_location block                   { ($2, (`FunLit (Some $2, [[$3]], $5), pos()), $4), pos() }
-| OP pattern POSTFIXOP perhaps_location block                  { ($3, (`FunLit (Some $3, [[$2]], $5), pos()), $4), pos() }
+| FUN var arg_lists perhaps_location block                     { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
+| OP pattern op pattern perhaps_location block                 { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
+| OP prefixop pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
+| OP pattern postfixop perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
 
 tlvarbinding:
-| VAR VARIABLE perhaps_location EQ exp                         { ($2, $5, $3), pos() }
+| VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
 
 signature: 
-| SIG VARIABLE COLON datatype                                  { $2, $4 }
-| SIG op COLON datatype                                        { $2, $4 }
+| SIG var COLON datatype                                       { $2, datatype $4 }
+| SIG op COLON datatype                                        { $2, datatype $4 }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `TypeDeclaration ($2, $3, $5), pos()  }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `Type ($2, $3, datatype $5), pos()  }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
 varlist:
-| VARIABLE                                                     { [$1] }
-| VARIABLE COMMA varlist                                       { $1 :: $3 }
+| VARIABLE                                                     { [$1, None] }
+| VARIABLE COMMA varlist                                       { ($1, None) :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -186,28 +233,29 @@ perhaps_location:
 | /* empty */                                                  { `Unknown }
 
 constant:
-| UINTEGER                                                     { `IntLit $1    , pos() }
-| UFLOAT                                                       { `FloatLit $1  , pos() }
-| STRING                                                       { `StringLit $1 , pos() }
-| TRUE                                                         { `BoolLit true , pos() }
-| FALSE                                                        { `BoolLit false, pos() }
-| CHAR                                                         { `CharLit $1   , pos() }
+| UINTEGER                                                     { `Int $1    , pos() }
+| UFLOAT                                                       { `Float $1  , pos() }
+| STRING                                                       { `String $1 , pos() }
+| TRUE                                                         { `Bool true , pos() }
+| FALSE                                                        { `Bool false, pos() }
+| CHAR                                                         { `Char $1   , pos() }
 
 atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
-| constant                                                     { $1 }
+| constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET RBRACKET                                            { `ListLit [], pos() } 
-| LBRACKET exps RBRACKET                                       { `ListLit $2, pos() } 
+| LBRACKET RBRACKET                                            { `ListLit ([], None), pos() } 
+| LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() } 
+| LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() } 
 | xml                                                          { $1 }
-| FUN arg_lists block                                          { `FunLit (None, $2, $3), pos() }
+| FUN arg_lists block                                          { `FunLit (None, ($2, (`Block $3, pos ()))), pos() }
 
 constructor_expression:
-| CONSTRUCTOR                                                  { `ConstructorLit($1, None), pos() }
-| CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2), pos() }
+| CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
+| CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { `Section $2, pos() }
@@ -221,175 +269,179 @@ parenthesized_thing:
 binop:
 | MINUS                                                        { `Minus }
 | MINUSDOT                                                     { `FloatMinus }
-| op                                                           { `Name $1 }
+| op                                                           { `Name (fst $1) }
 
 op:
-| INFIX0                                                       { $1 }
-| INFIXL0                                                      { $1 }
-| INFIXR0                                                      { $1 }
-| INFIX1                                                       { $1 }
-| INFIXL1                                                      { $1 }
-| INFIXR1                                                      { $1 }
-| INFIX2                                                       { $1 }
-| INFIXL2                                                      { $1 }
-| INFIXR2                                                      { $1 }
-| INFIX3                                                       { $1 }
-| INFIXL3                                                      { $1 }
-| INFIXR3                                                      { $1 }
-| INFIX4                                                       { $1 }
-| INFIXL4                                                      { $1 }
-| INFIXR4                                                      { $1 }
-| INFIX5                                                       { $1 }
-| INFIXL5                                                      { $1 }
-| INFIXR5                                                      { $1 }
-| INFIX6                                                       { $1 }
-| INFIXL6                                                      { $1 }
-| INFIXR6                                                      { $1 }
-| INFIX7                                                       { $1 }
-| INFIXL7                                                      { $1 }
-| INFIXR7                                                      { $1 }
-| INFIX8                                                       { $1 }
-| INFIXL8                                                      { $1 }
-| INFIXR8                                                      { $1 }
-| INFIX9                                                       { $1 }
-| INFIXL9                                                      { $1 }
-| INFIXR9                                                      { $1 }
+| INFIX0                                                       { $1, pos() }
+| INFIXL0                                                      { $1, pos() }
+| INFIXR0                                                      { $1, pos() }
+| INFIX1                                                       { $1, pos() }
+| INFIXL1                                                      { $1, pos() }
+| INFIXR1                                                      { $1, pos() }
+| INFIX2                                                       { $1, pos() }
+| INFIXL2                                                      { $1, pos() }
+| INFIXR2                                                      { $1, pos() }
+| INFIX3                                                       { $1, pos() }
+| INFIXL3                                                      { $1, pos() }
+| INFIXR3                                                      { $1, pos() }
+| INFIX4                                                       { $1, pos() }
+| INFIXL4                                                      { $1, pos() }
+| INFIXR4                                                      { $1, pos() }
+| INFIX5                                                       { $1, pos() }
+| INFIXL5                                                      { $1, pos() }
+| INFIXR5                                                      { $1, pos() }
+| INFIX6                                                       { $1, pos() }
+| INFIXL6                                                      { $1, pos() }
+| INFIXR6                                                      { $1, pos() }
+| INFIX7                                                       { $1, pos() }
+| INFIXL7                                                      { $1, pos() }
+| INFIXR7                                                      { $1, pos() }
+| INFIX8                                                       { $1, pos() }
+| INFIXL8                                                      { $1, pos() }
+| INFIXR8                                                      { $1, pos() }
+| INFIX9                                                       { $1, pos() }
+| INFIXL9                                                      { $1, pos() }
+| INFIXR9                                                      { $1, pos() }
  
 postfix_expression:
 | primary_expression                                           { $1 }
-| primary_expression POSTFIXOP                                 { `UnaryAppl (`Name $2, $1), pos() }
-| block                                                        { $1 }
-| SPAWN block                                                  { `Spawn $2, pos() }
+| primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
+| block                                                        { `Block $1, pos () }
+| SPAWN block                                                  { `Spawn ((`Block $2, pos()), None), pos () }
+| SPAWNWAIT block                                              { `SpawnWait ((`Block $2, pos()), None), pos () }
+| QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
+| QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
+                                                                               (`Constant (`Int (Num.num_of_int 0)), pos ())),
+                                                                         (`Block $5, pos ()), None), pos () }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
 arg_spec:
-| LPAREN RPAREN                                                { [], pos() }
-| LPAREN exps RPAREN                                           { $2, pos() }
+| LPAREN RPAREN                                                { [] }
+| LPAREN exps RPAREN                                           { $2 }
 
 exps:
 | exp COMMA exps                                               { $1 :: $3 }
 | exp                                                          { [$1] }
 
 unary_expression:
-| MINUS unary_expression                                       { `UnaryAppl (`Minus,      $2), pos() }
-| MINUSDOT unary_expression                                    { `UnaryAppl (`FloatMinus, $2), pos() }
-| PREFIXOP unary_expression                                    { `UnaryAppl (`Name $1, $2), pos() }
-| ABS unary_expression                                         { `UnaryAppl (`Abs, $2), pos() }
+| MINUS unary_expression                                       { `UnaryAppl (([], `Minus),      $2), pos() }
+| MINUSDOT unary_expression                                    { `UnaryAppl (([], `FloatMinus), $2), pos() }
+| PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
 infixr_9:
 | unary_expression                                             { $1 }
-| unary_expression INFIX9 unary_expression                     { `InfixAppl (`Name $2, $1, $3), pos() }
-| unary_expression INFIXR9 infixr_9                            { `InfixAppl (`Name $2, $1, $3), pos() }
+| unary_expression INFIX9 unary_expression                     { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| unary_expression INFIXR9 infixr_9                            { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_9:
 | infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_9 INFIXL9 infixr_9                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_8:
 | infixl_9                                                     { $1 }
-| infixl_9 INFIX8  infixl_9                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_9 INFIXR8 infixr_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_9 COLONCOLON infixr_8                                 { `InfixAppl (`Cons, $1, $3), pos() }
+| infixl_9 INFIX8  infixl_9                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_9 INFIXR8 infixr_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_9 COLONCOLON infixr_8                                 { `InfixAppl (([], `Cons), $1, $3), pos() }
 
 infixl_8:
 | infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_8 INFIXL8 infixr_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_7:
 | infixl_8                                                     { $1 }
-| infixl_8 INFIX7  infixl_8                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_8 INFIXR7 infixr_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_8 INFIX7  infixl_8                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_8 INFIXR7 infixr_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_7:
 | infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_7 INFIXL7 infixr_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_6:
 | infixl_7                                                     { $1 }
-| infixl_7 INFIX6  infixl_7                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_7 INFIXR6 infixr_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_7 INFIX6  infixl_7                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_7 INFIXR6 infixr_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_6 MINUS infixr_6                                      { `InfixAppl (`Minus, $1, $3), pos() }
-| infixl_6 MINUSDOT infixr_6                                   { `InfixAppl (`FloatMinus, $1, $3), pos() }
+| infixl_6 INFIXL6 infixr_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_6 MINUS infixr_6                                      { `InfixAppl (([], `Minus), $1, $3), pos() }
+| infixl_6 MINUSDOT infixr_6                                   { `InfixAppl (([], `FloatMinus), $1, $3), pos() }
 
 infixr_5:
 | infixl_6                                                     { $1 }
-| infixl_6 INFIX5  infixl_6                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_6 INFIXR5 infixr_5                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_6 INFIX5  infixl_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_6 INFIXR5 infixr_5                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_5:
 | infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_5 INFIXL5 infixr_5                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_4:
 | infixl_5                                                     { $1 }
-| infixl_5 INFIX4    infixl_5                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixr_5 TILDE     regex                                     { `InfixAppl (`RegexMatch, $1, $3), pos() }
+| infixl_5 INFIX4    infixl_5                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
 
 infixl_4:
 | infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_4 INFIXL4 infixr_4                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_3:
 | infixl_4                                                     { $1 }
-| infixl_4 INFIX3  infixl_4                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_4 INFIXR3 infixr_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_4 INFIX3  infixl_4                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_4 INFIXR3 infixr_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_3:
 | infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_3 INFIXL3 infixr_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_2:
 | infixl_3                                                     { $1 }
-| infixl_3 INFIX2  infixl_3                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_3 INFIXR2 infixr_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_3 INFIX2  infixl_3                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_3 INFIXR2 infixr_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_2:
 | infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_2 INFIXL2 infixr_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_1:
 | infixl_2                                                     { $1 }
-| infixl_2 INFIX1  infixl_2                                    { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_2 INFIXR1 infixr_1                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_2 INFIX1  infixl_2                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_2 INFIXR1 infixr_1                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_1:
 | infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_1 INFIXL1 infixr_1                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 APP       infixl_1                                  { `InfixAppl (`App, $1, $3), pos() }
-| infixl_1 INFIX0    infixl_1                                  { `InfixAppl (`Name $2, $1, $3), pos() }
-| infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_1 INFIX0    infixl_1                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
+| infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 infixl_0:
 | infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { `InfixAppl (`Name $2, $1, $3), pos() }
+| infixl_0 INFIXL0 infixr_0                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { `InfixAppl (`Or, $1, $3), pos() }
-| logical_expression AMPAMP infixl_0                           { `InfixAppl (`And, $1, $3), pos() }
+| logical_expression BARBAR infixl_0                           { `InfixAppl (([], `Or), $1, $3), pos() }
+| logical_expression AMPAMP infixl_0                           { `InfixAppl (([], `And), $1, $3), pos() }
 
 typed_expression:
 | logical_expression                                           { $1 }
-| logical_expression COLON datatype                            { `TypeAnnotation ($1, $3), pos() }
+| typed_expression COLON datatype                              { `TypeAnnotation ($1, datatype $3), pos() }
+| typed_expression COLON datatype LARROW datatype              { `Upcast ($1, datatype $3, datatype $5), pos() }
 
 db_expression:
 | typed_expression                                             { $1 }
-| INSERT exp VALUES exp                                        { `DBInsert ($2, $4), pos() }
-| DELETE LPAREN table_generator RPAREN perhaps_where           { `DBDelete ($3, $5), pos() }
+| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in `DBDelete (pat, phrase, $5), pos() }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { `DBUpdate($3, $5, $8), pos() }
+         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in `DBUpdate(pat, phrase, $5, $8), pos() }
 
 /* XML */
 xml:
@@ -398,39 +450,57 @@ xml:
 xmlid: 
 | VARIABLE                                                     { $1 }
 
+attrs:
+| block                                                        { [], Some (`Block $1, pos ()) }
+| attr_list                                                    { $1, None }
+| attr_list block                                              { $1, Some (`Block $2, pos ()) }
+
 attr_list:
 | attr                                                         { [$1] }
 | attr_list attr                                               { $2 :: $1 }
+
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
-| xmlid EQ LQUOTE RQUOTE                                       { ($1, [`StringLit "", pos()]) }
+| xmlid EQ LQUOTE RQUOTE                                       { ($1, [(`Constant (`String ""), pos() : Sugartypes.phrase)]) }
 
 attr_val:
-| block                                                        { [$1] }
-| STRING                                                       { [`StringLit $1, pos()] }
-| block attr_val                                               { $1 :: $2 }
-| STRING attr_val                                              { (`StringLit $1, pos()) :: $2}
+| block                                                        { [`Block $1, pos ()] }
+| STRING                                                       { [`Constant (`String $1), pos()] }
+| block attr_val                                               { (`Block $1, pos ()) :: $2 }
+| STRING attr_val                                              { (`Constant (`String $1), pos()) :: $2}
 
 xml_tree:
-| LXML SLASHRXML                                               { `Xml ($1, [], []), pos() } 
-| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], []), pos()) } 
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], $3), pos()) } 
-| LXML attr_list RXML ENDTAG                                   { ensure_match (pos()) $1 $4 (`Xml ($1, $2, []), pos()) } 
-| LXML attr_list SLASHRXML                                     { `Xml ($1, $2, []), pos() } 
-| LXML attr_list RXML xml_contents_list ENDTAG                 { ensure_match (pos()) $1 $5 (`Xml ($1, $2, $4), pos()) } 
+| LXML SLASHRXML                                               { `Xml ($1, [], None, []), pos() } 
+| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], None, []), pos()) } 
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], None, $3), pos()) } 
+| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (`Xml ($1, fst $2, snd $2, []), pos()) } 
+| LXML attrs SLASHRXML                                         { `Xml ($1, fst $2, snd $2, []), pos() } 
+| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (`Xml ($1, fst $2, snd $2, $4), pos()) } 
 
 xml_contents_list:
 | xml_contents                                                 { [$1] }
 | xml_contents xml_contents_list                               { $1 :: $2 }
 
 xml_contents:
-| block                                                        { $1 }
-| form_binding                                                 { $1 }
+| block                                                        { `Block $1, pos () }
+| formlet_binding                                              { $1 }
+| formlet_placement                                            { $1 }
+| page_placement                                               { $1 }
 | xml_tree                                                     { $1 }
 | CDATA                                                        { `TextNode (Utility.xml_unescape $1), pos() }
 
-form_binding:
+formlet_binding:
 | LBRACE logical_expression RARROW pattern RBRACE              { `FormBinding($2, $4), pos()}
+
+formlet_placement:
+| LBRACE logical_expression
+         FATRARROW logical_expression RBRACE                   { `FormletPlacement ($2, $4, (`ListLit ([], None), pos())), pos () }
+| LBRACE logical_expression
+         FATRARROW logical_expression
+         WITH logical_expression RBRACE                        { `FormletPlacement ($2, $4, $6), pos () }
+
+page_placement:
+| LBRACEBAR exp BARRBRACE                                      { `PagePlacement $2, pos() }
 
 conditional_expression:
 | db_expression                                                { $1 }
@@ -449,16 +519,23 @@ perhaps_cases:
 
 case_expression:
 | conditional_expression                                       { $1 }
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6), pos() }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3), pos() }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
-| FOR LPAREN generator RPAREN
+| FOR LPAREN perhaps_generators RPAREN
       perhaps_where
       perhaps_orderby
       exp                                                      { `Iteration ($3, $7, $5, $6), pos() }
 
+perhaps_generators:
+| /* empty */                                                  { [] }
+| generators                                                   { $1 }
+
+generators:
+| generator                                                    { [$1] }
+| generator COMMA generators                                   { $1 :: $3 }
 
 generator:
 | list_generator                                               { `List $1 }
@@ -480,16 +557,16 @@ perhaps_orderby:
 
 escape_expression:
 | iteration_expression                                         { $1 }
-| ESCAPE VARIABLE IN postfix_expression                        { `Escape ($2, $4), pos() }
+| ESCAPE var IN postfix_expression                             { `Escape ((fst $2, None, snd $2), $4), pos() }
 
-handlewith_expression:
+formlet_expression:
 | escape_expression                                            { $1 }
-| HANDLE exp WITH VARIABLE RARROW exp                          { `HandleWith ($2, $4, $6), pos() }
-| FORMLET xml YIELDS exp                                       { `Formlet($2, $4), pos() }
+| FORMLET xml YIELDS exp                                       { `Formlet ($2, $4), pos() }
+| PAGE xml                                                     { `Page ($2), pos() }
 
 table_expression:
-| handlewith_expression                                        { $1 }
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, $4, $5, $7), pos()} 
+| formlet_expression                                           { $1 }
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()} 
 
 perhaps_table_constraints:
 | WHERE table_constraints                                      { $2 }
@@ -505,6 +582,7 @@ field_constraints:
 
 field_constraint:
 | READONLY                                                     { `Readonly }
+| IDENTITY                                                     { `Identity }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }
@@ -516,24 +594,28 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
+| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
+| INSERT exp VALUES db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Binding ($2, $4), pos() }
-| exp SEMICOLON                                                { $1 }
-| FUN VARIABLE arg_lists block                                 { `FunLit (Some $2, $3, $4), pos() }
+| VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
+| exp SEMICOLON                                                { `Exp $1, pos () }
+| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
+| typedecl SEMICOLON                                           { $1 }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
 
 block:
-| LBRACE block_contents RBRACE                                 { `Block $2, pos() }
+| LBRACE block_contents RBRACE                                 { $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [$2], (`RecordLit ([], None), pos())) }
+| bindings exp SEMICOLON                                       { ($1 @ [`Exp $2, pos ()], (`RecordLit ([], None), pos())) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([$1], (`RecordLit ([], None), pos())) }
+| exp SEMICOLON                                                { ([`Exp $1, pos ()], (`RecordLit ([], None), pos())) }
 | exp                                                          { [], $1 }
 | perhaps_semi                                                 { ([], (`TupleLit [], pos())) }
 
@@ -557,7 +639,7 @@ just_datatype:
 datatype:
 | mu_datatype                                                  { $1 }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               Sugar.fresh_type_variable (),
+                                                                               fresh_type_variable (),
                                                                                $3) }
 | parenthesized_datatypes 
        MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
@@ -592,16 +674,15 @@ primary_datatype:
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
 								   | "NativeString" -> PrimitiveType `NativeString
-                                                                (*   | "Xml"     -> ListType (PrimitiveType `XmlItem) *)
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 
-| CONSTRUCTOR LPAREN primary_datatype_list RPAREN              { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN datatype_list RPAREN                      { TypeApplication ($1, $3) }
 
-primary_datatype_list:
-| primary_datatype                                             { [$1] }
-| primary_datatype COMMA primary_datatype_list                 { $1 :: $3 }
+datatype_list:
+| datatype                                                     { [$1] }
+| datatype COMMA datatype_list                                 { $1 :: $3 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -637,16 +718,17 @@ record_label:
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 row_variable:
-| VARIABLE                                                     { `Open $1 }
+| VARIABLE                                                     { `OpenRigid $1 }
+| QUOTEDVAR                                                    { `Open $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 /*
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex ($2, $3), pos()) }
-| SLASH regex_flags_opt                                                          { (`Regex (`Simply "", $2), pos()) }
-| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4), $5), pos())} 
+| SLASH regex_pattern_alternate regex_flags_opt                                  { (`Regex $2, pos()), $3 }
+| SLASH regex_flags_opt                                                          { (`Regex (`Simply ""), pos()), $2 }
+| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { (`Regex (`Replace ($2, $4)), pos()), `RegexReplace :: $5 }
 
 regex_flags_opt:
 | SLASH                                                        {[]}
@@ -655,7 +737,7 @@ regex_flags_opt:
 regex_replace:
 | /* empty */                                                  { `Literal ""}
 | REGEXREPL                                                    { `Literal $1}
-| block                                                        { `Splice $1}
+| block                                                        { `Splice (`Block $1, pos ()) }
 
 regex_pattern:
 | RANGE                                                        { `Range $1 }
@@ -668,7 +750,7 @@ regex_pattern:
 | regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice $1 }
+| block                                                        { `Splice (`Block $1, pos ()) }
 
 regex_pattern_alternate:
 | regex_pattern_sequence                                       { `Seq $1 }
@@ -683,20 +765,29 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { `HasType ($1, $3), pos() }
+| typed_pattern COLON primary_datatype                      { (`HasType ($1, datatype $3), pos()) }
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS VARIABLE                                  { `As ($3, $1), pos() }
+| cons_pattern AS var                                       { `As ((fst $3, None, snd $3), $1), pos() }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
 | constructor_pattern COLONCOLON cons_pattern               { `Cons ($1, $3), pos() }
 
 constructor_pattern:
-| primary_pattern                                           { $1 }
+| negative_pattern                                          { $1 }
 | CONSTRUCTOR                                               { `Variant ($1, None), pos() }
 | CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }
+
+constructors:
+| CONSTRUCTOR                                               { [$1] }
+| CONSTRUCTOR COMMA constructors                            { $1 :: $3 } 
+
+negative_pattern:
+| primary_pattern                                           { $1 }
+| MINUS CONSTRUCTOR                                         { `Negative [$2], pos() }
+| MINUS LPAREN constructors RPAREN                          { `Negative $3, pos() }
 
 parenthesized_pattern:
 | LPAREN RPAREN                                             { `Tuple [], pos() }
@@ -706,23 +797,23 @@ parenthesized_pattern:
 | LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable $1, pos() }
+| VARIABLE                                                  { `Variable ($1, None, pos()), pos() }
 | UNDERSCORE                                                { `Any, pos() }
-| constant                                                  { `Constant $1, pos() }
+| constant                                                  { let c, p = $1 in `Constant c, p }
 | LBRACKET RBRACKET                                         { `Nil, pos() }
 | LBRACKET patterns RBRACKET                                { `List $2, pos() }
 | parenthesized_pattern                                     { $1 }
 
 patterns:
-| pattern                                                   { [$1] }
-| pattern COMMA patterns                                    { $1 :: $3 }
+| pattern                                                 { [$1] }
+| pattern COMMA patterns                                { $1 :: $3 }
 
 labeled_patterns:
 | record_label EQ pattern                                   { [($1, $3)] }
 | record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
 
 multi_args:
-| LPAREN patterns RPAREN                                    { $2 }
+| LPAREN patterns RPAREN                                  { $2 }
 | LPAREN RPAREN                                             { [] }
 
 arg_lists:

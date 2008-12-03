@@ -21,7 +21,7 @@ let set_value setting v = setting.value <- v
 type universal = [
 | `Bool of bool setting
 | `Int of int setting
-| `String  of string setting
+| `String of string setting
 ]
 
 let parse_bool = function
@@ -135,8 +135,8 @@ let print_settings () =
                            match mode, is_user setting with
                              | `User, true
                              | `System, false ->
-			         (format_universal
-				    (Printf.sprintf " %-25s %-7s") setting)::p
+		                 (format_universal
+		                    (Printf.sprintf " %-25s %-7s") setting)::p
                              | _ -> p) !settings []) in
   let user_settings =
     ("User settings" :: get_settings `User) in

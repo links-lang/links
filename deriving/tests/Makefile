@@ -1,31 +1,24 @@
-OCAMLMAKEFILE = ../OCamlMakefile
+OCAMLMAKEFILE = ../../OCamlMakefile
 
-AUXLIB_DIRS  = ../lib/
-OCAMLOPT     = ocamlopt.opt
-OCAMLC       = ocamlc.opt
-OCAMLDEP     = ocamldep
-PATH        := $(PATH):../syntax
-OCAMLFLAGS   = -w Aef
+AUXLIB_DIRS = ../lib/
+OCAMLOPT := ocamlopt.opt
+OCAMLC := ocamlc.opt
+OCAMLDEP := ocamldep
 
-SOURCES = defs.ml               \
-          bimap.ml bimap.mli    \
-          sigs.ml               \
-          pickle_tests.ml       \
-	  typeable_tests.ml     \
-	  bounded_tests.ml      \
-	  eq_tests.ml           \
-	  dump_tests.ml         \
-	  enum_tests.ml         \
-	  functor_tests.ml      \
-	  show_tests.ml         \
-          exp.ml                \
-          inline.ml             \
+PATH := $(PATH):../syntax
+OCAMLFLAGS=-w Ae
+
+SOURCES = eqtest.ml     \
+          shelvetest.ml \
+          typeabletest.ml
 
 LIBS    = nums deriving
-RESULT  = tests
+RESULT  = test
 CLIBS 	= 
 
 INCDIRS = $(AUXLIB_DIRS)
 LIBDIRS = $(AUXLIB_DIRS)
+
+DOC_FILES=
 
 include $(OCAMLMAKEFILE)

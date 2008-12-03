@@ -25,9 +25,17 @@ let equals : ('a -> string) -> 'a -> 'a -> (string, 'a) either
 open Utility.EitherMonad
 
 let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
-let parse = attempt (Parse.parse_string Parse.program)
+
+let parse_thingy s = 
+  let sugar, pos_context = (Parse.parse_string Parse.program) s in
+  let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+    Sugar.desugar_program program
+
+let parse = attempt parse_thingy
+    
+
 let optimise = attempt (fun program -> Optimiser.optimise_program (Library.typing_env, program))
-let run tests = attempt (let _, prelude = Loader.read_file_cache (Settings.get_value Basicsettings.prelude_file) in
+let run tests = attempt (let _, prelude = Oldloader.load_file Library.typing_env (Settings.get_value Basicsettings.prelude_file) in
                          let prelude, _ = Interpreter.run_program [] [] prelude in
                            Interpreter.run_program prelude [] ->- snd) tests
 let show = attempt Result.string_of_result
@@ -36,16 +44,16 @@ let type_matches ~inferred ~expected =
   let nfreevars =  
     Types.TypeVarSet.cardinal -<- Types.free_type_vars 
   and inferred = 
-    Instantiate.instantiate_datatype (Types.make_fresh_envs inferred) inferred
+    Instantiate.datatype (Types.make_fresh_envs inferred) inferred
   and expected = 
-    Instantiate.instantiate_datatype (Types.make_rigid_envs expected) expected
+    Instantiate.datatype (Types.make_rigid_envs expected) expected
   in try
       (* Check for unification without instantiation.  Perhaps we
          could just count freevars on both sides instead of all this
          make_fresh_envs nonsense.
       *)
       let c = nfreevars inferred in
-        Inference.unify Library.alias_env (expected, inferred);
+        Unify.datatypes (expected, inferred);
         c = (nfreevars inferred)
     with _ -> false
 
@@ -56,19 +64,19 @@ let type_matches ~inferred ~expected =
   *)
   let check_rhs_unchanged l r =
     let l =  
-      Instantiate.instantiate_datatype (Types.make_wobbly_envs l) l 
+      Instantiate.datatype (Types.make_wobbly_envs l) l 
     and r =  
-     Instantiate.instantiate_datatype (Types.make_rigid_envs r) r 
+      Instantiate.datatype (Types.make_rigid_envs r) r 
     in try
         let c = Types.free_type_vars r in
-        Inference.unify Library.alias_env (l, r);
+          Unify.datatypes (l, r);
           Types.TypeVarSet.equal c (Types.free_type_vars r);
     with _ -> false
   in check_rhs_unchanged inferred expected
   && check_rhs_unchanged expected inferred 
 
 (* Check that the body of the program has a type equivalent to `t' *)
-let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
+let has_type (t : Types.datatype) (Syntax.Program (_, body) as program) =
   let body_type = Syntax.node_datatype body in
     if type_matches ~expected:t ~inferred:body_type then Right program
     else Left (Printf.sprintf
@@ -79,7 +87,7 @@ let has_type ((_, t) : Types.assumption) (Syntax.Program (_, body) as program) =
                  (Types.Show_datatype.show body_type)
 )
 
-let datatype = Parse.parse_string Parse.datatype
+let datatype = DesugarDatatypes.read ~aliases:Env.String.empty
 
 let functionp : Result.result -> Result.result m = function
   | `RecFunction _ as f -> Right f

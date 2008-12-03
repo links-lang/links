@@ -1,4 +1,3 @@
-open Result
 open Mysql
 
 let string_of_error_code = function
@@ -197,7 +196,7 @@ let string_of_error_code = function
 | Wrong_value_count_on_row         -> "Wrong value count on row"
 | Yes                              -> "Yes"
 
-class otherfield (thing : Mysql.dbty) : Result.otherfield =
+class otherfield (thing : Mysql.dbty) : Value.otherfield =
 object
   method show = pretty_type thing
 end
@@ -210,48 +209,46 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   in
     List.rev (obtain [])
 
-class mysql_result (result: result) db = object
-  inherit dbresult
+class mysql_result (result : result) db = object
+  inherit Value.dbvalue
   val rows = ref None
-  method status : db_status = 
+  method status : Value.db_status = 
     match status db with 
-      | StatusOK | StatusEmpty -> QueryOk
-      | StatusError c          -> QueryError (string_of_error_code c)
+      | StatusOK | StatusEmpty -> `QueryOk
+      | StatusError c          -> `QueryError (string_of_error_code c)
   method nfields : int = 
     fields result
   method fname  n : string = 
-    (Utility.valOf (fetch_field_dir result n)).name
-  method ftype  n : db_field_type = 
-    match (Utility.valOf (fetch_field_dir result n)).ty with
-      | IntTy | Int64Ty -> IntField
-      | StringTy | BlobTy -> TextField
-      | other -> SpecialField (new otherfield other)
+    (Utility.val_of (fetch_field_dir result n)).name
   method get_all_lst : string list list =
     match !rows with
       | None ->
           let toList row = 
-            List.map (Utility.fromOption "!!NULL!!") (Array.to_list row) in
+            List.map (Utility.from_option "!!NULL!!") (Array.to_list row) in
           let r = List.map toList (slurp fetch result)
           in
             rows := Some r;
             r
       | Some r -> r
   method error : string = 
-    Utility.valOf (errmsg db)
+    Utility.val_of (errmsg db)
 end
 
-class mysql_database spec = object
-  inherit database
+class mysql_database spec = object(self)
+  inherit Value.database
   val connection = connect spec
   method driver_name () = "mysql"
-  method exec query : dbresult = 
+  method exec query : Value.dbvalue = 
     try
       new mysql_result (exec connection query) connection
     with
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
   method escape_string = Mysql.escape
+  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun (table_name, field_names, vss, returning) ->
+      [self#make_insert_query(table_name, field_names, vss);
+       "select last_insert_id()"]
 end
 
 let parse_args (args : string) : db =
@@ -270,4 +267,4 @@ let parse_args (args : string) : db =
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
 let driver_name = "mysql"
-let _ = register_driver (driver_name, fun args -> new mysql_database (parse_args args), reconstruct_db_string (driver_name, args))
+let _ = Value.register_driver (driver_name, fun args -> new mysql_database (parse_args args), Value.reconstruct_db_string (driver_name, args))

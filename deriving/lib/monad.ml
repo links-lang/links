@@ -1,6 +1,6 @@
 module type Monad = 
 sig
-  type +'a m
+  type 'a m
   val return : 'a -> 'a m
   val fail : string -> 'a m
   val (>>=) : 'a m -> ('a -> 'b m) -> 'b m
@@ -17,7 +17,7 @@ end
 module MonadDefault
   (M : 
     sig
-      type +'a m
+      type 'a m
       val return : 'a -> 'a m
       val fail : string -> 'a m
       val (>>=) : 'a m -> ('a -> 'b m) -> 'b m

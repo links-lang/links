@@ -1,57 +1,36 @@
-(*pp camlp4of *)
-module InContext (L : Base.Loc) =
-struct
-  open Base
-  open Utils
-  open Type
-  open Camlp4.PreCast
-  include Base.InContext(L)
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
 
-  let classname = "Enum"
+open Deriving
 
-  let instance = object(self)
-    inherit make_module_expr ~classname ~allow_private:false
+let fill_enum_template loc tname numbering = <:str_item< 
+  declare
+    open Enum;
+    module $uid:"Enum_"^ tname$ = 
+      EnumDefaults (struct 
+                      type a = $lid:tname$; 
+                      value numbering = $numbering$; 
+                    end);
+  end>>
 
-    method sum ?eq ctxt ((tname,_,_,_,_) as decl) summands =
-    let numbering = 
-      List.fold_right2
-        (fun n ctor rest -> 
-           match ctor with
-             | (name, []) -> <:expr< ($uid:name$, $`int:n$) :: $rest$ >>
-             | (name,_) -> raise (Underivable ("Enum cannot be derived for the type "^
-                                  tname ^" because the constructor "^
-                                  name^" is not nullary")))
-        (List.range 0 (List.length summands))
-        summands
-        <:expr< [] >> in
-      <:module_expr< Enum.Defaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
+let gen_enum_instance = function
+  | ((loc, tname), _::_, _, _) -> error loc ("Not generating enumeration for polymorphic type "^ tname)
+  | ((loc, tname), tvars, <:ctyp< [ $list:ctors$ ] >>, constraints) ->
+      let numbering = 
+        List.fold_right2 (fun n ctor list -> (match ctor with
+                                           | (loc, name, [])    -> <:expr< [($uid:name$, $int:string_of_int n$) :: $list$] >>
+                                           | (loc, name, args)  -> (error
+                                                                      loc ("Not generating Enum instance for "^ tname
+                                                                           ^" because constructor "^ name ^" is not nullary"))))
+       (range 0 (List.length ctors - 1)) ctors <:expr< [] >> in
+     fill_enum_template loc tname numbering
+  | ((loc, tname), _, _, _) -> error loc ("Not generating Enum instance for non-sum type "^ tname)
 
-    method variant ctxt decl (_, tags) = 
-    let numbering = 
-      List.fold_right2
-        (fun n tagspec rest -> 
-           match tagspec with
-             | Tag (name, None) -> <:expr< (`$name$, $`int:n$) :: $rest$ >>
-             | Tag (name, _) -> raise (Underivable ("Enum cannot be derived because the tag "^
-                                                      name^" is not nullary"))
-             | _ -> raise (Underivable ("Enum cannot be derived for this "
-                                        ^"polymorphic variant type")))
-        (List.range 0 (List.length tags))
-        tags
-        <:expr< [] >> in
-      <:module_expr< Enum.Defaults(struct type a = $atype ctxt decl$ let numbering = $numbering$ end) >>
+let gen_enum_instances loc : instantiator = fun tdl ->
+  <:str_item< declare $list:List.map gen_enum_instance tdl$ end >>
 
-    method tuple context _ = raise (Underivable "Enum cannot be derived for tuple types")
-    method record ?eq _ (tname,_,_,_,_) = raise (Underivable
-                                                 ("Enum cannot be derived for record types (i.e. "^
-                                                    tname^")"))
+let _ = 
+  begin
+    instantiators := ("Enum", gen_enum_instances):: !instantiators;
+    sig_instantiators := ("Enum", Sig_utils.gen_sigs "Enum"):: !sig_instantiators;
   end
-end
-
-let _ = Base.register "Enum" 
-  ((fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname ()),
-   (fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in
-        M.gen_sigs ~context ~decls ~classname:M.classname))

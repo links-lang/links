@@ -1,66 +1,67 @@
-(*pp camlp4of *)
-module InContext (L : Base.Loc) =
-struct
-  open Type
-  open Base
-  open Camlp4.PreCast
-  include Base.InContext(L)
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
 
-  let classname = "Typeable"
+open Deriving
 
-  let mkName : name -> string = 
-    let file_name, sl, _, _, _, _, _, _ = Loc.to_tuple loc in
-      Printf.sprintf "%s_%d_%f_%s" 
-        file_name sl (Unix.gettimeofday ())
+let gen_instance  ({loc=loc; tname=tname; atype=atype; rtype=rtype; argmap=params}) =
+  let rec gen = function
+    | <:ctyp< [ $list:_$ ] >>  (* sum *)
+    | <:ctyp< { $list:_$ } >> (* record *)
+    | <:ctyp< [= $list:_$ ] >>   (* polymorphic variant *) ->
+      let paramList = 
+        List.fold_right 
+          (fun (_,(_,name)) cdr ->
+             <:expr< [$uid:name$.typeRep()::$cdr$] >>) 
+          params
+        <:expr< [] >>  in
+        <:module_expr< 
+        struct
+          type a = $atype$; 
+(*          value typeRep = let t = TypeRep (Tag.fresh(), $paramList$) in fun _ -> t;*)
+          value typeRep = 
+            let rep = ref None in 
+            fun _ -> 
+             (match rep.contents with
+              [ None -> let t = TypeRep (Tag.fresh(), $paramList$) in 
+                        do {rep.contents := Some t; t}
+              | Some r -> r ]);
+        end >>
+    | <:ctyp< '$lid:name$ >> ->
+      <:module_expr< $uid:snd (List.assoc name params)$ >>
+    | <:ctyp< $lid:name$ >> (* typename *) -> 
+      let name = "Typeable_" ^ name in <:module_expr< $uid:name$ >>
+    | <:ctyp< $f$ $p$ >> (* application *) ->
+      <:module_expr< $gen f$ $gen p$ >>
+    | <:ctyp< $uid:m$ . $t$ >> ->
+      <:module_expr< $uid:m$ . $gen t$ >>
+    | <:ctyp< ( $list:params$ ) >> (* tuple *) ->
+      (List.fold_left 
+         (fun s param -> <:module_expr< $s$ $param$ >>)
+       <:module_expr< $uid:Printf.sprintf "Typeable_%d" (List.length params)$ >>
+         (List.map gen params))
+    | _                            -> error loc ("Cannot currently generate typeable instances for "^ tname)
+  in <:module_expr< Typeable_defaults($gen rtype$) >>
 
-  let gen ?eq ctxt ((tname,_,_,_,_) as decl : Type.decl) _ = 
-    let paramList = 
-      List.fold_right 
-        (fun (p,_) cdr ->
-             <:expr< $uid:NameMap.find p ctxt.argmap$.type_rep::$cdr$ >>)
-        ctxt.params
-      <:expr< [] >>
-    in <:module_expr< struct type a = $atype ctxt decl$
-          let type_rep = TypeRep.mkFresh $str:mkName tname$ $paramList$ end >>
-
-  let tup ctxt ts mexpr expr = 
-      let params = 
-        expr_list 
-          (List.map (fun t -> <:expr< let module M = $expr ctxt t$ 
-                                       in $mexpr$ >>) ts) in
-        <:module_expr< Defaults(struct type a = $atype_expr ctxt (`Tuple ts)$
-                                       let type_rep = Typeable.TypeRep.mkTuple $params$ end) >>
-
-  let instance = object(self)
-    inherit make_module_expr ~classname ~allow_private:true 
-
-    method tuple ctxt ts = tup ctxt ts <:expr< M.type_rep >> (self#expr)
-    method sum = gen 
-    method record = gen
-    method variant ctxt decl (_,tags) =
-    let tags, extends = 
-      List.fold_left 
-        (fun (tags, extends) -> function
-           | Tag (l, None)  -> <:expr< ($str:l$, None) :: $tags$ >>, extends
-           | Tag (l,Some t) ->
-               <:expr< ($str:l$, Some $mproject (self#expr ctxt t) "type_rep"$) ::$tags$ >>,
-               extends
-           | Extends t -> 
-               tags,
-               <:expr< $mproject (self#expr ctxt t) "type_rep"$::$extends$ >>)
-        (<:expr< [] >>, <:expr< [] >>) tags in
-      <:module_expr< Defaults(
-        struct type a = $atype ctxt decl$
-               let type_rep = Typeable.TypeRep.mkPolyv $tags$ $extends$
-        end) >>
+let gen_instance tdl ((loc, tname), params, ctyp, constraints) =
+  let currents = List.map (fun ((_,tname),_,_,_) -> (tname, "Typeable_" ^ tname)) tdl in
+  let params = param_names params in
+  let atype = gen_type_a loc <:ctyp< $lid:tname$ >> params in
+  let ltype = gen_type_l tname params in
+  let struct_expr = gen_instance {loc=loc; tname=tname; ltype=ltype; atype=atype; rtype=ctyp; argmap=params; currents=currents} in
+    ("Typeable_"^ tname,
+     (let rhs = <:module_type< (Typeable with type a = $atype$) >> in
+        Sig_utils.gen_functor_type loc "Typeable" params rhs),
+     gen_functor loc "Typeable" params struct_expr)
+      
+let gen_instances loc : instantiator = 
+  begin
+    fun tdl ->
+      let mods = List.map (gen_instance tdl) tdl in
+        <:str_item< declare open Typeable; open Primitives; module rec $list:mods$; end >>
   end
-end
 
-let _ = Base.register "Typeable" 
-  ((fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-         ~default_module:"Defaults" ()),
-  (fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.gen_sigs ~context ~decls ~classname:M.classname))
+let _ = 
+  begin
+    instantiators := ("Typeable", gen_instances):: !instantiators;
+    sig_instantiators := ("Typeable", Sig_utils.gen_sigs "Typeable"):: !sig_instantiators;
+  end

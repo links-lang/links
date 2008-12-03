@@ -1,6 +1,4 @@
 open Sqlite
-open Result
-
 
 let error_as_string = function
 | RC_ok -> "ok"
@@ -30,7 +28,7 @@ let error_as_string = function
 | RC_format -> "format"
 
 class lite_result (vm: vm) = object
-  inherit dbresult
+  inherit Value.dbvalue
   val result_list =
     (* step_simple must be called before any of the methods, otherwise
        column_names, column_types, etc. will fail *)
@@ -39,24 +37,16 @@ class lite_result (vm: vm) = object
         collect_results (Array.to_list (step_simple vm) :: results) 
       with Sqlite_done -> results
     in List.rev (collect_results [])
-  method status : db_status = 
+  method status : Value.db_status = 
     match vm_rc vm with
-      | RC_ok -> QueryOk
-      | e     -> QueryError (error_as_string e)
+      | RC_ok -> `QueryOk
+      | e     -> `QueryError (error_as_string e)
   method nfields : int = 
     match result_list with 
       | [] -> -1
       | _  -> List.length (List.hd result_list)
   method fname  n : string = 
     Array.get (column_names vm) n
-  method ftype  n : db_field_type =
-    match Array.get (column_types vm) n with
-      | "" -> TextField (* SQLite was untyped prior to version 3. Need to 
-                           take type information from Links context *)
-      | "TEXT"|"STRING"    -> TextField
-      | "INT"|"INTEGER" -> IntField
-      | other -> failwith( "unknown field type : " ^ other)
-          (* others? *)
   method get_all_lst : string list list =
     result_list
   method error : string = 
@@ -65,16 +55,15 @@ end
 
 
 class lite_database file = object(self)
-  inherit database
+  inherit Value.database
   val connection = db_open file
   method driver_name () = "sqlite"
-  method exec query : dbresult =
+  method exec query : Value.dbvalue =
     let vm, _, _ = compile connection query 0 true in
       new lite_result vm
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method equal_types (t: Types.datatype) (dt : db_field_type) : bool = true
 end
 
 let driver_name = "sqlite"
-let _ = register_driver (driver_name, fun args -> new lite_database args, reconstruct_db_string (driver_name, args))
+let _ = Value.register_driver (driver_name, fun args -> new lite_database args, Value.reconstruct_db_string (driver_name, args))

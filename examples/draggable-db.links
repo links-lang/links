@@ -1,6 +1,6 @@
 fun step(state, id, items) client {
  receive {
-  case GetList(pid)     -> pid ! Items(items); step(state, id, items)
+  case GetList(pid)     -> pid ! items; step(state, id, items)
   case SetList(items)   ->
    draw(id, items);
    step(state, id, items)
@@ -44,7 +44,7 @@ fun draggableList(id, items) client
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
     {for (var item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
    </ul>,
-   fun () {dragger ! GetList(self())},
+   fun () {spawnWait { dragger ! GetList(self()); receive { case v -> v} }},
    fun (items) {dragger ! SetList(items);}
    )
 }
@@ -55,9 +55,14 @@ fun itemsTable() server {
 }
 
 fun load() server {
-  for (var item <-- itemsTable())
-    orderby (item.i)
-    [item.name]
+  var t = itemsTable();
+  var items =
+    query {
+      for (var item <-- t)
+       orderby ((1=item.i))
+        [(name=item.name)]
+    };
+  map ((.name), items)
 }
 
 fun save(itemsList) server {
@@ -69,41 +74,29 @@ fun main() client {
   var (bears, read, write) = draggableList("bears", load());
 
   var marshaller = spawn {
-    fun saveItems(pending) {
-      receive {
-        case msg -> switch (msg) {
-          case Items(items) ->
-            save(items);
-            ignore(for (var request <- pending)
-                     {self()!request; []})
-          case (_:[|Load|Save|]) -> saveItems(msg :: pending)
-        }
-      }
-    }
-
     fun listen() {
       receive {
         case Load -> write(load())
-        case Save -> read(); saveItems([])
-        case Items(_) -> error("unreachable")
+        case Save -> save(read())
       };
       listen()
     }
     listen()
   };
 
-  <html>
-  <head>
-   <style>
-     .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
-     .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
-   </style>
-  </head>
-  <body>
-    <h2>Great Bears</h2>{bears}
-    <input type="button" value="load" l:onclick="{marshaller!Load}"/>
-    <input type="button" value="save" l:onclick="{marshaller!Save}"/>
-  </body></html>
+  page
+   <html>
+   <head>
+    <style>
+      .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
+      .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
+    </style>
+   </head>
+   <body>
+     <h2>Great Bears</h2>{bears}
+     <input type="button" value="load" l:onclick="{marshaller!Load}"/>
+     <input type="button" value="save" l:onclick="{marshaller!Save}"/>
+   </body></html>
 }
 
 main()

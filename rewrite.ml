@@ -96,10 +96,11 @@ module SimpleRewrite
   and type rewriter = T.t -> T.t option =
 struct 
   include T
-  let both a b e =
+    (* equivalent to let e' = (from_option e (a e)) in from_option e' (b e') *)
+  let both a b e = 
     match a e with 
       | None   -> b e
-      | Some e -> Some (Utility.fromOption e (b e))
+      | Some e -> Some (Utility.from_option e (b e))
   and either a b e = 
     match a e with
       | None -> b e
@@ -108,7 +109,8 @@ struct
   and always e = Some e
 end
 
-(* utility for writing the process_children function in an unpleasant but concise style *)
+(** Utility for writing the process_children function in an unpleasant
+    but concise style *)
 let passto f exprs next = 
   let rec aux passed es = function
     | [] -> passed, es

@@ -1,246 +1,180 @@
-(*pp camlp4of *)
-module InContext (L : Base.Loc) =
-struct
-  open Base
-  open Utils
-  open Type
-  open Camlp4.PreCast
-  include Base.InContext(L)
-  module UT = Type.Untranslate(L)
+(* FIXME:
+   optimization: shouldn't pickle a tag for single-constructor types. *)
 
-  let typeable_defaults t = <:module_expr< Typeable.Defaults($t$) >>
+#load "pa_extend.cmo";;
+#load "q_MLast.cmo";;
+open Deriving
 
-  module Typeable = Typeable_class.InContext(L)
-  module Eq       = Eq_class.InContext(L)
+include Deriving.Struct_utils(struct let classname="Pickle" let defaults="Pickle_defaults"end)
 
-  let classname = "Pickle"
-  let bind, seq = 
-    let bindop = ">>=" and seqop = ">>" in
-      <:expr< $lid:bindop$ >>, <:expr< $lid:seqop$ >>
-
-  let unpickle_record_bindings ctxt (tname,params,rhs,cs,_) (fields : field list) e = <:expr<
-      let module Mutable = struct
-        type t = $UT.repr 
-            (instantiate_modargs_repr ctxt 
-               (Record (List.map (fun (n,p,_) -> (n,p,`Mutable)) fields)))$
-      end in $e$ >>
-
-  let unpickle_record ctxt (tname,_,_,_,_ as decl) fields expr = 
-    let msg = "unexpected object encountered unpickling "^tname in
-    let assignments = 
-      List.fold_right
-        (fun (id,_,_) exp ->
-           <:expr< this.Mutable.$lid:id$ <- $lid:id$; $exp$ >>)
-        fields
-      <:expr< return self >> in
-    let inner = 
-      List.fold_right
-        (fun (id,([],t),_) exp ->
-           <:expr< $bind$ ($mproject (expr ctxt t) "unpickle"$ $lid:id$)
-             (fun $lid:id$ -> $exp$) >>)
-        fields
-        assignments in
-    let idpat = patt_list (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
-      unpickle_record_bindings ctxt decl fields
-        (<:expr< W.record
-           (fun self -> function
-                  | $idpat$ -> let this = (Obj.magic self : Mutable.t) in $inner$
-                  | _ -> raise (UnpicklingError $str:msg$)) $`int:List.length fields$ >>)
-
-  let pickle_record ctxt decl fields expr =
-    let inner =
-      List.fold_right 
-        (fun (id,([],t),_) e ->
-           <:expr< $bind$ ($mproject (expr ctxt t) "pickle"$ $lid:id$) 
-                          (fun $lid:id$ -> $e$) >>)
-        fields
-        <:expr< (W.store_repr this
-                   (Repr.make
-                      $expr_list (List.map (fun (id,_,_) -> <:expr< $lid:id$ >>) fields)$)) >>
-    in
-      [ <:match_case< ($record_pattern fields$ as obj) ->
-                       W.allocate obj (fun this -> $inner$) >> ]
+let currentp currents = function
+| None -> false
+| Some (_, s) -> List.mem_assoc s currents
 
 
-  let typeable_instance ctxt tname =
-    <:module_expr< Typeable.Defaults(
-    $apply_functor <:module_expr< $uid:"Typeable_" ^ tname$ >> 
-      (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p ctxt.argmap$.T >>)
-         ctxt.params)$) >>
+let module_name currents = function
+| None -> assert false
+| Some (_, s) -> List.assoc s currents
 
-  let eq_instance ctxt tname =
-    apply_functor <:module_expr< $uid:"Eq_" ^ tname$ >> 
-      (List.map (fun (p,_) -> <:module_expr< $uid:NameMap.find p ctxt.argmap$.E >>)
-         ctxt.params)
 
-  let rebind_params ctxt name : Ast.str_item = 
-    NameMap.fold
-      (fun _ param s -> <:str_item< $s$ module $uid:param$ = $uid:param$.$uid:name$ >>)
-      ctxt.argmap
-      <:str_item< >>
+(* Generate a printer for each constructor parameter *)
+let rec gen_printer = 
+  let current default (t:MLast.ctyp) gen ({loc=loc;currents=currents} as ti) c = 
+    let lt = ltype_of_ctyp t in
+    if currentp currents lt then 
+      <:module_expr< $uid:(module_name currents lt)$ >>
+    else default t gen ti c
+  in 
+  gen_module_expr
+    ~tyrec:gen_other ~tysum:gen_other ~tyvrn:gen_other
+    ~tyapp:(current gen_app)
+    ~tylid:(current gen_lid)
 
-  let wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler =
-    <:module_expr< struct open Eq open Typeable
-                          module T = $tymod$
-                          module E = $eqmod$
-                          type a = $atype$
-                          open Write
-                          let pickle = let module W = Utils(T)(E) in function $list:picklers$
-                          open Read
-                          let unpickle = let module W = Utils(T) in $unpickler$
-    end >>
+let gen_printers ({loc=loc} as ti) tuple params = 
+ let m = (List.fold_left
+            (fun s param -> <:module_expr< $s$ $param$ >>)
+            <:module_expr< $uid:Printf.sprintf "Pickle_%d" (List.length params)$ >>
+            (List.map (gen_printer ti) params)) in
+   <:expr< let module S = $m$ in S.pickle buffer $tuple$ >>
 
-    let instance = object (self)
-    inherit make_module_expr ~classname ~allow_private:false
+(* Generate an individual case clause for the pickle function. 
+case:
+     | $(Ctor-name) $(params) -> 
+         Buffer.add_string buffer $(Ctor-name + space)
+         let module S = Pickle_$(|params|) $(modularized_param_types) in
+             S.pickle $(params) buffer
+*)
+let gen_pickle_case ti (loc, name, params') (pos : int) =
+  let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                  params' (range 0 (List.length params' - 1))) in
+  let patt = (List.fold_left 
+                (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< $uid:name$>> params) in
+  let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+  in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int pos$; $gen_printers ti tuple params'$ } >>)
 
-    method tuple ctxt ts = 
-      let nts = List.length ts in
-      let ids = (List.mapn (fun t n -> (Printf.sprintf "id%d" n, t)) ts) in
-      let eidlist = expr_list (List.map (fun (id,_) -> <:expr< $lid:id$ >>) ids) in
-      let pidlist = patt_list (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
-      let tpatt,texpr = tuple ~param:"id" nts in
-      let tymod = Typeable.tup ctxt ts <:expr< M.T.type_rep >> (self#expr)
-      and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
-      and picklers =
-        let inner = 
-          List.fold_right
-            (fun (id,t) expr -> 
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "pickle"$ $lid:id$) 
-                            (fun $lid:id$ -> $expr$) >>)
-            ids
-            <:expr< W.store_repr this (Repr.make $eidlist$) >> in
-          [ <:match_case< ($tpatt$ as obj) -> 
-                  W.allocate obj (fun this -> $inner$) >>]
+let gen_unpickle_case ti (loc, name, params') (pos : int) =
+  let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                  params' (range 0 (List.length params' - 1))) in
+  let expr = 
+    List.fold_left
+      (fun acc (_,v) -> <:expr< $acc$ $lid:v$ >>) 
+      <:expr< $uid:name$ >>
+      params
+  in
+  let patt = <:patt< $int:string_of_int pos$ >> in
+    (patt, None, 
+     List.fold_right 
+       (fun (ptype, var) expr ->
+          <:expr<  let module S = $gen_printer ti ptype$ in
+          let $lid:var$ = S.unpickle stream in $expr$ >>)
+       params
+       expr)
 
-      and unpickler = 
-        let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
-        let inner = 
-          List.fold_right 
-            (fun (id,t) expr ->
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "unpickle"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
-            ids
-            <:expr< return $texpr$ >> in
-          <:expr< W.tuple
-            (function
-               | $pidlist$ -> $inner$
-               | _ -> raise (UnpicklingError $str:msg$)) >>
-      and atype = atype_expr ctxt (`Tuple ts) in
-        <:module_expr< Pickle.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler$) >>
 
-    method polycase ctxt tagspec : Ast.match_case = match tagspec with
-    | Tag (name, None) -> <:match_case<
-        (`$name$ as obj) ->
-          W.allocate obj
-              (fun thisid -> 
-                 W.store_repr thisid
-                    (Repr.make ~constructor:$`int:(tag_hash name)$ [])) >>
-    | Tag (name, Some t) -> <:match_case< 
-        (`$name$ v1 as obj) ->
-           W.allocate obj
-            (fun thisid ->
-             $bind$ ($mproject (self#expr ctxt t) "pickle"$ v1)
-                    (fun mid -> 
-                    (W.store_repr thisid
-                        (Repr.make ~constructor:$`int:(tag_hash name)$ [mid])))) >>
-    | Extends t -> 
-        let patt, guard, cast = cast_pattern ctxt t in <:match_case<
-         ($patt$ as obj) when $guard$ ->
-            ($mproject (self#expr ctxt t) "pickle"$ $cast$) >>
 
-    method polycase_un ctxt tagspec : Ast.match_case = match tagspec with
-    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> return `$name$ >>
-    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> 
-      $bind$ ($mproject (self#expr ctxt t) "unpickle"$ x) (fun o -> return (`$name$ o)) >>
+let unpickle_failure ({loc=loc}as ti) = (<:patt< c >>, None, <:expr< failwith (Printf.sprintf "Unexpected tag %d during unpickling of type : %s" c $str:ti.tname$) >>)
 
-    method extension ctxt tname ts : Ast.match_case =
-      (* Try each extension in turn.  If we get an UnknownTag failure,
-         try the next one.  This is
+(* Generate the pickle and unpickle functions. *)
+let gen_sum ({loc=loc} as ti) ctors = <:str_item< 
+   value rec pickle buffer = 
+             fun [ $list:List.map2 (gen_pickle_case ti) ctors (range 0 (List.length ctors - 1))$ ]
+   and unpickle stream =
+           match Pickle_int.unpickle stream with [ $list:List.map2 (gen_unpickle_case ti) ctors (range 0 (List.length ctors - 1)) @ [unpickle_failure ti]$ ]
+>>
 
-         * safe because any two extensions that define the same tag
-           must be compatible at that point
+let gen_funs_record ({loc=loc}as ti) fields = 
+   let projections = List.map
+     (fun (loc,k,_,v) ->
+	<:expr< let module S = $gen_printer ti v$ in
+                S.pickle buffer (obj . $lid:k$) >>
+     ) fields in
+   let subexprs = List.map (fun (loc, k,_,_) -> (<:patt< $lid:k$ >>, <:expr< $lid:k$ >> )) fields in
+   let constructions = List.fold_right
+     (fun (loc, k, _, v) expr ->
+       <:expr< let module S = $gen_printer ti v$ in 
+               let $lid:k$ = S.unpickle stream in
+                 $expr$ >>
+     ) fields <:expr< { $list:subexprs$  } >>
+in
+<:str_item<
+   value rec pickle buffer obj = 
+        do { $list:projections$ }
+   and unpickle stream =
+          $constructions$
+>>
 
-         * fast because we can tell on the first integer comparison
-           whether we've picked the right path or not.
-      *)
-      let inner = List.fold_right 
-        (fun t exp -> <:expr<
-           let module M = $(self#expr ctxt t)$ in
-             try $exp$
-             with UnknownTag (n,_) -> (M.unpickle id :> a Read.m) >>)
-        ts
-        <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unpickling of "
-                                       ^tname$))) >>
-    in <:match_case< n,_ -> $inner$ >>
 
-    method variant ctxt (tname,_,_,_,_ as decl) (_, tags) = 
-      let unpickler = 
-        let tags, extensions = either_partition
-          (function Tag (name,t) -> Left (name,t) | Extends t -> Right t) tags in
-        let tag_cases = List.map (self#polycase_un ctxt) tags in
-        let extension_case = self#extension ctxt tname extensions in
-          <:expr< fun id -> W.sum (function $list:tag_cases @ [extension_case]$) id >>
-      in
-        wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
-          ~eqmod:(eq_instance ctxt tname)
-          ~picklers:(List.map (self#polycase ctxt) tags) ~unpickler
+let gen_polycase ({loc=loc} as ti) = function
+  | (MLast.RfTag (name, _, params'), n) -> 
+      let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                       params' (range 0 (List.length params' - 1))) in
+      let patt = (List.fold_left 
+                     (fun patt (_,v) -> <:patt< $patt$ $lid:v$ >>) <:patt< `$uid:name$>> params) in (* the "uid" isn't really safe here *)
+        (let tuple = tuple_expr loc (List.map (fun (_,p) -> <:expr< $lid:p$ >>) params)
+          in (patt, None, <:expr< do { Pickle_int.pickle buffer $int:string_of_int n$ ; 
+			               $gen_printers ti tuple params'$ }
+	      >>))
+          
+  | (MLast.RfInh (<:ctyp< $lid:tname$ >> as ctyp), n) -> 
+      (<:patt< (# $[tname]$ as $lid:tname$) >>, 
+      None, 
+      <:expr< let module S = $gen_printer ti ctyp$ in do {
+              Pickle_int.pickle buffer $int:string_of_int n$ ;
+              S.pickle buffer $lid:tname$
+        } >>)
+  | (MLast.RfInh ctyp, n) -> 
+      let var, guard, expr = cast_pattern ti ctyp ~param:"x" in
+        (var, guard, 
+         <:expr< let module S = $gen_printer ti ctyp$ in do {
+              Pickle_int.pickle buffer $int:string_of_int n$ ;
+              S.pickle buffer $expr$
+        } >>)
 
-    method case ctors ctxt (name, params') n : Ast.match_case * Ast.match_case = 
-    let nparams = List.length params' in
-    let ids = List.map (fun n ->  <:expr< $lid:Printf.sprintf "id%d" n$ >>) (List.range 0 nparams) in
-    let exp = 
-      List.fold_right2
-        (fun p n tail -> 
-           <:expr< $bind$ ($mproject (self#expr ctxt p) "pickle"$ $lid:Printf.sprintf "v%d" n$)
-                          (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
-        params'
-        (List.range 0 nparams)
-        <:expr< W.store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ids$) >> in
-      match params' with
-        | [] -> <:match_case< $uid:name$ as obj -> 
-                              W.allocate obj (fun thisid -> $exp$) >>,
-                <:match_case< $`int:n$, [] -> return $uid:name$ >>
-        | _  -> <:match_case< $uid:name$ $fst (tuple ~param:"v" nparams)$ as obj -> 
-                              W.allocate obj (fun thisid -> $exp$) >>,
-    let _, tuple = tuple ~param:"id" nparams in
-    let patt, exp = 
-      List.fold_right2 
-        (fun n t (pat, exp) ->
-           let m = Printf.sprintf "M%d" n and id = Printf.sprintf "id%d" n in
-           <:patt< $lid:id$ :: $pat$ >>,
-           <:expr< let module $uid:m$ = $self#expr ctxt t$
-                    in $bind$ ($uid:m$.unpickle $lid:id$) (fun $lid:id$ -> $exp$) >>)
-        (List.range 0 nparams)
-        params'
-      (<:patt< [] >>, <:expr< return ($uid:name$ $tuple$) >>) in
-      <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
-  method sum ?eq ctxt (tname,_,_,_,_ as decl) summands =
-    let nctors = List.length summands in
-    let picklers, unpicklers = List.split (List.mapn (self#case nctors ctxt) summands) in
-    wrap ~ctxt ~atype:(atype ctxt decl)
-      ~tymod:(typeable_instance ctxt tname)
-      ~eqmod:(eq_instance ctxt tname)
-      ~picklers
-      ~unpickler:<:expr< fun id -> 
-        let f = function $list:unpicklers$ 
-                 | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
-                                                  ^tname^": "$^ string_of_int n))
-        in W.sum f id >>
+let gen_unpickle_polycase ({loc=loc} as ti) = function
+  |  (MLast.RfTag (name, _, params'), n) -> 
+       let params = (List.map2 (fun p n -> (p, Printf.sprintf "v%d" n)) 
+                        params' (range 0 (List.length params' - 1))) in
+       let expr = 
+         List.fold_left
+           (fun acc (_,v) -> <:expr< $acc$ $lid:v$ >>) 
+         <:expr< `$uid:name$ >>
+           params
+       in
+         (<:patt< $int:string_of_int n$ >>, None, 
+         List.fold_right 
+           (fun (ptype, var) expr ->
+             <:expr<  let module S = $gen_printer ti ptype$ in
+                      let $lid:var$ = S.unpickle stream in $expr$ >>)
+           params
+           expr)
+  | (MLast.RfInh ctyp, n) -> 
+    (<:patt< $int:string_of_int n$ >>, None,
+    <:expr<  let module S = $gen_printer ti ctyp$ in
+               (S.unpickle stream :> a) >>)
 
-  method record ?eq ctxt (tname,_,_,_,_ as decl) (fields : Type.field list) = 
-      wrap ~ctxt ~atype:(atype ctxt decl) 
-        ~picklers:(pickle_record ctxt decl fields (self#expr))
-        ~unpickler:(unpickle_record ctxt decl fields (self#expr))
-        ~tymod:(typeable_instance ctxt tname)
-        ~eqmod:(eq_instance ctxt tname)
+
+let gen_funs_poly ({loc=loc} as ti) (row,_) =
+<:str_item<
+  value rec pickle buffer =
+         fun [ $list:List.map2 (curry (gen_polycase ti)) row (range 0 (List.length row - 1))$]
+     and unpickle stream =
+           match Pickle_int.unpickle stream with
+             [ $list:List.map2 (curry (gen_unpickle_polycase ti)) row  (range 0 (List.length row - 1)) @ [unpickle_failure ti]$ ] 
+>>
+
+(* TODO: merge with gen_printer *)
+let gen_module_expr ti = 
+  gen_module_expr
+    ~tyrec:(fun _ _ ti fields -> apply_defaults ti (gen_funs_record ti fields))
+    ~tysum:(fun _ _ ti ctors  -> apply_defaults ti (gen_sum ti ctors))
+    ~tyvrn:(fun _ _ ti row    -> apply_defaults ti (gen_funs_poly ti row))
+    ti ti.rtype
+
+let gen_instances loc tdl = gen_finstances ~gen_module_expr:gen_module_expr loc ~tdl:tdl
+
+let _ = 
+  begin
+    instantiators := ("Pickle", gen_instances) :: !instantiators;
+    sig_instantiators := ("Pickle", Sig_utils.gen_sigs "Pickle"):: !sig_instantiators;
   end
-end
-
-let _ = Base.register "Pickle"
-  ((fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in
-        M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-          ~default_module:"Defaults" ()),
-   (fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in
-        M.gen_sigs ~context ~decls ~classname:M.classname))

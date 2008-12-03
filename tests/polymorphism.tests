@@ -39,8 +39,7 @@ stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic mutual recursion [4]
 sig f : (a) -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } f
-stderr : @..*
-exit : 1
+stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic row recursion
 sig h : ((|a)) ->  Int fun h(x) {h((x,x))} h
@@ -61,3 +60,8 @@ stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
 Signatures on top-level variables
 sig x : Int var x = 3; x
 stdout : 3 : Int
+
+Value restriction
+sig f : (a) -> a var f = id(id); f
+stderr : @..*
+exit : 1

@@ -22,6 +22,8 @@ struct
 
   let empty = TypeMap.empty
 
+  let is_empty _ = failwith "is_empty nyi"
+
   let add dynamic value comparator map =
     let typeRep = tagOf dynamic in
     let monomap = 
@@ -43,11 +45,10 @@ struct
     with Not_found -> false
 
   let find dynamic map =
-    try 
-      let monomap, comparator = TypeMap.find (tagOf dynamic) map in
-        Some (snd (List.find
-                     (fun (k,_) -> comparator dynamic k)
-                     monomap))
+    try let monomap, comparator = TypeMap.find (tagOf dynamic) map in
+      Some (snd (List.find
+                   (fun (k,_) -> comparator dynamic k)
+                   monomap))
     with Not_found -> None
 
   let iter : (dynamic -> 'a -> unit) -> 'a t -> unit

@@ -1,489 +1,508 @@
-(*pp deriving *)
-(*
-  Idea: 
-  1. every object receives a serializable id.
-  2. an object is serialized using the ids of its subobjects
+(* Is it possible to have an interface that can include the
+   structure-sharing picklers?
+
+   NB: the structure-sharing pickler should detect cycles and fail.
 *)
-module Pickle =
-struct
-exception UnknownTag of int * string
-exception UnpicklingError of string
 
-module Id :
-sig
-  type t deriving (Show, Dump, Eq)
-  val initial : t
-  val compare : t -> t -> int
-  val next : t -> t  
-end =
-struct
-  type t = int deriving (Show, Dump, Eq)
-  let initial = 0
-  let compare = compare
-  let next = succ
-end
-module IdMap = Map.Make (Id)
-type id = Id.t deriving (Show, Dump)
+(** Pickle **)
 
-module Repr : sig
-  (* Break abstraction for the sake of efficiency for now *)
-  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Dump, Show)
-  val of_string : string -> t
-  val to_string : t -> string
-  val make : ?constructor:int -> id list -> t
-  val unpack_ctor : t -> int option * id list
-end =
-struct
-  type t = Bytes of string | CApp of (int option * Id.t list) deriving (Dump, Show)
-  let of_string s = Bytes s
-  let to_string = function
-    | Bytes s -> s
-    | _ -> invalid_arg "string_of_repr"
-  let make ?constructor ids = 
-    match constructor with
-      | Some n -> CApp (Some n, ids)
-      | None   -> CApp (None, ids)
-  let unpack_ctor = function 
-    | CApp arg -> arg
-    | _ -> raise (UnpicklingError "Error unpickling constructor")
-end
-type repr = Repr.t
-
-module Write : sig
-  type s = {
-    nextid : Id.t;
-    obj2id : Id.t Dynmap.DynMap.t;
-    id2rep : repr IdMap.t;
-  }
-  val initial_output_state : s
-  include Monad.Monad_state_type with type state = s
-
-  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) : sig
-    val allocate : T.a -> (id -> unit m) -> id m
-    val store_repr : id -> Repr.t -> unit m
-  end
-end =
-struct
-  type s = {
-    nextid : Id.t; (* the next id to be allocated *)
-    obj2id : Id.t Dynmap.DynMap.t; (* map from typerep to id cache for the corresponding type *)
-    id2rep : repr IdMap.t;
-  }
-  let initial_output_state = {
-    nextid = Id.initial;
-    obj2id = Dynmap.DynMap.empty;
-    id2rep = IdMap.empty;
-  }
-  include Monad.Monad_state (struct type state = s end)
-  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) =
-  struct
-    module C = Dynmap.Comp(T)(E)
-    let comparator = C.eq
-
-    let allocate o f =
-      let obj = T.make_dynamic o in
-      get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
-        match Dynmap.DynMap.find obj obj2id with
-          | Some id -> return id
-          | None -> 
-              let id, nextid = nextid, Id.next nextid in
-                put {t with
-                       obj2id=Dynmap.DynMap.add obj id comparator obj2id;
-                       nextid=nextid} >>
-                  f id >> return id
-                  
-    let store_repr id repr =
-      get >>= fun state ->
-        put {state with id2rep = IdMap.add id repr state.id2rep}
-  end
-end
-
-module Read : sig
-  type s = (repr * (Typeable.dynamic option)) IdMap.t
-  include Monad.Monad_state_type with type state = s
-  val find_by_id : id -> (Repr.t * Typeable.dynamic option) m
-  module Utils (T : Typeable.Typeable) : sig
-    val sum    : (int * id list -> T.a m)  -> id -> T.a m
-    val tuple  : (id list -> T.a m)        -> id -> T.a m
-    val record : (T.a -> id list -> T.a m) -> int -> id -> T.a m
-    val update_map : id -> (T.a -> unit m)
-  end
-end =
-struct
-  type s = (repr * (Typeable.dynamic option)) IdMap.t
-  include Monad.Monad_state (struct type state = s end)
-
-  let find_by_id id =
-    get >>= fun state ->
-    return (IdMap.find id state)
-
-  module Utils (T : Typeable.Typeable) = struct
-    let decode_repr_ctor c = match Repr.unpack_ctor c with
-      | (Some c, ids) -> (c, ids)
-      | _ -> invalid_arg "decode_repr_ctor"
-
-    let decode_repr_noctor c = match Repr.unpack_ctor c with
-      | (None, ids) -> ids
-      | _ -> invalid_arg "decode_repr_ctor"
-
-    let update_map id obj =
-      let dynamic = T.make_dynamic obj in
-      get >>= fun state -> 
-        match IdMap.find id state with 
-          | (repr, None) ->     
-              put (IdMap.add id (repr, Some dynamic) state)
-          | (_, Some _) -> 
-              return ()
-                (* Checking for id already present causes unpickling to fail 
-                   when there is circularity involving immutable values (even 
-                   if the recursion wholly depends on mutability).
-
-                   For example, consider the code
-
-                   type t = A | B of t ref deriving (Typeable, Eq, Pickle)
-                   let s = ref A in
-                   let r = B s in
-                   s := r;
-                   let pickled = Pickle_t.pickleS r in
-                   Pickle_t.unpickleS r
-
-                   which results in the value
-                   B {contents = B {contents = B { ... }}}
-
-                   During deserialization the following steps occur:
-                   1. lookup "B {...}" in the dictionary (not there)
-                   2. unpickle the contents of B:
-                   3. lookup the contents in the dictionary (not there)
-                   4. create a blank reference, insert it into the dictionary
-                   5. unpickle the contents of the reference:
-                   6. lookup ("B {...}") in the dictionary (not there)
-                   7. unpickle the contents of B:
-                   8. lookup the contents in the dictionary (there)
-                   9. insert "B{...}" into the dictionary.
-                   10. insert "B{...}" into the dictionary.
-                *)
-
-
-    let whizzy f id decode =
-      find_by_id id >>= fun (repr, dynopt) ->
-      match dynopt with 
-        | None ->
-            f (decode repr) >>= fun obj ->
-            update_map id obj >>
-            return obj
-        | Some obj -> return (T.throwing_cast obj)
-
-    let sum f id = whizzy f id decode_repr_ctor
-    let tuple f id = whizzy f id decode_repr_noctor
-    let record_tag = 0
-    let record f size id =
-      find_by_id id >>= fun (repr, obj) ->
-        match obj with
-          | None ->
-              let this = Obj.magic  (Obj.new_block record_tag size) in
-                update_map id this >>
-                f this (decode_repr_noctor repr) >>
-                return this
-          | Some obj -> return (T.throwing_cast obj)
-
-
-  end
-end
-
-
-module type Pickle =
-sig
+(* TODO: we could have an additional debugging unpickling method. *)
+module type Pickle = sig
   type a
-  module T : Typeable.Typeable with type a = a
-  module E : Eq.Eq with type a = a
-  val pickle : a -> id Write.m
-  val unpickle : id -> a Read.m
-  val to_buffer : Buffer.t -> a -> unit
-  val to_string : a -> string
-  val to_channel : out_channel -> a -> unit
-  val from_stream : char Stream.t -> a
-  val from_string : string -> a
-  val from_channel : in_channel -> a
+  val pickle : Buffer.t -> a -> unit
+  val unpickle : char Stream.t -> a
+  val pickleS : a -> string
+  val unpickleS : string -> a
 end
 
-module Defaults
-  (S : sig
-     type a
-     module T : Typeable.Typeable with type a = a
-     module E : Eq.Eq with type a = a
-     val pickle : a -> id Write.m
-     val unpickle : id -> a Read.m
-   end) : Pickle with type a = S.a =
+module type SimplePickle = sig
+  type a
+  val pickle : Buffer.t -> a -> unit
+  val unpickle : char Stream.t -> a
+end
+
+exception Unpickling_failure of string
+
+let bad_tag tag stream typename =
+  raise (Unpickling_failure
+           (Printf.sprintf 
+              "Failure during %s unpickling at character %d; unexpected tag %d" 
+              typename (Stream.count stream) tag))
+
+module Pickle_defaults (P : sig   
+			  type a
+			  val pickle : Buffer.t -> a -> unit
+			  val unpickle : char Stream.t -> a
+			end) : Pickle with type a = P.a = 
 struct
-  include S
-
-  type ids = (Id.t * Repr.t) list
-      deriving (Dump, Show)
-
-  type dumpable = id * ids
-      deriving (Show, Dump)
-
-  type ('a,'b) pair = 'a * 'b deriving (Dump)
-  type capp = int option * Id.t list deriving (Dump)
-
-  (* We don't serialize ids of each object at all: we just use the
-     ordering in the output file to implicitly record the ids of
-     objects.
-
-     Also, we don't serialize the repr constructors.  All values with
-     a particular constructor are grouped in a single list.
-
-     This can (and should) all be written much more efficiently.
-  *)
-  type discriminated = 
-      (Id.t * string) list
-    * (Id.t * (int * Id.t list)) list
-    * (Id.t * (Id.t list)) list
-        deriving (Dump, Show)
-
-  type discriminated_ordered = 
-      string list
-      * (int * Id.t list) list
-      * (Id.t list) list
-        deriving (Dump, Show)
-
-  let reorder : Id.t * discriminated -> Id.t * discriminated_ordered =
-    fun (root,(a,b,c)) ->
-      let collect_ids items (map,counter) =
-        List.fold_left 
-          (fun (map,counter) (id,_) ->
-             IdMap.add id counter map, Id.next counter) 
-          (map,counter) items in
-
-      let map, _ = 
-        collect_ids c
-          (collect_ids b
-             (collect_ids a
-                (IdMap.empty, Id.initial))) in
-      let lookup id = IdMap.find id map in
-        (lookup root,
-         (List.map snd a,
-          List.map (fun (_,(c,l)) -> c, List.map lookup l) b,
-          List.map (fun (_,l) -> List.map lookup l) c))
-
-  let unorder : Id.t * discriminated_ordered -> Id.t * discriminated
-    = fun (root,(a,b,c)) ->
-      let number_sequentially id items =
-        List.fold_left
-          (fun (id,items) item -> 
-             (Id.next id, (id,item)::items))
-          (id,[]) items in
-      let id = Id.initial in
-      let id, a = number_sequentially id a in
-      let id, b = number_sequentially id b in
-      let  _, c = number_sequentially id c in
-        (root, (a,b,c))
-
-  type ('a,'b) either = Left of 'a | Right of 'b
-  let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
-      : 'b list * 'c list =
-    let rec aux (lefts, rights) = function
-      | [] -> (List.rev lefts, List.rev rights)
-      | x::xs ->
-          match f x with 
-            | Left l  -> aux (l :: lefts, rights) xs
-            | Right r -> aux (lefts, r :: rights) xs
-    in aux ([], []) l
-
-  type discriminated_dumpable = Id.t * discriminated deriving (Dump) 
-
-  let discriminate : (Id.t * Repr.t) list -> discriminated
-    = fun input ->
-      let bytes, others = 
-        either_partition
-          (function
-             | id, (Repr.Bytes s) -> Left (id,s)
-             | id, (Repr.CApp c) -> Right (id,c))
-          input in
-      let ctors, no_ctors =
-        either_partition
-          (function
-             | id, (Some c, ps) -> Left (id, (c,ps))
-             | id, (None, ps) -> Right (id,ps))
-          others in
-        (bytes, ctors, no_ctors)
-
-  let undiscriminate : discriminated -> (Id.t * Repr.t) list
-    = fun (a,b,c) ->
-      List.map (fun (id,s) -> (id,Repr.Bytes s)) a
-      @ List.map (fun (id,(c,ps)) -> (id,Repr.CApp (Some c,ps))) b
-      @ List.map (fun (id,(ps)) -> (id,Repr.CApp (None,ps))) c
-
-  type do_pair = Id.t * discriminated_ordered 
-      deriving (Show, Dump)
-
-  let write_discriminated f
-    = fun (root,map) ->
-      let dmap = discriminate map in
-      let rmap = reorder (root,dmap) in
-        f rmap
-
-  let read_discriminated (f : 'b -> 'a) : 'b -> Id.t * (Id.t * Repr.t) list
-    = fun s -> 
-      let rmap = f s in
-      let (root,dmap) = unorder rmap in
-        (root, undiscriminate dmap)
-
-  open Write
-
-  let decode_pickled_string (f : 'a -> Id.t * discriminated_ordered) : 'b -> Id.t * Read.s =
-    fun s -> 
-      let (id, state : dumpable) = 
-        read_discriminated f s
-      in
-        id, (List.fold_right 
-               (fun (id,repr) map -> IdMap.add id (repr,None) map)
-               state
-               IdMap.empty)
-
-  let encode_pickled_string f =
-    fun (id,state) ->
-      let input_state =
-        id, IdMap.fold (fun id repr output -> (id,repr)::output)
-          state.id2rep [] in
-        write_discriminated f input_state
-
-  let doPickle f v : 'a = 
-    let id, state = runState (S.pickle v) initial_output_state in
-      encode_pickled_string f (id, state)
-
-  let doUnpickle f input = 
-    let id, initial_input_state = decode_pickled_string f input in  
-    let value, _ = Read.runState (S.unpickle id) initial_input_state in
-      value
-
-  let from_channel = doUnpickle Dump.from_channel<do_pair>
-  let from_string = doUnpickle Dump.from_string<do_pair>
-  let from_stream = doUnpickle Dump.from_stream<do_pair>
-  let to_channel channel = doPickle (Dump.to_channel<do_pair> channel)
-  let to_buffer buffer = doPickle (Dump.to_buffer<do_pair> buffer)
-  let to_string = doPickle Dump.to_string<do_pair>
+  include P
+  let pickleS obj = 
+    let buffer = Buffer.create 128 (* is there a reasonable value to use here? *) in
+      P.pickle buffer obj;
+      Buffer.sub buffer 0 (Buffer.length buffer)
+      (* should we explicitly deallocate the buffer? *)
+  and unpickleS string = P.unpickle (Stream.of_string string)
 end
 
-module Pickle_from_dump
-  (P : Dump.Dump)
-  (E : Eq.Eq with type a = P.a)
-  (T : Typeable.Typeable with type a = P.a)
-  : Pickle with type a = P.a
-           and type a = T.a = Defaults
-  (struct
-     type a = T.a
-     module T = T
-     module E = E
-     module Comp = Dynmap.Comp(T)(E)
-     open Write
-     module W = Utils(T)(E)
-     let pickle obj = 
-       W.allocate obj 
-         (fun id -> W.store_repr id (Repr.of_string (P.to_string obj)))
-     open Read
-     module U = Utils(T)
-     let unpickle id = 
-       find_by_id id >>= fun (repr, dynopt) ->
-         match dynopt with
-           | None -> 
-               let obj : a = P.from_string (Repr.to_string repr) in
-                 U.update_map id obj >> 
-                   return obj
-           | Some obj -> return (T.throwing_cast obj)
-   end)
 
-module Pickle_unit : Pickle with type a = unit = Pickle_from_dump(Dump.Dump_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
-module Pickle_bool = Pickle_from_dump(Dump.Dump_bool)(Eq.Eq_bool)(Typeable.Typeable_bool)
-module Pickle_int = Pickle_from_dump(Dump.Dump_int)(Eq.Eq_int)(Typeable.Typeable_int)
-module Pickle_char = Pickle_from_dump(Dump.Dump_char)(Eq.Eq_char)(Typeable.Typeable_char)
-module Pickle_float = Pickle_from_dump(Dump.Dump_float)(Eq.Eq_float)(Typeable.Typeable_float)
-module Pickle_num = Pickle_from_dump(Dump.Dump_num)(Eq.Eq_num)(Typeable.Typeable_num)
-module Pickle_string = Pickle_from_dump(Dump.Dump_string)(Eq.Eq_string)(Typeable.Typeable_string) 
-
-module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option = Defaults(
+(* Generic int pickler.  This should work for any (fixed-size) integer
+   type with suitable operations. *)
+module Pickle_intN (P : sig
+                      type t
+                      val zero : t
+                      val logand : t -> t -> t
+                      val logor : t -> t -> t
+                      val lognot : t -> t
+                      val shift_right_logical : t -> int -> t
+                      val shift_left : t -> int -> t
+                      val of_int : int -> t
+                      val to_int : t -> int
+                    end) = Pickle_defaults (
   struct
-    module T = Typeable.Typeable_option (V0.T)
-    module E = Eq.Eq_option (V0.E)
-    module Comp = Dynmap.Comp (T) (E)
-    open Write
-    type a = V0.a option
-    let rec pickle =
-      let module W = Utils(T)(E) in
-      function
-          None as obj ->
-            W.allocate obj
-              (fun id -> W.store_repr id (Repr.make ~constructor:0 []))
-        | Some v0 as obj ->
-            W.allocate obj
-              (fun thisid ->
-                 V0.pickle v0 >>= fun id0 ->
-                   W.store_repr thisid (Repr.make ~constructor:1 [id0]))
-    open Read
-    let unpickle = 
-      let module W = Utils(T) in
-      let f = function
-        | 0, [] -> return None
-        | 1, [id] -> V0.unpickle id >>= fun obj -> return (Some obj)
-        | n, _ -> raise (UnpicklingError
-                           ("Unexpected tag encountered unpickling "
-                            ^"option : " ^ string_of_int n)) in
-        W.sum f
+    type a = P.t
+	(* Format an integer using the following scheme:
+	   
+	   The lower 7 bits of each byte are used to store successive 7-bit
+	   chunks of the integer.
+	   
+	   The highest bit of each byte is used as a flag to indicate
+	   whether the next byte is present.
+	*)
+    open Buffer
+    open Char
+    open P
+
+    let pickle buffer =
+      let rec aux int =
+        (* are there more than 7 bits? *)
+        if logand int (lognot (of_int 0x7f)) <> zero
+        (* if there are, write the lowest 7 bite plus a high bit (to
+           indicate that there's more).  Then recurse, shifting the value
+           7 bits right *)
+        then begin
+          add_char buffer (chr (to_int (logor (of_int 0x80) (logand int (of_int 0x7f)))));
+	  aux (shift_right_logical int 7)
+        end
+          (* otherwise, write the bottom 7 bits only *)
+        else add_char buffer (chr (to_int int))
+      in aux
+
+    and unpickle stream = 
+      let rec aux (int : t) shift = 
+        let c = of_int (code (Stream.next stream)) in
+        let int = logor int (shift_left (logand c (of_int 0x7f)) shift) in
+          if logand c (of_int 0x80) <> zero then aux int (shift + 7)
+          else int 
+      in aux zero 0
+  end
+)
+
+module Pickle_int32 = Pickle_intN (Int32)
+module Pickle_int64 = Pickle_intN (Int64)
+module Pickle_nativeint = Pickle_intN (Nativeint)
+module Pickle_int = Pickle_defaults (
+  struct
+    type a = int
+    let pickle buffer int = Pickle_nativeint.pickle buffer (Nativeint.of_int int)
+    and unpickle stream = Nativeint.to_int (Pickle_nativeint.unpickle stream)
+  end
+)
+
+module Pickle_char = Pickle_defaults (
+  struct
+    type a = char
+    let pickle = Buffer.add_char
+    and unpickle = Stream.next
+  end
+)
+
+module Pickle_string = Pickle_defaults (
+  struct
+    type a = string
+    let pickle buffer string = 
+      begin
+        Pickle_int.pickle buffer (String.length string);
+        Buffer.add_string buffer string
+      end
+    and unpickle stream = 
+      let len = Pickle_int.unpickle stream in
+      let s = String.create len in
+        for i = 0 to len - 1 do
+          String.set s i (Stream.next stream) (* could use String.unsafe_set here *)
+        done;
+        s
+  end
+)
+
+module Pickle_float = Pickle_defaults (
+  struct
+    type a = float
+    let pickle buffer f = Pickle_int64.pickle buffer (Int64.bits_of_float f)
+    and unpickle stream = Int64.float_of_bits (Pickle_int64.unpickle stream)
+  end
+)
+
+module Pickle_list (P : SimplePickle) = Pickle_defaults (
+  (* This could perhaps be more efficient by pickling the list in
+     reverse: this would result in only one traversal being needed
+     during pickling, and no "reverse" being needed during unpickling.
+     (However, pickling would no longer be tail-recursive) *)
+  struct
+    type a = P.a list
+    let pickle buffer items = 
+      begin
+        Pickle_int.pickle buffer (List.length items);
+        List.iter (P.pickle buffer) items
+      end
+    and unpickle stream = 
+      let rec aux items = function
+        | 0 -> items
+        | n -> aux (P.unpickle stream :: items) (n-1)
+      in List.rev (aux [] (Pickle_int.unpickle stream))
+  end
+)
+
+(* This doesn't preserve sharing, so it shouldn't be allowed *)
+module Pickle_ref (P : SimplePickle) = Pickle_defaults (
+  struct
+    type a = P.a ref
+    let pickle buffer item = P.pickle buffer (!item)
+    and unpickle stream = ref (P.unpickle stream)
+  end
+)
+
+module Pickle_option (P : SimplePickle) = Pickle_defaults (
+  struct
+    type a = P.a option
+    let pickle buffer = function
+      | None   -> Pickle_int.pickle buffer 0
+      | Some s -> 
+          begin
+            Pickle_int.pickle buffer 1;
+            P.pickle buffer s
+          end
+    and unpickle stream = 
+      match Pickle_int.unpickle stream with
+        | 0 -> None
+        | 1 -> Some (P.unpickle stream)
+        | i      -> bad_tag i stream "option"
+  end
+)
+
+(* This doesn't preserve sharing, so it shouldn't be allowed *)
+module Pickle_array (P : SimplePickle) = Pickle_defaults (
+  struct
+    type a = P.a array
+        (* rather inefficient *)
+    let pickle buffer items = 
+    let module PList = Pickle_list (P) in
+      PList.pickle buffer (Array.to_list items)
+    and unpickle stream = 
+      let module PList = Pickle_list (P) in
+        Array.of_list (PList.unpickle stream)
+  end
+)
+
+module Pickle_bool = Pickle_defaults (
+  struct
+    type a = bool
+    let pickle buffer = function
+      | false -> Buffer.add_char buffer '\000'
+      | true  -> Buffer.add_char buffer '\001'
+    and unpickle stream =
+      match Stream.next stream with
+        | '\000' -> false
+        | '\001' -> true
+        | c      -> bad_tag (Char.code c) stream "bool"
+  end
+)
+
+module Pickle_unit = Pickle_defaults (
+  struct
+    type a = unit
+    let pickle _ () = ()
+    and unpickle _ = ()
+  end
+)
+
+module Pickle_0 = Pickle_unit
+module Pickle_1
+  (P1 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a)
+      let pickle buffer (p1) = 
+        begin
+          P1.pickle buffer p1;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+          (p1)
+    end)
+module Pickle_2
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a)
+      let pickle buffer (p1, p2) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+          (p1, p2)
+    end)
+module Pickle_3
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a)
+      let pickle buffer (p1, p2, p3) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+          (p1, p2, p3)
+    end)
+
+module Pickle_4
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a)
+      let pickle buffer (p1, p2, p3, p4) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+          (p1, p2, p3, p4)
+    end)
+module Pickle_5
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  (P5 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a * P5.a)
+      let pickle buffer (p1, p2, p3, p4, p5) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+          P5.pickle buffer p5;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+        let p5 = P5.unpickle stream in
+          (p1, p2, p3, p4, p5)
+    end)
+
+module Pickle_6
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  (P5 : SimplePickle)
+  (P6 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a)
+      let pickle buffer (p1, p2, p3, p4, p5, p6) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+          P5.pickle buffer p5;
+          P6.pickle buffer p6;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+        let p5 = P5.unpickle stream in
+        let p6 = P6.unpickle stream in
+          (p1, p2, p3, p4, p5, p6)
+    end)
+module Pickle_7
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  (P5 : SimplePickle)
+  (P6 : SimplePickle)
+  (P7 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a)
+      let pickle buffer (p1, p2, p3, p4, p5, p6, p7) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+          P5.pickle buffer p5;
+          P6.pickle buffer p6;
+          P7.pickle buffer p7;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+        let p5 = P5.unpickle stream in
+        let p6 = P6.unpickle stream in
+        let p7 = P7.unpickle stream in
+          (p1, p2, p3, p4, p5, p6, p7)
+    end)
+module Pickle_8
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  (P5 : SimplePickle)
+  (P6 : SimplePickle)
+  (P7 : SimplePickle)
+  (P8 : SimplePickle)
+  = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a * P8.a)
+      let pickle buffer (p1, p2, p3, p4, p5, p6, p7, p8) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+          P5.pickle buffer p5;
+          P6.pickle buffer p6;
+          P7.pickle buffer p7;
+          P8.pickle buffer p8;
+        end
+      and unpickle stream = 
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+        let p5 = P5.unpickle stream in
+        let p6 = P6.unpickle stream in
+        let p7 = P7.unpickle stream in
+        let p8 = P8.unpickle stream in
+          (p1, p2, p3, p4, p5, p6, p7, p8)
+    end)
+module Pickle_9
+  (P1 : SimplePickle)
+  (P2 : SimplePickle)
+  (P3 : SimplePickle)
+  (P4 : SimplePickle)
+  (P5 : SimplePickle)
+  (P6 : SimplePickle)
+  (P7 : SimplePickle)
+  (P8 : SimplePickle)
+  (P9 : SimplePickle) : Pickle 
+  with type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a * P8.a * P9.a) = Pickle_defaults (
+    struct
+      type a = (P1.a * P2.a * P3.a * P4.a * P5.a * P6.a * P7.a * P8.a * P9.a)
+      let pickle buffer (p1, p2, p3, p4, p5, p6, p7, p8, p9) = 
+        begin
+          P1.pickle buffer p1;
+          P2.pickle buffer p2;
+          P3.pickle buffer p3;
+          P4.pickle buffer p4;
+          P5.pickle buffer p5;
+          P6.pickle buffer p6;
+          P7.pickle buffer p7;
+          P8.pickle buffer p8;
+          P9.pickle buffer p9;
+        end
+      and unpickle stream = 
+        (* NB: Can't use either 
+
+           (P1.unpickle stream, P2.unpickle stream, ... )
+
+           or 
+
+           let p1 = P1.unpickle stream
+           and p2 = P2.unpickle stream
+           ...
+
+           because of unspecified evaluation order 
+        *)
+        let p1 = P1.unpickle stream in
+        let p2 = P2.unpickle stream in
+        let p3 = P3.unpickle stream in
+        let p4 = P4.unpickle stream in
+        let p5 = P5.unpickle stream in
+        let p6 = P6.unpickle stream in
+        let p7 = P7.unpickle stream in
+        let p8 = P8.unpickle stream in
+        let p9 = P9.unpickle stream in
+          (p1, p2, p3, p4, p5, p6, p7, p8, p9)
+    end)
+
+
+module Pickle_num = Pickle_defaults (
+  struct
+    (* TODO: a less wasteful pickler for nums.  A good start would be
+       using half a byte per decimal-coded digit, instead of a whole
+       byte. *)
+    type a = Num.num
+    let pickle buffer n = Pickle_string.pickle buffer (Num.string_of_num n)
+    and unpickle stream = Num.num_of_string (Pickle_string.unpickle stream)
+  end
+)
+
+module Pickle_unpicklable (P : sig type a val tname : string end) = Pickle_defaults ( 
+  struct 
+    type a = P.a
+    let pickle _ _ = failwith ("attempt to pickle a value of unpicklable type : " ^ P.tname)
+    let unpickle _ = failwith ("attempt to unpickle a value of unpicklable type : " ^ P.tname)
+  end
+)
+
+(* Uses Marshal to pickle the values that the parse-the-declarations
+   technique can't reach. *)
+module Pickle_via_marshal (P : sig type a end) = Pickle_defaults (
+(* Rather inefficient. *)
+  struct
+    include P
+    let pickle buffer obj = Buffer.add_string buffer (Marshal.to_string obj [Marshal.Closures])
+    let unpickle stream = 
+      let readn n = 
+        let s = String.create n in
+          for i = 0 to n - 1 do
+            String.set s i (Stream.next stream)
+          done;
+          s
+      in
+      let header = readn Marshal.header_size in
+      let datasize = Marshal.data_size header 0 in
+      let datapart = readn datasize in
+        Marshal.from_string (header ^ datapart) 0
   end)
-
-
-module Pickle_list (V0 : Pickle)
-  : Pickle with type a = V0.a list = Defaults (
-struct
-  module T = Typeable.Typeable_list (V0.T)
-  module E = Eq.Eq_list (V0.E)
-  module Comp = Dynmap.Comp (T) (E)
-  type a = V0.a list
-  open Write
-  module U = Utils(T)(E)
-  let rec pickle = function
-      [] as obj ->
-        U.allocate obj
-          (fun this -> U.store_repr this (Repr.make ~constructor:0 []))
-    | (v0::v1) as obj ->
-        U.allocate obj
-          (fun this -> V0.pickle v0 >>= fun id0 ->
-                          pickle v1 >>= fun id1 ->
-                            U.store_repr this (Repr.make ~constructor:1 [id0; id1]))
-  open Read
-  module W = Utils (T)
-  let rec unpickle id = 
-    let f = function
-      | 0, [] -> return []
-      | 1, [car;cdr] -> 
-          V0.unpickle car >>= fun car ->
-             unpickle cdr >>= fun cdr ->
-               return (car :: cdr)
-      | n, _ -> raise (UnpicklingError
-                         ("Unexpected tag encountered unpickling "
-                          ^"option : " ^ string_of_int n)) in
-      W.sum f id
-end)
-end
-include Pickle  
-
-type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
-    deriving (Pickle)
-
-(* Idea: keep pointers to values that we've serialized in a global
-   weak hash table so that we can share structure with them if we
-   deserialize any equal values in the same process *)
-
-(* Idea: serialize small objects (bools, chars) in place rather than
-   using the extra level of indirection (and space) introduced by ids
-*)
-
-(* Idea: bitwise output instead of bytewise.  Probably a bit much to
-   implement now, but should have a significant impact (e.g. one using
-   bit instead of one byte for two-constructor sums) *)
-
-(* Should we use a different representation for lists?  i.e. write out
-   the length followed by the elements?  we could no longer claim
-   sharing maximization, but it would actually be more efficient in
-   most cases.
-*)
