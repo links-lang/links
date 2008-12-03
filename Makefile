@@ -28,7 +28,7 @@ ifdef POSTGRESQL_LIBDIR
    DB_LIBS    += postgresql
 endif
 
-DERIVING_DIR=deriving-0.1.1
+DERIVING_DIR=deriving
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
