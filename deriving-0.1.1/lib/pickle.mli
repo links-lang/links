@@ -70,3 +70,14 @@ module Pickle_from_dump
   (E : Eq.Eq with type a = P.a)
   (T : Typeable.Typeable with type a = P.a)
   : Pickle with type a = P.a
+
+module Pickle_6 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle) (A6 : Pickle) 
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+module Pickle_5 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a
+module Pickle_4 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a
+module Pickle_3 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a
+module Pickle_2 (A1 : Pickle) (A2 : Pickle)
+  : Pickle with type a = A1.a * A2.a

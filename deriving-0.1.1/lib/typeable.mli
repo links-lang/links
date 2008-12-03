@@ -45,3 +45,13 @@ module Typeable_bool   : Typeable with type a = bool
 module Typeable_string : Typeable with type a = string
 module Typeable_char   : Typeable with type a = char
 
+module Typeable_6 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable) (A6 : Typeable) 
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+module Typeable_5 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a
+module Typeable_4 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a
+module Typeable_3 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a
+module Typeable_2 (A1 : Typeable) (A2 : Typeable)
+  : Typeable with type a = A1.a * A2.a

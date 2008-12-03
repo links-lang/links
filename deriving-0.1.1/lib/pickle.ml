@@ -470,6 +470,142 @@ include Pickle
 type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
     deriving (Pickle)
 
+module Pickle_6 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle) (A6 : Pickle) 
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a = Defaults (
+struct
+  module T = Typeable.Typeable_6 (A1.T) (A2.T) (A3.T) (A4.T) (A5.T) (A6.T)
+  module E = Eq.Eq_6             (A1.E) (A2.E) (A3.E) (A4.E) (A5.E) (A6.E)
+  module Comp = Dynmap.Comp (T) (E)
+  type a = A1.a * A2 .a * A3 .a * A4 .a * A5 .a * A6.a
+  open Write
+  module U = Utils(T)(E)
+  let rec pickle (a1, a2, a3, a4, a5, a6) =
+    assert false
+  open Read
+  module W = Utils(T)
+  let rec unpickle = 
+    W.tuple
+      (function
+         | [a1;a2;a3;a4;a5;a6] -> 
+             (A1.unpickle a1 >>= fun b1 ->
+              A2.unpickle a2 >>= fun b2 ->
+              A3.unpickle a3 >>= fun b3 ->
+              A4.unpickle a4 >>= fun b4 ->
+              A5.unpickle a5 >>= fun b5 ->
+              A6.unpickle a6 >>= fun b6 ->
+                return (b1, b2, b3, b4, b5, b6))
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"6-tuple : " ^ string_of_int (List.length l))))
+end)
+
+module Pickle_5 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a = Defaults (
+struct
+  module T = Typeable.Typeable_5 (A1.T) (A2.T) (A3.T) (A4.T) (A5.T)
+  module E = Eq.Eq_5             (A1.E) (A2.E) (A3.E) (A4.E) (A5.E)
+  module Comp = Dynmap.Comp (T) (E)
+  type a = A1.a * A2 .a * A3 .a * A4 .a * A5 .a
+  open Write
+  module U = Utils(T)(E)
+  let rec pickle (a1, a2, a3, a4, a5) =
+    assert false
+  open Read
+  module W = Utils(T)
+  let rec unpickle =
+    W.tuple 
+      (function
+         | [a1;a2;a3;a4;a5] -> 
+             (A1.unpickle a1 >>= fun b1 ->
+              A2.unpickle a2 >>= fun b2 ->
+              A3.unpickle a3 >>= fun b3 ->
+              A4.unpickle a4 >>= fun b4 ->
+              A5.unpickle a5 >>= fun b5 ->
+                return (b1, b2, b3, b4, b5))
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"5-tuple : " ^ string_of_int (List.length l))))
+end)
+
+module Pickle_4 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a * A4.a = Defaults (
+struct
+  module T = Typeable.Typeable_4 (A1.T) (A2.T) (A3.T) (A4.T)
+  module E = Eq.Eq_4             (A1.E) (A2.E) (A3.E) (A4.E)
+  module Comp = Dynmap.Comp (T) (E)
+  type a = A1.a * A2 .a * A3 .a * A4 .a
+  open Write
+  module U = Utils(T)(E)
+  let rec pickle (a1, a2, a3, a4) =
+    assert false
+  open Read
+  module W = Utils(T)
+  let rec unpickle = 
+    W.tuple
+      (function
+         | [a1;a2;a3;a4] -> 
+             (A1.unpickle a1 >>= fun b1 ->
+              A2.unpickle a2 >>= fun b2 ->
+              A3.unpickle a3 >>= fun b3 ->
+              A4.unpickle a4 >>= fun b4 ->
+                return (b1, b2, b3, b4))
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"4-tuple : " ^ string_of_int (List.length l))))
+end)
+
+module Pickle_3 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle)
+  : Pickle with type a = A1.a * A2.a * A3.a = Defaults (
+struct
+  module T = Typeable.Typeable_3 (A1.T) (A2.T) (A3.T)
+  module E = Eq.Eq_3             (A1.E) (A2.E) (A3.E)
+  module Comp = Dynmap.Comp (T) (E)
+  type a = A1.a * A2 .a * A3 .a
+  open Write
+  module U = Utils(T)(E)
+  let rec pickle (a1, a2, a3) =
+    assert false
+  open Read
+  module W = Utils(T)
+  let rec unpickle = 
+    W.tuple 
+      (function
+         | [a1;a2;a3] -> 
+             (A1.unpickle a1 >>= fun b1 ->
+              A2.unpickle a2 >>= fun b2 ->
+              A3.unpickle a3 >>= fun b3 ->
+                return (b1, b2, b3))
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"3-tuple : " ^ string_of_int (List.length l))))
+end)
+
+module Pickle_2 (A1 : Pickle) (A2 : Pickle)
+  : Pickle with type a = A1.a * A2.a = Defaults (
+struct
+  module T = Typeable.Typeable_2 (A1.T) (A2.T)
+  module E = Eq.Eq_2             (A1.E) (A2.E)
+  module Comp = Dynmap.Comp (T) (E)
+  type a = A1.a * A2 .a
+  open Write
+  module U = Utils(T)(E)
+  let rec pickle (a1, a2) =
+    assert false
+  open Read
+  module W = Utils(T)
+  let rec unpickle = 
+    W.tuple
+      (function
+         | [a1;a2] -> 
+             (A1.unpickle a1 >>= fun b1 ->
+                A2.unpickle a2 >>= fun b2 ->
+                  return (b1, b2))
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"2-tuple : " ^ string_of_int (List.length l))))
+end)
+
+
 (* Idea: keep pointers to values that we've serialized in a global
    weak hash table so that we can share structure with them if we
    deserialize any equal values in the same process *)

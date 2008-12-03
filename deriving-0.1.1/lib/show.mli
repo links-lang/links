@@ -41,3 +41,15 @@ module Show_set
   (O : Set.OrderedType) 
   (K : Show with type a = O.t)
   : Show with type a = Set.Make(O).t
+
+module Show_6 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show) (A6 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+module Show_5 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a
+module Show_4 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a
+module Show_3 (A1 : Show) (A2 : Show) (A3 : Show)
+  : Show with type a = A1.a * A2.a * A3.a
+module Show_2 (A1 : Show) (A2 : Show)
+  : Show with type a = A1.a * A2.a
+

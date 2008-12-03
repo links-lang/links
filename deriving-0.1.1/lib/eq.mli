@@ -26,3 +26,14 @@ module Eq_list (E : Eq)  : Eq with type a = E.a list
 module Eq_option (E : Eq): Eq with type a = E.a option
 module Eq_map_s_t (E : Eq) (M : Map.S) : Eq with type a = E.a M.t
 module Eq_set_s_t  (S : Set.S) : Eq with type a = S.t
+
+module Eq_6 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq) (A6 : Eq) 
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+module Eq_5 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq)
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a
+module Eq_4 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq)
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a
+module Eq_3 (A1 : Eq) (A2 : Eq) (A3 : Eq)
+  : Eq with type a = A1.a * A2.a * A3.a
+module Eq_2 (A1 : Eq) (A2 : Eq)
+  : Eq with type a = A1.a * A2.a

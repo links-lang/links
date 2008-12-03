@@ -208,3 +208,64 @@ type fpclass = Pervasives.fpclass =
 type 'a ref = 'a Pervasives.ref = { mutable contents : 'a; }
     deriving (Show)
 
+
+module Show_6 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show) (A6 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a = Defaults (
+struct
+  type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+  let format formatter (a1, a2, a3, a4, a5, a6) =
+    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a,@;%a)@]"
+      A1.format a1
+      A2.format a2
+      A3.format a3
+      A4.format a4
+      A5.format a5
+      A6.format a6
+end)
+
+module Show_5 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a = Defaults (
+struct
+  type a = A1.a * A2.a * A3.a * A4.a * A5.a
+  let format formatter (a1, a2, a3, a4, a5) =
+    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a)@]"
+      A1.format a1
+      A2.format a2
+      A3.format a3
+      A4.format a4
+      A5.format a5
+end)
+
+module Show_4 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show)
+  : Show with type a = A1.a * A2.a * A3.a * A4.a = Defaults (
+struct
+  type a = A1.a * A2.a * A3.a * A4.a
+  let format formatter (a1, a2, a3, a4) =
+    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a)@]"
+      A1.format a1
+      A2.format a2
+      A3.format a3
+      A4.format a4
+end)
+
+module Show_3 (A1 : Show) (A2 : Show) (A3 : Show)
+  : Show with type a = A1.a * A2.a * A3.a = Defaults (
+struct
+  type a = A1.a * A2.a * A3.a
+  let format formatter (a1, a2, a3) =
+    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a)@]"
+      A1.format a1
+      A2.format a2
+      A3.format a3
+end)
+
+module Show_2 (A1 : Show) (A2 : Show)
+  : Show with type a = A1.a * A2.a = Defaults (
+struct
+  type a = A1.a * A2.a
+  let format formatter (a1, a2) =
+    Format.fprintf formatter "@[<hov 1>(%a,@;%a)@]"
+      A1.format a1
+      A2.format a2
+end)
+

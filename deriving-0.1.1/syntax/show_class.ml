@@ -9,6 +9,7 @@ struct
   include Base.InContext(L)
   
   let classname = "Show"
+  let tuple_functors = [2;3;4;5;6]
     
   let wrap (ctxt:Base.context) (decl : Type.decl) matches = <:module_expr< 
   struct type a = $atype ctxt decl$
@@ -56,11 +57,15 @@ struct
 
     method tuple ctxt args = 
       let n = List.length args in
-      let tpatt, _ = tuple n in
-      <:module_expr< Defaults (struct type a = $atype_expr ctxt (`Tuple args)$
-                            let format formatter $tpatt$ = 
-                              $self#nargs ctxt 
-                                (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ end) >>
+        if List.mem n tuple_functors then
+          apply_functor <:module_expr< $uid:Printf.sprintf "Show_%d" n$ >>
+            (List.map (self#expr ctxt) args)
+        else
+          let tpatt, _ = tuple n in
+          <:module_expr< Defaults (struct type a = $atype_expr ctxt (`Tuple args)$
+                                let format formatter $tpatt$ = 
+                                  $self#nargs ctxt 
+                                    (List.mapn (fun t n -> Printf.sprintf "v%d" n, t) args)$ end) >>
 
     method case ctxt : Type.summand -> Ast.match_case = 
       fun (name, args) ->

@@ -72,3 +72,58 @@ struct
   type a = Num.num
   let eq = Num.eq_num
 end
+
+module Eq_6 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq) (A6 : Eq) 
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a =
+struct
+  type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+  let eq (l1, l2, l3, l4, l5, l6) (r1, r2, r3, r4, r5, r6) =
+    A1.eq l1 r1 &&
+    A2.eq l2 r2 &&
+    A3.eq l3 r3 &&
+    A4.eq l4 r4 &&
+    A5.eq l5 r5 &&
+    A6.eq l6 r6
+end
+
+module Eq_5 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq) 
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a =
+struct
+  type a = A1.a * A2.a * A3.a * A4.a * A5.a
+  let eq (l1, l2, l3, l4, l5) (r1, r2, r3, r4, r5) =
+    A1.eq l1 r1 &&
+    A2.eq l2 r2 &&
+    A3.eq l3 r3 &&
+    A4.eq l4 r4 &&
+    A5.eq l5 r5
+end
+
+module Eq_4 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq)
+  : Eq with type a = A1.a * A2.a * A3.a * A4.a =
+struct
+  type a = A1.a * A2.a * A3.a * A4.a
+  let eq (l1, l2, l3, l4) (r1, r2, r3, r4) =
+    A1.eq l1 r1 &&
+    A2.eq l2 r2 &&
+    A3.eq l3 r3 &&
+    A4.eq l4 r4
+end
+
+module Eq_3 (A1 : Eq) (A2 : Eq) (A3 : Eq)
+  : Eq with type a = A1.a * A2.a * A3.a =
+struct
+  type a = A1.a * A2.a * A3.a
+  let eq (l1, l2, l3) (r1, r2, r3) =
+    A1.eq l1 r1 &&
+    A2.eq l2 r2 &&
+    A3.eq l3 r3
+end
+
+module Eq_2 (A1 : Eq) (A2 : Eq)
+  : Eq with type a = A1.a * A2.a =
+struct
+  type a = A1.a * A2.a
+  let eq (l1, l2) (r1, r2) =
+    A1.eq l1 r1 &&
+    A2.eq l2 r2
+end

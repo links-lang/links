@@ -23,11 +23,15 @@ struct
     in <:module_expr< struct type a = $atype ctxt decl$
           let type_rep = TypeRep.mkFresh $str:mkName tname$ $paramList$ end >>
 
-  let tup ctxt ts mexpr expr = 
+  let tup ctxt ts mexpr (expr : _ -> _ -> _)  = 
       let params = 
         expr_list 
-          (List.map (fun t -> <:expr< let module M = $expr ctxt t$ 
-                                       in $mexpr$ >>) ts) in
+          (List.map (fun t ->
+                       match mexpr with
+                         | <:expr< M.$lid:id$ >> -> 
+                           mproject (expr ctxt t) id
+                         | _ ->
+                             <:expr< let module M = $expr ctxt t$ in $mexpr$ >>) ts) in
         <:module_expr< Defaults(struct type a = $atype_expr ctxt (`Tuple ts)$
                                        let type_rep = Typeable.TypeRep.mkTuple $params$ end) >>
 
@@ -43,7 +47,7 @@ struct
         (fun (tags, extends) -> function
            | Tag (l, None)  -> <:expr< ($str:l$, None) :: $tags$ >>, extends
            | Tag (l,Some t) ->
-               <:expr< ($str:l$, Some $mproject (self#expr ctxt t) "type_rep"$) ::$tags$ >>,
+               <:expr< ($str:l$, Some $mproject (self#expr ctxt t) "type_rep"$) :: $tags$ >>,
                extends
            | Extends t -> 
                tags,

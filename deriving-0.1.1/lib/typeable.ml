@@ -230,3 +230,47 @@ module Typeable_ref(A : Typeable) : Typeable with type a = A.a ref =
                   let type_rep = TypeRep.mkFresh "Primitive.ref" [A.type_rep]
            end)
 
+module Typeable_6 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable) (A6 : Typeable) 
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a =
+  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
+                  let type_rep = TypeRep.mkTuple [A1.type_rep;
+                                                  A2.type_rep;
+                                                  A3.type_rep;
+                                                  A4.type_rep;
+                                                  A5.type_rep;
+                                                  A6.type_rep]
+           end)
+
+module Typeable_5 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a =
+  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a * A5.a
+                  let type_rep = TypeRep.mkTuple [A1.type_rep;
+                                                  A2.type_rep;
+                                                  A3.type_rep;
+                                                  A4.type_rep;
+                                                  A5.type_rep]
+           end)
+
+module Typeable_4 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a * A4.a =
+  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a
+                  let type_rep = TypeRep.mkTuple [A1.type_rep;
+                                                  A2.type_rep;
+                                                  A3.type_rep;
+                                                  A4.type_rep]
+           end)
+
+module Typeable_3 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable)
+  : Typeable with type a = A1.a * A2.a * A3.a =
+  Defaults(struct type a = A1.a * A2.a * A3.a
+                  let type_rep = TypeRep.mkTuple [A1.type_rep;
+                                                  A2.type_rep;
+                                                  A3.type_rep]
+           end)
+
+module Typeable_2 (A1 : Typeable) (A2 : Typeable)
+  : Typeable with type a = A1.a * A2.a =
+  Defaults(struct type a = A1.a * A2.a
+                  let type_rep = TypeRep.mkTuple [A1.type_rep;
+                                                  A2.type_rep]
+           end)

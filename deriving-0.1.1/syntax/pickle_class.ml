@@ -8,6 +8,8 @@ struct
   include Base.InContext(L)
   module UT = Type.Untranslate(L)
 
+  let tuple_functors = [2;3;4;5;6]
+
   let typeable_defaults t = <:module_expr< Typeable.Defaults($t$) >>
 
   module Typeable = Typeable_class.InContext(L)
@@ -95,38 +97,42 @@ struct
 
     method tuple ctxt ts = 
       let nts = List.length ts in
-      let ids = (List.mapn (fun t n -> (Printf.sprintf "id%d" n, t)) ts) in
-      let eidlist = expr_list (List.map (fun (id,_) -> <:expr< $lid:id$ >>) ids) in
-      let pidlist = patt_list (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
-      let tpatt,texpr = tuple ~param:"id" nts in
-      let tymod = Typeable.tup ctxt ts <:expr< M.T.type_rep >> (self#expr)
-      and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
-      and picklers =
-        let inner = 
-          List.fold_right
-            (fun (id,t) expr -> 
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "pickle"$ $lid:id$) 
-                            (fun $lid:id$ -> $expr$) >>)
-            ids
-            <:expr< W.store_repr this (Repr.make $eidlist$) >> in
-          [ <:match_case< ($tpatt$ as obj) -> 
-                  W.allocate obj (fun this -> $inner$) >>]
-
-      and unpickler = 
-        let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
-        let inner = 
-          List.fold_right 
-            (fun (id,t) expr ->
-               <:expr< $bind$ ($mproject (self#expr ctxt t) "unpickle"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
-            ids
-            <:expr< return $texpr$ >> in
-          <:expr< W.tuple
-            (function
-               | $pidlist$ -> $inner$
-               | _ -> raise (UnpicklingError $str:msg$)) >>
-      and atype = atype_expr ctxt (`Tuple ts) in
-        <:module_expr< Pickle.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler$) >>
-
+        if List.mem nts tuple_functors then
+          apply_functor <:module_expr< $uid:Printf.sprintf "Pickle_%d" nts$ >> 
+            (List.map (self#expr ctxt) ts)
+        else
+          let ids = (List.mapn (fun t n -> (Printf.sprintf "id%d" n, t)) ts) in
+          let eidlist = expr_list (List.map (fun (id,_) -> <:expr< $lid:id$ >>) ids) in
+          let pidlist = patt_list (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
+          let tpatt,texpr = tuple ~param:"id" nts in
+          let tymod = Typeable.tup ctxt ts <:expr< M.T.type_rep >> (self#expr)
+          and eqmod = Eq.tup ctxt ts <:expr< M.E.eq >> (self#expr)
+          and picklers =
+            let inner = 
+              List.fold_right
+                (fun (id,t) expr -> 
+                   <:expr< $bind$ ($mproject (self#expr ctxt t) "pickle"$ $lid:id$) 
+                              (fun $lid:id$ -> $expr$) >>)
+                ids
+              <:expr< W.store_repr this (Repr.make $eidlist$) >> in
+              [ <:match_case< ($tpatt$ as obj) -> 
+                               W.allocate obj (fun this -> $inner$) >>]
+                
+          and unpickler = 
+            let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
+            let inner = 
+              List.fold_right 
+                (fun (id,t) expr ->
+                   <:expr< $bind$ ($mproject (self#expr ctxt t) "unpickle"$ $lid:id$) (fun $lid:id$ -> $expr$) >>)
+                ids
+              <:expr< return $texpr$ >> in
+              <:expr< W.tuple
+                      (function 
+                         | $pidlist$ -> $inner$
+                         | _ -> raise (UnpicklingError $str:msg$)) >>
+          and atype = atype_expr ctxt (`Tuple ts) in
+            <:module_expr< Pickle.Defaults($wrap ~ctxt ~atype ~tymod ~eqmod ~picklers ~unpickler$) >>
+              
     method polycase ctxt tagspec : Ast.match_case = match tagspec with
     | Tag (name, None) -> <:match_case<
         (`$name$ as obj) ->
@@ -180,9 +186,13 @@ struct
         let extension_case = self#extension ctxt tname extensions in
           <:expr< fun id -> W.sum (function $list:tag_cases @ [extension_case]$) id >>
       in
-        wrap ~ctxt ~atype:(atype ctxt decl) ~tymod:(typeable_instance ctxt tname)
+        wrap
+          ~ctxt
+          ~atype:(atype ctxt decl)
+          ~tymod:(typeable_instance ctxt tname)
           ~eqmod:(eq_instance ctxt tname)
-          ~picklers:(List.map (self#polycase ctxt) tags) ~unpickler
+          ~picklers:(List.map (self#polycase ctxt) tags)
+          ~unpickler
 
     method case ctors ctxt (name, params') n : Ast.match_case * Ast.match_case = 
     let nparams = List.length params' in
@@ -217,18 +227,23 @@ struct
   method sum ?eq ctxt (tname,_,_,_,_ as decl) summands =
     let nctors = List.length summands in
     let picklers, unpicklers = List.split (List.mapn (self#case nctors ctxt) summands) in
-    wrap ~ctxt ~atype:(atype ctxt decl)
+    wrap
+      ~ctxt
+      ~atype:(atype ctxt decl)
       ~tymod:(typeable_instance ctxt tname)
       ~eqmod:(eq_instance ctxt tname)
       ~picklers
       ~unpickler:<:expr< fun id -> 
-        let f = function $list:unpicklers$ 
-                 | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
-                                                  ^tname^": "$^ string_of_int n))
-        in W.sum f id >>
+                         let f = function
+                                  $list:unpicklers$ 
+                                 | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
+                                                                  ^tname^": "$^ string_of_int n))
+                         in W.sum f id >>
 
   method record ?eq ctxt (tname,_,_,_,_ as decl) (fields : Type.field list) = 
-      wrap ~ctxt ~atype:(atype ctxt decl) 
+      wrap
+        ~ctxt
+        ~atype:(atype ctxt decl) 
         ~picklers:(pickle_record ctxt decl fields (self#expr))
         ~unpickler:(unpickle_record ctxt decl fields (self#expr))
         ~tymod:(typeable_instance ctxt tname)
