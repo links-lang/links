@@ -94,4 +94,4 @@ stdout : foo<a/><b>bar</b>fubar : Xml
 
 Labelization bug
 (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
-stdout : @.* : Xml
+stdout : @.* : \[XmlItem\]

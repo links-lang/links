@@ -434,7 +434,9 @@ tab () ^ code lexpr ^ nl() ^
 "has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the argument passed to it has type" ^ nl() ^
-tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ ".")
+tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
+"and the current mailbox type is" ^ nl() ^
+tab() ^ code (show_type (TypeUtils.mailbox_type rt)) ^ ".")
 
     let infix_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
@@ -445,7 +447,9 @@ tab () ^ code (show_type lt) ^ nl () ^
 "while the arguments passed to it have types" ^ nl() ^
 tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
 "and" ^ nl() ^
-tab () ^ code (show_type (List.hd (List.tl (TypeUtils.arg_types rt)))) ^ ".")
+tab () ^ code (show_type (List.hd (List.tl (TypeUtils.arg_types rt)))) ^ nl() ^
+"and the current mailbox type is" ^ nl() ^
+tab() ^ code (show_type (TypeUtils.mailbox_type rt)) ^ ".")
 
     let fun_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
@@ -457,7 +461,9 @@ tab () ^ code (show_type lt) ^ nl () ^
 String.concat
 (nl() ^ "and" ^ nl())
 (List.map (fun t ->
-             tab() ^ code (show_type t)) (TypeUtils.arg_types rt)) ^ ".")
+             tab() ^ code (show_type t)) (TypeUtils.arg_types rt)) ^ nl() ^
+"and the current mailbox type is" ^ nl() ^
+tab() ^ code (show_type (TypeUtils.mailbox_type rt)) ^ ".")
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "XML attributes" t l

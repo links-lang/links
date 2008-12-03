@@ -127,17 +127,20 @@ let print_value rtype value =
                  else "")
 
 (** optimise and evaluate a program *)
-let process_program ?(printer=print_value) (valenv, nenv, typingenv) (program, t) =
+let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   (* TODO: the optimise part *)
 (*
   print_string ((Ir.Show_program.show program)^"\n");
   print_endline;
 *)
+  let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) program in
+  let valenv = Value.with_closures valenv closures in
+
   let valenv, v = lazy (Evalir.run_program valenv program)
     <|measure_as|> "run_program"
   in
     printer t v;
-    (valenv, nenv, typingenv), v
+    (valenv, nenv, tyenv), v
 
 (* Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =

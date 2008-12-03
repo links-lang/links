@@ -355,7 +355,8 @@ let globals (env, closures) =
                  match scope with
                    | _ -> IntMap.add name v globals
                    | _ -> globals) env (IntMap.empty), closures
-let with_closures (env, _) closures = (env, closures)
+let with_closures (env, closures') closures =
+  (env, IntMap.fold IntMap.add closures closures')
 
 let string_as_charlist s : t =
   `List (List.map (fun x -> (`Char x)) (explode s))
