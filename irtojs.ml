@@ -437,12 +437,23 @@ struct
   let lookup env x = IntMap.find x env
 end
 
-
 let bind_continuation kappa body =
   match kappa with
     | Var _ -> body kappa
-    | _ -> Bind ("_kappa", kappa, body (Var "_kappa"))
-
+    | _ ->
+        (* It is important to generate a unique name for continuation bindings because
+           in the JavaScript code:
+           
+           var f = e;
+           var f = function (args) {C[f]};
+           
+           the inner f is bound to function (args) {C[f]} and not e as we
+           might expect in a saner language. (In other words var f =
+           function(args) {body} is just syntactic sugar for function
+           f(args) {body}.)
+        *)
+        let k = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in
+          Bind (k, kappa, body (Var k))
 
 let apply_yielding (f, args) =
   Call(Var "_yield", f :: args)
