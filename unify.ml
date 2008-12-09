@@ -93,8 +93,8 @@ and eq_rows : (row * row) -> bool =
 and eq_field_envs (lfield_env, rfield_env) =
   let compare_specs = fun a b -> 
     match (a,b) with
-      | `Absent, `Absent -> true
-      | `Present t1, `Present t2 -> eq_types (t1, t2)
+      | (`Absent, t1), (`Absent, t2)
+      | (`Present, t1), (`Present, t2) -> eq_types (t1, t2)
       | _, _ -> false
   in
     StringMap.equal compare_specs lfield_env rfield_env
@@ -376,13 +376,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         (fun label field_spec extension ->
            if StringMap.mem label extending_env then
              (match field_spec, (StringMap.find label extending_env) with
-                | `Present t, `Present t' ->
+                | (`Present, t), (`Present, t')
+                | (`Absent, t), (`Absent, t') ->
                     unify' rec_env (t, t');
                     extension
-                | `Absent, `Absent ->
-                    extension
-                | `Present _, `Absent
-                | `Absent, `Present _ ->
+                | (`Present, _), (`Absent, _)
+                | (`Absent, _), (`Present, _) ->
                     raise (Failure (`PresentAbsentClash (label, lrow, rrow))))
            else
              StringMap.add label field_spec extension
@@ -537,9 +536,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let get_present_labels (field_env, row_var) =
         let rec get_present' rec_vars (field_env, row_var) =
           let top_level_labels = 
-            StringMap.fold (fun label field_spec labels ->
-                              match field_spec with
-                                | `Present _ -> StringSet.add label labels
+            StringMap.fold (fun label (flag, _) labels ->
+                              match flag with
+                                | `Present -> StringSet.add label labels
                                 | `Absent -> labels) field_env StringSet.empty
           in
             StringSet.union top_level_labels 
@@ -587,12 +586,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in 
         (* check that the open row contains no extra fields *)
         StringMap.iter
-          (fun label field_spec ->
+          (fun label (flag, _) ->
              if (StringMap.mem label rigid_field_env') then
                ()
              else
-               match field_spec with
-                 | `Present _ ->
+               match flag with
+                 | `Present ->
                      raise (Failure
                               (`Msg 
                                  ("Rows\n "^ string_of_row rigid_row

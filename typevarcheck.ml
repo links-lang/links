@@ -42,8 +42,8 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                           Unionfind.find row_var = `Closed) ->
                     begin
                       match FieldEnv.find "1" fields with
-                        | `Present t -> isg t
-                        | `Absent -> true
+                        | `Present, t
+                        | `Absent, t -> isg t
                     end
                 | _ ->                  
                     isgr row
@@ -105,8 +105,8 @@ and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
     FieldEnv.fold (fun _ spec result ->
                       match spec with
-                        | `Absent -> result
-                        | `Present t -> result || is_negative bound_vars var t
+                        | `Present, t
+                        | `Absent, t -> result || is_negative bound_vars var t
                    ) field_env false
 and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->
@@ -154,8 +154,8 @@ and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
     FieldEnv.fold (fun _ spec result ->
                       match spec with
-                        | `Absent -> result
-                        | `Present t -> result || is_positive bound_vars var t
+                        | `Present, t
+                        | `Absent, t -> result || is_positive bound_vars var t
                    ) field_env false
 and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->

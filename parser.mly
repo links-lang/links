@@ -11,6 +11,18 @@ let type_variable_counter = ref 0
 let fresh_type_variable : unit -> datatype =
   function () -> 
     incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
+  
+let fresh_rigid_type_variable : unit -> datatype =
+  function () -> 
+    incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter))
+
+let fresh_row_variable : unit -> row_var =
+  function () -> 
+    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter))
+
+let fresh_rigid_row_variable : unit -> row_var =
+  function () -> 
+    incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter))
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -50,7 +62,7 @@ let datatype d = d, None
 
 %token END
 %token EQ IN 
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP
+%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW MINUSQUESTION QUESTIONRARROW VAR OP
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -71,7 +83,7 @@ let datatype d = d, None
 %token <float> UFLOAT 
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG INCLUDE
@@ -639,8 +651,18 @@ just_datatype:
 datatype:
 | mu_datatype                                                  { $1 }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
+                                                                               fresh_rigid_type_variable (),
+                                                                               $3) }
+| parenthesized_datatypes QUESTIONRARROW datatype              { FunctionType ($1,
                                                                                fresh_type_variable (),
                                                                                $3) }
+| parenthesized_datatypes MINUS VARIABLE RARROW datatype       { FunctionType ($1,
+                                                                               RigidTypeVar $3,
+                                                                               $5) }      
+| parenthesized_datatypes
+       MINUSQUESTION VARIABLE RARROW datatype                  { FunctionType ($1,
+                                                                               TypeVar $3,
+                                                                               $5) }      
 | parenthesized_datatypes 
        MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
                                                                                TypeApplication ("Mailbox", [$3]),
@@ -666,7 +688,8 @@ primary_datatype:
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
 | VARIABLE                                                     { RigidTypeVar $1 }
-| QUOTEDVAR                                                    { TypeVar $1 }
+| QUESTIONVAR                                                  { TypeVar $1 }
+| QUESTION                                                     { fresh_type_variable () }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int
@@ -704,13 +727,15 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
-| CONSTRUCTOR MINUS                                            { $1, `Absent }
 | CONSTRUCTOR                                                  { $1, `Present UnitType }
+| CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
+| CONSTRUCTOR MINUS                                            { $1, `Absent (fresh_rigid_type_variable ()) }
+| CONSTRUCTOR MINUS COLON datatype                             { $1, `Absent $4 }
 
 field:
 | record_label COLON datatype                                  { $1, `Present $3 }
-| record_label MINUS                                           { $1, `Absent }
+| record_label MINUS                                           { $1, `Absent (fresh_rigid_type_variable ()) }
+| record_label MINUS COLON datatype                            { $1, `Absent $4 }
 
 record_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -719,7 +744,9 @@ record_label:
 
 row_variable:
 | VARIABLE                                                     { `OpenRigid $1 }
-| QUOTEDVAR                                                    { `Open $1 }
+| UNDERSCORE                                                   { fresh_rigid_row_variable () }
+| QUESTIONVAR                                                  { `Open $1 }
+| QUESTION                                                     { fresh_row_variable () }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 /*

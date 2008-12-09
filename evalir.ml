@@ -299,8 +299,8 @@ module Eval = struct
                     StringMap.fold
                       (fun name t fields->
                          match t with
-                           | `Present t -> (name, t)::fields
-                           | `Absent -> assert false)
+                           | `Present, t -> (name, t)::fields
+                           | `Absent, _ -> assert false)
                       fields
                       []
                 in

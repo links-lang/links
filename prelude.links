@@ -416,7 +416,7 @@ fun assocAll(x,l) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : ((a) -> b, [a]) -> [a]
+sig sortBy : ((a) -b-> c, [a]) -b-> [a]
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -567,7 +567,7 @@ typename MultiXmlContext = ([Xml]) -{O}-> Xml;
 
 typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -{O}-> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) -{O}-> ([CheckedFormBuilder], Gen));
-typename Handler (a) = (a) -> Page;
+typename Handler (a) = (a) -?-> Page;
 
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});

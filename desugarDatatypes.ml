@@ -27,18 +27,20 @@ let typevars =
 object (self)
   inherit SugarTraversals.fold as super
 
+  (* TODO: 
+
+     check that duplicate type variables have the same kind
+  *)
+
   val tyvars : quantifier list = []
   val bound  : quantifier list = []
 
-  method tyvars = Utility.unduplicate (=) tyvars
+  method tyvars = Utility.unduplicate (=) (List.rev tyvars)
 
-  method add tv = 
+  method add tv =
     if List.mem tv bound then self
-    else {< tyvars = tv :: tyvars >}
-
-  method add_all tvs = 
-    let tvs = List.filter (fun tv -> not (List.mem tv bound)) tvs in
-      {< tyvars = tvs @ tyvars >}
+    else
+      {< tyvars = tv :: tyvars >}
 
   method bind tv = {< bound = tv :: bound >}
 
@@ -92,7 +94,7 @@ struct
       | TupleType ks -> 
           let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
           and unit = Types.make_empty_closed_row ()
-          and present (s, x) = (s, `Present x)
+          and present (s, x) = (s, (`Present, x))
           in `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
       | RecordType r -> `Record (row var_env alias_env r)
       | VariantType r -> `Variant (row var_env alias_env r)
@@ -121,8 +123,8 @@ struct
         let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv} alias_env r)) in
           (StringMap.empty, point)
     and fields = map (fun (k, v) -> match v with
-                        | `Absent -> (k, `Absent)
-                        | `Present v -> (k, `Present (datatype var_env alias_env v))) fields 
+                        | `Absent v -> (k, (`Absent, datatype var_env alias_env v))
+                        | `Present v -> (k, (`Present, datatype var_env alias_env v))) fields 
     in fold_right Types.row_with fields seed
 
   let generate_var_mapping (vars : quantifier list) : (Types.quantifier list * var_env) =

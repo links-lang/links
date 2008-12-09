@@ -385,7 +385,7 @@ class map =
     method fieldspec : fieldspec -> fieldspec =
       function
       | `Present _x -> let _x = o#datatype _x in `Present _x
-      | `Absent -> `Absent
+      | `Absent _x -> let _x = o#datatype _x in `Absent _x
       
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Identity -> `Identity
@@ -827,7 +827,9 @@ class fold =
         let o = o#phrase _x_i1 in o
       
     method fieldspec : fieldspec -> 'self_type =
-      function | `Present _x -> let o = o#datatype _x in o | `Absent -> o
+      function
+      | `Present _x -> let o = o#datatype _x in o
+      | `Absent _x -> let o = o#datatype _x in o
       
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Identity -> o
@@ -1342,7 +1344,7 @@ class fold_map =
     method fieldspec : fieldspec -> ('self_type * fieldspec) =
       function
       | `Present _x -> let (o, _x) = o#datatype _x in (o, (`Present _x))
-      | `Absent -> (o, `Absent)
+      | `Absent _x -> let (o, _x) = o#datatype _x in (o, (`Absent _x))
       
     method fieldconstraint :
       fieldconstraint -> ('self_type * fieldconstraint) =

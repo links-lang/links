@@ -226,7 +226,7 @@ let directive_prefix = ['' '@' '$' '%']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' '|' '_' ]
+let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' '|' '_' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 
@@ -245,6 +245,8 @@ rule lex ctxt nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
+  | "-?->"                              { QUESTIONRARROW }
+  | "-?"                                { MINUSQUESTION }
   | "=>"                                { FATRARROW }
   | "-{"                                { MINUSLBRACE }
   | "}->"                               { RBRACERARROW }
@@ -292,7 +294,8 @@ rule lex ctxt nl = parse
                                           with Not_found | NotFound _ -> 
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
-  | "'" def_id as var                   { QUOTEDVAR var }
+  | "?" def_id as var                   { QUESTIONVAR var }
+  | '?'                                 { QUESTION }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse

@@ -40,8 +40,9 @@ let rec directives
     (ignore_envs 
        (fun _ ->
           StringSet.iter (fun n ->
-                       Printf.fprintf stderr " %-16s : %s\n" 
-                         n (Types.string_of_datatype (Env.String.lookup Lib.type_env n)))
+                            let t = Env.String.lookup Lib.type_env n in
+                              Printf.fprintf stderr " %-16s : %s\n" 
+                                n (Types.string_of_datatype t))
             (Env.String.domain Lib.type_env)),
      "list builtin functions and values");
 
@@ -51,8 +52,8 @@ let rec directives
     "typeenv",
     ((fun ((_, _, {Types.var_env = typeenv}) as envs) _ ->
         StringSet.iter (fun k ->
-                Printf.fprintf stderr " %-16s : %s\n"
-                  k (Types.string_of_datatype (Env.String.lookup typeenv k)))
+                          let t = Env.String.lookup typeenv k in
+                            Printf.fprintf stderr " %-16s : %s\n" k (Types.string_of_datatype t))
           (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Lib.type_env));
         envs),
      "display the current type environment");

@@ -60,7 +60,8 @@ type datatype =
     | `Application of (Abstype.t * datatype list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
-and field_spec = [ `Present of datatype | `Absent ]
+and presence_flag  = [ `Present | `Absent ]
+and field_spec = presence_flag * datatype
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var
@@ -104,8 +105,8 @@ val native_string_type : datatype
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
-val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t
-val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t
+(* val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t *)
+(* val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t *)
 
 val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
@@ -229,7 +230,7 @@ val show_mailbox_annotations : bool Settings.setting
 
 (** pretty printing *)
 val string_of_datatype : datatype -> string
-val string_of_datatype_raw : datatype -> string
+(*val string_of_datatype_raw : datatype -> string*)
 val string_of_row : row -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string

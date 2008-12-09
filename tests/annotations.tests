@@ -3,8 +3,8 @@ fun (x) {x} : (a) -> a
 stdout : @fun : \(([a-z]+)\) -> \1
 
 More-specific type annotation with typevars
-fun (x) {x} : ((a)->a) -> ((a)->a)
-stdout : @fun : \(\(([a-z]+)\) -> \1\) -> \(\1\) -> \1
+fun (x) {x} : ((a) -b-> a) -> ((a) -b-> a)
+stdout : @fun : \(\(([a-z]+)\) -[a-z]+-> \1\) -> \(\1\) -[a-z]+-> \1
 
 Too-general type annotation
 fun (x) {x+1} : (a) -> a

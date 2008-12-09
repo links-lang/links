@@ -41,8 +41,8 @@ let split_row name row =
   let t =
     if StringMap.mem name field_env then
       match (StringMap.find name field_env) with
-        | `Present t -> t
-        | `Absent -> 
+        | `Present, t -> t
+        | `Absent, _ -> 
             error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
@@ -60,7 +60,7 @@ let rec split_variant_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
   | `Variant row ->
       let t, row = split_row name row in
-        `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
+        `Variant (make_singleton_closed_row (name, (`Present, t))), `Variant row
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
@@ -118,7 +118,7 @@ let rec table_write_type t = match concrete_type t with
       error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
 
 let inject_type name t =
-  `Variant (make_singleton_open_row (name, `Present t))
+  `Variant (make_singleton_open_row (name, (`Present, t)))
 
 let abs_type _ = assert false
 let app_type _ _ = assert false
@@ -137,11 +137,11 @@ let record_without t names =
         else
           `Record
             (StringMap.mapi
-               (fun name t ->
+               (fun name (flag, t) ->
                   if StringSet.mem name names then
-                    `Absent
+                    `Absent, t
                   else
-                    t)
+                    flag, t)
                fields,
              row_var)
     | _ -> assert false

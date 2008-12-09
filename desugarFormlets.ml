@@ -108,13 +108,13 @@ object (o : 'self_type)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
-              let empty_type = Instantiate.alias "O" [] tycon_env in
+              let empty_mb = Types.make_mailbox_type (Instantiate.alias "O" [] tycon_env) in
               let ft =
                 List.fold_right
                   (fun t ft ->
-                     `Function (Types.make_tuple_type [t], empty_type, ft))
+                     `Function (Types.make_tuple_type [t], empty_mb, ft))
                   ts (tt ts) in
-              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_type)) ts in
+              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_mb)) ts in
                 begin
                   match args with
                     | [] ->
@@ -175,7 +175,7 @@ object (o : 'self_type)
         let e_in = `Formlet (body, yields) in
 (*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
         let dp = Sugartypes.dummy_position in
-        let empty_type = Instantiate.alias "O" [] tycon_env in
+        let empty_mb =  Types.make_mailbox_type (Instantiate.alias "O" [] tycon_env) in
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
@@ -194,8 +194,8 @@ object (o : 'self_type)
             ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
              [body;
               `FnAppl
-                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_type, yields_type)); mb]), dp),
-                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_type], (pss, yields)), dp]), dp])
+                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_mb, yields_type)); mb]), dp),
+                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_mb], (pss, yields)), dp]), dp])
         in
 (*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
           (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)             

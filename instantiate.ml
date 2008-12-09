@@ -62,10 +62,10 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
       let field_env' = StringMap.fold
 	(fun label field_spec field_env' ->
 	   match field_spec with
-	     | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-	     | `Absent ->
+	     | `Present, t -> StringMap.add label (`Present, inst rec_env t) field_env'
+	     | `Absent, t ->
 		 if is_closed then field_env'
-		 else StringMap.add label `Absent field_env'
+		 else StringMap.add label (`Absent, inst rec_env t) field_env'
 	) field_env StringMap.empty in
       let row_var' = inst_row_var rec_env row_var
       in

@@ -67,15 +67,16 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
 and get_field_spec_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
   fun kind bound_vars ->
     function
-      | `Present t -> get_type_args kind bound_vars t
-      | `Absent -> []
+      | `Present, t
+      | `Absent, t -> get_type_args kind bound_vars t
 
 and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
   fun kind bound_vars (field_env, row_var) ->
-    let field_vars = StringMap.fold
-      (fun _ field_spec vars ->
-         get_field_spec_type_args kind bound_vars field_spec @ vars
-      ) field_env [] in
+    let field_vars =
+      StringMap.fold
+        (fun _ field_spec vars ->
+           vars @ get_field_spec_type_args kind bound_vars field_spec
+        ) field_env [] in
     let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
     in
       field_vars @ row_vars
@@ -113,6 +114,23 @@ let get_quantifiers bound_vars = quantifiers_of_type_args -<- (get_type_args `Al
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
+let rigidify_quantifier =
+  function
+    | `TypeVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible var -> Unionfind.change point (`Rigid var)
+            | _ -> assert false
+        end
+    | `RowVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible var -> Unionfind.change point (`Rigid var)
+            | _ -> assert false
+        end
+    | `RigidTypeVar _
+    | `RigidRowVar _ -> ()
+
 (** generalise: 
     Universally quantify any free type variables in the expression.
 *)
@@ -121,6 +139,7 @@ let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = quantifiers_of_type_args type_args in
+    let () = List.iter rigidify_quantifier quantifiers in
     let quantified = Types.for_all (quantifiers, t) in 
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
       ((quantifiers, type_args), quantified)

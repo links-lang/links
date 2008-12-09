@@ -900,7 +900,7 @@ struct
 
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
-(*        Debug.print (Sugartypes.Show_program.show (bindings, body)); *)
+(*     Debug.print (Sugartypes.Show_program.show (bindings, body)); *)
     let body =
       match body with
         | None -> (`RecordLit ([], None), dp)
@@ -908,7 +908,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*          Debug.print (Ir.Show_program.show r);*)
+(*           Debug.print (Ir.Show_program.show r); *)
           r, I.sem_type s
 end
 
