@@ -34,6 +34,9 @@ object ('self)
   method get_var_env     : unit -> Types.environment
   method get_tycon_env   : unit -> Types.tycon_environment
   method get_formlet_env : unit -> Types.environment
+
+  method backup_envs     : Types.environment * Types.tycon_environment * Types.environment
+  method restore_envs    : (Types.environment * Types.tycon_environment * Types.environment) -> 'self
     
   method lookup_type     : name -> Types.datatype
   method lookup_mb       : unit -> Types.datatype
@@ -62,3 +65,4 @@ object ('self)
   method unary_op        : unary_op -> 'self * unary_op * Types.datatype
 end
 
+val fun_mailbox : Types.datatype -> Sugartypes.pattern list list -> Types.datatype

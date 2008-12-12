@@ -143,6 +143,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
 
+    method backup_envs = var_env, tycon_env, formlet_env
+    method restore_envs (var_env, tycon_env, formlet_env) =
+      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env >}
+
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
@@ -218,19 +222,20 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `FunLit (Some argss, lam), t)
       | `Spawn (body, Some inner_mb) ->
           (* bring the inner mailbox type into scope, then restore the
-             outer mailbox type afterwards *)
+             environments afterwards *)
+          let envs = o#backup_envs in
           let outer_mb = o#lookup_mb () in
           let o = o#with_mb inner_mb in
           let (o, body, _) = o#phrase body in
-          let o = o#with_mb outer_mb in
+          let o = o#restore_envs envs in
             (o, (`Spawn (body, Some inner_mb)), inner_mb)
       | `SpawnWait (body, Some inner_mb) ->
           (* bring the inner mailbox type into scope, then restore the
-             outer mailbox type afterwards *)
-          let outer_mb = o#lookup_mb () in
+             environments afterwards *)
+          let envs = o#backup_envs in
           let o = o#with_mb inner_mb in
           let (o, body, body_type) = o#phrase body in
-          let o = o#with_mb outer_mb in
+          let o = o#restore_envs envs in
             (o, `SpawnWait (body, Some inner_mb), body_type)
       | `ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in (o, `ListLit (es, Some t), t)
@@ -245,8 +250,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
             (o, `Iteration (gens, body, cond, orderby), t)
       | `Escape (b, e) ->
+          let envs = o#backup_envs in
           let (o, b) = o#binder b in
           let (o, e, t) = o#phrase e in
+          let o = o#restore_envs envs in
             (o, `Escape (b, e), t)
       | `Section sec -> (o, `Section sec, type_section var_env sec)
       | `Conditional (p, e1, e2) ->
@@ -255,8 +262,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e2, _) = o#phrase e2
           in (o, `Conditional (p, e1, e2), t)
       | `Block (bs, e) ->
+          let envs = o#backup_envs in
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
+          let o = o#restore_envs envs in
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
@@ -495,12 +504,12 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
     method funlit : Types.datatype -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_mb (pss, e) ->
         (* make sure that the right mailbox type is in scope for the
-           body, then restore the outer mailbox type afterwards *)
-        let outer_mb = o#lookup_mb () in
+           body, then restore the environments afterwards *)
+        let envs = o#backup_envs in
         let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
         let o = o#with_mb inner_mb in
         let (o, e, t) = o#phrase e in
-        let o = o#with_mb outer_mb in
+        let o = o#restore_envs envs in
           (o, (pss, e), t)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
