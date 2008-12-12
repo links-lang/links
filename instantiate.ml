@@ -12,6 +12,8 @@ type inst_type_env = meta_type_var IntMap.t
 type inst_row_env = meta_row_var IntMap.t
 type inst_env = inst_type_env * inst_row_env
 
+exception ArityMismatch
+
 let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype -> datatype =
   fun (tenv, renv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
@@ -162,7 +164,7 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
       | `ForAll (vars, _) -> vars
       | _ -> [] in
   let tenv, renv =
-    assert (List.length vars = List.length tyargs);
+    if (List.length vars <> List.length tyargs) then raise ArityMismatch;
     List.fold_right2
       (fun var t (tenv, renv) ->
          match (var, t) with

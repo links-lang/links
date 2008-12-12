@@ -109,6 +109,17 @@ let rec listu :
           let (o, x) = f o x in
           let (o, xs) = listu o f xs in (o, x::xs)
 
+let check_type_application (e, t) k =
+  begin
+    try
+      k ()
+    with Instantiate.ArityMismatch ->
+      prerr_endline ("Arity mismatch in type application");
+      prerr_endline ("Expression: " ^ Show_phrasenode.show e);
+      prerr_endline ("Type: "^Types.string_of_datatype t);
+      raise Instantiate.ArityMismatch
+  end
+
 class transform (env : (Types.environment * Types.tycon_environment)) =
   object (o : 'self_type)
     val var_env = fst env
@@ -118,6 +129,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
     method get_var_env : unit -> Types.environment = fun () -> var_env
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
+
+    method backup_envs = var_env, tycon_env, formlet_env
+    method restore_envs (var_env, tycon_env, formlet_env) =
+      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env >}
 
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
@@ -194,19 +209,20 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             (o, `FunLit (Some argss, lam), t)
       | `Spawn (body, Some inner_mb) ->
           (* bring the inner mailbox type into scope, then restore the
-             outer mailbox type afterwards *)
+             environments afterwards *)
+          let envs = o#backup_envs in
           let outer_mb = o#lookup_mb () in
           let o = o#with_mb inner_mb in
           let (o, body, _) = o#phrase body in
-          let o = o#with_mb outer_mb in
+          let o = o#restore_envs envs in
             (o, (`Spawn (body, Some inner_mb)), inner_mb)
       | `SpawnWait (body, Some inner_mb) ->
           (* bring the inner mailbox type into scope, then restore the
-             outer mailbox type afterwards *)
-          let outer_mb = o#lookup_mb () in
+             environments afterwards *)
+          let envs = o#backup_envs in
           let o = o#with_mb inner_mb in
           let (o, body, body_type) = o#phrase body in
-          let o = o#with_mb outer_mb in
+          let o = o#restore_envs envs in
             (o, `SpawnWait (body, Some inner_mb), body_type)
       | `Query (range, body, Some t) ->
           let (o, range) =
@@ -232,8 +248,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
             (o, `Iteration (gens, body, cond, orderby), t)
       | `Escape (b, e) ->
+          let envs = o#backup_envs in
           let (o, b) = o#binder b in
           let (o, e, t) = o#phrase e in
+          let o = o#restore_envs envs in
             (o, `Escape (b, e), t)
       | `Section sec -> (o, `Section sec, type_section var_env sec)
       | `Conditional (p, e1, e2) ->
@@ -242,8 +260,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, e2, _) = o#phrase e2
           in (o, `Conditional (p, e1, e2), t)
       | `Block (bs, e) ->
+          let envs = o#backup_envs in
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
+          let o = o#restore_envs envs in
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
@@ -251,10 +271,13 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
 (*             Debug.print ("exp: "^Show_phrasenode.show (`InfixAppl ((tyargs, op), e1, e1))); *)
-          let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
-          let (o, e1, _) = o#phrase e1 in
-          let (o, e2, _) = o#phrase e2 in
-            (o, `InfixAppl ((tyargs, op), e1, e2), t)
+            check_type_application
+              (`InfixAppl ((tyargs, op), e1, e2), t)
+              (fun () ->
+                 let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
+                 let (o, e1, _) = o#phrase e1 in
+                 let (o, e2, _) = o#phrase e2 in
+                   (o, `InfixAppl ((tyargs, op), e1, e2), t))
       | `Regex r ->
           let (o, r) = o#regex r in
             (o, `Regex r, Instantiate.alias "Regex" [] tycon_env)
@@ -264,9 +287,12 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
 (*             Debug.print ("exp: "^Show_phrasenode.show (`UnaryAppl ((tyargs, op), e))); *)
-          let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
-          let (o, e, _) = o#phrase e in
-            (o, `UnaryAppl ((tyargs, op), e), t)
+            check_type_application
+              (`UnaryAppl ((tyargs, op), e), t)
+              (fun () ->
+                 let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
+                 let (o, e, _) = o#phrase e in
+                   (o, `UnaryAppl ((tyargs, op), e), t))
       | `FnAppl (f, args) ->
           let (o, f, ft) = o#phrase f in
           let (o, args, _) = list o (fun o -> o#phrase) args in
@@ -278,8 +304,11 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t);*)
 (*             Debug.print ("TAppl: "^Show_phrasenode.show (`TAppl (e, tyargs))); *)
-          let t = Instantiate.apply_type t tyargs in
-            (o, `TAppl (e, tyargs), t)
+            check_type_application
+              (`TAppl (e, tyargs), t)
+              (fun () ->
+                 let t = Instantiate.apply_type t tyargs in
+                   (o, `TAppl (e, tyargs), t))
       | `TupleLit [e] ->
           (* QUESTION:
              
@@ -488,13 +517,11 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       
     method funlit : Types.datatype -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_mb (pss, e) ->
-        (* make sure that the right mailbox type is in scope for the
-           body, then restore the outer mailbox type afterwards *)
-        let outer_mb = o#lookup_mb () in
+        let envs = o#backup_envs in
         let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
         let o = o#with_mb inner_mb in
         let (o, e, t) = o#phrase e in
-        let o = o#with_mb outer_mb in
+        let o = o#restore_envs envs in
           (o, (pss, e), t)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
