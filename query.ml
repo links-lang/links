@@ -42,7 +42,6 @@ type t =
     | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
 
-
 let labels_of_fields fields = StringMap.fold (fun name _ labels -> StringSet.add name labels) fields StringSet.empty
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
@@ -353,20 +352,28 @@ struct
     | `Closure ((xs, body), closure_env), args ->
 (*         Debug.print ("closure: "^string_of_t (`Closure ((xs, body), closure_env))); *)
         let env = env ++ closure_env in
-        let env = List.fold_right2 (fun x arg env -> bind env (x, arg)) xs args env in
+        let env = List.fold_right2 (fun x arg env ->
+                                      Debug.print ("x: "^string_of_int x);
+                                      bind env (x, arg)) xs args env in
           computation env body
     | `Primitive "asList", [xs] ->
         xs
     | `Primitive "Cons", [x; xs] ->
-        reduce_concat env [`Singleton x; xs]
+        reduce_concat [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
-        reduce_concat env [xs; ys]
+        reduce_concat [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
             | `Closure (([x], body), closure_env) ->
+(*                 Debug.print ("f: "^string_of_t f); *)
+(*                 Debug.print ("ConcatMap x: "^string_of_int x); *)
+(*                 Debug.print ("xs: "^string_of_t xs); *)
                 let env = env ++ closure_env in
-                  reduce_for_source env computation (x, xs, body)
+                  reduce_for_source
+                    env
+                    (fun env (x, v, body) -> computation (bind env (x, v)) body)
+                    (x, xs, body)
             | _ -> assert false
         end
     | `Primitive "Map", [f; xs] ->
@@ -374,7 +381,10 @@ struct
           match f with
             | `Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
-                  reduce_for_source env (fun env e -> `Singleton (computation env e)) (x, xs, body)
+                  reduce_for_source
+                    env
+                    (fun env (x, v, body) -> `Singleton (computation (bind env (x, v)) body)) 
+                    (x, xs, body)
             | _ -> assert false
         end
     | `Primitive "SortBy", [f; xs] ->
@@ -412,7 +422,7 @@ struct
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->
-        reduce_if_condition env (c, apply env (t, args), apply env (e, args))
+        reduce_if_condition (c, apply env (t, args), apply env (e, args))
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
     | _ -> eval_error "Application of non-function"
@@ -427,7 +437,8 @@ struct
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _) -> 
+              | `Fun ((f, _) as fb, (_, args, body), _) ->
+(*                   Debug.print ("f: "^string_of_int f); *)
                   computation
                     (bind env (f, `Closure ((List.map fst args, body), env)))
                     (bs, tailcomp)
@@ -458,10 +469,10 @@ struct
         let c = value env c in
         let t = computation env t in
         let e = computation env e in
-          reduce_if_condition env (c, t, e)
+          reduce_if_condition (c, t, e)
             (*     | `Special (`For (x, source, body)) -> *)
             (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
-  and reduce_concat env vs =
+  and reduce_concat vs =
     let vs =
       (concat_map
          (function
@@ -474,14 +485,18 @@ struct
         | vs -> `Concat vs
   and reduce_for_source env eval_body (x, source, body) =
     let rs = reduce_for_source env eval_body in
-    let rb = reduce_for_body env in
+    let rb = reduce_for_body in
       match source with
-        | `Singleton v -> eval_body (bind env (x, v)) body
+        | `Singleton v -> eval_body env (x, v, body)
         | `Concat vs ->
-            reduce_concat env (List.map (fun v -> rs (x, v, body)) vs)
+            reduce_concat (List.map (fun v -> rs (x, v, body)) vs)
         | `If (c, t, e) ->
             assert (e = nil);
-            rb (x, t, reduce_if_condition env (c, eval_body env body, nil))
+            reduce_for_source
+              env
+              (fun env (x, v, body) ->
+                reduce_where_condition (c, eval_body env (x, v, body)))
+              (x, t, body)
         | `For (gs, os, v) ->
             begin
               match rs (x, v, body) with
@@ -490,17 +505,22 @@ struct
             end
         | `Table table ->
             let labels = table_labels table in
-              rb (x, source, eval_body (bind env (x, `Var (x, labels))) body)
+              rb (x, source, eval_body env (x, `Var (x, labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
-  and reduce_for_body env (x, source, body) =
+  and reduce_for_body (x, source, body) =
     match body with
       | `Concat vs ->
-          reduce_concat env (List.map (fun v -> reduce_for_body env (x, source, v)) vs)
+          reduce_concat (List.map (fun v -> reduce_for_body (x, source, v)) vs)
       | `For (gs, os, body) ->
           `For ((x, source)::gs, os, body)
       | _ ->
           `For ([x, source], [], body)
-  and reduce_if_condition env (c, t, e) =
+  and reduce_where_condition (c, t) =
+    assert (is_list t);
+    (*           Debug.print "list if"; *)
+    if t = nil then nil
+    else reduce_if_then (c, t, nil)
+  and reduce_if_condition (c, t, e) =
     (*     Debug.print ("if: "^string_of_t (`If (c, t, e))); *)
     match c with
       | `Constant (`Bool true) -> t
@@ -510,18 +530,18 @@ struct
           if e = nil then
             if t = nil then nil
             else
-              reduce_if_then env (c, t, e)
+              reduce_if_then (c, t, e)
           else
-            reduce_concat env [reduce_if_condition env (c, t, nil); reduce_if_condition env (`Apply ("not", [c]), e, nil)]
+            reduce_concat [reduce_if_condition (c, t, nil); reduce_if_condition (`Apply ("not", [c]), e, nil)]
       | `If (c', t', `Constant (`Bool false)) ->
-          reduce_if_then env (`Apply ("&&", [c'; t']), t, e)
+          reduce_if_then (`Apply ("&&", [c'; t']), t, e)
       | _ ->
-          reduce_if_then env (c, t, e)
-  and reduce_if_then env (c, t, e) =
-    let rt = reduce_if_then env in
+          reduce_if_then (c, t, e)
+  and reduce_if_then (c, t, e) =
+    let rt = reduce_if_then in
       match t with
         | `Concat vs ->
-            reduce_concat env (List.map (fun v -> rt (c, v, e)) vs)
+            reduce_concat (List.map (fun v -> rt (c, v, e)) vs)
         | `For (gs, os, body) ->
             `For (gs, os, rt (c, body, e))
         | `Record then_fields ->
@@ -570,7 +590,7 @@ struct
      comprehension. In this case the IR variable from the for
      comprehension is used to generate the table variable.
      
-     e.g. if the IR variable 1485 then the table variable is t1485
+     e.g. if the IR variable is 1485 then the table variable is t1485
   *)
   let fresh_table_var : unit -> Var.var = Var.fresh_raw_var
   let string_of_table_var var = "t" ^ string_of_int var
@@ -631,6 +651,7 @@ struct
         | `Apply ("+", [v; w]) -> "(" ^ sb v ^ ")" ^ " + " ^ "(" ^ sb w ^ ")"
         | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
         | `Apply ("==", [v; w]) -> "(" ^ sb v ^ ")" ^ " = " ^ "(" ^ sb w ^ ")"
+        | `Apply ("<>", [v; w]) -> "(" ^ sb v ^ ")" ^ " <> " ^ "(" ^ sb w ^ ")"
         | `Apply ("<=", [v; w]) -> "(" ^ sb v ^ ")" ^ " <= " ^ "(" ^ sb w ^ ")"
         | `Apply ("tilde", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
 
