@@ -1124,14 +1124,14 @@ let show_context : context -> context =
    return the corresponding function type *)
 let make_ft ps mailbox_type return_type =
   let pattern_typ (_, _, t) = t in
-  let p::ps = List.rev ps in
   let args =
-    Types.make_tuple_type -<- List.map pattern_typ
+    Types.make_tuple_type -<- List.map pattern_typ in
+  let rec ft =
+    function
+      | [p] -> `Function (args p, mailbox_type, return_type)
+      | p::ps -> `Function (args p, Types.fresh_type_variable (), ft ps)
   in
-    List.fold_right
-      (fun p t -> `Function (args p, Types.fresh_type_variable (), t))
-      ps
-      (`Function (args p, mailbox_type, return_type))
+    ft ps
 
 let rec type_check : context -> phrase -> phrase * Types.datatype = 
   fun context (expr, pos) ->
