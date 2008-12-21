@@ -1227,13 +1227,48 @@ let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
 (* subtyping *)
 let is_sub_type, is_sub_row =
   let module S = TypeVarSet in
+  let rec is_sub_mb (t, t') =
+(*     Debug.print ("mbt: "^string_of_datatype t); *)
+(*     Debug.print ("mbt': "^string_of_datatype t'); *)
+    match t, t' with
+      | `MetaTypeVar point, `MetaTypeVar point' ->
+          begin
+            match Unionfind.find point, Unionfind.find point' with
+              | `Rigid var, `Rigid var'
+              | `Flexible var, `Flexible var' -> var=var'
+              | `Body t, _ -> is_sub_mb (t, t')
+              | _, `Body t -> is_sub_mb (t, t')
+              | _, _ -> false
+          end
+      | `MetaTypeVar point, _ ->
+          begin
+            match Unionfind.find point with
+              | `Rigid _
+              | `Flexible _
+              | `Recursive _ -> false
+              | `Body t -> is_sub_mb (t, t')
+          end
+      | `Application (mb, [_ (*`Alias (("O", _), _)*)]), _
+          when mb.Abstype.id = mailbox.Abstype.id
+          -> true (* HACK *)
+      | _, `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Rigid _
+              | `Flexible _
+              | `Recursive _ -> false
+              | `Body t' -> is_sub_mb (t, t')
+          end
+      | _, _ -> false in
   let rec is_sub_type = fun rec_vars (t, t') ->
+(*     Debug.print ("t: "^string_of_datatype t); *)
+(*     Debug.print ("t': "^string_of_datatype t'); *)
     match t, t' with
       | `Not_typed, `Not_typed -> true
       | `Primitive p, `Primitive q -> p=q
       | `Function (f, m, t), `Function (f', m', t') ->
           is_sub_type rec_vars (f', f)
-          && is_sub_type rec_vars (m, m')
+          && is_sub_mb (m, m')
           && is_sub_type rec_vars (t, t')
       | `Record row', `Record row
       | `Variant row, `Variant row' ->
@@ -1278,6 +1313,7 @@ let is_sub_type, is_sub_row =
               | `Recursive _ -> false
               | `Body t' -> is_sub_type rec_vars (t, t')
           end
+      | `Alias ((name, []), _), `Alias ((name', []), _) when name=name' -> true
       | (`Alias (_, t)), t'
       | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | `ForAll (qs, t), `ForAll (qs', t') ->

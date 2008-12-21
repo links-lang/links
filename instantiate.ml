@@ -102,39 +102,69 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
       inst (IntMap.empty, IntMap.empty)
 
 (** instantiate_typ t
+
     remove any quantifiers and rename bound type vars accordingly
 *)
 let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
-  let rec collapse qs t =
-    match qs, t with
-      | qs, `ForAll (qs', t) -> collapse (qs @ qs') t
-      | [], t -> t
-      | qs, t -> `ForAll (qs, t)
-  in
-    match t with
-      | `ForAll (quantifiers, t) as dtype ->
-	(
-	  let () = Debug.if_set (show_instantiation)
+  match t with
+    | `ForAll (quantifiers, t) as dtype ->
+	let () =
+          Debug.if_set (show_instantiation)
 	    (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
+          
+        let typ var (tenv, renv, tys) =
+          let t = fresh_type_variable () in
+            IntMap.add var t tenv, renv, `Type t :: tys in
 
-          let typ var (tenv, renv, tys) =
-            let t = fresh_type_variable () in
-              IntMap.add var t tenv, renv, `Type t :: tys in
+        let row var (tenv, renv, tys) =
+          let r = fresh_row_variable () in
+            tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
 
-          let row var (tenv, renv, tys) =
-            let r = fresh_row_variable () in
-              tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+	let tenv, renv, tys = List.fold_left
+	  (fun env -> function
+	     | `TypeVar (var, _)
+	     | `RigidTypeVar (var, _) -> typ var env
+	     | `RowVar (var, _)
+	     | `RigidRowVar (var, _) -> row var env
+	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
 
-	  let tenv, renv, tys = List.fold_left
-	    (fun env -> function
-	       | `TypeVar (var, _)
-	       | `RigidTypeVar (var, _) -> typ var env
-	       | `RowVar (var, _)
-	       | `RigidRowVar (var, _) -> row var env
-	    ) (IntMap.empty, IntMap.empty, []) quantifiers in
-          let tys = List.rev tys in
-	    tys, instantiate_datatype (tenv, renv) t)
-      | t -> [], t
+        let tys = List.rev tys in
+	  tys, instantiate_datatype (tenv, renv) t
+    | t -> [], t
+
+
+(** instantiate_rigid t
+    
+    as instantiate_typ, but instantiates the bound type variables with fresh
+    rigid type variables
+*)
+let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
+  match t with
+    | `ForAll (quantifiers, t) as dtype ->
+	let () =
+          Debug.if_set (show_instantiation)
+	    (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in
+          
+        let typ var (tenv, renv, tys) =
+          let t = fresh_rigid_type_variable () in
+            IntMap.add var t tenv, renv, `Type t :: tys in
+
+        let row var (tenv, renv, tys) =
+          let r = fresh_rigid_row_variable () in
+            tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+
+	let tenv, renv, tys = List.fold_left
+	  (fun env -> function
+	     | `TypeVar (var, _)
+	     | `RigidTypeVar (var, _) -> typ var env
+	     | `RowVar (var, _)
+	     | `RigidRowVar (var, _) -> row var env
+	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
+
+        let tys = List.rev tys in
+	  tys, instantiate_datatype (tenv, renv) t
+    | t -> [], t
+
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
@@ -151,6 +181,16 @@ let instantiate : environment -> string -> type_arg list * datatype =
         failwith ("Variable '"^ var ^ "' does not refer to a declaration")
     in
       instantiate_typ t
+
+let rigid : environment -> string -> type_arg list * datatype =
+  fun env var ->
+    let t =
+      try
+        Env.String.lookup env var
+      with NotFound _ ->
+        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
+    in
+      instantiate_rigid t
         
 let var = instantiate
 let typ = instantiate_typ

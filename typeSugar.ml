@@ -1133,6 +1133,20 @@ let make_ft ps mailbox_type return_type =
   in
     ft ps
 
+let make_ft_poly_curry ps mailbox_type return_type =
+  let pattern_typ (_, _, t) = t in
+  let args =
+    Types.make_tuple_type -<- List.map pattern_typ in
+  let rec ft =
+    function
+      | [p] -> [], `Function (args p, mailbox_type, return_type)
+      | p::ps ->
+          let qs, t = ft ps in
+          let q, m = Types.fresh_type_quantifier () in
+            q::qs, `Function (args p, m, t)
+  in
+    Types.for_all (ft ps)
+
 let rec type_check : context -> phrase -> phrase * Types.datatype = 
   fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -1640,6 +1654,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let e = tc e in
               if Types.is_sub_type (t2, t1) then
                 begin
+(*                   Debug.print ("t1: "^Types.string_of_datatype t1); *)
+(*                   Debug.print ("t2: "^Types.string_of_datatype t2); *)
                   unify ~handle:Gripers.upcast_source (pos_and_typ e, no_pos t2);
                   `Upcast (erase e, t1', t2'), t1
                 end
@@ -1714,12 +1730,13 @@ and type_binding : context -> binding -> binding * context =
           let pats = List.map (List.map tpc) pats in
 
           (* Check that any annotation matches the shape of the function *)
-          let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
           let ft =
             match t with
-              | None -> shape
+              | None ->
+                  make_ft_poly_curry pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ())
               | Some (_, Some ft) ->
                   (* make sure the annotation has the right shape *)
+                  let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
                   let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft) in
                     ft in
 
@@ -1759,11 +1776,23 @@ and type_binding : context -> binding -> binding * context =
 (*                  Debug.print ("A("^name^")"); *)
                  let () = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
-                 let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
                  let inner =
                    match t with
-                     | None -> shape
+                     | None ->
+                         (* Here we're taking advandage of the
+                            following equivalence to make the curried
+                            arrows polymorphic:
+
+                                fun f(x1)...(xk) {e}
+                              ==
+                                fun f(x1)...(xk) {
+                                  fun f(x1)...(xk) {e}
+                                  f(x1)...(xk)
+                                }
+                         *)
+                         make_ft_poly_curry pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ())
                      | Some (_, Some t) ->
+                         let shape = make_ft pats (Types.fresh_type_variable ()) (Types.fresh_type_variable ()) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
 (*                            Debug.print ("ft: "^Types.string_of_datatype ft); *)
                            (* make sure the annotation has the right shape *)
@@ -1794,10 +1823,15 @@ and type_binding : context -> binding -> binding * context =
 (*                        Debug.print ("ft(1): "^Types.string_of_datatype (Env.lookup body_env name)); *)
                       let body = type_check (bind_var context' (mailbox, mt)) body in
                       let shape = make_ft pats mt (typ body) in
-                      let _, ft = Utils.instantiate context'.var_env name in
-(*                         Debug.print ("ft(2): "^Types.string_of_datatype (Env.lookup body_env name)); *)
-                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
-                        ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
+(*                         Debug.print ("shape: "^Types.string_of_datatype shape); *)
+                        (* it is important to instantiate with rigid
+                           type variables in order to ensure that the
+                           inferred type is consistent with any
+                           annotation *)
+                        let _, ft = Instantiate.rigid context'.var_env name in
+(*                           Debug.print ("ft(2): "^Types.string_of_datatype ft); *)
+                          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+                            ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
@@ -1827,7 +1861,8 @@ and type_binding : context -> binding -> binding * context =
                            let outer = Instantiate.freshen_quantifiers outer in
                              (inner, extras), outer, tyvars in
 
-(*                      Debug.print ("inner: "^Types.string_of_datatype inner); *)
+(*                      Debug.print ("typ body: "^Types.string_of_datatype (typ body)); *)
+(*                      Debug.print ("inner: "^Types.string_of_datatype (fst inner)); *)
 (*                      Debug.print ("outer: "^Types.string_of_datatype outer); *)
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in

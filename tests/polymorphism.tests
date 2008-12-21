@@ -39,7 +39,8 @@ stdout : @fun : \([a-z]\) -> Int
 
 Polymorphic mutual recursion [4]
 sig f : (a) -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) -> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } f
-stdout : @fun : \([a-z]\) -> Int
+stderr : @..*
+exit : 1
 
 Polymorphic row recursion
 sig h : ((|a)) ->  Int fun h(x) {h((x,x))} h
@@ -65,3 +66,12 @@ Value restriction
 sig f : (a) -> a var f = id(id); f
 stderr : @..*
 exit : 1
+
+Overly general signatures
+sig id : (a) -> b fun id(x) {x}
+stderr : @..*
+exit : 1
+
+Polymorphic effects for curried recursive functions
+fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
+stdout : fun : ((a) -b-> (c) -b-> d) -> ([a]) -> ([c]) -b-> [d]

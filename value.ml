@@ -506,11 +506,11 @@ let marshal_continuation (c : continuation) : string =
 
 let marshal_value : t -> string =
   (fun v ->
-     Debug.print "marshalling value";
+(*      Debug.print "marshalling value"; *)
      let compressed_v = compress_t v in
      let r =
        (compress_t ->- Pickle_compressed_t.pickleS ->- base64encode)(v) in
-       Debug.print "marshalled value";
+(*        Debug.print "marshalled value"; *)
        r)
 
 exception UnrealizableContinuation
