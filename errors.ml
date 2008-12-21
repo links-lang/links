@@ -163,7 +163,7 @@ let rec format_exception_html = function
         mapstrcat "</pre><pre class=\"typeError\">" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
         "</pre> have type(s) <code class=\"typeError\">" ^ 
         mapstrcat "</code><pre class=\"typeError\">" (indent 2 -<- xml_escape -<- string_of_datatype) paramtype ^
-        "</code> and cannot be passed to function <pre class=\"typeError\">"^ xml_escape(fexpr) ^
+        "</pre> and cannot be passed to function <pre class=\"typeError\">"^ xml_escape(fexpr) ^
         (* TBD: report the error in terms of argument types ? *)
         "</pre>which has type <code class=\"typeError\">"^ 
         xml_escape(string_of_datatype fntype) ^ "</code>"
