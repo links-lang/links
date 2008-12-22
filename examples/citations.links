@@ -64,16 +64,52 @@ fun getPapersAndCollaborators(author) server {
         [(id=p.id, title=p.title)]
     };
 
+  # return all papers for which authorid is a co-author
+  fun lookupPapers(authorid) {
+    for (var r <-- paperauthorTable)
+      where (r.authorid == authorid)
+      [(paperid=r.paperid)]
+  }
+
+  # return the authors of paper p satisfying the predicate f
+  fun lookupAuthors(p, f) {
+    for (var r <-- paperauthorTable)
+      where (p.paperid == r.paperid && f(r.authorid))
+      [(id=r.authorid)]
+  }
+
+  # return the details for author c
+  fun lookupAuthorDetails(c) {
+    for (var a <-- authorsTable)
+      where (c.id == a.id)
+      [(id=a.id, name=a.name)]
+  }
+
   var collaborators =
     query {
-      for (var r <-- paperauthorTable)
-      for (var q <-- paperauthorTable)
-      for (var a <-- authorsTable)
-       where (r.authorid == author.id &&
-              r.paperid == q.paperid && not (q.authorid == author.id) &&
-              q.authorid == a.id)
-         [(id=a.id, name=a.name)]
+      # papers written by author.id
+      var papers = lookupPapers(author.id);
+
+      # collaborators == authors \ {author.id}
+      var collaborators =
+        for (var p <- papers)
+          lookupAuthors(p, fun (id) {id <> author.id});
+
+      for (var c <- collaborators)
+        lookupAuthorDetails(c)
      };
+
+
+#  var collaborators =
+#    query {
+#      for (var r <-- paperauthorTable)
+#      for (var q <-- paperauthorTable)
+#      for (var a <-- authorsTable)
+#       where (r.authorid == author.id &&
+#              r.paperid == q.paperid && not (q.authorid == author.id) &&
+#              q.authorid == a.id)
+#         [(id=a.id, name=a.name)]
+#     };
 
   (papers, collaborators)
 }

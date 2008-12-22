@@ -39,7 +39,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
               from_gens @ mailbox_gens @ to_gens
         | `Record row
         | `Variant row -> get_row_type_args kind bound_vars row 
-        | `Table (r, w) -> gt r @ gt w
+        | `Table (r, w, n) -> gt r @ gt w @ gt n
         | `Alias ((_, ts), t) ->
             concat_map gt ts @ gt t
         | `ForAll (qs, t) -> 

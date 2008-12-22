@@ -73,7 +73,7 @@ let datatype d = d, None
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
-%token READONLY IDENTITY
+%token READONLY DEFAULT
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -594,7 +594,7 @@ field_constraints:
 
 field_constraint:
 | READONLY                                                     { `Readonly }
-| IDENTITY                                                     { `Identity }
+| DEFAULT                                                      { `Default }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }
@@ -683,7 +683,8 @@ primary_datatype:
                                                                    | ts  -> TupleType ts }
 | LPAREN fields RPAREN                                         { RecordType $2 }
 
-| TABLEHANDLE LPAREN datatype COMMA datatype RPAREN            { TableType ($3, $5) }
+| TABLEHANDLE
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { TableType ($3, $5, $7) }
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }

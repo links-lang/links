@@ -55,7 +55,7 @@ type datatype =
     | `Function of (datatype * datatype * datatype)
     | `Record of row
     | `Variant of row
-    | `Table of datatype * datatype
+    | `Table of datatype * datatype * datatype
     | `Alias of ((string * datatype list) * datatype)
     | `Application of (Abstype.t * datatype list)
     | `MetaTypeVar of meta_type_var 
@@ -205,7 +205,7 @@ val make_list_type : datatype -> datatype
 val make_mailbox_type : datatype -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : datatype * datatype -> datatype
+val make_table_type : datatype * datatype * datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

@@ -896,7 +896,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (** Database functions **)
   "asList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
-   datatype "(TableHandle(r, w)) -> [r]",
+   datatype "(TableHandle(r, w, n)) -> [r]",
   IMPURE);
 
   "insertrows",
@@ -911,7 +911,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                    (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w), [w]) -> ()",
+   datatype "(TableHandle(r, w, n), [w]) -> ()",
   IMPURE);
 
   "InsertReturning",
@@ -929,7 +929,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w), [w], String) -> Int",
+   datatype "(TableHandle(r, w, n), [w], String) -> Int",
   IMPURE);
 
   "updaterows", 
@@ -948,7 +948,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ignore (Database.execute_command query_string db))
                     rows;
                   `Record [])),
-   datatype "(TableHandle(r, w), [(r, w)]) -> ()",
+   datatype "(TableHandle(r, w, n), [(r, w)]) -> ()",
   IMPURE);
 
   "deleterows", 
@@ -963,7 +963,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
                     (Database.execute_command query_string db)
               | _ -> failwith "Internal error: delete row from non-database")),
-   datatype "(TableHandle(r, w), [r]) -> ()",
+   datatype "(TableHandle(r, w, n), [r]) -> ()",
   IMPURE);
 
   "getDatabaseConfig",

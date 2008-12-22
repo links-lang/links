@@ -49,7 +49,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                     isgr row
             end
         | `Variant row -> isgr row
-        | `Table (r, w) -> isg r && isg w
+        | `Table (r, w, n) -> isg r && isg w && isg n
         | `Alias (_, t) -> is_guarded bound_vars var t
         | `Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
@@ -94,7 +94,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `ForAll (qs, t) -> is_negative (bind_quantifiers qs bound_vars) var t
         | `Record row -> isnr row
         | `Variant row -> isnr row
-        | `Table (r, w) -> isn r || isn w
+        | `Table (r, w, n) -> isn r || isn w || isn n
         | `Alias (_, t) -> isn t
         | `Application (_, ts) -> 
             List.exists isn ts
@@ -143,7 +143,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `ForAll (qs, t) -> is_positive (bind_quantifiers qs bound_vars) var t
         | `Record row -> ispr row
         | `Variant row -> ispr row
-        | `Table (r, w) -> isp r || isp w
+        | `Table (r, w, n) -> isp r || isp w || isp n
         | `Alias (_, t) -> isp t
         | `Application (s, ts) ->
             List.exists isp ts

@@ -308,9 +308,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                unify' rec_env (lto, rto))
           | `Record l, `Record r -> unify_rows' rec_env (l, r)
           | `Variant l, `Variant r -> unify_rows' rec_env (l, r)
-          | `Table (lr, lw), `Table (rr, rw) ->
+          | `Table (lr, lw, ln), `Table (rr, rw, rn) ->
               (unify' rec_env (lr, rr);
-               unify' rec_env (lw, rw))
+               unify' rec_env (lw, rw);
+               unify' rec_env (ln, rn))
           | `Application (l, _), `Application (r, _) when l <> r ->
               raise (Failure
                        (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^

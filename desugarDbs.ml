@@ -43,6 +43,7 @@ object (o : 'self_type)
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
+        let needed_type = TypeUtils.table_needed_type table_type in
         let (tb, t) =
           let var = Utility.gensym ~prefix:"_db_" () in
             (var, Some table_type, dp), ((`Var var), dp) in
@@ -64,7 +65,7 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "deleterows", dp), [`Type mb; `Type read_type; `Type write_type]), dp),
+                ((`TAppl ((`Var "deleterows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
                  [t; rows]), dp))
         in
           o, e, Types.unit_type
@@ -73,6 +74,7 @@ object (o : 'self_type)
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
+        let needed_type = TypeUtils.table_needed_type table_type in
         let (tb, t) =
           let var = Utility.gensym ~prefix:"_db_" () in
             (var, Some table_type, dp), ((`Var var), dp) in
@@ -117,7 +119,7 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "updaterows", dp), [`Type mb; `Type read_type; `Type write_type]), dp),
+                ((`TAppl ((`Var "updaterows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
                  [t; row_pairs]), dp))
         in
           o, e, Types.unit_type          
@@ -126,19 +128,20 @@ object (o : 'self_type)
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
+        let needed_type = TypeUtils.table_needed_type table_type in
         let o, rows, _ = o#phrase rows in
         let o, (e : Sugartypes.phrasenode) =
           match returning with
             | None -> 
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "insertrows", dp), [`Type mb; `Type write_type; `Type read_type]), dp),
+                   ((`TAppl ((`Var "insertrows", dp), [`Type write_type; `Type read_type; `Type needed_type; `Type mb]), dp),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in
                   (o,
                    `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type mb; `Type write_type; `Type read_type]), dp),
+                     ((`TAppl ((`Var "InsertReturning", dp), [`Type write_type; `Type read_type; `Type needed_type; `Type mb]), dp),
                       [table; rows; field]))                  
         in
           o, e, Types.unit_type

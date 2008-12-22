@@ -135,7 +135,7 @@ sig
 
   val database : value sem -> tail_computation sem
 
-  val table_handle : value sem * value sem * (datatype * datatype) -> tail_computation sem
+  val table_handle : value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
   val wrong : datatype -> tail_computation sem
 
@@ -453,11 +453,11 @@ struct
   let database s =
     bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
 
-  let table_handle (database, table, (r, w)) =
+  let table_handle (database, table, (r, w, n)) =
     bind database
       (fun database ->
          bind table
-           (fun table -> lift (`Special (`Table (database, table, (r, w))), `Table (r, w))))
+           (fun table -> lift (`Special (`Table (database, table, (r, w, n))), `Table (r, w, n))))
 
   let wrong t = lift (`Special (`Wrong t), t)
 
@@ -717,8 +717,8 @@ struct
               in
                 I.database
                   (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
-          | `TableLit (name, (_, Some (readtype, writetype)), constraints, db) ->
-              I.table_handle (ev db, ev name, (readtype, writetype))
+          | `TableLit (name, (_, Some (readtype, writetype, neededtype)), constraints, db) ->
+              I.table_handle (ev db, ev name, (readtype, writetype, neededtype))
           | `Xml (tag, attrs, attrexp, children) ->
               (* check for duplicates *)
               let () =

@@ -853,12 +853,12 @@ fun preludeOptionKeyed (key, (data,text), selected) {
 
 sig preludeOptionsKeyed : ([(String,(a,String))], a) -> 
                           (Xml, (String) -> [a])
-fun preludeOptionsKeyed(items, default) {
+fun preludeOptionsKeyed(items, def) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
      case (itemKey, item)::items -> {
-       var (xml,r1) =preludeOptionKeyed(itemKey, item, (first(item) == default));
-       var (morexml, r2) = preludeOptionsKeyed(items, default);
+       var (xml,r1) =preludeOptionKeyed(itemKey, item, (first(item) == def));
+       var (morexml, r2) = preludeOptionsKeyed(items, def);
        ((xml++morexml, r1(r2))) }
   }
 }

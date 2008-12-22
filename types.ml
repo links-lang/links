@@ -75,7 +75,7 @@ type typ =
     | `Function of (typ * typ * typ)
     | `Record of row
     | `Variant of row
-    | `Table of typ * typ
+    | `Table of typ * typ * typ
     | `Alias of ((string * typ list) * typ)
     | `Application of (Abstype.t * typ list)
     | `MetaTypeVar of meta_type_var 
@@ -270,7 +270,9 @@ let free_type_vars, free_row_type_vars =
           S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars m; free_type_vars' rec_vars t]
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
-      | `Table (r, w)            -> S.union (free_type_vars' rec_vars r) (free_type_vars' rec_vars w)
+      | `Table (r, w, n)         ->
+          S.union_all
+            [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
       | `Alias ((_, ts), datatype) ->
           S.union (S.union_all (List.map (free_type_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, datatypes) -> S.union_all (List.map (free_type_vars' rec_vars) datatypes)
@@ -503,7 +505,7 @@ let rec datatype_skeleton :  TypeVarSet.t -> datatype -> datatype = fun rec_vars
         `Function (datatype_skeleton rec_vars f, datatype_skeleton rec_vars m, datatype_skeleton rec_vars t)
     | `Record row -> `Record (row_skeleton rec_vars row)
     | `Variant row -> `Variant (row_skeleton rec_vars row)
-    | `Table (r, w) -> `Table (datatype_skeleton rec_vars r, datatype_skeleton rec_vars w)
+    | `Table (r, w, n) -> `Table (datatype_skeleton rec_vars r, datatype_skeleton rec_vars w, datatype_skeleton rec_vars n)
     | `Alias _ -> assert false
     | `Application (s, ts) -> `Application (s, List.map (datatype_skeleton rec_vars) ts)
     | `ForAll _ -> assert false
@@ -553,7 +555,7 @@ let rec is_mailbox_free rec_vars (t : datatype) =
       | `Function (f, m, t) -> imb f && imb m && imb t
       | `Record row
       | `Variant row -> imbr row
-      | `Table (r, w) -> imb r && imb w
+      | `Table (r, w, n) -> imb r && imb w && imb n
       | `Alias ((_, ts), dt) -> List.for_all imb ts && imb dt
       | `Application (t, _) when t.Abstype.id = mailbox.Abstype.id -> false
       | `Application (_, ts) -> List.for_all imb ts
@@ -696,7 +698,7 @@ struct
             (fbtv f) @ (fbtv m) @ (fbtv t)
         | `Record row
         | `Variant row -> free_bound_row_type_vars ~include_aliases bound_vars row
-        | `Table (r, w) -> (fbtv r) @ (fbtv w)
+        | `Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
         | `ForAll (tyvars, body) ->
             let bound_vars, vars =
               List.fold_left
@@ -915,10 +917,11 @@ struct
                   bound_vars tyvars
               in
                 "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-          | `Table (r, w)   ->
+          | `Table (r, w, n)   ->
               "TableHandle(" ^
                 datatype bound_vars p r ^ "," ^
-                datatype bound_vars p w ^ ")"
+                datatype bound_vars p w ^ "," ^
+                datatype bound_vars p n ^ ")"
                 (*
                   QUESTION:
 
@@ -1047,7 +1050,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
           failwith "Not implemented flexible_type_vars for `ForAll yet"
 (*`ForAll (tvars, ftv body)*)
       | `Variant row -> row_flexible_type_vars bound_vars row
-      | `Table (r, w) -> TypeVarMap.superimpose (ftv r) (ftv w)
+      | `Table (r, w, n) -> TypeVarMap.union_all [ftv r; ftv w; ftv n]
       | `Alias ((name, ts), d) -> TypeVarMap.union_all ((ftv d)::(List.map ftv ts))
       | `Application (name, datatypes) -> TypeVarMap.union_all (List.map ftv datatypes)
 and row_flexible_type_vars bound_vars (field_env, row_var) =
@@ -1167,7 +1170,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `Function (f, m, t)      -> union [makeEnv boundvars f; makeEnv boundvars m; makeEnv boundvars t]
       | `Record row              
       | `Variant row             -> makeEnvR boundvars row
-      | `Table (l,r)             -> union [makeEnv boundvars l; makeEnv boundvars r]
+      | `Table (l,r,n)           -> union [makeEnv boundvars l; makeEnv boundvars r; makeEnv boundvars n]
       | `Alias ((name, ts), d)   -> union (List.map (makeEnv boundvars) ts @ [makeEnv boundvars d])
       | `Application (_, ds)     -> union (List.map (makeEnv boundvars) ds)
       | `ForAll (qs, t)          ->
@@ -1378,5 +1381,5 @@ let make_closed_row fields =
 let make_record_type ts = `Record (make_closed_row ts)
 let make_variant_type ts = `Variant (make_closed_row ts)
 
-let make_table_type (r, w) = `Table (r, w)
+let make_table_type (r, w, n) = `Table (r, w, n)
 

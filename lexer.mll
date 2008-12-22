@@ -164,6 +164,7 @@ let keywords = [
  "case"     , CASE;
  "client"   , CLIENT; 
  "database" , DATABASE;
+ "default"  , DEFAULT;
  "delete"   , DELETE;
  "else"     , ELSE; 
  "escape"   , ESCAPE; 
@@ -179,7 +180,6 @@ let keywords = [
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
- "identity" , IDENTITY; 
  "insert"   , INSERT; 
  "mu"       , MU; 
  "native"   , NATIVE;

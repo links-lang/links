@@ -276,7 +276,7 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Table (db, name, (readtype, _)) -> 
+    | `Table (db, name, (readtype, _, _)) -> 
         (match value env db, value env name, readtype with
            | `Database (db, params), name, `Record row ->
                apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))

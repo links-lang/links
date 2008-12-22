@@ -72,7 +72,7 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value 
-  | `Table of (value * value * (Types.datatype * Types.datatype))
+  | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
@@ -503,10 +503,10 @@ struct
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `Table (db, table_name, (rt, wt)) ->
+        | `Table (db, table_name, (rt, wt, nt)) ->
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in
-              `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
+              `Table (db, table_name, (rt, wt, nt)), `Table (rt, wt, nt), o
         | `Query (range, e, t) ->
             let range, o =
               o#optionu

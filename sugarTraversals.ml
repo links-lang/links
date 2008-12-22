@@ -251,10 +251,11 @@ class map =
           let _x = o#phrase _x in
           let y = o#datatype y in 
           let z = o#option 
-            (fun o (l,r) ->
+            (fun o (l,r,s) ->
                let l = o#unknown l in
                let r = o#unknown r in
-                 (l,r)) z in
+               let s = o#unknown s in
+                 (l,r,s)) z in
           let _x_i2 =
             o#list
               (fun o (_x, _x_i1) ->
@@ -388,7 +389,7 @@ class map =
       | `Absent _x -> let _x = o#datatype _x in `Absent _x
       
     method fieldconstraint : fieldconstraint -> fieldconstraint =
-      function | `Readonly -> `Readonly | `Identity -> `Identity
+      function | `Readonly -> `Readonly | `Default -> `Default
       
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -411,9 +412,10 @@ class map =
           let _x = o#list (fun o -> o#datatype) _x in TupleType _x
       | RecordType _x -> let _x = o#row _x in RecordType _x
       | VariantType _x -> let _x = o#row _x in VariantType _x
-      | TableType (_x, _x_i1) ->
+      | TableType (_x, _x_i1, _x_i2) ->
           let _x = o#datatype _x in
-          let _x_i1 = o#datatype _x_i1 in TableType (_x, _x_i1)
+          let _x_i1 = o#datatype _x_i1 in
+          let _x_i2 = o#datatype _x_i2 in TableType (_x, _x_i1, _x_i2)
       | ListType _x -> let _x = o#datatype _x in ListType _x
       | TypeApplication _x ->
           let _x =
@@ -716,9 +718,10 @@ class fold =
           let o = o#phrase _x in
           let o = o#datatype y in
           let o = o#option 
-            (fun o (l, r) ->
+            (fun o (l, r, s) ->
                let o = o#unknown l in
                let o = o#unknown r in
+               let o = o#unknown s in
                  o) z in
           let o =
             o#list
@@ -832,7 +835,7 @@ class fold =
       | `Absent _x -> let o = o#datatype _x in o
       
     method fieldconstraint : fieldconstraint -> 'self_type =
-      function | `Readonly -> o | `Identity -> o
+      function | `Readonly -> o | `Default -> o
       
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -851,8 +854,8 @@ class fold =
       | TupleType _x -> let o = o#list (fun o -> o#datatype) _x in o
       | RecordType _x -> let o = o#row _x in o
       | VariantType _x -> let o = o#row _x in o
-      | TableType (_x, _x_i1) ->
-          let o = o#datatype _x in let o = o#datatype _x_i1 in o
+      | TableType (_x, _x_i1, _x_i2) ->
+          let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
       | ListType _x -> let o = o#datatype _x in o
       | TypeApplication _x ->
           let o =
@@ -1202,9 +1205,10 @@ class fold_map =
                let (o, _x) = o#datatype _x in
                let (o, _x_i1) =
                  o#option
-                   (fun o (_x, _x_i1) ->
+                   (fun o (_x, _x_i1, _x_i2) ->
                       let (o, _x) = o#unknown _x in
-                      let (o, _x_i1) = o#unknown _x_i1 in (o, (_x, _x_i1)))
+                      let (o, _x_i1) = o#unknown _x_i1 in
+                      let (o, _x_i2) = o#unknown _x_i2 in (o, (_x, _x_i1, _x_i2)))
                    _x_i1
                in (o, (_x, _x_i1)))
               _x_i1 in
@@ -1348,7 +1352,7 @@ class fold_map =
       
     method fieldconstraint :
       fieldconstraint -> ('self_type * fieldconstraint) =
-      function | `Readonly -> (o, `Readonly) | `Identity -> (o, `Identity)
+      function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
       
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->
@@ -1379,9 +1383,10 @@ class fold_map =
           in (o, (TupleType _x))
       | RecordType _x -> let (o, _x) = o#row _x in (o, (RecordType _x))
       | VariantType _x -> let (o, _x) = o#row _x in (o, (VariantType _x))
-      | TableType (_x, _x_i1) ->
+      | TableType (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (TableType (_x, _x_i1)))
+          let (o, _x_i1) = o#datatype _x_i1 in
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (TableType (_x, _x_i1, _x_i2)))
       | ListType _x -> let (o, _x) = o#datatype _x in (o, (ListType _x))
       | TypeApplication _x ->
           let (o, _x) =

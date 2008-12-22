@@ -129,9 +129,10 @@ object (o : 'self_type)
 
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
+                   let n = `Type (TypeUtils.table_needed_type t) in
                    let mb = `Type (o#lookup_mb ()) in
 
-                   let e = `FnAppl ((`TAppl ((`Var ("asList"), dp), [r; mb; w]), dp), [e]), dp in
+                   let e = `FnAppl ((`TAppl ((`Var ("asList"), dp), [r; w; n; mb]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
                      o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, t::ts))

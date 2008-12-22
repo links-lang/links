@@ -47,7 +47,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
 	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
 	  | `Record row -> `Record (inst_row rec_env row)
 	  | `Variant row -> `Variant (inst_row rec_env row)
-	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
+	  | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
           | `ForAll (_,t) -> inst rec_env t
           | `Alias ((name, ts), d) -> 
               `Alias ((name, List.map (inst rec_env) ts), inst rec_env d)

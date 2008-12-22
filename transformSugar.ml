@@ -395,10 +395,10 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
             (o, `DatabaseLit (name, (driver, args)), `Primitive `DB)
-      | `TableLit (name, (dtype, Some (read_row, write_row)), constraints, db) ->
+      | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
           let (o, name, _) = o#phrase name in
           let (o, db, _) = o#phrase db in
-            (o, `TableLit (name, (dtype, Some (read_row, write_row)), constraints, db), `Table (read_row, write_row))
+            (o, `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db), `Table (read_row, write_row, needed_row))
       | `DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in

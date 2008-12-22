@@ -83,7 +83,7 @@ type datatype =
   | TupleType       of (datatype list)
   | RecordType      of row
   | VariantType     of row
-  | TableType       of datatype * datatype
+  | TableType       of datatype * datatype * datatype
   | ListType        of datatype
   | TypeApplication of (string * datatype list)
   | PrimitiveType   of Types.primitive
@@ -106,7 +106,7 @@ type quantifier =
     | `RowVar of name | `RigidRowVar of name ]
       deriving (Show)
 
-type fieldconstraint = [ `Readonly | `Identity ]
+type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type constant = Constant.constant
@@ -184,7 +184,7 @@ and phrasenode = [
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list

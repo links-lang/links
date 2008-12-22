@@ -156,6 +156,7 @@ sig
   val update_table : griper
   val update_pattern : griper
   val update_where : griper
+  val update_read : griper
   val update_write : griper
 
   val range_bound : griper
@@ -389,6 +390,14 @@ tab () ^ code (show_type rt))
       with_but2things pos
         "The binding must match the table in an update expression" ("pattern", l) ("row", r)
 
+    let update_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The fields must match the table in an update expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the read row has type" ^ nl () ^
+tab () ^ code (show_type rt))
+
     let update_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
 The fields must match the table in an update expression,
@@ -515,7 +524,7 @@ tab() ^ code (show_type (TypeUtils.mailbox_type rt)) ^ ".")
       fixed_type pos "The body of a table generator" t l
 
     let iteration_table_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
-      let rt = Types.make_table_type (rt, Types.fresh_type_variable ()) in
+      let rt = Types.make_table_type (rt, Types.fresh_type_variable (), Types.fresh_type_variable ()) in
         with_but2things pos
           ("The binding must match the table in a table generator") ("pattern", l) ("expression", (rexpr, rt))
 
@@ -1326,20 +1335,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and name   = tc name in
               `DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive `DB
 
-        | `TableLit (tname, (dtype, Some (read_row, write_row)), constraints, db) ->
+        | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
             let tname = tc tname 
             and db = tc db in
             let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
             and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
-              `TableLit (erase tname, (dtype, Some (read_row, write_row)), constraints, erase db), 
-            `Table (read_row, write_row)
+              `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase db), 
+            `Table (read_row, write_row, needed_row)
         | `DBDelete (pat, from, where) ->
-            let pat  = tpc pat 
-            and from = tc from
-            and read  = `Record (Types.make_empty_open_row ())
-            and write = `Record (Types.make_empty_open_row ()) in
+            let pat  = tpc pat in
+            let from = tc from in
+            let read  = `Record (Types.make_empty_open_row ()) in
+            let write = `Record (Types.make_empty_open_row ()) in
+            let needed = `Record (Types.make_empty_open_row ()) in
             let () = unify ~handle:Gripers.delete_table
-              (pos_and_typ from, no_pos (`Table (read, write))) in
+              (pos_and_typ from, no_pos (`Table (read, write, needed))) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
             let where = opt_map (type_check (context ++ pattern_env pat)) where in
             let () =
@@ -1348,13 +1358,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type
         | `DBInsert (into, values, id) ->
-            let into   = tc into
-            and values = tc values
-            and id = opt_map tc id
-            and read  = `Record (Types.make_empty_open_row ())
-            and write = `Record (Types.make_empty_open_row ()) in
+            let into   = tc into in
+            let values = tc values in
+            let id = opt_map tc id in
+            let read  = `Record (Types.make_empty_open_row ()) in
+            let write = `Record (Types.make_empty_open_row ()) in
+            let needed = `Record (Types.make_empty_open_row ()) in
             let () = unify ~handle:Gripers.insert_table
-              (pos_and_typ into, no_pos (`Table (read, write))) in
+              (pos_and_typ into, no_pos (`Table (read, write, needed))) in
             let () = unify ~handle:Gripers.insert_values (pos_and_typ values, no_pos (Types.make_list_type write)) in
             let () =
               opt_iter
@@ -1362,15 +1373,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                    unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
               `DBInsert (erase into, erase values, opt_map erase id), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
-            let pat  = tpc pat
-            and from = tc from
-            and read =  `Record (Types.make_empty_open_row ())
-            and write = `Record (Types.make_empty_open_row ()) in
+            let pat  = tpc pat in
+            let from = tc from in
+            let read =  `Record (Types.make_empty_open_row ()) in
+            let write = `Record (Types.make_empty_open_row ()) in
+            let needed = `Record (Types.make_empty_open_row ()) in
             let () = unify ~handle:Gripers.update_table
-              (pos_and_typ from, no_pos (`Table (read, write))) in
+              (pos_and_typ from, no_pos (`Table (read, write, needed))) in
+
+            (* the pattern should match the read type *)
             let () = unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read) in
             let context' = context ++ pattern_env pat in
             let where = opt_map (type_check context') where in
+
+            (* check that the where clause is boolean *)
             let () =
               opt_iter
                 (fun e -> unify ~handle:Gripers.update_where (pos_and_typ e, no_pos Types.bool_type)) where in
@@ -1385,6 +1401,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                        (name, exp)::set, StringMap.add name (`Present, typ exp) field_env)
                 set ([], StringMap.empty) in
 
+            (* all fields being updated must be present in the read table *)
+            let () = unify ~handle:Gripers.update_read
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable ()))) in
+
+            (* all fields being updated must be present in the write table *)
             let () = unify ~handle:Gripers.update_write
               (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable ())))
             in
@@ -1551,7 +1572,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                             context ++ pattern_env pattern)
                      | `Table (pattern, e) ->
                          let a = Types.fresh_type_variable () in
-                         let tt = Types.make_table_type (a, Types.fresh_type_variable ()) in
+                         let tt = Types.make_table_type (a, Types.fresh_type_variable (), Types.fresh_type_variable ()) in
                          let pattern = tpc pattern
                          and e = tc e in
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in

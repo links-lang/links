@@ -65,7 +65,7 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value
-  | `Table of value * value * (Types.datatype * Types.datatype)
+  | `Table of value * value * (Types.datatype * Types.datatype * Types.datatype)
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of value ]
 and computation = binding list * tail_computation

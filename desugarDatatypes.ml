@@ -98,7 +98,7 @@ struct
           in `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
       | RecordType r -> `Record (row var_env alias_env r)
       | VariantType r -> `Variant (row var_env alias_env r)
-      | TableType (r, w) -> `Table (datatype var_env r, datatype var_env w)
+      | TableType (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
       | ListType k -> `Application (Types.list, [datatype var_env k])
       | TypeApplication (tycon, ts) ->
           begin match SEnv.find alias_env tycon with
@@ -197,19 +197,24 @@ struct
   let tableLit alias_env constraints dt =
     try
       let (_, Some read_type) = datatype' empty_env alias_env (dt, None) in
-      let write_type = 
+      let write_row, needed_row = 
         match read_type with
           | `Record (fields, _) -> 
-              `Record
-                (StringMap.fold
-                   (fun label t row ->
-                      match lookup label constraints with 
-                        | Some cs when List.exists (function `Readonly | `Identity -> true) cs -> row
-                      | _  -> Types.row_with (label, t) row)
-                   fields
-                   (Types.make_empty_closed_row ()))
+              (StringMap.fold
+                 (fun label t (write, needed) ->
+                    match lookup label constraints with 
+                      | Some cs ->
+                          if List.exists ((=) `Readonly) cs then
+                            (write, needed)
+                          else (* if List.exists ((=) `Default) cs then *)
+                            (Types.row_with (label, t) write, needed)
+                      | _  ->
+                          let add = Types.row_with (label, t) in
+                            (add write, add needed))
+                 fields
+                 (Types.make_empty_closed_row (), Types.make_empty_closed_row ()))
           | _ -> failwith "Table types must be record types"
-      in read_type, write_type
+      in read_type, `Record write_row, `Record needed_row
     with UnexpectedFreeVar x ->
       failwith ("Free variable ("^ x ^") in table literal")
 end
@@ -247,10 +252,10 @@ object (self)
         let o, p = self#phrase p in
           o, `Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
     | `TableLit (t, (dt, _), cs, p) -> 
-        let read, write = Desugar.tableLit alias_env cs dt in
+        let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
         let o, p = o#phrase p in
-          o, `TableLit (t, (dt, Some (read, write)), cs, p)
+          o, `TableLit (t, (dt, Some (read, write, needed)), cs, p)
     (* Switch and receive type annotations are never filled in by
        this point, so we ignore them.  *)
     | p -> super#phrasenode p
