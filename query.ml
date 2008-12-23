@@ -353,7 +353,7 @@ struct
 (*         Debug.print ("closure: "^string_of_t (`Closure ((xs, body), closure_env))); *)
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env ->
-                                      Debug.print ("x: "^string_of_int x);
+(*                                      Debug.print ("x: "^string_of_int x);*)
                                       bind env (x, arg)) xs args env in
           computation env body
     | `Primitive "asList", [xs] ->

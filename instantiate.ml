@@ -62,15 +62,31 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
           | _ -> false in
 
       let field_env' = StringMap.fold
-	(fun label field_spec field_env' ->
-	   match field_spec with
-	     | `Present, t -> StringMap.add label (`Present, inst rec_env t) field_env'
-	     | `Absent, t ->
-		 if is_closed then field_env'
-		 else StringMap.add label (`Absent, inst rec_env t) field_env'
-	) field_env StringMap.empty in
-      let row_var' = inst_row_var rec_env row_var
-      in
+	(fun label (f, t) field_env' ->
+           let rec add =
+             function
+	       | `Present -> StringMap.add label (`Present, inst rec_env t) field_env'
+	       | `Absent ->
+		   if is_closed then field_env'
+		   else StringMap.add label (`Absent, inst rec_env t) field_env'
+               | `Var point ->
+                   match Unionfind.find point with
+                     | `Flexible var
+                     | `Rigid var ->
+                         let f =
+                           if IntMap.mem var (assert false) then
+                             IntMap.find var (assert false)
+                           else
+                             `Var point
+                         in
+                           StringMap.add label (f, inst rec_env t) field_env'
+                     | `Body f ->
+                         add f                           
+           in
+             add f)
+	field_env
+        StringMap.empty in
+      let row_var' = inst_row_var rec_env row_var in
 	field_env', row_var'
           (* precondition: row_var has been flattened *)
     and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->

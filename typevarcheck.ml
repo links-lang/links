@@ -44,6 +44,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                       match FieldEnv.find "1" fields with
                         | `Present, t
                         | `Absent, t -> isg t
+                        | `Var _, _ -> assert false (* TODO *)
                     end
                 | _ ->                  
                     isgr row
@@ -107,6 +108,7 @@ and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
                       match spec with
                         | `Present, t
                         | `Absent, t -> result || is_negative bound_vars var t
+                        | `Var _, _ -> assert false (* TODO *)
                    ) field_env false
 and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->
@@ -156,6 +158,7 @@ and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
                       match spec with
                         | `Present, t
                         | `Absent, t -> result || is_positive bound_vars var t
+                        | `Var _, _ -> assert false (* TODO *)
                    ) field_env false
 and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->

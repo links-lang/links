@@ -65,10 +65,23 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
       | `Body row -> get_row_type_args kind bound_vars row
 
 and get_field_spec_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
+  fun kind bound_vars (f, t) ->
+    get_presence_type_args kind bound_vars f @ get_type_args kind bound_vars t
+
+and get_presence_type_args : gen_kind -> TypeVarSet.t -> presence_flag -> type_arg list =
   fun kind bound_vars ->
     function
-      | `Present, t
-      | `Absent, t -> get_type_args kind bound_vars t
+      | `Present | `Absent -> []
+      | `Var point ->
+          begin
+            match Unionfind.find point with
+              | `Flexible var
+              | `Rigid var when TypeVarSet.mem var bound_vars -> []
+              | `Flexible _ when kind=`All -> [assert false]
+              | `Flexible _ -> []
+              | `Rigid _ -> [assert false]
+              | `Body f -> get_presence_type_args kind bound_vars f
+          end
 
 and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
   fun kind bound_vars (field_env, row_var) ->

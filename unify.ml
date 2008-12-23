@@ -95,6 +95,7 @@ and eq_field_envs (lfield_env, rfield_env) =
     match (a,b) with
       | (`Absent, t1), (`Absent, t2)
       | (`Present, t1), (`Present, t2) -> eq_types (t1, t2)
+      | (`Var lpoint, t1), (`Var rpoint, t2) -> Unionfind.equivalent lpoint rpoint && eq_types (t1, t2)
       | _, _ -> false
   in
     StringMap.equal compare_specs lfield_env rfield_env
@@ -323,6 +324,41 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
        Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
       )
 
+and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
+  fun rec_env (l, r) ->
+    match l, r with
+      | `Present, `Present
+      | `Absent, `Absent -> ()
+      | `Present, `Absent
+      | `Absent, `Present ->
+          raise (Failure (`Msg ("Present absent clash")))
+(*`PresentAbsentClash (label, lrow, rrow) *)
+      | `Var lpoint, `Var rpoint ->
+          begin
+            match Unionfind.find lpoint, Unionfind.find rpoint with
+              | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)
+              | _, `Body r -> unify_presence' rec_env (`Var lpoint, r)
+              | `Rigid l, `Rigid r ->
+                  if l <> r then 
+                    raise (Failure (`Msg ("Rigid presence variables "^
+                                            string_of_int l ^" and "^
+                                            string_of_int r ^" do not match")))
+                  else
+                    Unionfind.union lpoint rpoint
+              | `Flexible var, _ ->
+                  Unionfind.union lpoint rpoint
+              | _, `Flexible var ->
+                  Unionfind.union rpoint lpoint
+              | `Rigid l, _ ->
+                  raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
+                                          string_of_int l ^" with the presence variable "^ (assert false)
+                                          (* string_of_presence (`Var rpoint) *) ))) (* TODO *)
+              | _, `Rigid r ->
+                  raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
+                                          string_of_int r ^" with the type "^ (assert false)
+                                          (* string_of_presence (`Var lpoint) *) ))) (* TODO *)
+          end
+
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
   fun ((_, _) as rec_env) (lrow, rrow) ->
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
@@ -376,14 +412,11 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       StringMap.fold
         (fun label field_spec extension ->
            if StringMap.mem label extending_env then
-             (match field_spec, (StringMap.find label extending_env) with
-                | (`Present, t), (`Present, t')
-                | (`Absent, t), (`Absent, t') ->
-                    unify' rec_env (t, t');
-                    extension
-                | (`Present, _), (`Absent, _)
-                | (`Absent, _), (`Present, _) ->
-                    raise (Failure (`PresentAbsentClash (label, lrow, rrow))))
+             let f, t = field_spec in
+             let f', t' = StringMap.find label extending_env in
+               unify_presence' rec_env (f, f');
+               unify' rec_env (t, t');
+               extension
            else
              StringMap.add label field_spec extension
         ) traversal_env (StringMap.empty) in
@@ -537,10 +570,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let get_present_labels (field_env, row_var) =
         let rec get_present' rec_vars (field_env, row_var) =
           let top_level_labels = 
-            StringMap.fold (fun label (flag, _) labels ->
-                              match flag with
-                                | `Present -> StringSet.add label labels
-                                | `Absent -> labels) field_env StringSet.empty
+            StringMap.fold
+              (fun label (flag, _) labels ->
+                 match flag with
+                   | `Present -> StringSet.add label labels
+                   | `Absent -> labels
+                   | `Var _ -> assert false (* TODO *))
+              field_env
+              StringSet.empty
           in
             StringSet.union top_level_labels 
               (match Unionfind.find row_var with
@@ -600,6 +637,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                   ^"\n could not be unified because the former is rigid"
                                   ^" and the latter contains fields not present in the former")))
                  | `Absent -> ()
+                 | `Var _ -> assert false (* TODO *)
           ) open_field_env';
         
         (* check that the closed row contains no absent fields *)

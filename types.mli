@@ -35,6 +35,12 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type 't meta_presence_var_basis = 
+    [ `Flexible of int
+    | `Rigid of int
+    | `Body of 't ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+
 module Abstype :
 sig
   type t deriving (Eq, Show, Pickle, Typeable, Shelve)
@@ -60,13 +66,14 @@ type datatype =
     | `Application of (Abstype.t * datatype list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
-and presence_flag  = [ `Present | `Absent ]
+and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec = presence_flag * datatype
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
+and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
@@ -164,7 +171,7 @@ val closed_row_var : row_var
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
-val contains_present_fields : field_spec_map -> bool
+(* val contains_present_fields : field_spec_map -> bool *)
 
 val is_canonical_row_var : row_var -> bool
 val is_rigid_row : row -> bool

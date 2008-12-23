@@ -300,7 +300,8 @@ module Eval = struct
                       (fun name t fields->
                          match t with
                            | `Present, t -> (name, t)::fields
-                           | `Absent, _ -> assert false)
+                           | `Absent, _ -> assert false
+                           | `Var _, t -> assert false)
                       fields
                       []
                 in

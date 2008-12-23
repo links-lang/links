@@ -42,8 +42,10 @@ let split_row name row =
     if StringMap.mem name field_env then
       match (StringMap.find name field_env) with
         | `Present, t -> t
-        | `Absent, _ -> 
+        | `Absent, _ ->
             error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+        | `Var _, _ ->
+            error ("Attempt to split row "^string_of_row row ^" on var field" ^ name)
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
   in

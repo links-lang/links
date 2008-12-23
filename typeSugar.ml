@@ -770,7 +770,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                    | `Present, t ->
                        let pats = List.map (unwrap_at ((int_of_string name) - 1)) pats in
                          StringMap.add name (`Present, cpt pats t)
-                   | `Absent, _ ->
+                   | `Absent, _
+                   | `Var _, _ ->
                        assert false) fields StringMap.empty in
             `Record (fields, row_var)
       | `Record row ->
@@ -796,7 +797,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                    | `Present, t ->
                        let pats = List.map (unwrap_at name) pats in
                          StringMap.add name (`Present, cpt pats t)
-                   |  `Absent, _ ->
+                   | `Absent, _
+                   | `Var _, _ ->
                         assert false) fields StringMap.empty in
             `Record (fields, row_var)
       | `Variant row ->
@@ -837,7 +839,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                        let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
                          (StringMap.add name (`Present, t)) env
-                   | `Absent, _ ->
+                   | `Absent, _
+                   | `Var _, _ ->
                        assert false) fields StringMap.empty
           in
             if are_open pats then
@@ -1283,7 +1286,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                                             " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed))^
                                                             ") because the labels overlap")
                                               else
-                                                StringMap.add label t field_env') rfield_env field_env in
+                                                StringMap.add label t field_env'
+                                          | `Var _, _ -> assert false) rfield_env field_env in
                       `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var)
               end
         | `ListLit (es, _) ->
