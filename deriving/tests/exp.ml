@@ -16,6 +16,7 @@ sig
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp
+  and name = string
                deriving (Eq,Show,Pickle,Typeable,Dump)
 end =
 struct
@@ -35,9 +36,11 @@ struct
         | _ -> false
       in alpha_eq Env.empty
   end
+  module Eq_name = Eq_string 
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp
+  and name = string
                deriving (Show, Typeable, Pickle,Dump)
 end
 

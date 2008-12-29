@@ -12,7 +12,7 @@ sig
   type r1 = {
     r1_l1 : int;
     r1_l2 : int;
-  } deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
+  } deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
 
   type r2 = {
     mutable r2_l1 : int;
@@ -32,10 +32,10 @@ sig
   type funct = int -> int
 
   type intseq = INil | ICons of int * intseq
-    deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
+    deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
 
   type 'a seq = Nil | Cons of 'a * 'a seq
-    deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+    deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
   type uses_seqs = (intseq * float seq) 
       deriving (Dump, Eq, Show, Typeable, Pickle)
@@ -59,10 +59,10 @@ sig
 
   type 'a poly7 = Foo of [`F of 'a]
   and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
-      deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+      deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
   type poly10 = [`F | poly3]
-      deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+      deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
   type mutrec_a = mutrec_c
   and mutrec_b = { l1 : mutrec_c ; l2 : mutrec_a }
@@ -74,11 +74,11 @@ sig
   and ('a,'b) pmutrec_b = { pl1 : ('a,'b) pmutrec_c ; pl2 : ('a,'b) pmutrec_a }
   and ('a,'b) pmutrec_c = SS of 'a * ('a,'b) pmutrec_a * 'b
   and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
-      deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+      deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
-  type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Dump, Functor, Typeable, Pickle)
+  type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Dump(*, Functor*), Typeable, Pickle)
   type ('a,'b) ff2 = F1 of ('a,'b) ff2 | F2 of 'a seq * int * 'b option
-    deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+    deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
   type tup0 = unit
       deriving (Dump, Eq, Show, Typeable, Pickle)
@@ -101,7 +101,7 @@ sig
   end
 
   type 'a constrained = [`F of 'a] constraint 'a = int
-      deriving (Functor) 
+(*      deriving (Functor) *)
       
   type p1 = private P1 
       deriving (Show, Eq)
@@ -111,7 +111,7 @@ sig
   end
     
   type t = int 
-      deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle, Functor)
+      deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle(*, Functor*))
 end
   = Defs
 
@@ -120,14 +120,14 @@ module T_opaque :
 sig 
   type sum deriving (Dump, Eq, Show, Typeable, Pickle)
   type nullsum deriving (Enum, Bounded, Eq, Typeable, Pickle)
-  type r1 deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
+  type r1 deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
   type r2 deriving (Eq, Show, Typeable, Pickle)
   type r3 deriving (Eq, Show, Typeable, Pickle)
   type r4 
   type label
   type funct
-  type intseq deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
-  type 'a seq deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+  type intseq deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
+  type 'a seq deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
   type uses_seqs deriving (Dump, Eq, Show, Typeable, Pickle)
   type obj
   type poly0 deriving (Enum, Bounded, Show, Eq, Typeable, Pickle)
@@ -136,8 +136,8 @@ sig
   type poly3 deriving (Dump, Eq, Show, Typeable, Pickle) 
   type poly3b deriving (Dump, Eq, Show, Typeable, Pickle) 
   type 'a poly7 
-  and 'a poly8 deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
-  type poly10 deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+  and 'a poly8 deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
+  type poly10 deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
   type mutrec_a 
   and mutrec_b 
   and mutrec_c 
@@ -145,9 +145,9 @@ sig
   type ('a,'b) pmutrec_a 
   and ('a,'b) pmutrec_b 
   and ('a,'b) pmutrec_c 
-  and ('a,'b) pmutrec_d deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
-  type 'a ff1 deriving (Show, Eq, Dump, Functor, Typeable, Pickle)
-  type ('a,'b) ff2 deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+  and ('a,'b) pmutrec_d deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
+  type 'a ff1 deriving (Show, Eq, Dump(*, Functor*), Typeable, Pickle)
+  type ('a,'b) ff2 deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
   type tup0 deriving (Dump, Eq, Show, Typeable, Pickle)
   type tup2 deriving (Dump, Eq, Show, Typeable, Pickle)
   type tup3 deriving (Dump, Eq, Show, Typeable, Pickle)
@@ -155,10 +155,10 @@ sig
   type withref deriving (Eq, Show, Typeable, Pickle)
   module M : sig type t deriving (Show, Eq, Dump) end
   module P : sig type 'a t end
-  type 'a constrained constraint 'a = int deriving (Functor) 
+  type 'a constrained constraint 'a = int (*deriving (Functor) *)
   type p1 deriving (Show, Eq)
   module Private : sig type p2 end
-  type t deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle, Functor)
+  type t deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle(*, Functor*))
 end
   = Defs
 

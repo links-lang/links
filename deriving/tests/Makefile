@@ -16,10 +16,10 @@ SOURCES = defs.ml               \
 	  eq_tests.ml           \
 	  dump_tests.ml         \
 	  enum_tests.ml         \
-	  functor_tests.ml      \
 	  show_tests.ml         \
           exp.ml                \
           inline.ml             \
+#	  functor_tests.ml      \
 
 LIBS    = nums deriving
 RESULT  = tests

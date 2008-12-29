@@ -2,6 +2,9 @@
 (* More convenient representation for types, and translation from the
    Camlp4 representation *)
 
+exception Unsupported of Camlp4.PreCast.Ast.loc * string
+exception Unexpected of Camlp4.PreCast.Ast.loc * string
+
 open Utils
 
 (* auxiliary definitions *)
@@ -10,144 +13,235 @@ type qname = name list
 module NameMap = StringMap
 module NameSet = Set.Make(String)
 
+
+(* Things not handled:
+     records with polymorphic field types
+     constraints 
+     object types
+     classes
+     types with non-regular recursion
+     types called 'a' (!)
+*)
+
+
+(* A type parameter with an optional variance annotation *)
 type param = name * [`Plus | `Minus] option
 
-(* no support for private types yet *)
-type decl = name * param list * rhs * constraint_ list
-    (* whether the type was inserted by deriving *)
-    * bool
-and rhs = [`Fresh of expr option * repr * [`Private|`Public] 
-          |`Expr of expr
-          |`Variant of variant
-          |`Nothing]
-and repr = 
-    Sum of summand list
-  | Record of field list
-and field = name * poly_expr * [`Mutable | `Immutable]
-and summand = name * expr list
-and constraint_ = expr * expr
-and expr =  (* elements that can be nested *)
-    [ `Param of param
-    | `Label of ([`Optional|`NonOptional] * name * expr * expr)
-    | `Function of (expr * expr)
-    | `Constr of (qname * expr list)
-    | `Tuple of expr list
-    | `Object of [`NYI]
-    | `Class of [`NYI] ]
-and poly_expr = param list * expr
-    (* no support for < > variants yet.
-       no support for '&' yet.
-    *)
-and variant = [`Gt | `Lt | `Eq] * tagspec list
-and tagspec = Tag of name * expr option 
-              | Extends of expr
+(* A reference to one of the type constructors bound in the same
+   declaration.  e.g. within the declaration
+
+     type t1 = e1
+      and ...
+      and tn = en
+
+   this refers to one of the ti.
+*)
+type localtype = [`Local of name ]
+
+(* A reference to a type parameter *)
+type tyvar = [`Tyvar of name ]
+
+(* An "atomic" expression.  These are the only things allowed to
+   appear as subexpressions. *)
+type atomic = [ localtype | tyvar | `Ctor of qname ] 
+
+(* An application of a type constructor declared elsewhere *)
+type appl = [`Appl of qname * atomic list ]
+
+(* A polymorphic variant declaration *)
+type tagspec = [`Tag     of name * atomic option 
+               | localtype
+               | appl ]
+type variant = [`Variant of [`Gt | `Lt | `Eq ] * tagspec list ]
+
+(* A record type *)
+type field = name * atomic * [`Mutable | `Immutable ]
+type record = [`Record of field list]
+
+(* A sum type *)
+type summand = name * atomic list
+type sum = [`Sum of summand list ]
+
+(* A generative type *)
+type fresh = [ sum | record ]
+
+(* A type expression *)
+type expr = [ `Function of (atomic * atomic)
+            | `Tuple    of atomic list
+            | appl
+            | variant
+            | atomic ]
+
+(* The right hand side of a declaration *)
+type rhs = [`Fresh of expr option * fresh * [`Private|`Public] 
+           | expr]
+
+type sigrhs =[rhs | `Nothing]
+
+(* A type declaration group *)
+type decl = param list * rhs NameMap.t
+
+(* A type declaration group in a signature *)
+type sigdecl = param list * sigrhs NameMap.t
 
 class virtual ['result] fold = 
 object (self : 'self)
   method virtual crush : 'result list -> 'result
 
-  method decl (d:decl) =
-    self#crush (match d with
-                  | (_, _, rhs, cs,_) ->
-                      self#rhs rhs :: List.map self#constraint_ cs)
+  method param (_ : param) = 
+    self#crush []
 
-  method rhs (r:rhs) =
-    self#crush (match r with
-                  | `Fresh (Some e, r, _) -> [self#expr e; self#repr r]
-                  | `Fresh (None, r, _)   -> [self#repr r]
-                  | `Expr e               -> [self#expr e]
-                  | `Variant v            -> [self#variant v]
-                  | `Nothing              -> [])
-                      
-      
-  method repr r =
-    self#crush (match r with
-                    | Sum summands ->
-                        List.map self#summand summands
-                    | Record fields ->
-                        List.map self#field fields)
-    
-  method field (name, pexpr, flag) =
-    self#crush [self#poly_expr pexpr]
-      
-  method summand (_,es) =
-    self#crush (List.map self#expr es)
+  method localtype (_ : localtype) =
+    self#crush []
 
-  method constraint_ (e1,e2) =
-    self#crush [self#expr e1; self#expr e2]
+  method tyvar (_ : tyvar) =
+    self#crush []
 
-  method expr e = 
-    self#crush (match e with
-                    `Param _
-                  | `Object _
-                  | `Class _ -> []
-                  | `Label (_, _, e1, e2) 
-                  | `Function (e1, e2) -> [self#expr e1; self#expr e2]
-                  | `Constr (_, exprs)
-                  | `Tuple exprs  -> List.map self#expr exprs)
+  method atomic (a : atomic) =
+    self#crush (match a with
+                  | #localtype as l -> [self#localtype l]
+                  | #tyvar     as t -> [self#tyvar t]
+                  | `Ctor _         -> [])
 
-  method poly_expr (params,e) =
-    self#crush [self#expr e]
+  method appl (`Appl (_, ats) : appl) =
+    self#crush (List.map self#atomic ats)
 
-  method variant (_,tagspecs) =
-    self#crush (List.map self#tagspec tagspecs)
-
-  method tagspec t =
+  method tagspec (t : tagspec) =
     self#crush (match t with
-                    Tag (_, None) -> []
-                  | Tag (_, Some e)
-                  | Extends e -> [self#expr e])
+                  | `Tag (_, None)    -> []
+                  | `Tag (_, Some at) -> [self#atomic at]
+                  | #localtype as at  -> [self#localtype at]
+                  | #appl as a        -> [self#appl a])
+
+  method variant (`Variant (_, tags) : variant) =
+    self#crush (List.map self#tagspec tags)
+
+  method field (_, at, _ : field) =
+    self#crush [self#atomic at]
+
+  method record (`Record fields : record) =
+    self#crush (List.map self#field fields)
+
+  method summand (_, ats) = 
+    self#crush (List.map self#atomic ats)
+      
+  method sum (`Sum summands : sum) =
+    self#crush (List.map self#summand summands)
+
+  method fresh (f : fresh) =
+    self#crush (match f with
+                  | #sum    as s -> [self#sum s]
+                  | #record as r -> [self#record r])
+
+  method expr (e : expr) =
+    self#crush (match e with
+                  | `Function (l, r) -> [self#atomic l ; self#atomic r]
+                  | `Tuple ats -> List.map self#atomic ats
+                  | #appl as a -> [self#appl a]
+                  | #variant as v -> [self#variant v]
+                  | #atomic as a -> [self#atomic a] )
+
+  method rhs (r : rhs) =
+    self#crush (match r with
+                  | `Fresh (None, fresh, _) -> [self#fresh fresh]
+                  | `Fresh (Some e, fresh, _) -> [self#expr e; self#fresh fresh]
+                  | #expr as e -> [self#expr e])
+
+  method sigrhs (r : sigrhs) =
+    self#crush (match r with
+                  | #rhs as r -> [self#rhs r]
+                  | `Nothing  -> [])
+
+  method decl (params, rhs : decl) =
+    self#crush (List.map self#param params
+                @ (NameMap.fold 
+                     (fun _ rhs rs -> self#rhs rhs :: rs)
+                     rhs
+                     []))
+
+  method sigdecl (params, rhs : sigdecl) =
+    self#crush (List.map self#param params
+                @ (NameMap.fold 
+                     (fun _ rhs rs -> self#sigrhs rhs :: rs)
+                     rhs
+                     []))
 end
+
+
+
 
 class transform = 
 object (self : 'self)
 
-  method decl (name, params, rhs, constraints,g:decl) : decl =
-    (name, params, self#rhs rhs, List.map (self # constraint_) constraints, g)
+  method param (p : param) = p
 
-  method rhs = function
-    | `Fresh (eopt, repr, p) -> `Fresh (Option.map (self # expr) eopt, 
-                                        self # repr repr, p)
-    | `Expr e -> `Expr (self # expr e)
-    | `Variant v -> `Variant (self # variant v)
-    | `Nothing -> `Nothing
+  method localtype (l : localtype) = l
 
-  method repr = function
-    | Sum summands -> Sum (List.map (self # summand) summands)
-    | Record fields -> Record (List.map (self # field) fields)
+  method tyvar (t : tyvar) = t
 
-  method field (name, poly_expr, flag) =
-    (name, self # poly_expr poly_expr, flag)
-    
-  method summand (name, exprs) = 
-    (name, List.map (self # expr) exprs)
+  method atomic : atomic -> atomic = function 
+    | # localtype as l -> (self#localtype l :> atomic)
+    | # tyvar     as t -> (self#tyvar t     :> atomic)
+    | `Ctor _     as c -> c
 
-  method constraint_ (e1, e2) =
-    (self#expr e1, self#expr e2)
+  method appl : appl -> appl = function
+    | `Appl (q, ats) -> `Appl (q, List.map self#atomic ats)
 
-  method expr = function
-    | `Object _
-    | `Class _
-    | `Param _ as e -> e
-    | `Label (flag, name, e1, e2) -> `Label (flag, name, self # expr e1, self # expr e2)
-    | `Function (e1, e2) -> `Function (self # expr e1, self # expr e2)
-    | `Constr (qname, exprs) -> `Constr (qname, List.map (self # expr) exprs)
-    | `Tuple exprs -> `Tuple (List.map self # expr exprs)
+  method tagspec : tagspec -> tagspec = function
+    | `Tag (n, None)    -> `Tag (n, None)
+    | `Tag (n, Some at) -> `Tag (n, Some (self#atomic at))
+    | #localtype as at  -> (self#localtype at :> tagspec)
+    | #appl as a        -> (self#appl a :> tagspec)
 
-  method poly_expr (params, expr)
-    = (params, self # expr expr)
+  method variant : variant -> variant = function
+    | `Variant (spec, tagspecs) -> `Variant (spec, List.map self#tagspec tagspecs)
 
-  method variant (t, tagspecs)
-    = (t, List.map (self # tagspec) tagspecs)
-    
-  method tagspec = function
-    | Tag (name, eopt) -> Tag (name, Option.map (self # expr) eopt)
-    | Extends e -> Extends (self # expr e)
+  method field (name, at, mut) = (name, self#atomic at, mut)
+
+  method record : record -> record = function
+    | `Record fields ->`Record (List.map self#field fields)
+
+  method summand (name, ats) = (name, List.map self#atomic ats)
+
+  method sum : sum -> sum = function
+    | `Sum summands -> `Sum (List.map self#summand summands)
+
+  method fresh : fresh -> fresh = function
+    | #sum    as s -> (self#sum s    :> fresh)
+    | #record as r -> (self#record r :> fresh)
+
+  method expr : expr -> expr = function
+    | `Function (lat, rat)         -> `Function (self#atomic lat, self#atomic rat)
+    | `Tuple ats                   -> `Tuple (List.map self#atomic ats)
+    | #appl    as a                -> (self#appl a    :> expr)
+    | #variant as v                -> (self#variant v :> expr)
+    | #atomic  as a                -> (self#atomic a  :> expr)
+
+  method rhs : rhs -> rhs = function
+    | `Fresh (None, fresh, priv)   -> `Fresh (None,               self#fresh fresh, priv)
+    | `Fresh (Some e, fresh, priv) -> `Fresh (Some (self#expr e), self#fresh fresh, priv)
+    | #expr as e                   -> (self#expr e :> rhs)
+
+  method sigrhs : sigrhs -> sigrhs = function
+    | #rhs as r                    -> (self#rhs r :> sigrhs)
+    | `Nothing                     -> `Nothing
+
+  method decl (params, rhss) = 
+    (List.map self#param params,
+     NameMap.map self#rhs rhss)
+
+  method sigdecl (params, rhss) = 
+    (List.map self#param params,
+     NameMap.map self#sigrhs rhss)
 end
+
 
 module Translate =
 struct
   open Camlp4.PreCast
+
+  let unsupported loc msg = raise (Unsupported (loc, msg))
+  let unexpected loc msg = raise (Unexpected (loc, msg))
 
   let param = function
     | Ast.TyQuP (loc, name) -> name, Some `Plus
@@ -219,244 +313,349 @@ struct
           "deriving_" ^ !name_prefix ^ "_" ^ string_of_int !counter),
        (fun name -> name_prefix := name; counter := 0))
 
-  module WithParams(P : sig val params : param list end) =
-  struct
-    include P
+  (* map from type constructors to their definitions *) 
+  type bindings = (name * sigrhs) list
+  (* map from as-variables to the type constructors that replace them *) 
+  type alias_map = name NameMap.t
+  (* everything generated during translation *)
+  type env = { bindings : bindings;
+               aliases  : alias_map }
 
-    let apply_t name = 
-      `Constr([name], List.map (fun p -> `Param p) params)
+  let empty_env : env = { bindings = []; aliases = NameMap.empty }
+  let (++) l r = { bindings = l.bindings @ r.bindings ;
+                   aliases  = NameMap.union_disjoint2 l.aliases r.aliases }
+  let join_envs envs = List.fold_right (++) envs empty_env
+  let bind_binding n rhs env = { env with bindings = (n, rhs) :: env.bindings }
+  let bind_alias n rhs env = { env with aliases = NameMap.add n rhs env.aliases }
 
-    let rec expr : Ast.ctyp -> expr * vmap  = function
-      | Ast.TyObj _ -> `Object `NYI, []
-      | Ast.TyCls _ -> `Class `NYI, []
-      | Ast.TyQuP (_,_)
-      | Ast.TyQuM (_,_)
-      | Ast.TyQuo (_,_) as p -> `Param (param p), []
-      | Ast.TySum _
-      | Ast.TyRec _ -> failwith "deriving: top level element found nested"
-      | Ast.TyAny _ -> failwith "deriving does not support `_' in type definitions"
-      | Ast.TyArr (_,f,t) -> 
-          let f, v1 = expr f and t,v2 = expr t in
-            `Function (f, t), v1 @ v2
-      | Ast.TyApp _ as app -> let app, v = application app in `Constr app, v
-      | Ast.TyId (_, i) -> `Constr (qident i, []), []
-      | Ast.TyTup (_, t) -> let es, vs = List.split (list expr split_star t) in `Tuple es, List.concat vs
-      | Ast.TyVrnEq  (_, t) -> variant t `Eq
-      | Ast.TyVrnSup (_, t) -> variant t `Gt
-      | Ast.TyVrnInf (_, t) -> variant t `Lt
-      | Ast.TyAli (_, _, Ast.TyQuo (_,name)) when List.mem_assoc name params ->
-          failwith ("Alias names must be distinct from parameter names for "
-                    ^"\nderived types, but '"^name^" is both an alias and a parameter")
-      | Ast.TyAli (_, Ast.TyVrnEq  (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Eq
-      | Ast.TyAli (_, Ast.TyVrnSup (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Gt
-      | Ast.TyAli (_, Ast.TyVrnInf (_, t), Ast.TyQuo (_,name)) -> variant t ~alias:name `Lt
-      | Ast.TyVrnInfSup (_, _, _) -> failwith "deriving does not currently support [ < > ] variant types"
-      | Ast.TyLab _ -> failwith "deriving does not support label types"
-      | e -> failwith ("unexpected type at expr : " ^ Utils.DumpAst.ctyp e)
-    and tagspec = function
-      | Ast.TyVrn (_,tag)                  -> Tag (tag, None), []
-      | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> 
-          let es, vs = List.split (list expr split_comma t) in 
-            Tag (tag, Some (`Tuple es)), List.concat vs
-      | t                                  -> let e, v = expr t in Extends e, v
-    and application : Ast.ctyp -> (qname * expr list) * vmap = function
-      | Ast.TyApp (_, (Ast.TyApp _ as a), t) -> 
-          let (tcon, args), vs = application a in
-          let e, vs' = expr t in
-            (tcon, args @ [e]), vs @ vs'
-      | Ast.TyApp (_, (Ast.TyId (_, tcon)), t) -> 
-          let e, v = expr t in (qident tcon, [e]), v
-      | _ -> assert false
-    and variant tags ?alias spec = 
-      let name = fresh_name () in
-      let tags, vs = List.split (list tagspec split_or tags) in
-        (apply_t name, 
-         [name, (spec, tags), alias] @ List.concat vs)
-    let rec polyexpr : Ast.ctyp -> poly_expr * vmap = function
-      | Ast.TyPol (_, ps, t) -> 
-          begin match polyexpr t with 
-            | (ps',t'), [] -> (list param split_comma ps @ ps', t'), []
-            |  _ -> failwith ("deriving does not support polymorphic variant "
-                              ^"definitions within polymorphic record field types")
-          end
-      | t -> let e, v = expr t in ([], e), v
+  (* Accept a binding list of the form
+  
+     ('a1, ... 'an) t1 = e1
+     ...
+     ('a1, ... 'an) tn = en
+  
+     and return
+  
+     (t1, [[e1]]) ... (tn, [[en]]), (s1, [[f1]]), ... (sm, [[fm]])
+  
+     where each si = fi is a new type definitions created from a
+     nested type expression in one of the ei.
+  
+     Fail if any of the occurrences of the ti in the ei is applied to
+     something other than 'a1...'an
+  *)
+  let rhss (params : name list) (ctyps : (name * Ast.ctyp) list) : env = 
+    let module M = struct
+      let locals = NameSet.fromList (List.map fst ctyps)
 
+      let rec expr : Ast.ctyp -> expr * env =
+        fun ctyp ->
+          let loc = Ast.loc_of_ctyp ctyp in
+          match ctyp with
+            (* Variant *)
+            | Ast.TyVrnEq (_, t)  -> (variant t `Eq :> expr * _)
+            | Ast.TyVrnSup (_, t) -> (variant t `Gt :> expr * _)
+            | Ast.TyVrnInf (_, t) -> (variant t `Lt :> expr * _)
+            | Ast.TyVrnInfSup _   -> unsupported loc "< > variant types"
+            | Ast.TyNil _         -> unsupported loc "empty type declarations"
+            | Ast.TyObj _         -> unsupported loc "object types"
+            | Ast.TyCls _         -> unsupported loc "class types"
+            | Ast.TyQuP (_,_)
+            | Ast.TyQuM (_,_)     -> unexpected loc "variance annotation on non-parameter"
+            | Ast.TyQuo (_,name)  -> `Tyvar name, empty_env
+            | Ast.TySum _
+            | Ast.TyRec _         -> unexpected loc "nested toplevel element"
+            | Ast.TyAny _         -> unsupported loc "`_' in type definitions"
+            | Ast.TyLab _         -> unsupported loc "label types"
+            | Ast.TyAli (loc, _, Ast.TyQuo (_, name)) 
+                when List.mem name params ->
+                unsupported loc "alias names that coincide with parameter names"
+            | Ast.TyAli (_, t, Ast.TyQuo (_, name)) -> 
+                let name' = fresh_name () in
+                let e, binds = expr t in
+                  (`Local name', (bind_alias name name'
+                                    (bind_binding name' (e :> sigrhs) binds)))
+            | Ast.TyArr (_,f, t)  -> 
+                let f, binds = atomic f and t, binds' = atomic t in
+                  `Function (f, t), binds ++ binds'
+            | Ast.TyApp _ as t    -> 
+                begin match application t with
+                  | `Appl ([id], args), env 
+                      when NameSet.mem id locals ->
+                      if args = List.map (fun n -> `Tyvar n) params
+                      then `Local id, env
+                      else unsupported loc "non-regular recursion"
+                  | `Appl (tcon, args), env -> `Appl (tcon, args), env
+                end
+            | Ast.TyId (loc, i) ->
+                begin match qident i with 
+                  | ["a"] -> unsupported loc "types called 'a' (!)"
+                  | [id] when NameSet.mem id locals ->
+                      if params = []
+                      then `Local id, empty_env
+                      else unsupported loc "non-regular recursion"
+                  | qid -> `Ctor qid, empty_env
+                end
+            | Ast.TyTup (_, t) ->
+                let es, binds = List.split (list atomic split_star t) in 
+                  `Tuple es, join_envs binds
+            | t -> unexpected loc ("the type expression : " ^ PPAst.ctyp t)
+      and variant : Ast.ctyp -> [`Gt | `Lt | `Eq ] -> variant * env =
+        fun tags spec ->
+          let tags, binds = List.split (list tagspec split_or tags) in
+            `Variant (spec, tags), join_envs binds
+      and application : Ast.ctyp -> appl * env = function
+        | Ast.TyApp (_, (Ast.TyApp _ as a), t) -> 
+            let `Appl (tcon, args), binds = application a in
+            let e, binds' = atomic t in
+              `Appl (tcon, args @ [e]), binds ++ binds'
+        | Ast.TyApp (_, (Ast.TyId (_, tcon)), t) -> 
+            let e, binds = atomic t in
+              `Appl (qident tcon, [e]), binds
+        | _ -> assert false
+      and tagspec = function
+        | Ast.TyVrn (_,tag)                  -> `Tag (tag, None), empty_env
+        | Ast.TyOf (_, Ast.TyVrn (_,tag), t) -> 
+            let spec, binds = atomic t in
+              `Tag (tag, Some spec), binds
+        | t                                  -> 
+            match atomic t with
+              | (#localtype as typ, binds)
+              | (#appl      as typ, binds) -> typ, binds
+              | _                          -> assert false
+      and atomic t : atomic * env = 
+        match expr t with
+          | # atomic as a, binds -> a, binds
+          | e            , binds -> 
+              let name = fresh_name () in
+              let e, binds = expr t in
+                (`Local name, bind_binding name (e :> sigrhs) binds)
 
-    let field : Ast.ctyp -> field * vmap = function 
-      | Ast.TyCol (_, Ast.TyId (_,name), Ast.TyMut (_, t)) ->
-          let p, v = polyexpr t in (ident name, p, `Mutable), v
-      | Ast.TyCol (_, Ast.TyId (_,name), t) ->
-          let p, v = polyexpr t in (ident name, p, `Immutable), v
-      | _ -> assert false
+      let field : Ast.ctyp -> field * env = function 
+        | Ast.TyCol (loc, Ast.TyId _, Ast.TyMut (_, Ast.TyPol _)) 
+        | Ast.TyCol (loc, Ast.TyId _, Ast.TyPol _) -> 
+            unsupported loc "polymorphic record fields"
+        | Ast.TyCol (_, Ast.TyId (_,name), Ast.TyMut (_, t)) ->
+            let p, v = atomic t in (ident name, p, `Mutable), v
+        | Ast.TyCol (_, Ast.TyId (_,name), t) ->
+            let p, v = atomic t in (ident name, p, `Immutable), v
+        | _ -> assert false
 
-    let summand : Ast.ctyp -> summand * vmap = function 
-      | Ast.TyId (_, c)                  -> (ident c, []), []
-      | Ast.TyOf (_, Ast.TyId (_, c), t) -> 
-          let es, vs = List.split (list expr split_and t) in (ident c, es), List.concat vs
-      | _                                -> assert false
+      let record (t : Ast.ctyp) : record * env =
+        let fields, vs = List.split (list field split_semi t) in 
+          `Record fields, join_envs vs
 
-    let rec repr = function
-      | Ast.TyRec (loc, fields) -> 
-          let fields, vs = List.split (list field split_semi fields) in 
-            Record fields, List.concat vs
-      | Ast.TySum (loc, summands) -> 
-          let summands, vs = List.split (list summand split_or summands) in
-            Sum summands, List.concat vs
-      | e -> failwith ("deriving: unexpected representation type ("^Utils.DumpAst.ctyp e^")")
+      let summand : Ast.ctyp -> summand * env = function 
+        | Ast.TyId (_, c)                  -> (ident c, []), empty_env
+        | Ast.TyOf (_, Ast.TyId (_, c), t) -> 
+            let es, binds = List.split (list atomic split_and t) in
+              (ident c, es), join_envs binds
+        | _                                -> assert false
 
-    let toplevel : Ast.ctyp -> rhs * vmap  = function
-      | Ast.TyPrv (_, (Ast.TyRec _ | Ast.TySum _ as r)) -> 
-          let repr, vs = repr r in `Fresh (None, repr, `Private), vs
-      | Ast.TyRec _ | Ast.TySum _ as r -> 
-          let repr, vs = repr r in `Fresh (None, repr, `Public), vs
-      | Ast.TyVrnEq (_, t)  -> 
-          let es, vs = List.split (list tagspec split_or t) in
-            `Variant (`Eq, es), List.concat vs
-      | Ast.TyVrnSup (_, t) ->
-          let es, vs = List.split (list tagspec split_or t) in
-            `Variant (`Gt, es), List.concat vs 
-      | Ast.TyVrnInf (_, t) ->
-          let es, vs = List.split (list tagspec split_or t) in
-            `Variant (`Lt, es), List.concat vs
-      | Ast.TyVrnInfSup (_, _, _) -> failwith "deriving does not currently support [ < > ] types"
-      | Ast.TyNil _ -> `Nothing, []
-      | Ast.TyPrv _ -> failwith "deriving does not currently support private rows"
-      | Ast.TyMan (_, eq, (Ast.TyRec _ | Ast.TySum _ as r)) ->
-          let repr, v1 = repr r and ex, v2 = expr eq in 
-            `Fresh (Some ex, repr, `Public), v1 @ v2
-      | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec _ | Ast.TySum _ as r))) ->
-          let repr, v1 = repr r and ex, v2 = expr eq in 
-            `Fresh (Some ex, repr, `Private), v1 @ v2
-      | t -> let e, v = expr t in `Expr e, v
+      let sum (t : Ast.ctyp) : sum * env =
+        let summands, binds = List.split (list summand split_or t) in
+          `Sum summands, join_envs binds
 
-    let constraints : (Ast.ctyp * Ast.ctyp) list -> constraint_ list * vmap = 
-      fun cs ->
-        List.fold_right
-          (fun (c1,c2) (es,vs) -> 
-             let e1,v1 = expr c1 
-             and e2,v2 = expr c2
-             in ((e1,e2)::es), (v1 @ v2 @ vs))
-          cs
-          ([],[])
+      (* Accept a type declaration right hand side 
+         ('a1, ... 'an) t = e
+  
+         and return
+  
+           (t, [[e]]), (s1, [[f1]]), ... (sm, [[fm]])
+  
+         where each si = fi is a new type definitions created from a
+         nested type expression in e.
+  
+         Fail if any of the occurrences of `locals' in the e is applied to
+         something other than 'a1...'an 
+      *)
+      let rhs ~(name:name) : Ast.ctyp -> env = 
+        let () = set_name_prefix name in function
+        (* Record types (private, public, with and without equations) *)
+        | Ast.TyPrv (_, (Ast.TyRec (loc, t))) ->
+            let r, binds = record t in
+              bind_binding name ( `Fresh (None, (r :> fresh), `Private)) binds
+        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec (loc, t)))) ->
+            let r, rbinds = record t 
+            and e, ebinds = expr eq in
+              bind_binding name (`Fresh (Some e, (r :> fresh), `Private)) (rbinds ++ ebinds)
+        | Ast.TyRec (loc, t) ->
+            let r, binds = record t in
+              bind_binding name ( `Fresh (None, (r :> fresh), `Public)) binds
+        | Ast.TyMan (_, eq, (Ast.TyRec (loc, t))) ->
+            let r, rbinds = record t 
+            and e, ebinds = expr   eq in
+              bind_binding name (`Fresh (Some e, (r :> fresh), `Public)) (rbinds ++ ebinds)
 
-    let declify = 
-      let declify1 (name, variant, alias) : decl * (name * expr) option = 
-        (name, params, `Variant variant, [], true), Option.map (fun a -> a, apply_t name) alias in
-        List.map declify1
-  end
+        (* Sum types (private, public, with and without equations) *)
+        | Ast.TyPrv (_, (Ast.TySum (loc, t))) -> 
+            let s, binds = sum t in
+              bind_binding name (`Fresh (None, (s :> fresh), `Private)) binds
+        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TySum (loc, t)))) ->
+            let r, sbinds = sum t 
+            and e, ebinds = expr eq in
+              bind_binding name (`Fresh (Some e, (r :> fresh), `Private)) (sbinds ++ ebinds)
+        | Ast.TySum (loc, t) -> 
+            let s, binds = sum t in
+              bind_binding name (`Fresh (None, (s :> fresh), `Public)) binds
+        | Ast.TyMan (_, eq, (Ast.TySum (loc, t))) ->
+            let r, sbinds = sum t 
+            and e, ebinds = expr eq in
+              bind_binding name (`Fresh (Some e, (r :> fresh), `Public)) (sbinds ++ ebinds)
 
-  type alias_map = expr NameMap.t
-  let build_alias_map : (name * expr) option list -> alias_map = fun m ->
-    NameMap.fromList (List.concat_map (function None -> [] | Some e -> [e]) m)
+        (* Other private type *)
+        | Ast.TyPrv (loc, _) -> 
+            unsupported loc "private types other than records and sums"
 
-  let split : Ast.ctyp -> Ast.ctyp list =
-    let rec aux t = match split_and t with
-      | Left (l, r) -> aux l @ aux r
-      | Right t -> [t]
-    in aux
-       
-  let rec decl : Ast.ctyp -> decl list * alias_map = function
-    | Ast.TyDcl (loc, name, ps, rhs, cs) ->
-        set_name_prefix name;
-        let module P = WithParams(struct let params = params ps end) in
-        let tl, vs = P.toplevel rhs in
-        let cs, vcs = P.constraints cs in
-        let decls, aliases = List.split (P.declify (vs @ vcs)) in
-          [(name, P.params, tl, cs, false)] @ decls, build_alias_map aliases
-    | _ -> assert false
-        
-  let substitute_aliases : alias_map -> decl -> decl = fun map ->
-  object
-    inherit transform as super
-    method expr = function
-      | `Param (p,_) when NameMap.mem p map -> NameMap.find p map
-      | e -> super#expr e
-  end # decl
+        (* Nothing *)
+        | Ast.TyNil _ ->
+            bind_binding name `Nothing empty_env
 
-  let decls : Ast.ctyp -> decl list =
-    fun ctyp -> 
-      let decls, aliases = List.split (List.map decl (split ctyp)) in
-        List.concat
-          (List.map
-             (List.map
-                (substitute_aliases (NameMap.union_disjoint aliases))) decls)
+        (* Type aliases *)
+        | t -> 
+            let e, binds = expr t in
+              bind_binding name (e :> sigrhs) binds
+
+      let results = 
+        List.fold_right 
+          (fun (name, t) results -> rhs ~name t ++ results)
+          ctyps
+          empty_env
+      end
+      in M.results
+ 
+   let extract_params : Ast.ctyp -> param list * (name * Ast.ctyp) = function
+     | Ast.TyDcl (loc, _   , _ , _  , _::_) -> raise (Unsupported (loc, "type constraints"))
+     | Ast.TyDcl (loc, name, ps, rhs, []  ) -> (params ps, (name, rhs))
+     | _                                    -> assert false
+
+   let check_params loc : param list list -> param list = 
+     let check_eq ps' ps =
+       if ps' <> ps
+       then unsupported loc "different parameters for types within the same group"
+       else ps in
+     fun ps -> List.fold_right check_eq ps (List.hd ps)
+
+   let substitute_aliases : alias_map -> sigdecl -> sigdecl = fun map ->
+   object
+     inherit transform as super
+     method atomic = function
+       | `Tyvar p when NameMap.mem p map ->
+           `Local (NameMap.find p map)
+       | e -> super#atomic e
+   end # sigdecl
+
+   let sigdecl (ctyp : Ast.ctyp) : sigdecl =
+     let decls         : Ast.ctyp list     = list F.id split_and ctyp in
+     let params, decls : param list list * (name * Ast.ctyp) list = List.split (List.map extract_params decls) in
+     let params        : param list        = check_params (Ast.loc_of_ctyp ctyp) params in
+     let decls         : env               = rhss (List.map fst params) decls in 
+       substitute_aliases decls.aliases
+         (params, NameMap.fromList decls.bindings)
+
+   let decl (ctyp : Ast.ctyp) : decl =
+     let params, bindings = sigdecl ctyp in
+       (params, NameMap.map (function 
+                               | #rhs as d -> d
+                               | _ -> unsupported (Ast.loc_of_ctyp ctyp) 
+                                   "type declarations with empty right hand sides")
+                           bindings)
 end
 
-module Untranslate (C:sig val loc : Camlp4.PreCast.Ast.Loc.t end) =
+module Untranslate =
 struct
   open Camlp4.PreCast
-  open C
-    
-  let param = function
+
+  let param ~loc = function
     | p, None        -> <:ctyp<  '$lid:p$ >>
     | p, Some `Plus  -> <:ctyp< +'$lid:p$ >>
     | p, Some `Minus -> <:ctyp< -'$lid:p$ >>
 
-  let rec qname = function
+  let tyvar ~loc p = <:ctyp<  '$lid:p$ >>
+
+  let rec qname ~loc = function
     | [] -> assert false
     | [x] -> <:ident< $lid:x$ >>
-    | x::xs -> <:ident< $uid:x$.$qname xs$ >>
+    | x::xs -> <:ident< $uid:x$.$qname ~loc xs$ >>
         
-  let unlist join items translate = 
-    List.fold_right join (List.map translate items) (Ast.TyNil loc)
+  let unlist ~loc join items translate =
+      List.fold_right join (List.map translate items) (Ast.TyNil loc)
 
-  let pair l r = Ast.TySta (loc, l,r)
-  let bar l r = <:ctyp< $l$ | $r$ >>
-  let semi l r = <:ctyp< $l$ ; $r$ >>
-  let comma l r = <:ctyp< $l$ , $r$ >>
-  let and_ l r = <:ctyp< $l$ and $r$ >>
+  let pair  ~loc l r = Ast.TySta (loc, l,r)
+  let bar   ~loc l r = <:ctyp< $l$ | $r$ >>
+  let semi  ~loc l r = <:ctyp< $l$ ; $r$ >>
+  let comma ~loc l r = <:ctyp< $l$ , $r$ >>
+  let and_  ~loc l r = <:ctyp< $l$ and $r$ >>
 
-  let expr = 
-    let rec expr : expr -> Ast.ctyp = function
-        `Param p -> param p
-      | `Function (f, t) -> <:ctyp< $expr f$ -> $expr t$ >>
-      | `Tuple [t] -> expr t
-      | `Tuple ts -> Ast.TyTup (loc, unlist pair ts expr)
-      | `Constr (tcon, args) -> app (Ast.TyId (loc, qname tcon)) args
-      | _ -> assert false
-    and app f = function
-      | []    -> f
-      | [x]   -> <:ctyp< $expr x$ $f$ >>
-      | x::xs -> app (<:ctyp< $expr x$ $f$ >>) xs
-    in expr
-         
-  let poly (params, t) =
-    List.fold_right
-      (fun (p : param) (t : Ast.ctyp) -> 
-         Ast.TyPol (loc, param p, t))
-      params
-      (expr t)
+  let rec localtype ~loc params : name -> Ast.ctyp =
+    fun name -> app ~loc params <:ctyp< $lid:name$ >> 
+                 (List.map (fun (v, _) -> `Tyvar v) params)
 
-  let rec rhs : rhs -> Ast.ctyp = function
-      | `Fresh (None, t, `Private) -> <:ctyp< private $repr t$ >>
-      | `Fresh (None, t, `Public) -> repr t
-      | `Fresh (Some e, t, `Private) -> <:ctyp< $expr e$ = private $repr t$ >>
-      | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr e, repr t)
-      | `Expr t          -> expr t
-      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist bar tags tagspec$ ] >>
-      | `Variant (`Gt, tags) -> <:ctyp< [> $unlist bar tags tagspec$ ] >>
-      | `Variant (`Lt, tags) -> <:ctyp< [< $unlist bar tags tagspec$ ] >>
-      | `Nothing -> <:ctyp< >>
-  and tagspec = function
-      | Tag (c, None) -> <:ctyp< `$c$ >>
-      | Tag (c, Some t) -> <:ctyp< `$c$ of $expr t$ >>
-      | Extends t -> <:ctyp< $expr t$ >>
-  and summand (name, (args : expr list)) =
-      let args = unlist and_ args expr in
-        <:ctyp< $uid:name$ of $args$ >> 
-  and field ((name, t, mut) : field) = match mut with
-      | `Mutable   -> <:ctyp< $lid:name$ : mutable $poly t$ >> (* mutable l : t doesn't work; perhaps a camlp4 bug *)
-      | `Immutable -> <:ctyp< $lid:name$ : $poly t$ >>
-  and repr = function
-      | Sum summands  -> Ast.TySum (loc, unlist bar summands summand)
-      | Record fields -> <:ctyp< { $unlist semi fields field$ }>>
+  and atomic ~loc params : atomic -> Ast.ctyp = function
+    | `Local l -> localtype ~loc params l
+    | `Tyvar t -> tyvar ~loc t    
+    | `Ctor  c -> <:ctyp< $id:qname ~loc c$ >>
 
-  let constraint_ (e1,e2) = (expr e1, expr e2)
+  and app ~loc params f = function
+    | []    -> f
+    | [x]   -> <:ctyp< $atomic ~loc params x$ $f$ >>
+    | x::xs -> app ~loc params (<:ctyp< $atomic ~loc params x$ $f$ >>) xs
 
-  let decl ((name, params, r, constraints,_): decl) =
-    Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)
+  let tagspec ~loc params = function
+    | `Tag (c, None) -> <:ctyp< `$c$ >>
+    | `Tag (c, Some t) -> <:ctyp< `$c$ of $atomic ~loc params t$ >>
+    | `Local a -> localtype ~loc params a
+    | `Ctor q -> <:ctyp< $id:qname ~loc q$ >>
 
-  let sigdecl ((name, params, r, constraints, _): decl) =
-    [Ast.TyDcl (loc, name, List.map param params, rhs r, List.map constraint_ constraints)]
+  let expr ~loc params : expr -> Ast.ctyp = 
+    let atomic = atomic ~loc params in
+    function
+      | #atomic as a -> atomic a
+      | `Function (f, t) -> <:ctyp< $atomic f$ -> $atomic t$ >>
+      | `Tuple [t] -> atomic t
+      | `Tuple ts -> Ast.TyTup (loc, unlist ~loc (pair ~loc) ts atomic)
+      | `Appl (tcon, args) -> app ~loc params (Ast.TyId (loc, qname ~loc tcon)) args
+      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
+      | `Variant (`Gt, tags) -> <:ctyp< [> $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
+      | `Variant (`Lt, tags) -> <:ctyp< [< $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
 
+
+  let summand ~loc params (name, args) =
+    let args = unlist ~loc (and_ ~loc) args (atomic ~loc params) in
+      <:ctyp< $uid:name$ of $args$ >> 
+
+  let field ~loc params ((name, t, mut) : field) = match mut with
+    | `Mutable   -> <:ctyp< $lid:name$ : mutable $atomic ~loc params t$ >> (* mutable l : t doesn't work; perhaps a camlp4 bug *)
+    | `Immutable -> <:ctyp< $lid:name$ : $atomic ~loc params t$ >>
+
+  let repr ~loc params = function
+    | `Sum summands  -> Ast.TySum (loc, unlist ~loc (bar ~loc) summands (summand ~loc params))
+    | `Record fields -> <:ctyp< { $unlist ~loc (semi ~loc) fields (field ~loc params)$ }>>
+
+  let rhs ~loc params : rhs -> Ast.ctyp = function
+    | `Fresh (None, t, `Private) -> <:ctyp< private $repr ~loc params t$ >>
+    | `Fresh (None, t, `Public) -> repr ~loc params t
+    | `Fresh (Some e, t, `Private) -> <:ctyp< $expr ~loc params e$ = private $repr ~loc params t$ >>
+    | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr ~loc params e, repr ~loc params t)
+    | #expr as t          -> expr ~loc params t
+
+  let rrhs ~loc params : sigrhs -> Ast.ctyp = function
+    | #rhs as r -> rhs ~loc params r
+    | `Nothing  -> <:ctyp< >>
+          
+  let rec app_params ~loc f = function
+    | []    -> f
+    | [x]   -> <:ctyp< $x$ $f$ >>
+    | x::xs -> app_params ~loc (<:ctyp< $x$ $f$ >>) xs
+
+  let sigdecl ~loc (params, bindings : sigdecl) : Ast.ctyp list =
+    let params' = List.map (param ~loc) params in
+    NameMap.fold
+      (fun name r dcl ->
+         let rhs = rrhs ~loc params r in
+           Ast.TyDcl (loc, name, params', rhs, []):: dcl)
+      bindings
+      []
+
+  let decl = (sigdecl :> loc:_ -> _ * rhs NameMap.t -> _)
 end

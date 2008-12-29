@@ -18,19 +18,17 @@ struct
     try
       f p
     with 
-        Base.Underivable msg | Failure msg ->
+        Base.Underivable (loc, msg) ->
+          fatal_error loc msg
+      | Failure msg ->
           fatal_error loc msg
 
-  let derive proj (loc : Loc.t) tdecls classname =
-    let context = display_errors loc (Base.setup_context loc) tdecls in
-      display_errors loc
-        (proj (Base.find classname)) (loc, context, tdecls)
-  
-  let derive_str loc (tdecls : Type.decl list) classname : Ast.str_item =
-    derive fst loc tdecls classname
+
+  let derive_str loc (tdecls : Type.decl) classname : Ast.str_item =
+    (Base.find classname ~loc)#decls tdecls
   
   let derive_sig loc tdecls classname : Ast.sig_item =
-    derive snd loc tdecls classname
+    (Base.find classname ~loc)#signature tdecls
 
 
   DELETE_RULE Gram str_item: "type"; type_declaration END
@@ -42,18 +40,17 @@ struct
   str_item:
   [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
     | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-        let decls = display_errors loc Type.Translate.decls types in 
-        let module U = Type.Untranslate(struct let loc = loc end) in
-        let tdecls = List.map U.decl decls in
+        let decls = display_errors loc Type.Translate.decl types in 
+(*        let () = prerr_endline (Showdecl.Show_decl.show decls) in*)
+        let tdecls = Type.Untranslate.decl ~loc decls in
           <:str_item< type $list:tdecls$ $list:List.map (derive_str loc decls) cl$ >>
    ]]
   ;
   sig_item:
   [[ "type"; types = type_declaration -> <:sig_item< type $types$ >>
    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
-       let decls  = display_errors loc Type.Translate.decls types in 
-       let module U = Type.Untranslate(struct let loc = loc end) in
-       let tdecls = List.concat_map U.sigdecl decls in
+       let decls  = display_errors loc Type.Translate.sigdecl types in 
+       let tdecls = Type.Untranslate.sigdecl ~loc decls in
        let ms = List.map (derive_sig loc decls) cl in
          <:sig_item< type $list:tdecls$ $list:ms$ >> ]]
   ;
@@ -68,13 +65,12 @@ struct
          if not (Base.is_registered classname) then
            fatal_error loc ("deriving: "^ classname ^" is not a known `class'")
          else
-           let module U = Type.Untranslate(struct let loc = loc end) in
            let binding = Ast.TyDcl (loc, "inline", [], t, []) in
-           let decls = display_errors loc Type.Translate.decls binding in
-             if List.exists Base.contains_tvars_decl decls then
+           let decls = display_errors loc Type.Translate.decl binding in
+             if Base.contains_tvars_decl decls then
                fatal_error loc ("deriving: type variables cannot be used in `method' instantiations")
              else
-               let tdecls = List.map U.decl decls in
+               let tdecls = Type.Untranslate.decl ~loc decls in
                let m = derive_str loc decls classname in
                  <:expr< let module $uid:classname$ = 
                              struct

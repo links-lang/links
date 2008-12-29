@@ -1,115 +1,110 @@
 (*pp camlp4of *)
-module InContext (L : Base.Loc) =
-struct
-  open Base
-  open Utils
-  open Type
-  open Camlp4.PreCast
-  include Base.InContext(L)
 
-  let classname = "Dump"
+open Base
+open Utils
+open Type
+open Camlp4.PreCast
 
-  let wrap ~atype ~dumpers ~undump =
-    <:module_expr< struct type a = $atype$
-                          let to_buffer buffer = function $list:dumpers$
-                          let from_stream stream = $undump$ end >>
+let classname = "Dump"
 
-  let instance = object (self)
-    inherit make_module_expr ~classname ~allow_private:false
+let wrap ~loc ~atype ~dumpers ~undump =
+  <:module_expr< struct type a = $atype$
+                        let to_buffer buffer = function $list:dumpers$
+                        let from_stream stream = $undump$ end >>
 
-    method nargs ctxt (exprs : (name * Type.expr) list) : Ast.expr * Ast.expr =
+class dump ~loc =
+object (self)
+  inherit Base.deriver ~loc ~classname ~allow_private:false ~default:<:module_expr< Dump.Defaults >>
+
+    method private nargs (exprs : (name * Type.atomic) list) : Ast.expr * Ast.expr =
       List.fold_right
         (fun (id,t) (p,u) -> 
-           <:expr< $mproject (self#expr ctxt t) "to_buffer"$ buffer $lid:id$; $p$ >>,
-           <:expr< let $lid:id$ = $mproject (self#expr ctxt t) "from_stream"$ stream in $u$ >>)
-        exprs (<:expr<>>, <:expr< $tuple_expr (List.map (fun (id,_) -> <:expr< $lid:id$ >>) exprs)$>>)
+           <:expr< $id:self#atomic t$.to_buffer buffer $lid:id$; $p$ >>,
+           <:expr< let $lid:id$ = $id:self#atomic t$.from_stream stream in $u$ >>)
+        exprs (<:expr<>>, <:expr< $tuple_expr ~loc (List.map (fun (id,_) -> <:expr< $lid:id$ >>) exprs)$>>)
 
-    method tuple ctxt ts = 
-      let atype = atype_expr ctxt (`Tuple ts)
-      and dumpers, undump = 
+    method tuple atype ts = 
+      let atype = self#atype atype in
+      let dumpers, undump = 
         let n = List.length ts in 
-        let pinner, undump = self#nargs ctxt (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) ts) in
-        let patt, expr = tuple n in
+        let pinner, undump = self#nargs (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) ts) in
+        let patt, expr = tuple ~loc n in
           [ <:match_case< $patt$ -> $pinner$ >> ], undump in
-        <:module_expr< Defaults( $wrap ~atype ~dumpers ~undump$) >>
+        wrap ~loc ~atype ~dumpers ~undump
 
-    method polycase ctxt tagspec n : Ast.match_case * Ast.match_case = 
+    method private polycase (tagspec : tagspec) n : Ast.match_case * Ast.match_case = 
       let dumpn = <:expr< Dump_int.to_buffer buffer $`int:n$ >> in
         match tagspec with
-          | Tag (name, args) -> (match args with 
-              | None   -> <:match_case< `$name$ -> $dumpn$ >>,
-                          <:match_case< $`int:n$ -> `$name$ >>
-              | Some e -> <:match_case< `$name$ x -> $dumpn$;
-                                         $mproject (self#expr ctxt e) "to_buffer"$ buffer x >>,
-                          <:match_case< $`int:n$ -> 
-                                        `$name$ ($mproject (self#expr ctxt e) "from_stream"$ stream) >>)
-          | Extends t -> 
-              let patt, guard, cast = cast_pattern ctxt t in
-                <:match_case< $patt$ when $guard$ -> 
-                               $dumpn$; $mproject (self#expr ctxt t) "to_buffer"$ buffer $cast$ >>,
-                <:match_case< $`int:n$ -> ($mproject (self#expr ctxt t) "from_stream"$ stream :> a) >>
+          | `Tag (name,None) -> <:match_case< `$name$ -> $dumpn$ >>,
+                               <:match_case< $`int:n$ -> `$name$ >>
+          | `Tag (name, Some e) -> 
+                               <:match_case< `$name$ x -> $dumpn$;
+                                                           $id:self#atomic e$.to_buffer buffer x >>,
+                               <:match_case< $`int:n$ ->  `$name$ ($id:self#atomic e$.from_stream stream) >>
+          | `Local a -> 
+                <:match_case< (# $lid:a$ as x) ->
+                               $dumpn$; $id:self#local a$.to_buffer buffer x >>,
+                <:match_case< $`int:n$ -> ($id:self#local a$.from_stream stream :> a) >>
+          | `Ctor a -> 
+              let hashname = Untranslate.qname ~loc a in
+                <:match_case< (# $id:hashname$ as x) ->
+                               $dumpn$; $id:self#ctor a$.to_buffer buffer x >>,
+                <:match_case< $`int:n$ -> ($id:self#ctor a$.from_stream stream :> a) >>
 
-    method case ctxt (ctor,args) n =
+
+    method private case (ctor,args) n =
       match args with 
         | [] -> (<:match_case< $uid:ctor$ -> Dump_int.to_buffer buffer $`int:n$ >>,
                  <:match_case< $`int:n$ -> $uid:ctor$ >>)
         | _ -> 
         let nargs = List.length args in
-        let patt, exp = tuple nargs in
-        let dump, undump = self#nargs ctxt (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) args) in
+        let patt, exp = tuple ~loc nargs in
+        let dump, undump = self#nargs (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) args) in
         <:match_case< $uid:ctor$ $patt$ -> 
                       Dump_int.to_buffer buffer $`int:n$;
                       $dump$ >>,
         <:match_case< $`int:n$ -> let $patt$ = $undump$ in $uid:ctor$ $exp$  >>
     
-    method field ctxt : Type.field -> Ast.expr * Ast.expr = function
+    method private field : Type.field -> Ast.expr * Ast.expr = function
       | (name, _, `Mutable) -> 
-          raise (Underivable ("Dump cannot be derived for record types with mutable fields ("^name^")"))
-      | (name, ([], t), _) -> 
-          <:expr< $mproject (self#expr ctxt t) "to_buffer"$ buffer $lid:name$ >>,
-          <:expr< $mproject (self#expr ctxt t) "from_stream"$ stream >>
-      | f -> raise (Underivable ("Dump cannot be derived for record types with polymorphic fields")) 
+          raise (Underivable (loc, "Dump cannot be derived for record types with mutable fields ("^name^")"))
+      | (name, t, `Immutable) -> 
+          <:expr< $id:self#atomic t$.to_buffer buffer $lid:name$ >>,
+          <:expr< $id:self#atomic t$.from_stream stream >>
 
-    method sum ?eq ctxt ((tname,_,_,_,_) as decl) summands = 
-      let msg = "Dump: unexpected tag %d at character %d when deserialising " ^ tname in
-      let dumpers, undumpers = 
-        List.split (List.mapn (self#case ctxt) summands) in
-        wrap ~atype:(atype ctxt decl) ~dumpers
+    method sum (name, params) ?eq summands = 
+      let atype = self#atype (name, params) in
+      let msg = "Dump: unexpected tag %d at character %d when deserialising " ^ name in
+      let dumpers, undumpers = List.split (List.mapn self#case summands) in
+        wrap ~loc ~atype ~dumpers
           ~undump:<:expr< match Dump_int.from_stream stream with $list:undumpers$ 
                                 | n -> raise (Dump_error
                                                 (Printf.sprintf $str:msg$ n
                                                    (Stream.count stream))) >>
 
-    method record ?eq ctxt decl fields = 
-       let dumpers, undumpers = 
-         List.split (List.map (self#field ctxt) fields) in
+    method record atype ?eq fields = 
+      let atype = self#atype atype in
+       let dumpers, undumpers = List.split (List.map self#field fields) in
        let undump = 
          List.fold_right2
            (fun (field,_,_) undumper e -> 
               <:expr< let $lid:field$ = $undumper$ in $e$ >>)
            fields
            undumpers
-           (record_expression fields) in
-         wrap ~atype:(atype ctxt decl) ~undump
-               ~dumpers:[ <:match_case< $record_pattern fields$ -> $List.fold_left1 seq dumpers$ >>]
+           (record_expression ~loc fields) in
+         wrap ~loc ~atype ~undump
+               ~dumpers:[ <:match_case< $record_pattern ~loc fields$ -> $List.fold_left1 (seq ~loc) dumpers$ >>]
    
-    method variant ctxt decl (_, tags) = 
+    method variant atype (_, tags) = 
+      let atype = self#atype atype in
       let msg = "Dump: unexpected tag %d at character %d when deserialising polymorphic variant" in
-      let dumpers, undumpers = 
-        List.split (List.mapn (self#polycase ctxt) tags) in
-        wrap ~atype:(atype ctxt decl) ~dumpers:(dumpers @ [ <:match_case< _ -> assert false >>])
+      let dumpers, undumpers = List.split (List.mapn self#polycase tags) in
+        wrap ~loc ~atype ~dumpers:(dumpers @ [ <:match_case< _ -> assert false >>])
           ~undump:<:expr< match Dump_int.from_stream stream with $list:undumpers$ 
                                 | n -> raise (Dump_error
                                                 (Printf.sprintf $str:msg$ n
                                                    (Stream.count stream))) >>
-  end
+
 end
 
-let _ = Base.register "Dump"
-  ((fun (loc, context, decls) -> 
-     let module M = InContext(struct let loc = loc end) in
-       M.generate ~context ~decls ~make_module_expr:M.instance#rhs ~classname:M.classname
-         ~default_module:"Defaults" ()),
-   (fun (loc, context, decls) -> 
-      let module M = InContext(struct let loc = loc end) in
-        M.gen_sigs ~context ~decls ~classname:M.classname))
+let _ = Base.register classname (new dump)

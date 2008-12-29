@@ -124,6 +124,22 @@ struct
     | TyAnt (_, s) -> "TyAnt("^s^")"
 end
 
+module PPAst =
+struct
+  let printer = let module P = Camlp4.Printers.OCaml.Make(Camlp4.PreCast.Syntax) in new P.printer ()
+
+  let mk_print do_print p = 
+  let buffer = Buffer.create 100 in
+  let fmt = Format.formatter_of_buffer buffer in
+  let () = do_print fmt p in
+  let () = Format.pp_print_flush fmt () in
+    Buffer.contents buffer 
+
+  let patt = mk_print printer#patt
+  let match_case = mk_print printer#match_case
+  let ctyp = mk_print printer#ctyp
+end
+
 module StringMap =
 struct
   include Map.Make(String)

@@ -1,7 +1,57 @@
 (*pp camlp4of *)
 
+open Type
+open Utils
+open Base
 open Camlp4.PreCast
 
+exception TODO
+
+let classname = "Functor"
+
+(*
+   prototype: [[t]] : t -> t[b_i/a_i]
+
+
+   [[a_i]]   = f_i
+
+   [[C1|...CN]] = function [[C1]] ... [[CN]]               sum
+   [[`C1|...`CN]] = function [[`C1]] ... [[`CN]]           variant
+ 
+   [[{t1,...tn}]] = fun (t1,tn) -> ([[t1]],[[tn]])         tuple
+   [[{l1:t1; ... ln:tn}]] = 
+         fun {l1=t1;...ln=tn} -> {l1=[[t1]];...ln=[[tn]]}  record
+
+   [[(t1,...tn) c]] = c_map [[t1]]...[[tn]]                constructor
+
+   [[a -> b]] = f . [[a]] (where a_i \notin fv(b))         function
+
+   [[C0]]    = C0->C0                                      nullary constructors
+   [[C1 (t1...tn)]]  = C1 t -> C0 ([[t1]] t1...[[tn]] tn)  unary constructor
+   [[`C0]]   = `C0->`C0                                    nullary tag
+   [[`C1 t]] = `C1 t->`C0 [[t]] t                          unary tag
+*)
+
+class functor_ ~loc =
+object (self)
+  inherit Base.deriver ~loc  ~classname ~allow_private:false ?default:None
+
+  method variant (atype : name * param list) (spec, ts : [`Eq | `Gt | `Lt] * tagspec list) : Ast.module_expr =
+    raise TODO
+
+  method sum (atype : name * param list) ?eq:expr (ts : summand list) : Ast.module_expr  =
+    raise TODO
+      
+  method tuple (atype : name * param list) (ts : atomic list) : Ast.module_expr =
+    raise TODO
+      
+  method record (atype : name * param list) ?eq:expr (fields : field list) : Ast.module_expr =
+    raise TODO
+end
+
+let () = Base.register classname (new functor_)
+
+(*
 module InContext (C : sig val context : Base.context val loc : Camlp4.PreCast.Loc.t end) =
 struct
   open C
@@ -10,7 +60,6 @@ struct
   open Base
   include Base.InContext(C)
 
-  let classname = "Functor"
 
   let param_map : string NameMap.t = 
     List.fold_right
@@ -38,28 +87,7 @@ struct
         type $tdec name$ 
         let map = $rhs$
       end >>
-(*
-   prototype: [[t]] : t -> t[b_i/a_i]
 
-
-   [[a_i]]   = f_i
-
-   [[C1|...CN]] = function [[C1]] ... [[CN]]               sum
-   [[`C1|...`CN]] = function [[`C1]] ... [[`CN]]           variant
- 
-   [[{t1,...tn}]] = fun (t1,tn) -> ([[t1]],[[tn]])         tuple
-   [[{l1:t1; ... ln:tn}]] = 
-         fun {l1=t1;...ln=tn} -> {l1=[[t1]];...ln=[[tn]]}  record
-
-   [[(t1,...tn) c]] = c_map [[t1]]...[[tn]]                constructor
-
-   [[a -> b]] = f . [[a]] (where a_i \notin fv(b))         function
-
-   [[C0]]    = C0->C0                                      nullary constructors
-   [[C1 (t1...tn)]]  = C1 t -> C0 ([[t1]] t1...[[tn]] tn)  unary constructor
-   [[`C0]]   = `C0->`C0                                    nullary tag
-   [[`C1 t]] = `C1 t->`C0 [[t]] t                          unary tag
-*)
   let rec polycase = function
     | Tag (name, None) -> <:match_case< `$name$ -> `$name$ >>
     | Tag (name, Some e) -> <:match_case< `$name$ x -> `$name$ ($expr e$ x) >>
@@ -161,3 +189,4 @@ let _ = Base.register "Functor"
   (fun (loc, context, decls) ->
      let module F = InContext(struct let loc = loc and context = context end) in
        <:sig_item< $list:List.map F.gen_sig decls$>>))
+*)

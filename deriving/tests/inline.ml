@@ -20,12 +20,13 @@ type 'a seq = [`Nil | `Cons of 'a * 'a seq]
     
 type nil = [`Nil] 
     deriving (Typeable)
-type intlist = ([nil| `Cons of int * 'a ] as 'a)
-    deriving (Typeable)
+(*type intlist = ([nil| `Cons of int * 'a ] as 'a)
+    deriving (Typeable)*)
     
-let _ = 
+(*let _ = 
   Typeable.throwing_cast<intlist> 
     (Typeable.mk<int seq> (`Cons (1, `Cons (2, `Cons (3, `Nil)))))
+*)
 
 let _ =
     Eq.eq<bool> true (Eq.eq<int> 3 4)

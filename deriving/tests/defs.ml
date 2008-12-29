@@ -11,7 +11,7 @@ type nullsum = N0 | N1 | N2 | N3
 type r1 = {
   r1_l1 : int;
   r1_l2 : int;
-} deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
+} deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
 
 type r2 = {
   mutable r2_l1 : int;
@@ -38,10 +38,10 @@ type funct = int -> int
 
 (* recursive types *)
 type intseq = INil | ICons of int * intseq
-  deriving (Dump, Eq, Show, Typeable, Pickle, Functor)
+  deriving (Dump, Eq, Show, Typeable, Pickle(*, Functor*))
 
 type 'a seq = Nil | Cons of 'a * 'a seq
-  deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+  deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
 (* applied type constructors (nullary, n-ary) *)
 type uses_seqs = (intseq * float seq) 
@@ -73,15 +73,16 @@ type poly3b = int * ([`Nil | `Cons of int * 'c] as 'c) * [`F]
 (* <, >, =, > < polymorphic variants *)
 type 'a poly7 = Foo of [`F of 'a]
 and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
-    deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+    deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
+
 
 (*
 type poly9 = [`F | [`G]]
     deriving (Dump, Eq, Show, Typeable, Pickle)
-  currently broken.
-*)
+  currently broken.*)
+
 type poly10 = [`F | poly3]
-    deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+    deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
 (* mutually recursive types (monomorphic, polymorphic) *)
 type mutrec_a = mutrec_c
@@ -94,12 +95,12 @@ type ('a,'b) pmutrec_a = ('a,'b) pmutrec_c
 and ('a,'b) pmutrec_b = { pl1 : ('a,'b) pmutrec_c ; pl2 : ('a,'b) pmutrec_a }
 and ('a,'b) pmutrec_c = SS of 'a * ('a,'b) pmutrec_a * 'b
 and ('a,'b) pmutrec_d = [`T of ('a,'b) pmutrec_b]
-    deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+    deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
 (* polymorphic types *)
-type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Dump, Functor, Typeable, Pickle)
+type 'a ff1 = F of 'a * 'a | G of int deriving (Show, Eq, Dump(*, Functor*), Typeable, Pickle)
 type ('a,'b) ff2 = F1 of ('a,'b) ff2 | F2 of 'a seq * int * 'b option
-  deriving (Dump, Eq, Show, Functor, Typeable, Pickle)
+  deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
 (* tuples *)
 type tup0 = unit
@@ -138,7 +139,7 @@ end
 
 (* with constraints *)
 type 'a constrained = [`F of 'a] constraint 'a = int
-    deriving (Functor) (* Show, etc. don't work here *)
+    (*deriving (Functor)*) (* Show, etc. don't work here *)
 
 (* private datatypes *)
 type p1 = private P1 
@@ -156,4 +157,4 @@ end
 
 (* Reusing existing instances *)
 type t = int 
-    deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle, Functor)
+    deriving (Eq, Enum, Bounded, Dump, Show, Typeable, Pickle(*, Functor*))
