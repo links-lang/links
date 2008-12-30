@@ -351,12 +351,12 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
                   Unionfind.union rpoint lpoint
               | `Rigid l, _ ->
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
-                                          string_of_int l ^" with the presence variable "^ (assert false)
-                                          (* string_of_presence (`Var rpoint) *) ))) (* TODO *)
+                                          string_of_int l ^" with the presence variable "^
+                                          string_of_presence (`Var rpoint))))
               | _, `Rigid r ->
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
-                                          string_of_int r ^" with the type "^ (assert false)
-                                          (* string_of_presence (`Var lpoint) *) ))) (* TODO *)
+                                          string_of_int r ^" with the type "^
+                                          string_of_presence (`Var lpoint))))
           end
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
@@ -574,8 +574,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
               (fun label (flag, _) labels ->
                  match flag with
                    | `Present -> StringSet.add label labels
-                   | `Absent -> labels
-                   | `Var _ -> assert false (* TODO *))
+                   | `Absent
+                   | `Var _ -> labels)
               field_env
               StringSet.empty
           in
@@ -636,8 +636,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                   ^"\nand\n "^ string_of_row open_row
                                   ^"\n could not be unified because the former is rigid"
                                   ^" and the latter contains fields not present in the former")))
-                 | `Absent -> ()
-                 | `Var _ -> assert false (* TODO *)
+                 | `Absent
+                 | `Var _ -> ()
           ) open_field_env';
         
         (* check that the closed row contains no absent fields *)

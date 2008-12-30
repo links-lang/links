@@ -76,18 +76,19 @@ and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var ]
+    | `RowVar of int * meta_row_var
+    | `PresenceVar of int * meta_presence_var ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type type_variable =
-    [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
+    (int * [`Rigid | `Flexible] *
+       [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var])
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 val type_var_number : quantifier -> int
 
 type type_arg = 
-    [ `Type of datatype | `Row of row ]
+    [ `Type of datatype | `Row of row | `Presence of presence_flag ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
@@ -140,12 +141,18 @@ val fresh_rigid_type_variable : unit -> datatype
 val fresh_row_variable : unit -> row_var
 val fresh_rigid_row_variable : unit -> row_var
 
+val fresh_presence_variable : unit -> presence_flag
+val fresh_rigid_presence_variable : unit -> presence_flag
+
 (** fresh quantifiers *)
 val fresh_type_quantifier : unit -> quantifier * datatype
 val fresh_flexible_type_quantifier : unit -> quantifier * datatype
 
 val fresh_row_quantifier : unit -> quantifier * row_var
 val fresh_flexible_row_quantifier : unit -> quantifier * row_var
+
+val fresh_presence_quantifier : unit -> quantifier * presence_flag
+val fresh_flexible_presence_quantifier : unit -> quantifier * presence_flag
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -233,9 +240,9 @@ type inference_type_map =
 
 val extend_typing_environment : typing_environment -> typing_environment -> typing_environment
 
-val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
-val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
-val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t
+val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
 
 (** mailboxes *)
 val show_mailbox_annotations : bool Settings.setting
@@ -244,6 +251,7 @@ val show_mailbox_annotations : bool Settings.setting
 val string_of_datatype : datatype -> string
 (*val string_of_datatype_raw : datatype -> string*)
 val string_of_row : row -> string
+val string_of_presence : presence_flag -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string

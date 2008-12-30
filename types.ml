@@ -96,21 +96,34 @@ and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var ]
+    | `RowVar of int * meta_row_var
+    | `PresenceVar of int * meta_presence_var]
     deriving (Eq, Show, Pickle, Typeable, Shelve)
 
-type type_variable =
-    [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+(* HACK
+
+   deriving doesn't allow these types to be inlined in the definition
+   of type_variable
+*)
+module M =
+struct
+  type pliability = [`Rigid | `Flexible]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+  type point = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+end
+
+type type_variable = int * M.pliability * M.point
+    deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let var_of_quantifier =
   function
     | `TypeVar (var, _) -> var
     | `RowVar (var, _) -> var
+    | `PresenceVar (var, _) -> var
 
 type datatype = typ
-  deriving (Eq, Pickle, Typeable, Shelve)
+    deriving (Eq, Pickle, Typeable, Shelve)
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -130,15 +143,14 @@ let for_all : quantifier list * datatype -> datatype = function
         List.map
           (function
              | `TypeVar x -> `TypeVar x
-             | `RowVar x -> `RowVar x) qs
+             | `RowVar x -> `RowVar x
+             | `PresenceVar x -> `PresenceVar x) qs
       in
         match t with
           | `ForAll (qs', t) -> `ForAll (qs @ qs', t)
           | _ -> `ForAll (qs, t)
 
-let type_var_number = function
-  | `TypeVar (x, _)
-  | `RowVar (x, _) -> x
+let type_var_number = var_of_quantifier
 
 module Env = Env.String
 
@@ -174,6 +186,8 @@ let _ =
   let make_rigid_type_variable var = `MetaTypeVar (Unionfind.fresh (`Rigid var))
   let make_row_variable var = Unionfind.fresh (`Flexible var)
   let make_rigid_row_variable var = Unionfind.fresh (`Rigid var)
+  let make_presence_variable var = `Var (Unionfind.fresh (`Flexible var))
+  let make_rigid_presence_variable var = `Var (Unionfind.fresh (`Rigid var))
 
   let is_closed_row =
     let rec is_closed rec_vars =
@@ -215,6 +229,8 @@ let _ =
   let fresh_rigid_type_variable = make_rigid_type_variable -<- fresh_raw_variable
   let fresh_row_variable = make_row_variable -<- fresh_raw_variable
   let fresh_rigid_row_variable = make_rigid_row_variable -<- fresh_raw_variable
+  let fresh_presence_variable = make_presence_variable -<- fresh_raw_variable
+  let fresh_rigid_presence_variable = make_rigid_presence_variable -<- fresh_raw_variable
 
   let fresh_type_quantifier () =
     let var = fresh_raw_variable () in
@@ -225,6 +241,11 @@ let _ =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var in
       `RowVar (var, point), point
+
+  let fresh_presence_quantifier () =
+    let var = fresh_raw_variable () in
+    let point = Unionfind.fresh (`Rigid var) in
+      `PresenceVar (var, point), `Var point
         
   let fresh_flexible_type_quantifier () =
     let var = fresh_raw_variable () in
@@ -235,6 +256,11 @@ let _ =
     let var = fresh_raw_variable () in
     let point = make_row_variable var in
       `RowVar (var, point), point      
+
+  let fresh_flexible_presence_quantifier () =
+    let var = fresh_raw_variable () in
+    let point = Unionfind.fresh (`Flexible var) in
+      `PresenceVar (var, point), `Var point      
 
   let make_empty_closed_row () = empty_field_env, closed_row_var
   let make_empty_open_row () = empty_field_env, fresh_row_variable ()
@@ -426,6 +452,26 @@ let is_empty_row : row -> bool =
   in
     is_empty TypeVarSet.empty
 
+(*
+  get rid of any `Body constructors inside a presence flag
+*)
+let rec normalise_presence_flag f =
+  match f with
+    | `Present
+    | `Absent -> f
+    | `Var point ->
+        begin
+          match Unionfind.find point with
+            | `Flexible _
+            | `Rigid _ -> f
+            | `Body f -> normalise_presence_flag f
+        end
+
+let normalise_fields =
+  FieldEnv.map
+    (fun (f, t) ->
+       (normalise_presence_flag f, t))    
+
 (* 
  convert a row to the form (field_env, row_var)
  where Unionfind.find row_var is of the form:
@@ -434,7 +480,8 @@ let is_empty_row : row -> bool =
   | `Flexible var
   | `Recursive (var, body)
  *)
-let flatten_row : row -> row =
+let flatten_row : row -> row = fun (field_env, row_var) ->
+  let field_env = normalise_fields field_env in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
     fun rec_env ((field_env, row_var) as row) ->
       let row' =
@@ -459,7 +506,7 @@ let flatten_row : row -> row =
         assert (is_flattened_row row');
         row'
   in
-    flatten_row' IntMap.empty
+    flatten_row' IntMap.empty (field_env, row_var)
 
 
 (*
@@ -470,7 +517,8 @@ let flatten_row : row -> row =
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
-let unwrap_row : row -> (row * row_var option) =
+let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
+  let field_env = normalise_fields field_env in
   let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
     fun rec_env ((field_env, row_var) as row) ->
       let row' =
@@ -497,7 +545,7 @@ let unwrap_row : row -> (row * row_var option) =
         assert (is_flattened_row (fst row'));
         row'
   in
-    unwrap_row' IntMap.empty
+    unwrap_row' IntMap.empty (field_env, row_var)
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
@@ -636,6 +684,7 @@ struct
     function
       | `TypeVar (var, _) -> var, (`Rigid, `Type, `Bound)
       | `RowVar (var, _) -> var, (`Rigid, `Row, `Bound)
+      | `PresenceVar (var, _) -> var, (`Rigid, `Presence, `Bound)
 
   (* find all free and bound type variables *)
   (*
@@ -807,7 +856,8 @@ struct
     fun (policy, vars) ->
       function
         | `TypeVar (var, _)
-        | `RowVar (var, _) -> Vars.find var vars
+        | `RowVar (var, _)
+        | `PresenceVar (var, _) -> Vars.find var vars
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
@@ -1038,7 +1088,7 @@ and presence_flexible_type_vars bound_vars =
         begin
           match Unionfind.find point with
             | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-            | `Flexible var -> TypeVarMap.singleton var (assert false) (* TODO *)
+            | `Flexible var -> TypeVarMap.singleton var (`PresenceVar (var, point))
             | `Rigid _ -> TypeVarMap.empty
             | `Body f -> presence_flexible_type_vars bound_vars f
         end
@@ -1069,6 +1119,7 @@ and row_var_flexible_type_vars bound_vars row_var =
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty
+let free_bound_presence_type_vars ?(include_aliases=true) = Vars.free_bound_presence_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
 (* string conversions *)
@@ -1092,6 +1143,13 @@ let string_of_row ?(policy=Print.default_policy) row =
   Print.row "," TypeVarSet.empty
     (policy (), Vars.make_names (free_bound_row_type_vars ~include_aliases:true row))
     row
+
+let string_of_presence ?(policy=Print.default_policy) (f : presence_flag) = 
+  let policy = policy () in
+    Print.presence
+      TypeVarSet.empty
+      (policy, Vars.make_names (free_bound_presence_type_vars ~include_aliases:true f))
+      f
     
 let string_of_row_var ?(policy=Print.default_policy) row_var =
   match
@@ -1109,6 +1167,7 @@ let string_of_row_var ?(policy=Print.default_policy) row_var =
 *)
 let string_of_datatype t = string_of_datatype t
 let string_of_row r = string_of_row r
+let string_of_presence f = string_of_presence f
 let string_of_row_var r = string_of_row_var r
 
 module Show_datatype =
@@ -1134,7 +1193,7 @@ let extend_typing_environment
   {var_env = Env.extend l r ; tycon_env = Env.extend al ar }
 
 type type_arg = 
-    [ `Type of datatype | `Row of row ]
+    [ `Type of datatype | `Row of row | `Presence of presence_flag ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let string_of_environment env =
@@ -1147,13 +1206,14 @@ let string_of_environment env =
 
 let string_of_typing_environment {var_env=env} = string_of_environment env
 
-let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
+let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t * presence_flag IntMap.t =
   let module S = IntSet in
   let module M = IntMap in
-  let empties = M.empty, M.empty in
-  let union2 a b = M.fold M.add a b in
-  let union2both (l,r) (ll,rr) = (union2 l ll, union2 r rr) in
-  let union = List.fold_left union2both empties in
+  let empties = M.empty, M.empty, M.empty in
+  let union =
+    let union_one a b = M.fold M.add a b in
+    let union_three (x, y, z) (x', y', z') = (union_one x x', union_one y y', union_one z z') in
+      List.fold_left union_three empties in
   let rec make_env boundvars = function
       | `Not_typed
       | `Primitive _             -> empties
@@ -1169,7 +1229,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
                (fun q boundvars ->
                   match q with
                     | `TypeVar (var, _)
-                    | `RowVar (var, _) ->
+                    | `RowVar (var, _)
+                    | `PresenceVar (var, _) ->
                         S.add var boundvars)
                qs
                boundvars)
@@ -1177,10 +1238,12 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
-              | `Rigid var -> let l,r = empties in
-                  (M.add var (fresh_rigid_type_variable ()) l, r)
-              | `Flexible var -> let l, r = empties in
-                  (M.add var (fresh_type_variable ()) l, r)
+              | `Flexible var ->
+                  let tenv, renv, penv = empties in
+                    (M.add var (fresh_type_variable ()) tenv, renv, penv)
+              | `Rigid var ->
+                  let tenv, renv, penv = empties in
+                    (M.add var (fresh_rigid_type_variable ()) tenv, renv, penv)
               | `Recursive (l, _) when S.mem l boundvars -> empties
               | `Recursive (l, b) -> make_env (S.add l boundvars) b
               | `Body t -> make_env boundvars t
@@ -1192,8 +1255,12 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `Var point ->
           begin
             match Unionfind.find point with
-              | `Flexible var -> assert false (* TODO *)
-              | `Rigid var -> assert false (* TODO *)
+              | `Flexible var ->
+                  let tenv, renv, penv = empties in
+                    (tenv, renv, M.add var (fresh_presence_variable ()) penv)
+              | `Rigid var ->
+                  let tenv, renv, penv = empties in
+                    (tenv, renv, M.add var (fresh_rigid_presence_variable ()) penv)
               | `Body f -> make_env_f boundvars f
           end
   and make_env_r boundvars ((field_env, row_var):row) =
@@ -1205,25 +1272,29 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
     and row_vars = 
       match Unionfind.find row_var with
         | `Closed -> empties
-        | `Flexible var -> let l, r = empties in
-            (l, M.add var (fresh_row_variable ()) r)
-        | `Rigid var -> let l, r = empties in
-            (l, M.add var (fresh_rigid_row_variable ()) r)
+        | `Flexible var ->
+            let tenv, renv, penv = empties in
+              (tenv, M.add var (fresh_row_variable ()) renv, penv)
+        | `Rigid var ->
+            let tenv, renv, penv = empties in
+              (tenv, M.add var (fresh_rigid_row_variable ()) renv, penv)
         | `Recursive (l, _) when S.mem l boundvars -> empties
         | `Recursive (l, row) -> make_env_r (S.add l boundvars) row
         | `Body row -> make_env_r boundvars row
     in union [field_vars; row_vars]
   in make_env S.empty
 
-let make_rigid_envs datatype : datatype IntMap.t * row_var IntMap.t =
-  let tenv, renv = make_fresh_envs datatype in
+let make_rigid_envs datatype : datatype IntMap.t * row_var IntMap.t * presence_flag Utility.IntMap.t =
+  let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_rigid_type_variable ()) tenv,
-     IntMap.map (fun _ -> fresh_rigid_row_variable ()) renv)
+     IntMap.map (fun _ -> fresh_rigid_row_variable ()) renv,
+     IntMap.map (fun _ -> fresh_rigid_presence_variable ()) penv)
 
-let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t =
-  let tenv, renv = make_fresh_envs datatype in
+let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t * presence_flag Utility.IntMap.t =
+  let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_type_variable ()) tenv,
-     IntMap.map (fun _ -> fresh_row_variable ()) renv)
+     IntMap.map (fun _ -> fresh_row_variable ()) renv,
+     IntMap.map (fun _ -> fresh_presence_variable ()) penv)
 
 
 (* subtyping *)

@@ -77,9 +77,9 @@ and get_presence_type_args : gen_kind -> TypeVarSet.t -> presence_flag -> type_a
             match Unionfind.find point with
               | `Flexible var
               | `Rigid var when TypeVarSet.mem var bound_vars -> []
-              | `Flexible _ when kind=`All -> [assert false]
+              | `Flexible _ when kind=`All -> [`Presence (`Var point)]
               | `Flexible _ -> []
-              | `Rigid _ -> [assert false]
+              | `Rigid _ -> [`Presence (`Var point)]
               | `Body f -> get_presence_type_args kind bound_vars f
           end
 
@@ -108,8 +108,8 @@ let type_variables_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Flexible var -> `TypeVar (var, point)
-               | `Rigid var -> `RigidTypeVar (var, point)
+               | `Flexible var -> (var, `Flexible, `Type point)
+               | `Rigid var -> (var, `Rigid, `Type point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -117,10 +117,18 @@ let type_variables_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Flexible var -> `RowVar (var, row_var)
-               | `Rigid var -> `RigidRowVar (var, row_var)
+               | `Flexible var -> (var, `Flexible, `Row row_var)
+               | `Rigid var -> (var, `Rigid, `Row row_var)
                | _ -> assert false
-           end)
+           end
+       | `Presence (`Var point) ->
+           begin
+             match Unionfind.find point with
+               | `Flexible var -> (var, `Flexible, `Presence point)
+               | `Rigid var -> (var, `Rigid, `Presence point)
+               | _ -> assert false
+           end
+       | `Presence _ -> assert false)
 
 let quantifiers_of_type_args =
   List.map
@@ -140,7 +148,15 @@ let quantifiers_of_type_args =
                | `Flexible var
                | `Rigid var -> `RowVar (var, row_var)
                | _ -> assert false
-           end)
+           end
+       | `Presence (`Var point) ->
+           begin
+             match Unionfind.find point with
+               | `Flexible var
+               | `Rigid var -> `PresenceVar (var, point)
+               | _ -> assert false
+           end
+       | `Presence _ -> assert false)
 
 let get_type_variables bound_vars = type_variables_of_type_args -<- (get_type_args `All bound_vars)
 
@@ -157,6 +173,13 @@ let rigidify_quantifier =
             | _ -> assert false
         end
     | `RowVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible var -> Unionfind.change point (`Rigid var)
+            | `Rigid _ -> ()
+            | _ -> assert false
+        end
+    | `PresenceVar (_, point) ->
         begin
           match Unionfind.find point with
             | `Flexible var -> Unionfind.change point (`Rigid var)

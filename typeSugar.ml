@@ -1742,8 +1742,8 @@ and type_binding : context -> binding -> binding * context =
             else
               let tyvars = Generalise.get_type_variables context.var_env bt in
                 if List.exists (function
-                                  | `RigidTypeVar _ | `RigidRowVar _ -> true
-                                  | `TypeVar _ | `RowVar _ -> false) tyvars
+                                  | (_, `Rigid, _) -> true
+                                  | (_, `Flexible, _) -> false) tyvars
                 then
                   Gripers.value_restriction pos bt
                 else

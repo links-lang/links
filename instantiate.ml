@@ -14,8 +14,8 @@ type inst_env = inst_type_env * inst_row_env
 
 exception ArityMismatch
 
-let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype -> datatype =
-  fun (tenv, renv) ->
+let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t * presence_flag IntMap.t) -> datatype -> datatype =
+  fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
 	match datatype with
@@ -74,8 +74,8 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype ->
                      | `Flexible var
                      | `Rigid var ->
                          let f =
-                           if IntMap.mem var (assert false) then
-                             IntMap.find var (assert false)
+                           if IntMap.mem var penv then
+                             IntMap.find var penv
                            else
                              `Var point
                          in
@@ -128,22 +128,29 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
           Debug.if_set (show_instantiation)
 	    (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
           
-        let typ var (tenv, renv, tys) =
+        let typ var (tenv, renv, penv, tys) =
           let t = fresh_type_variable () in
-            IntMap.add var t tenv, renv, `Type t :: tys in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys in
 
-        let row var (tenv, renv, tys) =
+        let row var (tenv, renv, penv, tys) =
           let r = fresh_row_variable () in
-            tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+            tenv, IntMap.add var r renv, penv, `Row (StringMap.empty, r) :: tys in
 
-	let tenv, renv, tys = List.fold_left
-	  (fun env -> function
-	     | `TypeVar (var, _) -> typ var env
-	     | `RowVar (var, _) -> row var env
-	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
+        let presence var (tenv, renv, penv, tys) =
+          let t = fresh_presence_variable () in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
+
+	let tenv, renv, penv, tys =
+          List.fold_left
+	    (fun env ->
+               function
+	         | `TypeVar (var, _) -> typ var env
+	         | `RowVar (var, _) -> row var env
+	         | `PresenceVar (var, _) -> presence var env)
+            (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
 
         let tys = List.rev tys in
-	  tys, instantiate_datatype (tenv, renv) t
+	  tys, instantiate_datatype (tenv, renv, penv) t
     | t -> [], t
 
 
@@ -159,22 +166,27 @@ let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
           Debug.if_set (show_instantiation)
 	    (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in
           
-        let typ var (tenv, renv, tys) =
+        let typ var (tenv, renv, penv, tys) =
           let t = fresh_rigid_type_variable () in
-            IntMap.add var t tenv, renv, `Type t :: tys in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys in
 
-        let row var (tenv, renv, tys) =
+        let row var (tenv, renv, penv, tys) =
           let r = fresh_rigid_row_variable () in
-            tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+            tenv, IntMap.add var r renv, penv, `Row (StringMap.empty, r) :: tys in
 
-	let tenv, renv, tys = List.fold_left
+        let presence var (tenv, renv, penv, tys) =
+          let t = fresh_rigid_presence_variable () in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
+
+	let tenv, renv, penv, tys = List.fold_left
 	  (fun env -> function
 	     | `TypeVar (var, _) -> typ var env
 	     | `RowVar (var, _) -> row var env
-	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
+	     | `PresenceVar (var, _) -> presence var env
+	  ) (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
 
         let tys = List.rev tys in
-	  tys, instantiate_datatype (tenv, renv) t
+	  tys, instantiate_datatype (tenv, renv, penv) t
     | t -> [], t
 
 
@@ -215,13 +227,13 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
     match t with
       | `ForAll (vars, _) -> vars
       | _ -> [] in
-  let tenv, renv =
+  let tenv, renv, penv =
     if (List.length vars <> List.length tyargs) then raise ArityMismatch;
     List.fold_right2
-      (fun var t (tenv, renv) ->
+      (fun var t (tenv, renv, penv) ->
          match (var, t) with
            | (`TypeVar (var, _), `Type t) ->
-               (IntMap.add var t tenv, renv)
+               (IntMap.add var t tenv, renv, penv)
            | (`RowVar (var, _), `Row row) ->
                (* 
                   QUESTION:
@@ -235,15 +247,20 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
                begin
                  match row with
                    | fields, row_var when StringMap.is_empty fields ->
-                       (tenv, IntMap.add var row_var renv)
+                       (tenv, IntMap.add var row_var renv, penv)
                    | _ ->
-                       (tenv, IntMap.add var (Unionfind.fresh (`Body row)) renv)
+                       (tenv, IntMap.add var (Unionfind.fresh (`Body row)) renv, penv)
                end
+           | (`PresenceVar (var, _), `Presence f) ->
+               (tenv, renv, IntMap.add var f penv)
            | _ -> assert false)
-      vars tyargs (IntMap.empty, IntMap.empty)
+      vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
   in
-    instantiate_datatype (tenv, renv) t
+    instantiate_datatype (tenv, renv, penv) t
 
+(*
+  ensure that t has fresh quantifiers
+*)
 let freshen_quantifiers t =
   match t with
     | `ForAll (qs, _) ->
@@ -256,19 +273,18 @@ let freshen_quantifiers t =
                         q, `Type t
                   | `RowVar _ ->
                       let q, row_var = Types.fresh_row_quantifier () in
-                        q, `Row (StringMap.empty, row_var))
+                        q, `Row (StringMap.empty, row_var)
+                  | `PresenceVar _ ->
+                      let q, f = Types.fresh_presence_quantifier () in
+                        q, `Presence f)
                qs)
         in
           `ForAll (qs, apply_type t tyargs)
     | t -> t
 
 (*
-TODO:
-
-  Decide on a discipline for quantifiers. Perhaps we should insist that
-  all quantifiers be rigid.
+  replace the quantifiers in t with qs'
 *)
-
 let replace_quantifiers t qs' =
   match t with
     | `ForAll (qs, _) ->
@@ -279,7 +295,9 @@ let replace_quantifiers t qs' =
                  | `TypeVar _, `TypeVar (_, point)  ->
                      `Type (`MetaTypeVar point)
                  | `RowVar _, `RowVar (_, row_var) ->
-                     `Row (StringMap.empty, row_var))
+                     `Row (StringMap.empty, row_var)
+                 | `PresenceVar _, `PresenceVar (_, point)  ->
+                     `Presence (`Var point))
             qs
             qs'
         in
@@ -313,4 +331,4 @@ let alias name ts env =
             | _ -> assert false
         in
           `Alias ((name, ts),
-                  instantiate_datatype (tenv, IntMap.empty) body)
+                  instantiate_datatype (tenv, IntMap.empty, IntMap.empty) body)
