@@ -14,10 +14,8 @@ let rec add_extras =
     | Some q::extras, tyargs ->
         begin
           match q with
-            | `TypeVar (_, point)
-            | `RigidTypeVar (_, point) -> `Type (`MetaTypeVar point) :: add_extras (extras, tyargs)
-            | `RowVar (_, row_var)
-            | `RigidRowVar (_, row_var) -> `Row (StringMap.empty, row_var) :: add_extras (extras, tyargs)
+            | `TypeVar (_, point) -> `Type (`MetaTypeVar point) :: add_extras (extras, tyargs)
+            | `RowVar (_, row_var) -> `Row (StringMap.empty, row_var) :: add_extras (extras, tyargs)
         end
 
 class desugar_inners {Types.var_env=var_env; Types.tycon_env=tycon_env} =

@@ -730,12 +730,16 @@ vfields:
 vfield:
 | CONSTRUCTOR                                                  { $1, `Present UnitType }
 | CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
-| CONSTRUCTOR MINUS                                            { $1, `Absent (fresh_rigid_type_variable ()) }
+| CONSTRUCTOR PLUS                                             { $1, `Present UnitType }
+| CONSTRUCTOR PLUS COLON datatype                              { $1, `Present $4 }
+| CONSTRUCTOR MINUS                                            { $1, `Absent UnitType }
 | CONSTRUCTOR MINUS COLON datatype                             { $1, `Absent $4 }
 
 field:
 | record_label COLON datatype                                  { $1, `Present $3 }
-| record_label MINUS                                           { $1, `Absent (fresh_rigid_type_variable ()) }
+| record_label PLUS                                            { $1, `Present UnitType }
+| record_label PLUS COLON datatype                             { $1, `Present $4 }
+| record_label MINUS                                           { $1, `Absent UnitType }
 | record_label MINUS COLON datatype                            { $1, `Absent $4 }
 
 record_label:

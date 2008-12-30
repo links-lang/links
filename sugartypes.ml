@@ -101,9 +101,14 @@ and fieldspec = [`Present of datatype | `Absent of datatype]
 type datatype' = datatype * Types.datatype option
     deriving (Show)
 
-type quantifier =
+type type_variable =
     [ `TypeVar of name | `RigidTypeVar of name
     | `RowVar of name | `RigidRowVar of name ]
+      deriving (Show)
+
+type quantifier =
+    [ `TypeVar of name
+    | `RowVar of name ]
       deriving (Show)
 
 type fieldconstraint = [ `Readonly | `Default ]

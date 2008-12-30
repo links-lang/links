@@ -75,6 +75,11 @@ and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
+    [ `TypeVar of int * meta_type_var
+    | `RowVar of int * meta_row_var ]
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
+
+type type_variable =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)

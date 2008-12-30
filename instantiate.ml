@@ -138,10 +138,8 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
 
 	let tenv, renv, tys = List.fold_left
 	  (fun env -> function
-	     | `TypeVar (var, _)
-	     | `RigidTypeVar (var, _) -> typ var env
-	     | `RowVar (var, _)
-	     | `RigidRowVar (var, _) -> row var env
+	     | `TypeVar (var, _) -> typ var env
+	     | `RowVar (var, _) -> row var env
 	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
 
         let tys = List.rev tys in
@@ -171,10 +169,8 @@ let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
 
 	let tenv, renv, tys = List.fold_left
 	  (fun env -> function
-	     | `TypeVar (var, _)
-	     | `RigidTypeVar (var, _) -> typ var env
-	     | `RowVar (var, _)
-	     | `RigidRowVar (var, _) -> row var env
+	     | `TypeVar (var, _) -> typ var env
+	     | `RowVar (var, _) -> row var env
 	  ) (IntMap.empty, IntMap.empty, []) quantifiers in
 
         let tys = List.rev tys in
@@ -224,9 +220,9 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
     List.fold_right2
       (fun var t (tenv, renv) ->
          match (var, t) with
-           | ((`TypeVar (var, _) | `RigidTypeVar (var, _)), `Type t) ->
+           | (`TypeVar (var, _), `Type t) ->
                (IntMap.add var t tenv, renv)
-           | ((`RowVar (var, _) | `RigidRowVar (var, _)), `Row row) ->
+           | (`RowVar (var, _), `Row row) ->
                (* 
                   QUESTION:
                   
@@ -256,15 +252,9 @@ let freshen_quantifiers t =
             (List.map
                (function
                   | `TypeVar _ ->
-                      let q, t = Types.fresh_flexible_type_quantifier () in
-                        q, `Type t
-                  | `RigidTypeVar _ ->
                       let q, t = Types.fresh_type_quantifier () in
                         q, `Type t
                   | `RowVar _ ->
-                      let q, row_var = Types.fresh_flexible_row_quantifier () in
-                        q, `Row (StringMap.empty, row_var)
-                  | `RigidRowVar _ ->
                       let q, row_var = Types.fresh_row_quantifier () in
                         q, `Row (StringMap.empty, row_var))
                qs)
@@ -286,9 +276,9 @@ let replace_quantifiers t qs' =
           List.map2
             (fun q q' ->
                match q, q' with
-                 | (`TypeVar _ | `RigidTypeVar _), (`TypeVar (_, point) |`RigidTypeVar (_, point)) ->
+                 | `TypeVar _, `TypeVar (_, point)  ->
                      `Type (`MetaTypeVar point)
-                 | (`RowVar _ | `RigidRowVar _), (`RowVar (_, row_var) | `RigidRowVar (_, row_var)) ->
+                 | `RowVar _, `RowVar (_, row_var) ->
                      `Row (StringMap.empty, row_var))
             qs
             qs'

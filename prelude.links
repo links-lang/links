@@ -567,7 +567,7 @@ typename MultiXmlContext = ([Xml]) -{O}-> Xml;
 
 typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -{O}-> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) -{O}-> ([CheckedFormBuilder], Gen));
-typename Handler (a) = (a) -?-> Page;
+typename Handler (a) = (a) -{O}-> Page;
 
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
@@ -643,7 +643,7 @@ fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
 }
 
 sig validate :
-  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) -?-> Page
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) -{O}-> Page
 fun validate(c, h, k, zs, i, attributes) (env) {
   var (xml, v) = c(env);
   switch (v) {

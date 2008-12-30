@@ -20,13 +20,16 @@ let concrete_type t =
           begin
             match Unionfind.find point with
               | `Body t -> ct rec_names t
-              | `Recursive (_, t) ->
-                  ct rec_names t
+              | `Recursive (var, t) ->
+                  if IntSet.mem var rec_names then
+                    `MetaTypeVar point
+                  else
+                    ct (IntSet.add var rec_names) t
               | _ -> t
           end
       | _ -> t
   in
-    ct (StringSet.empty) t
+    ct (IntSet.empty) t
 
 let rec extract_row t = match concrete_type t with
   | `Record row -> row

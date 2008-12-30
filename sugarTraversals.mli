@@ -31,7 +31,6 @@ class map :
     method replace_rhs     : replace_rhs -> replace_rhs
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
-    method quantifier      : quantifier -> quantifier
     method position        : position -> position
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
@@ -91,7 +90,6 @@ class fold :
     method replace_rhs     : replace_rhs -> 'self
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
-    method quantifier      : quantifier -> 'self
     method position        : position -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
@@ -161,7 +159,6 @@ object ('self)
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : position -> 'self * position
   method program         : program -> 'self * program
-  method quantifier      : quantifier -> 'self * quantifier
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs

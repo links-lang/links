@@ -116,13 +116,6 @@ class map =
           let _x = o#regex _x in
           let _x_i1 = o#replace_rhs _x_i1 in `Replace ((_x, _x_i1))
       
-    method quantifier : quantifier -> quantifier =
-      function
-      | `TypeVar _x -> let _x = o#name _x in `TypeVar _x
-      | `RigidTypeVar _x -> let _x = o#name _x in `RigidTypeVar _x
-      | `RowVar _x -> let _x = o#name _x in `RowVar _x
-      | `RigidRowVar _x -> let _x = o#name _x in `RigidRowVar _x
-      
     method position : position -> position =
       fun (_x, _x_i1, _x_i2) ->
         let _x = o#unknown _x in
@@ -601,13 +594,6 @@ class fold =
       | `Replace ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#replace_rhs _x_i1 in o
       
-    method quantifier : quantifier -> 'self_type =
-      function
-      | `TypeVar _x -> let o = o#name _x in o
-      | `RigidTypeVar _x -> let o = o#name _x in o
-      | `RowVar _x -> let o = o#name _x in o
-      | `RigidRowVar _x -> let o = o#name _x in o
-      
     method position : position -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
         let o = o#unknown _x in
@@ -1058,14 +1044,6 @@ class fold_map =
           let (o, _x) = o#regex _x in
           let (o, _x_i1) = o#replace_rhs _x_i1
           in (o, (`Replace ((_x, _x_i1))))
-      
-    method quantifier : quantifier -> ('self_type * quantifier) =
-      function
-      | `TypeVar _x -> let (o, _x) = o#name _x in (o, (`TypeVar _x))
-      | `RigidTypeVar _x ->
-          let (o, _x) = o#name _x in (o, (`RigidTypeVar _x))
-      | `RowVar _x -> let (o, _x) = o#name _x in (o, (`RowVar _x))
-      | `RigidRowVar _x -> let (o, _x) = o#name _x in (o, (`RigidRowVar _x))
       
     method program : program -> ('self_type * program) =
       fun (_x, _x_i1) ->

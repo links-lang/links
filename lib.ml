@@ -130,7 +130,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let a = Types.fresh_raw_variable () in
     let t = Unionfind.fresh (`Rigid a) in
-      (`ForAll ([`RigidTypeVar (a, t)], `Function (make_tuple_type [from], `MetaTypeVar t, into)) : Types.datatype)),
+      (`ForAll ([`TypeVar (a, t)], `Function (make_tuple_type [from], `MetaTypeVar t, into)) : Types.datatype)),
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 

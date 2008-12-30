@@ -235,8 +235,8 @@ end
         "<code>" ^ s ^ "</code>"
       else
         match getenv "TERM" with
-          | Some ("rxvt"|"aterm"|"gnome-terminal"|"xterm") ->
-              "`\x1b[1;31m" ^ s ^ "\x1b[0m'"
+(*           | Some ("rxvt"|"aterm"|"gnome-terminal"|"xterm") -> *)
+(*               "`\x1b[1;31m" ^ s ^ "\x1b[0m'" *)
           | _ -> ("`"^ s ^ "'" )
       
     let nl () =
@@ -608,6 +608,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 tab() ^ code (show_type rt))
 
     let bind_rec_rec ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      Debug.print ("rt: "^Types.string_of_datatype rt);
       die pos ("\
 The recursive function definition has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
@@ -1739,10 +1740,10 @@ and type_binding : context -> binding -> binding * context =
               let pat = update_pattern_vars penv (erase_pat pat) in
                 (Utils.generalise context.var_env bt, pat, penv)
             else
-              let quantifiers = Generalise.get_quantifiers context.var_env bt in
+              let tyvars = Generalise.get_type_variables context.var_env bt in
                 if List.exists (function
                                   | `RigidTypeVar _ | `RigidRowVar _ -> true
-                                  | `TypeVar _ | `RowVar _ -> false) quantifiers                    
+                                  | `TypeVar _ | `RowVar _ -> false) tyvars
                 then
                   Gripers.value_restriction pos bt
                 else

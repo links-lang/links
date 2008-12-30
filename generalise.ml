@@ -102,7 +102,7 @@ let get_type_args kind bound_vars t =
                    | _ -> false) (get_type_args kind bound_vars t)
 
 
-let quantifiers_of_type_args =
+let type_variables_of_type_args =
   List.map
     (function
        | `Type (`MetaTypeVar point) ->
@@ -122,7 +122,27 @@ let quantifiers_of_type_args =
                | _ -> assert false
            end)
 
-let get_quantifiers bound_vars = quantifiers_of_type_args -<- (get_type_args `All bound_vars)
+let quantifiers_of_type_args =
+  List.map
+    (function
+       | `Type (`MetaTypeVar point) ->
+           begin
+             match Unionfind.find point with
+               | `Flexible var
+               | `Rigid var -> `TypeVar (var, point)
+               | _ -> assert false
+           end
+       | `Type _ -> assert false
+       | `Row (fields, row_var) ->
+           assert (StringMap.is_empty fields);
+           begin
+             match Unionfind.find row_var with
+               | `Flexible var
+               | `Rigid var -> `RowVar (var, row_var)
+               | _ -> assert false
+           end)
+
+let get_type_variables bound_vars = type_variables_of_type_args -<- (get_type_args `All bound_vars)
 
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
@@ -133,16 +153,16 @@ let rigidify_quantifier =
         begin
           match Unionfind.find point with
             | `Flexible var -> Unionfind.change point (`Rigid var)
+            | `Rigid _ -> ()
             | _ -> assert false
         end
     | `RowVar (_, point) ->
         begin
           match Unionfind.find point with
             | `Flexible var -> Unionfind.change point (`Rigid var)
+            | `Rigid _ -> ()
             | _ -> assert false
         end
-    | `RigidTypeVar _
-    | `RigidRowVar _ -> ()
 
 (** generalise: 
     Universally quantify any free type variables in the expression.
@@ -163,6 +183,6 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_quantifiers : environment -> datatype -> quantifier list =
+let get_type_variables : environment -> datatype -> type_variable list =
   fun env t ->
-    get_quantifiers (env_type_vars env) t
+    get_type_variables (env_type_vars env) t

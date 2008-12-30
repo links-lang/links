@@ -95,16 +95,19 @@ and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
+    [ `TypeVar of int * meta_type_var
+    | `RowVar of int * meta_row_var ]
+    deriving (Eq, Show, Pickle, Typeable, Shelve)
+
+type type_variable =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
-    deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 let var_of_quantifier =
   function
     | `TypeVar (var, _) -> var
-    | `RigidTypeVar (var, _) -> var
     | `RowVar (var, _) -> var
-    | `RigidRowVar (var, _) -> var
 
 type datatype = typ
   deriving (Eq, Pickle, Typeable, Shelve)
@@ -126,8 +129,8 @@ let for_all : quantifier list * datatype -> datatype = function
       let qs =
         List.map
           (function
-             | `TypeVar x | `RigidTypeVar x -> `RigidTypeVar x
-             | `RowVar x | `RigidRowVar x -> `RigidRowVar x) qs
+             | `TypeVar x -> `TypeVar x
+             | `RowVar x -> `RowVar x) qs
       in
         match t with
           | `ForAll (qs', t) -> `ForAll (qs @ qs', t)
@@ -135,9 +138,7 @@ let for_all : quantifier list * datatype -> datatype = function
 
 let type_var_number = function
   | `TypeVar (x, _)
-  | `RigidTypeVar (x, _)
-  | `RowVar (x, _)
-  | `RigidRowVar (x, _) -> x
+  | `RowVar (x, _) -> x
 
 module Env = Env.String
 
@@ -192,6 +193,9 @@ let _ =
     in
       is_closed TypeVarSet.empty
 
+  let is_empty_row ((fields, row_var) as row) =
+    is_closed_row row && FieldEnv.is_empty fields
+
   let get_row_var : row -> int option = fun (_, row_var) ->
     let rec get_row_var' = fun rec_vars -> function
       | `Closed -> None
@@ -215,12 +219,12 @@ let _ =
   let fresh_type_quantifier () =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Rigid var) in
-      `RigidTypeVar (var, point), `MetaTypeVar point
+      `TypeVar (var, point), `MetaTypeVar point
         
   let fresh_row_quantifier () =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var in
-      `RigidRowVar (var, point), point
+      `RowVar (var, point), point
         
   let fresh_flexible_type_quantifier () =
     let var = fresh_raw_variable () in
@@ -259,13 +263,16 @@ let concrete_type t =
           begin
             match Unionfind.find point with
               | `Body t -> ct rec_names t
-              | `Recursive (_, t) ->
-                  ct rec_names t
+              | `Recursive (var, t) ->
+                  if IntSet.mem var rec_names then
+                    `MetaTypeVar point
+                  else
+                    ct (IntSet.add var rec_names) t
               | _ -> t
           end
       | _ -> t
   in
-    ct (StringSet.empty) t
+    ct (IntSet.empty) t
 
 let free_type_vars, free_row_type_vars =
   let module S = TypeVarSet in
@@ -627,10 +634,8 @@ struct
 
   let varspec_of_tyvar =
     function
-      | `TypeVar (var, _) -> var, (`Flexible, `Type, `Bound)
-      | `RigidTypeVar (var, _) -> var, (`Rigid, `Type, `Bound)
-      | `RowVar (var, _) -> var, (`Flexible, `Row, `Bound)
-      | `RigidRowVar (var, _) -> var, (`Rigid, `Row, `Bound)
+      | `TypeVar (var, _) -> var, (`Rigid, `Type, `Bound)
+      | `RowVar (var, _) -> var, (`Rigid, `Row, `Bound)
 
   (* find all free and bound type variables *)
   (*
@@ -802,13 +807,7 @@ struct
     fun (policy, vars) ->
       function
         | `TypeVar (var, _)
-        | `RowVar (var, _) ->
-            if policy.flavours then
-              "?" ^ Vars.find var vars
-            else
-              Vars.find var vars
-        | `RigidTypeVar (var, _)
-        | `RigidRowVar (var, _) -> Vars.find var vars
+        | `RowVar (var, _) -> Vars.find var vars
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
@@ -940,57 +939,40 @@ struct
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map sd ts) ^")"
 
-  and presence bound_vars ((_policy, _vars) as _p) =
+  and presence bound_vars ((policy, vars) as p) =
     function
-      | `Present -> assert false
-      | `Absent -> assert false
-      | `Var _ -> assert false  (* TODO *)
+      | `Present -> ""
+      | `Absent -> "-"
+      | `Var point ->
+          begin
+            match Unionfind.find point with
+              | `Flexible var ->
+                  if policy.flavours then "(?" ^ Vars.find var vars ^ ")"
+                  else "(" ^ Vars.find var vars ^ ")"
+              | `Rigid var ->
+                  "(" ^ Vars.find var vars ^ ")"
+              | `Body f ->
+                  presence bound_vars p f
+          end
 
   and row sep bound_vars ((policy, vars) as p) (field_env, rv) =
-    let show_absent =
-      if is_closed_row (field_env, rv) then
-        (fun _ x -> x) (* don't show absent fields in closed rows *)
-      else
-        (fun (label, t) (present_strings, absent_strings) ->
-           let omit_type =
-             match concrete_type t with
-               | `MetaTypeVar point ->
-                   begin
-                     match Unionfind.find point with
-                       | `Rigid var ->
-                           let name, (_, _, count) = Vars.find_spec var vars in
-                             if count = 1 && not (IntSet.mem var bound_vars) then true
-                             else false
-                       | `Flexible var when not (policy.flavours) ->
-                           let name, (_, _, count) = Vars.find_spec var vars in
-                             if count = 1 && not (IntSet.mem var bound_vars) then true
-                             else false
-                       | _ -> false
-                   end
-               | _ -> false in
-           let t =
-             if omit_type then ""
-             else ":" ^ datatype bound_vars p t
-           in
-             present_strings, (label ^ "-" ^ t) :: absent_strings) in
-      
-    let present_strings, absent_strings =
+    let field_strings =
       FieldEnv.fold
-        (fun label t (present_strings, absent_strings) ->
-           match t with
-             | `Present, t ->
-                 (label ^ ":" ^ datatype bound_vars p t) :: present_strings, absent_strings
-             | `Absent, t ->
-                 show_absent (label, t) (present_strings, absent_strings)
-             | `Var point, t ->
-                 assert false)
-        field_env ([], []) in
+        (fun label (f, t) field_strings ->
+           match concrete_type t with
+             | `Record row when is_empty_row row ->
+                 (label ^ presence bound_vars p f) :: field_strings
+             | _ ->
+                 (label ^ presence bound_vars p f ^ ":" ^ datatype bound_vars p t) :: field_strings)
+        field_env [] in
 
     let row_var_string = row_var sep bound_vars p rv in
-      (String.concat sep (List.rev (present_strings) @ List.rev (absent_strings))) ^
-        (match row_var_string with
-           | None -> ""
-           | Some s -> "|"^s)
+      String.concat sep (List.rev (field_strings)) ^
+        begin
+          match row_var_string with
+            | None -> ""
+            | Some s -> "|"^s
+        end
   and row_var sep bound_vars ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | `Closed -> None
@@ -1056,7 +1038,7 @@ and presence_flexible_type_vars bound_vars =
         begin
           match Unionfind.find point with
             | `Flexible var when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-            | `Flexible var -> TypeVarMap.singleton var (assert false)
+            | `Flexible var -> TypeVarMap.singleton var (assert false) (* TODO *)
             | `Rigid _ -> TypeVarMap.empty
             | `Body f -> presence_flexible_type_vars bound_vars f
         end
@@ -1187,9 +1169,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
                (fun q boundvars ->
                   match q with
                     | `TypeVar (var, _)
-                    | `RigidTypeVar (var, _)
-                    | `RowVar (var, _)
-                    | `RigidRowVar (var, _) ->
+                    | `RowVar (var, _) ->
                         S.add var boundvars)
                qs
                boundvars)
@@ -1212,8 +1192,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t =
       | `Var point ->
           begin
             match Unionfind.find point with
-              | `Flexible var -> assert false
-              | `Rigid var -> assert false
+              | `Flexible var -> assert false (* TODO *)
+              | `Rigid var -> assert false (* TODO *)
               | `Body f -> make_env_f boundvars f
           end
   and make_env_r boundvars ((field_env, row_var):row) =
@@ -1360,7 +1340,7 @@ let is_sub_type, is_sub_row =
                                (* this seems a bit dodgey because it makes subtyping non-structural
                                   (the type is ignored), but perhaps it is what we want *)
                                true
-                           | `Var _, _ -> assert false) lfield_env true in
+                           | `Var _, _ -> assert false (* TODO *)) lfield_env true in
       let sub_row_vars =
         match Unionfind.find lrow_var, Unionfind.find rrow_var with
           | `Flexible var, `Flexible var'
