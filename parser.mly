@@ -24,6 +24,14 @@ let fresh_rigid_row_variable : unit -> row_var =
   function () -> 
     incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter))
 
+let fresh_presence_variable : unit -> presence_flag =
+  function () -> 
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter))
+  
+let fresh_rigid_presence_variable : unit -> presence_flag =
+  function () -> 
+    incr type_variable_counter; `RigidVar ("_" ^ string_of_int (!type_variable_counter))
+
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
@@ -690,6 +698,7 @@ primary_datatype:
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
 | VARIABLE                                                     { RigidTypeVar $1 }
 | QUESTIONVAR                                                  { TypeVar $1 }
+| UNDERSCORE                                                   { fresh_rigid_type_variable () }
 | QUESTION                                                     { fresh_type_variable () }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
@@ -728,24 +737,31 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present UnitType }
-| CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
-| CONSTRUCTOR PLUS                                             { $1, `Present UnitType }
-| CONSTRUCTOR PLUS COLON datatype                              { $1, `Present $4 }
-| CONSTRUCTOR MINUS                                            { $1, `Absent UnitType }
-| CONSTRUCTOR MINUS COLON datatype                             { $1, `Absent $4 }
+| CONSTRUCTOR                                                  { $1, (`Present, UnitType) }
+| CONSTRUCTOR COLON datatype                                   { $1, (`Present, $3) }
+| CONSTRUCTOR presence_flag                                    { $1, ($2, UnitType) }
+| CONSTRUCTOR presence_flag COLON datatype                     { $1, ($2, $4) }
 
 field:
-| record_label COLON datatype                                  { $1, `Present $3 }
-| record_label PLUS                                            { $1, `Present UnitType }
-| record_label PLUS COLON datatype                             { $1, `Present $4 }
-| record_label MINUS                                           { $1, `Absent UnitType }
-| record_label MINUS COLON datatype                            { $1, `Absent $4 }
+| record_label COLON datatype                                  { $1, (`Present, $3) }
+| record_label presence_flag                                   { $1, ($2, UnitType) }
+| record_label presence_flag COLON datatype                    { $1, ($2, $4) }
 
 record_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
+
+presence_flag:
+| PLUS                                                         { `Present }
+| LBRACE RBRACE                                                { `Present }
+| LBRACE PLUS RBRACE                                           { `Present }
+| MINUS                                                        { `Absent }
+| LBRACE MINUS RBRACE                                          { `Absent }
+| LBRACE VARIABLE RBRACE                                       { `RigidVar $2 }
+| LBRACE QUESTIONVAR RBRACE                                    { `Var $2 }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
+| LBRACE QUESTION RBRACE                                       { fresh_presence_variable () }
 
 row_variable:
 | VARIABLE                                                     { `OpenRigid $1 }

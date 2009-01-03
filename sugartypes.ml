@@ -94,7 +94,8 @@ and row_var =
     | `Open of name
     | `OpenRigid of name
     | `Recursive of name * row ]
-and fieldspec = [`Present of datatype | `Absent of datatype]
+and presence_flag = [ `Present | `Absent | `RigidVar of name | `Var of name ]
+and fieldspec = presence_flag * datatype
     deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
@@ -103,12 +104,14 @@ type datatype' = datatype * Types.datatype option
 
 type type_variable =
     [ `TypeVar of name | `RigidTypeVar of name
-    | `RowVar of name | `RigidRowVar of name ]
+    | `RowVar of name | `RigidRowVar of name
+    | `PresenceVar of name | `RigidPresenceVar of name ]
       deriving (Show)
 
 type quantifier =
     [ `TypeVar of name
-    | `RowVar of name ]
+    | `RowVar of name
+    | `PresenceVar of name ]
       deriving (Show)
 
 type fieldconstraint = [ `Readonly | `Default ]

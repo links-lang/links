@@ -54,6 +54,11 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t * presence_flag
 	  | `Application (n, elem_type) ->
 	      `Application (n, List.map (inst rec_env) elem_type)
     and inst_row : inst_env -> row -> row = fun rec_env row ->
+      (* BUG?
+         
+         If we change this to unwrap_row then it sometimes leads to
+         divergence during type inference. Is this the correct
+         behaviour? Why does this happen? *)
       let field_env, row_var = flatten_row row in
 	
       let is_closed =

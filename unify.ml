@@ -358,6 +358,19 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
                                           string_of_int r ^" with the type "^
                                           string_of_presence (`Var lpoint))))
           end
+      | `Var point, f | f, `Var point ->
+          begin
+            match (Unionfind.find point) with
+              | `Rigid l -> 
+                  raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
+                                          string_of_int l ^" with the presence flag "^
+                                          string_of_presence f)))
+              | `Flexible var ->
+                  Unionfind.change point (`Body f)
+              | `Body f' -> unify_presence' rec_env (f, f')
+          end
+      | _, _ ->
+          raise (Failure (`Msg ("Couldn't match "^ string_of_presence l ^" against "^ string_of_presence r)))
 
 and unify_rows' : unify_env -> ((row * row) -> unit) = 
   fun ((_, _) as rec_env) (lrow, rrow) ->
@@ -567,27 +580,38 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           | Some rec_env -> register_rec_row p2 rec_env in
 
     let unify_both_rigid_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
+      (* return the present labels from an unwrapped row *)
       let get_present_labels (field_env, row_var) =
-        let rec get_present' rec_vars (field_env, row_var) =
-          let top_level_labels = 
-            StringMap.fold
-              (fun label (flag, _) labels ->
-                 match flag with
-                   | `Present -> StringSet.add label labels
-                   | `Absent
-                   | `Var _ -> labels)
-              field_env
-              StringSet.empty
-          in
-            StringSet.union top_level_labels 
-              (match Unionfind.find row_var with
-                 | `Recursive (var, body) when (not (IntSet.mem var rec_vars)) ->
-                     get_present' (IntSet.add var rec_vars) body
-                 | _ -> StringSet.empty) in
-          get_present' IntSet.empty (field_env, row_var) in
-        
+        StringMap.fold
+          (fun label (flag, _) labels ->
+             match flag with
+               | `Present -> StringSet.add label labels
+               | `Absent
+               | `Var _ -> labels)
+          field_env
+          StringSet.empty in
+
+      (* return the present / flexible labels from an unwrapped row *)
+      let get_possibly_present_labels (field_env, row_env) =
+        StringMap.fold
+          (fun label (flag, _) labels ->
+             match flag with
+               | `Present -> StringSet.add label labels
+               | `Absent -> labels
+               | `Var point ->
+                   begin
+                     match Unionfind.find point with
+                       | `Flexible _ -> StringSet.add label labels
+                       | `Rigid _ -> labels
+                       | `Body _ -> assert false
+                   end)
+          field_env
+          StringSet.empty in
+
+      (* check that the field labels can possibly match up *)
       let fields_are_compatible (lrow, rrow) =
-        (StringSet.equal (get_present_labels lrow) (get_present_labels rrow)) in
+        (StringSet.subset (get_present_labels lrow) (get_possibly_present_labels rrow)) &&
+        (StringSet.subset (get_present_labels rrow) (get_possibly_present_labels lrow)) in
 
       let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
       let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
@@ -636,8 +660,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                   ^"\nand\n "^ string_of_row open_row
                                   ^"\n could not be unified because the former is rigid"
                                   ^" and the latter contains fields not present in the former")))
-                 | `Absent
-                 | `Var _ -> ()
+                 | `Absent -> ()
+                 | `Var _ -> () (* TODO *)
           ) open_field_env';
         
         (* check that the closed row contains no absent fields *)

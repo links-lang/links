@@ -376,10 +376,17 @@ class map =
         let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
       
-    method fieldspec : fieldspec -> fieldspec =
+    method presence_flag : presence_flag -> presence_flag =
       function
-      | `Present _x -> let _x = o#datatype _x in `Present _x
-      | `Absent _x -> let _x = o#datatype _x in `Absent _x
+      | `Present -> `Present
+      | `Absent -> `Absent
+      | `RigidVar _x -> let _x = o#name _x in `RigidVar _x
+      | `Var _x -> let _x = o#name _x in `Var _x
+
+    method fieldspec : fieldspec -> fieldspec =
+      fun (_x, _x_i1) ->
+        let _x = o#presence_flag _x in
+        let _x_i1 = o#datatype _x_i1 in (_x, _x_i1)
       
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Default -> `Default
@@ -814,11 +821,17 @@ class fold =
       fun (_x, _x_i1) ->
         let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let o = o#phrase _x_i1 in o
-      
-    method fieldspec : fieldspec -> 'self_type =
+
+    method presence_flag : presence_flag -> 'self_type =      
       function
-      | `Present _x -> let o = o#datatype _x in o
-      | `Absent _x -> let o = o#datatype _x in o
+      | `Present -> o
+      | `Absent -> o
+      | `RigidVar _x -> let o = o#name _x in o
+      | `Var _x -> let o = o#name _x in o
+
+    method fieldspec : fieldspec -> 'self_type =
+      fun (_x, _x_i1) ->
+        let o = o#presence_flag _x in let o = o#datatype _x_i1 in o
       
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
@@ -1323,10 +1336,17 @@ class fold_map =
         let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
       
-    method fieldspec : fieldspec -> ('self_type * fieldspec) =
+    method presence_flag : presence_flag -> ('self_type * presence_flag) =
       function
-      | `Present _x -> let (o, _x) = o#datatype _x in (o, (`Present _x))
-      | `Absent _x -> let (o, _x) = o#datatype _x in (o, (`Absent _x))
+      | `Present -> (o, `Present)
+      | `Absent -> (o, `Absent)
+      | `RigidVar _x -> let (o, _x) = o#name _x in (o, `RigidVar _x)
+      | `Var _x -> let (o, _x) = o#name _x in (o, `Var _x)
+
+    method fieldspec : fieldspec -> ('self_type * fieldspec) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#presence_flag _x in
+        let (o, _x_i1) = o#datatype _x_i1 in (o, (_x, _x_i1))
       
     method fieldconstraint :
       fieldconstraint -> ('self_type * fieldconstraint) =

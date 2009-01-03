@@ -61,75 +61,96 @@ object (self)
     | `OpenRigid s      -> self#add (`RigidRowVar s)
     | `Open s           -> self#add (`RowVar s)
     | `Recursive (s, r) -> let o = self#bind (`RigidRowVar s) in o#row r
+
+  method presence_flag = function
+    | `Absent
+    | `Present -> self
+    | `RigidVar s -> self#add (`RigidPresenceVar s)
+    | `Var s -> self#add (`PresenceVar s)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
-                 renv : Types.meta_row_var StringMap.t }
+                 renv : Types.meta_row_var StringMap.t;
+                 penv : Types.meta_presence_var StringMap.t }
 
-let empty_env = {tenv = StringMap.empty; renv = StringMap.empty}
+let empty_env = {tenv = StringMap.empty; renv = StringMap.empty; penv = StringMap.empty}
 
 exception UnexpectedFreeVar of string
 
 module Desugar =
 struct
-  let rec datatype ({tenv=tenv; renv=renv} as var_env) (alias_env : Types.tycon_environment) t =
+  let rec datatype ({tenv=tenv; renv=renv; penv=penv} as var_env) (alias_env : Types.tycon_environment) t =
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t tenv in 
       match t with
-      | TypeVar s -> (try `MetaTypeVar (lookup_type s)
-                      with NotFound _ -> raise (UnexpectedFreeVar s))
-      | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
-                           with NotFound _ -> raise (UnexpectedFreeVar s))
-      | FunctionType (f, m, t) ->
-          `Function (Types.make_tuple_type (List.map (datatype var_env) f), 
-                     datatype var_env m, 
-                     datatype var_env t)
-      | MuType (name, t) ->
-          let var = Types.fresh_raw_variable () in
-          let point = Unionfind.fresh (`Flexible var) in
-          let tenv = StringMap.add name point tenv in
-          let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv} t)) in
-            `MetaTypeVar point
-      | UnitType -> Types.unit_type
-      | TupleType ks -> 
-          let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) 
-          and unit = Types.make_empty_closed_row ()
-          and present (s, x) = (s, (`Present, x))
-          in `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
-      | RecordType r -> `Record (row var_env alias_env r)
-      | VariantType r -> `Variant (row var_env alias_env r)
-      | TableType (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
-      | ListType k -> `Application (Types.list, [datatype var_env k])
-      | TypeApplication (tycon, ts) ->
-          begin match SEnv.find alias_env tycon with
-            | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
-            | Some (`Alias _) -> let ts = List.map (datatype var_env) ts in
-                                   Instantiate.alias tycon ts alias_env
-            | Some (`Abstract abstype) -> 
-                `Application (abstype, List.map (datatype var_env) ts)
-          end
-      | PrimitiveType k -> `Primitive k
-      | DBType -> `Primitive `DB
-  and row ({tenv=tenv; renv=renv} as var_env) alias_env (fields, rv) =
+        | TypeVar s -> (try `MetaTypeVar (lookup_type s)
+                        with NotFound _ -> raise (UnexpectedFreeVar s))
+        | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
+                             with NotFound _ -> raise (UnexpectedFreeVar s))
+        | FunctionType (f, m, t) ->
+            `Function (Types.make_tuple_type (List.map (datatype var_env) f), 
+                       datatype var_env m, 
+                       datatype var_env t)
+        | MuType (name, t) ->
+            let var = Types.fresh_raw_variable () in
+            let point = Unionfind.fresh (`Flexible var) in
+            let tenv = StringMap.add name point tenv in
+            let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv; penv=penv} t)) in
+              `MetaTypeVar point
+        | UnitType -> Types.unit_type
+        | TupleType ks -> 
+            let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
+            let unit = Types.make_empty_closed_row () in
+            let present (s, x) = (s, (`Present, x))
+            in
+              `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
+        | RecordType r -> `Record (row var_env alias_env r)
+        | VariantType r -> `Variant (row var_env alias_env r)
+        | TableType (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
+        | ListType k -> `Application (Types.list, [datatype var_env k])
+        | TypeApplication (tycon, ts) ->
+            begin match SEnv.find alias_env tycon with
+              | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
+              | Some (`Alias _) -> let ts = List.map (datatype var_env) ts in
+                  Instantiate.alias tycon ts alias_env
+              | Some (`Abstract abstype) -> 
+                  `Application (abstype, List.map (datatype var_env) ts)
+            end
+        | PrimitiveType k -> `Primitive k
+        | DBType -> `Primitive `DB
+  and row ({tenv=tenv; renv=renv; penv=penv} as var_env) alias_env (fields, rv) =
     let lookup_row = flip StringMap.find renv in
-    let seed = match rv with
-      | `Closed    -> Types.make_empty_closed_row ()
-      | `OpenRigid rv
-      | `Open rv -> (StringMap.empty, lookup_row rv)
-      | `Recursive (name, r) ->
-          let var = Types.fresh_raw_variable () in
-          let point = Unionfind.fresh (`Flexible var) in
-        let renv = StringMap.add name point renv in
-        let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv} alias_env r)) in
-          (StringMap.empty, point)
-    and fields = map (fun (k, v) -> match v with
-                        | `Absent v -> (k, (`Absent, datatype var_env alias_env v))
-                        | `Present v -> (k, (`Present, datatype var_env alias_env v))) fields 
-    in fold_right Types.row_with fields seed
-
+    let seed =
+      match rv with
+        | `Closed -> Types.make_empty_closed_row ()
+        | `OpenRigid rv
+        | `Open rv -> (StringMap.empty, lookup_row rv)
+        | `Recursive (name, r) ->
+            let var = Types.fresh_raw_variable () in
+            let point = Unionfind.fresh (`Flexible var) in
+            let renv = StringMap.add name point renv in
+            let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv; penv=penv} alias_env r)) in
+              (StringMap.empty, point) in
+    let fields =
+      let lookup_flag = flip StringMap.find penv in
+        List.map
+          (fun (k, (f, t)) ->
+             let f =
+               match f with
+                 | `Absent -> `Absent
+                 | `Present -> `Present
+                 | `RigidVar name
+                 | `Var name -> `Var (lookup_flag name)
+             in
+               (k, (f, datatype var_env alias_env t)))
+          fields 
+    in
+      fold_right Types.row_with fields seed
+            
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
-    let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv}
-    and addr x r envs = {envs with renv = StringMap.add x r envs.renv} in
+    let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv} in
+    let addr x r envs = {envs with renv = StringMap.add x r envs.renv} in
+    let addf x f envs = {envs with penv = StringMap.add x f envs.penv} in
     let vars, var_env =
       List.fold_left
         (fun (vars, envs) v ->
@@ -146,7 +167,13 @@ struct
                      `RowVar (var, r)::vars, addr x r envs
                | `RigidRowVar x ->
                    let r = Unionfind.fresh (`Rigid var) in
-                     `RowVar (var, r)::vars , addr x r envs)
+                     `RowVar (var, r)::vars , addr x r envs
+               | `PresenceVar x ->
+                   let f = Unionfind.fresh (`Flexible var) in
+                     `PresenceVar (var, f)::vars, addf x f envs
+               | `RigidPresenceVar x ->
+                   let f = Unionfind.fresh (`Rigid var) in
+                     `PresenceVar (var, f)::vars, addf x f envs)
         ([], empty_env)
         vars
     in
@@ -181,7 +208,7 @@ struct
                   let tv = Types.fresh_raw_variable () in
                     ((x, Some tv) :: args, 
                      StringMap.add x (Unionfind.fresh (`Rigid tv)) map)) in
-          (args, datatype' {tenv=StringMap.union_disjoint tmap (mailbox_vars rhs); renv=StringMap.empty} alias_env rhs)
+          (args, datatype' {tenv=StringMap.union_disjoint tmap (mailbox_vars rhs); renv=StringMap.empty; penv=StringMap.empty} alias_env rhs)
       with UnexpectedFreeVar x ->
         failwith ("Free variable ("^ x ^") in definition of typename "^ name)
 

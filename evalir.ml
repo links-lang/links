@@ -295,7 +295,7 @@ module Eval = struct
             | None -> computation env cont e
             | Some (db, q, t) ->
                 let fields =
-                  let fields, _ = Types.flatten_row (TypeUtils.extract_row t) in
+                  let (fields, _), _ = Types.unwrap_row (TypeUtils.extract_row t) in
                     StringMap.fold
                       (fun name t fields->
                          match t with

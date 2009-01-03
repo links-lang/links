@@ -158,6 +158,7 @@ sig
   val update_where : griper
   val update_read : griper
   val update_write : griper
+  val update_needed : griper
 
   val range_bound : griper
 
@@ -404,6 +405,14 @@ The fields must match the table in an update expression,
 but the fields have type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the write row has type" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let update_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The fields must match the table in an update expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the needed row has type" ^ nl () ^
 tab () ^ code (show_type rt))
 
     let range_bound ~pos ~t1:l ~t2:(_,t) ~error:_ =
@@ -1406,13 +1415,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                        (name, exp)::set, StringMap.add name (`Present, typ exp) field_env)
                 set ([], StringMap.empty) in
 
-            (* all fields being updated must be present in the read table *)
+            let needed_env =
+              StringMap.map
+                (fun (_f, t) -> Types.fresh_presence_variable (), t)
+                field_env in
+
+            (* all fields being updated must be present in the read row *)
             let () = unify ~handle:Gripers.update_read
               (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable ()))) in
 
-            (* all fields being updated must be present in the write table *)
+            (* all fields being updated must be present in the write row *)
             let () = unify ~handle:Gripers.update_write
-              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable ())))
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable ()))) in
+
+            (* all fields being updated must be consistent with the needed row *)
+            let () = unify ~handle:Gripers.update_needed
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable ())))
             in
               `DBUpdate (erase_pat pat, erase from, opt_map erase where, 
                          List.map (fun (n,(p,_)) -> n, p) set), Types.unit_type

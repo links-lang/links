@@ -481,7 +481,6 @@ let normalise_fields =
   | `Recursive (var, body)
  *)
 let flatten_row : row -> row = fun (field_env, row_var) ->
-  let field_env = normalise_fields field_env in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
     fun rec_env ((field_env, row_var) as row) ->
       let row' =
@@ -504,10 +503,10 @@ let flatten_row : row -> row = fun (field_env, row_var) ->
                 field_env_union (field_env, field_env'), row_var'
       in
         assert (is_flattened_row row');
-        row'
-  in
-    flatten_row' IntMap.empty (field_env, row_var)
-
+        row' in
+  let field_env, row_var = flatten_row' IntMap.empty (field_env, row_var) in
+  let field_env = normalise_fields field_env in
+    field_env, row_var
 
 (*
  As flatten_row except if the flattened row_var is of the form:
@@ -518,7 +517,6 @@ then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
 let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
-  let field_env = normalise_fields field_env in
   let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
     fun rec_env ((field_env, row_var) as row) ->
       let row' =
@@ -543,9 +541,10 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
                 (field_env_union (field_env, field_env'), row_var'), rec_row
       in
         assert (is_flattened_row (fst row'));
-        row'
-  in
-    unwrap_row' IntMap.empty (field_env, row_var)
+        row' in
+  let (field_env, row_var), rec_row = unwrap_row' IntMap.empty (field_env, row_var) in
+  let field_env = normalise_fields field_env in
+    (field_env, row_var), rec_row
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
@@ -557,14 +556,6 @@ let float_type = `Primitive `Float
 let xml_type = `Alias (("Xml", []), `Application (list, [`Primitive `XmlItem]))
 let database_type = `Primitive `DB
 let native_string_type = `Primitive `NativeString
-
-(*
-let empty_var_maps : unit -> inference_type_map =
-  fun () ->
-    let type_var_map : (datatype Unionfind.point) IntMap.t ref = ref IntMap.empty in
-    let row_var_map : (row Unionfind.point) IntMap.t ref = ref IntMap.empty in
-      (type_var_map, row_var_map)
-*)  
 
 let rec is_mailbox_free rec_vars (t : datatype) =
   let imb = is_mailbox_free rec_vars in
@@ -837,16 +828,18 @@ module Print =
 struct
   let show_quantifiers = Settings.add_bool ("show_quantifiers", false, `User)
   let show_flavours = Settings.add_bool ("show_flavours", false, `User)
+  let hide_fresh_type_vars = Settings.add_bool ("hide_fresh_type_vars", true, `User)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool}
   type names = (string * Vars.spec) IntMap.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
-     flavours=Settings.get_value show_flavours}
+     flavours=Settings.get_value show_flavours;
+     hide_fresh=Settings.get_value hide_fresh_type_vars}
 
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
@@ -890,10 +883,19 @@ struct
           | `MetaTypeVar point ->
               begin             
                 match Unionfind.find point with
-                  | `Flexible var -> (* Debug.print ("flexi var: " ^ IntMap.find var vars); *)
-                      if policy.flavours then "?" ^ Vars.find var vars
-                      else Vars.find var vars
-                  | `Rigid var -> (* Debug.print ("rigid var: " ^ IntMap.find var vars); *) Vars.find var vars
+                  | `Flexible var when policy.flavours ->
+                      let name, (_, _, count) = Vars.find_spec var vars in
+                        if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                          "?"
+                        else
+                          "?" ^ name
+                  | `Rigid var
+                  | `Flexible var ->
+                      let name, (_, _, count) = Vars.find_spec var vars in
+                        if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                          "_"
+                        else
+                          name
                   | `Recursive (var, body) ->
                       (*                    Debug.print ("rec var: " ^ IntMap.find var vars);*)
                       if TypeVarSet.mem var bound_vars then
@@ -913,14 +915,14 @@ struct
                         match Unionfind.find point with
                           | `Flexible var when policy.flavours ->
                               let name, (_, _, count) = Vars.find_spec var vars in
-                                if count = 1 && not (IntSet.mem var bound_vars) then
+                                if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
                                   "-?->"
                                 else
                                   "-?" ^ name ^ "->"
                           | `Rigid var
                           | `Flexible var ->
                               let name, (_, _, count) = Vars.find_spec var vars in
-                                if count = 1 && not (IntSet.mem var bound_vars) then
+                                if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
                                   "->"
                                 else
                                   "-" ^ name ^ "->"
@@ -952,6 +954,10 @@ struct
               in
                 "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
           | `Table (r, w, n)   ->
+              (* TODO:
+
+                 pretty-print this using constraints?
+              *)
               "TableHandle(" ^
                 datatype bound_vars p r ^ "," ^
                 datatype bound_vars p w ^ "," ^
@@ -996,11 +1002,15 @@ struct
       | `Var point ->
           begin
             match Unionfind.find point with
+              | `Flexible var when policy.flavours ->
+                  let name, (_, _, count) = Vars.find_spec var vars in
+                    if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "{?}"
+                    else "{?" ^ name ^ "}"
+              | `Rigid var
               | `Flexible var ->
-                  if policy.flavours then "(?" ^ Vars.find var vars ^ ")"
-                  else "(" ^ Vars.find var vars ^ ")"
-              | `Rigid var ->
-                  "(" ^ Vars.find var vars ^ ")"
+                  let name, (_, _, count) = Vars.find_spec var vars in
+                    if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "{_}"
+                    else "{" ^ name ^ "}"
               | `Body f ->
                   presence bound_vars p f
           end
@@ -1028,12 +1038,12 @@ struct
       | `Closed -> None
       | `Flexible var when policy.flavours ->
           let name, (_, _, count) = Vars.find_spec var vars in
-            if count = 1 && not (IntSet.mem var bound_vars) then Some "?"
+            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then Some "?"
             else Some ("?" ^ name)
       | `Rigid var
       | `Flexible var ->
           let name, (_, _, count) = Vars.find_spec var vars in
-            if count = 1 && not (IntSet.mem var bound_vars) then Some "_"
+            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then Some "_"
             else Some (name)
       | `Recursive (var, r) ->
           if TypeVarSet.mem var bound_vars then
