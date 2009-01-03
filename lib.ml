@@ -894,12 +894,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   (** Database functions **)
-  "asList",
+  "AsList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
    datatype "(TableHandle(r, w, n)) -> [r]",
   IMPURE);
 
-  "insertrows",
+  "InsertRows",
   (`Server 
      (p2 (fun table rows -> 
             match table, rows with
@@ -911,7 +911,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                    (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [w]) -> ()",
+   datatype "(TableHandle(r, w, n), [s]) -> ()",
   IMPURE);
 
   "InsertReturning",
@@ -929,10 +929,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [w], String) -> Int",
+   datatype "(TableHandle(r, w, n), [s], String) -> Int",
   IMPURE);
 
-  "updaterows", 
+  "UpdateRows", 
   (`Server
      (p2 (fun table rows ->
             match table, rows with
@@ -951,7 +951,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(TableHandle(r, w, n), [(r, w)]) -> ()",
   IMPURE);
 
-  "deleterows", 
+  "DeleteRows", 
   (`Server
      (p2 (fun table rows ->
             match table, rows with

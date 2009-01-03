@@ -262,10 +262,11 @@ class map =
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2
           in `DBDelete ((_x, _x_i1, _x_i2))
-      | `DBInsert ((_x, _x_i1, _x_i2)) ->
+      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in `DBInsert ((_x, _x_i1, _x_i2))
+          let _x_i1 = o#list (fun o -> o#name) _x_i1 in
+          let _x_i2 = o#phrase _x_i2 in
+          let _x_i3 = o#option (fun o -> o#phrase) _x_i3 in `DBInsert ((_x, _x_i1, _x_i2, _x_i3))
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -727,8 +728,10 @@ class fold =
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in o
-      | `DBInsert ((_x, _x_i1, _x_i2)) ->
-          let o = o#phrase _x in let o = o#phrase _x_i1 in let o = o#option (fun o -> o#phrase) _x_i2 in o
+      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let o = o#phrase _x in
+          let o = o#list (fun o -> o#name) _x_i1 in
+          let o = o#phrase _x_i2 in let o = o#option (fun o -> o#phrase) _x_i3 in o
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
@@ -1217,11 +1220,12 @@ class fold_map =
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
           in (o, (`DBDelete ((_x, _x_i1, _x_i2))))
-      | `DBInsert ((_x, _x_i1, _x_i2)) ->
+      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#phrase _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
-          in (o, (`DBInsert ((_x, _x_i1, _x_i2))))
+          let (o, _x_i1) = o#list (fun o -> o#name) _x_i1 in
+          let (o, _x_i2) = o#phrase _x_i2 in
+          let (o, _x_i3) = o#option (fun o -> o#phrase) _x_i3
+          in (o, (`DBInsert ((_x, _x_i1, _x_i2, _x_i3))))
       | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in

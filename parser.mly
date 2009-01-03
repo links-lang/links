@@ -614,10 +614,16 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
-| INSERT exp VALUES db_expression
-  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
+| INSERT exp VALUES LPAREN RPAREN exp                          { `DBInsert ($2, [], $6, None), pos() }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { `DBInsert ($2, $5, $7, None), pos() }
+/*| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() } */
+/* | INSERT exp VALUES db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() } */
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
+
+record_labels:
+| record_label COMMA record_labels                             { $1 :: $3 }
+| record_label                                                 { [$1] }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }

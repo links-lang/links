@@ -2,25 +2,14 @@ var db = database "factorials";
 var factorials = table "factorials" with (i : Int, f : Int) from db; #write db;
 
 ### library functions ###
-fun upto(i,j) {
-  if(j < i) {
-    []
-  } else {
-    i :: (upto(i+1, j))
-  }
-}
-
-fun mem(y, xs) {
-  not (filter (fun (x) {x == y}, xs) == [])
-}
-
+# `diff` is list difference
 fun diff(xs, ys) {
-  filter(fun (x) {not(mem(x, ys))}, xs)
+  filter(fun (x) {not(elem(x, ys))}, xs)
 }
 ### end of library functions ###
 
 fun factorial(i) {
-  product(upto(1,i))
+  product([1..i])
 }
 
 fun insertFactorials(n) {
@@ -30,12 +19,11 @@ fun insertFactorials(n) {
       set (i = r.i, f = factorial(r.i));
     delete (var r <-- factorials)
       where (r.i < 0 || n < r.i);
-    var indexes = for (var r <-- factorials) [r.i];
-    insert factorials values
-      for (var i <- upto(0,n) `diff` indexes)
+    var indexes = map ((.1), query {for (var r <-- factorials) [(1=r.i)]});
+    insert factorials values (i,f)
+      for (var i <- [0..n] `diff` indexes)
         [(i=i, f=factorial(i))];
 #  }
 }
 
-# `diff` is list difference
 insertFactorials(20)

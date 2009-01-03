@@ -581,7 +581,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 
     let unify_both_rigid_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
       (* return the present labels from an unwrapped row *)
-      let get_present_labels (field_env, row_var) =
+      let get_present_labels (field_env, _row_var) =
         StringMap.fold
           (fun label (flag, _) labels ->
              match flag with
@@ -592,7 +592,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           StringSet.empty in
 
       (* return the present / flexible labels from an unwrapped row *)
-      let get_possibly_present_labels (field_env, row_env) =
+      let get_possibly_present_labels (field_env, _row_var) =
         StringMap.fold
           (fun label (flag, _) labels ->
              match flag with

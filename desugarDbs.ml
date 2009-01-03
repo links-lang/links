@@ -10,7 +10,7 @@ open Utility
       t = e
       rows = query {for (p as r <-- t) where b [r]}
     in
-      deleterows (t, rows)
+      DeleteRows (t, rows)
 
     update (p <- e) where b set (l1=e1, ..., lk=ek)
   -->
@@ -19,11 +19,11 @@ open Utility
       rows = query {for (p as r <-- t) where b [r]}
       row_pairs = for (p as r <- rows) [(r, (l1=e1, ..., lk=ek))]
     in
-      updaterows (t, row_pairs)
+      UpdateRows (t, row_pairs)
 
     insert table values rows
   -->
-    insertrows (table, rows)
+    InsertRows (table, rows)
 
     insert table values rows returning e
   -->
@@ -65,7 +65,7 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "deleterows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
+                ((`TAppl ((`Var "DeleteRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
                  [t; rows]), dp))
         in
           o, e, Types.unit_type
@@ -119,29 +119,39 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "updaterows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
+                ((`TAppl ((`Var "UpdateRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
                  [t; row_pairs]), dp))
         in
           o, e, Types.unit_type          
-    | `DBInsert (table, rows, returning) ->
+    | `DBInsert (table, _labels, rows, returning) ->
         let mb = o#lookup_mb () in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
         let needed_type = TypeUtils.table_needed_type table_type in
+
+        (* HACK
+           
+           We need value_type as our type system is not expressive
+           enough to give InsertRows a more accurate type. This isn't
+           too much of a problem as InsertRows can only be generated
+           from well-typed insert expressions. An alternative approach
+           would be to maintain some kind of insert expression in the
+           IR. *)
+        let value_type = `Record (Types.make_empty_open_row ()) in
         let o, rows, _ = o#phrase rows in
         let o, (e : Sugartypes.phrasenode) =
           match returning with
             | None -> 
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "insertrows", dp), [`Type write_type; `Type read_type; `Type needed_type; `Type mb]), dp),
+                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Type mb]), dp),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in
                   (o,
                    `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type write_type; `Type read_type; `Type needed_type; `Type mb]), dp),
+                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Type mb]), dp),
                       [table; rows; field]))                  
         in
           o, e, Types.unit_type

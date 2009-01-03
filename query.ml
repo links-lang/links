@@ -356,7 +356,7 @@ struct
 (*                                      Debug.print ("x: "^string_of_int x);*)
                                       bind env (x, arg)) xs args env in
           computation env body
-    | `Primitive "asList", [xs] ->
+    | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; xs] ->
         reduce_concat [`Singleton x; xs]
@@ -649,6 +649,7 @@ struct
         | `Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
         | `Apply ("||", [v; w]) -> "(" ^ sb v ^ ")" ^ " or " ^ "(" ^ sb w ^ ")"
         | `Apply ("+", [v; w]) -> "(" ^ sb v ^ ")" ^ " + " ^ "(" ^ sb w ^ ")"
+        | `Apply ("<", [v; w]) -> "(" ^ sb v ^ ")" ^ " < " ^ "(" ^ sb w ^ ")"
         | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
         | `Apply ("==", [v; w]) -> "(" ^ sb v ^ ")" ^ " = " ^ "(" ^ sb w ^ ")"
         | `Apply ("<>", [v; w]) -> "(" ^ sb v ^ ")" ^ " <> " ^ "(" ^ sb w ^ ")"

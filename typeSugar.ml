@@ -152,6 +152,10 @@ sig
   val delete_where : griper
   val insert_table : griper
   val insert_values : griper
+  val insert_read : griper
+  val insert_write : griper
+  val insert_needed : griper
+
   val insert_id : griper
   val update_table : griper
   val update_pattern : griper
@@ -379,6 +383,30 @@ tab () ^ code lexpr ^ nl () ^
 "have type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the write row has type" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let insert_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The fields must match the table in an insert expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the read row has type" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let insert_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The fields must match the table in an insert expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the write row has type" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let insert_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The fields must match the table in an insert expression,
+but the fields have type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the needed row has type" ^ nl () ^
 tab () ^ code (show_type rt))
 
     let insert_id ~pos ~t1:l ~t2:(_,t) ~error:_ =
@@ -1371,7 +1399,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun e -> unify ~handle:Gripers.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type
-        | `DBInsert (into, values, id) ->
+        | `DBInsert (into, labels, values, id) ->
             let into   = tc into in
             let values = tc values in
             let id = opt_map tc id in
@@ -1380,12 +1408,46 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let needed = `Record (Types.make_empty_open_row ()) in
             let () = unify ~handle:Gripers.insert_table
               (pos_and_typ into, no_pos (`Table (read, write, needed))) in
-            let () = unify ~handle:Gripers.insert_values (pos_and_typ values, no_pos (Types.make_list_type write)) in
+
+            let field_env =
+              List.fold_right
+                (fun name field_env ->
+                   if StringMap.mem name field_env then
+                     Gripers.die pos "Duplicate labels in insert expression."
+                   else
+                     StringMap.add name (`Present, Types.fresh_type_variable ()) field_env)
+                labels StringMap.empty in
+
+            (* check that the fields in the type of values match the declared labels *)
+            let () =
+              unify ~handle:Gripers.insert_values
+                (pos_and_typ values,
+                 no_pos (Types.make_list_type (`Record (field_env, Unionfind.fresh `Closed)))) in
+
+            let needed_env =
+              StringMap.map
+                (fun (_f, t) -> Types.fresh_presence_variable (), t)
+                field_env in
+
+            (* all fields being inserted must be present in the read row *)
+            let () = unify ~handle:Gripers.insert_read
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable ()))) in
+
+            (* all fields being inserted must be present in the write row *)
+            let () = unify ~handle:Gripers.insert_write
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable ()))) in
+
+            (* all fields being inserted must be consistent with the needed row *)
+            let () = unify ~handle:Gripers.insert_needed
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable ()))) in
+
+            (* insert returning ... *)
             let () =
               opt_iter
                 (fun id ->
-                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
-              `DBInsert (erase into, erase values, opt_map erase id), Types.unit_type
+                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id
+            in
+              `DBInsert (erase into, labels, erase values, opt_map erase id), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat in
             let from = tc from in

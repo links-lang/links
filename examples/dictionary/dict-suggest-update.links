@@ -4,7 +4,7 @@ var defsTable =
   where id readonly from database "dictionary";
 
 fun newDef(def) server {
-  insert defsTable values [def]
+  insert defsTable values (word, meaning) [def]
 }
 
 fun updateDef(def) server {

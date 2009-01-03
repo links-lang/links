@@ -411,11 +411,11 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             *)
           let (o, where, _) = option o (fun o -> o#phrase) where in
             (o, `DBDelete (p, from, where), Types.unit_type)
-      | `DBInsert (into, values, id) ->
+      | `DBInsert (into, labels, values, id) ->
           let (o, into, _) = o#phrase into in
           let (o, values, _) = o#phrase values in
           let (o, id, _) = option o (fun o -> o#phrase) id in
-            (o, `DBInsert (into, values, id), Types.unit_type)
+            (o, `DBInsert (into, labels, values, id), Types.unit_type)
       | `DBUpdate (p, from, where, set) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in

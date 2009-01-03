@@ -21,13 +21,13 @@ fun map(f, xs) {
 fun foldr(f, xs, y) {
   switch (xs) {
     case [] -> y
-    case (x::xs) -> foldr(f, xs, f(x)(y))
+    case (x::xs) -> foldr(f, xs, f(x,y))
   }
 }
 
 fun filter(xs, p) {
   foldr(
-    fun(x)(ys) {
+    fun(x,ys) {
      if(p(x)) {x :: ys}
      else {ys}
     }, xs, [])
@@ -37,7 +37,7 @@ fun mem(y, xs) {
   not (filter (xs, fun (x) {x == y}) == [])
 }
 
-fun diff(xs)(ys) {
+fun diff(xs,ys) {
   filter(xs, fun (x) {not(mem(x, ys))})
 }
 
@@ -76,7 +76,7 @@ fun insertItems(itemsTable, itemsList) {
   delete (var itemEntry <-- itemsTable)
     where (itemEntry.i < 0 || n < itemEntry.i);
   var indexes = for (var itemEntry <-- itemsTable) [itemEntry.i];
-  insert itemsTable values
+  insert itemsTable values (i, name)
     for (var i <- upto(0,n-1) `diff` indexes)
       [(i=i, name=select(itemsList, i))];
 }
