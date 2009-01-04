@@ -23,7 +23,7 @@ fun showList() server {
 }
 
 fun add(name) server {
- insert items values (name) [(name=name)];
+ insert items values [(name=name)];
  showList()
 }
 

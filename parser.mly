@@ -62,6 +62,8 @@ let make_tuple pos =
     | [e] -> `RecordLit ([("1", e)], None), pos
     | es -> `TupleLit es, pos
 
+let labels = List.map fst
+
 let parseRegexFlags f =
   let rec asList f i l = 
     if (i == String.length f) then
@@ -622,6 +624,12 @@ database_expression:
 | table_expression                                             { $1 }
 | INSERT exp VALUES LPAREN RPAREN exp                          { `DBInsert ($2, [], $6, None), pos() }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { `DBInsert ($2, $5, $7, None), pos() }
+| INSERT exp VALUES
+  LBRACKET LPAREN labeled_exps RPAREN RBRACKET                 { `DBInsert ($2,
+                                                                            labels $6,
+                                                                            (`ListLit ([`RecordLit ($6, None), pos()], None), pos()),
+                                                                            None),
+                                                                 pos() }
 | INSERT exp VALUES LPAREN RPAREN db_expression
   RETURNING VARIABLE                                           { `DBInsert ($2, [], $6, Some (`Constant (`String $8), pos())), pos() }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression

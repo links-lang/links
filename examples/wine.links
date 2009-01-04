@@ -186,7 +186,7 @@ sig sign_up : (Int, String, String) -> Page
 fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
 
-  insert (usersTable) values (cust_id, user_name, password)
+  insert (usersTable) values
     [( cust_id = new_cust_id, user_name = username, password = password )];
   if (order_id <> -1)
     claimCart(order_id, new_cust_id) else ();
@@ -611,7 +611,6 @@ fun add_to_cart(cust_id, order_id, wine_id) {
   var new_item_id = max_item_id + 1;
         
   insert (cartItemsTable) values
-        (cust_id, order_id, item_id, wine_id, qty, price)
         [( cust_id = cust_id,
            order_id = order_id,
            item_id = new_item_id,
@@ -637,7 +636,7 @@ fun create_cart(cust_id) {
         [(1=cart.order_id)]
     };
   var order_id = 1 + maximum(0, map ((.1), orders));
-  insert (shortOrderTable) values (cust_id, order_id)
+  insert (shortOrderTable) values 
          [(cust_id = cust_id, order_id = order_id)];
   setCookie("order_id", intToString(order_id));
   setCookie("cust_id", intToString(cust_id));
