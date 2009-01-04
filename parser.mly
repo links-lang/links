@@ -56,6 +56,12 @@ let annotate (signame, datatype) : _ -> binding =
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
+(* this preserves 1-tuples *)
+let make_tuple pos =
+  function
+    | [e] -> `RecordLit ([("1", e)], None), pos
+    | es -> `TupleLit es, pos
+
 let parseRegexFlags f =
   let rec asList f i l = 
     if (i == String.length f) then
@@ -573,7 +579,7 @@ perhaps_where:
 
 perhaps_orderby:
 | /* empty */                                                  { None }
-| ORDERBY LPAREN exp RPAREN                                    { Some $3 }
+| ORDERBY LPAREN exps RPAREN                                   { Some (make_tuple (pos()) $3) }
 
 escape_expression:
 | iteration_expression                                         { $1 }
@@ -616,9 +622,10 @@ database_expression:
 | table_expression                                             { $1 }
 | INSERT exp VALUES LPAREN RPAREN exp                          { `DBInsert ($2, [], $6, None), pos() }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { `DBInsert ($2, $5, $7, None), pos() }
-/*| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() } */
-/* | INSERT exp VALUES db_expression
-  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() } */
+| INSERT exp VALUES LPAREN RPAREN db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, [], $6, Some (`Constant (`String $8), pos())), pos() }
+| INSERT exp VALUES LPAREN record_labels RPAREN db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, $5, $7, Some (`Constant (`String $9), pos())), pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 record_labels:

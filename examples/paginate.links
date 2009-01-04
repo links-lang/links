@@ -22,7 +22,7 @@ fun find(n,c) {
  query [limit,offset] {
    for (var r <-- wordlist)
     where (r.word ~ /^{c}.*/)
-    orderby ((1=r.word))
+    orderby (r.word)
      [r]
  }
 

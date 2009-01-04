@@ -41,7 +41,7 @@ fun lookupFactorials(n) server {
  query {
    for (var row <-- factorials)
     where (row.i <= n)
-    orderby ((1=row.i))
+    orderby (row.i)
      [(i=row.i, f=row.f)]
  }
 }

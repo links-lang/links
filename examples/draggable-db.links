@@ -59,7 +59,7 @@ fun load() server {
   var items =
     query {
       for (var item <-- t)
-       orderby ((1=item.i))
+       orderby (item.i)
         [(name=item.name)]
     };
   map ((.name), items)
