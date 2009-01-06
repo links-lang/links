@@ -19,9 +19,9 @@ let tt =
     | [t] -> t
     | ts -> Types.make_tuple_type ts
 
-class desugar_formlets {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+class desugar_formlets env =
 object (o : 'self_type)
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   (*
     extract a list of (pattern, constructor, type) triples
@@ -71,9 +71,9 @@ object (o : 'self_type)
           | `TextNode s ->
               let e =
                 `FnAppl
-                  ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp),
+                  ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
                    [`FnAppl
-                      ((`TAppl ((`Var "stringToXml", dp), [`Type (o#lookup_mb ())]), dp),
+                      ((`TAppl ((`Var "stringToXml", dp), [`Row (o#lookup_effects)]), dp),
                        [`Constant (`String s), dp]), dp])
               in
                 (o, e, Types.xml_type)
@@ -83,7 +83,7 @@ object (o : 'self_type)
                   (`Block
                      (bs,
                       (`FnAppl
-                         ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp),
+                         ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
                           [e]), dp)))
               in
                 (o, e, Types.xml_type)
@@ -108,13 +108,14 @@ object (o : 'self_type)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
-              let empty_mb = Types.make_mailbox_type (Instantiate.alias "O" [] tycon_env) in
+              let empty_eff = Types.make_empty_closed_row () in
+(*Types.make_singleton_closed_row ("hear", (`Present, Instantiate.alias "O" [] tycon_env)) in*)
               let ft =
                 List.fold_right
                   (fun t ft ->
-                     `Function (Types.make_tuple_type [t], empty_mb, ft))
+                     `Function (Types.make_tuple_type [t], empty_eff, ft))
                   ts (tt ts) in
-              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_mb)) ts in
+              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_eff)) ts in
                 begin
                   match args with
                     | [] ->
@@ -123,11 +124,11 @@ object (o : 'self_type)
                         in
                           (o,
                            (`FnAppl
-                              ((`TAppl ((`Var "xml", dp), [`Type (o#lookup_mb ())]), dp), [e, dp])),
+                              ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp), [e, dp])),
                            Types.xml_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
-                        let mb = `Type (o#lookup_mb ()) in
+                        let mb = `Row (o#lookup_effects) in
                         let base : phrase =
                           (`FnAppl
                              ((`TAppl ((`Var "pure", dp), [`Type ft; mb]), dp),
@@ -150,17 +151,17 @@ object (o : 'self_type)
           | `Xml(tag, attrs, attrexp, contents) ->
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
               let (o, attrexp, _) = TransformSugar.option o (fun o -> o#phrase) attrexp in
-              let mb = o#lookup_mb () in
+              let eff = o#lookup_effects in
               let context : phrase =
                 let var = Utility.gensym ~prefix:"_formlet_" () in
                 let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var var), dp) in
-                  (`FunLit (Some [Types.make_tuple_type [Types.xml_type], mb],
+                  (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
                             ([[`Variable xb, dp]],
                              (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp))), dp) in
               let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "plug", dp), [`Type t; `Type mb]), dp),
+                   ((`TAppl ((`Var "plug", dp), [`Type t; `Row eff]), dp),
                     [context; e]),
                  t)
           | _ -> assert false
@@ -175,7 +176,8 @@ object (o : 'self_type)
         let e_in = `Formlet (body, yields) in
 (*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
         let dp = Sugartypes.dummy_position in
-        let empty_mb =  Types.make_mailbox_type (Instantiate.alias "O" [] tycon_env) in
+        let empty_eff = Types.make_empty_closed_row () in
+          (*Types.make_singleton_closed_row ("hear", (`Present, Instantiate.alias "O" [] tycon_env)) in*)
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
@@ -187,15 +189,15 @@ object (o : 'self_type)
             | _ -> [[`Tuple ps, dp]] in
 
         let arg_type = Types.make_tuple_type ts in
-        let mb = `Type (o#lookup_mb ()) in
+        let mb = `Row (o#lookup_effects) in
 
         let e =
           `FnAppl
             ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
              [body;
               `FnAppl
-                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_mb, yields_type)); mb]), dp),
-                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_mb], (pss, yields)), dp]), dp])
+                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
+                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], (pss, yields)), dp]), dp])
         in
 (*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
           (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)             
@@ -203,7 +205,6 @@ object (o : 'self_type)
 end
 
 let desugar_formlets env = ((new desugar_formlets env) : desugar_formlets :> TransformSugar.transform)
-
 
 let has_no_formlets =
 object

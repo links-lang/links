@@ -78,7 +78,7 @@ let dom_node = {
 type typ =
     [ `Not_typed
     | `Primitive of primitive
-    | `Function of (typ * typ * typ)
+    | `Function of (typ * row * typ)
     | `Record of row
     | `Variant of row
     | `Table of typ * typ * typ
@@ -240,7 +240,7 @@ let _ =
   let fresh_row_quantifier () =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var in
-      `RowVar (var, point), point
+      `RowVar (var, point), (FieldEnv.empty, point)
 
   let fresh_presence_quantifier () =
     let var = fresh_raw_variable () in
@@ -255,7 +255,7 @@ let _ =
   let fresh_flexible_row_quantifier () =
     let var = fresh_raw_variable () in
     let point = make_row_variable var in
-      `RowVar (var, point), point      
+      `RowVar (var, point), (FieldEnv.empty, point)
 
   let fresh_flexible_presence_quantifier () =
     let var = fresh_raw_variable () in
@@ -307,7 +307,7 @@ let free_type_vars, free_row_type_vars =
       | `Not_typed               -> S.empty
       | `Primitive _             -> S.empty
       | `Function (f, m, t)      ->
-          S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars m; free_type_vars' rec_vars t]
+          S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
       | `Table (r, w, n)         ->
@@ -563,7 +563,7 @@ let rec is_mailbox_free rec_vars (t : datatype) =
     match t with
       | `Not_typed -> true
       | `Primitive _ -> true
-      | `Function (f, m, t) -> imb f && imb m && imb t
+      | `Function (f, m, t) -> imb f && is_mailbox_free_row rec_vars m && imb t
       | `Record row
       | `Variant row -> imbr row
       | `Table (r, w, n) -> imb r && imb w && imb n
@@ -707,7 +707,7 @@ struct
                 | `Body t -> fbtv t
             end
         | `Function (f, m, t) ->
-            (fbtv f) @ (fbtv m) @ (fbtv t)
+            (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
         | `Record row
         | `Variant row -> free_bound_row_type_vars ~include_aliases bound_vars row
         | `Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
@@ -856,13 +856,13 @@ struct
     fun bound_vars ((policy, vars) as p) t ->
       let sd = datatype bound_vars p in
 
-      let string_of_mailbox_arrow mailbox_type =
-        begin
-          if Settings.get_value(show_mailbox_annotations) then
-            "-{" ^ sd mailbox_type ^ "}->"
-          else
-            "->"
-        end in
+(*       let string_of_mailbox_arrow mailbox_type = *)
+(*         begin *)
+(*           if Settings.get_value(show_mailbox_annotations) then *)
+(*             "-{" ^ sd mailbox_type ^ "}->" *)
+(*           else *)
+(*             "->" *)
+(*         end in *)
 
       let unwrap = fst -<- unwrap_row in
         (* precondition: the row is unwrapped *)
@@ -905,40 +905,38 @@ struct
                           datatype (TypeVarSet.add var bound_vars) p body
                   | `Body t -> (* Debug.print ("body"); *) sd t
               end
-          | `Function (args, mailbox_type, t) ->
+          | `Function (args, effects, t) ->
               let arrow =
-                match concrete_type mailbox_type with
-                  | `Application (mb, [t]) when mb.Abstype.id = mailbox.Abstype.id ->
-                      string_of_mailbox_arrow (t)
-                  | `MetaTypeVar point ->
-                      begin
-                        match Unionfind.find point with
-                          | `Flexible var when policy.flavours ->
-                              let name, (_, _, count) = Vars.find_spec var vars in
-                                if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                  "-?->"
-                                else
-                                  "-?" ^ name ^ "->"
-                          | `Rigid var
-                          | `Flexible var ->
-                              let name, (_, _, count) = Vars.find_spec var vars in
-                                if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                  "->"
-                                else
-                                  "-" ^ name ^ "->"
-                          | `Recursive _ -> assert false
-                          | `Body t' ->
-                              sd (`Function (args, t', t))
-                      end
-                  | t ->
-                      Debug.print
-                        ("broken arrow type: " ^ sd args ^ " -" ^ sd t ^ "-> " ^ sd t);
-                      assert false
+                let fields, row_var = unwrap effects in
+                  if FieldEnv.mem "hear" fields then
+                      "-{" ^ sd (snd (FieldEnv.find "hear" fields)) ^ "}->"
+                  else
+                    begin
+                      assert (FieldEnv.is_empty fields);
+                      match Unionfind.find row_var with
+                        | `Closed -> "-{}->"
+                        | `Flexible var when policy.flavours ->
+                            let name, (_, _, count) = Vars.find_spec var vars in
+                              if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                                "-?->"
+                              else
+                                "-?" ^ name ^ "->"
+                        | `Rigid var
+                        | `Flexible var ->
+                            let name, (_, _, count) = Vars.find_spec var vars in
+                              if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                                "->"
+                              else
+                                "-" ^ name ^ "->"
+                        | `Recursive _ -> assert false
+                        | `Body t' ->
+                            sd (`Function (args, t', t))
+                    end
               in
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
                     string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
-                  | t' ->     "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t
+                  | t' -> assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)
                 end
           | `Record r ->
               let r = unwrap r in
@@ -1081,7 +1079,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
               | `Body t -> ftv t
           end
       | `Function (f, m, t) ->
-          TypeVarMap.union_all [ftv f; ftv m; ftv t]
+          TypeVarMap.union_all [ftv f; row_flexible_type_vars bound_vars m; ftv t]
       | `Record row -> row_flexible_type_vars bound_vars row
       | `ForAll (tvars, body) ->
           failwith "Not implemented flexible_type_vars for `ForAll yet"
@@ -1193,14 +1191,15 @@ type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
 type environment        = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
 and typing_environment = { var_env   : environment ;
-                           tycon_env : tycon_environment }
+                           tycon_env : tycon_environment ;
+                           effect_row : row }
     deriving (Show)
 
 (* Functions on environments *)
 let extend_typing_environment 
-    {var_env = l ; tycon_env = al }
-    {var_env = r ; tycon_env = ar} : typing_environment = 
-  {var_env = Env.extend l r ; tycon_env = Env.extend al ar }
+    {var_env = l ; tycon_env = al ; effect_row = _el }
+    {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment = 
+  {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
 
 type type_arg = 
     [ `Type of datatype | `Row of row | `Presence of presence_flag ]
@@ -1227,7 +1226,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row_var IntMap.t * presenc
   let rec make_env boundvars = function
       | `Not_typed
       | `Primitive _             -> empties
-      | `Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
+      | `Function (f, m, t)      -> union [make_env boundvars f; make_env_r boundvars m; make_env boundvars t]
       | `Record row              
       | `Variant row             -> make_env_r boundvars row
       | `Table (l,r,n)           -> union [make_env boundvars l; make_env boundvars r; make_env boundvars n]
@@ -1310,48 +1309,48 @@ let make_wobbly_envs datatype : datatype IntMap.t * row_var IntMap.t * presence_
 (* subtyping *)
 let is_sub_type, is_sub_row =
   let module S = TypeVarSet in
-  let rec is_sub_mb (t, t') =
-(*     Debug.print ("mbt: "^string_of_datatype t); *)
-(*     Debug.print ("mbt': "^string_of_datatype t'); *)
-    match t, t' with
-      | `MetaTypeVar point, `MetaTypeVar point' ->
-          begin
-            match Unionfind.find point, Unionfind.find point' with
-              | `Rigid var, `Rigid var'
-              | `Flexible var, `Flexible var' -> var=var'
-              | `Body t, _ -> is_sub_mb (t, t')
-              | _, `Body t -> is_sub_mb (t, t')
-              | _, _ -> false
-          end
-      | `MetaTypeVar point, _ ->
-          begin
-            match Unionfind.find point with
-              | `Rigid _
-              | `Flexible _
-              | `Recursive _ -> false
-              | `Body t -> is_sub_mb (t, t')
-          end
-      | `Application (mb, [_ (*`Alias (("O", _), _)*)]), _
-          when mb.Abstype.id = mailbox.Abstype.id
-          -> true (* HACK *)
-      | _, `MetaTypeVar point ->
-          begin
-            match Unionfind.find point with
-              | `Rigid _
-              | `Flexible _
-              | `Recursive _ -> false
-              | `Body t' -> is_sub_mb (t, t')
-          end
-      | _, _ -> false in
+(*   let rec is_sub_eff (eff, eff') = *)
+(* (\*     Debug.print ("mbt: "^string_of_datatype t); *\) *)
+(* (\*     Debug.print ("mbt': "^string_of_datatype t'); *\) *)
+(*     match eff, eff' with *)
+(* (\*       | `MetaTypeVar point, `MetaTypeVar point' -> *\) *)
+(* (\*           begin *\) *)
+(* (\*             match Unionfind.find point, Unionfind.find point' with *\) *)
+(* (\*               | `Rigid var, `Rigid var' *\) *)
+(* (\*               | `Flexible var, `Flexible var' -> var=var' *\) *)
+(* (\*               | `Body t, _ -> is_sub_mb (t, t') *\) *)
+(* (\*               | _, `Body t -> is_sub_mb (t, t') *\) *)
+(* (\*               | _, _ -> false *\) *)
+(* (\*           end *\) *)
+(* (\*       | `MetaTypeVar point, _ -> *\) *)
+(* (\*           begin *\) *)
+(* (\*             match Unionfind.find point with *\) *)
+(* (\*               | `Rigid _ *\) *)
+(* (\*               | `Flexible _ *\) *)
+(* (\*               | `Recursive _ -> false *\) *)
+(* (\*               | `Body t -> is_sub_mb (t, t') *\) *)
+(* (\*           end *\) *)
+(* (\*       | `Application (mb, [_ (\\*`Alias (("O", _), _)*\\)]), _ *\) *)
+(* (\*           when mb.Abstype.id = mailbox.Abstype.id *\) *)
+(* (\*           -> true (\\* HACK *\\) *\) *)
+(* (\*       | _, `MetaTypeVar point -> *\) *)
+(* (\*           begin *\) *)
+(* (\*             match Unionfind.find point with *\) *)
+(* (\*               | `Rigid _ *\) *)
+(* (\*               | `Flexible _ *\) *)
+(* (\*               | `Recursive _ -> false *\) *)
+(* (\*               | `Body t' -> is_sub_mb (t, t') *\) *)
+(* (\*           end *\) *)
+(*       | _, _ -> false in *)
   let rec is_sub_type = fun rec_vars (t, t') ->
 (*     Debug.print ("t: "^string_of_datatype t); *)
 (*     Debug.print ("t': "^string_of_datatype t'); *)
     match t, t' with
       | `Not_typed, `Not_typed -> true
       | `Primitive p, `Primitive q -> p=q
-      | `Function (f, m, t), `Function (f', m', t') ->
+      | `Function (f, eff, t), `Function (f', eff', t') ->
           is_sub_type rec_vars (f', f)
-          && is_sub_mb (m, m')
+          && is_sub_eff rec_vars (eff, eff')
           && is_sub_type rec_vars (t, t')
       | `Record row', `Record row
       | `Variant row, `Variant row' ->
@@ -1402,6 +1401,44 @@ let is_sub_type, is_sub_row =
       | `ForAll (qs, t), `ForAll (qs', t') ->
           failwith "not implemented subtyping on forall types yet"          
       | _, _ -> false
+  (* This is like standard row sub-typing, but the field types must be invariant.
+     Ultimately we might want more flexibility. For instance, we might expect
+     contravariance in the type of heard messages (the 'hear' effect is only 
+     associated with input).
+  *)
+  and is_sub_eff =
+    fun rec_vars ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) ->
+      let sub_fields =
+        FieldEnv.fold (fun name t b ->
+                         match t with
+                           | `Present, t ->
+                               if FieldEnv.mem name rfield_env then
+                                 match FieldEnv.find name rfield_env with
+                                   | `Present, t' ->
+                                       (is_sub_type rec_vars (t, t') &&
+                                          is_sub_type rec_vars (t', t))
+                                   | `Absent, _
+                                   | `Var _, _ ->
+                                       false
+                               else
+                                 false
+                           | `Absent, _ ->
+                               (* this seems a bit dodgey because it makes subtyping non-structural
+                                  (the type is ignored), but perhaps it is what we want *)
+                               true
+                           | `Var _, _ -> assert false (* TODO *)) lfield_env true in
+      let sub_row_vars =
+        match Unionfind.find lrow_var, Unionfind.find rrow_var with
+          | `Flexible var, `Flexible var'
+          | `Rigid var, `Rigid var' -> var=var'
+          | `Closed, _ -> true
+          | `Body lrow, _ -> is_sub_eff rec_vars (lrow, rrow)
+          | _, `Body rrow -> is_sub_eff rec_vars (lrow, rrow)
+          | `Recursive _, `Recursive _ ->
+              assert false
+          | _, _ -> false
+      in
+        sub_fields && sub_row_vars
   and is_sub_row =
     fun rec_vars ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) ->
       let sub_fields =

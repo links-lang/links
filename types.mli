@@ -58,7 +58,7 @@ val dom_node : Abstype.t
 type datatype =
     [ `Not_typed
     | `Primitive of primitive
-    | `Function of (datatype * datatype * datatype)
+    | `Function of (datatype * row * datatype)
     | `Record of row
     | `Variant of row
     | `Table of datatype * datatype * datatype
@@ -96,7 +96,8 @@ type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
 type environment        = datatype Env.String.t
  and tycon_environment  = tycon_spec Env.String.t
  and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment }
+                            tycon_env : tycon_environment ;
+                            effect_row : row }
     deriving (Show)
 
 val concrete_type : datatype -> datatype
@@ -148,8 +149,8 @@ val fresh_rigid_presence_variable : unit -> presence_flag
 val fresh_type_quantifier : unit -> quantifier * datatype
 val fresh_flexible_type_quantifier : unit -> quantifier * datatype
 
-val fresh_row_quantifier : unit -> quantifier * row_var
-val fresh_flexible_row_quantifier : unit -> quantifier * row_var
+val fresh_row_quantifier : unit -> quantifier * row
+val fresh_flexible_row_quantifier : unit -> quantifier * row
 
 val fresh_presence_quantifier : unit -> quantifier * presence_flag
 val fresh_flexible_presence_quantifier : unit -> quantifier * presence_flag

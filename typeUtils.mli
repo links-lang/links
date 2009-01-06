@@ -8,7 +8,7 @@ val erase_type   : string -> Types.datatype -> Types.datatype
 val inject_type  : string -> Types.datatype -> Types.datatype
 val return_type  : Types.datatype -> Types.datatype
 val arg_types    : Types.datatype -> Types.datatype list
-val mailbox_type : Types.datatype -> Types.datatype
+val effect_row   : Types.datatype -> Types.row
 
 val element_type : Types.datatype -> Types.datatype
 

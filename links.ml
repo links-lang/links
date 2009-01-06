@@ -196,12 +196,12 @@ let interact envs =
         let sentence' = match sentence with
           | `Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-              let defs, nenv = Sugartoir.desugar_definitions (nenv, tenv) defs in
+              let defs, nenv = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
 (*                 Debug.print ("defs: "^Ir.Show_computation.show (defs, `Return (`Extend (StringMap.empty, None)))); *)
                 `Definitions (defs, nenv)
           | `Expression e     ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-              let e = Sugartoir.desugar_expression (nenv, tenv) e in
+              let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
 (*                Debug.print ("e: "^Ir.Show_computation.show e); *)
                 `Expression (e, t)
           | `Directive d      -> `Directive d
@@ -260,7 +260,7 @@ let evaluate_string_in envs v =
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
-    let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv) program in
+    let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
       ((globals @ locals, main), t)
   in
     (Settings.set_value interacting false;

@@ -1004,7 +1004,8 @@ let initialise_envs (nenv, tyenv) =
           (Env.String.bind tyenv.Types.var_env
              ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
           ("stringifyB64", dt "(a) -> String");
-     Types.tycon_env = tyenv.Types.tycon_env} in
+     Types.tycon_env = tyenv.Types.tycon_env;
+     Types.effect_row = tyenv.Types.effect_row } in
   let nenv =
     Env.String.bind
       (Env.String.bind nenv

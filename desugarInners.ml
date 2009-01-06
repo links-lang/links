@@ -19,9 +19,9 @@ let rec add_extras =
             | `PresenceVar (_, point) -> `Presence (`Var point) :: add_extras (extras, tyargs)
         end
 
-class desugar_inners {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+class desugar_inners env =
 object (o : 'self_type)
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   val extra_env = StringMap.empty
 
@@ -102,8 +102,8 @@ object (o : 'self_type)
             function
               | [] -> (o, [])
               | ((f, Some outer, fpos), ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
-                  let inner_mb = TransformSugar.fun_mailbox inner (fst lam) in
-                  let (o, lam, _) = o#funlit inner_mb lam in
+                  let inner_eff = TransformSugar.fun_effects inner (fst lam) in
+                  let (o, lam, _) = o#funlit inner_eff lam in
                   let (o, defs) = list o defs in
                   let extras = List.map (fun _ -> None) extras in
                     (o, ((f, Some outer, fpos), ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)

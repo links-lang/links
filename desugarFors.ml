@@ -49,9 +49,9 @@ let dp = Sugartypes.dummy_position
   This function generates the code to extract the results.
   It roughly corresponds to [[qs]].
 *)
-let results :  Types.datatype ->
+let results :  Types.row ->
   (Sugartypes.phrase list * Sugartypes.name list * Types.datatype list) -> Sugartypes.phrase =
-  fun mb (es, xs, ts) ->
+  fun eff (es, xs, ts) ->
     let results_type = Types.make_tuple_type ts in
     let rec results =
       function
@@ -79,29 +79,29 @@ let results :  Types.datatype ->
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
                 `FunLit
-                  (Some [a, mb],
+                  (Some [a, eff],
                    ([ps], (`TupleLit (q::qs), dp))), dp in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
                 `FunLit
-                  (Some [Types.make_tuple_type [t], mb],
+                  (Some [Types.make_tuple_type [t], eff],
                    ([[qb]],
                     (`FnAppl                   
-                       ((`TAppl ((`Var "map", dp), [a; `Type mb; b]), dp),
+                       ((`TAppl ((`Var "map", dp), [a; `Row eff; b]), dp),
                         [inner; r]), dp))), dp in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
               `FnAppl
-                ((`TAppl ((`Var "concatMap", dp), [a; `Type mb; b]), dp),
+                ((`TAppl ((`Var "concatMap", dp), [a; `Row eff; b]), dp),
                  [outer; e]), dp
     in
       results (es, xs, ts)
 
 
-class desugar_fors {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+class desugar_fors env =
 object (o : 'self_type)
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   (*
     extract a quadruple (sources, patterns, constructors, types)
@@ -130,9 +130,9 @@ object (o : 'self_type)
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
                    let n = `Type (TypeUtils.table_needed_type t) in
-                   let mb = `Type (o#lookup_mb ()) in
+                   let eff = `Row (o#lookup_effects) in
 
-                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp), [r; w; n; mb]), dp), [e]), dp in
+                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp), [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
                      o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, t::ts))
@@ -142,27 +142,14 @@ object (o : 'self_type)
         o, (List.rev es, List.rev ps, List.rev xs, List.rev ts)
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-(*     | `Iteration ([], (body, _), _, _) as e -> *)
-(*         o#phrasenode body *)
     | `Iteration (generators, body, filter, sort) ->
-        let mb = o#lookup_mb () in
+        let eff = o#lookup_effects in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
         let o, body, body_type = o#phrase body in
         let o, filter, _ = TransformSugar.option o (fun o -> o#phrase) filter in
         let o, sort, sort_type = TransformSugar.option o (fun o -> o#phrase) sort in
         let elem_type = TypeUtils.element_type body_type in
-(*         let body : phrase = *)
-(*           match sort with *)
-(*             | None -> body *)
-(*             | Some sort ->  *)
-(*                 let a = `Type elem_type in *)
-(*                 let b = `Type (Types.make_tuple_type [body_type; Types.bool_type]) in *)
-(*                 let var = Utility.gensym ~prefix:"_for_" () in *)
-(*                 let (xb, x) = (var, Some body_type, dp), ((`Var var), dp) in *)
-(*                   `FnAppl *)
-(*                     ((`TAppl ((`Var "map", dp), [a; `Type mb; b]), dp), *)
-(*                      [`FunLit (Some [Types.make_tuple_type [elem_type], mb], *)
-(*                                ([[`Variable xb, dp]], (`TupleLit [x; sort], dp))), dp; body]), dp in *)
+
         let body : phrase =
           match filter with
             | None -> body
@@ -181,66 +168,27 @@ object (o : 'self_type)
           
         let f : phrase =
           `FunLit
-            (Some [Types.make_tuple_type [arg_type], mb],
+            (Some [Types.make_tuple_type [arg_type], eff],
              ([arg], body)), dp in
           
-        let results = results mb (es, xs, ts) in
+        let results = results eff (es, xs, ts) in
         let results =
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
                 let g : phrase =
                   `FunLit
-                    (Some [Types.make_tuple_type [arg_type], mb],
+                    (Some [Types.make_tuple_type [arg_type], eff],
                      ([arg], sort)), dp
                 in
                   `FnAppl
-                    ((`TAppl ((`Var "sortBy", dp), [`Type arg_type; `Type mb; `Type sort_type]), dp),
+                    ((`TAppl ((`Var "sortBy", dp), [`Type arg_type; `Row eff; `Type sort_type]), dp),
                      [g; results]), dp in
 
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Type mb; `Type elem_type]), dp),
+            ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
              [f; results])
-
-
-
-(*         let e : phrasenode = *)
-(*           match sort, sort_type with *)
-(*             | None, None -> *)
-(*                 let a = *)
-(*                   match ts with *)
-(*                     | [t] -> `Type t *)
-(*                     | _ -> `Type (Types.make_tuple_type ts) in *)
-(*                 let b = `Type elem_type in *)
-(*                   `FnAppl *)
-(*                     ((`TAppl ((`Var "concatMap", dp), [a; `Type mb; b]), dp), *)
-(*                      [f; results]) *)
-(*             | Some sort, Some sort_type -> *)
-(*                 let bst = Types.make_tuple_type [body_type; sort_type] in *)
-(*                 let e : phrase = *)
-(*                   let a = *)
-(*                     match ts with *)
-(*                       | [t] -> `Type t *)
-(*                       | _ -> `Type (Types.make_tuple_type ts) in *)
-(*                   let b = `Type bst in *)
-(*                     `FnAppl *)
-(*                       ((`TAppl ((`Var "concatMap", dp), [a; `Type mb; b]), dp), *)
-(*                        [f; results]), dp in *)
-(*                 let e' : phrase = *)
-(*                   let a = `Type bst in *)
-(*                   let b = `Type sort_type in *)
-(*                   let snd = `Section(`Project "2"), dp in  *)
-(*                     `FnAppl *)
-(*                       ((`TAppl ((`Var "sortBy", dp), [a; `Type mb; b]), dp), *)
-(*                        [snd; e]), dp in *)
-                  
-(*                 let a = `Type bst in *)
-(*                 let b = `Type elem_type in *)
-(*                 let fst = `Section(`Project "1"), dp in  *)
-(*                   `FnAppl *)
-(*                     ((`TAppl ((`Var "map", dp), [a; `Type mb; b]), dp), *)
-(*                      [fst; e']) *)
         in
 (*           Debug.print ("comprehension: "^Show_phrasenode.show (`Iteration (generators, body, filter, sort))); *)
 (*           Debug.print ("body_type: "^Types.string_of_datatype body_type); *)

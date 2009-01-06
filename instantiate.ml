@@ -44,7 +44,7 @@ let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t * presence_flag
 			     `MetaTypeVar point'
 			 )
 		   | `Body t -> inst rec_env t)
-	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
+	  | `Function (f, m, t) -> `Function (inst rec_env f, inst_row rec_env m, inst rec_env t)
 	  | `Record row -> `Record (inst_row rec_env row)
 	  | `Variant row -> `Variant (inst_row rec_env row)
 	  | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
@@ -277,8 +277,8 @@ let freshen_quantifiers t =
                       let q, t = Types.fresh_type_quantifier () in
                         q, `Type t
                   | `RowVar _ ->
-                      let q, row_var = Types.fresh_row_quantifier () in
-                        q, `Row (StringMap.empty, row_var)
+                      let q, r = Types.fresh_row_quantifier () in
+                        q, `Row r
                   | `PresenceVar _ ->
                       let q, f = Types.fresh_presence_quantifier () in
                         q, `Presence f)

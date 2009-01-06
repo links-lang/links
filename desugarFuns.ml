@@ -64,9 +64,9 @@ let unwrap_def_dp (fb, tlam, location, t, pos) =
   let (fb, tlam, location, t) = unwrap_def (fb, tlam, location, t) in
     (fb, tlam, location, t, pos)
 
-class desugar_funs {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+class desugar_funs env =
 object (o : 'self_type)
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `FunLit (Some argss, lam) ->
@@ -88,20 +88,20 @@ object (o : 'self_type)
           (o, e, ft)
     | `Section (`Project name) ->
         let ab, a = Types.fresh_type_quantifier () in
-        let rhob, rho = Types.fresh_row_quantifier () in
-        let mb, m = Types.fresh_type_quantifier () in
+        let rhob, (fields, rho) = Types.fresh_row_quantifier () in
+        let effb, eff = Types.fresh_row_quantifier () in
 
-        let r = `Record (StringMap.add name (`Present, a) StringMap.empty, rho) in
+        let r = `Record (StringMap.add name (`Present, a) fields, rho) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
-        let ft : Types.datatype = `ForAll ([ab; rhob; mb], `Function (r, m, a)) in
+        let ft : Types.datatype = `ForAll ([ab; rhob; effb], `Function (r, eff, a)) in
           
         let pss = [[`Variable (x, Some r, dp), dp]] in
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
           `Block
-            ([`Fun ((f, Some ft, dp), ([ab; rhob; mb], (pss, body)), `Unknown, None), dp],
+            ([`Fun ((f, Some ft, dp), ([ab; rhob; effb], (pss, body)), `Unknown, None), dp],
              ((`Var f), dp))
         in
           (o, e, ft)

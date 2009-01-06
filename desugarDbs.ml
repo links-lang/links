@@ -33,13 +33,13 @@ open Utility
 
 let dp = Sugartypes.dummy_position
 
-class desugar_dbs {Types.var_env=var_env; Types.tycon_env=tycon_env} =
+class desugar_dbs env =
 object (o : 'self_type)
-  inherit (TransformSugar.transform (var_env, tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `DBDelete (pattern, table, condition) ->
-        let mb = o#lookup_mb () in
+        let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
@@ -65,12 +65,12 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "DeleteRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
+                ((`TAppl ((`Var "DeleteRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Row eff]), dp),
                  [t; rows]), dp))
         in
           o, e, Types.unit_type
     | `DBUpdate (pattern, table, condition, fields) ->
-        let mb = o#lookup_mb () in
+        let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
@@ -119,12 +119,12 @@ object (o : 'self_type)
           `Block
             ([`Val ([], ((`Variable tb), dp), table, `Unknown, None), dp],
              (`FnAppl
-                ((`TAppl ((`Var "UpdateRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type mb]), dp),
+                ((`TAppl ((`Var "UpdateRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Row eff]), dp),
                  [t; row_pairs]), dp))
         in
           o, e, Types.unit_type          
     | `DBInsert (table, _labels, rows, returning) ->
-        let mb = o#lookup_mb () in
+        let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
         let write_type = TypeUtils.table_write_type table_type in
@@ -145,13 +145,13 @@ object (o : 'self_type)
             | None -> 
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Type mb]), dp),
+                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in
                   (o,
                    `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Type mb]), dp),
+                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
                       [table; rows; field]))                  
         in
           o, e, Types.unit_type

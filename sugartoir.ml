@@ -55,18 +55,21 @@ module TEnv = Env.Int
 type nenv = var NEnv.t
 type tenv = Types.datatype TEnv.t
 
-type env = nenv * tenv
+type env = nenv * tenv * Types.row
 
-let lookup_name_and_type name (nenv, tenv) =
+let lookup_name_and_type name (nenv, tenv, _eff) =
   let var = NEnv.lookup nenv name in
     var, TEnv.lookup tenv var
 
 let lookup_name name env = fst (lookup_name_and_type name env)
 let lookup_type name env = snd (lookup_name_and_type name env)
+let lookup_effects (_, _, eff)= eff
 
-let with_mailbox_type t (nenv, tenv) =
-  let mb_var = NEnv.lookup nenv "_MAILBOX_" in
-    (nenv, TEnv.bind tenv (mb_var, t))
+(* Hmm... shouldn't we need to use something like this? *)
+
+(* let with_mailbox_type t (nenv, tenv) = *)
+(*   let mb_var = NEnv.lookup nenv "_MAILBOX_" in *)
+(*     (nenv, TEnv.bind tenv (mb_var, t)) *)
 
 module type MONAD =
 sig
@@ -102,7 +105,7 @@ sig
   val constant : constant -> value sem
   val var : (var * datatype) -> value sem
 
-  val escape : (var_info * Types.datatype * (var -> tail_computation sem)) -> tail_computation sem
+  val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
   val tappl : (value sem * Types.type_arg list) -> value sem
 
@@ -484,12 +487,12 @@ struct
            let (bs, tc) = CompilePatterns.let_pattern env p (v, vt) (reify body, body_type) in
              reflect (bs, (tc, body_type)))
 
-  let escape ((kt, _, _) as k_info, mb, body) =
+  let escape ((kt, _, _) as k_info, eff, body) =
     let kb, k = Var.fresh_var k_info in
     let body = body k in
     let body_type = sem_type body in
     let body = reify body in
-    let ft = `Function (kt, mb, body_type) in
+    let ft = `Function (kt, eff, body_type) in
     let f_info = (ft, "", `Local) in      
     let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)), body_type) in        
       M.bind (fun_binding (f_info, ([], [kb], body), `Unknown)) rest
@@ -571,9 +574,9 @@ struct
            M.bind
              (comp_binding (Var.info_of_type (sem_type v), `Return e))
              (fun var ->
-                let nenv, tenv = env in
+                let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv) (t, var, cases) in
+                let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
   let tappl (s, tyargs) =
@@ -584,15 +587,15 @@ end
 
 module Eval(I : INTERPRETATION) =
 struct
-  let extend xs vs (nenv, tenv) =
+  let extend xs vs (nenv, tenv, eff) =
     List.fold_left2
-      (fun (nenv, tenv) x (v, t) ->
-         (NEnv.bind nenv (x, v), TEnv.bind tenv (v, t)))
-      (nenv, tenv)
+      (fun (nenv, tenv, eff) x (v, t) ->
+         (NEnv.bind nenv (x, v), TEnv.bind tenv (v, t), eff))
+      (nenv, tenv, eff)
       xs
       vs
 
-  let (++) (nenv, tenv) (nenv', tenv') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv')
+  let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env (e, pos) ->
@@ -604,8 +607,8 @@ struct
           match tyargs with
             | [] -> I.var (x, xt)
             | _ -> (* Debug.print ("name: "^name); *) I.tappl (I.var (x, xt), tyargs) in
-      let mbt = lookup_type "_MAILBOX_" env in
-      let instantiate_mb name = instantiate name [`Type mbt] in
+      let eff = lookup_effects env in
+      let instantiate_mb name = instantiate name [`Row eff] in
       let cofv = I.comp_of_value in
       let ec = eval env in
       let ev = evalv env in
@@ -618,9 +621,9 @@ struct
           | `ListLit ([], Some t) ->
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Type mbt], [ev e; ev ((`ListLit (es, Some t)), pos)]))
+              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff], [ev e; ev ((`ListLit (es, Some t)), pos)]))
           | `Escape ((k, Some kt, _), body) ->
-              I.escape ((kt, k, `Local), mbt, fun v -> eval (extend [k] [(v, kt)] env) body)
+              I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | `Section (`Minus) -> cofv (lookup_var "-")
           | `Section (`FloatMinus) -> cofv (lookup_var "-.")
           | `Section (`Name name) -> cofv (lookup_var name)
@@ -741,14 +744,14 @@ struct
                   else
                     cofv
                       (I.concat (instantiate "Nil" [`Type (`Primitive `XmlItem)],
-                                 instantiate "Concat" [`Type (`Primitive `XmlItem); `Type mbt],
+                                 instantiate "Concat" [`Type (`Primitive `XmlItem); `Row eff],
                                  List.map ev children))
                 else
                   let attrs = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
                   let body =
                          I.xml (instantiate "Nil" [`Type Types.char_type],
-                                instantiate "Concat" [`Type Types.char_type; `Type mbt],
+                                instantiate "Concat" [`Type Types.char_type; `Row eff],
                                 tag, attrs, children)
                   in
                     begin

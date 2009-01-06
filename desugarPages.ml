@@ -24,13 +24,13 @@ let rec is_raw (phrase, pos) =
 let rec desugar_page (o, page_type) =
   let desugar_nodes pos : phrase list -> phrase =
     fun children ->
-      (`FnAppl ((`TAppl ((`Var "joinManyP", pos), [`Type (o#lookup_mb ())]), pos),
+      (`FnAppl ((`TAppl ((`Var "joinManyP", pos), [`Row (o#lookup_effects)]), pos),
                 [`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type), pos]), pos)
   in
     fun (e, pos) ->
       match e with
         | _ when is_raw (e, pos) ->
-            (`FnAppl ((`TAppl ((`Var "bodyP", pos), [`Type (o#lookup_mb ())]), pos),
+            (`FnAppl ((`TAppl ((`Var "bodyP", pos), [`Row (o#lookup_effects)]), pos),
                       [e, pos]), pos)
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
@@ -47,16 +47,16 @@ let rec desugar_page (o, page_type) =
                 | `Alias ((_, [a]), _) -> a
                 | _ -> assert false
             in
-              (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Type (o#lookup_mb ())]), pos),
+              (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
                         [formlet; handler; attributes]), pos)
         | `PagePlacement (page) -> page
         | `Xml ("#", [], _, children) ->
             desugar_nodes pos children
         | `Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
-              (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Type (o#lookup_mb ())]), pos),
+              (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Row (o#lookup_effects)]), pos),
                         [(`FunLit
-                            (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_mb ()]),
+                            (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
                                      [`Block ([], (`Var x, pos)), pos]), pos))), pos);
@@ -66,7 +66,7 @@ let rec desugar_page (o, page_type) =
 
 and desugar_pages env =
 object
-  inherit (TransformSugar.transform (env.Types.var_env, env.Types.tycon_env)) as super
+  inherit (TransformSugar.transform env) as super
 
   method phrasenode = function
     | `Page e ->

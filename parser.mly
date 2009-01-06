@@ -680,21 +680,25 @@ just_datatype:
 datatype:
 | mu_datatype                                                  { $1 }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               fresh_rigid_type_variable (),
+                                                                               ([], fresh_rigid_row_variable ()),
                                                                                $3) }
 | parenthesized_datatypes QUESTIONRARROW datatype              { FunctionType ($1,
-                                                                               fresh_type_variable (),
+                                                                               ([], fresh_row_variable ()),
                                                                                $3) }
 | parenthesized_datatypes MINUS VARIABLE RARROW datatype       { FunctionType ($1,
-                                                                               RigidTypeVar $3,
+                                                                               ([], `OpenRigid $3),
                                                                                $5) }      
 | parenthesized_datatypes
        MINUSQUESTION VARIABLE RARROW datatype                  { FunctionType ($1,
-                                                                               TypeVar $3,
+                                                                               ([], `Open $3),
                                                                                $5) }      
 | parenthesized_datatypes 
+       MINUSLBRACE RBRACERARROW datatype                       { FunctionType ($1,
+                                                                               ([], `Closed),
+                                                                               $4) }
+| parenthesized_datatypes 
        MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
-                                                                               TypeApplication ("Mailbox", [$3]),
+                                                                               ([("hear", (`Present, $3))], `Closed),
                                                                                $5) }
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
@@ -874,17 +878,17 @@ primary_pattern:
 | parenthesized_pattern                                     { $1 }
 
 patterns:
-| pattern                                                 { [$1] }
-| pattern COMMA patterns                                { $1 :: $3 }
+| pattern                                                   { [$1] }
+| pattern COMMA patterns                                    { $1 :: $3 }
 
 labeled_patterns:
 | record_label EQ pattern                                   { [($1, $3)] }
 | record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
 
 multi_args:
-| LPAREN patterns RPAREN                                  { $2 }
+| LPAREN patterns RPAREN                                    { $2 }
 | LPAREN RPAREN                                             { [] }
 
 arg_lists:
-| multi_args { [$1] }
-| multi_args arg_lists { $1 :: $2 }
+| multi_args                                                { [$1] }
+| multi_args arg_lists                                      { $1 :: $2 }

@@ -34,7 +34,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
                | `Body t -> gt t)
         | `Function (f, m, t) ->
             let from_gens = gt f
-            and mailbox_gens = gt m
+            and mailbox_gens = get_row_type_args kind bound_vars m
             and to_gens = gt t in
               from_gens @ mailbox_gens @ to_gens
         | `Record row

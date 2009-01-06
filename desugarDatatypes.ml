@@ -87,9 +87,9 @@ struct
                         with NotFound _ -> raise (UnexpectedFreeVar s))
         | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
                              with NotFound _ -> raise (UnexpectedFreeVar s))
-        | FunctionType (f, m, t) ->
+        | FunctionType (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f), 
-                       datatype var_env m, 
+                       row var_env alias_env e, 
                        datatype var_env t)
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
@@ -193,7 +193,7 @@ struct
           method tyvars = tyvars
             
           method datatype = function
-            | FunctionType (f, TypeVar x, t) -> 
+            | FunctionType (f, ([], `Open x), t) -> 
                 let var = `Flexible (Types.fresh_raw_variable()) in
                 let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in
                 let o = self#list (fun o -> o#datatype) f in

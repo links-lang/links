@@ -77,7 +77,7 @@ type location = [`Client | `Server | `Native | `Unknown]
 type datatype = 
   | TypeVar         of name
   | RigidTypeVar    of name
-  | FunctionType    of datatype list * datatype * datatype
+  | FunctionType    of datatype list * row * datatype
   | MuType          of name * datatype
   | UnitType
   | TupleType       of (datatype list)
@@ -164,9 +164,9 @@ and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.datatype) list) option * funlit
-| `Spawn            of phrase * Types.datatype option
-| `SpawnWait        of phrase * Types.datatype option
+| `FunLit           of ((Types.datatype * Types.row) list) option * funlit
+| `Spawn            of phrase * Types.row option
+| `SpawnWait        of phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option

@@ -66,7 +66,7 @@ let rec eq_types : (datatype * datatype) -> bool =
           begin match unalias t2 with
               `Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom)
                                          && eq_types (lto,   rto)
-                                         && eq_types (lm,    rm)
+                                         && eq_rows  (lm,    rm)
             | _                          -> false
           end
       | `Record l ->
@@ -304,8 +304,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
           | `Alias (_, t1), t2 
           | t1, `Alias (_, t2) -> unify' rec_env (t1, t2)
           | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
-              (unify' rec_env (lm, rm);
-               unify' rec_env (lfrom, rfrom);
+              (unify' rec_env (lfrom, rfrom);
+               unify_rows' rec_env (lm, rm);
                unify' rec_env (lto, rto))
           | `Record l, `Record r -> unify_rows' rec_env (l, r)
           | `Variant l, `Variant r -> unify_rows' rec_env (l, r)

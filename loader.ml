@@ -32,7 +32,7 @@ let read_file_source (filename:string) (nenv, tyenv) =
   let sugar, pos_context =
     lazy (Parse.parse_file Parse.program filename) <|measure_as|> "parse" in
   let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
-  let globals, main, nenv = Sugartoir.desugar_program (nenv, Var.varify_env (nenv, tyenv.Types.var_env)) program in
+  let globals, main, nenv = Sugartoir.desugar_program (nenv, Var.varify_env (nenv, tyenv.Types.var_env), tyenv.Types.effect_row) program in
     (nenv, tenv), (globals, main, t)
 
 let cachefile_path filename = 

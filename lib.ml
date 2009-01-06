@@ -128,9 +128,8 @@ let make_type_variable = Types.make_type_variable
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
-   (let a = Types.fresh_raw_variable () in
-    let t = Unionfind.fresh (`Rigid a) in
-      (`ForAll ([`TypeVar (a, t)], `Function (make_tuple_type [from], `MetaTypeVar t, into)) : Types.datatype)),
+   (let q, r = Types.fresh_row_quantifier () in
+      (`ForAll ([q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 
@@ -1217,7 +1216,7 @@ let value_env =
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
-let typing_env = {Types.var_env = type_env; tycon_env = alias_env}
+let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row ()}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

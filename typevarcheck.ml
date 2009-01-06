@@ -28,7 +28,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                 | `Body t -> isg t
             end
         | `Function (f, m, t) ->
-            isg f && isg m && isg t
+            isg f && isgr m && isg t
         | `ForAll (qs, t) -> 
             is_guarded (bind_quantifiers qs bound_vars) var t
         | `Record row ->
@@ -91,7 +91,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
                 | `Body t -> isn t
             end
         | `Function (f, m, t) ->
-            isp f || isp m || isn t
+            isp f || isnr m || isn t
         | `ForAll (qs, t) -> is_negative (bind_quantifiers qs bound_vars) var t
         | `Record row -> isnr row
         | `Variant row -> isnr row
@@ -141,7 +141,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
                 | `Body t -> isp t
             end
         | `Function (f, m, t) ->
-            isn f || isn m || isp t
+            isn f || ispr m || isp t
         | `ForAll (qs, t) -> is_positive (bind_quantifiers qs bound_vars) var t
         | `Record row -> ispr row
         | `Variant row -> ispr row

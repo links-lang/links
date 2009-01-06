@@ -9,12 +9,12 @@ let type_section env =
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
         let ab, a = Types.fresh_type_quantifier () in
-        let rhob, rho = Types.fresh_row_quantifier () in
-        let mb, m = Types.fresh_type_quantifier () in
+        let rhob, (fields, rho) = Types.fresh_row_quantifier () in
+        let eb, e = Types.fresh_row_quantifier () in
 
-        let r = `Record (StringMap.add label (`Present, a) StringMap.empty, rho) in
-          `ForAll ([ab; rhob; mb],
-                   `Function (Types.make_tuple_type [r], m, a))
+        let r = `Record (StringMap.add label (`Present, a) fields, rho) in
+          `ForAll ([ab; rhob; eb],
+                   `Function (Types.make_tuple_type [r], e, a))
     | `Name var -> TyEnv.lookup env var
 
 let type_unary_op env tycon_env =
@@ -49,24 +49,24 @@ let type_binary_op env tycon_env =
   | `Name "<="
   | `Name "<>" ->
       let ab, a = Types.fresh_type_quantifier () in
-      let mb, m = Types.fresh_type_quantifier () in
-        `ForAll ([ab; mb],
-                 `Function (Types.make_tuple_type [a; a], m, `Primitive `Bool))
+      let eb, e = Types.fresh_row_quantifier () in
+        `ForAll ([ab; eb],
+                 `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "send"
   | `Name n       -> TyEnv.lookup env n
 
-let fun_mailbox t pss =
-  let rec get_mb =
+let fun_effects t pss =
+  let rec get_eff =
     function
-      | `Function (_, mb, _), [_] -> mb
-      | `Function (_, _, t), _::pss -> get_mb (TypeUtils.concrete_type t, pss)
+      | `Function (_, effects, _), [_] -> effects
+      | `Function (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
       | `ForAll (_, t) -> TypeUtils.concrete_type t
       | t -> t
   in
-    get_mb (t, pss)
+    get_eff (t, pss)
 
 let option :
     'self_type ->
@@ -120,28 +120,29 @@ let check_type_application (e, t) k =
       raise Instantiate.ArityMismatch
   end
 
-class transform (env : (Types.environment * Types.tycon_environment)) =
+class transform (env : Types.typing_environment) =
   object (o : 'self_type)
-    val var_env = fst env
-    val tycon_env = snd env
+    val var_env = env.Types.var_env
+    val tycon_env = env.Types.tycon_env
     val formlet_env = TyEnv.empty
+    val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
     method get_var_env : unit -> Types.environment = fun () -> var_env
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
 
-    method backup_envs = var_env, tycon_env, formlet_env
-    method restore_envs (var_env, tycon_env, formlet_env) =
-      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env >}
+    method backup_envs = var_env, tycon_env, formlet_env, effect_row
+    method restore_envs (var_env, tycon_env, formlet_env, effect_row) =
+      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
+         effect_row = effect_row >}
 
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
-    method lookup_mb : unit -> Types.datatype = fun () ->
-      o#lookup_type "_MAILBOX_"
+    method lookup_effects : Types.row = effect_row
 
-    method with_mb : Types.datatype -> 'self_type = fun mb ->
-      {< var_env = TyEnv.bind var_env ("_MAILBOX_", mb) >}
+    method with_effects : Types.row -> 'self_type = fun effects ->
+      {< effect_row = fst (Types.unwrap_row effects) >}
 
     method unary_op : unary_op -> ('self_type * unary_op * Types.datatype) =
       fun op ->
@@ -197,33 +198,36 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
       | `Var var -> (o, `Var var, o#lookup_type var)
       | `FunLit (Some argss, lam) ->
 (*          Debug.print ("funlit: "^Sugartypes.Show_phrasenode.show (`FunLit (Some argss, lam)));*)
-          let inner_mb = snd (last argss) in
-          let (o, lam, rt) = o#funlit inner_mb lam in
+          let inner_e = snd (last argss) in
+          let (o, lam, rt) = o#funlit inner_e lam in
           let t =
             List.fold_right
-              (fun (args, mb) rt ->
-                 `Function (args, mb, rt))
+              (fun (args, effects) rt ->
+                 `Function (args, effects, rt))
               argss
               rt
           in
             (o, `FunLit (Some argss, lam), t)
-      | `Spawn (body, Some inner_mb) ->
-          (* bring the inner mailbox type into scope, then restore the
+      | `Spawn (body, Some inner_effects) ->
+          (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
-          let outer_mb = o#lookup_mb () in
-          let o = o#with_mb inner_mb in
+          let inner_mb =
+            let fields, _ = inner_effects in
+            let _, t = StringMap.find "hear" fields in
+              `Application (Types.mailbox, [t]) in
+          let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (body, Some inner_mb)), inner_mb)
-      | `SpawnWait (body, Some inner_mb) ->
-          (* bring the inner mailbox type into scope, then restore the
+            (o, (`Spawn (body, Some inner_effects)), inner_mb)
+      | `SpawnWait (body, Some inner_effects) ->
+          (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
-          let o = o#with_mb inner_mb in
+          let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `SpawnWait (body, Some inner_mb), body_type)
+            (o, `SpawnWait (body, Some inner_effects), body_type)
       | `Query (range, body, Some t) ->
           let (o, range) =
             optionu o
@@ -267,7 +271,7 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
-(*             Debug.print ("infix"); *)
+            (*             Debug.print ("infix"); *)
 (*             Debug.print ("t: "^Types.string_of_datatype t); *)
 (*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
 (*             Debug.print ("exp: "^Show_phrasenode.show (`InfixAppl ((tyargs, op), e1, e1))); *)
@@ -515,11 +519,11 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
           let (o, p) = o#pattern p in
            (o, `Table (p, e))
       
-    method funlit : Types.datatype -> funlit -> ('self_type * funlit * Types.datatype) =
-      fun inner_mb (pss, e) ->
+    method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
+      fun inner_eff (pss, e) ->
         let envs = o#backup_envs in
         let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
-        let o = o#with_mb inner_mb in
+        let o = o#with_effects inner_eff in
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
           (o, (pss, e), t)
@@ -539,8 +543,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
             let (o, p) = o#pattern p in
               (o, `Val (tyvars, p, e, location, t))
         | `Fun ((_, Some ft, _) as f, (tyvars, lam), location, t) ->
-            let inner_mb = fun_mailbox ft (fst lam) in
-            let (o, lam, _) = o#funlit inner_mb lam in
+            let inner_effects = fun_effects ft (fst lam) in
+            let (o, lam, _) = o#funlit inner_effects lam in
             let (o, f) = o#binder f in
               (o, `Fun (f, (tyvars, lam), location, t))
         | `Funs defs ->
@@ -564,8 +568,8 @@ class transform (env : (Types.environment * Types.tycon_environment)) =
                   | [] -> (o, [])
                   | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
                       let ft = inner in
-                      let inner_mb = fun_mailbox ft (fst lam) in
-                      let (o, lam, _) = o#funlit inner_mb lam in
+                      let inner_effects = fun_effects ft (fst lam) in
+                      let (o, lam, _) = o#funlit inner_effects lam in
                       let (o, defs) = list o defs in
                         (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
             in

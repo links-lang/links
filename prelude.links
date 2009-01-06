@@ -439,14 +439,6 @@ fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 ####   A library of functions supporting the 'formlet ... yields ...' syntax
 ####   TBD: move to a namespaced module
 
-# This uninhabited type is attached to the mailbox type of the formlet and page functions
-#  to indicate 'pureity' in the sense of functions that
-# cannot read from the mailbox.
-#
-# It significantly reduces the number of quantifiers inferred
-# (e.g. bodyP has 13 quantifiers without the 'O's and 1 with!)
-typename O = [||];
-
 ####   NOTE: top-level vars have been eta-expanded in order to tell
 ####   the JS compiler that they are pure and hence can be safely
 ####   compiled. If we had a purity analysis then all of these could
@@ -454,11 +446,11 @@ typename O = [||];
 
 typename Env = [(String,String)];
 typename Gen = Int;
-typename State (d,a) = (d) -{O}-> (a,d);
-typename Collector (a) = (Env) -{O}-> a;
+typename State (d,a) = (d) -{}-> (a,d);
+typename Collector (a) = (Env) -{}-> a;
 typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
-typename XmlContext = (Xml) -{O}-> Xml;
+typename XmlContext = (Xml) -{}-> Xml;
 
 typename Attributes = [(String, String)];
 
@@ -562,12 +554,12 @@ fun formlets(fs) {
 }
 
 # Page stuff
-typename RecForms = [mu a.(([a]) -{O}-> Xml)];
-typename MultiXmlContext = ([Xml]) -{O}-> Xml;
+typename RecForms = [mu a.(([a]) -{}-> Xml)];
+typename MultiXmlContext = ([Xml]) -{}-> Xml;
 
-typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -{O}-> Xml;
-typename Page = (Int, MultiXmlContext, (Gen) -{O}-> ([CheckedFormBuilder], Gen));
-typename Handler (a) = (a) -{O}-> Page;
+typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) -{}-> Xml;
+typename Page = (Int, MultiXmlContext, (Gen) -{}-> ([CheckedFormBuilder], Gen));
+typename Handler (a) = (a) -{}-> Page;
 
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
@@ -624,7 +616,7 @@ fun mkForm(cont, contents, attributes) {
   </form>
 }
 
-sig renderPagePure : (Page) -{O}-> Xml
+sig renderPagePure : (Page) -{}-> Xml
 fun renderPagePure((n, k, fs)) {
   var (ms, _) = fs(0);
   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
@@ -634,7 +626,7 @@ fun renderPagePure((n, k, fs)) {
 sig renderPage : (Page) -> Xml
 fun renderPage(p) {
   # HACK: this allows us to use renderPage in effectful contexts
-  (renderPagePure : ((Page) -?-> Xml) <- ((Page) -{O}-> Xml))(p)
+  (renderPagePure : ((Page) -?-> Xml) <- ((Page) -{}-> Xml))(p)
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) -> Xml
@@ -643,7 +635,7 @@ fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
 }
 
 sig validate :
-  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) -{O}-> Page
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) -{}-> Page
 fun validate(c, h, k, zs, i, attributes) (env) {
   var (xml, v) = c(env);
   switch (v) {
