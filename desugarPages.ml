@@ -44,7 +44,7 @@ let rec desugar_page (o, page_type) =
             let formlet_type = Types.concrete_type formlet_type in
             let a =
               match formlet_type with
-                | `Alias ((_, [a]), _) -> a
+                | `Alias ((_, [`Type a]), _) -> a
                 | _ -> assert false
             in
               (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),

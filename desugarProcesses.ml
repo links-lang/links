@@ -25,7 +25,7 @@ object (o : 'self_type)
         let mbt, inner_mb = 
           let fields, _ = inner_eff in
           let _, t = StringMap.find "hear" fields in
-            t, `Application (Types.mailbox, [t]) in
+            t, `Application (Types.mailbox, [`Type t]) in
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
         let (o, body, body_type) = o#phrase body in

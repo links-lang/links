@@ -81,7 +81,7 @@ let rec eq_types : (datatype * datatype) -> bool =
           end
       | `Application (s, ts) ->
           begin match unalias t2 with
-              `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_types) ts ts'
+              `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
             | _ -> false
           end
       | `Alias  _ -> assert false
@@ -90,15 +90,14 @@ let rec eq_types : (datatype * datatype) -> bool =
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
+and eq_presence =
+  function
+    | `Absent, `Absent
+    | `Present, `Present -> true
+    | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
 and eq_field_envs (lfield_env, rfield_env) =
-  let compare_specs = fun a b -> 
-    match (a,b) with
-      | (`Absent, t1), (`Absent, t2)
-      | (`Present, t1), (`Present, t2) -> eq_types (t1, t2)
-      | (`Var lpoint, t1), (`Var rpoint, t2) -> Unionfind.equivalent lpoint rpoint && eq_types (t1, t2)
-      | _, _ -> false
-  in
-    StringMap.equal compare_specs lfield_env rfield_env
+  let eq_specs (lf, lt) (rf, rt) = eq_presence (lf, rf) && eq_types (lt, rt) in
+    StringMap.equal eq_specs lfield_env rfield_env
 and eq_row_vars (lpoint, rpoint) =
   (* QUESTION:
      Do we need to deal with closed rows specially?
@@ -109,6 +108,12 @@ and eq_row_vars (lpoint, rpoint) =
     | `Rigid var, `Rigid var'
     | `Recursive (var, _), `Recursive (var', _) -> var=var'
     | _, _ -> Unionfind.equivalent lpoint rpoint
+and eq_type_args =
+  function
+    | `Type lt, `Type rt -> eq_types (lt, rt)
+    | `Row lr, `Row rr -> eq_rows (lr, rr)
+    | `Presence lf, `Presence rf -> eq_presence (lf, rf)
+    | _, _ -> false
 
 (*
   unification environment:
@@ -318,7 +323,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit = fun rec_env ->
                        (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
                                 "' with abstract type '"^string_of_datatype t2^"'")))
           | `Application (l, ls), `Application (r, rs) ->
-              List.iter2 (fun lt rt -> unify' rec_env (lt, rt)) ls rs
+              List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2))));
        Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1);
@@ -740,6 +745,15 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     in
       Debug.if_set (show_row_unification)
         (fun () -> "Unified rows: " ^ (string_of_row lrow) ^ " and: " ^ (string_of_row rrow))
+
+and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
+  fun rec_env ->
+    function
+      | `Type lt, `Type rt -> unify' rec_env (lt, rt)
+      | `Row lr, `Row rr -> unify_rows' rec_env (lr, rr)
+      | `Presence lf, `Presence rf -> unify_presence' rec_env (lf, rf)
+      | l, r -> 
+          raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
 
 let unify (t1, t2) =
   unify' (IntMap.empty, IntMap.empty) (t1, t2)

@@ -215,7 +215,7 @@ class transform (env : Types.typing_environment) =
           let inner_mb =
             let fields, _ = inner_effects in
             let _, t = StringMap.find "hear" fields in
-              `Application (Types.mailbox, [t]) in
+              `Application (Types.mailbox, [`Type t]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
@@ -450,7 +450,7 @@ class transform (env : Types.typing_environment) =
                      formlet_env=formlet_env >} in
           let (o, yields, t) = o#phrase yields in
           let o = {< var_env=var_env >} in
-            (o, `Formlet (body, yields), Instantiate.alias "Formlet" [t] tycon_env)
+            (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
       | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
       | `FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in

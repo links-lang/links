@@ -112,7 +112,7 @@ let rec format_exception_html = function
         Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
   | MistypedSendError(pos, fexpr, fntype, pexpr,
-                      ([`Application(mbtc, [mbType]); msgType] as paramtypes),
+                      ([`Application(mbtc, [`Type mbType]); msgType] as paramtypes),
                       mb)
       when Types.Abstype.Eq_t.eq mbtc Types.mailbox ->
       let msg = "The expressions <code class=\"typeError\">" ^ 

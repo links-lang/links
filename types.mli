@@ -62,8 +62,8 @@ type datatype =
     | `Record of row
     | `Variant of row
     | `Table of datatype * datatype * datatype
-    | `Alias of ((string * datatype list) * datatype)
-    | `Application of (Abstype.t * datatype list)
+    | `Alias of ((string * type_arg list) * datatype)
+    | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list * datatype)]
 and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
@@ -78,6 +78,8 @@ and quantifier =
     [ `TypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var
     | `PresenceVar of int * meta_presence_var ]
+and type_arg = 
+    [ `Type of datatype | `Row of row | `Presence of presence_flag ]
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
 type type_variable =
@@ -87,11 +89,7 @@ type type_variable =
 
 val type_var_number : quantifier -> int
 
-type type_arg = 
-    [ `Type of datatype | `Row of row | `Presence of presence_flag ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
-
-type tycon_spec = [`Alias of int list * datatype | `Abstract of Abstype.t]
+type tycon_spec = [`Alias of quantifier list * datatype | `Abstract of Abstype.t]
 
 type environment        = datatype Env.String.t
  and tycon_environment  = tycon_spec Env.String.t
@@ -118,6 +116,8 @@ val native_string_type : datatype
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
+
+val var_of_quantifier : quantifier -> int
 
 (* val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t *)
 (* val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t *)
@@ -231,9 +231,6 @@ val make_table_type : datatype * datatype * datatype -> datatype
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
 
-val is_mailbox_free     : datatype -> bool
-val is_mailbox_free_row : row -> bool
-
 (** environments *)
 type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
@@ -241,9 +238,9 @@ type inference_type_map =
 
 val extend_typing_environment : typing_environment -> typing_environment -> typing_environment
 
-val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
-val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
-val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row_var Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
 
 (** mailboxes *)
 val show_mailbox_annotations : bool Settings.setting
@@ -253,6 +250,7 @@ val string_of_datatype : datatype -> string
 (*val string_of_datatype_raw : datatype -> string*)
 val string_of_row : row -> string
 val string_of_presence : presence_flag -> string
+val string_of_type_arg : type_arg -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string

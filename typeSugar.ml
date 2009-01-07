@@ -631,7 +631,7 @@ tab() ^ code (show_type lt) ^ nl() ^
 tab() ^ code (show_type rt))
 
     let bind_rec_rec ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      Debug.print ("rt: "^Types.string_of_datatype rt);
+(*      Debug.print ("rt: "^Types.string_of_datatype rt);*)
       die pos ("\
 The recursive function definition has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
@@ -891,7 +891,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
-      | `Application (l, [t]) 
+      | `Application (l, [`Type t]) 
           when Types.Abstype.Eq_t.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
@@ -902,7 +902,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               | `As (_, p) | `HasType (p, _) -> unwrap p
               | `Variant _ | `Negative _ | `Record _ | `Tuple _ -> assert false in
           let pats = concat_map unwrap pats in
-            `Application (Types.list, [cpt pats t])
+            `Application (Types.list, [`Type (cpt pats t)])
       | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
       | `MetaTypeVar point ->
           begin
@@ -1325,10 +1325,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             begin match List.map tc es with
               | [] ->
                   let t = Types.fresh_type_variable () in
-                    `ListLit ([], Some t), `Application (Types.list, [t])
+                    `ListLit ([], Some t), `Application (Types.list, [`Type t])
               | e :: es -> 
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [typ e])
+                  `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)])
             end
         | `FunLit (_, (pats, body)) ->
             let () = check_for_duplicate_names pos (List.flatten pats) in
@@ -1495,14 +1495,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `Spawn (p, _) ->
             (* (() -{b}-> d) -> Mailbox (b) *)
             let mb_type = Types.fresh_type_variable () in
-            let pid_type = `Application (Types.mailbox, [mb_type]) in
+            let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
             let effects = Types.make_singleton_closed_row ("hear", (`Present, mb_type)) in
             let p = type_check (bind_effects context effects) p in
               `Spawn (erase p, Some effects), pid_type
         | `SpawnWait (p, _) ->
             (* (() -{b}-> d) -> d *)
             let mb_type = Types.fresh_type_variable () in
-            let pid_type = `Application (Types.mailbox, [mb_type]) in
+            let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
             let effects = Types.make_singleton_closed_row ("hear", (`Present, mb_type)) in
             let p = type_check (bind_effects context effects) p in
             let return_type = typ p in
@@ -1600,7 +1600,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let yields = type_check context' yields in
               unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
               (`Formlet (erase body, erase yields),
-               Instantiate.alias "Formlet" [typ yields] context.tycon_env)
+               Instantiate.alias "Formlet" [`Type (typ yields)] context.tycon_env)
         | `Page e ->
             let e = tc e in
               unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
@@ -1612,10 +1612,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Gripers.render_formlet
-              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [`Type t] context.tycon_env)) in
             let () = unify ~handle:Gripers.render_handler
               (pos_and_typ h, (exp_pos f, 
-                               Instantiate.alias "Handler" [t] context.tycon_env)) in
+                               Instantiate.alias "Handler" [`Type t] context.tycon_env)) in
             let () = unify ~handle:Gripers.render_attributes
               (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
             in
@@ -1629,7 +1629,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable () in
-            let ft = Instantiate.alias "Formlet" [a] context.tycon_env in
+            let ft = Instantiate.alias "Formlet" [`Type a] context.tycon_env in
               unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               `FormBinding (erase e, erase_pat pattern), Types.xml_type

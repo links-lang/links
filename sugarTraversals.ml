@@ -391,6 +391,12 @@ class map =
       
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Default -> `Default
+
+    method quantifier : quantifier -> quantifier =
+      function
+      | `TypeVar _x -> let _x = o#name _x in `TypeVar _x
+      | `RowVar _x -> let _x = o#name _x in `RowVar _x
+      | `PresenceVar _x -> let _x = o#name _x in `PresenceVar _x
       
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -422,12 +428,18 @@ class map =
           let _x =
             (fun (_x, _x_i1) ->
                let _x = o#name _x in
-               let _x_i1 = o#list (fun o -> o#datatype) _x_i1 in (_x, _x_i1))
+               let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
               _x
           in TypeApplication _x
       | PrimitiveType _x -> let _x = o#unknown _x in PrimitiveType _x
       | DBType -> DBType
       
+    method type_arg : type_arg -> type_arg =
+      function
+      | `Type _x -> let _x = o#datatype _x in `Type _x
+      | `Row _x -> let _x = o#row _x in `Row _x
+      | `Presence _x -> let _x = o#presence_flag _x in `Presence _x
+
     method constant : constant -> constant =
       function
       | `Float _x -> let _x = o#float _x in `Float _x
@@ -480,13 +492,16 @@ class map =
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
       | `Include _x -> let _x = o#string _x in `Include _x
-      | `Type ((_x, names, _x_i2)) ->
+      | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
-          let names = o#list (fun o (l,r) -> 
-                                let l = o#name l in
-                                let r = o#unknown r in
-                                  (l,r)) names in
-          let _x_i2 = o#datatype' _x_i2 in `Type ((_x, names, _x_i2))
+          let _x_i1 =
+            o#list
+              (fun o (_x, _x_i1) -> 
+                 let _x = o#quantifier _x in
+                 let _x_i1 = o#unknown _x_i1
+                 in (_x, _x_i1))
+              _x_i1
+          in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
       | `Infix -> `Infix
       | `Exp _x -> let _x = o#phrase _x in `Exp _x
       
@@ -838,6 +853,12 @@ class fold =
       
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
+
+    method quantifier : quantifier -> 'self_type =
+      function
+      | `TypeVar _x -> o
+      | `RowVar _x -> o
+      | `PresenceVar _x -> o
       
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -863,12 +884,18 @@ class fold =
           let o =
             (fun (_x, _x_i1) ->
                let o = o#name _x in
-               let o = o#list (fun o -> o#datatype) _x_i1 in o)
+               let o = o#list (fun o -> o#type_arg) _x_i1 in o)
               _x
           in o
       | PrimitiveType _x -> let o = o#unknown _x in o
       | DBType -> o
       
+    method type_arg : type_arg -> 'self_type =
+      function
+      | `Type _x -> let o = o#datatype _x in o
+      | `Row _x -> let o = o#row _x in o
+      | `Presence _x -> let o = o#presence_flag _x in o
+
     method constant : constant -> 'self_type =
       function
       | `Float _x -> let o = o#float _x in o
@@ -916,13 +943,16 @@ class fold =
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
       | `Include _x -> let o = o#string _x in o
-      | `Type ((_x, names, _x_i2)) ->
+      | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
-          let o = o#list (fun o (l, r) -> 
-                            let o = o#name l in
-                            let o = o#unknown r in
-                              o) names in
-          let o = o#datatype' _x_i2 in o
+          let o =
+            o#list
+              (fun o (_x, _x_i1) -> 
+                 let o = o#quantifier _x in
+                 let o = o#unknown _x_i1
+                 in o)
+              _x_i1 
+          in let o = o#datatype' _x_i2 in o
       | `Infix -> o
       | `Exp _x -> let o = o#phrase _x in o
       
@@ -1356,6 +1386,12 @@ class fold_map =
       fieldconstraint -> ('self_type * fieldconstraint) =
       function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
       
+    method quantifier : quantifier -> ('self_type * quantifier) =
+      function
+      | `TypeVar _x -> let (o, _x) = o#name _x in (o, `TypeVar _x)
+      | `RowVar _x -> let (o, _x) = o#name _x in (o, `RowVar _x)
+      | `PresenceVar _x -> let (o, _x) = o#name _x in (o, `PresenceVar _x)
+
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->
         let (o, _x) = o#string _x in
@@ -1394,7 +1430,7 @@ class fold_map =
           let (o, _x) =
             (fun (_x, _x_i1) ->
                let (o, _x) = o#string _x in
-               let (o, _x_i1) = o#list (fun o -> o#datatype) _x_i1
+               let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
                in (o, (_x, _x_i1)))
               _x
           in (o, (TypeApplication _x))
@@ -1402,6 +1438,12 @@ class fold_map =
           let (o, _x) = o#unknown _x in (o, (PrimitiveType _x))
       | DBType -> (o, DBType)
       
+    method type_arg : type_arg -> ('self_type * type_arg) =
+      function
+      | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
+      | `Row _x -> let (o, _x) = o#row _x in (o, `Row _x)
+      | `Presence _x -> let (o, _x) = o#presence_flag _x in (o, `Presence _x)
+
     method constant : constant -> ('self_type * constant) =
       function
       | `Float _x -> let (o, _x) = o#float _x in (o, (`Float _x))
@@ -1462,8 +1504,8 @@ class fold_map =
           let (o, _x_i1) =
             o#list
               (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#name _x in
-                 let (o, _x_i1) = o#option (fun o -> o#int) _x_i1
+                 let (o, _x) = o#quantifier _x in
+                 let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
                  in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2

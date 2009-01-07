@@ -42,7 +42,7 @@ object (o : 'self_type)
             let t = Types.fresh_type_variable () in
             let () =
               Unify.datatypes
-                (ft, Instantiate.alias "Formlet" [t] tycon_env) in
+                (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let var = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (var, Some t, dp), ((`Var var), dp) in
               [(`As (xb, p)), dp], [x], [t]
@@ -200,7 +200,7 @@ object (o : 'self_type)
                  [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], (pss, yields)), dp]), dp])
         in
 (*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
-          (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)             
+          (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)             
     | e -> super#phrasenode e
 end
 

@@ -16,8 +16,8 @@ let alias_env : Types.tycon_environment =
     AliasEnv.bind
     AliasEnv.empty
     [
-      "String"  , `Alias ([], `Application (Types.list, [`Primitive `Char]));
-      "Xml"     , `Alias ([], `Application (Types.list, [`Primitive `XmlItem]));
+      "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)]));
+      "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
       "Mailbox" , `Abstract Types.mailbox;
@@ -56,7 +56,7 @@ let debug_process_status () =
   prerr_endline ("blocked processes : " ^ 
                    string_of_int (Hashtbl.length blocked_processes))
 
-let _ =   Hashtbl.add messages 0 (Queue.create ())
+let _ = Hashtbl.add messages 0 (Queue.create ())
 
 let fresh_pid =
   let current_pid = (ref 0 : pid ref) in

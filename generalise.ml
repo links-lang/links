@@ -41,11 +41,11 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `Variant row -> get_row_type_args kind bound_vars row 
         | `Table (r, w, n) -> gt r @ gt w @ gt n
         | `Alias ((_, ts), t) ->
-            concat_map gt ts @ gt t
+            concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | `ForAll (qs, t) -> 
             get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
         | `Application (_, args) ->
-            Utility.concat_map gt args
+            Utility.concat_map (get_type_arg_type_args kind bound_vars) args
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =
   fun kind bound_vars row_var ->
@@ -93,6 +93,13 @@ and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
     let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
     in
       field_vars @ row_vars
+
+and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg list =
+  fun kind bound_vars ->
+    function
+      | `Type t -> get_type_args kind bound_vars t
+      | `Row r -> get_row_type_args kind bound_vars r
+      | `Presence f -> get_presence_type_args kind bound_vars f
 
 let get_type_args kind bound_vars t =
   unduplicate (fun l r ->

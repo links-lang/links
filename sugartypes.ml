@@ -85,7 +85,7 @@ type datatype =
   | VariantType     of row
   | TableType       of datatype * datatype * datatype
   | ListType        of datatype
-  | TypeApplication of (string * datatype list)
+  | TypeApplication of (string * type_arg list)
   | PrimitiveType   of Types.primitive
   | DBType
 and row = (string * fieldspec) list * row_var
@@ -96,7 +96,11 @@ and row_var =
     | `Recursive of name * row ]
 and presence_flag = [ `Present | `Absent | `RigidVar of name | `Var of name ]
 and fieldspec = presence_flag * datatype
-    deriving (Show)
+and type_arg =
+    [ `Type of datatype
+    | `Row of row
+    | `Presence of presence_flag ]
+      deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = datatype * Types.datatype option
@@ -218,7 +222,7 @@ and bindingnode = [
 | `Funs    of (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
-| `Type    of name * (name * int option) list * datatype'
+| `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
 ]

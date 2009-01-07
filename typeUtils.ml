@@ -105,7 +105,7 @@ let rec effect_row t = match concrete_type t with
 
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t
-  | `Application (l, [t])
+  | `Application (l, [`Type t])
       when Types.Abstype.Eq_t.eq l Types.list -> t
   | t ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)

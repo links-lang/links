@@ -45,10 +45,12 @@ class map :
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
     method presence_flag   : presence_flag -> presence_flag
+    method quantifier      : quantifier -> quantifier
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
     method datatype'       : datatype' -> datatype'
+    method type_arg        : type_arg -> type_arg
     method constant        : constant -> constant
     method binop           : binop -> binop
     method tybinop         : tyarg list * binop -> tyarg list * binop
@@ -104,11 +106,13 @@ class fold :
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
     method presence_flag   : presence_flag -> 'self
+    method quantifier      : quantifier -> 'self
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
     method datatype        : datatype -> 'self
     method datatype'       : datatype' -> 'self
+    method type_arg        : type_arg -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
     method tybinop         : tyarg list * binop -> 'self
@@ -162,6 +166,7 @@ object ('self)
   method position        : position -> 'self * position
   method presence_flag   : presence_flag -> 'self * presence_flag
   method program         : program -> 'self * program
+  method quantifier      : quantifier -> 'self * quantifier
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs
@@ -170,7 +175,8 @@ object ('self)
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
-  method unary_op        : unary_op -> 'self * unary_op
+  method type_arg        : type_arg -> 'self * type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
+  method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a
 end

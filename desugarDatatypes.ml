@@ -107,17 +107,24 @@ struct
         | RecordType r -> `Record (row var_env alias_env r)
         | VariantType r -> `Variant (row var_env alias_env r)
         | TableType (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
-        | ListType k -> `Application (Types.list, [datatype var_env k])
+        | ListType k -> `Application (Types.list, [`Type (datatype var_env k)])
         | TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
-              | Some (`Alias _) -> let ts = List.map (datatype var_env) ts in
+              | Some (`Alias _) -> let ts = List.map (type_arg var_env alias_env) ts in
                   Instantiate.alias tycon ts alias_env
               | Some (`Abstract abstype) -> 
-                  `Application (abstype, List.map (datatype var_env) ts)
+                  `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
         | PrimitiveType k -> `Primitive k
         | DBType -> `Primitive `DB
+  and presence ({tenv=_; renv=_; penv=penv}) _alias_env =
+    let lookup_flag = flip StringMap.find penv in
+      function
+        | `Absent -> `Absent
+        | `Present -> `Present
+        | `RigidVar name
+        | `Var name -> `Var (lookup_flag name)
   and row ({tenv=tenv; renv=renv; penv=penv} as var_env) alias_env (fields, rv) =
     let lookup_row = flip StringMap.find renv in
     let seed =
@@ -132,20 +139,18 @@ struct
             let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv; penv=penv} alias_env r)) in
               (StringMap.empty, point) in
     let fields =
-      let lookup_flag = flip StringMap.find penv in
         List.map
           (fun (k, (f, t)) ->
-             let f =
-               match f with
-                 | `Absent -> `Absent
-                 | `Present -> `Present
-                 | `RigidVar name
-                 | `Var name -> `Var (lookup_flag name)
-             in
+             let f = presence var_env alias_env f in
                (k, (f, datatype var_env alias_env t)))
           fields 
     in
       fold_right Types.row_with fields seed
+  and type_arg var_env alias_env =
+    function
+      | `Type t -> `Type (datatype var_env alias_env t)
+      | `Row r -> `Row (row var_env alias_env r)
+      | `Presence f -> `Presence (presence var_env alias_env f)
             
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
     let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv} in
@@ -201,13 +206,20 @@ struct
                   o
             | dt -> super#datatype dt
         end)#datatype' dt) # tyvars in
+    let name_of_quantifier =
+      function
+        | `TypeVar x
+        | `RowVar x
+        | `PresenceVar x -> x in
       try
         let args, tmap = 
           ListLabels.fold_right ~init:([], StringMap.empty) args
-            ~f:(fun (x, _) (args, map) -> 
+            ~f:(fun (q, _) (args, map) ->
                   let tv = Types.fresh_raw_variable () in
-                    ((x, Some tv) :: args, 
-                     StringMap.add x (Unionfind.fresh (`Rigid tv)) map)) in
+                  let point = Unionfind.fresh (`Rigid tv) in
+                  let qv = `TypeVar (tv, point) in
+                    ((q, Some qv) :: args, 
+                     StringMap.add (name_of_quantifier q) point map)) in
           (args, datatype' {tenv=StringMap.union_disjoint tmap (mailbox_vars rhs); renv=StringMap.empty; penv=StringMap.empty} alias_env rhs)
       with UnexpectedFreeVar x ->
         failwith ("Free variable ("^ x ^") in definition of typename "^ name)

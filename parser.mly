@@ -244,8 +244,8 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 varlist:
-| VARIABLE                                                     { [$1, None] }
-| VARIABLE COMMA varlist                                       { ($1, None) :: $3 }
+| VARIABLE                                                     { [`TypeVar $1, None] }
+| VARIABLE COMMA varlist                                       { (`TypeVar $1, None) :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -736,11 +736,11 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 
-| CONSTRUCTOR LPAREN datatype_list RPAREN                      { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
-datatype_list:
-| datatype                                                     { [$1] }
-| datatype COMMA datatype_list                                 { $1 :: $3 }
+type_arg_list:
+| datatype                                                     { [`Type $1] }
+| datatype COMMA type_arg_list                                 { `Type $1 :: $3 }
 
 vrow:
 | vfields                                                      { $1 }
