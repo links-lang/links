@@ -241,7 +241,7 @@ let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
-      Errors.display_fatal Loader.load_file (nenv, tyenv) filename
+      Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
       ((globals @ locals, main), t)
   in
@@ -272,7 +272,10 @@ let evaluate_string_in envs v =
 let load_prelude () = 
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       Loader.load_file (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)) in
+       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value prelude_file)) in
+
+  let tyenv = Lib.patch_prelude_funs tyenv in
+
   let () = Lib.prelude_tyenv := Some tyenv in
   let () = Lib.prelude_nenv := Some nenv in
 
@@ -333,7 +336,10 @@ let main () =
   let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  let () = Utility.for_each !to_precompile (Loader.precompile_cache (nenv, tyenv)) in
+  let () =
+    Utility.for_each
+      !to_precompile
+      (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv))) in
   let () = if !to_precompile <> [] then Settings.set_value interacting false in
           
   let () = Utility.for_each !file_list (run_file prelude envs) in       

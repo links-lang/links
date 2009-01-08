@@ -16,7 +16,7 @@ var paperId = "paper";
 var authorLabel = "Author";
 var paperLabel = "Paper";
 
-sig header : (String) -> Xml
+sig header : (String) ~> Xml
 fun header(title) {
   <head>
    <title>{stringToXml(title)}</title>
@@ -28,7 +28,7 @@ fun header(title) {
   </head>
 }
 
-sig suggest : (String, String) -> ()
+sig suggest : (String, String) ~> ()
 fun suggest(authorPrefix, paperPrefix) client {
   var (authorList, paperList) = completions(authorPrefix, paperPrefix);
   replaceChildren(
@@ -41,13 +41,13 @@ fun suggest(authorPrefix, paperPrefix) client {
   )
 }
 
-sig formatAuthorList : ([Author]) -> Xml
+sig formatAuthorList : ([Author]) ~> Xml
 fun formatAuthorList(authors) server {
   for (var a <- authors)
     <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
 }
 
-sig formatPaperList : ([Paper]) -> Xml
+sig formatPaperList : ([Paper]) ~> Xml
 fun formatPaperList(papers) server {
   for (var p <- papers)
     <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
@@ -114,7 +114,7 @@ fun getPapersAndCollaborators(author) server {
   (papers, collaborators)
 }
 
-sig showAuthorInfo : (Author) -> Page
+sig showAuthorInfo : (Author) ~> Page
 fun showAuthorInfo(author) server {
   var (papers, collaborators) = getPapersAndCollaborators(author);
 
@@ -162,7 +162,7 @@ fun updateAuthor(author) server {
   showAuthorInfo(author)
 }
 
-sig showPaperInfo : (Paper) -> Page
+sig showPaperInfo : (Paper) ~> Page
 fun showPaperInfo(paper) server {
   var authors = getAuthors(paper);
 
@@ -181,7 +181,7 @@ fun showPaperInfo(paper) server {
    </html>
 }
 
-sig completions : (String, String) -> (Xml, Xml)
+sig completions : (String, String) ~> (Xml, Xml)
 fun completions(authorPrefix, paperPrefix) server {
   var authors =
     if (authorPrefix == "") []
@@ -235,7 +235,7 @@ fun completions(authorPrefix, paperPrefix) server {
   (formatAuthorList(authors), formatPaperList(papers))
 }
 
-sig distinct : ([(id:Int|r)]) -> [(id:Int|r)]
+sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
 fun distinct(xs) {
   fold_left(
     fun (ys, x) {

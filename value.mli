@@ -120,5 +120,3 @@ val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment 
 
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
 val unmarshal_value : unmarshal_envs -> string -> t
-
-val minimize : continuation -> continuation

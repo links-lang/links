@@ -109,7 +109,6 @@ object (o : 'self_type)
                 in
                   List.rev pss, List.rev vs, List.rev ts in
               let empty_eff = Types.make_empty_closed_row () in
-(*Types.make_singleton_closed_row ("hear", (`Present, Instantiate.alias "O" [] tycon_env)) in*)
               let ft =
                 List.fold_right
                   (fun t ft ->
@@ -177,7 +176,6 @@ object (o : 'self_type)
 (*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
         let dp = Sugartypes.dummy_position in
         let empty_eff = Types.make_empty_closed_row () in
-          (*Types.make_singleton_closed_row ("hear", (`Present, Instantiate.alias "O" [] tycon_env)) in*)
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in

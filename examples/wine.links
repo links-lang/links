@@ -113,7 +113,7 @@ fun assocd(x, l, d) {
 
 # This function demonstrates that we can now support abstraction
 # over queries.
-sig firstField : (TableHandle (r, w, n), (r) -m-> Bool, (r) -m-> a) -m-> a
+sig firstField : (TableHandle (r, w, n), (r) {}-> Bool, (r) {}-> a) e~> a
 fun firstField(t, p, body) {
   var matches =
     query {
@@ -182,7 +182,7 @@ fun htmlHead() {
   <head> <link href="wine.css" rel="StyleSheet"/> </head>
 }
 
-sig sign_up : (Int, String, String) -> Page
+sig sign_up : (Int, String, String) ~> Page
 fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
 
@@ -282,8 +282,7 @@ fun customerName(cust_id) {
        (.user_name)))
 }
 
-sig header : (Int, Int) -> Xml
-
+sig header : (Int, Int) ~> Xml
 fun header(cust_id, order_id) {
   if (cust_id == -1)
     <div align="right">
@@ -358,7 +357,7 @@ fun purchase_confirmation(cust_id, order_id, total) {
    </html>
 }
 
-sig order_total : (Int, Int) -> Float
+sig order_total : (Int, Int) ~> Float
 fun order_total(cust_id, order_id) {
   sum_float(
     map ((.1),
@@ -456,7 +455,7 @@ fun withButton(label, frm) {
     result
 }
 
-sig update_cart : (Int, Int, [(Int,Int)]) -> ()
+sig update_cart : (Int, Int, [(Int,Int)]) ~> ()
 fun update_cart(cust_id, order_id, qtys) {
   # Gosh, here's an ugly idiom:
   ignore(for (var (item_id, newQty) <- qtys) {
@@ -561,7 +560,7 @@ fun cart_itemlist(cust_id, order_id) {
   }
 }
 
-sig show_cart : (Int, Int, String) -> Page
+sig show_cart : (Int, Int, String) ~> Page
 fun show_cart(cust_id, order_id, msg) {
  page
   <html> {htmlHead()}
@@ -576,7 +575,7 @@ fun show_cart(cust_id, order_id, msg) {
   </html>
 }
 
-sig cartStats : (Int, Int) -> (Float, Int)
+sig cartStats : (Int, Int) ~> (Float, Int)
 fun cartStats(cust_id, order_id) {
   var cart_items = 
     query {
@@ -596,7 +595,7 @@ fun cartStats(cust_id, order_id) {
   (total_cost, total_items)
 }
 
-sig add_to_cart : (Int, Int, Int) -> Page
+sig add_to_cart : (Int, Int, Int) ~> Page
 fun add_to_cart(cust_id, order_id, wine_id) {
   var price = get_wine_price(wine_id);
   var max_item_id = maximum(0,
@@ -718,7 +717,7 @@ fun cartSummary(cust_id, order_id) {
   </div>
 }
 
-sig search_results : (Int, Int, Int, Int, Int) -> Page
+sig search_results : (Int, Int, Int, Int, Int) ~> Page
 fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
@@ -782,7 +781,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
    </html>
 }
 
-sig main : () -> Page
+sig main : () ~> Page
 fun main() {
   search_results(-1, -1, 1, 1, 0)
 }

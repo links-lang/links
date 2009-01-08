@@ -1,6 +1,6 @@
 var noMsg = "";
 
-sig login_widget : (String, Handler((username:String, pass:String))) -> Page
+sig login_widget : (String, Handler((username:String, pass:String))) ~> Page
 fun login_widget(msg, return) {
    page
     <html>
@@ -29,7 +29,7 @@ fun validAuth(name, pass) {
   name == "ezra" && pass == "knock"
 }
 
-sig get_user : (String) -> String
+sig get_user : (String) ~> String
 fun get_user(msg) {
   var current_user = getCookie("loginname");
   if (current_user <> "")     # User is logged in! Return creds.
@@ -47,12 +47,12 @@ fun get_user(msg) {
   }
 }
 
-sig logout : () -> ()
+sig logout : () ~> ()
 fun logout() {
   setCookie("loginname", "");
 }
 
-sig logoutLink : (() -> Page) -> Xml
+sig logoutLink : (() ~> Page) ~> Xml
 fun logoutLink(target) {
   <a l:href="{logout(); freshResource(); target()}">Logout</a>
 }

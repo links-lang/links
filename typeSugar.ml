@@ -166,6 +166,10 @@ sig
 
   val range_bound : griper
 
+  val spawn_outer : griper
+  val spawn_wait_outer : griper
+  val query_outer : griper
+
   val receive_mailbox : griper
   val receive_patterns : griper
 
@@ -211,9 +215,13 @@ sig
 
   val bind_val : griper
   val bind_val_annotation : griper
+
   val bind_fun_annotation : griper
+  val bind_fun_return : griper
+
   val bind_rec_annotation : griper
   val bind_rec_rec : griper
+
   val bind_exp : griper
 
   val list_pattern : griper
@@ -446,6 +454,27 @@ tab () ^ code (show_type rt))
     let update_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Where clauses" t l
 
+    let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Spawn blocks are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the current effect row is" ^ nl() ^
+code (show_type lt) ^ ".")
+
+    let spawn_wait_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Spawn wait blocks are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the current effect row is" ^ nl() ^
+code (show_type lt) ^ ".")
+
+    let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Query blocks are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the current effect row is" ^ nl() ^
+code (show_type lt) ^ ".")
+
     let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 The current mailbox must always have a mailbox type" ^ nl() ^
@@ -623,6 +652,13 @@ tab() ^ code (show_type lt) ^ nl() ^
 "but it is annotated with type" ^ nl() ^
 tab() ^ code (show_type rt))
 
+    let bind_fun_return ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The non-recursive function definition has return type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"but its annotation has return type" ^ nl() ^
+tab() ^ code (show_type rt))
+
     let bind_rec_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
 The recursive function definition has type" ^ nl() ^
@@ -722,7 +758,6 @@ let bind_effects context r = {context with effect_row = r}
 
 let type_section context (`Section s as s') =
   let env = context.var_env in
-  let effects = context.effect_row in
   let (tyargs, t) =
     match s with
       | `Minus         -> Utils.instantiate env "-"
@@ -730,6 +765,7 @@ let type_section context (`Section s as s') =
       | `Project label ->
           let a = Types.fresh_type_variable () in
           let rho = Types.fresh_row_variable () in
+          let effects = Types.make_empty_open_row () in (* projection is pure! *)
           let r = `Record (StringMap.add label (`Present, a) StringMap.empty, rho) in
             [`Type a; `Row (StringMap.empty, rho); `Row effects], `Function (Types.make_tuple_type [r], effects, a)
       | `Name var      -> Utils.instantiate env var
@@ -1496,30 +1532,56 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* (() -{b}-> d) -> Mailbox (b) *)
             let mb_type = Types.fresh_type_variable () in
             let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
-            let effects = Types.make_singleton_closed_row ("hear", (`Present, mb_type)) in
-            let p = type_check (bind_effects context effects) p in
-              `Spawn (erase p, Some effects), pid_type
+            let inner_effects =
+              Types.row_with ("wild", (`Present, Types.unit_type))
+                (Types.make_singleton_open_row ("hear", (`Present, mb_type))) in
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type))
+              in
+                unify ~handle:Gripers.spawn_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+            let p = type_check (bind_effects context inner_effects) p in
+              `Spawn (erase p, Some inner_effects), pid_type
         | `SpawnWait (p, _) ->
             (* (() -{b}-> d) -> d *)
             let mb_type = Types.fresh_type_variable () in
             let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
-            let effects = Types.make_singleton_closed_row ("hear", (`Present, mb_type)) in
-            let p = type_check (bind_effects context effects) p in
+            let inner_effects =
+              Types.row_with ("wild", (`Present, Types.unit_type))
+                (Types.make_singleton_open_row ("hear", (`Present, mb_type))) in
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type))
+              in
+                unify ~handle:Gripers.spawn_wait_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+            let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `SpawnWait (erase p, Some effects), return_type
+              `SpawnWait (erase p, Some inner_effects), return_type
         | `Query (range, p, _) ->
-            let range =
-              opt_map (fun (limit, offset) ->
-                         let limit = tc limit in
-                           unify ~handle:Gripers.range_bound (pos_and_typ limit, no_pos Types.int_type);
-                           let offset = tc offset in
-                             unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type);
-                             (erase limit, erase offset)) range in
-            let p = tc p in
+            let range, outer_effects =
+              match range with
+                | None -> None, Types.make_empty_open_row ()
+                | Some (limit, offset) ->
+                    let limit = tc limit in
+                    let () = unify ~handle:Gripers.range_bound (pos_and_typ limit, no_pos Types.int_type) in
+                    let offset = tc offset in
+                    let () = unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type) in
+                    let outer_effects =
+                      Types.make_singleton_open_row ("wild", (`Present, Types.unit_type))
+                    in
+                      Some (erase limit, erase offset), outer_effects in
+            let inner_effects = Types.make_empty_closed_row () in
+            let () = unify ~handle:Gripers.query_outer
+              (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+            let p = type_check (bind_effects context inner_effects) p in
               `Query (range, erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable () in
-            let effects = Types.make_singleton_closed_row ("hear", (`Present, mb_type)) in
+            let effects =
+              Types.row_with ("wild", (`Present, Types.unit_type))
+                (Types.make_singleton_open_row ("hear", (`Present, mb_type))) in
 
             let () = unify ~handle:Gripers.receive_mailbox
               (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
@@ -1834,14 +1896,17 @@ and type_binding : context -> binding -> binding * context =
           let () = check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
 
+          let effects = Types.make_empty_open_row () in
+          let return_type = Types.fresh_type_variable () in
+
           (* Check that any annotation matches the shape of the function *)
           let ft =
             match t with
               | None ->
-                  make_ft_poly_curry pats (Types.make_empty_open_row ()) (Types.fresh_type_variable ())
+                  make_ft pats effects return_type
               | Some (_, Some ft) ->
                   (* make sure the annotation has the right shape *)
-                  let shape = make_ft pats (Types.make_empty_open_row ()) (Types.fresh_type_variable ()) in
+                  let shape = make_ft pats effects return_type in
                   let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft) in
                     ft in
 
@@ -1849,12 +1914,10 @@ and type_binding : context -> binding -> binding * context =
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
           let context' = List.fold_left fold_in_envs context pats in
 
-          let effects = Types.make_empty_open_row () in
           let body = type_check (bind_effects context' effects) body in
 
-          (* check that any annotation still matches *)
-          let shape = make_ft pats effects (typ body) in            
-          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+          (* check that the body type matches the return type of any annotation *)
+          let () = unify pos ~handle:Gripers.bind_fun_return (no_pos (typ body), no_pos return_type) in
 
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
@@ -1877,6 +1940,9 @@ and type_binding : context -> binding -> binding * context =
 
             As well as the function types, the typed patterns are also
             returned here as a simple optimisation.  *)
+
+          let fresh_wild () = Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) in
+
           let inner_env, patss =
             List.fold_left
               (fun (inner_env, patss) ((name,_,_), (_, (pats, body)), _, t, pos) ->
@@ -1897,9 +1963,9 @@ and type_binding : context -> binding -> binding * context =
                                   f(x1)...(xk)
                                 }
                          *)
-                         make_ft_poly_curry pats (Types.make_empty_open_row ()) (Types.fresh_type_variable ())
+                         make_ft_poly_curry pats (fresh_wild ()) (Types.fresh_type_variable ())
                      | Some (_, Some t) ->
-                         let shape = make_ft pats (Types.make_empty_open_row ()) (Types.fresh_type_variable ()) in
+                         let shape = make_ft pats (fresh_wild ()) (Types.fresh_type_variable ()) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
 (*                            Debug.print ("ft: "^Types.string_of_datatype ft); *)
                            (* make sure the annotation has the right shape *)
@@ -1926,7 +1992,7 @@ and type_binding : context -> binding -> binding * context =
 (*                       Debug.print ("B("^name^")"); *)
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
-                      let effects = Types.make_empty_open_row () in
+                      let effects = fresh_wild () in
 (*                        Debug.print ("ft(1): "^Types.string_of_datatype (Env.lookup body_env name)); *)
                       let body = type_check (bind_effects context' effects) body in
                       let shape = make_ft pats effects (typ body) in

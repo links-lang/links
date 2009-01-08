@@ -245,11 +245,15 @@ rule lex ctxt nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
-  | "-?->"                              { QUESTIONRARROW }
-  | "-?"                                { MINUSQUESTION }
+(*   | "-?->"                              { QUESTIONRARROW } *)
+(*   | "-?"                                { MINUSQUESTION } *)
+  | "~>"                                { SQUIGRARROW }
+(*   | "~?~>"                              { QUESTIONSQUIGRARROW } *)
+(*   | "~?"                                { SQUIGQUESTION } *)
   | "=>"                                { FATRARROW }
   | "-{"                                { MINUSLBRACE }
-  | "}->"                               { RBRACERARROW }
+(*   | "}->"                               { RBRACERARROW } *)
+(*   | "}~>"                               { RBRACESQUIGRARROW } *)
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }

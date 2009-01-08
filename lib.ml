@@ -308,7 +308,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.: 
      if (test) exit(1) else 42 *)
-   datatype "(a) -> b",
+   datatype "(a) ~> b",
   IMPURE);
 
   (* Adds a list of attributes (represented as pairs of strings) to
@@ -319,7 +319,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let attrs = List.map (fun p -> unbox_pair p) attrs in
                `List (List.map (add_attributes attrs) xmlitems)
          | _ -> failwith "Internal error: addAttributes takes an XML forest and a list of attributes"),
-   datatype "(Xml, [(String, String)]) -> Xml",
+   datatype "(Xml, [(String, String)]) ~> Xml",
    PURE);
 
   "send",
@@ -336,12 +336,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
               Hashtbl.remove blocked_processes pid
             with NotFound _ -> ());
            `Record []),
-   datatype "(Mailbox (a), a) -{b}-> ()",
+   datatype "(Mailbox (a), a) {:b}~> ()",
   IMPURE);
 
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "() -{a}-> Mailbox (a)",
+   datatype "() {:a}~> Mailbox (a)",
   IMPURE);
 
   "haveMail",
@@ -359,7 +359,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (`PFun (fun ([]) -> assert false),
-     datatype "() -{a}-> (a)",
+     datatype "() {:a}~> (a)",
   IMPURE);
 
   "spawn",
@@ -377,12 +377,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "(() -{b}-> d) -> Mailbox (b)",
+   datatype "(() {:b}~> d) ~> Mailbox (b)",
   IMPURE);
 (*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
   "spawnWait",
-  (`Client, datatype "(() -{b}-> d) -> d",
+  (`Client, datatype "(() {:b}~> d) ~> d",
   IMPURE);
 
   "_MAILBOX_",
@@ -425,7 +425,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          with
              Failure "hd" -> failwith "hd() of empty list"
       ),
-   datatype "([a]) -> a",
+   datatype "([a]) ~> a",
   IMPURE);
 
   "tl", 
@@ -435,7 +435,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          with
              Failure "tl" -> failwith "tl() of empty list"
       ),
-   datatype "([a]) -> [a]",
+   datatype "([a]) ~> [a]",
   IMPURE);
   
   "length", 
@@ -446,13 +446,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "take",
   (p2 (fun n l ->
          box_list (Utility.take (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) -> [a]",
+   datatype "(Int, [a]) ~> [a]",
   PURE);
 
   "drop",
   (p2 (fun n l ->
          box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) -> [a]",
+   datatype "(Int, [a]) ~> [a]",
   PURE);
 
   "max",
@@ -461,7 +461,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
            | _ -> failwith "Internal error: non-list passed to max"),
-   datatype "([a]) -> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
   "min",
@@ -470,7 +470,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
            | _ -> failwith "Internal error: non-list passed to min"),
-   datatype "([a]) -> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
   (** XML **)
@@ -549,7 +549,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "error",
-  (p1 (unbox_string ->- failwith), datatype "(String) -> a",
+  (p1 (unbox_string ->- failwith), datatype "(String) ~> a",
   IMPURE);
   
   (* HACK *)
@@ -560,7 +560,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* DOM API *)
 
   "isElementNode",
-  (`Client, datatype "(DomNode) -> Bool",
+  (`Client, datatype "(DomNode) ~> Bool",
   PURE);
 
 
@@ -571,170 +571,170 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (*    datatype "(a) -> ()"); *)
 
   "insertBefore",
-  (`Client, datatype "(Xml, DomNode) -> ()",
+  (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE);
 
   "appendChildren",
-  (`Client, datatype "(Xml, DomNode) -> ()",
+  (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE);
 
   "replaceNode",
-  (`Client, datatype "(Xml, DomNode) -> ()",
+  (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE); 
 
   "replaceDocument",
-  (`Client, datatype "(Xml) -> ()",
+  (`Client, datatype "(Xml) ~> ()",
   IMPURE); 
 
   "domInsertBeforeRef",
-  (`Client, datatype "(DomNode, DomNode) -> ()",
+  (`Client, datatype "(DomNode, DomNode) ~> ()",
   IMPURE);
 
   "domAppendChildRef",
-  (`Client, datatype "(DomNode, DomNode) -> ()",
+  (`Client, datatype "(DomNode, DomNode) ~> ()",
   IMPURE);
 
   "removeNode",
-  (`Client, datatype "(DomNode) -> ()",
+  (`Client, datatype "(DomNode) ~> ()",
   IMPURE);
 
   "replaceChildren",
-  (`Client, datatype "(Xml, DomNode) -> ()",
+  (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE);
 
   "swapNodes",
-  (`Client, datatype "(DomNode, DomNode) -> ()",
+  (`Client, datatype "(DomNode, DomNode) ~> ()",
   IMPURE);
 
   "getDocumentNode",
-  (`Client, datatype "() -> DomNode",
+  (`Client, datatype "() ~> DomNode",
   IMPURE);
 
   "getNodeById",
-  (`Client, datatype "(String) -> DomNode",
+  (`Client, datatype "(String) ~> DomNode",
   IMPURE);
 
   "getValue",
-  (`Client, datatype "(DomNode) -> Xml",
+  (`Client, datatype "(DomNode) ~> Xml",
   IMPURE);
 
   "isNull",
-  (`Client, datatype "(DomNode) -> Bool",
+  (`Client, datatype "(DomNode) ~> Bool",
   PURE);
 
   (* Section: Accessors for XML *)
   "getTagName",
-  (`Client, datatype "(Xml) -> String",
+  (`Client, datatype "(Xml) ~> String",
   IMPURE);
 
   "getTextContent",
-  (`Client, datatype "(Xml) -> String",
+  (`Client, datatype "(Xml) ~> String",
   IMPURE);
 
   "getAttributes",
-  (`Client, datatype "(Xml) -> [(String,String)]",
+  (`Client, datatype "(Xml) ~> [(String,String)]",
   IMPURE);
 
   "hasAttribute",
-  (`Client, datatype "(Xml, String) -> Bool",
+  (`Client, datatype "(Xml, String) ~> Bool",
   PURE);
 
   "getAttribute",
-  (`Client, datatype "(Xml, String) -> String",
+  (`Client, datatype "(Xml, String) ~> String",
   IMPURE);
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "(Xml) -> Xml",
+  (`Client, datatype "(Xml) ~> Xml",
   PURE);
 
   (* Section: Accessors for DomNodes *)
   "domGetNodeValueFromRef",
-  (`Client, datatype "(DomNode) -> String",
+  (`Client, datatype "(DomNode) ~> String",
   IMPURE);
 
   "domGetTagNameFromRef",
-  (`Client, datatype "(DomNode) -> String",
+  (`Client, datatype "(DomNode) ~> String",
   IMPURE);
 
   "domGetAttributeFromRef",
-  (`Client, datatype "(DomNode, String) -> String",
+  (`Client, datatype "(DomNode, String) ~> String",
   IMPURE);
 
   "domSetAttributeFromRef",
-  (`Client, datatype "(DomNode, String, String) -> String",
+  (`Client, datatype "(DomNode, String, String) ~> String",
   IMPURE);
 
   "domGetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String) -> String",
+  (`Client, datatype "(DomNode, String) ~> String",
   IMPURE);
 
   "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String, String) -> String",
+  (`Client, datatype "(DomNode, String, String) ~> String",
   IMPURE);
 
   (* Section:  Navigation for DomNodes *)
   "parentNode",
-  (`Client, datatype "(DomNode) -> DomNode",
+  (`Client, datatype "(DomNode) ~> DomNode",
   IMPURE);
 
   "firstChild",
-  (`Client, datatype "(DomNode) -> DomNode",
+  (`Client, datatype "(DomNode) ~> DomNode",
   IMPURE);
   
   "nextSibling",
-  (`Client, datatype "(DomNode) -> DomNode",
+  (`Client, datatype "(DomNode) ~> DomNode",
   IMPURE);
 
   (* Section: DOM Event API *)
   "getTarget",
-  (`Client, datatype "(Event) -> DomNode",
+  (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
   "getTargetValue",
-  (`Client, datatype "(Event) -> String",
+  (`Client, datatype "(Event) ~> String",
   PURE);
 
   "getTargetElement",
-  (`Client, datatype "(Event) -> DomNode",
+  (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
   "registerEventHandlers",
-  (`Client, datatype "([(String,(Event)->())]) -> String",
+  (`Client, datatype "([(String,(Event) -> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
   "getPageX",
-  (`Client, datatype "(Event) -> Int",
+  (`Client, datatype "(Event) ~> Int",
   PURE);
 
   (* getPageY : (Event) -> Int *)
   "getPageY",
-  (`Client, datatype "(Event) -> Int",
+  (`Client, datatype "(Event) ~> Int",
   PURE);
 
   (* getFromElement : (Event) -> DomNode *)
   "getFromElement",
-  (`Client, datatype "(Event) -> DomNode",
+  (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
   (* getToElement : (Event) -> DomNode *)
   "getToElement",
-  (`Client, datatype "(Event) -> DomNode",
+  (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
   (* getTime : (Event) -> Int *)
   "getTime",
-  (`Client, datatype "(Event) -> Int",
+  (`Client, datatype "(Event) ~> Int",
   PURE);
 
   (* getCharCode : (Event) -> Int *)
   "getCharCode",
-  (`Client, datatype "(Event) -> Int",
+  (`Client, datatype "(Event) ~> Int",
   PURE);
 
   "getInputValue",
-  (`Client, datatype "(String) -> String",
+  (`Client, datatype "(String) ~> String",
   PURE);
 
   "event",
@@ -756,7 +756,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            `Record []
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
-   datatype "(String, String) -> ()",
+   datatype "(String, String) ~> ()",
   IMPURE);
 
 
@@ -791,7 +791,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              | None -> ""
          in
            box_string value),
-   datatype "(String) -> String",
+   datatype "(String) ~> String",
   IMPURE);
 
   (* getCommandOutput disabled for now; possible security risk. *)
@@ -808,7 +808,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
            `Record []
-      ), datatype "(String) -> ()",
+      ), datatype "(String) ~> ()",
   IMPURE);
   (* Should this function really return? 
      I think not --ez*)
@@ -819,13 +819,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             let k = minimize k in
-               (match string_as_charlist(marshal_continuation k) with
+             (match string_as_charlist(marshal_continuation k) with
                   `List _ as value -> value
                 | _ -> assert(false))
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
-   datatype "((a) -> b) -> String",
+   datatype "((a) -> b) ~> String",
   IMPURE);
   (* arg type should actually be limited
      to continuations, but we don't have
@@ -839,19 +838,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          `Record []*)
          failwith "The sleep function is not implemented on the server yet"
       ),
-   datatype "(Int) -> ()",
+   datatype "(Int) ~> ()",
   IMPURE);
 
   "clientTime",
   (`Client,
-   datatype "() -> Int",
+   datatype "() ~> Int",
    IMPURE);
   
   "serverTime",
   (`Server
      (`PFun (fun _ ->
                box_int(num_of_float(Unix.time())))),
-   datatype "() -> Int",
+   datatype "() ~> Int",
    IMPURE);
 
   "dateToInt",
@@ -874,7 +873,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                let t, _ = Unix.mktime tm in              
                  box_int (num_of_float t)
            | _ -> assert false),
-   datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) -> Int",
+   datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) ~> Int",
    IMPURE);
 
   "intToDate",
@@ -889,7 +888,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              "minutes", box_int tm.Unix.tm_min;
              "seconds", box_int tm.Unix.tm_sec;
            ]),
-  datatype "(Int) -> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
+  datatype "(Int) ~> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
   IMPURE);
 
   (** Database functions **)
@@ -910,7 +909,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                    (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s]) -> ()",
+   datatype "(TableHandle(r, w, n), [s]) ~> ()",
   IMPURE);
 
   "InsertReturning",
@@ -928,7 +927,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s], String) -> Int",
+   datatype "(TableHandle(r, w, n), [s], String) ~> Int",
   IMPURE);
 
   "UpdateRows", 
@@ -947,7 +946,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ignore (Database.execute_command query_string db))
                     rows;
                   `Record [])),
-   datatype "(TableHandle(r, w, n), [(r, w)]) -> ()",
+   datatype "(TableHandle(r, w, n), [(r, w)]) ~> ()",
   IMPURE);
 
   "DeleteRows", 
@@ -962,7 +961,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string);
                     (Database.execute_command query_string db)
               | _ -> failwith "Internal error: delete row from non-database")),
-   datatype "(TableHandle(r, w, n), [r]) -> ()",
+   datatype "(TableHandle(r, w, n), [r]) ~> ()",
   IMPURE);
 
   "getDatabaseConfig",
@@ -975,7 +974,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	  else
 	    `Record(["driver", string_as_charlist driver;
 		     "args", string_as_charlist args])),
-   datatype "() -> (driver:String, args:String)",
+   datatype "() ~> (driver:String, args:String)",
   IMPURE);
   
   (** some char functions **)
@@ -1015,7 +1014,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
                `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
-    datatype "() -> [(String,String)]",
+    datatype "() ~> [(String,String)]",
     IMPURE));
 
   (* regular expression matching *)
@@ -1033,7 +1032,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
 	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
         box_bool (Str.string_match regex string 0)),
-    datatype "(NativeString, Regex) -> Bool",
+    datatype "(NativeString, Regex) ~> Bool",
     PURE));
 
   (* regular expression matching with grouped matched results as a list *)
@@ -1054,7 +1053,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	with 
 	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-     datatype "(String, Regex) -> [String]",
+     datatype "(String, Regex) ~> [String]",
    PURE));
 
   ("lntilde",	
@@ -1074,7 +1073,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	with 
 	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
 	accumMatches [] ngroups))),
-    datatype "(NativeString, Regex) -> [String]",
+    datatype "(NativeString, Regex) ~> [String]",
     PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -1084,7 +1083,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
         let string = unbox_string s in
         box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
-    datatype "(String, Regex) -> String",
+    datatype "(String, Regex) ~> String",
     PURE));
 	
   ("sntilde",	
@@ -1093,25 +1092,25 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
 	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
 	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
-    datatype "(NativeString, Regex) -> NativeString",
+    datatype "(NativeString, Regex) ~> NativeString",
     PURE));
    
   (* NativeString utilities *)
   ("char_at",
    (`Server (p2 (fun ((`NativeString ss) : Value.t) ((`Int ix):Value.t) -> `Char (ss.[Num.int_of_num ix]))),
-    (datatype ("(NativeString, Int) -> Char")),
+    (datatype ("(NativeString, Int) ~> Char")),
     IMPURE));
 
   ("strlen",
    (`Server (p1 (fun s -> match s with
                      `NativeString ss -> `Int (Num.num_of_int (String.length ss))
 	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
-    (datatype ("(NativeString) -> Int ")),
+    (datatype ("(NativeString) ~> Int ")),
     PURE));
 
   ("to_native_string",
    (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
-    (datatype ("(String) -> NativeString")),
+    (datatype ("(String) ~> NativeString")),
     PURE));
 	
   ("from_native_string",
@@ -1119,36 +1118,36 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	       (fun s-> match s with  
 	            (`NativeString ss) -> box_string ss
 	          | _  -> failwith "Internal error: Bad coercion from native string")),
-    (datatype ("(NativeString) -> String")),
+    (datatype ("(NativeString) ~> String")),
     PURE));
 	
   ("unsafePickleCont",
    (`Server (p1 (marshal_value ->- box_string)),
-    datatype "(() -> a) -> String",
+    datatype "(() -> a) ~> String",
     IMPURE));
 
   (* Serialize values to DB *)
   ("pickle_value", 
    (`Server (p1 (fun v -> (box_string (marshal_value v)))),
-    datatype "(a) -> String",
+    datatype "(a) ~> String",
     IMPURE));     
 
   ("unpickle_value",
    (`Server (p1 (fun v -> assert false (*broken_unmarshal_value (unbox_string v)*))),
-    datatype "(String) -> a",
+    datatype "(String) ~> a",
   IMPURE));
 
   (* HACK *)
   ("unsafe_cast",
    (`Server (p1 (fun v -> v)),
-    datatype "(a) -> b",
+    datatype "(a) ~> b",
     PURE));
   
   (** A silly server-side function, just for testing server-side primitives 
       called from client. Remove this if there is a better one for testing. *)
   ("server_concat",
   (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
-   datatype "(String, String) -> String",
+   datatype "(String, String) ~> String",
    IMPURE));
 
   (** non-deterministic random number generator *)
@@ -1185,9 +1184,25 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   with e ->
                     `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
                )),
-            datatype "(String) -> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
+            datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
             IMPURE)
 ]
+
+(* HACK
+
+   these functions are recursive, so type inference has no way of
+   knowing that they are in fact tame
+*)
+let patch_prelude_funs tyenv =
+  {tyenv with
+     var_env =
+      Env.String.bind
+        (Env.String.bind
+           (Env.String.bind
+              tyenv.Types.var_env
+              ("map", datatype "((a) b-> c, [a]) b-> [c]"))
+           ("concatMap", datatype "((a) b-> [c], [a]) b-> [c]"))
+        ("sortBy", datatype "((a) b-> _, [a]) b-> [a]")}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None
@@ -1224,9 +1239,9 @@ let primitive_name = Env.Int.lookup venv
 
 let primitive_location (name:string) = 
   match fst3 (List.assoc name env) with
-  | `Client ->  `Client
-  | `Server _ -> `Server
-  | #primitive -> `Unknown
+    | `Client ->  `Client
+    | `Server _ -> `Server
+    | #primitive -> `Unknown
 
 let rec function_arity =
   function

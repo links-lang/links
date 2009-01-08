@@ -61,7 +61,12 @@ let refine_bindings : binding list -> binding list =
       let sccs = Graph.topo_sort_sccs graph in
         List.map
           (fun scc ->
-             `Funs (List.map (find_fun ->- unFun) scc), pos)
+             let funs = List.map (find_fun ->- unFun) scc in
+               match funs with
+                 | [(((n, _, _) as b), ((tyvars, _), body), location, dt, pos)]
+                     when not (StringSet.mem n (Freevars.funlit body)) -> `Fun (b, (tyvars, body), location, dt), pos
+                 | _ -> `Funs (funs), pos)
+      
           sccs
     in 
       (* refine a group of bindings *)

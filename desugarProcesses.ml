@@ -22,10 +22,11 @@ object (o : 'self_type)
     | `Spawn (body, Some inner_eff) ->
         (* bring the inner mailbox type into scope, then restore the
            outer mailbox type afterwards *)
-        let mbt, inner_mb = 
-          let fields, _ = inner_eff in
+        let mbt, inner_mb, other_effects = 
+          let fields, row_var = inner_eff in
           let _, t = StringMap.find "hear" fields in
-            t, `Application (Types.mailbox, [`Type t]) in
+          let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in           
+            t, `Application (Types.mailbox, [`Type t]), other_effects in
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
         let (o, body, body_type) = o#phrase body in
@@ -33,7 +34,7 @@ object (o : 'self_type)
 
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "spawn", dp), [`Type mbt; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var "spawn", dp), [`Type mbt; `Row other_effects; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
         in
           (o, e, inner_mb)
@@ -41,10 +42,11 @@ object (o : 'self_type)
         (* bring the inner mailbox type into scope, then restore the
            outer mailbox type afterwards *)
 
-        let mbt = 
-          let fields, _ = inner_eff in
+        let mbt, other_effects = 
+          let fields, row_var = inner_eff in
           let _, t = StringMap.find "hear" fields in
-            t in
+          let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in           
+            t, other_effects in
 
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
@@ -53,19 +55,20 @@ object (o : 'self_type)
           
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "spawnWait", dp), [ `Type mbt; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var "spawnWait", dp), [ `Type mbt; `Row other_effects; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
         in
           (o, e, body_type)
     | `Receive (cases, Some t) ->
-        let fields, _ = o#lookup_effects in
+        let fields, row_var = o#lookup_effects in
+        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in          
           begin
             match StringMap.find "hear" fields with
               | (`Present, mbt) ->
                   o#phrasenode
                     (`Switch
                        ((`FnAppl
-                           ((`TAppl ((`Var "recv", dp), [`Type mbt]), dp),
+                           ((`TAppl ((`Var "recv", dp), [`Type mbt; `Row other_effects]), dp),
                             []), dp),
                         cases, 
                         Some t))                  

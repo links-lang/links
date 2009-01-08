@@ -872,31 +872,78 @@ struct
               end
           | `Function (args, effects, t) ->
               let arrow =
-                let fields, row_var = unwrap effects in
-                  if FieldEnv.mem "hear" fields then
-                      "-{" ^ sd (snd (FieldEnv.find "hear" fields)) ^ "}->"
-                  else
-                    begin
-                      assert (FieldEnv.is_empty fields);
+                let (fields, row_var) as r = unwrap effects in
+                  if FieldEnv.is_empty fields then
+                    match Unionfind.find row_var with
+                      | `Closed -> "{}->"
+                      | `Flexible var when policy.flavours ->
+                          let name, (_, _, count) = Vars.find_spec var vars in
+                            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                              "?->"
+                            else
+                              "?" ^ name ^ "->"
+                      | `Rigid var
+                      | `Flexible var ->
+                          let name, (_, _, count) = Vars.find_spec var vars in
+                            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                              "->"
+                            else
+                              name ^ "->"
+                      | `Recursive _ -> assert false
+                      | `Body t' ->
+                          sd (`Function (args, t', t))
+                  else if
+                    (FieldEnv.mem "wild" fields &&
+                       fst (FieldEnv.find "wild" fields) = `Present &&
+                        FieldEnv.size fields = 1)
+                  then
+                    match Unionfind.find row_var with
+                      | `Closed -> "{}~>"
+                      | `Flexible var when policy.flavours ->
+                          let name, (_, _, count) = Vars.find_spec var vars in
+                            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                              "?~>"
+                            else
+                              "?" ^ name ^ "~>"
+                      | `Rigid var
+                      | `Flexible var ->
+                          let name, (_, _, count) = Vars.find_spec var vars in
+                            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                              "~>"
+                            else
+                              name ^ "~>"
+                      | `Recursive _ -> assert false
+                      | `Body t' ->
+                          sd (`Function (args, t', t))                   
+                  else if
+                    (FieldEnv.mem "hear" fields &&
+                       FieldEnv.mem "wild" fields &&
+                       fst (FieldEnv.find "hear" fields) = `Present &&
+                        fst (FieldEnv.find "wild" fields) = `Present &&
+                        FieldEnv.size fields = 2)
+                  then
+                    let ht = sd (snd (FieldEnv.find "hear" fields)) in
                       match Unionfind.find row_var with
-                        | `Closed -> "-{}->"
+                        | `Closed ->
+                            "{:" ^ ht ^ ":}~>"
                         | `Flexible var when policy.flavours ->
                             let name, (_, _, count) = Vars.find_spec var vars in
                               if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                "-?->"
+                                "{:" ^ ht ^ " ?}~>"
                               else
-                                "-?" ^ name ^ "->"
+                                "{:" ^ ht ^ " ?" ^ name ^ "}~>"
                         | `Rigid var
                         | `Flexible var ->
                             let name, (_, _, count) = Vars.find_spec var vars in
                               if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                "->"
+                                "{:" ^ ht ^ "}~>"
                               else
-                                "-" ^ name ^ "->"
+                                "{:" ^ ht ^ " " ^ name ^ "}~>"
                         | `Recursive _ -> assert false
                         | `Body t' ->
                             sd (`Function (args, t', t))
-                    end
+                  else
+                      "{" ^ row "," bound_vars p r ^ "}->"
               in
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->

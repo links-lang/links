@@ -494,7 +494,8 @@ let links_project name = function
   | _ -> failwith ("Match failure in record projection")
 
 let marshal_continuation (c : continuation) : string = 
-  let pickle = Pickle_compressed_continuation.pickleS (compress_continuation c) in
+  let cs = compress_continuation c in
+  let pickle = Pickle_compressed_continuation.pickleS cs in
     Debug.print("marshalled continuation size: " ^
                   string_of_int(String.length pickle));
     if (String.length pickle > 4096) then (
@@ -524,5 +525,3 @@ let unmarshal_value envs : string -> t =
   base64decode
   ->- Pickle_compressed_t.unpickleS
   ->- (uncompress_t envs)
-
-let minimize _ = assert false

@@ -56,6 +56,8 @@ let annotate (signame, datatype) : _ -> binding =
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
+let row_with field (fields, row_var) = field::fields, row_var
+
 (* this preserves 1-tuples *)
 let make_tuple pos =
   function
@@ -77,8 +79,9 @@ let datatype d = d, None
 %}
 
 %token END
-%token EQ IN 
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW MINUSQUESTION QUESTIONRARROW VAR OP
+%token EQ IN
+%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP
+%token SQUIGRARROW RBRACESQUIGRARROW
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -679,27 +682,55 @@ just_datatype:
 
 datatype:
 | mu_datatype                                                  { $1 }
+| straight_arrow                                               { $1 }
+| squiggly_arrow                                               { $1 }
+
+rowvar:
+| VARIABLE                                                     { `OpenRigid $1 }
+| QUESTION VARIABLE                                            { `Open $2 }  
+| QUESTION                                                     { fresh_row_variable () }
+| UNDERSCORE                                                   { fresh_rigid_row_variable () }
+
+arrow_prefix:
+| LBRACE RBRACE                                                { ([], `Closed) }
+| LBRACE fields RBRACE                                         { $2 }
+| rowvar                                                       { ([], $1) }
+
+hear_arrow_prefix:
+| LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  fresh_rigid_row_variable ()) }
+| LBRACE COLON datatype COLON RBRACE                           { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  `Closed) }
+| LBRACE COLON datatype rowvar RBRACE                          { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  $4) }
+| LBRACE COLON datatype COMMA fields RBRACE                    { row_with
+                                                                   ("wild", (`Present, UnitType))
+                                                                   (row_with
+                                                                      ("hear", (`Present, $3))
+                                                                      $5) }
+
+straight_arrow:
+| parenthesized_datatypes arrow_prefix RARROW datatype         { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
                                                                                ([], fresh_rigid_row_variable ()),
                                                                                $3) }
-| parenthesized_datatypes QUESTIONRARROW datatype              { FunctionType ($1,
-                                                                               ([], fresh_row_variable ()),
-                                                                               $3) }
-| parenthesized_datatypes MINUS VARIABLE RARROW datatype       { FunctionType ($1,
-                                                                               ([], `OpenRigid $3),
-                                                                               $5) }      
-| parenthesized_datatypes
-       MINUSQUESTION VARIABLE RARROW datatype                  { FunctionType ($1,
-                                                                               ([], `Open $3),
-                                                                               $5) }      
-| parenthesized_datatypes 
-       MINUSLBRACE RBRACERARROW datatype                       { FunctionType ($1,
-                                                                               ([], `Closed),
+
+squiggly_arrow:
+| parenthesized_datatypes arrow_prefix SQUIGRARROW datatype    { FunctionType ($1,
+                                                                               row_with
+                                                                                 ("wild", (`Present, UnitType))
+                                                                                 $2,
                                                                                $4) }
-| parenthesized_datatypes 
-       MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
-                                                                               ([("hear", (`Present, $3))], `Closed),
-                                                                               $5) }
+| parenthesized_datatypes hear_arrow_prefix
+  SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
+                                                                               ([("wild", (`Present, UnitType))],
+                                                                                 fresh_rigid_row_variable ()),
+                                                                                $3) }
+
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
 | primary_datatype                                             { $1 }
@@ -707,7 +738,6 @@ mu_datatype:
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
 | LPAREN datatypes RPAREN                                      { $2 }
-
 
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
