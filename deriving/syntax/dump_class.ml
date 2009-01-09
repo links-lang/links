@@ -45,12 +45,6 @@ object (self)
                 <:match_case< (# $lid:a$ as x) ->
                                $dumpn$; $id:self#local a$.to_buffer buffer x >>,
                 <:match_case< $`int:n$ -> ($id:self#local a$.from_stream stream :> a) >>
-          | `Ctor a -> 
-              let hashname = Untranslate.qname ~loc a in
-                <:match_case< (# $id:hashname$ as x) ->
-                               $dumpn$; $id:self#ctor a$.to_buffer buffer x >>,
-                <:match_case< $`int:n$ -> ($id:self#ctor a$.from_stream stream :> a) >>
-
 
     method private case (ctor,args) n =
       match args with 

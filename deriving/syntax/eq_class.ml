@@ -32,9 +32,7 @@ object (self)
   method private polycase : Type.tagspec -> Ast.match_case = function
     | `Tag (name, None) -> <:match_case< `$name$, `$name$ -> true >>
     | `Tag (name, Some e) -> <:match_case< `$name$ l, `$name$ r -> $id:self#atomic e$.eq l r >>
-    | `Local a -> <:match_case< (# $lid:a$ as l, # $lid:a$ as r) -> $id:self#local a$.eq l r >>
-    | `Ctor a -> let h = Untranslate.qname ~loc a in
-        <:match_case< ((# $id:h$ as l), (# $id:h$ as r)) -> $id:self#ctor a$.eq l r >>
+    | `Local a -> <:match_case< ((# $lid:a$ as l), (# $lid:a$ as r)) -> $id:self#local a$.eq l r >>
 
   method private case : Type.summand -> Ast.match_case = 
     fun (name,args) ->

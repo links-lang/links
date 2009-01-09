@@ -43,15 +43,14 @@ type tyvar = [`Tyvar of name ]
 
 (* An "atomic" expression.  These are the only things allowed to
    appear as subexpressions. *)
-type atomic = [ localtype | tyvar | `Ctor of qname ] 
+type atomic = [ localtype | tyvar ] 
 
 (* An application of a type constructor declared elsewhere *)
 type appl = [`Appl of qname * atomic list ]
 
 (* A polymorphic variant declaration *)
 type tagspec = [`Tag     of name * atomic option 
-               | localtype
-               | appl ]
+               | localtype ]
 type variant = [`Variant of [`Gt | `Lt | `Eq ] * tagspec list ]
 
 (* A record type *)
@@ -100,8 +99,7 @@ object (self : 'self)
   method atomic (a : atomic) =
     self#crush (match a with
                   | #localtype as l -> [self#localtype l]
-                  | #tyvar     as t -> [self#tyvar t]
-                  | `Ctor _         -> [])
+                  | #tyvar     as t -> [self#tyvar t])
 
   method appl (`Appl (_, ats) : appl) =
     self#crush (List.map self#atomic ats)
@@ -110,8 +108,7 @@ object (self : 'self)
     self#crush (match t with
                   | `Tag (_, None)    -> []
                   | `Tag (_, Some at) -> [self#atomic at]
-                  | #localtype as at  -> [self#localtype at]
-                  | #appl as a        -> [self#appl a])
+                  | #localtype as at  -> [self#localtype at])
 
   method variant (`Variant (_, tags) : variant) =
     self#crush (List.map self#tagspec tags)
@@ -182,7 +179,6 @@ object (self : 'self)
   method atomic : atomic -> atomic = function 
     | # localtype as l -> (self#localtype l :> atomic)
     | # tyvar     as t -> (self#tyvar t     :> atomic)
-    | `Ctor _     as c -> c
 
   method appl : appl -> appl = function
     | `Appl (q, ats) -> `Appl (q, List.map self#atomic ats)
@@ -191,8 +187,7 @@ object (self : 'self)
     | `Tag (n, None)    -> `Tag (n, None)
     | `Tag (n, Some at) -> `Tag (n, Some (self#atomic at))
     | #localtype as at  -> (self#localtype at :> tagspec)
-    | #appl as a        -> (self#appl a :> tagspec)
-
+ 
   method variant : variant -> variant = function
     | `Variant (spec, tagspecs) -> `Variant (spec, List.map self#tagspec tagspecs)
 
@@ -394,7 +389,7 @@ struct
                       if params = []
                       then `Local id, empty_env
                       else unsupported loc "non-regular recursion"
-                  | qid -> `Ctor qid, empty_env
+                  | qid -> (*`Ctor qid*)`Appl (qid, []), empty_env
                 end
             | Ast.TyTup (_, t) ->
                 let es, binds = List.split (list atomic split_star t) in 
@@ -421,7 +416,7 @@ struct
         | t                                  -> 
             match atomic t with
               | (#localtype as typ, binds)
-              | (#appl      as typ, binds) -> typ, binds
+(*              | (#appl      as typ, binds) *)-> typ, binds
               | _                          -> assert false
       and atomic t : atomic * env = 
         match expr t with
@@ -594,18 +589,16 @@ struct
   and atomic ~loc params : atomic -> Ast.ctyp = function
     | `Local l -> localtype ~loc params l
     | `Tyvar t -> tyvar ~loc t    
-    | `Ctor  c -> <:ctyp< $id:qname ~loc c$ >>
 
   and app ~loc params f = function
     | []    -> f
     | [x]   -> <:ctyp< $atomic ~loc params x$ $f$ >>
     | x::xs -> app ~loc params (<:ctyp< $atomic ~loc params x$ $f$ >>) xs
 
-  let tagspec ~loc params = function
+  let tagspec ~loc params : tagspec -> _ = function
     | `Tag (c, None) -> <:ctyp< `$c$ >>
     | `Tag (c, Some t) -> <:ctyp< `$c$ of $atomic ~loc params t$ >>
     | `Local a -> localtype ~loc params a
-    | `Ctor q -> <:ctyp< $id:qname ~loc q$ >>
 
   let expr ~loc params : expr -> Ast.ctyp = 
     let atomic = atomic ~loc params in

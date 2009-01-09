@@ -138,7 +138,7 @@ object (self)
   method virtual record  : name * param list -> ?eq:expr -> field list -> Ast.module_expr
   method virtual tuple   : name * param list -> atomic list -> Ast.module_expr
 
-  method decls (params, decls : decl) : Ast.str_item =
+  method decls params (decls : rhs NameMap.t list) : Ast.str_item =
     (* plan: 
        set up an enclosing recursive module
        generate functors for all types in the clique
@@ -160,35 +160,41 @@ object (self)
     let apply_defaults mexpr = match default with
       | None -> mexpr
       | Some default -> <:module_expr< $default$ ($mexpr$) >> in
-    let mbinds =
-      NameMap.fold
-        (fun name rhs binds -> 
-             (rhs,
-              <:module_binding< $uid:classname ^ "_"^ name$
-                              : $uid:classname$.$uid:classname$ with type a = $self#atype (name, params)$
-                              = $apply_defaults (self#rhs (name, params) rhs)$ >>) :: binds)
-        decls
-        [] in
-    let sorted_mbinds = make_safe mbinds in
-    let mrec =
-      <:str_item< open $uid:classname$ module rec $list:sorted_mbinds$ >> in
+    let mbinds : (Type.rhs * Camlp4.PreCast.Ast.module_binding) list list =
+      List.map
+        (fun decl -> 
+           NameMap.fold
+             (fun name rhs binds -> 
+                (rhs,
+                 <:module_binding< $uid:classname ^ "_"^ name$
+                                 : $uid:classname$.$uid:classname$ with type a = $self#atype (name, params)$
+                                 = $apply_defaults (self#rhs (name, params) rhs)$ >>) :: binds)
+             decl
+             [])
+        decls in
+    let sorted_mbinds : Ast.module_binding list list = List.map make_safe mbinds in
+    let mrecs
+        = List.fold_right (fun m ms -> <:str_item< module rec $list:m$ $ms$ >>) sorted_mbinds <:str_item< >> in
+    let mrecs =
+      <:str_item< open $uid:classname$ $mrecs$ >> in
       match params with
-        | [] -> mrec
+        | [] -> mrecs
         | _ ->
-            let fixed = make_functor <:module_expr< struct $mrec$ end >> in
+            let fixed = make_functor <:module_expr< struct $mrecs$ end >> in
             let applied = apply_functor ~loc
                             <:module_expr< $uid:wrapper_name$ >> 
                             (List.map (fun (p,_) -> Ast.IdUid (loc, tvar_name p)) params) in
-         let projected =
-           NameMap.fold 
-             (fun name rhs projected -> 
-                let modname = classname ^ "_"^ name in
-                let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
-                  (<:str_item< module $uid:modname$ = $make_functor rhs$>> :: projected))
-             decls
-             [] in
-         let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
-           <:str_item< $m$ $list:projected$ >>
+            let names : NameMap.key list = List.concat (List.map (fun map -> NameMap.fold (fun i _ is -> i :: is) map []) decls) in
+            let projected =
+              List.map
+                (fun name -> 
+                   let modname = classname ^ "_"^ name in
+                   let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
+                     (<:str_item< module $uid:modname$ = $make_functor rhs$>>))
+                names
+            in
+            let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
+              <:str_item< $m$ $list:projected$ >>
 
 
   method signature (params, names : sigdecl) : Ast.sig_item =
@@ -215,7 +221,6 @@ object (self)
   method atomic : atomic -> Ast.ident = function
     | `Local l -> self#local l
     | `Tyvar t -> self#tyvar t
-    | `Ctor  q -> self#ctor  q
 
   method function_ f = raise (Underivable (loc, classname ^ " cannot be derived for function types"))
 
@@ -231,7 +236,6 @@ object (self)
     | `Fresh (eq, `Sum summands, _) -> self#sum ctyp ?eq summands
     | `Fresh (eq, `Record fields, _) -> self#record ctyp ?eq fields
     | `Tyvar p    -> <:module_expr< $id:self#tyvar p$ >>
-    | `Ctor q     -> <:module_expr< $id:self#ctor q$ >>
     | `Function f -> self#function_  f
     | `Appl c     -> self#constr     c
     | `Tuple t    -> self#tuple      ctyp t

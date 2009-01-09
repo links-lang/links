@@ -20,6 +20,7 @@ CAMLP4_NATIVE_POSTFILES=$(CAMLP4_POSTFILES:.cmo=.cmx)
 SOURCES = id.ml                 \
           utils.ml              \
           type.ml               \
+ analyse.ml \
  showdecl.ml \
          base.ml               \
           show_class.ml         \

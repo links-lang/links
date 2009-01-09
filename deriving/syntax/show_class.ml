@@ -50,10 +50,6 @@ object (self)
       | `Local a -> 
           let rhs = in_hovbox ~loc <:expr< $id:self#local a$.format formatter x >>  in
             <:match_case<(# $lid:a$ as x) -> $ rhs$ >>
-      | `Ctor a -> 
-          let rhs = in_hovbox ~loc <:expr< $id:self#ctor a$.format formatter x >>  in
-          let hashname = Untranslate.qname ~loc a in 
-            <:match_case<(# $id:hashname$ as x) -> $ rhs$ >>
 
   method sum ctyp ?eq summands = wrap ~loc (self#atype ctyp) (List.map self#case summands)
 

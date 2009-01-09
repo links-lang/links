@@ -80,8 +80,6 @@ object (self)
                         (Repr.make ~constructor:$`int:(tag_hash name)$ [mid])))) >>
     | `Local t -> 
         <:match_case< (# $lid:t$) as obj -> $id:self#local t$.pickle obj >>
-    | `Ctor c ->
-        <:match_case< (# $id:Untranslate.qname ~loc c$) as obj -> $id:self#ctor c$.pickle obj >>
 
     method private polycase_un tagspec : Ast.match_case = match tagspec with
     | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> return `$name$ >>
@@ -91,7 +89,7 @@ object (self)
     method variant (tname, params as atype) (_, tagspec) : Ast.module_expr =
       let unpickler = 
         let tags, extensions = either_partition
-          (function (`Tag (name,t)) -> Left (name,t) | (`Local _ | `Ctor _) as t -> Right t) tagspec in
+          (function (`Tag (name,t)) -> Left (name,t) | (`Local _) as t -> Right t) tagspec in
         let tag_cases : Ast.match_case list = List.map self#polycase_un tags in
         let extension_case : Ast.match_case = self#extension tname extensions in
           <:expr< fun id -> W.sum (function $list:tag_cases @ [extension_case]$) id >>

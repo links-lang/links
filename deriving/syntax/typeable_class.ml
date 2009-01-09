@@ -39,8 +39,7 @@ object (self)
         (fun (tags, extends) -> function
            | `Tag (l, None)  -> <:expr< ($str:l$, None) :: $tags$ >>, extends
            | `Tag (l,Some t) -> <:expr< ($str:l$, Some $id:self#atomic t$.type_rep) :: $tags$ >>, extends
-           | `Local t        -> tags, <:expr< $id:self#local t$.type_rep ::$extends$ >>
-           | `Ctor c         -> tags, <:expr< $id:self#ctor c$.type_rep ::$extends$ >>)
+           | `Local t        -> tags, <:expr< $id:self#local t$.type_rep ::$extends$ >>)
         (<:expr< [] >>, <:expr< [] >>) tags in
       <:module_expr< struct type a = $self#atype atype$
                             let type_rep = Typeable.TypeRep.mkPolyv $tags$ $extends$
