@@ -977,14 +977,14 @@ struct
       match b with
         | `Fun (f, (tyvars, xs, body), location) ->             
             let xs, body, o =
-              let (xs, o) =
+              let (xs, o, bound_vars) =
                 List.fold_right
-                  (fun x (xs, o) ->
+                  (fun x (xs, o, bound_vars) ->
                      let x, o = o#binder x in
-                       (x::xs, o))
+                       (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars))
                   xs
-                  ([], o) in
-              let o = o#close f (FreeVars.computation o#get_type_environment globals body) in
+                  ([], o, globals) in
+              let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in
               let body, _, o = o#computation body in
                 xs, body, o in
             let f, o = o#binder f in
@@ -1001,14 +1001,14 @@ struct
             let defs, o =
               List.fold_left
                 (fun (defs, o) (f, (tyvars, xs, body), location) ->
-                   let xs, o =
+                   let xs, o, bound_vars =
                      List.fold_right
-                       (fun x (xs, o) ->
+                       (fun x (xs, o, bound_vars) ->
                           let (x, o) = o#binder x in
-                            (x::xs, o))
+                            (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars))
                        xs
-                       ([], o) in
-                   let o = o#close f (FreeVars.computation o#get_type_environment globals body) in
+                       ([], o, globals) in
+                   let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in
                    let body, _, o = o#computation body in
                      (f, (tyvars, xs, body), location)::defs, o)
                 ([], o)

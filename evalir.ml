@@ -314,6 +314,16 @@ module Eval = struct
     fun env -> computation env Value.toplevel_cont
 end
 
+let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Value.env * Value.t) =
+  fun cont env program ->
+    try (
+      ignore 
+        (Eval.computation env cont program);
+      failwith "boom"
+    ) with
+      | Eval.TopLevel (env, v) -> (env, v)
+      | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (

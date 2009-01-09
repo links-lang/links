@@ -229,7 +229,7 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
     | #primitive_value_basis as v -> v
     | `Database s ->
         let driver, params = parse_db_string s in
-        let database = db_connect driver params in 
+        let database = db_connect driver params in
           `Database database
 
 let rec uncompress_continuation (closures, scopes, conts, recs) cont : continuation =
@@ -248,7 +248,7 @@ and uncompress_t (closures, scopes, conts, funs) v : t =
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
       | `RecFunction (defs, env, var) ->
-          `RecFunction (List.map (fun f -> (f, IntMap.find var funs)) defs,
+          `RecFunction (List.map (fun f -> (f, IntMap.find f funs)) defs,
                         uncompress_env (closures, scopes, conts, funs) env,
                         var)
       | `PrimitiveFunction f -> `PrimitiveFunction f
@@ -299,6 +299,7 @@ let build_unmarshal_envs ((_, closures), nenv, tyenv) program : unmarshal_envs =
     method bind_fun (fb, (xsb, e)) =
       let f = Var.var_of_binder fb in
       let xs = List.map Var.var_of_binder xsb in
+(*        Debug.print ("f: "^string_of_int f^" has arity: "^string_of_int (List.length xs));*)
       let funs = IntMap.add f (xs, e) funs in
         o#with_funs funs
 

@@ -814,7 +814,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      I think not --ez*)
 
   (** reifyK: I choose an obscure name, for an obscure function, until
-      a better one can be though up. It just turns a continuation into its
+      a better one can be thought up. It just turns a continuation into its
       string representation *)
   "reifyK",
   (p1 (function

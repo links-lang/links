@@ -6,7 +6,8 @@ open Utility
 type query_params = (string * Value.t) list deriving (Show)
 
 type web_request =
-    ExprEval of Ir.tail_computation * Value.env
+  | ContInvoke of Value.continuation * query_params
+  | ExprEval of Ir.tail_computation * Value.env
   | ClientReturn of Value.continuation * Value.t
   | RemoteCall of Value.t * Value.t list
   | CallMain
@@ -55,13 +56,34 @@ let decode_continuation (cont : string) : Value.continuation =
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
 let is_special_param (k, _) =
-  List.mem k ["_k"; "_jsonArgs"]
+  List.mem k ["_cont"; "_k"; "_jsonArgs"]
 
 let string_dict_to_charlist_dict =
   alistmap Value.string_as_charlist
 
+(* WARNING:
+
+   don't delete (again!): the _cont parameter is set by
+   the freshResource function defined in the prelude
+*)
+(* Extract continuation from the parameters passed in over CGI.*)
+let contin_invoke_req (valenv, nenv, tyenv) program params =
+  Debug.print ("Invoking a server continuation");
+  let pickled_continuation = List.assoc "_cont" params in
+  let params = List.filter (not -<- is_special_param) params in
+  let params = string_dict_to_charlist_dict params in
+  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+  let closures = Ir.ClosureTable.program tenv program in
+  let valenv = Value.with_closures valenv (closures) in
+  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
+    (* assert false *) (* TODO: implement this *)
+    (* TBD: create a debug setting for printing webif modes. *)
+(*     Debug.print("Invoking " ^ string_of_cont(unmarshal_continuation valenv program pickled_continuation)); *)
+      ContInvoke (Value.unmarshal_continuation unmarshal_envs pickled_continuation, params)
+
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
 let expr_eval_req (valenv, nenv, tyenv) program params =
+  Debug.print ("eval expression request");
   let string_pair (l, r) =
     `Extend
       (StringMap.from_alist [("1", `Constant (`String l));
@@ -72,7 +94,7 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
   let valenv = Value.with_closures valenv (closures) in
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
-      | `RecFunction ([(f, (_xs, _body))], locals, _) as v ->
+        | `RecFunction ([(f, (_xs, _body))], locals, _) as v ->
           let json_env =
             if List.mem_assoc "_jsonArgs" params then
               match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
@@ -108,6 +130,9 @@ let is_remote_call params =
 let is_client_call_return params = 
   List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
+let is_contin_invocation params = 
+  List.mem_assoc "_cont" params
+
 let is_expr_request = List.exists is_special_param
         
 let client_return_req cgi_args = 
@@ -129,24 +154,34 @@ let is_multipart () =
   ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
+
+(* We wrap the continuation of the whole program in a call to
+   renderPage. We also return the resulting continuation so that we
+   can use it elsewhere (i.e. in processing ExprEval).
+*)
 let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (bs, body) =
   let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
-    (bs @ [`Let (xb, ([], body))],
-     `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]))
+  let tail = `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]) in
+  let cont = fun env -> [(`Local, x, env, ([], tail))] in
+    (bs @ [`Let (xb, ([], body))], tail), cont
 
-let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) (* original source *) =
+let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont =
   function
+    | ContInvoke (cont, params) ->
+        Lib.print_http_response [("Content-type", "text/html")]
+          (Value.string_of_value
+             (Evalir.apply_cont_safe cont valenv (`Record params)))
     | ExprEval(expr, locals) ->        
         let env = Value.shadow valenv ~by:locals in
-        let v = snd (Evalir.run_program env (wrap_with_render_page (nenv, tyenv) ([], expr))) in
+        let v = snd (Evalir.run_program_with_cont (render_cont env) env ([], expr)) in
           Lib.print_http_response [("Content-type", "text/html")]
             (Value.string_of_value v)               
     | ClientReturn(cont, value) ->
         Debug.print ("client return");
         let result_json = (Json.jsonize_value 
                              (Evalir.apply_cont_safe cont valenv value)) in
-        Lib.print_http_response [("Content-type", "text/plain")]
-          (Utility.base64encode result_json)
+          Lib.print_http_response [("Content-type", "text/plain")]
+            (Utility.base64encode result_json)
     | RemoteCall(func, args) ->
         let result = Evalir.apply_safe valenv (func, args) in
 	  Lib.print_http_response [("Content-type", "text/plain")]
@@ -155,13 +190,13 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) (* original 
         Lib.print_http_response [("Content-type", "text/html")] 
           (if is_client_program (globals @ locals, main) then
              let program = (globals @ locals, main) in
-             Debug.print "Running client program";
-             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-             let closures = Ir.ClosureTable.program tenv program in
-               Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
+               Debug.print "Running client program";
+               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+               let closures = Ir.ClosureTable.program tenv program in
+                 Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
            else
-(*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
-             let program = wrap_with_render_page (nenv, tyenv) (locals, main) in
+             (*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
+             let program = locals, main in (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
              Debug.print "Running server program";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 (*                  Debug.print ("tenv domain: "^Env.Int.fold (fun name _ s -> s ^ string_of_int name ^ "\n") tenv "\n"); *)
@@ -187,6 +222,7 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
       (valenv,
        Env.String.extend nenv nenv',
        Types.extend_typing_environment tyenv tyenv') in
+    let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
     let globals = prelude @ globals in
     let cgi_args =
       if is_multipart () then
@@ -205,12 +241,14 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
           get_remote_call_args lookup cgi_args
         else if is_client_call_return cgi_args then
           client_return_req cgi_args
+        else if (is_contin_invocation cgi_args) then
+          contin_invoke_req (valenv, nenv, tyenv) (globals @ locals, main) cgi_args
         else if (is_expr_request cgi_args) then
           expr_eval_req (valenv, nenv, tyenv) (globals @ locals, main) cgi_args
         else
           CallMain
       in
-        perform_request (valenv, nenv, tyenv) (globals, (locals, main)) request
+        perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont request
   with
       (* FIXME: errors need to be handled differently
          between user-facing and remote-call modes. *)

@@ -492,7 +492,7 @@ struct
     let body = body k in
     let body_type = sem_type body in
     let body = reify body in
-    let ft = `Function (kt, eff, body_type) in
+    let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
     let f_info = (ft, "", `Local) in      
     let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)), body_type) in        
       M.bind (fun_binding (f_info, ([], [kb], body), `Unknown)) rest
@@ -911,7 +911,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*           Debug.print (Ir.Show_program.show r); *)
+(*          Debug.print (Ir.Show_program.show r);*)
           r, I.sem_type s
 end
 
