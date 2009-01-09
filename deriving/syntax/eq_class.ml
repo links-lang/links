@@ -18,7 +18,7 @@ object (self)
           (List.fold_left
              (fun (e, n) t -> 
                 let l = Printf.sprintf "l%d" n and r = Printf.sprintf "r%d" n in
-                  (<:expr< $id:self#atomic t$.eq $lid:l$ $lid:r$ && $e$ >>, n+1))
+                  (<:expr< $e$ && $id:self#atomic t$.eq $lid:l$ $lid:r$ >>, n+1))
              (<:expr< true >>, 0)
              args)
 

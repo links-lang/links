@@ -5,7 +5,8 @@ open Utils
 open Type
 open Camlp4.PreCast
 
-let tuple_functors = [2;3;4;5;6]
+(*let tuple_functors = [2;3;4;5;6]*)
+let tuple_functors = []
 
 let classname = "Pickle"
 
@@ -20,9 +21,11 @@ let wrap ~loc ~atype ~tymod ~eqmod ~picklers ~unpickler =
                         module E = $eqmod$
                         type a = $atype$
                         open Write
-                        let pickle = let module W = Utils(T)(E) in function $list:picklers$
+                        module W = Utils(T)(E)
+                        let pickle = function $list:picklers$
                         open Read
-                        let unpickle = let module W = Utils(T) in $unpickler$
+                        module R = Utils(T)
+                        let unpickle = $unpickler$
   end >>
 
 (*
@@ -92,7 +95,7 @@ object (self)
           (function (`Tag (name,t)) -> Left (name,t) | (`Local _) as t -> Right t) tagspec in
         let tag_cases : Ast.match_case list = List.map self#polycase_un tags in
         let extension_case : Ast.match_case = self#extension tname extensions in
-          <:expr< fun id -> W.sum (function $list:tag_cases @ [extension_case]$) id >>
+          <:expr< fun id -> R.sum (function $list:tag_cases @ [extension_case]$) id >>
       in
         wrap
           ~loc
@@ -134,7 +137,7 @@ object (self)
                    <:expr< $bind ~loc$ ($id:self#atomic t$.unpickle $lid:id$) (fun $lid:id$ -> $expr$) >>)
                 ids
               <:expr< return $texpr$ >> in
-              <:expr< W.tuple
+              <:expr< R.tuple
                       (function 
                          | $pidlist$ -> $inner$
                          | _ -> raise (UnpicklingError $str:msg$)) >>
@@ -184,7 +187,7 @@ object (self)
                                     $list:unpicklers$ 
                                    | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
                                                                     ^tname^": "$^ string_of_int n))
-                           in W.sum f id >>
+                           in R.sum f id >>
 
     method record (tname, params) ?eq (fields : Type.field list) : Ast.module_expr =
       let picklers =
@@ -233,7 +236,7 @@ object (self)
             assignments in
         let idpat = patt_list ~loc (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
           unpickle_record_bindings
-            (<:expr< W.record
+            (<:expr< R.record
                (fun self -> function
                   | $idpat$ -> let this = (Obj.magic self : Mutable.t) in $inner$
                   | _ -> raise (UnpicklingError $str:msg$)) $`int:List.length fields$ >>)

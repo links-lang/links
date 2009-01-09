@@ -33,6 +33,8 @@ struct
        (List.fold_right (Type.NameMap.fold Type.NameMap.add) tdecls Type.NameMap.empty)) in
     (Base.find classname ~loc)#signature sigdecl
 
+  let group_rhss (params, rhs) = (params, Analyse.group_rhss rhs)
+
   DELETE_RULE Gram str_item: "type"; type_declaration END
   DELETE_RULE Gram sig_item: "type"; type_declaration END
 
@@ -42,15 +44,14 @@ struct
   str_item:
   [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
     | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-        let params, rhss = display_errors loc Type.Translate.decl types in 
-        let decl_cliques = Analyse.group_rhss rhss in 
+        let params, rhss = group_rhss (display_errors loc Type.Translate.decl types) in 
         let tdecls = 
           List.fold_right
             (fun rhs output -> <:str_item< type $list:Type.Untranslate.decl ~loc (params, rhs)$ $output$ >>)
-            decl_cliques 
+            rhss
             <:str_item< >>
         in
-          <:str_item< $tdecls$ $list:List.map (derive_str loc params decl_cliques) cl$ >>
+          <:str_item< $tdecls$ $list:List.map (derive_str loc params rhss) cl$ >>
    ]]
   ;
   sig_item:
@@ -84,7 +85,7 @@ struct
                fatal_error loc ("deriving: type variables cannot be used in `method' instantiations")
              else
                let tdecls = Type.Untranslate.decl ~loc decls in
-               let m = derive_str loc params [rhss] classname in
+               let m = derive_str loc params (Analyse.group_rhss rhss) classname in
                  <:expr< let module $uid:classname$ = 
                              struct
                                type $list:tdecls$
