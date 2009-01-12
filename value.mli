@@ -54,7 +54,11 @@ type primitive_value = [
 | `Int of Num.num
 | `XML of xmlitem 
 | `NativeString of string ]
-    deriving (Show, Pickle)       
+(*    deriving (Show, Pickle)       *)
+module Show_primitive_value : Show.Show 
+  with type a = primitive_value
+module Pickle_primitive_value : Pickle.Pickle
+  with type a = primitive_value
 
 type t = [
 | primitive_value

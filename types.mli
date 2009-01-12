@@ -50,27 +50,30 @@ val list     : Abstype.t
 val event    : Abstype.t 
 val dom_node : Abstype.t
 
-type datatype =
+type typ =
     [ `Not_typed
     | `Primitive of primitive
-    | `Function of (datatype * datatype * datatype)
+    | `Function of (typ * typ * typ)
     | `Record of row
     | `Variant of row
-    | `Table of datatype * datatype
-    | `Alias of ((string * datatype list) * datatype)
-    | `Application of (Abstype.t * datatype list)
+    | `Table of typ * typ
+    | `Alias of ((string * typ list) * typ)
+    | `Application of (Abstype.t * typ list)
     | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list * datatype)]
-and field_spec = [ `Present of datatype | `Absent ]
+    | `ForAll of (quantifier list * typ)]
+and field_spec = [ `Present of typ | `Absent ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var
-and meta_type_var = (datatype meta_type_var_basis) point
+and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and quantifier =
     [ `TypeVar of int * meta_type_var | `RigidTypeVar of int * meta_type_var
     | `RowVar of int * meta_row_var | `RigidRowVar of int * meta_row_var ]
       deriving (Eq, Typeable, Show, Pickle)
+
+type datatype = typ
+  deriving (Eq, Typeable, Show, Pickle)
 
 val type_var_number : quantifier -> int
 

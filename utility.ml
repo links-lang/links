@@ -272,8 +272,8 @@ module Eq_stringmap (E : Eq.Eq) : Eq.Eq with type a = E.a stringmap = Eq.Eq_map_
 module Pickle_stringmap (S : Pickle.Pickle) : Pickle.Pickle with type a = S.a stringmap = 
   Pickle.Defaults(
     struct
-      module T = Typeable_stringmap(S.T)
-      module E = Eq_stringmap(S.E)
+      module Typeable = Typeable_stringmap(S.Typeable)
+      module Eq = Eq_stringmap(S.Eq)
       type a = S.a stringmap
       let pickle  _ = failwith "pickle stringmap nyi"
       let unpickle   _ = failwith "unpickle stringmap nyi"
@@ -297,8 +297,8 @@ module Dump_intset = Dump.Dump_undumpable (struct type a = intset let tname ="in
 module Pickle_intset : Pickle.Pickle with type a = intset = 
   Pickle.Defaults(
     struct
-      module T = Typeable_intset
-      module E = Eq_intset
+      module Typeable = Typeable_intset
+      module Eq = Eq_intset
       type a = intset
       let pickle  _ = failwith "pickle intset nyi"
       let unpickle   _ = failwith "unpickle intset nyi"
@@ -318,8 +318,8 @@ module Pickle_intmap (S : Pickle.Pickle)
  = 
   Pickle.Defaults(
     struct
-      module T = Typeable_intmap(S.T)
-      module E = Eq_intmap(S.E)
+      module Typeable = Typeable_intmap(S.Typeable)
+      module Eq = Eq_intmap(S.Eq)
       type a = S.a intmap
       let pickle  _ = failwith "pickle intmap nyi"
       let unpickle  _ = failwith "unpickle intmap nyi"

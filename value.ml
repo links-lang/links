@@ -58,8 +58,8 @@ module Dump_database = Dump.Dump_undumpable (struct type a = database let tname 
 module Pickle_database : Pickle.Pickle with type a = database = 
   Pickle.Defaults(
     struct
-      module T = Typeable_database
-      module E = Eq_database
+      module Typeable = Typeable_database
+      module Eq = Eq_database
       type a = database
       let pickle _ = failwith "pickle database nyi"
       let unpickle _ = failwith "unpickle database nyi"
