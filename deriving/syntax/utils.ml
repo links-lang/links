@@ -138,6 +138,7 @@ struct
   let patt = mk_print printer#patt
   let match_case = mk_print printer#match_case
   let ctyp = mk_print printer#ctyp
+  let str_item = mk_print printer#str_item
 end
 
 module StringMap =

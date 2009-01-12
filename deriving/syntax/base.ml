@@ -133,12 +133,15 @@ object (self)
       <:ctyp< $lid:name$ >>
       params
 
+  method superclasses : name list = []
   method virtual variant : name * param list ->  [`Gt | `Lt | `Eq ] * tagspec list -> Ast.module_expr
   method virtual sum     : name * param list -> ?eq:expr -> summand list -> Ast.module_expr
   method virtual record  : name * param list -> ?eq:expr -> field list -> Ast.module_expr
   method virtual tuple   : name * param list -> atomic list -> Ast.module_expr
 
-  method decls params (decls : rhs NameMap.t list) : Ast.str_item =
+  method decls params (decls : (is_generated * rhs) NameMap.t list) : Ast.str_item =
+    let () = List.iter (fun m -> assert (not (NameMap.is_empty m))) decls in
+
     (* plan: 
        set up an enclosing recursive module
        generate functors for all types in the clique
@@ -160,11 +163,11 @@ object (self)
     let apply_defaults mexpr = match default with
       | None -> mexpr
       | Some default -> <:module_expr< $default$ ($mexpr$) >> in
-    let mbinds : (Type.rhs * Camlp4.PreCast.Ast.module_binding) list list =
+    let mbinds : (Type.rhs * Ast.module_binding) list list =
       List.map
         (fun decl -> 
            NameMap.fold
-             (fun name rhs binds -> 
+             (fun name (_, rhs) binds -> 
                 (rhs,
                  <:module_binding< $uid:classname ^ "_"^ name$
                                  : $uid:classname$.$uid:classname$ with type a = $self#atype (name, params)$
@@ -184,7 +187,7 @@ object (self)
             let applied = apply_functor ~loc
                             <:module_expr< $uid:wrapper_name$ >> 
                             (List.map (fun (p,_) -> Ast.IdUid (loc, tvar_name p)) params) in
-            let names : NameMap.key list = List.concat (List.map (fun map -> NameMap.fold (fun i _ is -> i :: is) map []) decls) in
+            let names : NameMap.key list = List.concat_map (fun map -> NameMap.fold (fun i _ is -> i :: is) map []) decls in
             let projected =
               List.map
                 (fun name -> 

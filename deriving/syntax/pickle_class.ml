@@ -17,14 +17,14 @@ let seq  ~loc = let seqop  = ">>"  in <:expr< $lid:seqop$  >>
 let wrap ~loc ~atype ~tymod ~eqmod ~picklers ~unpickler =
   <:module_expr< struct open Eq 
                         open Typeable
-                        module T = $tymod$
-                        module E = $eqmod$
+                        module Typeable = $tymod$
+                        module Eq = $eqmod$
                         type a = $atype$
                         open Write
-                        module W = Utils(T)(E)
+                        module W = Utils(Typeable)(Eq)
                         let pickle = function $list:picklers$
                         open Read
-                        module R = Utils(T)
+                        module R = Utils(Typeable)
                         let unpickle = $unpickler$
   end >>
 
@@ -43,6 +43,8 @@ end
 class pickle ~loc =
 object (self)
   inherit Base.deriver ~loc  ~classname ~allow_private:false ~default:<:module_expr< Pickle.Defaults >>
+
+  method superclasses = ["Eq"; "Typeable"]
 
   method private extension tname ts : Ast.match_case =
     (* Try each extension in turn.  If we get an UnknownTag failure,
@@ -250,13 +252,13 @@ object (self)
       let args = List.map (fun (a, _) -> `Tyvar a) params in
         apply_functor ~loc
         <:module_expr< $uid:"Typeable_"^ name$ >>  
-          (List.map (fun a -> <:ident< $id:self#atomic a$.T >>) args)
+          (List.map (fun a -> <:ident< $id:self#atomic a$.Typeable >>) args)
 
     method private eq_instance (name, params) =
       let args = List.map (fun (a, _) -> `Tyvar a) params in
         apply_functor ~loc
         <:module_expr< $uid:"Eq_"^ name$ >>  
-          (List.map (fun a -> <:ident< $id:self#atomic a$.E >>) args)
+          (List.map (fun a -> <:ident< $id:self#atomic a$.Eq >>) args)
 end
 
 let () = Base.register classname (new pickle)

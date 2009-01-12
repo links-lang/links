@@ -199,11 +199,10 @@ struct
 end
 
 
-let group_sigrhss : sigrhs NameMap.t -> sigrhs NameMap.t list
+let group_sigrhss : (is_generated * sigrhs) NameMap.t -> (is_generated * sigrhs) NameMap.t list
   = fun rhss ->
-    let components = 
-      let add tname rhs binds = (tname, NameSet.elements (localrefs#sigrhs rhs)) :: binds in
-        NameMap.fold add rhss [] in
+    let add tname (_, rhs) binds = (tname, NameSet.elements (localrefs#sigrhs rhs)) :: binds in
+    let components = NameMap.fold add rhss [] in
     let sorted = Graph.topo_sort_sccs components in
       List.map (fun clique -> 
                   List.fold_right
@@ -213,11 +212,10 @@ let group_sigrhss : sigrhs NameMap.t -> sigrhs NameMap.t list
                     NameMap.empty) sorted
 
 (** Find the strongly-connected components **)
-let group_rhss : rhs NameMap.t -> rhs NameMap.t list
+let group_rhss : (is_generated * rhs) NameMap.t -> (is_generated * rhs) NameMap.t list
   = fun rhss ->
-    let components = 
-      let add tname rhs binds = (tname, NameSet.elements (localrefs#rhs rhs)) :: binds in
-        NameMap.fold add rhss [] in
+    let add tname (_, rhs) binds = (tname, NameSet.elements (localrefs#rhs rhs)) :: binds in
+    let components = NameMap.fold add rhss [] in
     let sorted = Graph.topo_sort_sccs components in
       List.map (fun clique -> 
                   List.fold_right

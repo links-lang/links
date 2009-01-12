@@ -75,13 +75,15 @@ type expr = [ `Function of (atomic * atomic)
 type rhs = [`Fresh of expr option * fresh * [`Private|`Public] 
            | expr]
 
-type sigrhs =[rhs | `Nothing]
+type sigrhs = [ rhs | `Nothing]
+
+type is_generated = bool
 
 (* A type declaration group *)
-type decl = param list * rhs NameMap.t
+type decl = param list * (is_generated * rhs) NameMap.t
 
 (* A type declaration group in a signature *)
-type sigdecl = param list * sigrhs NameMap.t
+type sigdecl = param list * (is_generated * sigrhs) NameMap.t
 
 class virtual ['result] fold = 
 object (self : 'self)
@@ -152,14 +154,14 @@ object (self : 'self)
   method decl (params, rhs : decl) =
     self#crush (List.map self#param params
                 @ (NameMap.fold 
-                     (fun _ rhs rs -> self#rhs rhs :: rs)
+                     (fun _ (_, rhs) rs -> self#rhs rhs :: rs)
                      rhs
                      []))
 
   method sigdecl (params, rhs : sigdecl) =
     self#crush (List.map self#param params
                 @ (NameMap.fold 
-                     (fun _ rhs rs -> self#sigrhs rhs :: rs)
+                     (fun _ (_, rhs) rs -> self#sigrhs rhs :: rs)
                      rhs
                      []))
 end
@@ -221,13 +223,13 @@ object (self : 'self)
     | #rhs as r                    -> (self#rhs r :> sigrhs)
     | `Nothing                     -> `Nothing
 
-  method decl (params, rhss) = 
+  method decl (params, rhss) : decl= 
     (List.map self#param params,
-     NameMap.map self#rhs rhss)
+     NameMap.map (fun (g, r) -> (g, self#rhs r)) rhss)
 
-  method sigdecl (params, rhss) = 
+  method sigdecl (params, rhss) : sigdecl = 
     (List.map self#param params,
-     NameMap.map self#sigrhs rhss)
+     NameMap.map (fun (g, r) -> (g, self#sigrhs r)) rhss)
 end
 
 
@@ -309,7 +311,7 @@ struct
        (fun name -> name_prefix := name; counter := 0))
 
   (* map from type constructors to their definitions *) 
-  type bindings = (name * sigrhs) list
+  type bindings = (name * (is_generated * sigrhs)) list
   (* map from as-variables to the type constructors that replace them *) 
   type alias_map = name NameMap.t
   (* everything generated during translation *)
@@ -320,7 +322,7 @@ struct
   let (++) l r = { bindings = l.bindings @ r.bindings ;
                    aliases  = NameMap.union_disjoint2 l.aliases r.aliases }
   let join_envs envs = List.fold_right (++) envs empty_env
-  let bind_binding n rhs env = { env with bindings = (n, rhs) :: env.bindings }
+  let bind_binding n generated rhs env = { env with bindings = (n, (generated, rhs)) :: env.bindings }
   let bind_alias n rhs env = { env with aliases = NameMap.add n rhs env.aliases }
 
   (* Accept a binding list of the form
@@ -369,7 +371,7 @@ struct
                 let name' = fresh_name () in
                 let e, binds = expr t in
                   (`Local name', (bind_alias name name'
-                                    (bind_binding name' (e :> sigrhs) binds)))
+                                    (bind_binding name' true (e :> sigrhs) binds)))
             | Ast.TyArr (_,f, t)  -> 
                 let f, binds = atomic f and t, binds' = atomic t in
                   `Function (f, t), binds ++ binds'
@@ -424,7 +426,7 @@ struct
           | e            , binds -> 
               let name = fresh_name () in
               let e, binds = expr t in
-                (`Local name, bind_binding name (e :> sigrhs) binds)
+                (`Local name, bind_binding name true (e :> sigrhs) binds)
 
       let field : Ast.ctyp -> field * env = function 
         | Ast.TyCol (loc, Ast.TyId _, Ast.TyMut (_, Ast.TyPol _)) 
@@ -465,38 +467,39 @@ struct
          something other than 'a1...'an 
       *)
       let rhs ~(name:name) : Ast.ctyp -> env = 
-        let () = set_name_prefix name in function
+        let () = set_name_prefix name in
+        let bind = bind_binding name false in function
         (* Record types (private, public, with and without equations) *)
         | Ast.TyPrv (_, (Ast.TyRec (loc, t))) ->
             let r, binds = record t in
-              bind_binding name ( `Fresh (None, (r :> fresh), `Private)) binds
+              bind ( `Fresh (None, (r :> fresh), `Private)) binds
         | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec (loc, t)))) ->
             let r, rbinds = record t 
             and e, ebinds = expr eq in
-              bind_binding name (`Fresh (Some e, (r :> fresh), `Private)) (rbinds ++ ebinds)
+              bind (`Fresh (Some e, (r :> fresh), `Private)) (rbinds ++ ebinds)
         | Ast.TyRec (loc, t) ->
             let r, binds = record t in
-              bind_binding name ( `Fresh (None, (r :> fresh), `Public)) binds
+              bind ( `Fresh (None, (r :> fresh), `Public)) binds
         | Ast.TyMan (_, eq, (Ast.TyRec (loc, t))) ->
             let r, rbinds = record t 
             and e, ebinds = expr   eq in
-              bind_binding name (`Fresh (Some e, (r :> fresh), `Public)) (rbinds ++ ebinds)
+              bind (`Fresh (Some e, (r :> fresh), `Public)) (rbinds ++ ebinds)
 
         (* Sum types (private, public, with and without equations) *)
         | Ast.TyPrv (_, (Ast.TySum (loc, t))) -> 
             let s, binds = sum t in
-              bind_binding name (`Fresh (None, (s :> fresh), `Private)) binds
+              bind (`Fresh (None, (s :> fresh), `Private)) binds
         | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TySum (loc, t)))) ->
             let r, sbinds = sum t 
             and e, ebinds = expr eq in
-              bind_binding name (`Fresh (Some e, (r :> fresh), `Private)) (sbinds ++ ebinds)
+              bind (`Fresh (Some e, (r :> fresh), `Private)) (sbinds ++ ebinds)
         | Ast.TySum (loc, t) -> 
             let s, binds = sum t in
-              bind_binding name (`Fresh (None, (s :> fresh), `Public)) binds
+              bind (`Fresh (None, (s :> fresh), `Public)) binds
         | Ast.TyMan (_, eq, (Ast.TySum (loc, t))) ->
             let r, sbinds = sum t 
             and e, ebinds = expr eq in
-              bind_binding name (`Fresh (Some e, (r :> fresh), `Public)) (sbinds ++ ebinds)
+              bind (`Fresh (Some e, (r :> fresh), `Public)) (sbinds ++ ebinds)
 
         (* Other private type *)
         | Ast.TyPrv (loc, _) -> 
@@ -504,12 +507,12 @@ struct
 
         (* Nothing *)
         | Ast.TyNil _ ->
-            bind_binding name `Nothing empty_env
+            bind `Nothing empty_env
 
         (* Type aliases *)
         | t -> 
             let e, binds = expr t in
-              bind_binding name (e :> sigrhs) binds
+              bind (e :> sigrhs) binds
 
       let results = 
         List.fold_right 
@@ -551,7 +554,7 @@ struct
    let decl (ctyp : Ast.ctyp) : decl =
      let params, bindings = sigdecl ctyp in
        (params, NameMap.map (function 
-                               | #rhs as d -> d
+                               | _, #rhs as d -> d
                                | _ -> unsupported (Ast.loc_of_ctyp ctyp) 
                                    "type declarations with empty right hand sides")
                            bindings)
@@ -644,11 +647,11 @@ struct
   let sigdecl ~loc (params, bindings : sigdecl) : Ast.ctyp list =
     let params' = List.map (param ~loc) params in
     NameMap.fold
-      (fun name r dcl ->
+      (fun name (_, r) dcl ->
          let rhs = rrhs ~loc params r in
            Ast.TyDcl (loc, name, params', rhs, []):: dcl)
       bindings
       []
 
-  let decl = (sigdecl :> loc:_ -> _ * rhs NameMap.t -> _)
+  let decl = (sigdecl :> loc:_ -> _ * (_ * rhs) NameMap.t -> _)
 end

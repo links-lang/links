@@ -24,34 +24,61 @@ struct
           fatal_error loc msg
 
 
-  let derive_str loc params tdecls classname : Ast.str_item =
+  let derive_str loc params (tdecls :  (Type.is_generated * Type.rhs) Type.NameMap.t list) classname : Ast.str_item =
     (Base.find classname ~loc)#decls params tdecls
   
   let derive_sig loc params tdecls classname : Ast.sig_item =
     let sigdecl = 
       (params,
        (List.fold_right (Type.NameMap.fold Type.NameMap.add) tdecls Type.NameMap.empty)) in
-    (Base.find classname ~loc)#signature sigdecl
+      (Base.find classname ~loc)#signature sigdecl
 
   let group_rhss (params, rhs) = (params, Analyse.group_rhss rhs)
+
+  let find_superclasses loc classname : Type.name list =
+    (Base.find classname ~loc)#superclasses
 
   DELETE_RULE Gram str_item: "type"; type_declaration END
   DELETE_RULE Gram sig_item: "type"; type_declaration END
 
   open Ast
 
+  (*
+    TODO: 
+    Suppose that we're generating an instance of a class C for a type t.
+
+    If we're not generating instances of the superclasses S1 ... Sn of
+    C for t then we should generate instances of S1 ... Sn for the
+    types generated from t.
+  *)
+
   EXTEND Gram
   str_item:
   [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
-    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
+    | "type"; types = type_declaration; "deriving"; "("; classes = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
         let params, rhss = group_rhss (display_errors loc Type.Translate.decl types) in 
-        let tdecls = 
-          List.fold_right
-            (fun rhs output -> <:str_item< type $list:Type.Untranslate.decl ~loc (params, rhs)$ $output$ >>)
-            rhss
-            <:str_item< >>
+        let tdecls = List.map (fun rhs -> <:str_item< type $list:Type.Untranslate.decl ~loc (params, rhs)$ >>) rhss in
+        let generated_rhss = 
+          List.concat_map
+            (fun rhs ->
+               let m = (Type.NameMap.fold 
+                          (fun name (is_generated, rhs) map -> 
+                             if (is_generated && List.exists (Type.NameMap.mem name) rhss) 
+                             then Type.NameMap.add name (is_generated, rhs) map
+                             else map)
+                          rhs
+                          Type.NameMap.empty)
+               in if Type.NameMap.is_empty m then [] else [m])
+            rhss 
         in
-          <:str_item< $tdecls$ $list:List.map (derive_str loc params rhss) cl$ >>
+
+        let instances = List.map (fun cl -> 
+                                    let instance = derive_str loc params rhss cl in
+                                    let superclasses = find_superclasses loc cl in
+                                    let underived_superclasses = List.filter (fun cl -> not (List.mem cl classes)) superclasses in
+                                    let superclass_instances = List.map (fun c -> derive_str loc params generated_rhss c) underived_superclasses in
+                                      <:str_item< $list:superclass_instances$ $instance$ >>) classes in
+          <:str_item< $list:tdecls$ $list:instances$ >>
    ]]
   ;
   sig_item:
@@ -59,14 +86,9 @@ struct
    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
        let params, rhss  = display_errors loc Type.Translate.sigdecl types in 
        let decl_cliques = Analyse.group_sigrhss rhss in
-       let tdecls = 
-          List.fold_right
-            (fun rhs output -> <:sig_item< type $list:Type.Untranslate.sigdecl ~loc (params, rhs)$ $output$ >>)
-            decl_cliques 
-            <:sig_item< >>
-       in
+       let tdecls = List.map (fun rhs -> <:sig_item< type $list:Type.Untranslate.sigdecl ~loc (params, rhs)$ >>) decl_cliques  in
        let ms =  List.map (derive_sig loc params decl_cliques) cl  in
-         <:sig_item< $tdecls$ $list:ms$ >> ]]
+         <:sig_item< $list:tdecls$ $list:ms$ >> ]]
   ;
   END
 
@@ -84,12 +106,15 @@ struct
              if Base.contains_tvars_decl decls then
                fatal_error loc ("deriving: type variables cannot be used in `method' instantiations")
              else
-               let tdecls = Type.Untranslate.decl ~loc decls in
-               let m = derive_str loc params (Analyse.group_rhss rhss) classname in
+               let utdecls = Type.Untranslate.decl ~loc decls in
+               let tdecls = Analyse.group_rhss rhss in
+               let superclass_instances = List.map (derive_str loc params tdecls) (find_superclasses loc classname) in
+               let instance = derive_str loc params tdecls classname in
                  <:expr< let module $uid:classname$ = 
                              struct
-                               type $list:tdecls$
-                               $m$ 
+                               type $list:utdecls$
+                               $list:superclass_instances$
+                               $instance$ 
                                include $uid:classname ^ "_inline"$
                              end
                           in $uid:classname$.$lid:methodname$ >>

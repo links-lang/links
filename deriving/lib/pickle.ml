@@ -58,8 +58,8 @@ module Write : sig
   val initial_output_state : s
   include Monad.Monad_state_type with type state = s
 
-  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) : sig
-    val allocate : T.a -> (id -> unit m) -> id m
+  module Utils (Typeable : Typeable.Typeable) (Eq : Eq.Eq with type a = Typeable.a) : sig
+    val allocate : Typeable.a -> (id -> unit m) -> id m
     val store_repr : id -> Repr.t -> unit m
   end
 end =
@@ -75,13 +75,13 @@ struct
     id2rep = IdMap.empty;
   }
   include Monad.Monad_state (struct type state = s end)
-  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) =
+  module Utils (Typeable : Typeable.Typeable) (Eq : Eq.Eq with type a = Typeable.a) =
   struct
-    module C = Dynmap.Comp(T)(E)
+    module C = Dynmap.Comp (Typeable)(Eq)
     let comparator = C.eq
 
     let allocate o f =
-      let obj = T.make_dynamic o in
+      let obj = Typeable.make_dynamic o in
       get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
         match Dynmap.DynMap.find obj obj2id with
           | Some id -> return id
@@ -102,11 +102,11 @@ module Read : sig
   type s = (repr * (Typeable.dynamic option)) IdMap.t
   include Monad.Monad_state_type with type state = s
   val find_by_id : id -> (Repr.t * Typeable.dynamic option) m
-  module Utils (T : Typeable.Typeable) : sig
-    val sum    : (int * id list -> T.a m)  -> id -> T.a m
-    val tuple  : (id list -> T.a m)        -> id -> T.a m
-    val record : (T.a -> id list -> T.a m) -> int -> id -> T.a m
-    val update_map : id -> (T.a -> unit m)
+  module Utils (Typeable : Typeable.Typeable) : sig
+    val sum    : (int * id list -> Typeable.a m)  -> id -> Typeable.a m
+    val tuple  : (id list -> Typeable.a m)        -> id -> Typeable.a m
+    val record : (Typeable.a -> id list -> Typeable.a m) -> int -> id -> Typeable.a m
+    val update_map : id -> (Typeable.a -> unit m)
   end
 end =
 struct
@@ -117,7 +117,7 @@ struct
     get >>= fun state ->
     return (IdMap.find id state)
 
-  module Utils (T : Typeable.Typeable) = struct
+  module Utils (Typeable : Typeable.Typeable) = struct
     let decode_repr_ctor c = match Repr.unpack_ctor c with
       | (Some c, ids) -> (c, ids)
       | _ -> invalid_arg "decode_repr_ctor"
@@ -127,7 +127,7 @@ struct
       | _ -> invalid_arg "decode_repr_ctor"
 
     let update_map id obj =
-      let dynamic = T.make_dynamic obj in
+      let dynamic = Typeable.make_dynamic obj in
       get >>= fun state -> 
         match IdMap.find id state with 
           | (repr, None) ->     
@@ -171,7 +171,7 @@ struct
             f (decode repr) >>= fun obj ->
             update_map id obj >>
             return obj
-        | Some obj -> return (T.throwing_cast obj)
+        | Some obj -> return (Typeable.throwing_cast obj)
 
     let sum f id = whizzy f id decode_repr_ctor
     let tuple f id = whizzy f id decode_repr_noctor
@@ -184,7 +184,7 @@ struct
                 update_map id this >>
                 f this (decode_repr_noctor repr) >>
                 return this
-          | Some obj -> return (T.throwing_cast obj)
+          | Some obj -> return (Typeable.throwing_cast obj)
 
 
   end
@@ -194,8 +194,8 @@ end
 module type Pickle =
 sig
   type a
-  module T : Typeable.Typeable with type a = a
-  module E : Eq.Eq with type a = a
+  module Typeable : Typeable.Typeable with type a = a
+  module Eq : Eq.Eq with type a = a
   val pickle : a -> id Write.m
   val unpickle : id -> a Read.m
   val to_buffer : Buffer.t -> a -> unit
@@ -209,8 +209,8 @@ end
 module Defaults
   (S : sig
      type a
-     module T : Typeable.Typeable with type a = a
-     module E : Eq.Eq with type a = a
+     module Typeable : Typeable.Typeable with type a = a
+     module Eq : Eq.Eq with type a = a
      val pickle : a -> id Write.m
      val unpickle : id -> a Read.m
    end) : Pickle with type a = S.a =
@@ -368,21 +368,21 @@ end
 module Pickle_from_dump
   (P : Dump.Dump)
   (E : Eq.Eq with type a = P.a)
-  (T : Typeable.Typeable with type a = P.a)
+  (Typeable : Typeable.Typeable with type a = P.a)
   : Pickle with type a = P.a
-           and type a = T.a = Defaults
+           and type a = Typeable.a = Defaults
   (struct
-     type a = T.a
-     module T = T
-     module E = E
-     module Comp = Dynmap.Comp(T)(E)
+     type a = Typeable.a
+     module Typeable = Typeable
+     module Eq = E
+     module Comp = Dynmap.Comp(Typeable)(Eq)
      open Write
-     module W = Utils(T)(E)
+     module W = Utils(Typeable)(Eq)
      let pickle obj = 
        W.allocate obj 
          (fun id -> W.store_repr id (Repr.of_string (P.to_string obj)))
      open Read
-     module U = Utils(T)
+     module U = Utils(Typeable)
      let unpickle id = 
        find_by_id id >>= fun (repr, dynopt) ->
          match dynopt with
@@ -390,7 +390,7 @@ module Pickle_from_dump
                let obj : a = P.from_string (Repr.to_string repr) in
                  U.update_map id obj >> 
                    return obj
-           | Some obj -> return (T.throwing_cast obj)
+           | Some obj -> return (Typeable.throwing_cast obj)
    end)
 
 module Pickle_unit : Pickle with type a = unit = Pickle_from_dump(Dump.Dump_unit)(Eq.Eq_unit)(Typeable.Typeable_unit)
@@ -403,13 +403,13 @@ module Pickle_string = Pickle_from_dump(Dump.Dump_string)(Eq.Eq_string)(Typeable
 
 module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option = Defaults(
   struct
-    module T = Typeable.Typeable_option (V0.T)
-    module E = Eq.Eq_option (V0.E)
-    module Comp = Dynmap.Comp (T) (E)
+    module Typeable = Typeable.Typeable_option (V0.Typeable)
+    module Eq = Eq.Eq_option (V0.Eq)
+    module Comp = Dynmap.Comp (Typeable) (Eq)
     open Write
     type a = V0.a option
     let rec pickle =
-      let module W = Utils(T)(E) in
+      let module W = Utils(Typeable)(Eq) in
       function
           None as obj ->
             W.allocate obj
@@ -421,7 +421,7 @@ module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option = Defaults
                    W.store_repr thisid (Repr.make ~constructor:1 [id0]))
     open Read
     let unpickle = 
-      let module W = Utils(T) in
+      let module W = Utils(Typeable) in
       let f = function
         | 0, [] -> return None
         | 1, [id] -> V0.unpickle id >>= fun obj -> return (Some obj)
@@ -435,12 +435,12 @@ module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option = Defaults
 module Pickle_list (V0 : Pickle)
   : Pickle with type a = V0.a list = Defaults (
 struct
-  module T = Typeable.Typeable_list (V0.T)
-  module E = Eq.Eq_list (V0.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_list (V0.Typeable)
+  module Eq = Eq.Eq_list (V0.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = V0.a list
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle = function
       [] as obj ->
         U.allocate obj
@@ -451,7 +451,7 @@ struct
                           pickle v1 >>= fun id1 ->
                             U.store_repr this (Repr.make ~constructor:1 [id0; id1]))
   open Read
-  module W = Utils (T)
+  module W = Utils (Typeable)
   let rec unpickle id = 
     let f = function
       | 0, [] -> return []
@@ -473,16 +473,16 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
 module Pickle_6 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle) (A6 : Pickle) 
   : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a = Defaults (
 struct
-  module T = Typeable.Typeable_6 (A1.T) (A2.T) (A3.T) (A4.T) (A5.T) (A6.T)
-  module E = Eq.Eq_6             (A1.E) (A2.E) (A3.E) (A4.E) (A5.E) (A6.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_6 (A1.Typeable) (A2.Typeable) (A3.Typeable) (A4.Typeable) (A5.Typeable) (A6.Typeable)
+  module Eq = Eq.Eq_6             (A1.Eq) (A2.Eq) (A3.Eq) (A4.Eq) (A5.Eq) (A6.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = A1.a * A2 .a * A3 .a * A4 .a * A5 .a * A6.a
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle (a1, a2, a3, a4, a5, a6) =
     assert false
   open Read
-  module W = Utils(T)
+  module W = Utils(Typeable)
   let rec unpickle = 
     W.tuple
       (function
@@ -502,16 +502,16 @@ end)
 module Pickle_5 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle)
   : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a = Defaults (
 struct
-  module T = Typeable.Typeable_5 (A1.T) (A2.T) (A3.T) (A4.T) (A5.T)
-  module E = Eq.Eq_5             (A1.E) (A2.E) (A3.E) (A4.E) (A5.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_5 (A1.Typeable) (A2.Typeable) (A3.Typeable) (A4.Typeable) (A5.Typeable)
+  module Eq = Eq.Eq_5             (A1.Eq) (A2.Eq) (A3.Eq) (A4.Eq) (A5.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = A1.a * A2 .a * A3 .a * A4 .a * A5 .a
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle (a1, a2, a3, a4, a5) =
     assert false
   open Read
-  module W = Utils(T)
+  module W = Utils(Typeable)
   let rec unpickle =
     W.tuple 
       (function
@@ -530,16 +530,16 @@ end)
 module Pickle_4 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle)
   : Pickle with type a = A1.a * A2.a * A3.a * A4.a = Defaults (
 struct
-  module T = Typeable.Typeable_4 (A1.T) (A2.T) (A3.T) (A4.T)
-  module E = Eq.Eq_4             (A1.E) (A2.E) (A3.E) (A4.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_4 (A1.Typeable) (A2.Typeable) (A3.Typeable) (A4.Typeable)
+  module Eq = Eq.Eq_4             (A1.Eq) (A2.Eq) (A3.Eq) (A4.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = A1.a * A2 .a * A3 .a * A4 .a
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle (a1, a2, a3, a4) =
     assert false
   open Read
-  module W = Utils(T)
+  module W = Utils(Typeable)
   let rec unpickle = 
     W.tuple
       (function
@@ -557,16 +557,16 @@ end)
 module Pickle_3 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle)
   : Pickle with type a = A1.a * A2.a * A3.a = Defaults (
 struct
-  module T = Typeable.Typeable_3 (A1.T) (A2.T) (A3.T)
-  module E = Eq.Eq_3             (A1.E) (A2.E) (A3.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_3 (A1.Typeable) (A2.Typeable) (A3.Typeable)
+  module Eq = Eq.Eq_3             (A1.Eq) (A2.Eq) (A3.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = A1.a * A2 .a * A3 .a
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle (a1, a2, a3) =
     assert false
   open Read
-  module W = Utils(T)
+  module W = Utils(Typeable)
   let rec unpickle = 
     W.tuple 
       (function
@@ -583,16 +583,16 @@ end)
 module Pickle_2 (A1 : Pickle) (A2 : Pickle)
   : Pickle with type a = A1.a * A2.a = Defaults (
 struct
-  module T = Typeable.Typeable_2 (A1.T) (A2.T)
-  module E = Eq.Eq_2             (A1.E) (A2.E)
-  module Comp = Dynmap.Comp (T) (E)
+  module Typeable = Typeable.Typeable_2 (A1.Typeable) (A2.Typeable)
+  module Eq = Eq.Eq_2             (A1.Eq) (A2.Eq)
+  module Comp = Dynmap.Comp (Typeable) (Eq)
   type a = A1.a * A2 .a
   open Write
-  module U = Utils(T)(E)
+  module U = Utils(Typeable)(Eq)
   let rec pickle (a1, a2) =
     assert false
   open Read
-  module W = Utils(T)
+  module W = Utils(Typeable)
   let rec unpickle = 
     W.tuple
       (function
