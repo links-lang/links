@@ -703,9 +703,9 @@ hear_arrow_prefix:
 | LBRACE COLON datatype COLON RBRACE                           { ([("wild", (`Present, UnitType));
                                                                    ("hear", (`Present, $3))],
                                                                   `Closed) }
-| LBRACE COLON datatype rowvar RBRACE                          { ([("wild", (`Present, UnitType));
+| LBRACE COLON datatype COLON rowvar RBRACE                    { ([("wild", (`Present, UnitType));
                                                                    ("hear", (`Present, $3))],
-                                                                  $4) }
+                                                                  $5) }
 | LBRACE COLON datatype COMMA fields RBRACE                    { row_with
                                                                    ("wild", (`Present, UnitType))
                                                                    (row_with
