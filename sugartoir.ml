@@ -114,6 +114,7 @@ sig
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
+  val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
@@ -344,27 +345,6 @@ struct
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
-(*   let rec concat (nil, cons, ss) = *)
-(*     List.fold_right (fun s ss -> apply_pure (cons, [s; ss])) ss nil *)
-
-(*   let xml (nil, cons, name, attrs, children) = *)
-(*     let lift_attrs attrs = *)
-(*       List.fold_right *)
-(*         (fun (name, ss) attrs -> *)
-(*            bind (concat (nil, cons, ss)) *)
-(*              (fun v -> *)
-(*                 M.bind attrs *)
-(*                   (fun bs -> lift ((name, v) :: bs)))) *)
-(*         attrs (lift []) in *)
-(*     let attrs = lift_attrs attrs in *)
-(*     let children = lift_list children in   *)
-(*       M.bind attrs *)
-(*         (fun attrs -> *)
-(*            M.bind children *)
-(*              (fun children -> *)
-(*                 let attrs = StringMap.from_alist attrs in                     *)
-(*                   lift (`XmlNode (name, attrs, children), `Primitive `XmlItem))) *)
-
   let rec concat (nil, append, ss) =
     match ss with 
       | [] -> nil
@@ -478,7 +458,13 @@ struct
                  bind offset
                    (fun offset ->                      
                       lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))           
-   
+  
+  let letvar (x_info, s, body) =
+    bind s
+      (fun e ->
+         M.bind (comp_binding (x_info, e))
+           (fun x -> body x))
+ 
   let comp env (p, s, body) =
     let vt = sem_type s in
       bind s
@@ -796,6 +782,13 @@ struct
         | (b,bpos)::bs ->
             begin
               match b with
+                | `Val (_, (`Variable (x, Some xt, _xpos), _), body, _, _) ->
+                    let x_info = (xt, x, scope) in
+                      I.letvar
+                        (x_info,
+                         ec body,
+                         fun v ->
+                           eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Val (_, p, body, _, _) ->
                     let p, penv = CompilePatterns.desugar_pattern scope p in
                     let env' = env ++ penv in
@@ -911,7 +904,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*          Debug.print (Ir.Show_program.show r);*)
+(*          Debug.print (Ir.Show_program.show r); *)
           r, I.sem_type s
 end
 

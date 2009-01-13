@@ -94,7 +94,7 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
   let valenv = Value.with_closures valenv (closures) in
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
-        | `RecFunction ([(f, (_xs, _body))], locals, _) as v ->
+        | `RecFunction ([(f, (_xs, _body))], locals, _, _) as v ->
           let json_env =
             if List.mem_assoc "_jsonArgs" params then
               match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with

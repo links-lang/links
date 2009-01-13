@@ -77,11 +77,11 @@ SOURCES = $(OPC)                		\
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
-          value.mli value.ml                    \
           errors.mli errors.ml                  \
           parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
+          value.mli value.ml                    \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
           desugarLAttributes.mli desugarLAttributes.ml	\

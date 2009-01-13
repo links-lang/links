@@ -422,7 +422,7 @@ struct
                   (List.map Var.var_of_binder xsb, body) in
               let fv = IntMap.find f closures in
 
-              let func = Value.marshal_value (`RecFunction ([f, lam], Value.with_closures Value.empty_env closures, f)) in
+              let func = Value.marshal_value (`RecFunction ([f, lam], Value.with_closures Value.empty_env closures, f, `Local)) in
               let json_args =
                 let fields =
                   IntSet.fold

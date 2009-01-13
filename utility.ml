@@ -519,7 +519,7 @@ struct
       (explode str)
 
   let implode : char list -> string = 
-    (String.concat "") -<- (List.map (String.make 1))
+    (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
 
   let contains p = explode ->- List.exists p
       

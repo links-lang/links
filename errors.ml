@@ -28,6 +28,9 @@ exception NonfuncAppliedTypeError of (SourceCode.pos * string * Types.datatype *
 					string list * Types.datatype list *
 					Types.datatype option)
 
+exception Runtime_error of string
+
+
 let show_pos : SourceCode.pos -> string = 
   fun ((pos : Lexing.position), _, _) ->
     Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
@@ -74,7 +77,7 @@ let rec format_exception = function
         ", cannot be applied to `"^ String.concat ", " pexpr ^"'of types\n    " ^
         mapstrcat ", " string_of_datatype paramtype ^ (get_mailbox_msg false mb)
       in format_exception(Type_error(pos, msg))
-  | Value.Runtime_error s -> "*** Runtime error: " ^ s
+  | Runtime_error s -> "*** Runtime error: " ^ s
   | ASTSyntaxError (pos, s) -> 
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
@@ -159,7 +162,7 @@ let rec format_exception_html = function
                                      ^ "</ul></li>\n")
              duplicates "") ^ "</ul>"
           
-  | Value.Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
+  | Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
   | ASTSyntaxError (pos, s) -> 
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 

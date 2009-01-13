@@ -4,6 +4,8 @@ type synerrspec = {filename : string; linespec : string;
                    message : string; linetext : string;
                    marker : string}
 
+
+exception Runtime_error of string
 exception UndefinedVariable of string
 
 exception MultiplyDefinedToplevelNames of 

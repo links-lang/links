@@ -973,6 +973,40 @@ struct
         else
           b, o
 
+    method close_cont fvs =
+      function
+        | [] -> o
+        | `Let (x, (tyvars, body))::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder x) fvs in
+            let fvs' = IntSet.union fvs (FreeVars.tail_computation o#get_type_environment IntSet.empty body) in
+              (o#close x fvs)#close_cont fvs' bs
+        | `Fun (f, _, _)::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
+              o#close_cont fvs bs
+        | `Rec defs::bs ->
+            let fvs =
+              List.fold_right
+                (fun (f, _, _) fvs ->
+                 IntSet.remove (Var.var_of_binder f) fvs)
+                defs
+                fvs
+            in
+              o#close_cont fvs bs            
+        | `Alien (f, _language)::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
+              o#close_cont fvs bs            
+        | `Module _::bs ->
+            assert false
+
+    method computation : computation -> (computation * Types.datatype * 'self_type) =
+      fun (bs, tc) ->
+        let bs, o = o#bindings bs in
+        let tc, t, o = o#tail_computation tc in
+
+        let free_vars = FreeVars.tail_computation o#get_type_environment IntSet.empty tc in
+        let o = o#close_cont free_vars (List.rev bs) in
+          (bs, tc), t, o
+
     method binding b =
       match b with
         | `Fun (f, (tyvars, xs, body), location) ->             

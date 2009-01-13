@@ -1,8 +1,6 @@
 (*pp deriving *)
 (* Values and environments *)
 
-exception Runtime_error of string
-
 class type otherfield
  = object method show : string end
 
@@ -61,7 +59,7 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t 
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var)
+| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var * Ir.scope)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of continuation ]
@@ -114,7 +112,9 @@ val string_of_tuple : (string * t) list -> string
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
 
-type unmarshal_envs = Ir.closures * Ir.scope Utility.IntMap.t * Ir.computation Utility.IntMap.t * (Ir.var list * Ir.computation) Utility.IntMap.t
+type unmarshal_envs =
+    env * Ir.scope Utility.IntMap.t *
+      Ir.computation Utility.IntMap.t * (Ir.var list * Ir.computation) Utility.IntMap.t
 
 val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment -> Ir.program -> unmarshal_envs
 

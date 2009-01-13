@@ -961,7 +961,7 @@ struct
                   (fun bound_vars tyvar ->
                      TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
                   bound_vars tyvars
-              in
+              in 
                 "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
           | `Table (r, w, n)   ->
               (* TODO:

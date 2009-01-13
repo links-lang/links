@@ -4,7 +4,7 @@ open List
 open Utility
 
 type database = Value.database
-exception Runtime_error = Value.Runtime_error
+exception Runtime_error = Errors.Runtime_error
 
 class virtual db_args from_str = object
   val strval : string = from_str
@@ -30,7 +30,7 @@ let execute_command  (query:string) (db: database) : Value.t =
     begin
       match result#status with
         | `QueryOk -> `Record []
-        | `QueryError msg -> raise (Value.Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
+        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
     end
 
 let execute_insert (table_name, field_names, vss) db =

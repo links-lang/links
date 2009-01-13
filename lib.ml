@@ -819,9 +819,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             (match string_as_charlist(marshal_continuation k) with
-                  `List _ as value -> value
-                | _ -> assert(false))
+             begin
+               let s = marshal_continuation k in
+                 match string_as_charlist s with
+                   | `List _ as value -> value
+                   | _ -> assert(false)
+             end
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
    datatype "((a) -> b) ~> String",

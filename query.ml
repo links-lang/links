@@ -222,7 +222,7 @@ struct
                StringMap.empty
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
-      | `RecFunction ([(f, (xs, body))], env, f') ->
+      | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction f -> `Primitive f
@@ -238,11 +238,11 @@ struct
   let lookup (val_env, exp_env) var =
     match Value.lookup var val_env, Env.Int.find exp_env var with
       | None, Some v -> v
-      | Some (`RecFunction ([(_, _)], _, f)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
           `Primitive "ConcatMap"
-      | Some (`RecFunction ([(_, _)], _, f)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
           `Primitive "Map"
-      | Some (`RecFunction ([(_, _)], _, f)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortBy" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortBy" = f ->
           `Primitive "SortBy"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))

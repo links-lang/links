@@ -147,7 +147,7 @@ module Eval = struct
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t = function
-    | `RecFunction (recs, locals, n), ps -> 
+    | `RecFunction (recs, locals, n, scope), ps -> 
         begin
           match lookup n recs with
             | Some (args, body) ->
@@ -157,7 +157,7 @@ module Eval = struct
                 let locals =
                   List.fold_right
                     (fun (name, _) env ->
-                       Value.bind name (`RecFunction (recs, env, name), `Local) env)
+                       Value.bind name (`RecFunction (recs, env, name, scope), scope) env)
                     recs locals in
 
                 (* extend env with locals *)
@@ -219,10 +219,11 @@ module Eval = struct
               computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
 (*               Debug.print ("f: "^string_of_int f); *)
-              computation (Value.bind
-                             f
-                             (`RecFunction ([f, (List.map fst args, body)], env, f),
-                              Var.scope_of_binder fb) env) cont (bs, tailcomp)
+              let scope = Var.scope_of_binder fb in
+                computation (Value.bind
+                               f
+                               (`RecFunction ([f, (List.map fst args, body)], env, f, scope),
+                                scope) env) cont (bs, tailcomp)
           | `Rec defs ->
               (* partition the defs into client defs and non-client defs *)
               let client_defs, defs =
@@ -242,10 +243,11 @@ module Eval = struct
               let env = 
                 List.fold_right (fun ((f, _) as fb, _, _) env ->
 (*                                    Debug.print ("rec f: "^string_of_int f); *)
-                                   Value.bind f
-                                     (`RecFunction (bindings, env, f),
-                                      Var.scope_of_binder fb)
-                                     env) defs env
+                                   let scope = Var.scope_of_binder fb in
+                                     Value.bind f
+                                       (`RecFunction (bindings, env, f, scope),
+                                        scope)
+                                       env) defs env
               in
                 computation env cont (bs, tailcomp)
           | `Alien _ 
