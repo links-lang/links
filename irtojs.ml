@@ -347,14 +347,15 @@ end =
 struct
   let builtin_ops =
     StringMap.from_alist
-      [ "+",  "+" ;
-        "+.", "+" ;
-        "-",  "-" ;
-        "-.", "-" ;
-        "*",  "*" ;
-        "*.", "*" ;
-        "/",  "/" ;
-        "/.", "/" ]
+      [ "+",   "+" ;
+        "+.",  "+" ;
+        "-",   "-" ;
+        "-.",  "-" ;
+        "*",   "*" ;
+        "*.",  "*" ;
+        "/",   "/" ;
+        "/.",  "/" ;
+        "mod", "%" ]
 
   let is x = StringMap.mem x builtin_ops
   let js_name op = StringMap.find op builtin_ops
