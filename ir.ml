@@ -150,13 +150,6 @@ sig
   end
 end
 
-let doc_concat sep l =
-  match l with 
-      [] -> empty
-    | (h::t) -> h ^^ List.fold_left (fun a d -> sep ^^ d ^^ a) empty t
-
-let doc_join f = (doc_concat break) -<- List.map f
-
 let var_name v n = if n = "" then "__"^(string_of_int v) else n
 
 class stringIR venv = 
@@ -250,13 +243,16 @@ object (o : 'self_type)
                     nest 2 (text "then" ^| o#computation t) ^|
                         nest 2 (text "else" ^| o#computation f))
                       
-      | `Special v -> text "SPECIAL"
+      | `Special s ->
+          match s with
+              `CallCC v -> group (parens (text "call/cc" ^| o#value v))
+            | _ -> text "SPECIAL"
           
   method bindings : binding list -> 'self_type * doc = fun bs ->
     let (o, d) = List.fold_left
       (fun (o, accum_d) b -> let (o, d) = o#binding b in o, accum_d ^| d)
       (o, empty) bs in
-      (o, group(d))
+      (o, d)
 
   method computation : computation -> doc = fun (bs, tc) ->
     match bs with

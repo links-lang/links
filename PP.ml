@@ -88,6 +88,14 @@ let punctuate punc =
   | xs -> let (xs, x) = unsnoc xs in
       (List.map (fun x -> x ^^ punc) xs) @ [x]
 
+let doc_concat sep l =
+  match l with 
+      [] -> empty
+    | (h::t) -> h ^^ List.fold_right (fun d a -> sep ^^ d ^^ a) t empty
+
+let doc_join f l = doc_concat break (List.map f l)
+
+
 let vsep xs = List.fold_right (^|) xs DocNil
 
 let hsep xs = List.fold_right (^+^) xs DocNil

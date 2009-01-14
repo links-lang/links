@@ -237,6 +237,19 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
     print_endline (Ir.string_of_ir (invert_env nenv) program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
+let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+  let printer (valenv, nenv, typingenv) (program, t) =
+    let code = Irtoml.ml_of_ir 
+      (not (Settings.get_value nocps)) 
+      (not (Settings.get_value nobox)) 
+      (invert_env nenv) 
+      program 
+    in
+      (*print_endline (Ir.Show_program.show program ^ "\n");*)
+      print_endline code
+  in
+    handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
+
 let run_file prelude envs filename =
   Settings.set_value interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
@@ -247,12 +260,14 @@ let run_file prelude envs filename =
   in
     if Settings.get_value web_mode then
       Webif.serve_request envs prelude filename
-    else
-      if Settings.get_value pretty_print_ir then
-        print_ir parse_and_desugar envs filename
-      else
-        ignore (evaluate parse_and_desugar envs filename)
-
+    else 
+       if Settings.get_value pretty_print_ir then
+         print_ir parse_and_desugar envs filename
+       else if Settings.get_value compile then
+         ignore (compile_ir parse_and_desugar envs filename)
+       else
+         ignore (evaluate parse_and_desugar envs filename) 
+          
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
@@ -266,6 +281,8 @@ let evaluate_string_in envs v =
     (Settings.set_value interacting false;
      if Settings.get_value pretty_print_ir then
        print_ir parse_and_desugar envs v
+     else if Settings.get_value compile then
+       ignore (compile_ir parse_and_desugar envs v)
      else
        ignore (evaluate parse_and_desugar envs v))
 
@@ -307,6 +324,9 @@ let options : opt list =
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('p',     "print-ir",            set pretty_print_ir true,         None);
+    ('c',     "compile-ir",          set compile true,                 None);
+    (noshort, "nocps",               set nocps true,                   None);
+    (noshort, "nobox",               set nobox true,                   None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
