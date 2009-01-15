@@ -261,26 +261,30 @@ let inline_script file = (* makes debugging with firebug easier *)
 module Arithmetic :
 sig
   val is : string -> bool
-  val js_name : string -> string
   val gen : (code * string * code) -> code
 end =
 struct
   let builtin_ops =
     StringMap.from_alist
-      [ "+",  "+"  ;
-        "+.", "+"  ;
-        "-",  "-"  ;
-        "-.", "-"  ;
-        "*",  "*"  ;
-        "*.", "*"  ;
-        "/",  "/"  ;
-        "/.", "/"  ]
+      [ "+",   "+"  ;
+        "+.",  "+"  ;
+        "-",   "-"  ;
+        "-.",  "-"  ;
+        "*",   "*"  ;
+        "*.",  "*"  ;
+        "/",   ""   ;
+        "^",   ""   ;
+        "^.",  ""  ;
+        "/.",  "/"  ;
+        "mod", "%"  ]
 
   let is x = StringMap.mem x builtin_ops
   let js_name op = StringMap.find op builtin_ops
   let gen (l, op, r) =
     match op with
       | "/" -> Call (Var "Math.floor", [Binop (l, js_name op, r)])
+      | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
+      | "^." -> Call (Var "Math.pow", [l; r])
       | _ -> Binop(l, js_name op, r)
 end
 
