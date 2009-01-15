@@ -78,7 +78,7 @@ let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
   fun scope (p, pos) ->
     let pp = desugar_pattern scope in
-    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row ()) in
+    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row `Any) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) =
       function

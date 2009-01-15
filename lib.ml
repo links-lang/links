@@ -385,15 +385,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(() {:b}~> d) ~> d",
   IMPURE);
 
-  "_MAILBOX_",
-  (`Int (num_of_int 0),
-   (let u = fresh_type_variable () in
-      (* Deliberately non-quantified type.  Mailboxes are
-         non-polymorphic, so this is a so-called "weak type
-         variable". *)
-      u),
-   PURE);
-
   (** Lists and collections **)
   "Nil",
   (`List [],
@@ -1228,7 +1219,7 @@ let value_env =
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
-let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row ()}
+let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row `Any}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

@@ -95,15 +95,14 @@ let rec directives
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
               StringSet.iter
                 (fun id -> 
-                      if id <> "_MAILBOX_" then
-                        (try begin
-                           let t' = Env.String.lookup tenv id in
-                           let ttype = Types.string_of_datatype t' in
-                           let fresh_envs = Types.make_fresh_envs t' in
-                           let t' = Instantiate.datatype fresh_envs t' in 
-                             Unify.datatypes (t,t');
-                             Printf.fprintf stderr " %s : %s\n" id ttype
-                         end with _ -> ()))
+                   try begin
+                     let t' = Env.String.lookup tenv id in
+                     let ttype = Types.string_of_datatype t' in
+                     let fresh_envs = Types.make_fresh_envs t' in
+                     let t' = Instantiate.datatype fresh_envs t' in 
+                       Unify.datatypes (t,t');
+                       Printf.fprintf stderr " %s : %s\n" id ttype
+                   end with _ -> ())
                 (Env.String.domain tenv)
               ; envs),
      "search for functions that match the given type");

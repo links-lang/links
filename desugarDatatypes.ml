@@ -93,7 +93,7 @@ struct
                        datatype var_env t)
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Flexible var) in
+            let point = Unionfind.fresh (`Flexible (var, `Any)) in
             let tenv = StringMap.add name point tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv; penv=penv} t)) in
               `MetaTypeVar point
@@ -134,7 +134,7 @@ struct
         | `Open rv -> (StringMap.empty, lookup_row rv)
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Flexible var) in
+            let point = Unionfind.fresh (`Flexible (var, `Any)) in
             let renv = StringMap.add name point renv in
             let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv; penv=penv} alias_env r)) in
               (StringMap.empty, point) in
@@ -162,16 +162,16 @@ struct
            let var = Types.fresh_raw_variable () in
              match v with
                | `TypeVar x ->
-                   let t = Unionfind.fresh (`Flexible var) in
+                   let t = Unionfind.fresh (`Flexible (var, `Any)) in
                      `TypeVar (var, t)::vars, addt x t envs
                | `RigidTypeVar x ->
-                   let t = Unionfind.fresh (`Rigid var) in
+                   let t = Unionfind.fresh (`Rigid (var, `Any)) in
                      `TypeVar (var, t)::vars, addt x t envs
                | `RowVar x ->
-                   let r = Unionfind.fresh (`Flexible var) in
+                   let r = Unionfind.fresh (`Flexible (var, `Any)) in
                      `RowVar (var, r)::vars, addr x r envs
                | `RigidRowVar x ->
-                   let r = Unionfind.fresh (`Rigid var) in
+                   let r = Unionfind.fresh (`Rigid (var, `Any)) in
                      `RowVar (var, r)::vars , addr x r envs
                | `PresenceVar x ->
                    let f = Unionfind.fresh (`Flexible var) in
@@ -199,7 +199,7 @@ struct
             
           method datatype = function
             | FunctionType (f, ([], `Open x), t) -> 
-                let var = `Flexible (Types.fresh_raw_variable()) in
+                let var = `Flexible (Types.fresh_raw_variable(), `Any) in
                 let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in
                 let o = self#list (fun o -> o#datatype) f in
                 let o = o#datatype t in
@@ -216,7 +216,7 @@ struct
           ListLabels.fold_right ~init:([], StringMap.empty) args
             ~f:(fun (q, _) (args, map) ->
                   let tv = Types.fresh_raw_variable () in
-                  let point = Unionfind.fresh (`Rigid tv) in
+                  let point = Unionfind.fresh (`Rigid (tv, `Any)) in
                   let qv = `TypeVar (tv, point) in
                     ((q, Some qv) :: args, 
                      StringMap.add (name_of_quantifier q) point map)) in

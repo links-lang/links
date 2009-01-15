@@ -39,7 +39,7 @@ object (o : 'self_type)
             let (_o, _f, ft) = o#phrase f in
 (*               Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
 (*               Debug.print ("ft: "^Types.string_of_datatype ft); *)
-            let t = Types.fresh_type_variable () in
+            let t = Types.fresh_type_variable `Any in
             let () =
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in

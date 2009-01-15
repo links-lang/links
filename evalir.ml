@@ -215,7 +215,7 @@ module Eval = struct
 (*               Debug.print ("var: "^string_of_int var); *)
               tail_computation env (((Var.scope_of_binder b, var, env, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-              Debug.print ("client f: "^string_of_int f);
+(*               Debug.print ("client f: "^string_of_int f); *)
               computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
 (*               Debug.print ("f: "^string_of_int f); *)

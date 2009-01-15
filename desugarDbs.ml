@@ -138,7 +138,7 @@ object (o : 'self_type)
            from well-typed insert expressions. An alternative approach
            would be to maintain some kind of insert expression in the
            IR. *)
-        let value_type = `Record (Types.make_empty_open_row ()) in
+        let value_type = `Record (Types.make_empty_open_row `Any) in
         let o, rows, _ = o#phrase rows in
         let o, (e : Sugartypes.phrasenode) =
           match returning with

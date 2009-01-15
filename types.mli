@@ -24,9 +24,12 @@ module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionf
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
     deriving (Typeable, Show, Pickle)
 
+type subkind = [ `Any | `Base ]
+      deriving (Eq, Show, Pickle, Typeable, Shelve)
+
 type 't meta_type_var_basis =
-    [ `Flexible of int
-    | `Rigid of int
+    [ `Flexible of (int * subkind)
+    | `Rigid of (int * subkind)
     | `Recursive of (int * 't)
     | `Body of 't ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
@@ -87,6 +90,16 @@ type type_variable =
        [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var])
       deriving (Eq, Typeable, Show, Pickle, Shelve)
 
+(* base kind stuff *)
+val is_base_type : datatype -> bool
+val is_base_row : row -> bool
+
+val is_baseable_type : datatype -> bool
+val is_baseable_row : row -> bool
+
+val basify_type : datatype -> unit
+val basify_row : row -> unit
+
 val type_var_number : quantifier -> int
 
 type tycon_spec = [`Alias of quantifier list * datatype | `Abstract of Abstype.t]
@@ -130,17 +143,17 @@ val fresh_raw_variable : unit -> int
 val bump_variable_counter : int -> unit
 
 (** type variable construction *)
-val make_type_variable : int -> datatype
-val make_rigid_type_variable : int -> datatype
-val make_row_variable : int -> row_var
-val make_rigid_row_variable : int -> row_var
-  
-(** fresh type variable generation *)
-val fresh_type_variable : unit -> datatype
-val fresh_rigid_type_variable : unit -> datatype
+val make_type_variable : int -> subkind -> datatype
+val make_rigid_type_variable : int -> subkind -> datatype
+val make_row_variable : int -> subkind -> row_var
+val make_rigid_row_variable : int -> subkind -> row_var
 
-val fresh_row_variable : unit -> row_var
-val fresh_rigid_row_variable : unit -> row_var
+(** fresh type variable generation *)
+val fresh_type_variable : subkind -> datatype
+val fresh_rigid_type_variable : subkind -> datatype
+
+val fresh_row_variable : subkind -> row_var
+val fresh_rigid_row_variable : subkind -> row_var
 
 val fresh_presence_variable : unit -> presence_flag
 val fresh_rigid_presence_variable : unit -> presence_flag
@@ -158,11 +171,11 @@ val fresh_flexible_presence_quantifier : unit -> quantifier * presence_flag
 (** {0 rows} *)
 (** empty row constructors *)
 val make_empty_closed_row : unit -> row
-val make_empty_open_row : unit -> row
+val make_empty_open_row : subkind -> row
 
 (** singleton row constructors *)
 val make_singleton_closed_row : (string * field_spec) -> row
-val make_singleton_open_row : (string * field_spec) -> row
+val make_singleton_open_row : (string * field_spec) -> subkind -> row
 
 (** row predicates *)
 val is_closed_row : row -> bool

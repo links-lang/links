@@ -20,8 +20,8 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `Primitive _ -> []
         | `MetaTypeVar point ->
             (match Unionfind.find point with
-               | `Flexible var
-               | `Rigid var when TypeVarSet.mem var bound_vars -> []
+               | `Flexible (var, _)
+               | `Rigid (var, _) when TypeVarSet.mem var bound_vars -> []
                | `Flexible _ when kind=`All -> [`Type (`MetaTypeVar point)]
                | `Flexible _ -> []
                | `Rigid _ -> [`Type (`MetaTypeVar point)]
@@ -51,8 +51,8 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
   fun kind bound_vars row_var ->
     match Unionfind.find row_var with
       | `Closed -> []
-      | `Flexible var
-      | `Rigid var when TypeVarSet.mem var bound_vars -> []
+      | `Flexible (var, _)
+      | `Rigid (var, _) when TypeVarSet.mem var bound_vars -> []
       | `Flexible _ when kind=`All -> [`Row (StringMap.empty, row_var)]
       | `Flexible _ -> []
       | `Rigid _ -> [`Row (StringMap.empty, row_var)]
@@ -115,8 +115,8 @@ let type_variables_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Flexible var -> (var, `Flexible, `Type point)
-               | `Rigid var -> (var, `Rigid, `Type point)
+               | `Flexible (var, _) -> (var, `Flexible, `Type point)
+               | `Rigid (var, _) -> (var, `Rigid, `Type point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -124,8 +124,8 @@ let type_variables_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Flexible var -> (var, `Flexible, `Row row_var)
-               | `Rigid var -> (var, `Rigid, `Row row_var)
+               | `Flexible (var, _) -> (var, `Flexible, `Row row_var)
+               | `Rigid (var, _) -> (var, `Rigid, `Row row_var)
                | _ -> assert false
            end
        | `Presence (`Var point) ->
@@ -143,8 +143,8 @@ let quantifiers_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Flexible var
-               | `Rigid var -> `TypeVar (var, point)
+               | `Flexible (var, _)
+               | `Rigid (var, _) -> `TypeVar (var, point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -152,8 +152,8 @@ let quantifiers_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Flexible var
-               | `Rigid var -> `RowVar (var, row_var)
+               | `Flexible (var, _)
+               | `Rigid (var, _) -> `RowVar (var, row_var)
                | _ -> assert false
            end
        | `Presence (`Var point) ->
@@ -175,14 +175,14 @@ let rigidify_quantifier =
     | `TypeVar (_, point) ->
         begin
           match Unionfind.find point with
-            | `Flexible var -> Unionfind.change point (`Rigid var)
+            | `Flexible (var, subkind) -> Unionfind.change point (`Rigid (var, subkind))
             | `Rigid _ -> ()
             | _ -> assert false
         end
     | `RowVar (_, point) ->
         begin
           match Unionfind.find point with
-            | `Flexible var -> Unionfind.change point (`Rigid var)
+            | `Flexible (var, subkind) -> Unionfind.change point (`Rigid (var, subkind))
             | `Rigid _ -> ()
             | _ -> assert false
         end
