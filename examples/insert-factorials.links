@@ -14,14 +14,14 @@ fun factorial(i) {
 
 fun insertFactorials(n) {
 #  atomic {
-    update (var r <-- factorials)
+    update (r <-- factorials)
       where (0 <= r.i && r.i <= n)
       set (i = r.i, f = factorial(r.i));
-    delete (var r <-- factorials)
+    delete (r <-- factorials)
       where (r.i < 0 || n < r.i);
-    var indexes = map ((.1), query {for (var r <-- factorials) [(1=r.i)]});
+    var indexes = map ((.1), query {for (r <-- factorials) [(1=r.i)]});
     insert factorials values (i,f)
-      for (var i <- [0..n] `diff` indexes)
+      for (i <- [0..n] `diff` indexes)
         [(i=i, f=factorial(i))];
 #  }
 }

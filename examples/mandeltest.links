@@ -2,11 +2,11 @@
 
 typename Context = Int;
 
-alien javascript jsmandelbrot : (Float, Float) -> Int;
+alien javascript jsmandelbrot : (Float, Float) ~> Int;
 
-alien javascript getCanvasById : (String) -> Context;
-alien javascript canvasSetFillStyle : (Context, String) -> ();
-alien javascript canvasFillRect : (Context, Int, Int, Int, Int) -> ();
+alien javascript getCanvasById : (String) ~> Context;
+alien javascript canvasSetFillStyle : (Context, String) ~> ();
+alien javascript canvasFillRect : (Context, Int, Int, Int, Int) ~> ();
 
 alien javascript fullyNativeMandelbrot : () -> ();
 
@@ -139,9 +139,9 @@ fun recursive(compute, c) {
 
 fun iterative(compute, c) client {
   ignore(
-  for (var y <- range(-39, 39)) {
+  for (y <- range(-39, 39)) {
     ignore(
-    for (var x <- range(-39,39)) {
+    for (x <- range(-39,39)) {
       (if (compute(intToFloat(x)/.40.0, intToFloat(y)/.40.0) == 0) (c ! Point (x+39,y+39))
        else ()); []
     }); []
@@ -149,7 +149,7 @@ fun iterative(compute, c) client {
 }
 
 fun lookupName(bindings, s) {
-  var fs = (for (var (name, f) <- bindings)
+  var fs = (for ((name, f) <- bindings)
         if(name == s) {[f]} else {[]});
   hd(fs)
 }
@@ -199,13 +199,13 @@ fun dodrawing(drawingName, traversalName) client {
 # seem to work at all
 
 #fun radioButtons(name, bindings) {
-#  for (var (x, f) <- bindings)
+#  for ((x, f) <- bindings)
 #    <input type="radio" l:name="{name}" value="{x}" />
 #}
 
 #fun selection(name, bindings) {
 #  <select l:name="{name}">
-#    {for (var (x, f) <- bindings)
+#    {for ((x, f) <- bindings)
 #       <option>{stringToXml(x)}</option>}
 #  </select>
 #}
@@ -222,13 +222,13 @@ page
   <form l:onsubmit="{ignore(spawn{dodrawing(drawingName, traversalName)})}">
   Traversal: 
   <select l:name="traversalName">
-    {for (var (name, traversal) <- traversals())
+    {for ((name, traversal) <- traversals())
         <option>{stringToXml(name)}</option>}
   </select>
   Drawing:
   <select l:name="drawingName">
     {debug(intToString(length(drawings())));
-     for (var (name, drawing) <- drawings())
+     for ((name, drawing) <- drawings())
        <option>{stringToXml(name)}</option>}
   </select>
   <button type="submit">Draw</button>

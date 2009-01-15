@@ -10,7 +10,7 @@ fun showList() server {
       <button type="submit">Add item</button>
     </form>
     <table>
-     {for (var item <- query {for (var item <-- items) [item]})
+     {for (item <- query {for (item <-- items) [item]})
         <tr><td>{stringToXml(item.name)}</td>
             <td><form l:action="{remove(item.name)}" method="POST">
                  <button type="submit">Done</button>
@@ -28,7 +28,7 @@ fun add(name) server {
 }
 
 fun remove(name) server {
- delete (var r <-- items) where (r.name == name);
+ delete (r <-- items) where (r.name == name);
  showList()
 }
 

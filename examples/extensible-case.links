@@ -26,7 +26,7 @@ fun add_C(f) (e) {
   }
 }
 
-fun default(f:(([|rho|]) -> String)) {
+fun defaultCase(f:(([|rho|]) -> String)) {
   f
 }
 

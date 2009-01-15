@@ -15,21 +15,21 @@ var mathfuns = [ ("floor", floor),
                  ("sqrt", sqrt)];
 
 fun msg(div, txt) {
-   appendChildren(<span>{stringToXml(txt)}</span><br/>, div);
+   appendChildren(<span>{stringToXml(txt)}</span><br />, div);
 }
 
 fun stringToFloat(s) { intToFloat(stringToInt(s)) }
 
 fun go(c::rest) client {
   var div = getNodeById("stuff");
-  for (var (name, f) <- charfuns) {
+  for ((name, f) <- charfuns) {
     if (f(c)) msg(div, name ++ " " ++ [c] ++ " : true")
     else msg(div, name ++ " " ++ [c] ++ " : false");
     []
   };
   msg(div, "ord " ++ [c] ++ " " ++ intToString(ord(c)));
   msg(div, "chr.ord " ++ [c] ++ " " ++ [(chr(ord(c)))]);
-  for (var (name, f) <- mathfuns) {
+  for ((name, f) <- mathfuns) {
       msg(div, name ++ " " ++ c::rest ++ " " ++ floatToString(f(stringToFloat(c::rest))));
       []
   }

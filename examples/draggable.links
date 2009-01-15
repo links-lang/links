@@ -40,7 +40,7 @@ fun draggableList(id, items)
       l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
       l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}"
    >
-    {for (var item <- items)
+    {for (item <- items)
          format(item)}
   </ul>
 

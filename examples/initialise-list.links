@@ -70,14 +70,14 @@ fun select(xs, i) {
 fun insertItems(itemsTable, itemsList) {
   var n = length(itemsList);
   
-  update (var itemEntry <-- itemsTable)
+  update (itemEntry <-- itemsTable)
     where (0 <= itemEntry.i && itemEntry.i < n)
     set (i=itemEntry.i, name=select(itemsList, itemEntry.i));
   delete (var itemEntry <-- itemsTable)
     where (itemEntry.i < 0 || n < itemEntry.i);
-  var indexes = for (var itemEntry <-- itemsTable) [itemEntry.i];
+  var indexes = for (itemEntry <-- itemsTable) [itemEntry.i];
   insert itemsTable values (i, name)
-    for (var i <- upto(0,n-1) `diff` indexes)
+    for (i <- upto(0,n-1) `diff` indexes)
       [(i=i, name=select(itemsList, i))];
 }
 

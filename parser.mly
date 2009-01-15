@@ -573,10 +573,10 @@ generator:
 | table_generator                                              { `Table $1 }
 
 list_generator:
-| VAR pattern LARROW exp                                       { ($2, $4) }
+| pattern LARROW exp                                           { ($1, $3) }
 
 table_generator:
-| VAR pattern LLARROW exp                                      { ($2, $4) }
+| pattern LLARROW exp                                          { ($1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None }

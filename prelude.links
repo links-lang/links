@@ -70,7 +70,7 @@ op xs !! n { select(xs, n) }
 
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
- for (var x <- xs) {
+ for (x <- xs) {
   if (x == x1) [x2]
   else if (x == x2) [x1]
   else [x]
@@ -125,7 +125,7 @@ fun replicate(n, item) {
 }
 
 fun filter(p, l) {
-  for (var x <- l) where (p(x)) [x]
+  for (x <- l) where (p(x)) [x]
 }
 
 fun flip(f) {
@@ -421,8 +421,8 @@ fun sortBy (f, l) {
   switch (l) {
     case [] -> []
     case x::xs -> {
-      var lt = for (var y <- xs) where (f(y) < f(x))  [y];
-      var ge = for (var y <- xs) where (f(y) >= f(x)) [y];
+      var lt = for (y <- xs) where (f(y) < f(x))  [y];
+      var ge = for (y <- xs) where (f(y) >= f(x)) [y];
       sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
     }
   }
@@ -808,10 +808,10 @@ sig inputRadiogroup : ([a], a, ([(Xml, a)]) ?-> Xml) ?->
                       Formlet (a) 
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
-  sequence (for (var x <- items) [nextName]) >>= fun (keys) {
+  sequence (for (x <- items) [nextName]) >>= fun (keys) {
     var keyedItems = zip(keys,items);
     fun itemXml(selected) {
-      for (var (key, data) <- keyedItems)
+      for ((key, data) <- keyedItems)
         [(addAttributes(<input type="radio" name="{name}" value="{key}" />,
                         if (data == selected)
                           [("checked","on")] else []),
@@ -879,7 +879,7 @@ fun choiceDefault (items, selected) {
   # generate a fresh name for the field (menu) as a whole
   nextName >>= fun (fieldName) {
   # generate a list of fresh names, one for each menu item.
-  sequence (for (var x <- items) [nextName]) >>= fun (optKeys) {
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
      var keyedItems = zip(optKeys, items);
      return ((
         # pre-validation, use the original 'selected' parameter
@@ -904,7 +904,7 @@ fun choices (items) {
   # generate a fresh name for the field (menu) as a whole
   nextName >>= fun (fieldName) {
   # generate a list of fresh names, one for each menu item.
-  sequence (for (var x <- items) [nextName]) >>= fun (optKeys) {
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
     var keyedItems = zip(optKeys, items);
     return ((
        # pre-validation, use the 'selected' flags in the 'items' list
@@ -915,7 +915,7 @@ fun choices (items) {
          var selectedKeys = assocAll(fieldName,env);
          # now re-mark the items as selected or not according to
          #     whether they appear in the query env.
-         var keyedItems = for (var((key, (data, text, sel))) <- keyedItems)
+         var keyedItems = for (((key, (data, text, sel))) <- keyedItems)
                             [(key, (data, text, key `elem` selectedKeys))];
          var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
          (<select name="{fieldName}" multiple="multiple">{xml}</select>,

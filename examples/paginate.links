@@ -9,7 +9,7 @@ fun find(n,c) {
 
 # take(results_per_page,
 #  drop(results_per_page * (n-1),
-#   for (var r <-- wordlist)
+#   for (r <-- wordlist)
 #    where (r.word ~ /^{c}.*/)
 #    orderby (r.word)
 #    [r]
@@ -20,7 +20,7 @@ fun find(n,c) {
  var offset = results_per_page * (n-1);
 
  query [limit,offset] {
-   for (var r <-- wordlist)
+   for (r <-- wordlist)
     where (r.word ~ /^{c}.*/)
     orderby (r.word)
      [r]
@@ -37,7 +37,7 @@ fun showPage(n, c) {
    <body>
     <h1>{title}</h1>
     <dl>
-     {for (var result <- find(n, c))
+     {for (result <- find(n, c))
      <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
     </dl>
     {if (n <> 1) <a l:href="{showPage(n-1,c)}">previous</a> else <span/>}
@@ -52,7 +52,7 @@ page
   <body>
    <h1>Dictionary browser</h1>
     <ul>
-     {for (var c <- "abcdefghijklmnopqrstuvwxyz")
+     {for (c <- "abcdefghijklmnopqrstuvwxyz")
      <li><a l:href="{showPage(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
     </ul>
   </body>

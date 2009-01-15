@@ -8,13 +8,13 @@ fun newDef(def) server {
 }
 
 fun updateDef(def) server {
-  update (var d <-- defsTable)
+  update (d <-- defsTable)
    where (d.id == def.id)
    set (word=def.word, meaning=def.meaning)
 }
 
 fun deleteDef(id) server {
-  delete (var def <-- defsTable)
+  delete (def <-- defsTable)
    where (def.id == id)
 }
 
@@ -22,7 +22,7 @@ fun completions(s) server {
   if (s == "") []
   else {
     query [10] {
-      for (var def <-- defsTable)
+      for (def <-- defsTable)
        where (def.word ~ /^{s}.*/)
        orderby ((1=def.word))
         [def]
@@ -71,7 +71,7 @@ fun format(defs) {
   <div class="section">
    <div class="tip">Click a definition to edit it.</div>
    <table>
-     { for (var def <- defs)
+     { for (def <- defs)
          <tr class="entry">
            <td class="label-col entry-word">{stringToXml(def.word)}</td>
            <td class="def" id="def:{def.id}">
