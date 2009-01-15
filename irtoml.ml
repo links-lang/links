@@ -4,6 +4,8 @@ open Utility
 open Ir
 open PP
 
+exception Unsupported of string;;
+
 type code =
   | Bool of bool
   | Int of num
@@ -111,13 +113,58 @@ struct
     | _ -> assert false
 end
 
+(* This is mostly stolen from irtojs.ml *)
+module Symbols =
+struct
+  let words =
+    CharMap.from_alist
+      [ '!', "bang";
+        '$', "dollar";
+        '%', "percent";
+        '&', "and";
+        '*', "star";
+        '+', "plus";
+        '/', "slash";
+        '<', "lessthan";
+        '=', "equals";
+        '>', "greaterthan";
+        '?', "huh";
+        '@', "monkey";
+        '\\', "backslash";
+        '^', "caret";
+        '-', "hyphen";
+        '.', "fullstop";
+        '|', "pipe"; ]
+
+  let has_symbols name =
+    List.exists (not -<- Utility.Char.isWord) (explode name)
+
+  let wordify name = 
+    if has_symbols name then 
+      ("s_" ^
+         mapstrcat "_" 
+         (fun ch ->
+            if (Utility.Char.isWord ch) then
+              String.make 1 ch
+            else if CharMap.mem ch words then
+             CharMap.find ch words
+            else
+              failwith("Internal error: unknown symbol character: "^String.make 1 ch))
+         (Utility.explode name))
+        (* TBD: it would be better if this split to chunks maximally matching
+           (\w+)|(\W)
+           then we would not split apart words in partly-symbolic idents. *)
+    else
+      name
+end
+
 let ident_substs = StringMap.from_alist
   [ "+", "int_add";
     "-", "int_minus";
     "*", "int_mult";
     "==", "equals";
     "Nil", "nil";
-    "Cons", "cons"]
+    "Cons", "cons" ]
 
 let subst_ident n = 
   if StringMap.mem n ident_substs then
@@ -125,13 +172,17 @@ let subst_ident n =
   else
     n
 
-let var_name v n = 
-  if n = "" then 
-    "v_"^(string_of_int v) 
-  else if StringMap.mem n ident_substs then
-    StringMap.find n ident_substs
-  else
-    "_"^n
+let make_var_name v n = 
+  let name = 
+    if n = "" then 
+      "v_"^(string_of_int v)
+    else 
+      "_"^n
+  in 
+    (Symbols.wordify -<- subst_ident) name
+
+let get_var_name n =
+  (Symbols.wordify -<- subst_ident) n
 
 let bind_continuation k body =
   match k with 
@@ -146,7 +197,7 @@ struct
 
     method add_bindings : binder list -> 'self_type = fun bs ->
       let env = List.fold_left 
-        (fun m (v, (_, n, _)) -> IntMap.add v (var_name v n) m) env bs in
+        (fun m (v, (_, n, _)) -> IntMap.add v (make_var_name v n) m) env bs in
         {< env=env >}
           
     method constant : constant -> code = fun c ->
@@ -161,7 +212,7 @@ struct
       match v with 
         | `Constant c -> o#constant c
 
-        | `Variable v -> Var (subst_ident (IntMap.find v env))
+        | `Variable v -> Var (get_var_name (IntMap.find v env))
 
         | `Extend (r, v) ->
             let record = B.box_record (
@@ -193,16 +244,17 @@ struct
 
         | `XmlNode (name, attrs, children) ->
             B.box_xml (
-              Triple (
-                NativeString name,
-                Lst (StringMap.fold
-                       (fun n v a -> Pair(NativeString n, o#value v)::a) attrs []),                   
-                Lst (List.map o#value children)))
+              Call (Var "build_xml", 
+                    [Triple (
+                       NativeString name,
+                       Lst (StringMap.fold
+                              (fun n v a -> Pair(NativeString n, o#value v)::a) attrs []),                   
+                       Lst (List.map o#value children))]))
                       
         | `ApplyPure (v, vl) -> 
             B.box_call (Call (o#value v, List.map o#value vl))
 
-        | `Coerce _ -> Empty
+        | `Coerce (v, _) -> o#value v
 
     method bindings : binding list -> ('self_type -> code) -> code = fun bs f ->
       match bs with
@@ -210,7 +262,7 @@ struct
         | (b::bs) -> o#binding b (fun o' -> o'#bindings bs f)
 
     method binder : binder -> string = fun (v, (_, name, _)) ->
-      var_name v name
+      make_var_name v name
 
     method virtual binding : binding -> ('self_type -> code) -> code
   end
@@ -245,7 +297,15 @@ struct
             B.box_if (
               If (o#value v, o#computation t, o#computation f))
               
-        | `Special s -> Empty
+        | `Special s ->
+            match s with
+                `CallCC v -> 
+                  raise (Unsupported "CallCC not supported in direct style.")
+              | `Database _
+              | `Table _
+              | `Query _ -> raise (Unsupported "Database operations not supported.")
+              | _ -> assert false
+
 
     method computation : computation -> code = fun (bs, tc) ->
       o#bindings bs (fun o' -> o'#tail_computation tc)
@@ -271,9 +331,9 @@ struct
                        o''#computation comp)) funs,
                 rest_f o'))
             
-        | `Alien _ -> Empty
+        | `Alien _ -> assert false
             
-        | `Module _ -> Empty            
+        | `Module _ -> assert false      
   end
 
   class cps env =
@@ -305,13 +365,12 @@ struct
 
 
         | `If (v, t, f) ->
-            B.box_if (
-              bind_continuation k
-                (fun k -> If (o#value v, o#computation t k, o#computation f k)))
+            bind_continuation k
+              (fun k -> B.box_if (If (o#value v, o#computation t k, o#computation f k)))
               
         | `Special s ->
             match s with
-              `CallCC v ->
+               `CallCC v ->
                 bind_continuation k
                   (fun k ->
                      (* This wrapper dumps the unnecessary continuation argument
@@ -319,7 +378,10 @@ struct
                      Let ("call_k", 
                           B.box_fun (Fun (["_"; "arg"], B.box_call (Call (k, [Var "arg"])))),
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
-              | _ -> Empty
+              | `Database _
+              | `Table _
+              | `Query _ -> raise (Unsupported "Database operations not supported.")
+              | _ -> assert false
 
     method computation : computation -> code -> code = fun (bs, tc) k ->
       o#bindings bs (fun o' -> o'#tail_computation tc k)
@@ -351,6 +413,12 @@ struct
         | `Module _ -> Empty            
   end
 end
+
+(* 
+   Found the bottleneck :P 
+   TODO: Find a tractable indentation scheme for CPS!
+*)
+let nest : int -> doc -> doc = fun i x -> x
 
 let args_doc args =
   if args = [] then
@@ -441,11 +509,11 @@ let rec ml_of_code c =
             text "]")
 
     | Call (f, args) -> 
-        let args = if args = [] then text "()" else doc_join ml_of_code args in
-          parens (group (
-                    nest 2 ((ml_of_code f) ^| args)))
+          let args = if args = [] then text "()" else doc_join ml_of_code args in
+            parens (group (
+                      nest 2 ((ml_of_code f) ^| args)))
 
-    | Empty -> empty
+    | Empty -> assert false
 
 let preamble = "open Num\nopen Mllib;;\n\n"
 let postamble = "\n\nlet _ = run entry"

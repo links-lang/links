@@ -2,7 +2,10 @@ open Num
 
 module StringMap = Map.Make (String);;
 
-type value = 
+type xml =
+  | Node of string * (string * value) list * value list
+  | Text of string
+and value = 
   | Bool of bool
   | Char of char
   | Int of Num.num
@@ -12,13 +15,13 @@ type value =
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
-  | Xml of string * (string * value) list * value list
+  | Xml of xml
 
 (* This is quickly cobbled together so I can play with things. *)
 let rec string_of_value = function
   | Bool x -> string_of_bool x
   | Int x -> Num.string_of_num x
-  | Char x -> "'" ^ Char.escaped x ^ "'"
+  | Char x -> String.make 1 x
   | NativeString x -> x
   | Float x -> string_of_float x
   | Function x -> "Fun"
@@ -27,7 +30,10 @@ let rec string_of_value = function
   | Record r -> "(" ^ String.concat ", "
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
-  | Xml (name, attrs, children) ->
+  | Xml x -> string_of_xml x
+and      
+    string_of_xml = function
+      | Node (name, attrs, children) ->
       let attrs = List.fold_left (
         fun s attr ->
           match attr with
@@ -37,6 +43,7 @@ let rec string_of_value = function
         "<" ^ name ^ attrs ^ ">" ^
           String.concat "" (List.map string_of_value children) ^
           "</" ^ name ^ ">"
+      | Text s -> s
 
 let box_bool x = Bool x
 let unbox_bool = function
@@ -83,14 +90,15 @@ let unbox_list = function
   | Lst l -> l
   | _ -> assert false
 
-let box_xml (n, a, c) = Xml (n, a, c)
+let box_xml x = Xml x
 let unbox_xml = function 
-  | Xml (n, a, c) -> (n, a, c)
+  | Xml x -> x
   | _ -> assert false
 
-let project m k = StringMap.find (unbox_string k) (unbox_record m);;
-
+(* Internal functions used by compiler *)
 let start = box_func (fun x -> x);;
+let project m k = StringMap.find (unbox_string k) (unbox_record m);;
+let build_xml (n, a, c) = Node (n, a, c)
 
 let nil = box_list ([])
 
@@ -115,7 +123,7 @@ let cons = box_func (
     fun l -> box_list (x::(unbox_list l))))
 
 let stringToXml = box_func (
-  fun s -> s)
+  fun s -> box_xml (Text (unbox_string s)))
 
 let reifyK = box_func (
   fun k -> box_func (
@@ -128,14 +136,25 @@ let reifyK = box_func (
 let exit = box_func (
   fun k -> box_func (
     fun v -> v
-))
+  ))
 
-let run entry_f =
-  let result =
-    if Array.length Sys.argv > 1 then
-      let k = (Marshal.from_string (Netencoding.Base64.decode Sys.argv.(1)) 0 : value) in
-      let fake_k = (box_func (fun _ -> assert false)) in
-        (unbox_func ((unbox_func k) fake_k))  (box_int (num_of_string "42"))
-    else
-      entry_f () in
+let getenv : string -> string option =
+  fun name ->
+    try Some (Sys.getenv name)
+    with Not_found -> None
+
+let handle_request entry_f =
+  NativeString ("Content-type: text/html\n\n" ^ (string_of_value (entry_f ())))
+    
+let resume_with_cont cont arg =
+  let cont = (Marshal.from_string (Netencoding.Base64.decode Sys.argv.(1)) 0 : value) in
+  let k = (box_func (fun _ -> assert false)) in
+    (unbox_func ((unbox_func cont) k)) arg
+      
+let run entry_f =  
+  let result = 
+    match getenv "REQUEST_METHOD" with
+      | Some _ -> handle_request entry_f
+      | None -> entry_f ()
+  in
     print_endline (string_of_value result)

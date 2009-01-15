@@ -239,13 +239,13 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
 
 let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let printer (valenv, nenv, typingenv) (program, t) =
+    (*print_endline (Ir.Show_program.show program ^ "\n");*)
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox)) 
       (invert_env nenv) 
       program 
     in
-      (*print_endline (Ir.Show_program.show program ^ "\n");*)
       print_endline code
   in
     handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
