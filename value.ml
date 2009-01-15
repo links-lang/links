@@ -226,6 +226,13 @@ let rec compress_continuation cont : compressed_continuation =
   List.map
     (fun (_scope, var, env, _body) ->
        let valenv, closures = env in
+(*         Debug.print ("continuation frame: " ^string_of_int var);*)
+(*        let () = *)
+(*          IntMap.fold *)
+(*            (fun name _ () -> *)
+(*              Debug.print ("name (1): "^string_of_int name); ()) *)
+(*            valenv *)
+(*            () in *)
        let locals =
          IntSet.fold
            (fun name locals ->
@@ -233,7 +240,7 @@ let rec compress_continuation cont : compressed_continuation =
                 | None
                 | Some (_, `Global) -> locals
                 | Some (v, `Local) ->
-(*                    Debug.print ("continuation name: "^string_of_int name);*)
+(*                    Debug.print ("name (2): "^string_of_int name);*)
                     IntMap.add name (v, `Local) locals)
            (IntMap.find var closures)
            IntMap.empty

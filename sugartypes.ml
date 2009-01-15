@@ -44,7 +44,6 @@ let string_of_binop =
     | `Or -> "||"
     | `Cons -> "::"    
     | `Name name -> name
-    | `App -> "app"
 
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos

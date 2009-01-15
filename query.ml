@@ -609,6 +609,55 @@ struct
     else
       label
 
+
+  module Arithmetic :
+  sig
+    val is : string -> bool
+    val gen : (string * string * string) -> string
+  end =
+  struct
+    let builtin_ops =
+      StringMap.from_alist
+        [ "+",   "+"  ;
+          "+.",  "+"  ;
+          "-",   "-"  ;
+          "-.",  "-"  ;
+          "*",   "*"  ;
+          "*.",  "*"  ;
+          "/",   ""   ;
+          "^",   ""   ;
+          "^.",  ""   ;
+          "/.",  "/"  ;
+          "mod", "%"  ]
+
+    let is x = StringMap.mem x builtin_ops
+    let sql_name op = StringMap.find op builtin_ops
+    let gen (l, op, r) =
+      match op with
+        | "/" -> "floor("^l^"/"^r^")"
+        | "^" -> "floor(pow("^l^","^r^"))"
+        | "^." -> "pow("^l^","^r^")"
+        | _ -> "("^l^sql_name op^r^")"
+  end
+
+  module SqlFuns :
+  sig
+    val is : string -> bool
+    val name : string -> string
+  end =
+  struct
+    let funs =
+      StringMap.from_alist
+        [ "toUpper",  "upper";
+          "toLower",  "lower";
+          "ord",      "ord";
+          "chr",      "char";
+          "random",   "rand" ]
+
+    let is f = StringMap.mem f funs
+    let name f = StringMap.find f funs
+  end
+
   let rec string_of_query q =
     let sq = string_of_query in
     let sb = string_of_base in
@@ -644,17 +693,22 @@ struct
         | `Constant c -> Constant.string_of_constant c
         | `Project (var, label) ->
             string_of_table_var var ^ "." ^ label
-        | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToInt" | "floatToString" | "stringToFloat"), [v]) -> sb v
+        | `Apply (op, [l; r]) when Arithmetic.is op -> Arithmetic.gen (sb l, op, sb r)
+        | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat"), [v]) -> sb v
+        | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
         | `Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
+        | `Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
         | `Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
         | `Apply ("||", [v; w]) -> "(" ^ sb v ^ ")" ^ " or " ^ "(" ^ sb w ^ ")"
-        | `Apply ("+", [v; w]) -> "(" ^ sb v ^ ")" ^ " + " ^ "(" ^ sb w ^ ")"
-        | `Apply ("<", [v; w]) -> "(" ^ sb v ^ ")" ^ " < " ^ "(" ^ sb w ^ ")"
-        | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
         | `Apply ("==", [v; w]) -> "(" ^ sb v ^ ")" ^ " = " ^ "(" ^ sb w ^ ")"
         | `Apply ("<>", [v; w]) -> "(" ^ sb v ^ ")" ^ " <> " ^ "(" ^ sb w ^ ")"
+        | `Apply ("<", [v; w]) -> "(" ^ sb v ^ ")" ^ " < " ^ "(" ^ sb w ^ ")"
+        | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
         | `Apply ("<=", [v; w]) -> "(" ^ sb v ^ ")" ^ " <= " ^ "(" ^ sb w ^ ")"
+        | `Apply (">=", [v; w]) -> "(" ^ sb v ^ ")" ^ " >= " ^ "(" ^ sb w ^ ")"
         | `Apply ("tilde", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
+        | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
+        | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
 
   let string_of_query range q =
     let range =

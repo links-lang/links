@@ -928,6 +928,10 @@ struct
     let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
       o#get_free_vars
 
+  let binding tyenv bound_vars bs =
+    let _, o = (new visitor tyenv bound_vars)#binding bs in
+      o#get_free_vars
+
   let bindings tyenv bound_vars bs =
     let _, o = (new visitor tyenv bound_vars)#bindings bs in
       o#get_free_vars
@@ -945,6 +949,11 @@ type closures = intset intmap
     deriving (Show, Pickle)
 
 (* Compute the closures in an IR expression *)
+(*
+
+  This computes the free variables for every function
+  and every continuation in an IR expression.
+*)
 module ClosureTable =
 struct
   type t = closures
@@ -969,25 +978,37 @@ struct
         else
           b, o
 
+    (* Incrementally compute the free variables for every possible
+       continuation arising from a computation.
+
+       The first argument is the free variables in the tail. The
+       second argument is the list of bindings in reverse order.
+
+       The list of bindings is in reverse order in order to make
+       things both easier to express and more efficient.
+    *)
     method close_cont fvs =
       function
         | [] -> o
         | `Let (x, (tyvars, body))::bs ->
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
+              (*               Debug.print ("cont "^string_of_int (Var.var_of_binder x)^": "^ *)
+(*                              String.concat "," (List.map string_of_int (IntSet.elements fvs))); *)
             let fvs' = IntSet.union fvs (FreeVars.tail_computation o#get_type_environment IntSet.empty body) in
               (o#close x fvs)#close_cont fvs' bs
-        | `Fun (f, _, _)::bs ->
+        | (`Fun (f, _, _) as b)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
-              o#close_cont fvs bs
-        | `Rec defs::bs ->
+            let fvs' = IntSet.union fvs (FreeVars.binding o#get_type_environment IntSet.empty b) in
+              o#close_cont fvs' bs
+        | (`Rec defs as b)::bs ->
             let fvs =
               List.fold_right
                 (fun (f, _, _) fvs ->
-                 IntSet.remove (Var.var_of_binder f) fvs)
+                   IntSet.remove (Var.var_of_binder f) fvs)
                 defs
-                fvs
-            in
-              o#close_cont fvs bs            
+                fvs in
+            let fvs' = IntSet.union fvs (FreeVars.binding o#get_type_environment IntSet.empty b) in
+              o#close_cont fvs' bs
         | `Alien (f, _language)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
               o#close_cont fvs bs            

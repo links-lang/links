@@ -139,7 +139,7 @@ let string_to_xml : Value.t -> Value.t = function
 
 let char_test_op fn pure = 
   (`PFun (fun [c] -> (`Bool (fn (unbox_char c)))),
-   datatype "(Char) -> Bool",
+   datatype "(Char) ~> Bool",
   pure)
 
 let char_conversion fn pure = 
@@ -294,13 +294,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "intToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_int ~conv:(string_of_num) ~box:box_string)),
-   datatype "(Int) -> Xml",
+   datatype "(Int) ~> Xml",
   PURE);
   
   "floatToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float) ~box:box_string)),
-   datatype "(Float) -> Xml",
+   datatype "(Float) ~> Xml",
   PURE);
   
   "exit",
@@ -347,7 +347,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "haveMail",
   (`PFun (fun _ -> 
             failwith "The haveMail function is not implemented on the server yet"),
-   datatype "() -> Bool",
+   datatype "() ~> Bool",
    IMPURE);
 
   "recv",
@@ -406,12 +406,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(a, [a]) -> [a]",
    PURE);
 
-  "Singleton",
-  (p1 (fun x ->
-         box_list [x]),
-   datatype "(a) -> [a]",
-   PURE);
-
   "Concat",
   (p2 (fun xs ys ->
          box_list (unbox_list xs @ unbox_list ys)),
@@ -440,7 +434,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
-   datatype "([a]) -> Int",
+   datatype "([a]) ~> Int",
   PURE);
 
   "take",
@@ -480,11 +474,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   datatype "(Xml) -> Xml",
+   datatype "(Xml) ~> Xml",
   IMPURE);
 
   "objectType",
-  (`Client, datatype "(a) -> String",
+  (`Client, datatype "(a) ~> String",
   IMPURE);
 
   "attribute",
@@ -501,34 +495,34 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)
                | _ -> none),
-   datatype "(Xml,String) -> [|Some:String | None:()|]",
+   datatype "(Xml,String) ~> [|Some:String | None:()|]",
   PURE);
   
   "alertDialog",
-  (`Client, datatype "(String) -> ()",
+  (`Client, datatype "(String) ~> ()",
    IMPURE);
 
   "debug", 
   (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
                       `Record []),
-   datatype "(String) -> ()",
+   datatype "(String) ~> ()",
   IMPURE);
 
   "debugObj",
-  (`Client, datatype "(a) -> ()",
+  (`Client, datatype "(a) ~> ()",
   IMPURE);
   
   "dump",
-  (`Client, datatype "(a) -> ()",
+  (`Client, datatype "(a) ~> ()",
   IMPURE);
   
   "textContent",
-  (`Client, datatype "(DomNode) -> String",
+  (`Client, datatype "(DomNode) ~> String",
   IMPURE);
 
   "print",
   (p1 (fun msg -> print_endline (unbox_string msg); flush stdout; `Record []),
-   datatype "(String) -> ()",
+   datatype "(String) ~> ()",
   IMPURE);
 
   "javascript",

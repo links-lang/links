@@ -160,8 +160,12 @@ fun get_wine_price(wine_id) {
 }
 
 fun cust_id_next() {  # WARNING: race condition here
-  var ids = for (var u <-- usersTable)
-              [u.cust_id];
+  var ids =
+    map((.1),
+      query {
+        for (var u <-- usersTable)
+          [(1=u.cust_id)]
+      });
   maximum(0, ids) + 1
 }
 
