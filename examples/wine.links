@@ -113,7 +113,7 @@ fun assocd(x, l, d) {
 
 # This function demonstrates that we can now support abstraction
 # over queries.
-sig firstField : (TableHandle (r, w, n), (r) {}-> Bool, (r) {}-> a) e~> a
+#sig firstField : (TableHandle (r, w, n), (r) {}-> Bool, (r) {}-> a) e~> a
 fun firstField(t, p, body) {
   var matches =
     query {

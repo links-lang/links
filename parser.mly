@@ -8,21 +8,21 @@ open Sugartypes
       
 let type_variable_counter = ref 0
   
-let fresh_type_variable : unit -> datatype =
-  function () -> 
-    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
+let fresh_type_variable : subkind -> datatype =
+  function subkind -> 
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
   
-let fresh_rigid_type_variable : unit -> datatype =
-  function () -> 
-    incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter))
+let fresh_rigid_type_variable : subkind -> datatype =
+  function subkind -> 
+    incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
 
-let fresh_row_variable : unit -> row_var =
-  function () -> 
-    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter))
+let fresh_row_variable : subkind -> row_var =
+  function subkind -> 
+    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind)
 
-let fresh_rigid_row_variable : unit -> row_var =
-  function () -> 
-    incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter))
+let fresh_rigid_row_variable : subkind -> row_var =
+  function subkind -> 
+    incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter), subkind)
 
 let fresh_presence_variable : unit -> presence_flag =
   function () -> 
@@ -55,6 +55,31 @@ let annotate (signame, datatype) : _ -> binding =
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+
+
+let attach_subkind pos (t, k) =
+   match k with
+     | "Any" -> t
+     | "Base" ->
+         begin
+           match t with
+             | TypeVar (x, _) -> TypeVar (x, `Base)
+             | RigidTypeVar (x, _) -> RigidTypeVar (x, `Base)
+             | _ -> assert false
+         end
+     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
+
+let attach_row_subkind pos (r, k) =
+   match k with
+     | "Any" -> r
+     | "Base" ->
+         begin
+           match r with
+             | `Open (x, _) -> `Open (x, `Base)
+             | `OpenRigid (x, _) -> `OpenRigid (x, `Base)
+             | _ -> assert false
+         end
+     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -247,8 +272,8 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 varlist:
-| VARIABLE                                                     { [`TypeVar $1, None] }
-| VARIABLE COMMA varlist                                       { (`TypeVar $1, None) :: $3 }
+| VARIABLE                                                     { [`TypeVar ($1, `Any), None] }
+| VARIABLE COMMA varlist                                       { (`TypeVar ($1, `Any), None) :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -685,25 +710,19 @@ datatype:
 | straight_arrow                                               { $1 }
 | squiggly_arrow                                               { $1 }
 
-rowvar:
-| VARIABLE                                                     { `OpenRigid $1 }
-| QUESTION VARIABLE                                            { `Open $2 }  
-| QUESTION                                                     { fresh_row_variable () }
-| UNDERSCORE                                                   { fresh_rigid_row_variable () }
-
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
 | LBRACE fields RBRACE                                         { $2 }
-| rowvar                                                       { ([], $1) }
+| nonrec_row_var                                               { ([], $1) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
                                                                    ("hear", (`Present, $3))],
-                                                                  fresh_rigid_row_variable ()) }
+                                                                  fresh_rigid_row_variable `Any) }
 | LBRACE COLON datatype COLON RBRACE                           { ([("wild", (`Present, UnitType));
                                                                    ("hear", (`Present, $3))],
                                                                   `Closed) }
-| LBRACE COLON datatype COLON rowvar RBRACE                    { ([("wild", (`Present, UnitType));
+| LBRACE COLON datatype COLON nonrec_row_var RBRACE            { ([("wild", (`Present, UnitType));
                                                                    ("hear", (`Present, $3))],
                                                                   $5) }
 | LBRACE COLON datatype COMMA fields RBRACE                    { row_with
@@ -715,7 +734,7 @@ hear_arrow_prefix:
 straight_arrow:
 | parenthesized_datatypes arrow_prefix RARROW datatype         { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               ([], fresh_rigid_row_variable ()),
+                                                                               ([], fresh_rigid_row_variable `Any),
                                                                                $3) }
 
 squiggly_arrow:
@@ -728,7 +747,7 @@ squiggly_arrow:
   SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
                                                                                ([("wild", (`Present, UnitType))],
-                                                                                 fresh_rigid_row_variable ()),
+                                                                                 fresh_rigid_row_variable `Any),
                                                                                 $3) }
 
 mu_datatype:
@@ -751,10 +770,8 @@ primary_datatype:
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
-| VARIABLE                                                     { RigidTypeVar $1 }
-| QUESTIONVAR                                                  { TypeVar $1 }
-| UNDERSCORE                                                   { fresh_rigid_type_variable () }
-| QUESTION                                                     { fresh_type_variable () }
+| type_var                                                     { $1 }
+| kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int
@@ -767,6 +784,15 @@ primary_datatype:
                                                                }
 
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
+
+type_var:
+| VARIABLE                                                     { RigidTypeVar ($1, `Any) }
+| QUESTIONVAR                                                  { TypeVar ($1, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable `Any }
+| QUESTION                                                     { fresh_type_variable `Any }
+
+kinded_type_var:
+| type_var COLONCOLON CONSTRUCTOR                              { attach_subkind (pos()) ($1, $3) }
 
 type_arg_list:
 | datatype                                                     { [`Type $1] }
@@ -782,13 +808,15 @@ datatypes:
 
 fields:
 | field                                                        { [$1], `Closed }
-| field VBAR row_variable                                      { [$1], $3 }
-| VBAR row_variable                                            { [], $2 }
+| field VBAR row_var                                           { [$1], $3 }
+| VBAR row_var                                                 { [], $2 }
+| VBAR kinded_row_var                                          { [], $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 vfields:
 | vfield                                                       { [$1], `Closed }
-| row_variable                                                 { [], $1 }
+| row_var                                                      { [], $1 }
+| kinded_row_var                                               { [], $1 }
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
@@ -818,12 +846,22 @@ presence_flag:
 | LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
 | LBRACE QUESTION RBRACE                                       { fresh_presence_variable () }
 
-row_variable:
-| VARIABLE                                                     { `OpenRigid $1 }
-| UNDERSCORE                                                   { fresh_rigid_row_variable () }
-| QUESTIONVAR                                                  { `Open $1 }
-| QUESTION                                                     { fresh_row_variable () }
+nonrec_row_var:
+| VARIABLE                                                     { `OpenRigid ($1, `Any) }
+| QUESTIONVAR                                                  { `Open ($1, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable `Any }
+| QUESTION                                                     { fresh_row_variable `Any }
+
+row_var:
+| nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
+
+kinded_nonrecrow_var:
+| nonrec_row_var COLONCOLON CONSTRUCTOR                        { attach_row_subkind (pos()) ($1, $3) }
+
+kinded_row_var:
+| row_var COLONCOLON CONSTRUCTOR                               { attach_row_subkind (pos()) ($1, $3) }
+
 
 /*
  * Regular expression grammar

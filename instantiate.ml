@@ -172,8 +172,8 @@ let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
           List.fold_left
             (fun env ->
                function
-                 | `TypeVar (var, _) -> typ (var, `Any) env
-                 | `RowVar (var, _) -> row (var, `Any) env
+                 | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
+                 | `RowVar ((var, subkind), _) -> row (var, subkind) env
                  | `PresenceVar (var, _) -> presence var env)
             (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
 
@@ -208,8 +208,8 @@ let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
 
         let tenv, renv, penv, tys = List.fold_left
           (fun env -> function
-             | `TypeVar (var, _) -> typ (var, `Any) env
-             | `RowVar (var, _) -> row (var, `Any) env
+             | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
+             | `RowVar ((var, subkind), _) -> row (var, subkind) env
              | `PresenceVar (var, _) -> presence var env
           ) (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
 
@@ -260,9 +260,9 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
     List.fold_right2
       (fun var t (tenv, renv, penv) ->
          match (var, t) with
-           | (`TypeVar (var, _), `Type t) ->
+           | (`TypeVar ((var, _subkind), _), `Type t) ->
                (IntMap.add var t tenv, renv, penv)
-           | (`RowVar (var, _), `Row row) ->
+           | (`RowVar ((var, _subkind), _), `Row row) ->
                (* 
                   QUESTION:
                   
@@ -296,11 +296,11 @@ let freshen_quantifiers t =
           List.split
             (List.map
                (function
-                  | `TypeVar _ ->
-                      let q, t = Types.fresh_type_quantifier () in
+                  | `TypeVar ((_, subkind), _) ->
+                      let q, t = Types.fresh_type_quantifier subkind in
                         q, `Type t
-                  | `RowVar _ ->
-                      let q, r = Types.fresh_row_quantifier () in
+                  | `RowVar ((_, subkind), _) ->
+                      let q, r = Types.fresh_row_quantifier subkind in
                         q, `Row r
                   | `PresenceVar _ ->
                       let q, f = Types.fresh_presence_quantifier () in
@@ -351,9 +351,9 @@ let alias name tyargs env =
           List.fold_right2
             (fun q arg (tenv, renv, penv) ->
                match q, arg with
-                 | `TypeVar (x, _), `Type t ->
+                 | `TypeVar ((x, _), _), `Type t ->
                      IntMap.add x t tenv, renv, penv
-                 | `RowVar (x, _), `Row row ->
+                 | `RowVar ((x, _), _), `Row row ->
                      tenv, IntMap.add x row renv, penv
                  | `PresenceVar (x, _), `Presence f  ->
                      tenv, renv, IntMap.add x f penv)

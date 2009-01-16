@@ -26,6 +26,7 @@ class map :
     method binder          : binder -> binder
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
+    method subkind         : subkind -> subkind
     method row_var         : row_var -> row_var
     method row             : row -> row
     method replace_rhs     : replace_rhs -> replace_rhs
@@ -88,6 +89,7 @@ class fold :
     method binder          : binder -> 'self
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
+    method subkind         : subkind -> 'self
     method row_var         : row_var -> 'self
     method row             : row -> 'self
     method replace_rhs     : replace_rhs -> 'self
@@ -175,6 +177,7 @@ object ('self)
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
+  method subkind         : subkind -> 'self * subkind
   method type_arg        : type_arg -> 'self * type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op

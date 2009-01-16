@@ -98,8 +98,8 @@ and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
-    [ `TypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var
+    [ `TypeVar of (int * subkind) * meta_type_var
+    | `RowVar of (int * subkind) * meta_row_var
     | `PresenceVar of int * meta_presence_var]
 and type_arg = 
     [ `Type of typ | `Row of row | `Presence of presence_flag ]
@@ -227,8 +227,8 @@ type type_variable = int * M.pliability * M.point
 
 let var_of_quantifier =
   function
-    | `TypeVar (var, _) -> var
-    | `RowVar (var, _) -> var
+    | `TypeVar ((var, _), _) -> var
+    | `RowVar ((var, _), _) -> var
     | `PresenceVar (var, _) -> var
 
 type datatype = typ
@@ -343,30 +343,30 @@ let _ =
   let fresh_presence_variable = make_presence_variable -<- fresh_raw_variable
   let fresh_rigid_presence_variable = make_rigid_presence_variable -<- fresh_raw_variable
 
-  let fresh_type_quantifier () =
+  let fresh_type_quantifier subkind =
     let var = fresh_raw_variable () in
-    let point = Unionfind.fresh (`Rigid (var, `Any)) in
-      `TypeVar (var, point), `MetaTypeVar point
+    let point = Unionfind.fresh (`Rigid (var, subkind)) in
+      `TypeVar ((var, subkind), point), `MetaTypeVar point
         
-  let fresh_row_quantifier () =
+  let fresh_row_quantifier subkind =
     let var = fresh_raw_variable () in
-    let point = make_rigid_row_variable var `Any in
-      `RowVar (var, point), (FieldEnv.empty, point)
+    let point = make_rigid_row_variable var subkind in
+      `RowVar ((var, subkind), point), (FieldEnv.empty, point)
 
   let fresh_presence_quantifier () =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Rigid var) in
       `PresenceVar (var, point), `Var point
         
-  let fresh_flexible_type_quantifier () =
+  let fresh_flexible_type_quantifier subkind =
     let var = fresh_raw_variable () in
-    let point = Unionfind.fresh (`Flexible (var, `Any)) in
-      `TypeVar (var, point), `MetaTypeVar point
+    let point = Unionfind.fresh (`Flexible (var, subkind)) in
+      `TypeVar ((var, subkind), point), `MetaTypeVar point
         
-  let fresh_flexible_row_quantifier () =
+  let fresh_flexible_row_quantifier subkind =
     let var = fresh_raw_variable () in
-    let point = make_row_variable var `Any in
-      `RowVar (var, point), (FieldEnv.empty, point)
+    let point = make_row_variable var subkind in
+      `RowVar ((var, subkind), point), (FieldEnv.empty, point)
 
   let fresh_flexible_presence_quantifier () =
     let var = fresh_raw_variable () in
@@ -740,8 +740,8 @@ struct
 
   let varspec_of_tyvar =
     function
-      | `TypeVar (var, _) -> var, (`Rigid, `Type, `Bound)
-      | `RowVar (var, _) -> var, (`Rigid, `Row, `Bound)
+      | `TypeVar ((var, _subkind), _) -> var, (`Rigid, `Type, `Bound)
+      | `RowVar ((var, _subkind), _) -> var, (`Rigid, `Row, `Bound)
       | `PresenceVar (var, _) -> var, (`Rigid, `Presence, `Bound)
 
   (* find all free and bound type variables *)
@@ -922,13 +922,20 @@ struct
   let quantifier : (policy * names) -> quantifier -> string =
     fun (policy, vars) ->
       function
-        | `TypeVar (var, _)
-        | `RowVar (var, _)
+        | `TypeVar ((var, _), _)
+        | `RowVar ((var, _), _)
         | `PresenceVar (var, _) -> Vars.find var vars
+
+  let subkind : (policy * names) -> subkind -> string =
+    fun (_policy, _vars) ->
+      function
+        | `Any -> ""
+        | `Base -> "::Base"
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
       let sd = datatype bound_vars p in
+      let sk = subkind p in
 
 (*       let string_of_mailbox_arrow mailbox_type = *)
 (*         begin *)
@@ -957,19 +964,19 @@ struct
           | `MetaTypeVar point ->
               begin             
                 match Unionfind.find point with
-                  | `Flexible (var, _) when policy.flavours ->
+                  | `Flexible (var, k) when policy.flavours ->
                       let name, (_, _, count) = Vars.find_spec var vars in
-                        if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                          "?"
-                        else
-                          "?" ^ name
-                  | `Rigid (var, _)
-                  | `Flexible (var, _) ->
+                        (if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                           "?"
+                         else
+                           "?" ^ name) ^ sk k
+                  | `Rigid (var, k)
+                  | `Flexible (var, k) ->
                       let name, (_, _, count) = Vars.find_spec var vars in
-                        if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                          "_"
-                        else
-                          name
+                        (if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
+                           "_"
+                         else
+                           name) ^ sk k
                   | `Recursive (var, body) ->
                       (*                    Debug.print ("rec var: " ^ IntMap.find var vars);*)
                       if TypeVarSet.mem var bound_vars then
@@ -1155,15 +1162,17 @@ struct
   and row_var sep bound_vars ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | `Closed -> None
-      | `Flexible (var, _) when policy.flavours ->
+      | `Flexible (var, k) when policy.flavours ->
           let name, (_, _, count) = Vars.find_spec var vars in
-            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then Some "?"
-            else Some ("?" ^ name)
-      | `Rigid (var, _)
-      | `Flexible (var, _) ->
+            Some             
+              ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "?"
+                else ("?" ^ name)) ^ subkind p k)
+      | `Rigid (var, k)
+      | `Flexible (var, k) ->
           let name, (_, _, count) = Vars.find_spec var vars in
-            if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then Some "_"
-            else Some (name)
+            Some
+              ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "_"
+                else name) ^ subkind p k)
       | `Recursive (var, r) ->
           if TypeVarSet.mem var bound_vars then
             Some (Vars.find var vars)
@@ -1196,7 +1205,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
           begin
             match Unionfind.find point with
               | `Flexible (var, _) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-              | `Flexible (var, _) -> TypeVarMap.singleton var (`TypeVar (var, point))
+              | `Flexible (var, subkind) -> TypeVarMap.singleton var (`TypeVar ((var, subkind), point))
               | `Rigid _ -> TypeVarMap.empty
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var bound_vars then
@@ -1245,7 +1254,7 @@ and row_var_flexible_type_vars bound_vars row_var =
   match Unionfind.find row_var with
     | `Closed -> TypeVarMap.empty
     | `Flexible (var, _) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-    | `Flexible (var, _) -> TypeVarMap.singleton var (`RowVar (var, row_var))
+    | `Flexible (var, subkind) -> TypeVarMap.singleton var (`RowVar ((var, subkind), row_var))
     | `Rigid _ -> TypeVarMap.empty
     | `Recursive (var, row) ->
         if TypeVarSet.mem var bound_vars then
@@ -1378,8 +1387,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
             (List.fold_right
                (fun q boundvars ->
                   match q with
-                    | `TypeVar (var, _)
-                    | `RowVar (var, _)
+                    | `TypeVar ((var, _), _)
+                    | `RowVar ((var, _), _)
                     | `PresenceVar (var, _) ->
                         S.add var boundvars)
                qs

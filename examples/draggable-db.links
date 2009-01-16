@@ -66,7 +66,7 @@ fun load() server {
 }
 
 fun save(itemsList) server {
-  update (var itemEntry <-- itemsTable())
+  update (itemEntry <-- itemsTable())
     set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 

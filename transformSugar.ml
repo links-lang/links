@@ -8,9 +8,9 @@ let type_section env =
     | `Minus -> TyEnv.lookup env "-"
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
-        let ab, a = Types.fresh_type_quantifier () in
-        let rhob, (fields, rho) = Types.fresh_row_quantifier () in
-        let eb, e = Types.fresh_row_quantifier () in
+        let ab, a = Types.fresh_type_quantifier `Any in
+        let rhob, (fields, rho) = Types.fresh_row_quantifier `Any in
+        let eb, e = Types.fresh_row_quantifier `Any in
 
         let r = `Record (StringMap.add label (`Present, a) fields, rho) in
           `ForAll ([ab; rhob; eb],
@@ -48,8 +48,8 @@ let type_binary_op env tycon_env =
   | `Name "<"
   | `Name "<="
   | `Name "<>" ->
-      let ab, a = Types.fresh_type_quantifier () in
-      let eb, e = Types.fresh_row_quantifier () in
+      let ab, a = Types.fresh_type_quantifier `Any in
+      let eb, e = Types.fresh_row_quantifier `Any in
         `ForAll ([ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "send"

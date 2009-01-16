@@ -33,7 +33,7 @@ fun completions(pre) server {
     query [10] {
       for (w <-- wordlist)
        where (w.word ~ /^{pre}.*/)
-       orderby ((1=w.word))
+       orderby (w.word)
         [w]
     }
   }

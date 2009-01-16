@@ -61,12 +61,21 @@ class map =
       | `FloatMinus -> `FloatMinus
       | `Project _x -> let _x = o#name _x in `Project _x
       | `Name _x -> let _x = o#name _x in `Name _x
+
+    method subkind : subkind -> subkind =
+      function
+      | `Any -> `Any
+      | `Base -> `Base
       
     method row_var : row_var -> row_var =
       function
       | `Closed -> `Closed
-      | `Open _x -> let _x = o#name _x in `Open _x
-      | `OpenRigid _x -> let _x = o#name _x in `OpenRigid _x
+      | `Open (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in `Open ((_x, _x_i1))
+      | `OpenRigid (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in `OpenRigid ((_x, _x_i1))
       | `Recursive ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
@@ -394,8 +403,12 @@ class map =
 
     method quantifier : quantifier -> quantifier =
       function
-      | `TypeVar _x -> let _x = o#name _x in `TypeVar _x
-      | `RowVar _x -> let _x = o#name _x in `RowVar _x
+      | `TypeVar (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1))
+      | `RowVar (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in `RowVar ((_x, _x_i1))
       | `PresenceVar _x -> let _x = o#name _x in `PresenceVar _x
       
     method directive : directive -> directive =
@@ -405,8 +418,12 @@ class map =
       
     method datatype : datatype -> datatype =
       function
-      | TypeVar _x -> let _x = o#name _x in TypeVar _x
-      | RigidTypeVar _x -> let _x = o#name _x in RigidTypeVar _x
+      | TypeVar (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in TypeVar ((_x, _x_i1))
+      | RigidTypeVar (_x , _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#subkind _x_i1 in RigidTypeVar ((_x, _x_i1))
       | FunctionType (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -568,12 +585,21 @@ class fold =
       | `FloatMinus -> o
       | `Project _x -> let o = o#name _x in o
       | `Name _x -> let o = o#name _x in o
+
+    method subkind : subkind -> 'self_type =
+      function
+      | `Any -> o
+      | `Base -> o
       
     method row_var : row_var -> 'self_type =
       function
       | `Closed -> o
-      | `Open _x -> let o = o#name _x in o
-      | `OpenRigid _x -> let o = o#name _x in o
+      | `Open (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#subkind _x_i1 in o
+      | `OpenRigid (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#subkind _x_i1 in o
       | `Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
       
@@ -866,8 +892,12 @@ class fold =
       
     method datatype : datatype -> 'self_type =
       function
-      | TypeVar _x -> let o = o#name _x in o
-      | RigidTypeVar _x -> let o = o#name _x in o
+      | TypeVar (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#subkind _x_i1 in o
+      | RigidTypeVar (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#subkind _x_i1 in o
       | FunctionType (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1035,11 +1065,20 @@ class fold_map =
       | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
       
+    method subkind : subkind -> ('self_type * subkind) =
+      function
+      | `Any -> (o, `Any)
+      | `Base -> (o, `Base)
+
     method row_var : row_var -> ('self_type * row_var) =
       function
       | `Closed -> (o, `Closed)
-      | `Open _x -> let (o, _x) = o#name _x in (o, (`Open _x))
-      | `OpenRigid _x -> let (o, _x) = o#name _x in (o, (`OpenRigid _x))
+      | `Open (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, (`Open ((_x, _x_i1))))
+      | `OpenRigid (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, (`OpenRigid ((_x, _x_i1))))
       | `Recursive ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
@@ -1388,8 +1427,12 @@ class fold_map =
       
     method quantifier : quantifier -> ('self_type * quantifier) =
       function
-      | `TypeVar _x -> let (o, _x) = o#name _x in (o, `TypeVar _x)
-      | `RowVar _x -> let (o, _x) = o#name _x in (o, `RowVar _x)
+      | `TypeVar (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, `TypeVar ((_x, _x_i1)))
+      | `RowVar (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, `RowVar ((_x, _x_i1)))
       | `PresenceVar _x -> let (o, _x) = o#name _x in (o, `PresenceVar _x)
 
     method directive : directive -> ('self_type * directive) =
@@ -1405,8 +1448,12 @@ class fold_map =
       
     method datatype : datatype -> ('self_type * datatype) =
       function
-      | TypeVar _x -> let (o, _x) = o#name _x in (o, (TypeVar _x))
-      | RigidTypeVar _x -> let (o, _x) = o#name _x in (o, (RigidTypeVar _x))
+      | TypeVar (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, (TypeVar ((_x, _x_i1))))
+      | RigidTypeVar (_x, _x_i1) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#subkind _x_i1 in (o, (RigidTypeVar ((_x, _x_i1))))
       | FunctionType (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in

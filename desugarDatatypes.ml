@@ -51,16 +51,16 @@ object (self)
     | b          -> super#bindingnode b
 
   method datatype = function
-    | TypeVar t         -> self#add (`TypeVar t)
-    | RigidTypeVar s    -> self#add (`RigidTypeVar s)
-    | MuType (v, k)     -> let o = self#bind (`RigidTypeVar v) in o#datatype k
-    | dt                -> super#datatype dt
+    | TypeVar (x, k)        -> self#add (`TypeVar (x, k))
+    | RigidTypeVar (x, k)   -> self#add (`RigidTypeVar (x, k))
+    | MuType (v, t)         -> let o = self#bind (`RigidTypeVar (v, `Any)) in o#datatype t
+    | dt                    -> super#datatype dt
         
   method row_var = function
     | `Closed           -> self
-    | `OpenRigid s      -> self#add (`RigidRowVar s)
-    | `Open s           -> self#add (`RowVar s)
-    | `Recursive (s, r) -> let o = self#bind (`RigidRowVar s) in o#row r
+    | `OpenRigid (x, k) -> self#add (`RigidRowVar (x, k))
+    | `Open (x, k)      -> self#add (`RowVar (x, k))
+    | `Recursive (s, r) -> let o = self#bind (`RigidRowVar (s, `Any)) in o#row r
 
   method presence_flag = function
     | `Absent
@@ -83,10 +83,10 @@ struct
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t tenv in 
       match t with
-        | TypeVar s -> (try `MetaTypeVar (lookup_type s)
-                        with NotFound _ -> raise (UnexpectedFreeVar s))
-        | RigidTypeVar s -> (try `MetaTypeVar (lookup_type s)
+        | TypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
                              with NotFound _ -> raise (UnexpectedFreeVar s))
+        | RigidTypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
+                                  with NotFound _ -> raise (UnexpectedFreeVar s))
         | FunctionType (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f), 
                        row var_env alias_env e, 
@@ -130,8 +130,8 @@ struct
     let seed =
       match rv with
         | `Closed -> Types.make_empty_closed_row ()
-        | `OpenRigid rv
-        | `Open rv -> (StringMap.empty, lookup_row rv)
+        | `OpenRigid (rv, _)
+        | `Open (rv, _) -> (StringMap.empty, lookup_row rv)
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Flexible (var, `Any)) in
@@ -161,18 +161,18 @@ struct
         (fun (vars, envs) v ->
            let var = Types.fresh_raw_variable () in
              match v with
-               | `TypeVar x ->
-                   let t = Unionfind.fresh (`Flexible (var, `Any)) in
-                     `TypeVar (var, t)::vars, addt x t envs
-               | `RigidTypeVar x ->
-                   let t = Unionfind.fresh (`Rigid (var, `Any)) in
-                     `TypeVar (var, t)::vars, addt x t envs
-               | `RowVar x ->
-                   let r = Unionfind.fresh (`Flexible (var, `Any)) in
-                     `RowVar (var, r)::vars, addr x r envs
-               | `RigidRowVar x ->
-                   let r = Unionfind.fresh (`Rigid (var, `Any)) in
-                     `RowVar (var, r)::vars , addr x r envs
+               | `TypeVar (x, subkind) ->
+                   let t = Unionfind.fresh (`Flexible (var, subkind)) in
+                     `TypeVar ((var, subkind), t)::vars, addt x t envs
+               | `RigidTypeVar (x, subkind) ->
+                   let t = Unionfind.fresh (`Rigid (var, subkind)) in
+                     `TypeVar ((var, subkind), t)::vars, addt x t envs
+               | `RowVar (x, subkind) ->
+                   let r = Unionfind.fresh (`Flexible (var, subkind)) in
+                     `RowVar ((var, subkind), r)::vars, addr x r envs
+               | `RigidRowVar (x, subkind) ->
+                   let r = Unionfind.fresh (`Rigid (var, subkind)) in
+                     `RowVar ((var, subkind), r)::vars , addr x r envs
                | `PresenceVar x ->
                    let f = Unionfind.fresh (`Flexible var) in
                      `PresenceVar (var, f)::vars, addf x f envs
@@ -198,7 +198,7 @@ struct
           method tyvars = tyvars
             
           method datatype = function
-            | FunctionType (f, ([], `Open x), t) -> 
+            | FunctionType (f, ([], `Open (x, _)), t) -> 
                 let var = `Flexible (Types.fresh_raw_variable(), `Any) in
                 let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in
                 let o = self#list (fun o -> o#datatype) f in
@@ -208,8 +208,8 @@ struct
         end)#datatype' dt) # tyvars in
     let name_of_quantifier =
       function
-        | `TypeVar x
-        | `RowVar x
+        | `TypeVar (x, _)
+        | `RowVar (x, _)
         | `PresenceVar x -> x in
       try
         let args, tmap = 
@@ -217,7 +217,7 @@ struct
             ~f:(fun (q, _) (args, map) ->
                   let tv = Types.fresh_raw_variable () in
                   let point = Unionfind.fresh (`Rigid (tv, `Any)) in
-                  let qv = `TypeVar (tv, point) in
+                  let qv = `TypeVar ((tv, `Any), point) in
                     ((q, Some qv) :: args, 
                      StringMap.add (name_of_quantifier q) point map)) in
           (args, datatype' {tenv=StringMap.union_disjoint tmap (mailbox_vars rhs); renv=StringMap.empty; penv=StringMap.empty} alias_env rhs)

@@ -1225,7 +1225,7 @@ let make_ft_poly_curry ps effects return_type =
       | [p] -> [], `Function (args p, effects, return_type)
       | p::ps ->
           let qs, t = ft ps in
-          let q, eff = Types.fresh_row_quantifier () in
+          let q, eff = Types.fresh_row_quantifier `Any in
             q::qs, `Function (args p, eff, t)
   in
     Types.for_all (ft ps)
@@ -1582,7 +1582,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Any)) in
+            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base)) in
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->

@@ -78,8 +78,8 @@ and meta_type_var = (datatype meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
-    [ `TypeVar of int * meta_type_var
-    | `RowVar of int * meta_row_var
+    [ `TypeVar of (int * subkind) * meta_type_var
+    | `RowVar of (int * subkind) * meta_row_var
     | `PresenceVar of int * meta_presence_var ]
 and type_arg = 
     [ `Type of datatype | `Row of row | `Presence of presence_flag ]
@@ -159,11 +159,11 @@ val fresh_presence_variable : unit -> presence_flag
 val fresh_rigid_presence_variable : unit -> presence_flag
 
 (** fresh quantifiers *)
-val fresh_type_quantifier : unit -> quantifier * datatype
-val fresh_flexible_type_quantifier : unit -> quantifier * datatype
+val fresh_type_quantifier : subkind -> quantifier * datatype
+val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
 
-val fresh_row_quantifier : unit -> quantifier * row
-val fresh_flexible_row_quantifier : unit -> quantifier * row
+val fresh_row_quantifier : subkind -> quantifier * row
+val fresh_flexible_row_quantifier : subkind -> quantifier * row
 
 val fresh_presence_quantifier : unit -> quantifier * presence_flag
 val fresh_flexible_presence_quantifier : unit -> quantifier * presence_flag

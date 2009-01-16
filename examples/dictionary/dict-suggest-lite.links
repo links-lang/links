@@ -28,10 +28,12 @@ fun completions(pre) server {
 
  if (pre == "") []
  else {
-  take(10, for (w <-- wordlist)
-            where (w.word ~ /^{pre}.*/)
-            orderby (w.word)
-            [w])
+  query [10] {
+   for (w <-- wordlist)
+    where (w.word ~ /^{pre}.*/)
+    orderby (w.word)
+     [w]
+  }
  }
 }
 

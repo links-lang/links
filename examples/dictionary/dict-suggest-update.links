@@ -24,7 +24,7 @@ fun completions(s) server {
     query [10] {
       for (def <-- defsTable)
        where (def.word ~ /^{s}.*/)
-       orderby ((1=def.word))
+       orderby (def.word)
         [def]
     }
   }

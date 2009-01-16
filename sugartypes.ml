@@ -73,9 +73,12 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Eq, Typeable, Show, Pickle, Shelve)
 
-type datatype = 
-  | TypeVar         of name
-  | RigidTypeVar    of name
+type subkind = [`Any | `Base]
+    deriving (Show)
+
+type datatype =
+  | TypeVar         of name * subkind
+  | RigidTypeVar    of name * subkind
   | FunctionType    of datatype list * row * datatype
   | MuType          of name * datatype
   | UnitType
@@ -90,8 +93,8 @@ type datatype =
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
-    | `Open of name
-    | `OpenRigid of name
+    | `Open of name * subkind
+    | `OpenRigid of name * subkind
     | `Recursive of name * row ]
 and presence_flag = [ `Present | `Absent | `RigidVar of name | `Var of name ]
 and fieldspec = presence_flag * datatype
@@ -106,14 +109,14 @@ type datatype' = datatype * Types.datatype option
     deriving (Show)
 
 type type_variable =
-    [ `TypeVar of name | `RigidTypeVar of name
-    | `RowVar of name | `RigidRowVar of name
+    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
+    | `RowVar of name * subkind | `RigidRowVar of name * subkind
     | `PresenceVar of name | `RigidPresenceVar of name ]
       deriving (Show)
 
 type quantifier =
-    [ `TypeVar of name
-    | `RowVar of name
+    [ `TypeVar of name * subkind
+    | `RowVar of name * subkind
     | `PresenceVar of name ]
       deriving (Show)
 
