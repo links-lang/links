@@ -22,6 +22,7 @@ type code =
   | Triple of code * code * code
   | Lst of code list
   | Case of code * ((code * code) list) * ((code * code) option)
+  | Die of code
   | Empty
 deriving (Show)
 
@@ -39,7 +40,8 @@ sig
   val box_call : code -> code
   val box_if : code -> code
   val box_case : code -> code
-  val box_xml : code -> code
+  val box_xmlitem : code -> code
+  val box_list : code -> code
 end
 
 let wrap_with name v =
@@ -59,7 +61,8 @@ struct
   let box_call = identity
   let box_if = identity
   let box_case = identity
-  let box_xml = identity
+  let box_xmlitem = identity
+  let box_list = identity
 end
 
 module CamlBoxer : Boxer =
@@ -71,7 +74,8 @@ struct
   let box_float = wrap_with "box_float"
   let box_variant = wrap_with "box_variant"
   let box_record = wrap_with "box_record"
-  let box_xml = wrap_with "box_xml"
+  let box_xmlitem = wrap_with "box_xmlitem"
+  let box_list = wrap_with "box_list"
 
   let curry_box args body =
     List.fold_right
@@ -164,7 +168,8 @@ let ident_substs = StringMap.from_alist
     "*", "int_mult";
     "==", "equals";
     "Nil", "nil";
-    "Cons", "cons" ]
+    "Cons", "cons";
+    "Concat", "concat" ]
 
 let subst_ident n = 
   if StringMap.mem n ident_substs then
@@ -243,14 +248,16 @@ struct
         | `TApp (v, _) -> o#value v
 
         | `XmlNode (name, attrs, children) ->
-            B.box_xml (
-              Call (Var "build_xml", 
-                    [Triple (
-                       NativeString name,
-                       Lst (StringMap.fold
-                              (fun n v a -> Pair(NativeString n, o#value v)::a) attrs []),                   
-                       Lst (List.map o#value children))]))
-                      
+            B.box_list(
+              Lst [
+                B.box_xmlitem (          
+                  Call (Var "build_xmlitem", [
+                          NativeString name;
+                          Lst (
+                            StringMap.fold
+                              (fun n v a -> Pair(NativeString n, o#value v)::a) attrs []);
+                          Lst (List.map o#value children)]))])
+                        
         | `ApplyPure (v, vl) -> 
             B.box_call (Call (o#value v, List.map o#value vl))
 
@@ -304,7 +311,7 @@ struct
               | `Database _
               | `Table _
               | `Query _ -> raise (Unsupported "Database operations not supported.")
-              | _ -> assert false
+              | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
 
     method computation : computation -> code = fun (bs, tc) ->
@@ -381,7 +388,7 @@ struct
               | `Database _
               | `Table _
               | `Query _ -> raise (Unsupported "Database operations not supported.")
-              | _ -> assert false
+              | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
     method computation : computation -> code -> code = fun (bs, tc) k ->
       o#bindings bs (fun o' -> o'#tail_computation tc k)
@@ -512,6 +519,9 @@ let rec ml_of_code c =
           let args = if args = [] then text "()" else doc_join ml_of_code args in
             parens (group (
                       nest 2 ((ml_of_code f) ^| args)))
+
+    | Die s ->
+        group (text "raise (InternalError" ^| ml_of_code s ^| text ")")
 
     | Empty -> assert false
 

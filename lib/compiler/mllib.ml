@@ -2,9 +2,10 @@ open Num
 
 module StringMap = Map.Make (String);;
 
-type xml =
-  | Node of string * (string * value) list * value list
+type xml = value list
+and xmlitem = 
   | Text of string
+  | Node of string * (string * string) list * xml
 and value = 
   | Bool of bool
   | Char of char
@@ -15,36 +16,9 @@ and value =
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
-  | Xml of xml
+  | Xmlitem of xmlitem
 
-(* This is quickly cobbled together so I can play with things. *)
-let rec string_of_value = function
-  | Bool x -> string_of_bool x
-  | Int x -> Num.string_of_num x
-  | Char x -> String.make 1 x
-  | NativeString x -> x
-  | Float x -> string_of_float x
-  | Function x -> "Fun"
-  | Lst l -> "[" ^ String.concat ", " (List.map string_of_value l) ^ "]"
-  | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
-  | Record r -> "(" ^ String.concat ", "
-      (StringMap.fold
-         (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
-  | Xml x -> string_of_xml x
-and      
-    string_of_xml = function
-      | Node (name, attrs, children) ->
-      let attrs = List.fold_left (
-        fun s attr ->
-          match attr with
-            | (n, NativeString v) -> s ^ " " ^ n ^ "=" ^ "\"" ^v^ "\""
-            | _ -> assert false) "" attrs 
-      in
-        "<" ^ name ^ attrs ^ ">" ^
-          String.concat "" (List.map string_of_value children) ^
-          "</" ^ name ^ ">"
-      | Text s -> s
-
+(* Boxing functions *)
 let box_bool x = Bool x
 let unbox_bool = function
   | Bool x -> x
@@ -90,16 +64,79 @@ let unbox_list = function
   | Lst l -> l
   | _ -> assert false
 
-let box_xml x = Xml x
-let unbox_xml = function 
-  | Xml x -> x
+let box_xmlitem x = Xmlitem x
+let unbox_xmlitem = function 
+  | Xmlitem x -> x
   | _ -> assert false
 
+(* Stolen from Utility.ml *)
+let (-<-) f g x = f (g x)
+
+let xml_escape s = 
+  Str.global_replace (Str.regexp "<") "&lt;" 
+    (Str.global_replace (Str.regexp "&") "&amp;" s)
+
+let mapstrcat glue f list = String.concat glue (List.map f list)
+
+let implode : char list -> string = 
+  (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
+
+let getenv : string -> string option =
+  fun name ->
+    try Some (Sys.getenv name)
+    with Not_found -> None
+
+(* Stolen from value.ml *)
+let attr_escape =
+   Str.global_replace (Str.regexp "\"") "\\\""
+
+(* This is quickly cobbled together so I can play with things. *)
+let rec string_of_value = function
+  | Bool x -> string_of_bool x
+  | Int x -> Num.string_of_num x
+  | Char x -> String.make 1 x
+  | NativeString x -> x
+  | Float x -> string_of_float x
+  | Function x -> "Fun"
+  | Lst l -> string_of_list l
+  | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
+  | Record r -> "(" ^ String.concat ", "
+      (StringMap.fold
+         (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
+  | Xmlitem x -> string_of_xmlitem x
+and
+    string_of_list = function
+      | (x::xs) as l ->
+          match x with
+            | Xmlitem _ -> mapstrcat "" string_of_value l
+            | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
+and
+    (* Somewhat stolen from value.ml *)
+    string_of_xmlitem = let format_attr (k, v) =
+      k ^ "=\"" ^ attr_escape v ^ "\""
+    in
+    let format_attrs attrs =
+      match mapstrcat " " format_attr attrs with
+        | "" -> ""
+        | a -> " " ^ a 
+    in
+      function
+        | Text s -> xml_escape s
+        | Node (name, attrs, children) ->
+            match children with
+              | [] -> "<" ^ name ^ format_attrs attrs ^ " />"
+              | _ -> ("<" ^ name ^ format_attrs attrs ^ ">"
+                         ^ mapstrcat "" string_of_value children
+                         ^ "</" ^ name ^ ">")
+          
 (* Internal functions used by compiler *)
 let start = box_func (fun x -> x);;
 let project m k = StringMap.find (unbox_string k) (unbox_record m);;
-let build_xml (n, a, c) = Node (n, a, c)
+let build_xmlitem name attrs children =
+    Node (name, List.map 
+            (fun (n, v) -> (n, unbox_string v)) attrs, children)
 
+(* Library stuff *)
 let nil = box_list ([])
 
 let equals = box_func (
@@ -107,7 +144,7 @@ let equals = box_func (
     fun y -> box_bool (x = y)))
 
 let int_add = box_func (
-  fun x -> box_func (
+  fun x ->  box_func (
     fun y -> box_int ((unbox_int x) +/ (unbox_int y))))
 
 let hd = box_func (
@@ -122,8 +159,13 @@ let cons = box_func (
   fun x -> box_func (
     fun l -> box_list (x::(unbox_list l))))
 
+let concat = box_func (
+  fun l1 -> box_func (
+    fun l2 -> 
+      box_list ((unbox_list l1) @ (unbox_list l2))))
+
 let stringToXml = box_func (
-  fun s -> box_xml (Text (unbox_string s)))
+  fun s -> box_list ([box_xmlitem (Text (unbox_string s))]))
 
 let reifyK = box_func (
   fun k -> box_func (
@@ -138,11 +180,8 @@ let exit = box_func (
     fun v -> v
   ))
 
-let getenv : string -> string option =
-  fun name ->
-    try Some (Sys.getenv name)
-    with Not_found -> None
 
+(* Main stuff *)
 let handle_request entry_f =
   NativeString ("Content-type: text/html\n\n" ^ (string_of_value (entry_f ())))
     
