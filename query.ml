@@ -453,7 +453,8 @@ struct
     | `Return v -> value env v
     | `Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | `Special s -> failwith "special not allowed in db block"
+    | `Special (`Query (None, e, _)) -> computation env e
+    | `Special _s -> failwith "special not allowed in query block"
     | `Case (v, cases, default) ->
         assert false
           (*         (match value env v with *)

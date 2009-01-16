@@ -201,6 +201,8 @@ sig
   val iteration_table_pattern : griper
   val iteration_body : griper
   val iteration_where : griper
+  val iteration_base_order : griper
+  val iteration_base_body : griper
 
   val escape : griper
 
@@ -472,7 +474,7 @@ code (show_type lt) ^ ".")
 
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-Query blocks are wild" ^ nl() ^
+The query block has effects" ^ nl() ^
 code (show_type rt) ^ nl() ^
 "but the current effect row is" ^ nl() ^
 code (show_type lt) ^ ".")
@@ -590,6 +592,16 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let iteration_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Where clauses" t l
+
+    let iteration_base_order ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
+      with_but pos
+        ("An orderby clause in a database comprehension must return a list of records of base type")
+        (expr, t)
+
+    let iteration_base_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
+      with_but pos
+        ("A database comprehension must return a list of records of base type")
+        (expr, t)
 
     let escape ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "The argument to escape" t l
@@ -1705,7 +1717,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `FormBinding (erase e, erase_pat pattern), Types.xml_type
 
         (* various expressions *)
-        | `Iteration (generators, body, where, orderby) ->            
+        | `Iteration (generators, body, where, orderby) ->
+            let is_query =
+              List.exists (function
+                             | `List _ -> false
+                             | `Table _ -> true) generators in
+            let context =              
+              if is_query then
+                {context with effect_row = Types.make_empty_closed_row ()}
+              else
+                context in
             let generators, context =
               List.fold_left
                 (fun (generators, context) ->
@@ -1713,8 +1734,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                      | `List (pattern, e) ->
                          let a = Types.fresh_type_variable `Any in
                          let lt = Types.make_list_type a in
-                         let pattern = tpc pattern
-                         and e = tc e in
+                         let pattern = tpc pattern in
+                         let e = tc e in
                          let () = unify ~handle:Gripers.iteration_list_body (pos_and_typ e, no_pos lt) in
                          let () = unify ~handle:Gripers.iteration_list_pattern (ppos_and_typ pattern, (exp_pos e, a))
                          in
@@ -1723,8 +1744,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                      | `Table (pattern, e) ->
                          let a = Types.fresh_type_variable `Any in
                          let tt = Types.make_table_type (a, Types.fresh_type_variable `Any, Types.fresh_type_variable `Any) in
-                         let pattern = tpc pattern
-                         and e = tc e in
+                         let pattern = tpc pattern in
+                         let e = tc e in
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
                          let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
                            (`Table (erase_pat pattern, erase e) :: generators,
@@ -1735,12 +1756,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let body = tc body in
             let where = opt_map tc where in
             let orderby = opt_map tc orderby in
+            let () =
               unify ~handle:Gripers.iteration_body
-                (pos_and_typ body, no_pos (Types.make_list_type (Types.fresh_type_variable `Any)));
+                (pos_and_typ body, no_pos (Types.make_list_type (Types.fresh_type_variable `Any))) in
+            let () =
               opt_iter (fun where -> unify ~handle:Gripers.iteration_where
-                          (pos_and_typ where, no_pos Types.bool_type)) where;
-              `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby), (typ body)
-
+                          (pos_and_typ where, no_pos Types.bool_type)) where in
+            let () =
+              if is_query then
+                begin
+                  opt_iter (fun order ->
+                              unify ~handle:Gripers.iteration_base_order
+                                (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row `Base)))) orderby;
+                  unify ~handle:Gripers.iteration_base_body
+                    (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row `Base))))
+                end in
+            let e = `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
+              if is_query then
+                `Query (None, (e, pos), Some (typ body)), typ body
+              else
+                e, typ body
         | `Escape ((name,_,pos), e) ->
             (* There's a question here whether to generalise the
                return type of continuations.  With `escape'
