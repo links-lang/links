@@ -143,9 +143,32 @@ let equals = box_func (
   fun x -> box_func (
     fun y -> box_bool (x = y)))
 
+let links_not = box_func (
+  fun x -> box_bool (not (unbox_bool x)))
+
 let int_add = box_func (
   fun x ->  box_func (
     fun y -> box_int ((unbox_int x) +/ (unbox_int y))))
+
+let int_minus = box_func (
+  fun x -> box_func (
+    fun y -> box_int ((unbox_int x) -/ (unbox_int y))))
+
+let int_gt = box_func (
+  fun x -> box_func (
+    fun y -> box_bool ((unbox_int x) >/ (unbox_int y))))
+
+let int_lt = box_func (
+  fun x -> box_func (
+    fun y -> box_bool ((unbox_int x) </ (unbox_int y))))
+
+let int_gte = box_func (
+  fun x -> box_func (
+    fun y -> box_bool ((unbox_int x) >=/ (unbox_int y))))
+
+let int_lte = box_func (
+  fun x -> box_func (
+    fun y -> box_bool ((unbox_int x) <=/ (unbox_int y))))
 
 let hd = box_func (
   fun k -> box_func (

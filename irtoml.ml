@@ -166,10 +166,17 @@ let ident_substs = StringMap.from_alist
   [ "+", "int_add";
     "-", "int_minus";
     "*", "int_mult";
+    ">", "int_gt";
+    "<", "int_lt";
+    ">=", "int_gte";
+    "<=", "int_lte";
+    "!=", "not_equals";
     "==", "equals";
     "Nil", "nil";
     "Cons", "cons";
-    "Concat", "concat" ]
+    "Concat", "concat";
+    "Not", "links_not"
+  ]
 
 let subst_ident n = 
   if StringMap.mem n ident_substs then
