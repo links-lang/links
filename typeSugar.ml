@@ -2139,13 +2139,13 @@ struct
       Debug.if_set show_pre_sugar_typing
         (fun () ->
            "before type checking: "^Show_program.show (bindings, body));
-      let ctxt', bindings = type_bindings tyenv bindings in 
+      let tyenv', bindings = type_bindings tyenv bindings in 
         match body with
-          | None -> (bindings, None), Types.unit_type, ctxt'
+          | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->
-              let body, typ = type_check (Types.extend_typing_environment tyenv ctxt') body in
+              let body, typ = type_check (Types.extend_typing_environment tyenv tyenv') body in
 (*                  Debug.print ("checked type: " ^ Types.string_of_datatype typ);                 *)
-                (bindings, Some body), typ, ctxt'
+                (bindings, Some body), typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg
 

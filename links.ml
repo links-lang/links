@@ -9,6 +9,39 @@ let ps1 = "links> "
 
 type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
+(** Print a value (including its type if `printing_types' is [true]). *)
+let print_value rtype value = 
+  print_string (Value.string_of_value value);
+  print_endline (if Settings.get_value(printing_types) then
+		   " : "^ Types.string_of_datatype rtype
+                 else "")
+
+(** optimise and evaluate a program *)
+let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
+  (* TODO: the optimise part *)
+(*
+  print_string ((Ir.Show_program.show program)^"\n");
+  print_endline;
+*)
+  let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) program in
+  let valenv = Value.with_closures valenv closures in
+
+  let valenv, v = lazy (Evalir.run_program valenv program)
+    <|measure_as|> "run_program"
+  in
+    printer t v;
+    valenv, v
+
+(* Read Links source code, then optimise and run it. *)
+let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+  handle_errors
+    (fun x ->
+       let (program, t), (nenv', tyenv') = measure "parse" parse (nenv, tyenv) x in
+       let valenv, v = process_program envs (program, t) in
+         (valenv,
+          Env.String.extend nenv nenv',
+          Types.extend_typing_environment tyenv tyenv'), v)
+
 (** Definition of the various repl directives *)
 let rec directives 
     : (string
@@ -58,35 +91,32 @@ let rec directives
         envs),
      "display the current type environment");
 
-(* TODO: adapt env and load to the new IR *)
 
-(*     "env", *)
-(*     ((fun ((valenv, _) as envs) _ -> *)
-(*         iter (fun (v, k) -> *)
-(*                      Printf.fprintf stderr " %-16s : %s\n" *)
-(*                        v (Result.string_of_result k)) *)
-(*           (filter (not -<- Library.is_primitive -<- fst)  valenv); *)
-(*      envs), *)
-(*      "display the current value environment"); *)
+    "env",
+    ((fun ((valenv, nenv, _tyenv) as envs) _ ->
+        let venv = fst valenv in
+          Env.String.fold
+            (fun name var () ->
+               if not (Lib.is_primitive name) then
+                 Printf.fprintf stderr " %-16s : %s\n"
+                   name (Value.string_of_value (fst (IntMap.find var venv))))
+            nenv ();
+          envs),
+     "display the current value environment");
 
-(*     "load", *)
-(*     ((fun (envs : Result.environment * Types.typing_environment) args -> *)
-(*         match args with *)
-(*           | [filename] -> *)
-(*               let library_types, libraries = *)
-(*                 (Errors.display_fatal Oldloader.load_file Library.typing_env (Settings.get_value prelude_file)) in  *)
-(*               let libraries, _ = Interpreter.run_program [] [] libraries in *)
-(*               let sugar, pos_context = Parse.parse_file Parse.program filename in *)
-(*               let (bindings, expr), _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in *)
-(*               let defs = Sugar.desugar_definitions bindings in *)
-(*               let expr = opt_map Sugar.desugar_expression expr in *)
-(*               let program = Syntax.Program (defs, from_option (Syntax.unit_expression (`U Syntax.dummy_position)) expr) in *)
-(*               let (typingenv : Types.typing_environment), program = Inference.type_program library_types program in *)
-(*               let program = Optimiser.optimise_program (typingenv, program) in *)
-(*               let program = Syntax.labelize program in *)
-(*                 (fst ((Interpreter.run_program libraries []) program), (typingenv : Types.typing_environment)) *)
-(*           | _ -> prerr_endline "syntax: @load \"filename\""; envs), *)
-(*      "load in a Links source file, replacing the current environment"); *)
+    "load",
+    ((fun (envs) args ->
+        match args with
+          | [filename] ->
+              let parse_and_desugar (nenv, tyenv) filename =
+                let (nenv, tyenv), (globals, (locals, main), t) =
+                  Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
+                in
+                  ((globals @ locals, main), t), (nenv, tyenv) in
+              let envs, _ = evaluate parse_and_desugar envs filename in
+                envs
+          | _ -> prerr_endline "syntax: @load \"filename\""; envs),
+     "load in a Links source file, extending the current environment");
 
     "withtype",
     ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases} as envs) args ->
@@ -119,33 +149,6 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
     flush stderr;
     envs
 
-(** Print a value (including its type if `printing_types' is [true]). *)
-let print_value rtype value = 
-  print_string (Value.string_of_value value);
-  print_endline (if Settings.get_value(printing_types) then
-		   " : "^ Types.string_of_datatype rtype
-                 else "")
-
-(** optimise and evaluate a program *)
-let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
-  (* TODO: the optimise part *)
-(*
-  print_string ((Ir.Show_program.show program)^"\n");
-  print_endline;
-*)
-  let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) program in
-  let valenv = Value.with_closures valenv closures in
-
-  let valenv, v = lazy (Evalir.run_program valenv program)
-    <|measure_as|> "run_program"
-  in
-    printer t v;
-    (valenv, nenv, tyenv), v
-
-(* Read Links source code, then optimise and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
-    handle_errors (measure "parse" parse (nenv, tyenv) ->- process_program envs)
-
 (* Interactive loop *)
 let interact envs =
   let make_dotter ps1 =
@@ -161,7 +164,7 @@ let interact envs =
              (match measure "parse" parse input with
                 | `Definitions ([], _), tyenv -> valenv, nenv, tyenv
                 | `Definitions (defs, nenv'), tyenv ->
-                    let (valenv, _, _ as envs), _ =
+                    let valenv, _ =
                       process_program
                         ~printer:(fun _ _ -> ())
                         envs
@@ -181,8 +184,8 @@ let interact envs =
                        Env.String.extend nenv nenv',
                        tyenv)
                 | `Expression (e, t), tyenv ->
-                    let envs, _ = process_program envs (e, t) in
-                      envs
+                    let valenv, _ = process_program envs (e, t) in
+                      valenv, nenv, tyenv
                 | `Directive directive, _ -> execute_directive directive envs))
     in
       print_string ps1; flush stdout;
@@ -231,13 +234,13 @@ let invert_env env =
 
 (* Read Links source code and pretty-print the IR *)
 let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
-  let printer (valenv, nenv, typingenv) (program, t) =
+  let printer (valenv, nenv, typingenv) ((program, t), _) =
     print_endline (Ir.Show_program.show program ^ "\n");
     print_endline (Ir.string_of_ir (invert_env nenv) program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
 let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
-  let printer (valenv, nenv, typingenv) (program, t) =
+  let printer (valenv, nenv, typingenv) ((program, t), _) =
     (*print_endline (Ir.Show_program.show program ^ "\n");*)
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
@@ -255,7 +258,7 @@ let run_file prelude envs filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
-      ((globals @ locals, main), t)
+      ((globals @ locals, main), t), (nenv, tyenv)
   in
     if Settings.get_value web_mode then
       Webif.serve_request envs prelude filename
@@ -275,7 +278,7 @@ let evaluate_string_in envs v =
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
     let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
-      ((globals @ locals, main), t)
+      ((globals @ locals, main), t), (nenv, tyenv)
   in
     (Settings.set_value interacting false;
      if Settings.get_value pretty_print_ir then
