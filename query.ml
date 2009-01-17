@@ -34,7 +34,7 @@ type t =
     | `If of t * t * t
     | `Table of Value.table
     | `Singleton of t | `Concat of t list
-    | `Record of t StringMap.t | `Project of t * string | `Erase of t * string
+    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t
     | `Variant of string * t
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
@@ -92,7 +92,7 @@ struct
     | `If of pt * pt * pt
     | `Table of Value.table
     | `Singleton of pt | `Concat of pt list
-    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * string
+    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t
     | `Variant of string * pt
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
@@ -111,7 +111,7 @@ struct
         | `Record fields -> `Record (StringMap.map bt fields)
         | `Variant (name, v) -> `Variant (name, bt v)
         | `Project (v, name) -> `Project (bt v, name)
-        | `Erase (v, name) -> `Erase (bt v, name)
+        | `Erase (v, names) -> `Erase (bt v, names)
         | `Apply (f, vs) -> `Apply (f, List.map bt vs)
         | `Closure ((xs, e), _) -> `Lam (xs, e)
         | `Primitive f -> `Primitive f
@@ -307,20 +307,28 @@ struct
             | _ -> eval_error "Error projecting from record"
         in
           project (value env r, label)
-    | `Erase (label, r) ->
-        let rec erase (r, label) =
+    | `Erase (labels, r) ->
+        let rec erase (r, labels) =
           match r with
             | `Record fields ->
-                assert (StringMap.mem label fields);
-                StringMap.find label fields
+                assert (StringSet.for_all (fun label -> StringMap.mem label fields) labels);
+                `Record
+                  (StringMap.fold
+                     (fun label v fields ->
+                        if StringSet.mem label labels then
+                          fields
+                        else
+                          StringMap.add label v fields)
+                     fields
+                     StringMap.empty)
             | `If (c, t, e) ->
-                `If (c, erase (t, label), erase (e, label))
-            | `Var (x, labels) ->
-                assert (StringSet.mem label labels);
-                `Erase (`Var (x, labels), label)
+                `If (c, erase (t, labels), erase (e, labels))
+            | `Var (x, labels') ->
+                assert (StringSet.subset labels labels');
+                `Erase (`Var (x, labels'), labels)
             | _ -> eval_error "Error erasing from record"
         in
-          erase (value env r, label)
+          erase (value env r, labels)
     | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v

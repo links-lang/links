@@ -77,10 +77,10 @@ let rec project_type name t = match concrete_type t with
   | t -> 
       error ("Attempt to project non-record type "^string_of_datatype t)
     
-let rec erase_type name t = match concrete_type t with
-  | `ForAll (_, t) -> erase_type name t
+let rec erase_type names t = match concrete_type t with
+  | `ForAll (_, t) -> erase_type names t
   | `Record row ->
-      let t, row = split_row name row in
+      let row = StringSet.fold (fun name row -> snd (split_row name row)) names row in
         `Record row
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
 

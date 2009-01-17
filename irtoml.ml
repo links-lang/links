@@ -244,8 +244,8 @@ struct
         | `Project (n, v) ->
             Call (Var "project", [o#value v; o#constant (`String n)])
 
-        | `Erase (n, v) ->
-            Call (Var "erase", [o#value v; o#constant (`String n)])
+        | `Erase (ns, v) ->
+            Call (Var "erase", [o#value v; Lst (List.map (fun n -> o#constant (`String n)) (StringSet.elements ns))])
               
         | `Inject (n, v, _) ->
             B.box_variant (Pair (NativeString n, o#value v))

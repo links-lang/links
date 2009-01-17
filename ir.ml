@@ -24,6 +24,9 @@ type tyarg = Types.type_arg
 
 type name = string
   deriving (Show, Pickle)
+
+type name_set = Utility.stringset
+  deriving (Show, Pickle)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show, Pickle)
 
@@ -43,7 +46,7 @@ type value =
   | `Variable of var
   | `Extend of (value name_map * value option)
   | `Project of (name * value)
-  | `Erase of (name * value)
+  | `Erase of (name_set * value)
   | `Inject of (name * value * Types.datatype)
 
   | `TAbs of tyvar list * value
@@ -193,7 +196,10 @@ object (o : 'self_type)
                                       group (o#value v))))
 
       | `Project (n, v) -> group (o#value v ^^ text "." ^^ text n)
-      | `Erase (n, v) -> parens (group (o#value v ^^ text "\\" ^^ text n))
+      | `Erase (ns, v) -> parens (group (o#value v ^^
+                                           text "\\{" ^^
+                                           StringSet.fold (fun n ns -> ns ^^ text n) ns empty ^^
+                                           text "}"))
       | `Inject (n, v, _) -> group (text n ^^ parens(o#value v))
       | `TAbs _ -> text "TABS"
       | `TApp (v, ts) -> o#value v
@@ -412,13 +418,13 @@ struct
             let (v, vt, o) = o#value v in
 (*               Debug.print ("project_vt: " ^ Types.string_of_datatype vt); *)
               `Project (name, v), deconstruct (project_type name) vt, o
-        | `Erase (name, v) ->
+        | `Erase (names, v) ->
 (*             Debug.print ("erase_e: " ^ Show_value.show (`Erase (name, v))); *)
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type name) vt in
+            let t = deconstruct (erase_type names) vt in
 (*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
 (*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
-              `Erase (name, v), t, o
+              `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
               `Inject (name, v, t), t, o

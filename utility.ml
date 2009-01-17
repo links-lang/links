@@ -255,6 +255,11 @@ module type CHARSET = Set with type elt = char
 module CharSet : CHARSET = Set.Make(Char)
 module CharMap = Map.Make(Char)
 
+type stringset = StringSet.t
+    deriving (Show)
+
+module Pickle_stringset = Pickle.Pickle_unpicklable (struct type a = stringset let tname = "stringset" end)
+
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
 

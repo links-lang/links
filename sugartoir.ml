@@ -42,6 +42,7 @@ open Ir
    frontend and call/cc in the IR) is silly.
 *)
 
+let show_compiled_ir = Settings.add_bool ("show_compiled_ir", false, `User)
 
 exception ASTSyntaxError = SourceCode.ASTSyntaxError
 
@@ -394,6 +395,10 @@ struct
     let t = TypeUtils.project_type name (sem_type s) in
       bind s (fun v -> lift (`Project (name, v), t))
 
+  let erase (s, names) =
+    let t = TypeUtils.erase_type names (sem_type s) in
+      bind s (fun v -> lift (`Erase (names, v), t))
+
   let coerce (s, t) =
     bind s (fun v -> lift (`Coerce (v, t), sem_type s))
 
@@ -410,7 +415,7 @@ struct
         StringSet.empty
         fields in
     let t = TypeUtils.record_without (sem_type s) names in
-      record (fields, Some (coerce (s, t)))
+      record (fields, Some (erase (s, names)))
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))
@@ -904,7 +909,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-(*          Debug.print (Ir.Show_program.show r); *)
+          Debug.if_set show_compiled_ir (fun () -> Ir.Show_program.show r);
           r, I.sem_type s
 end
 

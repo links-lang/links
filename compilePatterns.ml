@@ -248,14 +248,15 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
               match rest with
                 | None -> body
                 | Some p ->
-                    let rt =
+                    let names =
                       StringMap.fold
-                        (fun name _ t ->
-                           TypeUtils.erase_type name t)
+                        (fun name _ names ->
+                           StringSet.add name names)
                         fields
-                        t
-                    in
-                      lp rt p (`Coerce (value, rt)) body
+                        StringSet.empty in
+                    let rt = TypeUtils.erase_type names t in
+                      lp rt p (`Erase (names, value)) body
+(*                      lp rt p (`Coerce (value, rt)) body *)
             in
               StringMap.fold
                 (fun name p body ->
@@ -771,19 +772,17 @@ and match_record
              else
                (* type of the original record continuation *)
                let pt =
-                 StringMap.fold
-                   (fun name _ t ->
-                      TypeUtils.erase_type name t)
-                   bs
-                   t in
+                 let original_names =
+                   StringMap.fold
+                     (fun name _ names ->
+                        StringSet.add name names)
+                     bs
+                     StringSet.empty
+                 in
+                   TypeUtils.erase_type original_names t in
 
                (* type of the flattened record continuation *)
-               let xt =
-                 StringSet.fold
-                   (fun name t ->
-                      TypeUtils.erase_type name t)
-                   names
-                   t in
+               let xt = TypeUtils.erase_type names t in
                let xb, x = Var.fresh_var_of_type xt in
 
                let body =

@@ -80,44 +80,28 @@ module Eval = struct
         begin
           match opt_app (value env) (`Record []) r with
             | `Record fs ->
-                `Record (List.rev
-                           (StringMap.fold 
-                              (fun label v fs ->
-                                 if List.mem_assoc label fs then
-                                   (label, value env v) :: (List.remove_assoc label fs)
-                                     (* HACK:
-                                        
-                                        Currently record erasure is
-                                        being compiled to `Coerce, but
-                                        `Coerce is being compiled to a
-                                        no-op. This would be fine
-                                        except functions such as
-                                        equality are not parametric in
-                                        Links, so it will break
-                                        equality.
-
-                                        As long as `Coerce is a no-op
-                                        it makes sense to disable this
-                                        error. *)
-(*                                    eval_error *)
-(*                                      "Error adding fields: label %s already present" *)
-(*                                      label *)
-                                 else
-                                   (label, value env v)::fs)
-                              fields
-                              fs))
+                `Record (StringMap.fold 
+                           (fun label v fs ->
+                              (label, value env v)::fs)
+                           fields
+                           fs)
             | _ -> eval_error "Error adding fields: non-record"
         end
     | `Project (label, r) ->
-        (match value env r with
-           | `Record fields when List.mem_assoc label fields ->
-               List.assoc label fields
-           | _ -> eval_error "Error projecting label %s" label)
-    | `Erase (label, r) ->
-        (match value env r with
-           | `Record fields when List.mem_assoc label fields ->
-               `Record (List.remove_assoc label fields)
-           | _ -> eval_error "Error erasing label %s" label)
+        begin
+          match value env r with
+            | `Record fields when List.mem_assoc label fields ->
+                List.assoc label fields
+            | _ -> eval_error "Error projecting label %s" label
+        end
+    | `Erase (labels, r) ->
+        begin
+          match value env r with
+            | `Record fields when
+                StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
+                `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
+            | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
+        end
     | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
@@ -153,15 +137,15 @@ module Eval = struct
             | Some (args, body) ->
                 (* unfold recursive definitions once *)
 
-                (* extend locals with recs *)
-                let locals =
-                  List.fold_right
-                    (fun (name, _) env ->
-                       Value.bind name (`RecFunction (recs, env, name, scope), scope) env)
-                    recs locals in
-
                 (* extend env with locals *)
                 let env = Value.shadow env ~by:locals in
+
+                (* extend env with recs *)
+                let env =
+                  List.fold_right
+                    (fun (name, _) env ->
+                       Value.bind name (`RecFunction (recs, locals, name, scope), scope) env)
+                    recs env in
 
                 (* extend env with arguments *)
                 let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in

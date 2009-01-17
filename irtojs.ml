@@ -603,8 +603,8 @@ let rec generate_value env : Ir.value -> code =
             end
       | `Project (name, v) ->
           Call (Var "LINKS.project", [gv v; strlit name])
-      | `Erase (name, v) ->
-          Call (Var "LINKS.erase", [gv v; strlit name])
+      | `Erase (names, v) ->
+          Call (Var "LINKS.erase", [gv v; Lst (List.map strlit (StringSet.elements names))])
       | `Inject (name, v, _t) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]

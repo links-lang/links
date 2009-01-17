@@ -20,6 +20,9 @@ type tyarg = Types.type_arg
 
 type name = string
   deriving (Show)
+
+type name_set = Utility.stringset
+  deriving (Show)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
@@ -38,7 +41,7 @@ type value =
   | `Variable of var
   | `Extend of value name_map * value option
   | `Project of name * value
-  | `Erase of name * value    (* should be implemented using coerce *) 
+  | `Erase of name_set * value
   | `Inject of name * value * Types.datatype
 
   | `TAbs of tyvar list * value
