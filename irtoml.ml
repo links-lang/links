@@ -213,11 +213,24 @@ let lib_funcs = [
   "_hd", ["unbox_list"], "id", false;
   "_tl", ["unbox_list"], "box_list", false;
   "_drop", ["unbox_int"; "unbox_list"], "box_list", false;
+  "_take", ["unbox_int"; "unbox_list"], "box_list", false;
 
   "_not", ["unbox_bool"], "box_bool", false;
 
+  "_addAttributes", ["unbox_list"; "unbox_list"], "box_list", false;
+
+  "_intToXml", ["unbox_int"], "box_list", false;
+  "_stringToXml", ["unbox_string"], "box_list", false;
+  "_intToString", ["unbox_int"], "box_string", false;
+  "_stringToInt", ["unbox_string"], "box_int", false;
+  "_stringToFloat", ["unbox_string"], "box_float", false;
+
+  "_environment", [], "box_list", false;
+  "_redirect", ["unbox_string"], "id", true;
   "_exit", ["id"], "id", true;
   "_error", ["unbox_string"], "id", false;
+  "_unsafePickleCont", ["id"], "box_string", false;
+  "_reifyK", ["id"], "box_string", false;
 ]
 
 (* TODO: Most of this can be handled generically *)

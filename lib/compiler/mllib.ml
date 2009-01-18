@@ -18,21 +18,27 @@ and value =
   | Record of value StringMap.t
   | Lst of value list
   | Xmlitem of xmlitem
-
+  
 (* Stolen from Utility.ml *)
 let identity x = x
 
 let (-<-) f g x = f (g x)
 
 let xml_escape s = 
-  Str.global_replace (Str.regexp "<") "&lt;" 
-    (Str.global_replace (Str.regexp "&") "&amp;" s)
+  Str.global_replace (Str.regexp "<") "&lt;" ( 
+    Str.global_replace (Str.regexp ">") "&lt;" 
+    (Str.global_replace (Str.regexp "&") "&amp;" s))
 
 let mapstrcat glue f list = String.concat glue (List.map f list)
 
 let rec drop n = if n = (num_of_int 0) then identity else function
   | []     -> []
   | _ :: t -> drop (pred_num n) t
+
+let rec take n list = match n, list with 
+  | 0, _ -> []
+  | _, [] -> []
+  | _, h :: t -> h :: take (n - 1) t
 
 let explode : string -> char list = 
   let rec explode' list n string = 
@@ -151,6 +157,14 @@ let build_xmlitem name attrs children =
     Node (name, List.map 
             (fun (n, v) -> (n, unbox_string v)) attrs, children)
 
+let unwrap_pair m = 
+  let m = unbox_record m in
+    StringMap.find "1" m, StringMap.find "2" m
+
+let marshal_value : value -> string =
+  fun v -> Netencoding.Base64.encode (
+    Marshal.to_string v [Marshal.Closures])
+
 (* Library functions *)
 
 let l_nil = box_list ([])
@@ -166,31 +180,56 @@ let u_l_int_add = (+/)
 let u_l_int_minus = (-/)
 let u_l_int_mult = ( */ )
 let u_l_int_div = (//)
-let u__negate = Num.minus_num
+let u__negate = minus_num
 
 let u_l_int_gt = (>)
 let u_l_int_lt = (<)
 let u_l_int_gte = (>=)
 let u_l_int_lte = (<=)
 
-let u__mod = Num.mod_num
+let u__mod = mod_num
 
 let u__hd = List.hd
 let u__tl = List.tl
 
 let u_l_cons v l = v::l
 let u_l_concat l1 l2 = l1 @ l2
+let u__take n l = take (int_of_num n) l
 
 let u__drop = drop
+
+let u__intToString = string_of_num
+let u__stringToInt = num_of_string
+
+let u__stringToFloat = float_of_string
 
 let u__stringToXml s =
   [box_xmlitem (Text s)]
 
-let u__reifyK k =
-  Netencoding.Base64.encode (
-    Marshal.to_string k [Marshal.Closures])
+let u__intToXml i = 
+  u__stringToXml (string_of_num i)
+
+let add_attribute (s, v) = function
+  | Xmlitem (Node (n, a, c)) ->
+      Xmlitem (Node (n, ((unbox_string s), (unbox_string v))::a, c))
+  | Xmlitem (Text s) -> Xmlitem (Text s)
+  | _ -> assert false
+
+let add_attributes = List.fold_right add_attribute
+
+let u__addAttributes x attrs =
+  let attrs = List.map unwrap_pair attrs in
+    List.map (add_attributes attrs) x
+
+let u__environment () = []
+
+let u__unsafePickleCont = marshal_value
+
+let u__reifyK = marshal_value
 
 let u__error = failwith
+
+let u__redirect s = assert false
 
 let u__exit k v = v
 
