@@ -197,8 +197,8 @@ let lib_funcs = [
   "l_int_add", ["unbox_int"; "unbox_int"], "box_int", false;
   "l_int_minus", ["unbox_int"; "unbox_int"], "box_int", false;
   "l_int_mult", ["unbox_int"; "unbox_int"], "box_int", false;
-  "l_mod", ["unbox_int"; "unbox_int"], "box_int", false;
-  "l_negate", ["unbox_int"], "box_int", false;
+  "_mod", ["unbox_int"; "unbox_int"], "box_int", false;
+  "_negate", ["unbox_int"], "box_int", false;
 
   "l_int_gt", ["unbox_int"; "unbox_int"], "box_bool", false;
   "l_int_gte", ["unbox_int"; "unbox_int"], "box_bool", false;
@@ -210,14 +210,14 @@ let lib_funcs = [
 
   "l_cons", ["id"; "unbox_list"], "box_list", false;
   "l_concat", ["unbox_list"; "unbox_list"], "box_list", false;
-  "l_hd", ["unbox_list"], "id", false;
-  "l_tl", ["unbox_list"], "box_list", false;
-  "l_drop", ["unbox_int"; "unbox_list"], "box_list", false;
+  "_hd", ["unbox_list"], "id", false;
+  "_tl", ["unbox_list"], "box_list", false;
+  "_drop", ["unbox_int"; "unbox_list"], "box_list", false;
 
-  "l_not", ["unbox_bool"], "box_bool", false;
+  "_not", ["unbox_bool"], "box_bool", false;
 
-  "l_exit", ["id"], "id", true;
-  "l_error", ["unbox_string"], "id", false;
+  "_exit", ["id"], "id", true;
+  "_error", ["unbox_string"], "id", false;
 ]
 
 (* TODO: Most of this can be handled generically *)
@@ -234,23 +234,17 @@ let ident_substs = StringMap.from_alist
     "Nil", "l_nil";
     "Cons", "l_cons";
     "Concat", "l_concat";
-    "not", "l_not";
-    "hd", "l_hd";
-    "tl", "l_tl";
-    "exit", "l_exit";
-    "mod", "l_mod";
-    "drop", "l_drop";
-    "negate", "l_negate";
-    "error", "l_error";
-
-    "concatMap", "_concatMap";
-    "map", "_map";
-    "sortBy", "_sortBy";
   ]
 
 let subst_ident n = 
   if StringMap.mem n ident_substs then
     StringMap.find n ident_substs
+  else
+    n
+
+let subst_primitive n =
+  if Lib.is_primitive n then
+    "_"^n
   else
     n
 
@@ -261,10 +255,10 @@ let make_var_name v n =
     else 
       "_"^n
   in 
-    (Symbols.wordify -<- subst_ident) name
+    (Symbols.wordify -<- subst_primitive -<- subst_ident) name
 
 let get_var_name n =
-  (Symbols.wordify -<- subst_ident) n
+  (Symbols.wordify -<- subst_primitive -<- subst_ident) n
 
 let bind_continuation k body =
   match k with 

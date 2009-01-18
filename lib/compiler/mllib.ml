@@ -155,38 +155,39 @@ let u_l_not_equals = (!=)
 
 let u_l_and = (&&)
 let u_l_or = (||)
-let u_l_not = not
+let u__not = not
 
 let u_l_int_add = (+/)
 let u_l_int_minus = (-/)
 let u_l_int_mult = ( */ )
 let u_l_int_div = (//)
-let u_l_mod = Num.mod_num
-let u_l_negate = Num.minus_num
+let u__negate = Num.minus_num
 
 let u_l_int_gt = (>)
 let u_l_int_lt = (<)
 let u_l_int_gte = (>=)
 let u_l_int_lte = (<=)
 
-let u_l_hd = List.hd
-let u_l_tl = List.tl
+let u__mod = Num.mod_num
+
+let u__hd = List.hd
+let u__tl = List.tl
 
 let u_l_cons v l = v::l
 let u_l_concat l1 l2 = l1 @ l2
 
-let u_l_drop = drop
+let u__drop = drop
 
-let u_l_stringToXml s =
+let u__stringToXml s =
   [box_xmlitem (Text s)]
 
-let u_l_reifyK k =
+let u__reifyK k =
   Netencoding.Base64.encode (
     Marshal.to_string k [Marshal.Closures])
 
-let u_l_error = failwith
+let u__error = failwith
 
-let u_l_exit k v = v
+let u__exit k v = v
 
 (* Main stuff *)
 let handle_request entry_f =
