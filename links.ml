@@ -239,13 +239,14 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
     print_endline (Ir.string_of_ir (invert_env nenv) program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
-let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (*print_endline (Ir.Show_program.show program ^ "\n");*)
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox)) 
-      (invert_env nenv) 
+      (invert_env nenv)
+      prelude
       program 
     in
       print_endline code
@@ -266,7 +267,7 @@ let run_file prelude envs filename =
        if Settings.get_value pretty_print_ir then
          print_ir parse_and_desugar envs filename
        else if Settings.get_value compile then
-         ignore (compile_ir parse_and_desugar envs filename)
+         ignore (compile_ir parse_and_desugar envs prelude filename)
        else
          ignore (evaluate parse_and_desugar envs filename) 
           
@@ -283,8 +284,6 @@ let evaluate_string_in envs v =
     (Settings.set_value interacting false;
      if Settings.get_value pretty_print_ir then
        print_ir parse_and_desugar envs v
-     else if Settings.get_value compile then
-       ignore (compile_ir parse_and_desugar envs v)
      else
        ignore (evaluate parse_and_desugar envs v))
 
@@ -346,12 +345,16 @@ let main () =
     | Some _ -> Settings.set_value web_mode true
     | None -> ()
   end;
+
   config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
   let file_list = ref [] in
   Errors.display_fatal_l (lazy 
      (parse_cmdline options (fun i -> push_back i file_list)));
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
+
+  if Settings.get_value compile then
+      Settings.set_value prelude_file "compiler_prelude.links";
 
   let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
     

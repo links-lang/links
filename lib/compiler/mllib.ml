@@ -2,6 +2,8 @@ open Num
 
 module StringMap = Map.Make (String);;
 
+exception InternalError of string
+
 type xml = value list
 and xmlitem = 
   | Text of string
@@ -70,6 +72,8 @@ let unbox_xmlitem = function
   | _ -> assert false
 
 (* Stolen from Utility.ml *)
+let identity x = x
+
 let (-<-) f g x = f (g x)
 
 let xml_escape s = 
@@ -77,6 +81,10 @@ let xml_escape s =
     (Str.global_replace (Str.regexp "&") "&amp;" s)
 
 let mapstrcat glue f list = String.concat glue (List.map f list)
+
+let rec drop n = if n = (num_of_int 0) then identity else function
+  | []     -> []
+  | _ :: t -> drop (pred_num n) t
 
 let implode : char list -> string = 
   (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
@@ -106,6 +114,7 @@ let rec string_of_value = function
   | Xmlitem x -> string_of_xmlitem x
 and
     string_of_list = function
+      | [] -> "[]"
       | (x::xs) as l ->
           match x with
             | Xmlitem _ -> mapstrcat "" string_of_value l
@@ -130,79 +139,54 @@ and
                          ^ "</" ^ name ^ ">")
           
 (* Internal functions used by compiler *)
+let id = box_func identity
 let start = box_func (fun x -> x);;
 let project m k = StringMap.find (unbox_string k) (unbox_record m);;
 let build_xmlitem name attrs children =
     Node (name, List.map 
             (fun (n, v) -> (n, unbox_string v)) attrs, children)
 
-(* Library stuff *)
-let nil = box_list ([])
+(* Library functions *)
 
-let equals = box_func (
-  fun x -> box_func (
-    fun y -> box_bool (x = y)))
+let l_nil = box_list ([])
 
-let links_not = box_func (
-  fun x -> box_bool (not (unbox_bool x)))
+let u_l_equals = (=)
+let u_l_not_equals = (!=)
 
-let int_add = box_func (
-  fun x ->  box_func (
-    fun y -> box_int ((unbox_int x) +/ (unbox_int y))))
+let u_l_and = (&&)
+let u_l_or = (||)
+let u_l_not = not
 
-let int_minus = box_func (
-  fun x -> box_func (
-    fun y -> box_int ((unbox_int x) -/ (unbox_int y))))
+let u_l_int_add = (+/)
+let u_l_int_minus = (-/)
+let u_l_int_mult = ( */ )
+let u_l_int_div = (//)
+let u_l_mod = Num.mod_num
+let u_l_negate = Num.minus_num
 
-let int_gt = box_func (
-  fun x -> box_func (
-    fun y -> box_bool ((unbox_int x) >/ (unbox_int y))))
+let u_l_int_gt = (>)
+let u_l_int_lt = (<)
+let u_l_int_gte = (>=)
+let u_l_int_lte = (<=)
 
-let int_lt = box_func (
-  fun x -> box_func (
-    fun y -> box_bool ((unbox_int x) </ (unbox_int y))))
+let u_l_hd = List.hd
+let u_l_tl = List.tl
 
-let int_gte = box_func (
-  fun x -> box_func (
-    fun y -> box_bool ((unbox_int x) >=/ (unbox_int y))))
+let u_l_cons v l = v::l
+let u_l_concat l1 l2 = l1 @ l2
 
-let int_lte = box_func (
-  fun x -> box_func (
-    fun y -> box_bool ((unbox_int x) <=/ (unbox_int y))))
+let u_l_drop = drop
 
-let hd = box_func (
-  fun k -> box_func (
-    fun l -> (unbox_func k) (List.hd (unbox_list l))))
+let u_l_stringToXml s =
+  [box_xmlitem (Text s)]
 
-let tl = box_func (
-  fun k -> box_func (
-    fun l -> (unbox_func k) (box_list (List.tl (unbox_list l)))))
+let u_l_reifyK k =
+  Netencoding.Base64.encode (
+    Marshal.to_string k [Marshal.Closures])
 
-let cons = box_func (
-  fun x -> box_func (
-    fun l -> box_list (x::(unbox_list l))))
+let u_l_error = failwith
 
-let concat = box_func (
-  fun l1 -> box_func (
-    fun l2 -> 
-      box_list ((unbox_list l1) @ (unbox_list l2))))
-
-let stringToXml = box_func (
-  fun s -> box_list ([box_xmlitem (Text (unbox_string s))]))
-
-let reifyK = box_func (
-  fun k -> box_func (
-    fun cont ->
-      (unbox_func k) (
-        NativeString (
-          Netencoding.Base64.encode (
-            Marshal.to_string cont [Marshal.Closures])))))
-
-let exit = box_func (
-  fun k -> box_func (
-    fun v -> v
-  ))
-
+let u_l_exit k v = v
 
 (* Main stuff *)
 let handle_request entry_f =

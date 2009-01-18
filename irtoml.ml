@@ -14,7 +14,7 @@ type code =
   | Float of float
   | Var of string
   | Rec of (string * string list * code) list * code
-  | Fun of string list * code
+  | Fun of string list * code 
   | Let of string * code * code
   | If of (code * code * code)
   | Call of (code * code list)
@@ -28,6 +28,8 @@ deriving (Show)
 
 module type Boxer =
 sig
+  val wrap_func : bool -> string * string list * string * bool -> code -> code
+
   val box_bool : code -> code
   val box_record : code -> code
   val box_int : code -> code
@@ -45,10 +47,13 @@ sig
 end
 
 let wrap_with name v =
-  Call (Var name, [v])
+  match name with
+    | "id" -> v
+    | _ -> Call (Var name, [v])
 
 module FakeBoxer : Boxer =
 struct
+  let wrap_func _ _ _ = Empty
   let box_bool = identity
   let box_int = identity
   let box_char = identity
@@ -80,6 +85,32 @@ struct
   let curry_box args body =
     List.fold_right
       (fun arg c -> Call (Var "box_func", [Fun ([arg], c)])) args body
+
+  let wrap_func cps (name, unboxers, boxer, needs_k) rest = 
+    let arg_names = List.rev (
+      fst (
+        List.fold_left ( 
+          fun (l, n) _ -> ("arg_" ^ (string_of_int n))::l, n + 1) ([], 0) unboxers)) in
+
+    let body_create arg_names unboxers =
+      wrap_with boxer (
+        Call (
+          Var ("u_" ^ name), 
+          List.map2 (fun ub arg -> wrap_with ub (Var arg)) unboxers arg_names))
+    in      
+      if needs_k && not cps then
+        (* Functions that require k should error when not using CPS *)
+        Die (NativeString (name ^ " cannot be used in direct style."))
+      else if needs_k then
+        let body = body_create ("k"::arg_names) ("unbox_func"::unboxers) in
+          Let (name, curry_box ("k"::arg_names) body, rest)
+      else if cps then
+        let body = Call (
+          wrap_with "unbox_func" (Var "k"), [body_create arg_names unboxers]) in
+          Let (name, curry_box ("k"::arg_names) body, rest)
+      else
+        let body = body_create arg_names unboxers in
+          Let (name, curry_box arg_names body, rest)
 
   let box_fun = function
     | Fun (a, b) -> curry_box a b
@@ -162,20 +193,59 @@ struct
       name
 end
 
+let lib_funcs = [
+  "l_int_add", ["unbox_int"; "unbox_int"], "box_int", false;
+  "l_int_minus", ["unbox_int"; "unbox_int"], "box_int", false;
+  "l_int_mult", ["unbox_int"; "unbox_int"], "box_int", false;
+  "l_mod", ["unbox_int"; "unbox_int"], "box_int", false;
+  "l_negate", ["unbox_int"], "box_int", false;
+
+  "l_int_gt", ["unbox_int"; "unbox_int"], "box_bool", false;
+  "l_int_gte", ["unbox_int"; "unbox_int"], "box_bool", false;
+  "l_int_lt", ["unbox_int"; "unbox_int"], "box_bool", false;
+  "l_int_lte", ["unbox_int"; "unbox_int"], "box_bool", false;
+
+  "l_equals", ["id"; "id"], "box_bool", false;
+  "l_not_equals", ["id"; "id"], "box_bool", false;
+
+  "l_cons", ["id"; "unbox_list"], "box_list", false;
+  "l_concat", ["unbox_list"; "unbox_list"], "box_list", false;
+  "l_hd", ["unbox_list"], "id", false;
+  "l_tl", ["unbox_list"], "box_list", false;
+  "l_drop", ["unbox_int"; "unbox_list"], "box_list", false;
+
+  "l_not", ["unbox_bool"], "box_bool", false;
+
+  "l_exit", ["id"], "id", true;
+  "l_error", ["unbox_string"], "id", false;
+]
+
+(* TODO: Most of this can be handled generically *)
 let ident_substs = StringMap.from_alist
-  [ "+", "int_add";
-    "-", "int_minus";
-    "*", "int_mult";
-    ">", "int_gt";
-    "<", "int_lt";
-    ">=", "int_gte";
-    "<=", "int_lte";
-    "!=", "not_equals";
-    "==", "equals";
-    "Nil", "nil";
-    "Cons", "cons";
-    "Concat", "concat";
-    "Not", "links_not"
+  [ "+", "l_int_add";
+    "-", "l_int_minus";
+    "*", "l_int_mult";
+    ">", "l_int_gt";
+    "<", "l_int_lt";
+    ">=", "l_int_gte";
+    "<=", "l_int_lte";
+    "!=", "l_not_equals";
+    "==", "l_equals";
+    "Nil", "l_nil";
+    "Cons", "l_cons";
+    "Concat", "l_concat";
+    "not", "l_not";
+    "hd", "l_hd";
+    "tl", "l_tl";
+    "exit", "l_exit";
+    "mod", "l_mod";
+    "drop", "l_drop";
+    "negate", "l_negate";
+    "error", "l_error";
+
+    "concatMap", "_concatMap";
+    "map", "_map";
+    "sortBy", "_sortBy";
   ]
 
 let subst_ident n = 
@@ -206,6 +276,12 @@ struct
   class virtual codeIR env = 
   object (o : 'self_type)
     val env = env
+
+    method wrap_func = B.wrap_func false
+
+    method wrap_lib rest =
+      List.fold_left
+        (fun r x -> o#wrap_func x r) rest lib_funcs
 
     method add_bindings : binder list -> 'self_type = fun bs ->
       let env = List.fold_left 
@@ -279,6 +355,9 @@ struct
       make_var_name v name
 
     method virtual binding : binding -> ('self_type -> code) -> code
+
+    method virtual program : program -> code
+
   end
     
   class direct env = 
@@ -320,6 +399,8 @@ struct
               | `Query _ -> raise (Unsupported "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
+    method program : program -> code = fun prog ->
+      o#wrap_lib (o#computation prog)
 
     method computation : computation -> code = fun (bs, tc) ->
       o#bindings bs (fun o' -> o'#tail_computation tc)
@@ -352,7 +433,16 @@ struct
 
   class cps env =
   object (o : 'self_type)
-    inherit codeIR env
+    inherit codeIR env as super
+
+    method wrap_func = B.wrap_func true
+
+    (* `ApplyPure is a pain. *)
+    method value : value -> code = function
+      | `ApplyPure (v, vl) ->
+          B.box_call (Call (o#value v, (Var "id")::(List.map o#value vl)))
+      | v -> super#value v
+
     method tail_computation : tail_computation -> code -> code = fun tc k ->
       match tc with
           `Return v -> B.box_call (Call (k, [o#value v]))
@@ -399,7 +489,10 @@ struct
 
     method computation : computation -> code -> code = fun (bs, tc) k ->
       o#bindings bs (fun o' -> o'#tail_computation tc k)
-        
+
+    method program : program -> code = fun prog -> 
+      o#wrap_lib (o#computation prog (Var "start"))
+
     method binding : binding -> ('self_type -> code) -> code = fun b rest_f ->
       match b with
           `Let (x, (_, tc)) ->
@@ -530,7 +623,7 @@ let rec ml_of_code c =
     | Die s ->
         group (text "raise (InternalError" ^| ml_of_code s ^| text ")")
 
-    | Empty -> assert false
+    | Empty -> empty
 
 let preamble = "open Num\nopen Mllib;;\n\n"
 let postamble = "\n\nlet _ = run entry"
@@ -538,19 +631,19 @@ let postamble = "\n\nlet _ = run entry"
 module BoxingCamlTranslater = Translater CamlBoxer
 module NonBoxingCamlTranslater = Translater FakeBoxer
 
-let ml_of_ir cps box env comp =
+let ml_of_ir cps box env prelude (bs, tc) =
+  let comp = prelude @ bs, tc in
   let c = 
-    if cps then
+    if cps then 
       if box then 
-        (new BoxingCamlTranslater.cps env)#computation comp (Var "start")
+        (new BoxingCamlTranslater.cps env)#program comp
       else
-        (new NonBoxingCamlTranslater.cps env)#computation comp (Var "start")
+        (new NonBoxingCamlTranslater.cps env)#program comp
     else
       if box then 
-        (new BoxingCamlTranslater.direct env)#computation comp
+        (new BoxingCamlTranslater.direct env)#program comp
       else
-        (new NonBoxingCamlTranslater.direct env)#computation comp
-  in
+        (new NonBoxingCamlTranslater.direct env)#program comp in
     (* Hack: this needs to be fixed so top-level bindings are
        properly exposed. *)
     preamble ^
