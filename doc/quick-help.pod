@@ -38,17 +38,17 @@ Characters: C<'a'>, C<'9'>, C<'\012'>.
 
 Links supports the standard arithmetic operators.
 
- +                : (Int) -> (Int) -> Int
- -                : (Int) -> (Int) -> Int
- *                : (Int) -> (Int) -> Int
- /                : (Int) -> (Int) -> Int
- ^                : (Int) -> (Int) -> Int
- mod              : (Int) -> (Int) -> Int
- +.               : (Float) -> (Float) -> Float
- -.               : (Float) -> (Float) -> Float
- *.               : (Float) -> (Float) -> Float
- /.               : (Float) -> (Float) -> Float
- ^.               : (Float) -> (Float) -> Float
+ +                : (Int, Int) -> Int
+ -                : (Int, Int) -> Int
+ *                : (Int, Int) -> Int
+ /                : (Int, Int) -> Int
+ ^                : (Int, Int) -> Int
+ mod              : (Int, Int) -> Int
+ *.               : (Float, Float) -> Float
+ +.               : (Float, Float) -> Float
+ -.               : (Float, Float) -> Float
+ /.               : (Float, Float) -> Float
+ ^.               : (Float, Float) -> Float
 
 As Links does not yet have any support for overloading, the floating
 point versions are distinguished using the "." suffix. The arithmetic
@@ -59,7 +59,7 @@ parentheses.
 
 returns C<7>.
 
-  (*.)(6.0)(7.)
+  (*.)(6.0, 7.)
 
 returns C<42.>.
 
@@ -254,6 +254,7 @@ C<other> case will not by selected unless the previous cases do not
 match.
 
 Here we assume that nothing other than a camel has humps.
+
 =head2 XML Quasiquotes
 
 Also called "quasis," these are the principal way to embed XML values
@@ -474,24 +475,25 @@ Any expression that evaluates to a function value can be called:
 
 The principal loop construct in Links is the list comprehension:
 
-    for (var x <- source)
+    for (x <- source)
        body
 
-The body should be an expression that evaluates to a list.
+Both the source and the body should be expressions that evaluate to
+lists.
 
 The value of a comprehension is the concatenation of all the lists
 produced by evaluating the body, once for each element of I<source>, and
 binding that element to the variable C<x>. For example:
 
     var source_list = [1, 2, 3];
-    for (var x <- source_list)
+    for (x <- source_list)
         [ x*x ]
 
 constructs a list of the squares of the values in C<source_list>. Note
 that more than one value can be included in the body list:
 
     var source_list = [2, 3, 7, 8, 9, 55];
-    for (var n <- source_list)
+    for (n <- source_list)
         if (odd(n))
            [n, n+1]
         else
@@ -506,20 +508,20 @@ Other forms of looping can be implemented using tail recursion.
 A comprehension can be filtered using the C<where> clause.
 
     var source = [2, 3, 4, 5, 6, 7];
-    for (var x <- source)
+    for (x <- source)
     where (odd(x))
       [x+1]
 
 returns C<[4, 6, 8]>. A where clause is equivalent to a condition
 nested within a comprehension:
 
-    for (var x <- src)
+    for (x <- src)
     where (pred)
       expr
 
 is equivalent to
 
-    for (var x <- src)
+    for (x <- src)
       if (pred)
         expr
       else []
@@ -541,10 +543,18 @@ by their year of release:
     orderby (m.release_year)
       [(m.model_number, m.model_name)]
 
-Note that the C<orderby> clause currently only has an effect on
-comprehensions against a database, and only when the ordering
-expression (C<m.release_year> in this case) is a field of the target
-table. This feature will be expanded in a future release.
+=head3 Multiple generators
+
+It is possible to use a for comprehension to iterate over multiple
+lists at once.
+
+   links>
+     for (fruit <- ["apple", "orange", "banana"], i <- [1..4])
+     orderby (fruit)
+       [(i, fruit)];
+   [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
+    (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
 
 =head2 Tables
 
@@ -579,22 +589,13 @@ f:Int),(i:Int, f:Int))>.  The first argument to C<TableHandle> is the
 type for reading from the table and the second is the type for
 writing. In this instance they are the same.
 
-A table can be coerced to a list using the C<asList> function:
-
-  asList : TableHandle(r, w) -> [r]
-
-(Special note: the argument to C<asList> must be an expression of
-concrete table type--that is, the compiler must be able to determine
-the type of the table as declared by a C<table> keyword, at compile
-time. For example, the expression C<fun (t) { asList(t) }> does not
-meet this restriction because the compiler cannot determine the fields
-of C<t> at compile time. This is a limitation that will be fixed in
-the next release of Links.)
 
 To avoid writing C<asList> in a C<for> comprehension, you may use the
-special C<E<lt>--> shorthand. Inside the generator of a comprehension,
-C<z <-- t> is syntactic sugar for C<z <- asList(t)>. So with the above
-declarations you may write
+special C<E<lt>--> shorthand. 
+
+For comprehensions support a further kind of generator C<z <-- t> for
+reading from database tables. So with the above declarations you may
+write
 
   for (z <-- factorials)
    where (i <= 20)
@@ -602,17 +603,87 @@ declarations you may write
 
 to extract rows from the C<factorials> table.
 
-Tables now have preliminary support for constraints. Currently the
-only constraint that can be applied is to define some fields as
-readonly. To assign to the variable C<t> the table "people" with
-fields C<id> of type Int and C<name> of type String where C<id> is
-readonly, write:
+An entire table can be read using the C<asList> function:
 
-  var t = table "people" with (id:Int, name:String) 
-                         where id readonly from db;
+  sig asList : (TableHandle((|a::Base),_,_)) -> [(|a::Base)]
+  fun asList(t) {for (z <-- t) [z]}
 
-The variable C<t> has type C<TableHandle((id:Int, name:String),
-(name:String))>, as the C<id> field is C<readonly>.
+As of version 0.5 table fields support two kinds of constraint:
+C<readonly> and C<default>. A C<readonly> field must not be included
+in an insert or an update. A C<default> field need not be included in
+an insert.
+
+To assign to the variable C<t> the table "people" with fields C<id> of
+type C<Int>, C<name> of type C<String> and C<nationality> of type
+C<String> where C<id> is readonly and C<nationality> has a default,
+write:
+
+  links>
+    var t = table "people" with (id:Int, name:String, nationality:String) 
+                           where id readonly, nationality default from db;
+    t = (table people) : 
+      TableHandle((id:Int,name:String,nationality:String),
+                  (name:String,nationality:String),
+                  (name:String))
+
+The components of the C<TableHandle> type indicate the I<readable>
+fields, the I<writeable> fields and the I<needed> fields. Only C<name>
+and C<nationality> are writeable as C<id> is readonly. Only C<name> is
+needed (in order to insert a row into the "people" table) as
+C<nationality> has a default and C<id> is readonly.
+
+=head2 Database abstraction
+
+Links version 0.5 takes a radically different approach to compiling
+Links code to SQL. Older versions of Links failed to compile database
+code to efficient SQL as soon as the programmer abstracted over parts
+of the query (other systems such as LINQ have similar problems).
+
+A simple example is abstracting over a where clause. The natural way
+to do this in Links is to represent the where clause using a predicate
+function mapping table rows to booleans:
+
+  fun (p) {
+    for (x <-- t) where (p(x)) e
+  }
+
+The problem is that if C<p> is allowed to be arbitrary code then there
+is no way that the SQL compiler can know that it can be compiled to
+SQL, so the only option is to compile the for comprehension to an SQL
+query that reads the whole of C<t> and then performs the filtering in
+Links. The solution implemented in Links as of version 0.5 is to use an
+effect system to restrict the type of C<p> to only admit functions
+which are compileable to SQL.
+
+Function arrows are annotated with effects. A straight arrow C<->>
+indicates a I<tame> function, that is a function that can be compiled
+to the database. A squiggly arrow C<~>> indicates a I<wild>
+function, that is one that cannot be compiled to the database.
+
+When you write a for comprehension with a table generator in it that
+automatically forces any functions from the body and any C<where> or
+C<orderby> clauses to be tame. If you try to call a wild function from
+inside one of these clauses then you will get a type
+error.
+
+Furthermore, the type system also includes a simple subkinding system
+which is used to enforce the constraint that a database comprehension
+can only return a list of records of base type. (Type variables either
+have kind C<Any>, which means they can be instantiated to any type, or
+kind C<Base> which means they can only be instantiated to base
+types. The kind C<Base> is a subkind of C<Any>.)  This ensures that a
+database comprehension always compiles into exactly one SQL query.
+
+=head2 Query blocks
+
+A query block supports further abstraction over queries. 
+
+  query {
+    e
+  }
+
+The expression C<e> must be tame and must have the type list of record
+of base type.
 
 =head2 Database modifications
 
@@ -620,9 +691,10 @@ Databases can be read from using tables and C<for>
 comprehensions. Insert, update and delete operations are also
 supported. These are similar to the corresponding SQL statements.
 
-  insert t values rs
+  insert t values (f1, ..., fk) rs
 
-inserts the list of rows C<rs> into the table C<t>.
+inserts the list of rows C<rs> into the table C<t> where C<rs> must
+be a list of records with fields C<f1, ... fk>.
 
   update (var r <-- t)
    where condition
@@ -729,7 +801,7 @@ For example:
 Certain forms of regex can be compiled into an SQL test using the
 C<LIKE> operator. For example, the expression
 
-    for (var x <-- t)
+    for (x <-- t)
     where (x.name ~ /.*edinburgh.*/)
       [x.id]
 
@@ -795,8 +867,8 @@ with the types of various values. For example:
     [(42, "The answer"), (7, "The number of wonders of the world")] 
       : [(Int, String)]
 
-Note that the type of an integer sum is Int, and the type of a string
-is String. The I<pair> C<(42, "The answer")> has a type that indicates
+Note that the type of an integer is Int, and the type of a string is
+String. The I<pair> C<(42, "The answer")> has a type that indicates
 the first part of the pair is an C<Int> and the second part is a
 C<String>; this type is written C<(Int, String)>.
 
@@ -805,8 +877,7 @@ elements. Note that I<all elements of a list must be of the same
 type>. This allows you to apply an operation to an arbitary element of
 the list and to know what type it is. If you need to mix different
 types within a list, you can do so by assigning variant tags to
-each. There is a variety of tricks for getting what you want out of a
-strong type system. See L</"TBD"> for some ideas.
+each.
 
 By constrast, elements of a tuple can be of the same or of different
 types, but the number of elements of a tuple is fixed.
@@ -884,23 +955,15 @@ and following this declaration you can use C<Colour> in place of
 C<[|Red | Orange | Yellow | Green | Blue | Indigo | Violet|]>. For
 instance, you can now define functions with the following signatures:
 
-  sig showColour : Colour -> String
-  sig invertColour : Colour -> Colour
+  sig showColour : (Colour) -> String
+  sig invertColour : (Colour) -> Colour
   sig combineColours : (Colour, Colour) -> Colour
 
 It is also possible to define parameterised type aliases.
 
-  typename T(a,b) = ((a -> b), [a]) -> [b]
-
-defines the parameterised type alias T(a), and you can write:
-
-  sig map : T(a,b)
-  fun map(f,xs) {
-    switch (xs) {
-      case [] -> []
-      case (x::xs) -> f(x) :: (map (f, xs))
-    }
-  }
+  links> typename Pair(a, b) = (a, b)
+  links> (1, true) : Pair (?, ?)
+  (1, true) : Pair (Int, Bool)
 
 Currently type aliases are only allowed at the top-level.
 
@@ -1056,7 +1119,7 @@ To use this feature, simply annotate functions with the keyword
 "client" or "server". For example:
 
   fun lookupUserID(username) server {
-    for (var user <- users)
+    for (user <- users)
     where (user.name = username)
       [user.id]
   }
@@ -1398,8 +1461,8 @@ Returns a list of the child nodes of this xml node.
 When in the context of an HTTP request, cookies can be manipulated
 using these library functions:
 
-    getCookie : String -> String
-    setCookie : String -> String -> unit
+    getCookie : (String) ~> String
+    setCookie : (String, String) ~> unit
 
 Each takes the cookie name as its first parameter. C<getCookie>
 returns the current value of the cookie, as it was passed with the
@@ -1422,8 +1485,8 @@ interactive shell.
  intToFloat       : (Int) -> Float
  intToString      : (Int) -> String
  floatToString    : (Float) -> String
- stringToXml      : (String) -> Xml
- intToXml         : (Int) -> Xml
+ stringToXml      : (String) ~> Xml
+ intToXml         : (Int) ~> Xml
 
 These function convert between values of different types.
 
@@ -1441,13 +1504,13 @@ ASCII value as an integer.
 
 =head2 Character classification
 
- isAlpha          : (Char) -> Bool
- isAlnum          : (Char) -> Bool
- isLower          : (Char) -> Bool
- isUpper          : (Char) -> Bool
- isDigit          : (Char) -> Bool
- isXDigit         : (Char) -> Bool
- isBlank          : (Char) -> Bool
+ isAlpha          : (Char) ~> Bool
+ isAlnum          : (Char) ~> Bool
+ isLower          : (Char) ~> Bool
+ isUpper          : (Char) ~> Bool
+ isDigit          : (Char) ~> Bool
+ isXDigit         : (Char) ~> Bool
+ isBlank          : (Char) ~> Bool
 
 (C<isXDigit> returns true for hexadecimal digits)
 
@@ -1468,26 +1531,26 @@ ASCII value as an integer.
 
 =head2 Miscellaneous
 
- print            : (String) -> ()
+ print            : (String) ~> ()
 
 Print a string to the standard output. (This function has undefined behaviour when Links is running as a CGI script.)
 
- error            : (String) -> a
+ error            : (String) ~> a
  
 Raise a fatal error.
 
- debug            : (String) -> ()
+ debug            : (String) ~> ()
 
 Output a string to stderr. When running a client function this will
 output to a special window only if links is run with the -d flag. When
 running a server function stderr is typically forwarded to the web
 server's error log.
 
- sleep            : (Int) -> ()
+ sleep            : (Int) ~> ()
 
 Wait for the specified number of seconds.
 
- exit             : a -> b
+ exit             : (a) ~> b
 
 Exits the program, using the argument to exit as the program's return value.
 
@@ -1504,31 +1567,31 @@ runs a program. The functions it defines are explained below.
 =over 4
 
 =item *
-length : ([b]) -> Int
+length : ([_]) ~> Int
 
 Returns the number of elements in the given list.
 
 =item *
-all : (a->Bool, [a]) -> Bool
+all : (a b~> Bool, [a]) b~> Bool
 
 Returns C<true> if all elements of the list satisfy the predicate,
 C<false> otherwise. (All elements of the empty list satisfy any
 predicate).
 
 =item *
-and : ([a]) -> Bool
+and : ([Bool]) ~> Bool
 
 Returns C<true> if all elements of the list are C<true>.
 
 =item *
-any : (a -> Bool, [a]) -> Bool
+any : ((a) b~> Bool, [a]) b~> Bool
 
 Returns C<true> if any element of the list satisfies the predicate,
 C<false> otherwise. (No element of the empty list satisfies any
 predicate).
 
 =item *
-or : ([a]) -> Bool
+or : ([Bool]) ~> Bool
 
 Returns C<true> if any element of the list is C<true>.
 
@@ -1539,7 +1602,7 @@ even : (Int) -> Bool
 Returns C<true> if the argument is, respectively, odd or even.
 
 =item *
-select : ([a], Int) -> a
+select : ([a], Int) ~> a
 
 C<select(list, i)> returns the C<i>th element of the list, the first
 element being 0 (and throws an error if the list has fewer than C<i>+1
@@ -1551,17 +1614,17 @@ swap : ([a], a, a) -> [a]
 C<swap(xs, a, b)> takes each instance of C<a> in C<xs> and replaces it
 with C<b>, and vice-versa, performing the two substitutions simultaneously.
 
-=item *
-fold_left : ((b, a) -> b, b, [a]) -> b
+=item*
+fold_left : ((a, b) c~> a, a, [b]) c~> a
 
 =item *
-fold_right : ((a, b) -> b, b, [a]) -> b
+fold_right : ((a, b) c~> b, b, [a]) c~> b
 
 =item *
-fold_left1 : ((a, a) -> a, [a]) -> a
+fold_left1 : ((a, a) b~> a, [a]) b~> a
 
 =item *
-fold_right1 : ((a, a) -> b, [a]) -> a
+fold_right1 : ((a, a) b~> a, [a]) b~> a
 
 Functions for arbitrary list manipulation. (Documentation TBD.)
 
@@ -1578,17 +1641,17 @@ pairing the I<i>the element of the first list with the I<i>th element
 of the second list.
 
 =item *
-replicate : (Int, a) -> [a]
+replicate : (Int, a) ~> [a]
 
 C<replicate(n, item)> returns a list containing just C<n> copies of C<item>.
 
 =item *
-filter : (a -> Bool, [a]) -> [a]
+filter : (a b-> Bool, [a]) b-> [a]
 
 Returns just those elements from the list that satisfy the given predicate.
 
 =item *
-compose : (b -> a, c -> b) -> c -> a
+compose : ((a) b-> c, (d) b-> a) -> (d) b-> c
 
 Given a function C<f> and a function C<g>, returns a function that
 applies C<g> to its argument and C<f> to the result of that.
@@ -1599,7 +1662,7 @@ id : (a) -> a
 Returns its argument.
 
 =item *
-map : (a -> b, [a]) -> [b]
+map : ((a) b-> c, [a]) b-> [c]
 
 Transforms a list by applying the function to each element of the list.
 
@@ -1608,7 +1671,7 @@ of applying the given function to the I<i>th element of the given
 list.
 
 =item *
-concatMap : (a -> [b], [a]) -> [b]
+concatMap : (a b-> [c], [a]) b-> [c]
 
 Applies the function to each element of the list, and concatenates the
 resulting lists, thus returning a "flat" list. Works much like a
@@ -1627,23 +1690,23 @@ An attempt to apply one of these functions to a tuple that doesn't
 have enough elements will result in a type error.
 
 =item *
-sum : ([Int]) -> Int
+sum : ([Int]) ~> Int
 
 Returns the numerical sum of a list of integers.
 
 =item *
-product : ([Int]) -> Int
+product : ([Int]) ~> Int
 
 Returns the numerical produce of a list of integers.
 
 =item *
-reverse : ([a]) -> [a]
+reverse : ([a]) ~> [a]
 
 C<reverse(list)> returns a list of the elements in C<list>, but in the
 reverse order.
 
 =item *
-concat : ([[a]]) -> [a]
+concat : ([[a]]) ~> [a]
 
 Given a list of lists, this concatenates all of those lists together. E.g.:
 
@@ -1651,7 +1714,7 @@ Given a list of lists, this concatenates all of those lists together. E.g.:
     [1, 2, 3, 4, 5, 6]
 
 =item *
-join : ([a], [[a]]) -> [a]
+join : ([a], [[a]]) ~> [a]
 
 C<join(glue, list)> returns a list formed by interspersing the "glue"
 in between each element of C<list> and concatenating them. E.g.:
@@ -1662,25 +1725,25 @@ in between each element of C<list> and concatenating them. E.g.:
 (Note the use of an ordinary C<String> as a list of C<Char>s.)
 
 =item *
-takeWhile : (a -> Bool, [a]) -> [a]
+takeWhile : ((a) b-> Bool, [a]) b-> [a]
 
 Returns the initial segment of the given list which satisfies the
 given predicate.
 
 =item *
-dropWhile : (a -> Bool, [a]) -> [a]
+dropWhile : ((a) -> Bool, [a]) b-> [a]
 
 Returns all of the given list I<but> the initial segment satisfying
 the given predicate. C<takeWhile(p,l) ++ dropWhile(p,l)> is equal to
 C<l> for any predicate C<p>.
 
 =item *
-ignore : a -> ()
+ignore : (_) -> ()
 
 Throws away its argument and returns unit, the empty tuple C<()>.
 
 =item *
-isJust : Maybe (a) -> Bool
+isJust : Maybe (_) -> Bool
 
 Returns C<true> if its argument is C<Just >I<x> for some I<x>, that
 is, if it is not C<Nothing>.
@@ -1688,34 +1751,34 @@ is, if it is not C<Nothing>.
 (TBD: document C<Maybe> types)
 
 =item *
-search : ((a) -> Bool, [a]) -> Maybe (a)
+search : ((a) b~> Bool, [a]) b~> Maybe (a)
 
 =item *
-find : ((a) -> Bool, [a]) -> a
+find : ((a) b~> Bool, [a]) b~> a
 
 =item *
-fromJust : Maybe (a) -> a
+fromJust : Maybe (a) ~> a
 
 Given an argument C<Just >I<x>, returns I<x>. Otherwise, raises an
 error.
 
 =item *
-memassoc : (a,[(a,b)]) -> Bool
+memassoc : (a,[(a, _)]) ~> Bool
 
 Given a key and an association list, returns C<true> if the key is 
 in the domain of the association list.
 
 =item *
-lookup : (a,[(a,b)]) -> Maybe (b)
+lookup : (a, [(a, b)]) ~> Maybe (b)
 
 =item *
-assoc : (String,[(String,b)]) -> b
+assoc : (String, [(String, b)]) ~> b
 
 =item *
-assocAll : (String,[(String,b)]) -> [b]
+assocAll : (String, [(String, b)]) ~> [b]
 
 =item *
-sortBy : ((a) -> b, [a]) -> [a]
+sortBy : ((a) b-> c, [a]) b-> [a]
 
 =back
 
@@ -1726,7 +1789,7 @@ These functions only make sense in the context of web programs.
 =over 4
 
 =item *
-freshResource : () -> ()
+freshResource : () ~> ()
 
 Redirects the client to a new page and continues from the call-point.
 
@@ -1741,15 +1804,14 @@ subsequent reload.
 Currently only works for server-only Links programs.
 
 =item *
-sendSuspend : ((a -> ()) -> Xml) -> a
+sendSuspend : (((a) -> Page) d~> Page) d~> a
 
-C<sendSuspend(xmlFunc)> calls the function C<xmlFunc> to generate an
-XML document and exits the program using that XML document as the
-output.
+C<sendSuspend(f)> calls the function C<f> to generate an
+page and exits the program using that page as the output.
 
 C<sendSuspend> captures the current continuation when it is called and
-passes this as the argument to C<xmlFunc>. Thus, C<xmlFunc> can use
-its argument to resume computation at the point where C<sendSuspend>.
+passes this as the argument to C<f>. Thus, C<f> can use its argument
+to resume computation at the point where C<sendSuspend> was called.
 
 See C<examples/login-flow.links> for an example of the use of
 C<sendSuspend>.
@@ -1758,7 +1820,7 @@ C<sendSuspend>.
 
 =head2 Formlet library
 
-hese routines can be used with the C<formlet>/C<yields> syntax
+These routines can be used with the C<formlet>/C<yields> syntax
 described in L</"Formlets">. Familiarize yourself with that mechanism
 before trying to read about these functions.
 
@@ -1777,7 +1839,7 @@ Given a string, makes an XML text node out of it, and returns the
 formlet which displays that XML and yields the unit value.
 
 =item *
-plug : (Xml -> Xml) -> Formlet (a) -> Formlet (a)
+plug : (XmlContext, Formlet (a)) -> Formlet (a)
 
 Transforms the visible (XML) part of a formlet by applying the given
 XML function.
@@ -1789,16 +1851,10 @@ Constructs a formlet containing just a simple C<input> field, yielding
 the value entered as a C<String>.
 
 =item *
-inputValue : String -> Formlet (String)
+inputValue : (String) ~> Formlet (String)
 
 Constructs a formlet containing just a simple C<inpute> field; its
 initial text contents are given by the argument.
-
-=item *
-hidden : String -> Formlet (String)
-
-Constructs a formlet containing a hidden field whose value is given in
-the argument.
 
 =item *
 inputFile : Formlet (String)
@@ -1812,7 +1868,7 @@ Constructs a formlet containing a simple inut field whose submission will
 be treated as an C<Int>.
 
 =item *
-inputIntValue : Int -> Formlet(Int)
+inputIntValue : (Int) ~> Formlet(Int)
 
 Constructs a formlet containing a simple input field whose submission
 will be treated as an C<Int> and whose default value is given in the
@@ -1825,28 +1881,28 @@ Constructs a formlet containing a simple input field whose submission
 will be treated as a C<Float>.
 
 =item *
-textarea : String -> Formlet (String)
+textarea : (String) ~> Formlet (String)
 
 Constructs a formlet containing a simple textarea (multi-line text
 input) field whose contents default to the argument.
 
 =item *
-submitButton : (String,a) -> Formlet (Maybe(a))
+submitButton : (String) ~> Formlet (Bool)
 
 =item *
-resetButton : (String,a) -> Formlet (Maybe(a))
+resetButton : (String) ~> Formlet (Bool)
 
 =item *
-pushButton : (String,a) -> Formlet (Maybe(a))
+pushButton : (String) ~> Formlet (Bool)
 
 =item *
-button : (String,[|Submit|Reset|Button|],a) -> Formlet (Maybe(a))
+button : (String, [|Submit|Reset|Button|]) ~> Formlet (Bool)
 
-C<button("Text", behavior, key)> constructs a simple button element
-that will yield C<Just key> if this button is the one that submits the
-form and C<Nothing> otherwise. C<behavior> choose whether the button
-is an HTML submit button, a reset button, or an undistinguished button
-(see the HTML spec).
+C<button("Text", behavior)> constructs a simple button element that
+will yield C<true> if this button is the one that submits the form and
+C<false> otherwise. C<behavior> choose whether the button is an HTML
+submit button, a reset button, or an undistinguished button (see the
+HTML spec).
 
 The other forms are shortcuts for corresponding choices of C<behavior>.
 
@@ -1858,12 +1914,12 @@ C<true> if the checkbox is checked at submit time, and C<false> if
 not.
 
 =item *
-inputRadiogroup : ([(String, a)], (String, a), [(String,a)], [(Xml, a)] -> Xml) -> Formlet (String) 
+inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) -> Formlet (a)
 
 Documentation TBD.
 
 =item *
-choice : ([(a,String)]) -> Formlet (a)
+choice : ([(a, String)]) ~> Formlet (a)
 
 Constructs a formlet that contains a pop-up menu (C<select> element)
 whose options are given by the list. The argument is a list of pairs,
@@ -1873,7 +1929,7 @@ the choice on submission. The value yielded by the formlet will be
 one of these keys.
 
 =item *
-choiceDefault : ([(a,String)], a) -> Formlet (a)
+choiceDefault : ([(a,String)], a) ~> Formlet (a)
 
 Like C<choice>, this constructs a formlet containing a pop-up menu
 (C<select> element). The second parameter is the key of a choice that
@@ -1882,23 +1938,10 @@ should be selected by default.
 (FIXME: This function currently doesn't work.)
 
 =item *
-choices : [(a,String)] -> Formlet ([a])
+choices : ([(a, String, Bool)]) ~> Formlet ([a])
 
 Constructs a formlet containing a multiple-select scrollbox containing
-the options listed in the argument, as per L<choice> above.
-
-=item *
-render : (Formlet (a), a -> Xml) -> Xml
-
-Given a formlet and a submission-handler function, returns the XML
-that realizes the formlet (a C<E<lt>formE<gt>> element) and whose
-C<action> will trigger the handler function. The handler function
-will be invoked at the server and will represent a page-transition.
-
-=item *
-renderMultipart : (Formlet (a), a -> Xml) -> Xml
-
-(Documentation TBD.)
+the options listed in the argument, as per C<choice> above.
 
 =back
 
