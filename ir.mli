@@ -158,9 +158,9 @@ module ClosureTable :
 sig
   type t = closures
 
-  val value : Types.datatype Env.Int.t -> value -> t
-  val tail_computation : Types.datatype Env.Int.t -> tail_computation -> t
-  val computation : Types.datatype Env.Int.t -> computation -> t
-  val bindings : Types.datatype Env.Int.t -> binding list -> t
-  val program : Types.datatype Env.Int.t -> program -> t
+  val value : Types.datatype Env.Int.t -> Utility.IntSet.t ->  value -> t
+  val tail_computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> tail_computation -> t
+  val computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> computation -> t
+  val bindings : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding list -> t
+  val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
 end

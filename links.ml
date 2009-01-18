@@ -18,12 +18,18 @@ let print_value rtype value =
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
-  (* TODO: the optimise part *)
-(*
-  print_string ((Ir.Show_program.show program)^"\n");
-  print_endline;
-*)
-  let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) program in
+  let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+
+  (* TODO: optimisation *)
+
+  (* need to be careful here as, for instance, running ElimDeadDefs
+     on the prelude would lead to lots of functions being deleted that
+     might actually be used in the program itself.
+  *)
+(*  let program = Ir.ElimDeadDefs.program tenv program in*)
+(*  let program = Ir.Inline.program tenv program in*)
+
+  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
   let valenv = Value.with_closures valenv closures in
 
   let valenv, v = lazy (Evalir.run_program valenv program)
@@ -94,14 +100,13 @@ let rec directives
 
     "env",
     ((fun ((valenv, nenv, _tyenv) as envs) _ ->
-        let venv = fst valenv in
-          Env.String.fold
-            (fun name var () ->
-               if not (Lib.is_primitive name) then
-                 Printf.fprintf stderr " %-16s : %s\n"
-                   name (Value.string_of_value (fst (IntMap.find var venv))))
-            nenv ();
-          envs),
+        Env.String.fold
+          (fun name var () ->
+             if not (Lib.is_primitive name) then
+               Printf.fprintf stderr " %-16s : %s\n"
+                 name (Value.string_of_value (Value.find var valenv)))
+          nenv ();
+        envs),
      "display the current value environment");
 
     "load",
@@ -162,8 +167,8 @@ let interact envs =
         Errors.display ~default:(fun _ -> envs)
           (lazy
              (match measure "parse" parse input with
-                | `Definitions ([], _), tyenv -> valenv, nenv, tyenv
-                | `Definitions (defs, nenv'), tyenv ->
+                | `Definitions ([], _), _ -> valenv, nenv, tyenv
+                | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       process_program
                         ~printer:(fun _ _ -> ())
@@ -172,8 +177,9 @@ let interact envs =
                     let () =
                       Env.String.fold
                         (fun name var () ->
+(*                            Debug.print ("name: "^name); *)
                            let v = Value.find var valenv in
-                           let t = Env.String.lookup tyenv.Types.var_env name in
+                           let t = Env.String.lookup tyenv'.Types.var_env name in
                              prerr_endline (name
                                             ^" = "^Value.string_of_value v
                                             ^" : "^Types.string_of_datatype t); ())
@@ -182,8 +188,8 @@ let interact envs =
                     in
                       (valenv,
                        Env.String.extend nenv nenv',
-                       tyenv)
-                | `Expression (e, t), tyenv ->
+                       Types.extend_typing_environment tyenv tyenv')
+                | `Expression (e, t), _ ->
                     let valenv, _ = process_program envs (e, t) in
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> execute_directive directive envs))
@@ -198,9 +204,9 @@ let interact envs =
         let sentence' = match sentence with
           | `Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-              let defs, nenv = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
+              let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
 (*                 Debug.print ("defs: "^Ir.Show_computation.show (defs, `Return (`Extend (StringMap.empty, None)))); *)
-                `Definitions (defs, nenv)
+                `Definitions (defs, nenv')
           | `Expression e     ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
@@ -297,8 +303,9 @@ let load_prelude () =
   let () = Lib.prelude_tyenv := Some tyenv in
   let () = Lib.prelude_nenv := Some nenv in
 
-  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) globals in
-  let valenv = Evalir.run_defs (Value.with_closures Value.empty_env closures) globals in
+  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals in
+(*    Debug.print ("closures: "^String.concat "\n" (List.rev (IntMap.fold (fun name _ names -> (string_of_int name) :: names) closures [])));*)
+  let valenv = Evalir.run_defs (Value.empty_env closures) globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,

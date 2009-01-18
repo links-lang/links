@@ -167,29 +167,68 @@ and t = [
 | `ClientFunction of string
 | `Continuation of continuation ]
 and env = (t * Ir.scope) Utility.intmap * Ir.closures
+(* and env = (int * (t * Ir.scope)) list * Ir.closures *)
   deriving (Show, Pickle)
 
+
+
 (* environment stuff *)
-let empty_env = IntMap.empty, IntMap.empty
+let empty_env closures = IntMap.empty, closures
 let bind name v (env, closures) = IntMap.add name v env, closures
 let find name (env, _closures) = fst (IntMap.find name env)
 let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env)
-let shadow (outers, closures) ~by:(by, closures') =
-  let closures =
-    IntMap.fold
-      (fun name xs closures ->
-         IntMap.add name xs closures)
-      closures'
-      closures
-  in
+let lookupS name (env, _closures) = IntMap.lookup name env
+let shadow (outers, closures) ~by:(by, _closures') =
+(* WARNING:
+
+   The commented out code causes an enormous slowdown.
+*)
+(*   let closures = *)
+(*     IntMap.fold *)
+(*       (fun name xs closures -> *)
+(*          IntMap.add name xs closures) *)
+(*       closures' *)
+(*       closures *)
+(*   in *)
     IntMap.fold (fun name v env -> IntMap.add name v env) by outers, closures
+let fold f (env, closures) a = IntMap.fold f env a
 let globals (env, closures) =
   IntMap.fold (fun name ((_, scope) as v) globals ->
-                 match scope with
-                   | _ -> IntMap.add name v globals
-                   | _ -> globals) env (IntMap.empty), closures
+          match scope with
+            | _ -> IntMap.add name v globals
+            | _ -> globals) env (IntMap.empty), closures
+let get_closures (_, closures) = closures
+let find_closure (_, closures) var = IntMap.find var closures
 let with_closures (env, closures') closures =
   (env, IntMap.fold IntMap.add closures closures')
+(* env of environment stuff *)
+
+
+(* list environment implementation *)
+(* let empty_env closures = [], closures *)
+(* let bind name v (env, closures) = (name, v)::env, closures *)
+(* let find name (env, _closures) = *)
+(*   fst (List.assoc name env) *)
+(* let lookup name env = *)
+(*   try Some (find name env) *)
+(*   with NotFound _ -> None *)
+(* let lookupS name (env, _closures) = *)
+(*   try Some (List.assoc name env) *)
+(*   with NotFound _ -> None *)
+(* let shadow (outers, closures) ~by:(by, _closures') = *)
+(*   by @ outers, closures *)
+(* let fold f (env, _closures) a = List.fold_right (fun (name, v) -> f name v) env a *)
+(* let globals (env, closures) = *)
+(*   List.fold_right (fun (name, ((_, scope) as v)) globals -> *)
+(*                      match scope with *)
+(*                        | _ -> (name, v)::globals *)
+(*                        | _ -> globals) env [], closures *)
+(* let find_closure (_, closures) var = IntMap.find var closures *)
+(* let with_closures (env, closures') closures = *)
+(*   (env, IntMap.fold IntMap.add closures closures') *)
+(* env of environment stuff *)
+
+
 
 (* compressed types for more efficient pickling *)
 type compressed_primitive_value = [
@@ -217,35 +256,26 @@ let compress_primitive_value : primitive_value -> [> compressed_primitive_value]
   function
     | #primitive_value_basis as v -> v
     | `Table ((_database, db), table, row) ->
-        Debug.print ("compressing table: "^table);
+(*         Debug.print ("compressing table: "^table); *)
         `Table (db, table, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
+
+let localise env var =
+  IntSet.fold
+    (fun name locals ->
+       match lookupS name env with
+         | None
+         | Some (_, `Global) -> locals
+         | Some (v, `Local) ->
+             bind name (v, `Local) locals)
+    (find_closure env var)
+    (empty_env (get_closures env))
 
 let rec compress_continuation cont : compressed_continuation =
 (*  Debug.print ("length cont: "^string_of_int (List.length cont));*)
   List.map
-    (fun (_scope, var, env, _body) ->
-       let valenv, closures = env in
-(*         Debug.print ("continuation frame: " ^string_of_int var);*)
-(*        let () = *)
-(*          IntMap.fold *)
-(*            (fun name _ () -> *)
-(*              Debug.print ("name (1): "^string_of_int name); ()) *)
-(*            valenv *)
-(*            () in *)
-       let locals =
-         IntSet.fold
-           (fun name locals ->
-              match IntMap.lookup name valenv with
-                | None
-                | Some (_, `Global) -> locals
-                | Some (v, `Local) ->
-(*                    Debug.print ("name (2): "^string_of_int name);*)
-                    IntMap.add name (v, `Local) locals)
-           (IntMap.find var closures)
-           IntMap.empty
-       in
-         (var, compress_env (locals, closures))) cont
+    (fun (_scope, var, locals, _body) ->
+       (var, compress_env locals)) cont
 and compress_t v : compressed_t =
   let cv = compress_t in
     match v with
@@ -253,33 +283,16 @@ and compress_t v : compressed_t =
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
-      | `RecFunction (defs, env, f, `Local) ->
-          let valenv, closures = env in
-          let locals =
-            List.fold_left
-              (fun locals (f, (_xs, _body)) ->
-                 IntSet.fold
-                   (fun name locals ->
-                      match IntMap.lookup name valenv with
-                        | None
-                        | Some (_, `Global) -> locals
-                        | Some (v, `Local) ->
-(*                            Debug.print ("closure name: "^string_of_int name);*)
-                            IntMap.add name (v, `Local) locals)
-                   (IntMap.find f closures)
-                   locals)
-              IntMap.empty
-              defs
-          in                                                 
-            `LocalFunction (List.map (fun (f, (_xs, _body)) -> f) defs, compress_env (locals, closures), f)
+      | `RecFunction (defs, locals, f, `Local) ->
+          `LocalFunction (List.map (fun (f, (_xs, _body)) -> f) defs, compress_env locals, f)
       | `RecFunction (defs, _env, f, `Global) ->
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
       | `PrimitiveFunction f -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-and compress_env (env, _closures) : compressed_env =
+and compress_env env : compressed_env =
   List.rev
-    (IntMap.fold
+    (fold
        (fun name (v, scope) compressed ->
           if scope = `Global then
             compressed
@@ -310,7 +323,8 @@ let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont 
        let scope = IntMap.find var scopes in
        let body = IntMap.find var conts in
        let env = uncompress_env envs env in
-         (scope, var, env, body))
+       let locals = localise env var in
+         (scope, var, locals, body))
     cont
 and uncompress_t ((globals, _scopes, _conts, funs) as envs) v : t =
   let uv = uncompress_t envs in
@@ -326,7 +340,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs) v : t =
                         `Local)
       | `GlobalFunction (defs, f) ->
           `RecFunction (List.map (fun f -> (f, IntMap.find f funs)) defs,
-                        globals,
+                        localise globals f,
                         f,
                         `Global)
       | `PrimitiveFunction f -> `PrimitiveFunction f
@@ -336,7 +350,7 @@ and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
   List.fold_left
     (fun env (name, v) ->
        bind name (uncompress_t envs v, IntMap.find name scopes) env)
-    globals
+    (empty_env (get_closures globals))
     env
 
 type unmarshal_envs =
@@ -415,16 +429,17 @@ let build_unmarshal_envs ((venv, closures), nenv, tyenv) program : unmarshal_env
   end in
   let _, _, o = build#computation program in
   let scopes, conts, funs = o#get_envs in
-  let globals : env =
-    ((IntMap.fold
-        (fun name (v, scope) env ->
-           if scope = `Global then
-             IntMap.add name (v, scope) env
-           else
-             env)
-        venv
-        IntMap.empty),
-     closures)
+  let globals = globals (venv, closures)
+(*   let globals = *)
+(*     ((IntMap.fold *)
+(*         (fun name (v, scope) env -> *)
+(*            if scope = `Global then *)
+(*              IntMap.add name (v, scope) env *)
+(*            else *)
+(*              env) *)
+(*         venv *)
+(*         IntMap.empty), *)
+(*      closures) *)
   in
     globals, scopes, conts, funs
 

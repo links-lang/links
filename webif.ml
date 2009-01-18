@@ -73,7 +73,7 @@ let contin_invoke_req (valenv, nenv, tyenv) program params =
   let params = List.filter (not -<- is_special_param) params in
   let params = string_dict_to_charlist_dict params in
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-  let closures = Ir.ClosureTable.program tenv program in
+  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
   let valenv = Value.with_closures valenv (closures) in
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     (* assert false *) (* TODO: implement this *)
@@ -90,7 +90,7 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
                              ("2", `Constant (`String r))],
        None) in
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-  let closures = Ir.ClosureTable.program tenv program in
+  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
   let valenv = Value.with_closures valenv (closures) in
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
@@ -102,11 +102,11 @@ let expr_eval_req (valenv, nenv, tyenv) program params =
                        List.fold_left
                          (fun env (name, v) ->
                             Value.bind (int_of_string name) (v, `Local) env)
-                         Value.empty_env
+                         (Value.empty_env closures)
                          fields
                 | _ -> assert false
             else
-              Value.empty_env in
+              Value.empty_env closures in
 
           (* we don't need to pass the args in here as they are read using the environment
              function *)
@@ -173,7 +173,7 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont 
              (Evalir.apply_cont_safe cont valenv (`Record params)))
     | ExprEval(expr, locals) ->        
         let env = Value.shadow valenv ~by:locals in
-        let v = snd (Evalir.run_program_with_cont (render_cont env) env ([], expr)) in
+        let v = snd (Evalir.run_program_with_cont (render_cont (Value.empty_env (Value.get_closures env))) env ([], expr)) in
           Lib.print_http_response [("Content-type", "text/html")]
             (Value.string_of_value v)               
     | ClientReturn(cont, value) ->
@@ -192,7 +192,7 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont 
              let program = (globals @ locals, main) in
                Debug.print "Running client program";
                let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-               let closures = Ir.ClosureTable.program tenv program in
+               let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
                  Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
            else
              (*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
@@ -200,7 +200,7 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont 
              Debug.print "Running server program";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 (*                  Debug.print ("tenv domain: "^Env.Int.fold (fun name _ s -> s ^ string_of_int name ^ "\n") tenv "\n"); *)
-             let closures = Ir.ClosureTable.program tenv (globals @ (fst program), snd program) in
+             let closures = Ir.ClosureTable.program tenv Lib.primitive_vars (globals @ (fst program), snd program) in
 (*                  Debug.print ("closures: "^Ir.Show_closures.show closures); *)              
              let valenv = Value.with_closures valenv (closures) in
              let _env, v = Evalir.run_program valenv program in
@@ -214,7 +214,8 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
     let () = Debug.print ("...loaded") in
 (*    let () = Debug.print ("program: "^Ir.Show_program.show (globals @ locals, main)) in *)
-    let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) (globals @ locals, main) in
+    let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
+    let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) Lib.primitive_vars (globals @ locals, main) in
 
     let valenv = Evalir.run_defs (Value.with_closures valenv closures) globals in
 
@@ -222,7 +223,6 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
       (valenv,
        Env.String.extend nenv nenv',
        Types.extend_typing_environment tyenv tyenv') in
-    let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
     let globals = prelude @ globals in
     let cgi_args =
       if is_multipart () then

@@ -80,11 +80,29 @@ module Eval = struct
         begin
           match opt_app (value env) (`Record []) r with
             | `Record fs ->
-                `Record (StringMap.fold 
-                           (fun label v fs ->
-                              (label, value env v)::fs)
-                           fields
-                           fs)
+                (* HACK
+
+                   Pre-pending the fields to r in this order shouldn't
+                   be necessary but without the List.rev deriving
+                   somehow manages to serialisee things in the wrong
+                   order on the "Your Shopping Cart" page of the
+                   winestore example.  *)
+                `Record (List.rev
+                           (StringMap.fold 
+                              (fun label v fs ->
+                                 if List.mem_assoc label fs then
+                                   (* (label, value env v) :: (List.remove_assoc label fs) *)
+                                   eval_error
+                                     "Error adding fields: label %s already present" label
+                                 else
+                                   (label, value env v)::fs)
+                              fields
+                              []) @ fs)
+(*                 `Record (StringMap.fold  *)
+(*                            (fun label v fs -> *)
+(*                               (label, value env v)::fs) *)
+(*                            fields *)
+(*                            fs) *)
             | _ -> eval_error "Error adding fields: non-record"
         end
     | `Project (label, r) ->
@@ -136,6 +154,7 @@ module Eval = struct
           match lookup n recs with
             | Some (args, body) ->
                 (* unfold recursive definitions once *)
+(*                 Debug.print ("calling: "^string_of_int n); *)
 
                 (* extend env with locals *)
                 let env = Value.shadow env ~by:locals in
@@ -197,16 +216,18 @@ module Eval = struct
       | b::bs -> match b with
           | `Let ((var, _) as b, (_, tc)) ->
 (*               Debug.print ("var: "^string_of_int var); *)
-              tail_computation env (((Var.scope_of_binder b, var, env, (bs, tailcomp))::cont) : Value.continuation) tc
+              let locals = Value.localise env var in
+                tail_computation env (((Var.scope_of_binder b, var, locals, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
 (*               Debug.print ("client f: "^string_of_int f); *)
               computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
 (*               Debug.print ("f: "^string_of_int f); *)
               let scope = Var.scope_of_binder fb in
+              let locals = Value.localise env f in
                 computation (Value.bind
                                f
-                               (`RecFunction ([f, (List.map fst args, body)], env, f, scope),
+                               (`RecFunction ([f, (List.map fst args, body)], locals, f, scope),
                                 scope) env) cont (bs, tailcomp)
           | `Rec defs ->
               (* partition the defs into client defs and non-client defs *)
@@ -214,24 +235,32 @@ module Eval = struct
                 List.partition (function
                                   | (_fb, _lam, (`Client | `Native)) -> true
                                   | _ -> false) defs in
+              
+              let locals =
+                match defs with
+                  | [] -> Value.empty_env (Value.get_closures env)
+                  | ((f, _), _, _)::_ -> Value.localise env f in
 
-              (* add the client defs to the environment *)
+              (* add the client defs to the environments *)
               let env =
                 List.fold_left
                   (fun env ((f, _) as fb, _lam, _location) ->
-                     Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env)
+                     let v = `ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb in
+                       Value.bind f v env)
                   env client_defs in
 
+              (* add the server defs to the environment *)
               let bindings = List.map (fun ((f,_), (_, args, body), _) ->
                                          f, (List.map fst args, body)) defs in
-              let env = 
-                List.fold_right (fun ((f, _) as fb, _, _) env ->
-(*                                    Debug.print ("rec f: "^string_of_int f); *)
-                                   let scope = Var.scope_of_binder fb in
-                                     Value.bind f
-                                       (`RecFunction (bindings, env, f, scope),
-                                        scope)
-                                       env) defs env
+              let env =
+                List.fold_right
+                  (fun ((f, _) as fb, _, _) env ->
+                     (* Debug.print ("rec f: "^string_of_int f); *)
+                     let scope = Var.scope_of_binder fb in
+                       Value.bind f
+                         (`RecFunction (bindings, locals, f, scope),
+                          scope)
+                         env) defs env
               in
                 computation env cont (bs, tailcomp)
           | `Alien _ 
@@ -267,8 +296,6 @@ module Eval = struct
            | `Database (db, params), name, `Record row ->
                apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
            | _ -> eval_error "Error evaluating table handle")
-    | `For (xb, source, body) ->
-        assert false
     | `Query (range, e, _t) ->
 (*         Debug.print ("t: "^Types.string_of_datatype t); *)
         let range =
@@ -313,11 +340,12 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Va
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (
+(*       Debug.print ("running..."); *)
       ignore 
         (Eval.eval env program);
       failwith "boom"
     ) with
-      | Eval.TopLevel (env, v) -> (env, v)
+      | Eval.TopLevel (env, v) -> (* Debug.print ("ran"); *) (env, v)
       | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =

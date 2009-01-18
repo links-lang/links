@@ -368,7 +368,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          let new_pid = fresh_pid () in
            Hashtbl.add messages new_pid (Queue.create ());
            let var = Var.dummy_var in
-           let cont = (`Local, var, Value.empty_env, ([], `Apply (`Variable var, []))) in
+           let cont = (`Local, var, Value.empty_env IntMap.empty, ([], `Apply (`Variable var, []))) in
            Queue.push ((cont::Value.toplevel_cont, f), new_pid) suspended_processes;
            (`Int (num_of_int new_pid))),
    (*
@@ -494,7 +494,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "debug", 
-  (p1 (fun message -> prerr_endline (unbox_string message); flush stderr;
+  (p1 (fun message -> Debug.print (unbox_string message);
                       `Record []),
    datatype "(String) ~> ()",
   IMPURE);
@@ -1222,6 +1222,8 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row `Any}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
+
+let primitive_vars = Env.String.fold (fun name var vars -> IntSet.add var vars) nenv IntSet.empty
 
 let primitive_name = Env.Int.lookup venv
 

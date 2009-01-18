@@ -69,17 +69,22 @@ and env = (t * Ir.scope) Utility.intmap * Ir.closures
 
 val toplevel_cont : continuation
 
-val empty_env : env
+val empty_env : Ir.closures -> env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
 val find : Ir.var -> env -> t
 val lookup : Ir.var -> env -> t option
+val lookupS : Ir.var -> env -> (t * Ir.scope) option
 val shadow : env -> by:env -> env
+val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
+val get_closures : env -> Ir.closures
+val find_closure : env -> Ir.var -> Utility.IntSet.t
 val with_closures : env -> Ir.closures -> env
+
+val localise : env -> Ir.var -> env
 
 val project : string -> [> `Record of (string * 'b) list ] -> 'b
 val untuple : t -> t list
-
 
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : t -> bool
