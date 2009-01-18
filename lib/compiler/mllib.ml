@@ -13,12 +13,40 @@ and value =
   | Char of char
   | Int of Num.num
   | Float of float
-  | NativeString of string
   | Function of (value -> value)
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
   | Xmlitem of xmlitem
+
+(* Stolen from Utility.ml *)
+let identity x = x
+
+let (-<-) f g x = f (g x)
+
+let xml_escape s = 
+  Str.global_replace (Str.regexp "<") "&lt;" 
+    (Str.global_replace (Str.regexp "&") "&amp;" s)
+
+let mapstrcat glue f list = String.concat glue (List.map f list)
+
+let rec drop n = if n = (num_of_int 0) then identity else function
+  | []     -> []
+  | _ :: t -> drop (pred_num n) t
+
+let explode : string -> char list = 
+  let rec explode' list n string = 
+    if n = String.length string then list
+    else explode' (string.[n] :: list) (n + 1) string
+  in List.rev -<- (explode' [] 0)
+
+let implode : char list -> string = 
+  (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
+
+let getenv : string -> string option =
+  fun name ->
+    try Some (Sys.getenv name)
+    with Not_found -> None
 
 (* Boxing functions *)
 let box_bool x = Bool x
@@ -36,9 +64,14 @@ let unbox_char = function
   | Char x -> x
   | _ -> assert false
 
-let box_string x = NativeString x
+let box_list l = Lst l
+let unbox_list = function
+  | Lst l -> l
+  | _ -> assert false
+
+let box_string x = box_list (List.map box_char (explode x))
 let unbox_string = function
-  | NativeString x -> x
+  | Lst x -> implode (List.map unbox_char x)
   | _ -> assert false
   
 let box_float x = Float x
@@ -61,38 +94,10 @@ let unbox_record = function
   | Record r -> r
   | _ -> assert false
 
-let box_list l = Lst l
-let unbox_list = function
-  | Lst l -> l
-  | _ -> assert false
-
 let box_xmlitem x = Xmlitem x
 let unbox_xmlitem = function 
   | Xmlitem x -> x
   | _ -> assert false
-
-(* Stolen from Utility.ml *)
-let identity x = x
-
-let (-<-) f g x = f (g x)
-
-let xml_escape s = 
-  Str.global_replace (Str.regexp "<") "&lt;" 
-    (Str.global_replace (Str.regexp "&") "&amp;" s)
-
-let mapstrcat glue f list = String.concat glue (List.map f list)
-
-let rec drop n = if n = (num_of_int 0) then identity else function
-  | []     -> []
-  | _ :: t -> drop (pred_num n) t
-
-let implode : char list -> string = 
-  (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
-
-let getenv : string -> string option =
-  fun name ->
-    try Some (Sys.getenv name)
-    with Not_found -> None
 
 (* Stolen from value.ml *)
 let attr_escape =
@@ -102,8 +107,7 @@ let attr_escape =
 let rec string_of_value = function
   | Bool x -> string_of_bool x
   | Int x -> Num.string_of_num x
-  | Char x -> String.make 1 x
-  | NativeString x -> x
+  | Char x -> "'" ^ Char.escaped x ^ "'"
   | Float x -> string_of_float x
   | Function x -> "Fun"
   | Lst l -> string_of_list l
@@ -117,6 +121,7 @@ and
       | [] -> "[]"
       | (x::xs) as l ->
           match x with
+            | Char _ -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
             | Xmlitem _ -> mapstrcat "" string_of_value l
             | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
 and
@@ -191,7 +196,7 @@ let u__exit k v = v
 
 (* Main stuff *)
 let handle_request entry_f =
-  NativeString ("Content-type: text/html\n\n" ^ (string_of_value (entry_f ())))
+  box_string ("Content-type: text/html\n\n" ^ (string_of_value (entry_f ())))
     
 let resume_with_cont cont arg =
   let cont = (Marshal.from_string (Netencoding.Base64.decode Sys.argv.(1)) 0 : value) in
