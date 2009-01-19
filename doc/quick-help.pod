@@ -300,19 +300,19 @@ C<l:name>, which binds the value of an input field to a variable, and
 C<l:onsubmit>, with which you can supply an expression to be evaluated
 when the form is submitted.
 
-   <form l:onsubmit="{say_hello(personName)}>
+   <form l:onsubmit="{say_hello(personName)}">
       What is your name? 
       <input l:name="{personName}"/>
    </form>
 
-The "C<personName>" variable bound by the C<l:name> attribute is in scope in
+The C<personName> variable bound by the C<l:name> attribute is in scope in
 the C<l:onsubmit> expression, which may also contain references to
 other variables in the enclosing scope.  The values of these variables
 are passed from form to form automatically.
 
-Unfortunately, the C<l:> mechanism breaks abstraction. To address this
-issue Links version 0.4 has introduced L</"Formlets">, a mechanism for
-abstracting fragments of forms.
+Unfortunately, the C<l:> mechanism does not support any abstraction in
+building forms.  For a more abstraction-friendly construct, see
+L</"Formlets">, describing a mechanism for abstracting form fragments.
 
 =head2 Comparisons and Boolean Expressions
 
@@ -503,7 +503,7 @@ This example returns C<[2, 3, 4, 7, 8, 8, 9, 10, 55, 56]>.
 
 Other forms of looping can be implemented using tail recursion.
 
-=head3 The C<where> clause
+=head3 Filtering comprehensions
 
 A comprehension can be filtered using the C<where> clause.
 
@@ -512,8 +512,10 @@ A comprehension can be filtered using the C<where> clause.
     where (odd(x))
       [x+1]
 
-returns C<[4, 6, 8]>. A where clause is equivalent to a condition
-nested within a comprehension:
+returns C<[4, 6, 8]>.
+
+A C<where> clause is equivalent to a condition nested within a
+comprehension:
 
     for (x <- src)
     where (pred)
@@ -529,13 +531,15 @@ is equivalent to
 C<where> is a clause on C<for> comprehensions: it cannot be used
 outside of a C<for>.
 
-=head3 The C<orderby> clause
+=head3 Sorting comprehensions
+
+TBD: make this example generic instead of forward-referencing tables.
 
 The C<orderby> clause on C<for> comprehensions is used to sort the
 source before evaluating the body.
 
 For example, suppose "models" is a table previously declared (see
-L</"Tables">), describing models of an automobile make. Then the
+L</"Database Access">), describing models of an automobile make. Then the
 following will return a list of pairs describing the models, ordered
 by their year of release:
 
@@ -543,10 +547,23 @@ by their year of release:
     orderby (m.release_year)
       [(m.model_number, m.model_name)]
 
-=head3 Multiple generators
+=head3 Multi-generator comprehensions
 
-It is possible to use a for comprehension to iterate over multiple
-lists at once.
+A comprehension can draw elements from more than one list. For each
+element produced by the first I<generator>, Links iterates over all
+the items produced by the remaining generators.
+
+For example:
+
+   links>
+     for (fruit <- ["apple", "orange", "banana"], i <- [1..4])
+       [(i, fruit)];
+   [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
+    (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
+
+You can also impose an order on all the elements produced by the
+series of generators in a comprehension header, as in:
 
    links>
      for (fruit <- ["apple", "orange", "banana"], i <- [1..4])
@@ -556,145 +573,288 @@ lists at once.
     (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
     (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
 
-=head2 Tables
+Links will produce a list of tuple elements as dictated by the
+generators, then sort them, and finally evaluate the body expression
+for each element produced. Note that it is the source elements, I<not>
+the body elements, which are sorted.
 
-As of version 0.3 tables and databases are first-class. To assign to
-the variable C<db> a database called "factorials" using the C<mysql>
-driver, connecting to the default port as the user C<web> write:
+The effect of multi-generator comprehensions is much like that of
+nested comprehensions: the comprehension
+
+     for (fruit <- ["apple", "orange", "banana"], i <- [1..4])
+       [(i, fruit)];
+
+behaves just like this one:
+
+     for (fruit <- ["apple", "orange", "banana"])
+       for (i <- [1..4])
+         [(i, fruit)];
+
+But multi-generator comprehensions are different from the nested
+counterparts when it comes to clauses such as C<orderby>. This is
+because the C<orderby> clause sorts the list of tuples produced by all
+the generators in the I<most recent> comprehension header. When using
+nested single-generator comprehesions, you are sorting one series of
+elements which is then collected by another comprehension, for a
+result than may not obey the desired ordering. For example,
+
+   links> for (fruit <- ["apple", "orange", "banana"])
+            for (i <- [1..4])
+            orderby (i)
+              [(i, fruit)];
+   [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
+    (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
+
+=head2 Database access
+
+To access the database, use I<database> and I<table expressions>,
+which produce first-class values representing, respectively, database
+connections and tables within such connected databases.
+
+To connect to a given database instance using a particular database
+driver, use a C<database> expression.
+
+  database <database-name> <driver-name> <parameter-string>;
+
+The C<E<lt>parameter stringE<gt>> is a colon-separated string whose
+interpretation is driver-dependent, but which usually includes the
+hostname, port, username and password. For example, to connect to the
+database C<factorials> using the C<mysql> driver, using the default
+host name and the port 3306, and bind the resulting connection to the
+variable C<db>, use
 
   var db = database "factorials" "mysql" ":3306:web:";
 
-If database_driver and database_args are defined in the configuration
-file then you can write simply:
+The driver and parameter string default to the configuration values
+C<database_driver> and C<database_args>, so at a minimum you need only
+give the instance name:
 
   var db = database "factorials";
 
-Supported drivers are: C<postgres>, C<mysql> and C<sqlite>. The
-C<args> field is only used by the postgres and mysql drivers. It has
-the form:
+Supported drivers include C<postgres>, C<mysql> and C<sqlite>. The
+C<E<lt>parameter-stringE<gt>> field is presently only used by the
+postgres and mysql drivers and has the form:
 
   host:port:user:password
 
-When a database is evaluated on the server a connection is
+When a database expression is evaluated on the server a connection is
 automatically opened if one is not already open.
 
-To assign to the variable C<factorials> the table "factorials" with
-fields C<i> and C<f> both of type C<Int> associated with the database
-C<db> write:
+Table-handles are created using C<table> expressions, which need the
+table's name, its type, as a record, and the database connection (a
+value produced by a C<database> expression as above):
 
-  var factorials = table "factorials" with (i : Int, f : Int) from db;
+  table <table-name> with <row-type> from <database-connection>;
 
-The variable C<factorials> has type C<TableHandle((i:Int,
+For example, to create a handle to the table
+C<factorials> with fields C<i> and C<f> both of type C<Int> associated
+with the database C<db>, and bind it to the variable C<fac_table>, use:
+
+  var fac_table = table "factorials" with (i : Int, f : Int) from db;
+
+The variable C<fac_table> then has type C<TableHandle((i:Int,
 f:Int),(i:Int, f:Int))>.  The first argument to C<TableHandle> is the
-type for reading from the table and the second is the type for
-writing. In this instance they are the same.
+type used when reading from the table and the second is the type for
+writing. In this instance, the two are the same, so it is not
+necessary to list them separately. (TBD: how do I describe them if I
+want to?)
 
+=head3 Using tables
 
-To avoid writing C<asList> in a C<for> comprehension, you may use the
-special C<E<lt>--> shorthand. 
+To iterate over the items of a table--or just to fetch one row--use
+C<for> comprehensions. 
 
-For comprehensions support a further kind of generator C<z <-- t> for
-reading from database tables. So with the above declarations you may
-write
+Since a table-handle in Links is different from a list, we cannot
+simply draw elements directly from a table as we draw them from a
+list. But a special form of generator accepts a table-handle as its
+source:
 
-  for (z <-- factorials)
-   where (i <= 20)
-    [z]
+  var parlors = table "ice_cream_parlors" 
+                with (name : String, fans : Int) from db;
+  for (p <-- parlors)
+  where (p.flavors > 1)
+    [x]
 
-to extract rows from the C<factorials> table.
+This comprehension selects all the elements from the
+C<ice_cream_parlors> table that serve more than one flavor.
 
-An entire table can be read using the C<asList> function:
+The special I<long-arrow generator> C<E<lt>--> accepts a table-handle,
+and not a list, as its right-hand side.
+
+The long-arrow generator also specifies that the comprehension in
+which it participates I<must> be executed by a single SQL query at run
+time. When an expression is executed as a query, it should be
+relatively efficient because, for example, any comprehension filtering
+should be performed by the database, before involving the Links
+runtime system. The database system may be able to do this efficiently
+by using its indexes.
+
+When you don't want to specify that an expression becomes a query, you
+can extract all the rows of a table directly using the special
+function C<asList>. The C<asList> function takes a single argument, a
+table handle, and produces a list of all the rows in the table at the
+time when the function is applied.
+
+For example, you may write
+
+  for (p <-- parlors)
+   where (p.flavors <= 20)
+    [(name = p.name)]
+
+to extract from the C<parlors> table the names of those with
+fewer than 20 flavors. This might be compiled into an SQL query such
+as
+
+  select p.name as name from parlors as p
+  where p.flavors <= 20
+
+The C<asList> function extracts an entire table at once:
 
   sig asList : (TableHandle((|a::Base),_,_)) -> [(|a::Base)]
   fun asList(t) {for (z <-- t) [z]}
 
-As of version 0.5 table fields support two kinds of constraint:
-C<readonly> and C<default>. A C<readonly> field must not be included
-in an insert or an update. A C<default> field need not be included in
-an insert.
+Thus the following expression gives the same result as the previous
+query for selecting shops with fewer than 20 flavors, but it does more
+work outside the database system:
 
-To assign to the variable C<t> the table "people" with fields C<id> of
-type C<Int>, C<name> of type C<String> and C<nationality> of type
-C<String> where C<id> is readonly and C<nationality> has a default,
-write:
+  for (p <- asList(parlors))
+   where (p.flavors <= 20)
+    [(name = p.name)]
+
+It would use the following simple SQL to get its raw data:
+
+  select * from parlors
+
+and the Links runtime system would filter the data itself.
+
+=head3 Table special features: readonly and default
+
+Database fields can be given two kinds of special features: they can
+be made I<read-only> and they can be I<defaulted> or given default
+values when inserting.
+
+(TBD: move insert/update before this instead of forward-referencing.)
+
+A read-only field must not be included in an insert or an update. A
+defaulted field need not be included in an insert.
+
+To enable these special features on a table field, add a C<where>
+clause to the table expression that lists field names with the
+corresponding keyword. For example:
+
+  table "people" with (id:Int, name:String, nationality:String) 
+                 where id readonly, nationality default from db
+
+This returns a table handle for the table C<people> with fields C<id>
+and C<nationality>, where the C<id> field cannot be modified from the
+Links code, and C<nationality> has a default value so it is not
+necessary to supply one when inserting rows. (TBD: Is giving a value
+optional or is it forbidden?)
+
+The components of the type assigned by links to a table handle
+indicate the I<readable> fields, the I<writeable> fields and the
+I<needed> fields, in that order:
 
   links>
     var t = table "people" with (id:Int, name:String, nationality:String) 
                            where id readonly, nationality default from db;
-    t = (table people) : 
-      TableHandle((id:Int,name:String,nationality:String),
-                  (name:String,nationality:String),
-                  (name:String))
+  t = (table people) : 
+    TableHandle((id:Int,name:String,nationality:String),
+                (name:String,nationality:String),
+                (name:String))
 
-The components of the C<TableHandle> type indicate the I<readable>
-fields, the I<writeable> fields and the I<needed> fields. Only C<name>
-and C<nationality> are writeable as C<id> is readonly. Only C<name> is
-needed (in order to insert a row into the "people" table) as
-C<nationality> has a default and C<id> is readonly.
+Only C<name> and C<nationality> are I<writeable>, as C<id> is
+readonly. Only C<name> is I<needed> when inserting, as C<nationality>
+has a default and C<id> is readonly.
 
-=head2 Database abstraction
+=head3 Database abstraction
 
-Links version 0.5 takes a radically different approach to compiling
-Links code to SQL. Older versions of Links failed to compile database
-code to efficient SQL as soon as the programmer abstracted over parts
-of the query (other systems such as LINQ have similar problems).
+Links supports a powerful mode of abstraction over query fragments.
 
-A simple example is abstracting over a where clause. The natural way
-to do this in Links is to represent the where clause using a predicate
-function mapping table rows to booleans:
+A simple example occurs when you want to filter a table, but using
+some abstract predicate given by another piece of code. For example,
+you are writing an API to access some database tables, and you want
+the API caller to be able to choose how to filter the rows.
 
-  fun (p) {
-    for (x <-- t) where (p(x)) e
+A natural way to do this in Links is to represent the filter using a
+predicate function (one mapping table rows to booleans):
+
+  fun selectedShops(pred) {
+    for (p <-- parlors) where (pred(p)) e
   }
 
-The problem is that if C<p> is allowed to be arbitrary code then there
-is no way that the SQL compiler can know that it can be compiled to
-SQL, so the only option is to compile the for comprehension to an SQL
-query that reads the whole of C<t> and then performs the filtering in
-Links. The solution implemented in Links as of version 0.5 is to use an
-effect system to restrict the type of C<p> to only admit functions
-which are compileable to SQL.
+In this situation, since the long-arrow generator is used, the
+programmer demands that the entire comprehension be executed as a single
+SQL query--even though the predicate on which to filter is not known
+until runtime.
 
-Function arrows are annotated with effects. A straight arrow C<->>
-indicates a I<tame> function, that is a function that can be compiled
-to the database. A squiggly arrow C<~>> indicates a I<wild>
-function, that is one that cannot be compiled to the database.
+Still, Links guarantees at compile time that this is achievable--or
+gives a compile-time error if not. This involves analyzing the program
+to ensure that callers of C<selectedShops> never pass a function that
+Links cannot translate to SQL in the context of the above query. If so,
+an error is generated, usually at the call site, explaining that the 
+function passed was not "tame"--the Links term for a function that 
+doesn't translate to SQL.
 
-When you write a for comprehension with a table generator in it that
-automatically forces any functions from the body and any C<where> or
-C<orderby> clauses to be tame. If you try to call a wild function from
-inside one of these clauses then you will get a type
-error.
+How to determine at a glance whether your function will translate to
+SQL? In brief, the only sorts of functions that should fail to
+translate are those that use "wild" primitives, and recursive
+functions.
 
-Furthermore, the type system also includes a simple subkinding system
-which is used to enforce the constraint that a database comprehension
-can only return a list of records of base type. (Type variables either
-have kind C<Any>, which means they can be instantiated to any type, or
-kind C<Base> which means they can only be instantiated to base
-types. The kind C<Base> is a subkind of C<Any>.)  This ensures that a
-database comprehension always compiles into exactly one SQL query.
+To recognize wild and tame functions in the compiler's output, look at
+the function arrows. A straight arrow C<->> indicates a tame function,
+which can be translated to the database. A squiggly arrow C<~>>
+indicates a wild function, which cannot be compiled to the database.
+You can also use these arrow forms in the source, in type annoations,
+to constrain functions to the way you think they should act (or force
+the compiler to produce an error message if not).
 
-=head2 Query blocks
+A comprehension with a long-arrow generator (See L<Using tables>)
+implicitly requires the entire comprehension to be translatable to a
+single SQL query, and this effectively requires every function it
+calls to be I<tame>. To assert this requirement explicitly, or to make
+it elsewhere than a comprehension, use the C<query> block form (See
+L<Query blocks>).
 
-A query block supports further abstraction over queries. 
+Besides the issue of wildness, a query expression is not considered
+SQL-translatable if its result type is not the type of a flat
+relation--a list of records with fields of base type (C<Int>,
+C<String>, C<Float>, and so on).
+
+=head3 Query blocks
+
+To assert explicitly that an expression--which need not be a
+comprehension--translates to a query, wrap it in a query block:
 
   query {
     e
   }
 
-The expression C<e> must be tame and must have the type list of record
-of base type.
+As with long-arrow comprehensions, the expression C<e> must be "tame"
+and must have relation type: a list of records with fields of base
+type, or the compiler will give an error.
 
-=head2 Database modifications
+Use C<query> assertions to offload parts of your computation to the
+database system, taking advantage of its efficient query-planning
+facilities.
 
-Databases can be read from using tables and C<for>
-comprehensions. Insert, update and delete operations are also
+=head3 Database modifications
+
+As explained above, a links program can read from a database using
+table-handles and C<for>-comprehensions.
+
+Database modifications--insert, update and delete operations--are also
 supported. These are similar to the corresponding SQL statements.
+
+For example, the Links expression
 
   insert t values (f1, ..., fk) rs
 
 inserts the list of rows C<rs> into the table C<t> where C<rs> must
 be a list of records with fields C<f1, ... fk>.
+
+The Links expression
 
   update (var r <-- t)
    where condition
@@ -702,6 +862,8 @@ be a list of records with fields C<f1, ... fk>.
 
 updates the rows of table C<t> that satisfy C<condition> by setting each
 field C<fi> to C<vi>.
+
+The Links expression
 
   delete (var r <-- t)
    where condition
@@ -796,22 +958,22 @@ For example:
     links> "Portobello" ~ /.*bell.*/
     true : Bool
 
-=head4 Special features: database compilation
+=head3 Special feature: regexes and the database
 
-Certain forms of regex can be compiled into an SQL test using the
-C<LIKE> operator. For example, the expression
+Certain uses of regular expressions can be translated to an SQL
+expression involving the C<LIKE> operator. For example, the expression
 
-    for (x <-- t)
-    where (x.name ~ /.*edinburgh.*/)
-      [x.id]
+    for (uni <-- universities)
+    where (uni.city ~ /.*edinburgh.*/)
+      [uni]
 
-should compile to an SQL query that selects all those C<id>s from the
-table pointed to by C<t> having C<edinburgh> as a substring of their
-C<name> column. The query would look like this:
+should translate to an SQL query that selects all those unis from the
+C<universities> table having C<edinburgh> as a substring of their
+C<name> column. The query might look like this:
 
     select id from t where t.name like '%edinburgh%'
 
-=head4 Limitations
+=head3 Limitations
 
 Currently, a regex in Links cannot be treated as a first-class value:
 a regex can only appear I<lexically> as the right-hand side of a use
@@ -1291,9 +1453,10 @@ prefix. Widely-supported l-event attributes include:
 =back
 
 When an element containing one of these attributes is installed in the
-current DOM document (see L<Modifying the Page>), the associated code
-is registered as a handler for the corresponding event type. If the
-element is removed from the DOM, its event handlers become inactive.
+current DOM document (see L<Modifying the Web Page>), the associated
+code is registered as a handler for the corresponding event type. If
+the element is removed from the DOM, its event handlers become
+inactive.
 
 The content of one of these attributes should be a Links expression
 enclosed in curly braces, an expression of type C<()> which may
@@ -1347,7 +1510,7 @@ page (I<right> and I<down> are the positive directions).
 
 =back
 
-=head2 Modifying the Page
+=head2 Modifying the Web Page
 
 L<XML Quasiquote|XML Quasiquotes> expressions construct XML values, but these 
 values are not rendered by a browser immediately. XML values can be used to 
@@ -2047,7 +2210,7 @@ should be selected by default.
 =item *
 choices : ([(a, String, Bool)]) ~> Formlet ([a])
 
-Constructs a formlet containing a multiple-select scrollbox containing
+Constructs a formlet containing a multi-select scrollbox containing
 the options listed in the argument, as per C<choice> above.
 
 =back
