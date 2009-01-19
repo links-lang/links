@@ -2095,7 +2095,6 @@ and type_binding : context -> binding -> binding * context =
             (`Foreign ((name, Some datatype, pos), language, dt),
              (bind_var empty_context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
-          flush stderr;
           t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt))
       | `Infix -> `Infix, empty_context
       | `Exp e ->
@@ -2152,13 +2151,8 @@ struct
   let sentence tyenv =
     function
       | `Definitions bindings -> 
-          let te, bindings = type_bindings tyenv bindings in
-          let tyenv =
-            {tyenv with
-               var_env = Env.extend tyenv.var_env te.var_env;
-               tycon_env = Env.extend tyenv.tycon_env te.tycon_env}
-          in             
-            `Definitions bindings, Types.unit_type, tyenv
+          let tyenv', bindings = type_bindings tyenv bindings in
+            `Definitions bindings, Types.unit_type, tyenv'
       | `Expression (_, pos as body) -> 
           let body, t = (type_check tyenv body) in
             `Expression body, t, tyenv

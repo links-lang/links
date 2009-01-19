@@ -7,6 +7,33 @@ fun concatMap(f, xs) {
   }
 }
 
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}
+
+fun filter(p, l) {
+  concatMap (fun (x) {if(p(x)) [x] else []}, l)
+}
+
+# TBD: rename this 'sortOn' to follow Haskell usage?
+sig sortBy : ((a) b~> c, [a]) b~> [a]
+fun sortBy (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
+    }
+  }
+}
+
+sig sortByBase : ((a) b~> (| _::Base), [a]) b~> [a]
+var sortByBase = sortBy;
+
 fun all(p, l) {
    switch (l) {
      case []    -> true
@@ -124,10 +151,6 @@ fun replicate(n, item) {
   else item :: replicate(n-1, item)
 }
 
-fun filter(p, l) {
-  for (x <- l) where (p(x)) [x]
-}
-
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }
@@ -163,13 +186,6 @@ fun sum(ns) {
 
 fun product(ns) {
   fold_left((*), 1, ns)
-}
-
-fun map(f, l) {
-  switch (l) {
-    case []     -> []
-    case hd::tl -> f(hd) :: map(f,tl)
-  }
 }
 
 fun mapi(f, xs) {
@@ -415,25 +431,15 @@ fun assocAll(x,l) {
   }
 }
 
-# TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : ((a) b~> c, [a]) b~> [a]
-fun sortBy (f, l) {
-  switch (l) {
-    case [] -> []
-    case x::xs -> {
-      var lt = for (y <- xs) where (f(y) < f(x))  [y];
-      var ge = for (y <- xs) where (f(y) >= f(x)) [y];
-      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
-    }
-  }
-}
-
 sig isInt : (String) -> Bool
 fun isInt (x) { x ~ /-?[0-9]+$/ }
 
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+fun asList(t) {
+  for (x <-- t) [x]
+}
 
 # #### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax

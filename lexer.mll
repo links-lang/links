@@ -226,7 +226,7 @@ let directive_prefix = ['' '@' '$' '%']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' '|' '_' ]
+let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 

@@ -78,6 +78,11 @@ let rec directives
     "builtins",
     (ignore_envs 
        (fun _ ->
+          Env.String.fold
+            (fun k s () ->
+               Printf.fprintf stderr "typename %s = %s\n" k
+                 (Types.string_of_tycon_spec s))
+            (Lib.typing_env.Types.tycon_env) ();
           StringSet.iter (fun n ->
                             let t = Env.String.lookup Lib.type_env n in
                               Printf.fprintf stderr " %-16s : %s\n" 
@@ -89,7 +94,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, _, {Types.var_env = typeenv}) as envs) _ ->
+    ((fun ((_, _, {Types.var_env = typeenv; Types.tycon_env = tycon_env}) as envs) _ ->
         StringSet.iter (fun k ->
                           let t = Env.String.lookup typeenv k in
                             Printf.fprintf stderr " %-16s : %s\n" k (Types.string_of_datatype t))
@@ -97,6 +102,15 @@ let rec directives
         envs),
      "display the current type environment");
 
+    "tyconenv",
+    ((fun ((_, _, {Types.tycon_env = tycon_env}) as envs) _ ->
+        StringSet.iter (fun k ->
+                          let s = Env.String.lookup tycon_env k in
+                            Printf.fprintf stderr " %s = %s\n" k
+                              (Types.string_of_tycon_spec s))
+          (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
+        envs),
+     "display the current type alias environment");
 
     "env",
     ((fun ((valenv, nenv, _tyenv) as envs) _ ->
@@ -167,13 +181,20 @@ let interact envs =
         Errors.display ~default:(fun _ -> envs)
           (lazy
              (match measure "parse" parse input with
-                | `Definitions ([], _), _ -> valenv, nenv, tyenv
                 | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       process_program
                         ~printer:(fun _ _ -> ())
                         envs
                         ((defs, `Return (`Extend (StringMap.empty, None))), Types.unit_type) in
+                    let () =
+                      Env.String.fold
+                        (fun name spec () ->
+(*                            Debug.print ("name: "^name); *)
+                             prerr_endline (name
+                                            ^" = "^Types.string_of_tycon_spec spec); ())
+                        (tyenv'.Types.tycon_env)
+                        () in
                     let () =
                       Env.String.fold
                         (fun name var () ->

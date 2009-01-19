@@ -1187,10 +1187,12 @@ let patch_prelude_funs tyenv =
       Env.String.bind
         (Env.String.bind
            (Env.String.bind
-              tyenv.Types.var_env
-              ("map", datatype "((a) b-> c, [a]) b-> [c]"))
-           ("concatMap", datatype "((a) b-> [c], [a]) b-> [c]"))
-        ("sortBy", datatype "((a) b-> _, [a]) b-> [a]")}
+              (Env.String.bind
+                 tyenv.Types.var_env
+                 ("map", datatype "((a) b-> c, [a]) b-> [c]"))
+              ("concatMap", datatype "((a) b-> [c], [a]) b-> [c]"))
+           ("sortByBase", datatype "((a) b-> (|_::Base), [a]) b-> [a]"))
+        ("filter", datatype "((a) b-> Bool, [a]) b-> [a]")}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None

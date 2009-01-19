@@ -105,6 +105,8 @@ and type_arg =
     [ `Type of typ | `Row of row | `Presence of presence_flag ]
       deriving (Eq, Show, Pickle, Typeable, Shelve)
 
+type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
+
 let rec is_base_type : typ -> bool =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
@@ -843,6 +845,18 @@ struct
       | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
       | `Presence f -> free_bound_presence_type_vars ~include_aliases bound_vars f
 
+  let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
+    match tycon_spec with
+      | `Alias (tyvars, body) ->
+          let bound_vars, vars =
+            List.fold_left
+              (fun (bound_vars, vars) tyvar ->
+                 let var, spec = varspec_of_tyvar tyvar in
+                   (TypeVarSet.add var bound_vars, (var, spec)::vars)) (TypeVarSet.empty, []) tyvars
+          in
+            (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
+      | `Abstract _ -> []
+
 (*   let varset_of_vars vars = *)
 (*     V.fold (fun var _ varset -> TypeVarSet.add var varset) vars TypeVarSet.empty *)
 
@@ -1187,6 +1201,22 @@ struct
       | `Row r -> row "," bound_vars p r
       | `Presence f -> presence bound_vars p f
 
+  let tycon_spec bound_vars p =
+    function
+      | `Alias (tyvars, body) ->
+          let bound_vars =
+            List.fold_left
+              (fun bound_vars tyvar ->
+                 TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+              bound_vars tyvars
+          in
+            begin
+              match tyvars with
+                | [] -> datatype bound_vars p body
+                | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
+            end
+      | `Abstract _ -> "abstract"
+
   let strip_quantifiers =
     function
       | `ForAll (_, t)
@@ -1275,6 +1305,8 @@ let free_bound_presence_type_vars ?(include_aliases=true) = Vars.free_bound_pres
 let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyarg_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
+let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
+
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) (t : datatype) = 
   let policy = policy () in
@@ -1321,6 +1353,14 @@ let string_of_row_var ?(policy=Print.default_policy) row_var =
       | None -> ""
       | Some s -> s
 
+let string_of_tycon_spec ?(policy=Print.default_policy) (tycon : tycon_spec) = 
+  let policy = policy () in
+    Print.tycon_spec
+      TypeVarSet.empty
+      (policy, Vars.make_names (free_bound_tycon_type_vars ~include_aliases:true tycon))
+      tycon
+
+
 (* HACK:
 
    Just use the default policy. At some point we might want to export
@@ -1331,6 +1371,7 @@ let string_of_row r = string_of_row r
 let string_of_presence f = string_of_presence f
 let string_of_type_arg arg = string_of_type_arg arg
 let string_of_row_var r = string_of_row_var r
+let string_of_tycon_spec s = string_of_tycon_spec s
 
 module Show_datatype =
   Show.ShowDefaults(struct
@@ -1339,8 +1380,12 @@ module Show_datatype =
                         Format.pp_print_string fmt (string_of_datatype a)
                     end)
 
-type tycon_spec = [`Alias of quantifier list * datatype | `Abstract of Abstype.t]
-    deriving (Show)
+module Show_tycon_spec =
+  Show.ShowDefaults(struct
+                      type a = tycon_spec
+                      let format fmt a = 
+                        Format.pp_print_string fmt (string_of_tycon_spec a)
+                    end)
 
 type environment        = datatype Env.t
 and tycon_environment  = tycon_spec Env.t

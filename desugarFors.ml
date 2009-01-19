@@ -176,6 +176,17 @@ object (o : 'self_type)
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
+                let sortBy = 
+                  let is_query =
+                    List.exists (function
+                                   | `List _ -> false
+                                   | `Table _ -> true) generators
+                  in
+                    if is_query then
+                      "sortByBase"
+                    else
+                      "sortBy" in
+
                 let g : phrase =
                   `FunLit
                     (Some [Types.make_tuple_type [arg_type], eff],
