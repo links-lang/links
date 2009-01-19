@@ -290,7 +290,7 @@ directly in other XML quasis:
     var nameLine = <#> Name: <b>{name}</b> </#>;
     <div>
       {nameLine} <br />
-      &copy; 2005-2007 Links Team, University of Edinburgh
+      &copy; 2005-2009 Links Team, University of Edinburgh
     </div>
 
 =head2 Forms
@@ -967,6 +967,112 @@ It is also possible to define parameterised type aliases.
 
 Currently type aliases are only allowed at the top-level.
 
+=head2 Type variables
+
+Type variables in Links are written as lower case names.
+
+  sig id : (a) -> a
+  fun id(x) {x}
+
+We distinguish between I<rigid> type variables and I<flexible> type
+variables. A I<rigid> type variable (like the C<a> in the C<id>
+function above) is a proper polymorphic object-level type variable
+that can be instantiated to any type when its binding function is
+applied. A I<flexible> type variable (also called a I<weak> type
+variable or I<unification> type variable) is a monomorphic meta-level
+variable that will be instantiated to a object-level type by the type
+inference algorithm. A flexible type variable is indicated by
+prefixing a type variable with a question mark C<?>. Flexible type
+variables are useful if you want to assert the shape of the type of an
+expression, but you want type inference to fill in some of the type
+for you.
+
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, ?a, Bool);
+  (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool)
+
+If you only want to use a flexible type variable once, then you don't
+need to name it.
+
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, ?, Bool);
+  (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool
+
+A rigid type variable that is only used once is written as C<_>. This
+notation is also used by the pretty-printer.
+
+  links> fun (x) {0};
+  fun : (_) -> Int
+
+=head2 Function types and effects
+
+Function typess in Links are annotated with effects. The primitive
+form of a function type is:
+
+  (A1, ..., An) {E}-> B
+
+This is the type of a function that takes n arguments of types C<A1>,
+..., C<An>, has effects C<E> and returns values of type C<B>.
+
+The effects C<E> are represented as a I<row> type (as used in record
+and variant types). If an effect is present then that indicates that
+it might happen at run-time. If an effects absent then that indicates
+that it will definitely not happen at run-time.
+
+Currently the only two effects that are tracked in Links are C<wild>,
+which corresponds to code that cannot be run in the database, and
+C<hear:A> which corresponds to code that can 'hear' messages of type
+C<A>. In the future we plan to experiment with tracking other effects.
+
+In an effort to make function types more readable, syntactic sugar is
+provided for a number of common classes of function arrow. As well as
+being available to the programmer, the syntactic sugar is also used by
+the pretty-printer. The meta-variable C<X> stands for a rigid or
+flexible row variable.
+
+  X->            {|X}->
+  ->             {|_}->
+  {E}~>          {wild,E}~>
+  X~>            {|X}~>
+  ~>             {|_}~>
+
+  {:A,E}~>       {hear:A,E}~>
+  {:A:X}~>       {hear:A,|X}~>
+  {:A}~>         {:A:_}~>
+  {:A:}~>        {:A,}~>
+
+=head2 Kinds and subkinding
+
+The Links type system has three I<kinds> for classifying types and
+type variables: standard types and type variables have kind C<Type>,
+rows and row variables have kind C<Row>, and presence flags and
+presence variables have kind C<Presence>.
+
+In order to allow the type system to enforce the constraint that
+queries can only return lists of records of base type, Links also
+supports a very basic form of I<subkinding>. Type variables and row
+variables can be annotated with a subkind. Type variables either have
+subkind C<Any>, which means they can be instantiated to any type, or
+subkind C<Base> which means they can only be instantiated to base
+types. The subkind C<Base> is a subkind of C<Any>. Similarly, row
+variables either have subkind C<Any> or subkind C<Base>. A row
+variable of subkind C<Base> can only be instantiated with a row if all
+the field in the row are base types. Type inference introduces subkind
+annotations when inferring the type of a query.
+
+  links> fun (e) {query {e}};
+  fun : ([(|a::Base)]) -> [(|a::Base)]
+
+The base types are: C<Int>, C<Bool>, C<Float>, C<Char> and C<String>.
+
+(In fact C<String> is an alias for C<[Char]>. This leads to a hole in
+our SQL compilation scheme, as it fails to disallow string
+manipulation code that cannot be compiled to SQL, such as the
+following:
+
+  fun (t) {for (r <-- t) [(name=(for (c <- r.name) where (c <> 'a') [c]):String)]}
+
+This problem will be fixed in a future version of Links by changing
+C<String> to be a distinct base type.)
+
 =head1 Features
 
 =head2 Formlets
@@ -1487,6 +1593,7 @@ interactive shell.
  floatToString    : (Float) -> String
  stringToXml      : (String) ~> Xml
  intToXml         : (Int) ~> Xml
+ floatToXml       : (Int) ~> Xml
 
 These function convert between values of different types.
 
