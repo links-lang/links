@@ -210,9 +210,23 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
   try 
 (*    let (valenv, nenv, tyenv) = envs in*)
     let () = Debug.print ("Loading: "^filename^"...") in
-    let (nenv', tyenv'), (globals, (locals, main), _t) =
+    let (nenv', tyenv'), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
     let () = Debug.print ("...loaded") in
+
+    let () =
+      try
+        Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)
+      with
+          Unify.Failure error ->
+            begin
+              match error with
+                | `Msg s ->
+                    Debug.print ("Unification error: "^s)
+                | _ -> ()
+            end;
+            failwith ("Web programs must have type Page but this program has type "^Types.string_of_datatype t) in
+
 (*    let () = Debug.print ("program: "^Ir.Show_program.show (globals @ locals, main)) in *)
     let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
     let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) Lib.primitive_vars (globals @ locals, main) in

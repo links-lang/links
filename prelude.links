@@ -524,7 +524,7 @@ op m @@=> f {
 sig xml : (Xml) -> Formlet (())
 fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 
-sig text : (String) -> Formlet (())
+sig text : (String) ~> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
 sig plug : (XmlContext, Formlet (a)) ?-> Formlet (a)
@@ -739,7 +739,7 @@ fun textarea(value) {
 }
 
 # raw submit button
-sig submit : (String) -> Xml
+sig submit : (String) ~> Xml
 fun submit(text) {
   <button type="submit">{stringToXml(text)}</button>
 }
@@ -837,7 +837,7 @@ fun inputRadiogroup(items, selected, layout) {
 # preludeOptionKeyed: A utility function for the <select> formlets
 # ('choice' and 'choices'). Constructs an <option> element and an associated
 # function for determining whether this option was selected.
-sig preludeOptionKeyed : (String, (a,String), Bool) -> 
+sig preludeOptionKeyed : (String, (a,String), Bool) ~> 
                          (Xml, ((String) c-> [a]) -> (String) c-> [a])
 fun preludeOptionKeyed (key, (data,text), selected) {
   if (selected) {
@@ -954,7 +954,7 @@ fun satisfies(f, validate) {
 }
 
 
-sig errorMsg : ((a) b-> Bool, (a) b-> String) -> (a,Xml) b-> Either (Xml,Xml)
+sig errorMsg : ((a) b~> Bool, (a) b~> String) -> (a,Xml) b~> Either (Xml,Xml)
 fun errorMsg (f, msg) (x,xml) {
   if (f(x)) Left (xml)
   else Right (<span class="errorinput">{xml} </span>

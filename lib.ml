@@ -288,7 +288,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "stringToXml",
   ((p1 string_to_xml),
-   datatype "(String) -> Xml",
+   datatype "(String) ~> Xml",
   PURE);
 
   "intToXml",
