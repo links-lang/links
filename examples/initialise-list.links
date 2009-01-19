@@ -73,7 +73,7 @@ fun insertItems(itemsTable, itemsList) {
   update (itemEntry <-- itemsTable)
     where (0 <= itemEntry.i && itemEntry.i < n)
     set (i=itemEntry.i, name=select(itemsList, itemEntry.i));
-  delete (var itemEntry <-- itemsTable)
+  delete (itemEntry <-- itemsTable)
     where (itemEntry.i < 0 || n < itemEntry.i);
   var indexes = for (itemEntry <-- itemsTable) [itemEntry.i];
   insert itemsTable values (i, name)

@@ -195,7 +195,7 @@ let fold f (env, closures) a = IntMap.fold f env a
 let globals (env, closures) =
   IntMap.fold (fun name ((_, scope) as v) globals ->
           match scope with
-            | _ -> IntMap.add name v globals
+            | `Global -> IntMap.add name v globals
             | _ -> globals) env (IntMap.empty), closures
 let get_closures (_, closures) = closures
 let find_closure (_, closures) var = IntMap.find var closures

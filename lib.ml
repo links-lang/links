@@ -336,7 +336,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
               Hashtbl.remove blocked_processes pid
             with NotFound _ -> ());
            `Record []),
-   datatype "(Mailbox (a), a) {:b}~> ()",
+   datatype "(Mailbox (a), a) ~> ()",
   IMPURE);
 
   "self",

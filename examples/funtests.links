@@ -15,7 +15,7 @@ var mathfuns = [ ("floor", floor),
                  ("sqrt", sqrt)];
 
 fun msg(div, txt) {
-   appendChildren(<span>{stringToXml(txt)}</span><br />, div);
+   appendChildren(<#><span>{stringToXml(txt)}</span><br/></#>, div);
 }
 
 fun stringToFloat(s) { intToFloat(stringToInt(s)) }

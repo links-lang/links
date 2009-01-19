@@ -56,6 +56,14 @@ let annotate (signame, datatype) : _ -> binding =
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
+let attach_kind pos (t, k) =
+   match k with
+     | "Type" -> `TypeVar (t, `Any)
+     | "Base" -> `TypeVar (t, `Base)
+     | "Row" -> `RowVar (t, `Any)
+     | "BaseRow" -> `RowVar (t, `Base)
+     | "Presence" -> `PresenceVar t
+     | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
 
 let attach_subkind pos (t, k) =
    match k with
@@ -271,9 +279,13 @@ typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
+typearg:
+| VARIABLE                                                     { (`TypeVar ($1, `Any), None) }
+| VARIABLE COLONCOLON CONSTRUCTOR                              { (attach_kind (pos()) ($1, $3), None) }
+
 varlist:
-| VARIABLE                                                     { [`TypeVar ($1, `Any), None] }
-| VARIABLE COMMA varlist                                       { (`TypeVar ($1, `Any), None) :: $3 }
+| typearg                                                      { [$1] }
+| typearg COMMA varlist                                        { $1 :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }

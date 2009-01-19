@@ -1435,9 +1435,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
-            let read  = `Record (Types.make_empty_open_row `Any) in
-            let write = `Record (Types.make_empty_open_row `Any) in
-            let needed = `Record (Types.make_empty_open_row `Any) in
+            let read  = `Record (Types.make_empty_open_row `Base) in
+            let write = `Record (Types.make_empty_open_row `Base) in
+            let needed = `Record (Types.make_empty_open_row `Base) in
             let () = unify ~handle:Gripers.delete_table
               (pos_and_typ from, no_pos (`Table (read, write, needed))) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
@@ -1451,9 +1451,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let into   = tc into in
             let values = tc values in
             let id = opt_map tc id in
-            let read  = `Record (Types.make_empty_open_row `Any) in
-            let write = `Record (Types.make_empty_open_row `Any) in
-            let needed = `Record (Types.make_empty_open_row `Any) in
+            let read  = `Record (Types.make_empty_open_row `Base) in
+            let write = `Record (Types.make_empty_open_row `Base) in
+            let needed = `Record (Types.make_empty_open_row `Base) in
             let () = unify ~handle:Gripers.insert_table
               (pos_and_typ into, no_pos (`Table (read, write, needed))) in
 
@@ -1463,7 +1463,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                    if StringMap.mem name field_env then
                      Gripers.die pos "Duplicate labels in insert expression."
                    else
-                     StringMap.add name (`Present, Types.fresh_type_variable `Any) field_env)
+                     StringMap.add name (`Present, Types.fresh_type_variable `Base) field_env)
                 labels StringMap.empty in
 
             (* check that the fields in the type of values match the declared labels *)
@@ -1479,15 +1479,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             (* all fields being inserted must be present in the read row *)
             let () = unify ~handle:Gripers.insert_read
-              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable `Any))) in
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable `Base))) in
 
             (* all fields being inserted must be present in the write row *)
             let () = unify ~handle:Gripers.insert_write
-              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable `Any))) in
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable `Base))) in
 
             (* all fields being inserted must be consistent with the needed row *)
             let () = unify ~handle:Gripers.insert_needed
-              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Any))) in
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Base))) in
 
             (* insert returning ... *)
             let () =
@@ -1499,9 +1499,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat in
             let from = tc from in
-            let read =  `Record (Types.make_empty_open_row `Any) in
-            let write = `Record (Types.make_empty_open_row `Any) in
-            let needed = `Record (Types.make_empty_open_row `Any) in
+            let read =  `Record (Types.make_empty_open_row `Base) in
+            let write = `Record (Types.make_empty_open_row `Base) in
+            let needed = `Record (Types.make_empty_open_row `Base) in
             let () = unify ~handle:Gripers.update_table
               (pos_and_typ from, no_pos (`Table (read, write, needed))) in
 
@@ -1532,15 +1532,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             (* all fields being updated must be present in the read row *)
             let () = unify ~handle:Gripers.update_read
-              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable `Any))) in
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable `Base))) in
 
             (* all fields being updated must be present in the write row *)
             let () = unify ~handle:Gripers.update_write
-              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable `Any))) in
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable `Base))) in
 
             (* all fields being updated must be consistent with the needed row *)
             let () = unify ~handle:Gripers.update_needed
-              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Any)))
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Base)))
             in
               `DBUpdate (erase_pat pat, erase from, opt_map erase where, 
                          List.map (fun (n,(p,_)) -> n, p) set), Types.unit_type

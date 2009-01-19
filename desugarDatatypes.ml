@@ -190,37 +190,51 @@ struct
   (* Desugar a typename declaration.  Free variables are not allowed
      here (except for the parameters, of course). *)
   let typename alias_env name args (rhs : Sugartypes.datatype') = 
-    let mailbox_vars dt =
-      ((object
-          inherit SugarTraversals.fold as super
-          val tyvars = StringMap.empty
+(*     let mailbox_vars dt = *)
+(*       ((object *)
+(*           inherit SugarTraversals.fold as super *)
+(*           val tyvars = StringMap.empty *)
             
-          method tyvars = tyvars
+(*           method tyvars = tyvars *)
             
-          method datatype = function
-            | FunctionType (f, ([], `Open (x, _)), t) -> 
-                let var = `Flexible (Types.fresh_raw_variable(), `Any) in
-                let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in
-                let o = self#list (fun o -> o#datatype) f in
-                let o = o#datatype t in
-                  o
-            | dt -> super#datatype dt
-        end)#datatype' dt) # tyvars in
-    let name_of_quantifier =
-      function
-        | `TypeVar (x, _)
-        | `RowVar (x, _)
-        | `PresenceVar x -> x in
+(*           method datatype = function *)
+(*             | FunctionType (f, ([], `Open (x, _)), t) ->  *)
+(*                 let var = `Flexible (Types.fresh_raw_variable(), `Any) in *)
+(*                 let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in *)
+(*                 let o = self#list (fun o -> o#datatype) f in *)
+(*                 let o = o#datatype t in *)
+(*                   o *)
+(*             | dt -> super#datatype dt *)
+(*         end)#datatype' dt) # tyvars in *)
+(*     let name_of_quantifier = *)
+(*       function *)
+(*         | `TypeVar (x, _) *)
+(*         | `RowVar (x, _) *)
+(*         | `PresenceVar x -> x in *)
       try
-        let args, tmap = 
-          ListLabels.fold_right ~init:([], StringMap.empty) args
-            ~f:(fun (q, _) (args, map) ->
-                  let tv = Types.fresh_raw_variable () in
-                  let point = Unionfind.fresh (`Rigid (tv, `Any)) in
-                  let qv = `TypeVar ((tv, `Any), point) in
-                    ((q, Some qv) :: args, 
-                     StringMap.add (name_of_quantifier q) point map)) in
-          (args, datatype' {tenv=StringMap.union_disjoint tmap (mailbox_vars rhs); renv=StringMap.empty; penv=StringMap.empty} alias_env rhs)
+        let empty_envs =
+          {tenv=StringMap.empty; renv=StringMap.empty; penv=StringMap.empty} in
+        let args, envs = 
+          ListLabels.fold_right ~init:([], empty_envs) args
+            ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
+                  let var = Types.fresh_raw_variable () in
+                    match q with
+                      | `TypeVar (name, subkind) ->
+                          let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                            ((q, Some (`TypeVar ((var, subkind), point)))::args,
+                             {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
+                      | `RowVar (name, subkind) ->
+                          let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                            ((q, Some (`RowVar ((var, subkind), point)))::args,
+                             {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
+                      | `PresenceVar name ->
+                          let point = Unionfind.fresh (`Rigid var) in
+                            ((q, Some (`PresenceVar (var, point)))::args,
+                             {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
+          (args, datatype' envs alias_env rhs)
+(* {tenv=StringMap.empty; (\* StringMap.union_disjoint tmap (mailbox_vars rhs); *\) *)
+(*                             renv=StringMap.empty; *)
+(*                             penv=StringMap.empty} alias_env rhs) *)
       with UnexpectedFreeVar x ->
         failwith ("Free variable ("^ x ^") in definition of typename "^ name)
 
