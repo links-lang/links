@@ -31,8 +31,10 @@ fun sortBy (f, l) {
   }
 }
 
+# need to be careful to make sure this doesn't get 
+# optimised away - it does if we eta reduce it
 sig sortByBase : ((a) b~> (| _::Base), [a]) b~> [a]
-var sortByBase = sortBy;
+fun sortByBase(f, l) {sortBy(f, l)}
 
 fun all(p, l) {
    switch (l) {
@@ -437,7 +439,7 @@ fun isInt (x) { x ~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-fun asList(t) {
+fun asList(t) server {
   for (x <-- t) [x]
 }
 

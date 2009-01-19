@@ -230,7 +230,6 @@ examples/channels.links
 examples/citations.links
 examples/client-server-prims.links
 examples/crop.links
-examples/date.links
 examples/dictionary
 examples/dictionary/README
 examples/dictionary/create-table-mysql.sql
@@ -242,8 +241,6 @@ examples/draggable-db.links
 examples/draggable.links
 examples/factorial.links
 examples/factorials.sql
-examples/formlet-idiom.links
-examples/formlets-demo.links
 examples/forms-test.links
 examples/index.html
 examples/initialise-list.links
@@ -255,5 +252,6 @@ examples/paginate.links
 examples/progress.links
 examples/todo-db.links
 examples/todo.links
+examples/validate.links
 examples/wine.css
 examples/wine.links

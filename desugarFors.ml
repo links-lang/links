@@ -176,16 +176,16 @@ object (o : 'self_type)
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
-                let sortBy = 
+                let sort_by, sort_type_arg = 
                   let is_query =
                     List.exists (function
                                    | `List _ -> false
                                    | `Table _ -> true) generators
                   in
                     if is_query then
-                      "sortByBase"
+                      "sortByBase", `Row (TypeUtils.extract_row sort_type)
                     else
-                      "sortBy" in
+                      "sortBy", `Type sort_type in
 
                 let g : phrase =
                   `FunLit
@@ -193,7 +193,7 @@ object (o : 'self_type)
                      ([arg], sort)), dp
                 in
                   `FnAppl
-                    ((`TAppl ((`Var "sortBy", dp), [`Type arg_type; `Row eff; `Type sort_type]), dp),
+                    ((`TAppl ((`Var sort_by, dp), [`Type arg_type; `Row eff; sort_type_arg]), dp),
                      [g; results]), dp in
 
         let e : phrasenode =

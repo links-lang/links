@@ -26,7 +26,7 @@ fun login_widget(msg, return) {
 
 sig validAuth : (String, String) -> Bool
 fun validAuth(name, pass) {
-  name == "ezra" && pass == "knock"
+  name == "foo" && pass == "bar"
 }
 
 sig get_user : (String) ~> String

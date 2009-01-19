@@ -740,7 +740,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                           ("name", gv table_name);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
-      | `Query e -> assert false
+      | `Query e -> Die "Attempt to run a query on the client"
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))

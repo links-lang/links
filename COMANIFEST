@@ -11,6 +11,8 @@ examples/extras.js
 examples/document-replace.links
 examples/draw.links
 examples/extensible-case.links
+examples/formlet-idiom.links
+examples/formlets-demo.links
 examples/funtests.links
 examples/login-flow.links
 examples/mandelopt.links
