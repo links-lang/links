@@ -15,13 +15,13 @@ examples/funtests.links
 examples/login-flow.links
 examples/mandelopt.links
 examples/mandelopt.html
-examples/mandeltest.links
+examples/tofix/mandeltest.links
 examples/multiple.links
 examples/href-test.links
 examples/test-prims.links
 examples/nbe.links
-examples/regex.links
-examples/sleep.links
+examples/tofix/regex.links
+examples/tofix/sleep.links
 examples/tofix
 examples/tofix/chat.cgi
 examples/tofix/dom-send.links
@@ -37,18 +37,16 @@ examples/tofix/login-recursive.links
 examples/tofix/new-dom-api.links
 examples/tofix/token-ring-client.links
 examples/tofix/token-ring-server.links
+examples/tofix/web-include-test.links
 examples/tofix/xml-access.links
-examples/vali-date.links
-examples/varrec.links
-examples/xml_typing.links
+examples/validate.links
+examples/tofix/xml_typing.links
 
 links.el
 links-mode.el
 
 checkfiles
 make_release
-
-sort.ml
 
 tests/selenium-tests
 tests/selenium-tests/selenium-suite.html
