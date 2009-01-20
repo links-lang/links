@@ -1120,6 +1120,11 @@ It is also possible to define parameterised type aliases.
   links> (1, true) : Pair (?, ?)
   (1, true) : Pair (Int, Bool)
 
+It is even possible to parameterise type aliases over row variables.
+
+  links> typename Record(r::Row) = (x:Int|r);
+  Record = a.(x:Int|a)
+
 Currently type aliases are only allowed at the top-level.
 
 =head2 Type variables
