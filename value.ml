@@ -2,6 +2,8 @@
 open Num
 open Utility
 
+let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+
 class type otherfield = 
 object 
   method show : string
@@ -109,7 +111,7 @@ type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Eq, Pickle)
+    deriving (Typeable, Show, Eq, Pickle, Dump)
 
 let is_attr = function
   | Attr _ -> true
@@ -145,7 +147,7 @@ type primitive_value_basis =  [
 | `Int of num
 | `XML of xmlitem 
 | `NativeString of string ]
-  deriving (Show, Typeable, Eq, Pickle)
+  deriving (Show, Typeable, Eq, Pickle, Dump)
 
 type primitive_value = [
 | primitive_value_basis
@@ -234,7 +236,7 @@ type compressed_primitive_value = [
 | `Table of string * string * string
 | `Database of string
 ]
-  deriving (Show, Eq, Typeable, Pickle)
+  deriving (Show, Eq, Typeable, Pickle, Dump)
 
 type compressed_continuation = (Ir.var * compressed_env) list
 and compressed_t = [
@@ -248,7 +250,7 @@ and compressed_t = [
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
-  deriving (Show, Eq, Typeable, Pickle)
+  deriving (Show, Eq, Typeable, Pickle, Dump)
 
 let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
   function
@@ -578,46 +580,68 @@ let links_project name = function
   | (`Record fields) -> List.assoc name fields
   | _ -> failwith ("Match failure in record projection")
 
+type 'a serialiser = {
+  save : 'a -> string;
+  load : string -> 'a;
+}
+
+let marshal_save : 'a -> string = fun v -> Marshal.to_string v []
+and marshal_load : string -> 'a = fun v -> Marshal.from_string v 0
+
+let continuation_serialisers : (string * compressed_continuation serialiser) list = [
+  "Marshal",
+  { save = marshal_save ; load = marshal_load };
+  
+  "Pickle",
+  { save = Pickle_compressed_continuation.to_string ; load = Pickle_compressed_continuation.from_string };
+
+  "Dump",
+  { save = Dump_compressed_continuation.to_string ; load = Dump_compressed_continuation.from_string }
+]
+
+let value_serialisers : (string * compressed_t serialiser) list = [
+  "Marshal",
+  { save = marshal_save ; load = marshal_load };
+  
+  "Pickle",
+  { save = Pickle_compressed_t.to_string ; load = Pickle_compressed_t.from_string };
+
+  "Dump",
+  { save = Dump_compressed_t.to_string ; load = Dump_compressed_t.from_string };
+]
+
+let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =
+  fun serialisers ->
+    let name = Settings.get_value serialiser in
+    try List.assoc name serialisers
+    with NotFound _ -> failwith ("Unknown serialisation method : " ^ name)
+
+let continuation_serialiser : unit -> compressed_continuation serialiser =
+  fun () -> retrieve_serialiser continuation_serialisers
+
+let value_serialiser : unit -> compressed_t serialiser =
+  fun () -> retrieve_serialiser value_serialisers
+
 let marshal_continuation (c : continuation) : string = 
   let cs = compress_continuation c in
-  let pickle = Pickle_compressed_continuation.to_string cs in
-(*    Debug.print("marshalled continuation size: " ^
-                  string_of_int(String.length pickle));*)
-    if (String.length pickle > 4096) then (
+  let { save = save } = continuation_serialiser () in
+  let pickle = save cs in
+    if String.length pickle > 4096 then 
       prerr_endline "Marshalled continuation larger than 4K:";
-(*      Debug.print ("marshalling: " ^Show_compressed_continuation.show cs);*)
-(*      Debug.print("marshalling:"^ string_of_cont c)*)
-    );
-    let result = base64encode pickle in
-      result
-
+    base64encode pickle
 
 let marshal_value : t -> string =
-  (fun v ->
-     let compressed_v = compress_t v in
-(*     let () = Debug.print ("compressed : " ^ 
-                             Show_compressed_t.show compressed_v) in*)
-     let pickled = Pickle_compressed_t.to_string compressed_v in
-     let r = base64encode pickled in
-       r)
-
+  fun v ->
+    let { save = save } = value_serialiser () in
+      base64encode (save (compress_t v))
 
 exception UnrealizableContinuation
 
 let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
-    base64decode
-    ->- Pickle_compressed_continuation.from_string
-      ->- (uncompress_continuation envs)
-
+    let { load = load } = continuation_serialiser () in
+    base64decode ->- load ->- uncompress_continuation envs
 
 let unmarshal_value envs : string -> t =
   fun s ->
-    let s' = base64decode s in
-    let () = Debug.print ("base64-decoded " ^ string_of_int (String.length s')) in
-    let v = Pickle_compressed_t.from_string s' in
-    let () = Debug.print "unpickled" in
-    let v' = uncompress_t envs v in
-    let () = Debug.print "decompressed" in
-      v'
-
-
+    let { load = load } = value_serialiser () in
+      uncompress_t envs (load (base64decode s))

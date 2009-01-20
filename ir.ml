@@ -10,7 +10,7 @@ type scope = Var.scope
   deriving (Show)
 (* term variables *)
 type var = Var.var
-  deriving (Show, Eq, Typeable, Pickle)
+  deriving (Show, Eq, Typeable, Pickle, Dump)
 type var_info = Var.var_info
   deriving (Show)
 type binder = Var.binder

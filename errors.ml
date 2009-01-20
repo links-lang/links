@@ -177,8 +177,8 @@ let rec format_exception_html = function
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
 (*   | Value.UnrealizableContinuation -> *)
 (*       "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>" *)
-  | exn -> (*"<h1>Links Error</h1>\n" ^ Printexc.to_string exn*)
-       raise exn (* use for backtraces *) 
+  | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
+      (*raise exn (* use for backtraces *) *)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) = 
   try 
