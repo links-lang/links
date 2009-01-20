@@ -338,14 +338,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "() {:a}~> Mailbox (a)",
+   datatype "() {:a|_}~> Mailbox (a)",
 (* "() ~e~> _) ~> Process (e)" *)
   IMPURE);
 
   "haveMail",
   (`PFun (fun _ -> 
             failwith "The haveMail function is not implemented on the server yet"),
-   datatype "() {:_}~> Bool",
+   datatype "() {:_|_}~> Bool",
    IMPURE);
 
   "recv",
@@ -357,7 +357,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (`PFun (fun ([]) -> assert false),
-     datatype "() {:a}~> a",
+     datatype "() {:a|_}~> a",
   IMPURE);
 
   "spawn",
@@ -375,12 +375,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "(() {:a}~> _) ~> Mailbox (a)",
+   datatype "(() {:a|_}~> _) ~> Mailbox (a)",
 (* "(() ~e~> _) ~> Process (e)" *)
   IMPURE);
 
   "spawnWait",
-  (`Client, datatype "(() {:_}~> c) ~> c",
+  (`Client, datatype "(() {:_|_}~> c) ~> c",
 (* "(() ~> a) ~> a" *)
   IMPURE);
 

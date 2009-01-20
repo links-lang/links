@@ -1046,20 +1046,20 @@ struct
                     let ht = sd (snd (FieldEnv.find "hear" fields)) in
                       match Unionfind.find row_var with
                         | `Closed ->
-                            "{:" ^ ht ^ ":}~>"
+                            "{:" ^ ht ^ "}~>"
                         | `Flexible (var, _) when policy.flavours ->
                             let name, (_, _, count) = Vars.find_spec var vars in
                               if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                "{:" ^ ht ^ " ?}~>"
+                                "{:" ^ ht ^ "|?}~>"
                               else
-                                "{:" ^ ht ^ " ?" ^ name ^ "}~>"
+                                "{:" ^ ht ^ "|?" ^ name ^ "}~>"
                         | `Rigid (var, _)
                         | `Flexible (var, _) ->
                             let name, (_, _, count) = Vars.find_spec var vars in
                               if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then
-                                "{:" ^ ht ^ "}~>"
+                                "{:" ^ ht ^ "|_}~>"
                               else
-                                "{:" ^ ht ^ " " ^ name ^ "}~>"
+                                "{:" ^ ht ^ "|" ^ name ^ "}~>"
                         | `Recursive _ -> assert false
                         | `Body t' ->
                             sd (`Function (args, t', t))

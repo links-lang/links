@@ -60,5 +60,5 @@ typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
 stdout : (false, 1, "two") : Bar (Bool,Int,String)
 
 Typename [3]
-typename F(a,b) = (a) {:b:}~> a; sig f : F(Int,Int) fun f(x) {recv() + x} sig g : F(Int,String) fun g(x) {stringToInt(recv()) + x} g
+typename F(a,b) = (a) {:b}~> a; sig f : F(Int,Int) fun f(x) {recv() + x} sig g : F(Int,String) fun g(x) {stringToInt(recv()) + x} g
 stdout : fun : F (Int,String)

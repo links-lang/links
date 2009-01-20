@@ -724,32 +724,32 @@ datatype:
 
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
-| LBRACE fields RBRACE                                         { $2 }
+| LBRACE efields RBRACE                                        { $2 }
 
 straight_arrow_prefix:
 | arrow_prefix                                                 { $1 }
 | MINUS nonrec_row_var                                         { ([], $2) }
 
 squig_arrow_prefix:
+| hear_arrow_prefix                                            { $1 }
 | arrow_prefix                                                 { $1 }
 | TILDE nonrec_row_var                                         { ([], $2) }
 
-
 hear_arrow_prefix:
-| LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
-                                                                  fresh_rigid_row_variable `Any) }
-| LBRACE COLON datatype COLON RBRACE                           { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
-                                                                  `Closed) }
-| LBRACE COLON datatype COLON nonrec_row_var RBRACE            { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
-                                                                  $5) }
-| LBRACE COLON datatype COMMA fields RBRACE                    { row_with
+| LBRACE COLON datatype COMMA efields RBRACE                   { row_with
                                                                    ("wild", (`Present, UnitType))
                                                                    (row_with
                                                                       ("hear", (`Present, $3))
                                                                       $5) }
+| LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  `Closed) }
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  $5) }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  $5) }
 
 straight_arrow:
 | parenthesized_datatypes
@@ -765,8 +765,9 @@ squiggly_arrow:
                                                                                  ("wild", (`Present, UnitType))
                                                                                  $2,
                                                                                $4) }
-| parenthesized_datatypes hear_arrow_prefix
+/*| parenthesized_datatypes hear_arrow_prefix
   SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
+*/
 | parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
                                                                                ([("wild", (`Present, UnitType))],
                                                                                  fresh_rigid_row_variable `Any),
@@ -835,6 +836,16 @@ fields:
 | VBAR kinded_row_var                                          { [], $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
+field:
+| record_label COLON datatype                                  { $1, (`Present, $3) }
+| record_label presence_flag                                   { $1, ($2, UnitType) }
+| record_label presence_flag COLON datatype                    { $1, ($2, $4) }
+
+record_label:
+| CONSTRUCTOR                                                  { $1 }
+| VARIABLE                                                     { $1 }
+| UINTEGER                                                     { Num.string_of_num $1 }
+
 vfields:
 | vfield                                                       { [$1], `Closed }
 | row_var                                                      { [], $1 }
@@ -847,15 +858,22 @@ vfield:
 | CONSTRUCTOR presence_flag                                    { $1, ($2, UnitType) }
 | CONSTRUCTOR presence_flag COLON datatype                     { $1, ($2, $4) }
 
-field:
-| record_label COLON datatype                                  { $1, (`Present, $3) }
-| record_label presence_flag                                   { $1, ($2, UnitType) }
-| record_label presence_flag COLON datatype                    { $1, ($2, $4) }
+efields:
+| efield                                                       { [$1], `Closed }
+| efield VBAR nonrec_row_var                                   { [$1], $3 }
+| VBAR nonrec_row_var                                          { [], $2 }
+| VBAR kinded_nonrec_row_var                                   { [], $2 }
+| efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
-record_label:
+efield:
+| effect_label                                                 { $1, (`Present, UnitType) }
+| effect_label COLON datatype                                  { $1, (`Present, $3) }
+| effect_label presence_flag                                   { $1, ($2, UnitType) }
+| effect_label presence_flag COLON datatype                    { $1, ($2, $4) }
+
+effect_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
-| UINTEGER                                                     { Num.string_of_num $1 }
 
 presence_flag:
 | PLUS                                                         { `Present }
@@ -878,12 +896,11 @@ row_var:
 | nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
-kinded_nonrecrow_var:
+kinded_nonrec_row_var:
 | nonrec_row_var COLONCOLON CONSTRUCTOR                        { attach_row_subkind (pos()) ($1, $3) }
 
 kinded_row_var:
 | row_var COLONCOLON CONSTRUCTOR                               { attach_row_subkind (pos()) ($1, $3) }
-
 
 /*
  * Regular expression grammar

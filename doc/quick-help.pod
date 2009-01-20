@@ -1180,19 +1180,18 @@ C<A>. In the future we plan to experiment with tracking other effects.
 In an effort to make function types more readable, syntactic sugar is
 provided for a number of common classes of function arrow. As well as
 being available to the programmer, the syntactic sugar is also used by
-the pretty-printer. The meta-variable C<X> stands for a rigid or
-flexible row variable.
+the pretty-printer. The meta-variable C<X> stands for a rigid (C<a> or
+C<_>) or flexible (C<?a> or C<?>) row variable.
 
-  X->            {|X}->
+  -X->           {|X}->
   ->             {|_}->
   {E}~>          {wild,E}~>
-  X~>            {|X}~>
+  ~X~>           {|X}~>
   ~>             {|_}~>
 
+  {:A}~>         {hear:A}~>
   {:A,E}~>       {hear:A,E}~>
-  {:A:X}~>       {hear:A,|X}~>
-  {:A}~>         {:A:_}~>
-  {:A:}~>        {:A,}~>
+  {:A|X}~>       {hear:A|X}~>
 
 =head2 Kinds and subkinding
 
