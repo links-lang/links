@@ -183,7 +183,7 @@ object (o : 'self_type)
   method value : value -> doc = fun v ->
     match v with 
       | `Constant c -> o#constant c
-      | `Variable v -> text (IntMap.find v venv)
+      | `Variable v -> text ((IntMap.find v venv) ^ "/" ^ (string_of_int v))
 
       | `Extend (r, v) ->
           (let r_doc = doc_concat (text "," ^^ break)
@@ -236,6 +236,7 @@ object (o : 'self_type)
               | Some (b, c) ->
                   group (
                     nest 2 (
+                      text "DEFAULT: " ^|
                       group (o#binder b) ^| text "->") ^|
                         o#computation c) in
             group (
@@ -252,7 +253,10 @@ object (o : 'self_type)
       | `Special s ->
           match s with
               `CallCC v -> group (parens (text "call/cc" ^| o#value v))
-            | _ -> text "SPECIAL"
+            | `Database _ -> text "DATABASE"
+            | `Table _ -> text "TABLE"
+            | `Query _ -> text "QUERY"
+            | `Wrong _ -> text "WRONG"
           
   method bindings : binding list -> 'self_type * doc = fun bs ->
     let (o, d) = List.fold_left
@@ -297,7 +301,7 @@ object (o : 'self_type)
       | `Module _ -> o, text "MODULE"
 
   method binder : binder -> doc = fun (v, (_, name, _)) ->
-    text (var_name v name)
+    text ((var_name v name) ^ "/" ^ (string_of_int v))
 
 end
 

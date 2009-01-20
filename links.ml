@@ -262,13 +262,13 @@ let invert_env env =
 (* Read Links source code and pretty-print the IR *)
 let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
-    print_endline (Ir.Show_program.show program ^ "\n");
+    (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     print_endline (Ir.string_of_ir (invert_env nenv) program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
 let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
-    (*print_endline (Ir.Show_program.show program ^ "\n");*)
+    (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox)) 
@@ -380,9 +380,6 @@ let main () =
      (parse_cmdline options (fun i -> push_back i file_list)));
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
-
-  if Settings.get_value compile then
-      Settings.set_value prelude_file "compiler_prelude.links";
 
   let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
     

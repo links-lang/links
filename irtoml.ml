@@ -205,6 +205,8 @@ let lib_funcs = [
   "l_int_lt", ["unbox_int"; "unbox_int"], "box_bool", false;
   "l_int_lte", ["unbox_int"; "unbox_int"], "box_bool", false;
 
+  "_tilde", ["id"; "id"], "box_bool", false;
+
   "l_equals", ["id"; "id"], "box_bool", false;
   "l_not_equals", ["id"; "id"], "box_bool", false;
 
@@ -361,9 +363,6 @@ struct
     method binder : binder -> string = fun (v, (_, name, _)) ->
       make_var_name v name
 
-    method top_binding : binding -> code = fun b ->
-      o#binding b (fun _ -> Empty)
-
     method virtual binding : binding -> ('self_type -> code) -> code
 
     method virtual program : program -> code
@@ -384,17 +383,17 @@ struct
         | `Case (v, cases, default) ->
             let gen_case n (b, c) =
               let o = o#add_bindings [b] in
-                Pair (NativeString n, Var (o#binder b)),
+                Pair (n, Var (o#binder b)),
               o#computation c
             in              
               B.box_case (
                 Case (
                   o#value v,
-                  StringMap.fold (fun n c l -> (gen_case n c)::l) cases [],
+                  StringMap.fold (fun n c l -> (gen_case (NativeString n) c)::l) cases [],
                   match default with 
                       None -> None
                     | Some c ->
-                        Some (gen_case "_" c)))
+                        Some (gen_case (Var "_") c)))
 
         | `If (v, t, f) ->
             B.box_if (
@@ -403,10 +402,11 @@ struct
         | `Special s ->
             match s with
                 `CallCC v -> 
-                  raise (Unsupported "CallCC not supported in direct style.")
+                  Die (NativeString "CallCC not supported in direct style.")
+
               | `Database _
               | `Table _
-              | `Query _ -> raise (Unsupported "Database operations not supported.")
+              | `Query _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
     method program : program -> code = fun prog ->
@@ -465,17 +465,17 @@ struct
               (fun k ->
                  let gen_case n (b, c) =
                    let o = o#add_bindings [b] in
-                     Pair (NativeString n, Var (o#binder b)),
+                     Pair (n, Var (o#binder b)),
                    o#computation c k 
                  in
                    B.box_case (
                      Case (
                        o#value v,
-                       StringMap.fold (fun n c l -> (gen_case n c)::l) cases [],
+                       StringMap.fold (fun n c l -> (gen_case (NativeString n) c)::l) cases [],
                        match default with 
                            None -> None
                          | Some c ->
-                             Some (gen_case "_" c))))
+                             Some (gen_case (Var "_") c))))
 
 
         | `If (v, t, f) ->
@@ -494,7 +494,7 @@ struct
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
               | `Database _
               | `Table _
-              | `Query _ -> raise (Unsupported "Database operations not supported.")
+              | `Query _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
     method computation : computation -> code -> code = fun (bs, tc) k ->

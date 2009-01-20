@@ -225,6 +225,8 @@ let u_l_int_lte = (<=)
 
 let u__mod = mod_num
 
+let u__tilde r s = false
+
 let u__hd = List.hd
 let u__tl = List.tl
 
