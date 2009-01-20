@@ -2,15 +2,8 @@
 (** Core types *)
 
 (* field environments *)
-(*module FieldEnv : Map.S with type key = string*)
-(*type 'a stringmap = 'a Utility.StringMap.t*)
-
-(* module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap *)
-(* module Show_stringmap (A : Show.Show) : Show.Show with type a = A.a stringmap *)
-(* module Pickle_stringmap (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a stringmap *)
-
 type 'a stringmap = 'a Utility.StringMap.t
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Show)
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
@@ -19,34 +12,33 @@ module TypeVarSet : Utility.INTSET
 type 'a point = 'a Unionfind.point 
 
 module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
-module Pickle_point (A : Pickle.Pickle) : Pickle.Pickle with type a = A.a Unionfind.point
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
-    deriving (Typeable, Show, Pickle)
+    deriving (Show)
 
 type subkind = [ `Any | `Base ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 't meta_type_var_basis =
     [ `Flexible of (int * subkind)
     | `Rigid of (int * subkind)
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 't meta_presence_var_basis = 
     [ `Flexible of int
     | `Rigid of int
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 module Abstype :
 sig
-  type t deriving (Eq, Show, Pickle, Typeable, Shelve)
+  type t deriving (Show, Eq)
   val make  : string -> int -> t
   val arity : t -> int
   val name  : t -> string
@@ -58,23 +50,23 @@ val list     : Abstype.t
 val event    : Abstype.t 
 val dom_node : Abstype.t
 
-type datatype =
+type typ =
     [ `Not_typed
     | `Primitive of primitive
-    | `Function of (datatype * row * datatype)
+    | `Function of (typ * row * typ)
     | `Record of row
     | `Variant of row
-    | `Table of datatype * datatype * datatype
-    | `Alias of ((string * type_arg list) * datatype)
+    | `Table of typ * typ * typ
+    | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list * datatype)]
+    | `ForAll of (quantifier list * typ)]
 and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
-and field_spec = presence_flag * datatype
+and field_spec = presence_flag * typ
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var
-and meta_type_var = (datatype meta_type_var_basis) point
+and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
@@ -82,13 +74,16 @@ and quantifier =
     | `RowVar of (int * subkind) * meta_row_var
     | `PresenceVar of int * meta_presence_var ]
 and type_arg = 
-    [ `Type of datatype | `Row of row | `Presence of presence_flag ]
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+    [ `Type of typ | `Row of row | `Presence of presence_flag ]
+      deriving (Show)
+
+type datatype = typ
+      deriving (Show)
 
 type type_variable =
     (int * [`Rigid | `Flexible] *
        [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var])
-      deriving (Eq, Typeable, Show, Pickle, Shelve)
+      deriving (Show)
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool

@@ -1,7 +1,7 @@
 (*pp deriving *)
 
 type 'a point
-  deriving (Eq, Typeable, Shelve, Show)
+  deriving (Show)
 
 val fresh      : 'a -> 'a point
 val find       : 'a point -> 'a

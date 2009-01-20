@@ -3,7 +3,7 @@ open Utility
 
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap
-type 'a field_env = 'a stringmap deriving (Eq, Pickle, Typeable, Show, Shelve)
+type 'a field_env = 'a stringmap deriving (Show)
 
 (* type var sets *)
 module TypeVarSet = Utility.IntSet
@@ -12,40 +12,45 @@ module TypeVarSet = Utility.IntSet
 module TypeVarMap = Utility.IntMap
 
 (* points *)
-type 'a point = 'a Unionfind.point deriving (Eq, Typeable, Shelve, Show)
-
-(* module Show_point (S : Show.Show) = Show.Show_unprintable(struct type a = S.a point end) *)
-module Pickle_point (S : Pickle.Pickle) = Pickle.Pickle_unpicklable(struct type a = S.a point let tname = "point" end)
+type 'a point = 'a Unionfind.point deriving (Show)
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString ]
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+    deriving (Show)
 
 type subkind = [ `Any | `Base ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 't meta_type_var_basis =
     [ `Flexible of int * subkind
     | `Rigid of int * subkind
     | `Recursive of (int * 't)
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 'r meta_row_var_basis =
     [ 'r meta_type_var_basis | `Closed ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type 't meta_presence_var_basis = 
     [ `Flexible of int
     | `Rigid of int
     | `Body of 't ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
+
+
+type istring = string deriving (Show)
+module Eq_istring : Eq.Eq with type a = istring  =
+struct
+  type a = istring
+  let eq = (=)
+end
 
 module Abstype =
 struct
-  type t = { id    : string ;
-             name  : string ;
+  type t = { id    : istring ;
+             name  : istring ;
              arity : int }
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Eq, Show)
   let make name arity = 
     let id = Utility.gensym ~prefix:"abstype:" () in
       { id    = id ;
@@ -103,7 +108,7 @@ and quantifier =
     | `PresenceVar of int * meta_presence_var]
 and type_arg = 
     [ `Type of typ | `Row of row | `Presence of presence_flag ]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
+      deriving (Show)
 
 type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 
@@ -211,21 +216,8 @@ let rec basify_row (fields, row_var) =
     fields
     ()
 
-(* HACK
-
-   deriving doesn't allow these types to be inlined in the definition
-   of type_variable
-*)
-module M =
-struct
-  type pliability = [`Rigid | `Flexible]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
-  type point = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
-      deriving (Eq, Show, Pickle, Typeable, Shelve)
-end
-
-type type_variable = int * M.pliability * M.point
-    deriving (Eq, Typeable, Show, Pickle, Shelve)
+type type_variable = int * [`Rigid | `Flexible] *  [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
+    deriving (Show)
 
 let var_of_quantifier =
   function
@@ -234,7 +226,6 @@ let var_of_quantifier =
     | `PresenceVar (var, _) -> var
 
 type datatype = typ
-    deriving (Eq, Pickle, Typeable, Shelve)
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -1374,18 +1365,18 @@ let string_of_row_var r = string_of_row_var r
 let string_of_tycon_spec s = string_of_tycon_spec s
 
 module Show_datatype =
-  Show.ShowDefaults(struct
-                      type a = datatype
-                      let format fmt a = 
-                        Format.pp_print_string fmt (string_of_datatype a)
-                    end)
+  Show.Defaults(struct
+                  type a = datatype
+                  let format fmt a = 
+                    Format.pp_print_string fmt (string_of_datatype a)
+                end)
 
 module Show_tycon_spec =
-  Show.ShowDefaults(struct
-                      type a = tycon_spec
-                      let format fmt a = 
-                        Format.pp_print_string fmt (string_of_tycon_spec a)
-                    end)
+  Show.Defaults(struct
+                  type a = tycon_spec
+                  let format fmt a = 
+                    Format.pp_print_string fmt (string_of_tycon_spec a)
+                end)
 
 type environment        = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
@@ -1401,11 +1392,11 @@ let extend_typing_environment
   {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
 
 let string_of_environment env =
-  let module M = Env.Show_t(Show.ShowDefaults(struct
-                                                type a = datatype
-                                                let format fmt a = 
-                                                  Format.pp_print_string fmt (string_of_datatype a)
-                                              end)) in
+  let module M = Env.Show_t(Show.Defaults(struct
+                                            type a = datatype
+                                            let format fmt a = 
+                                              Format.pp_print_string fmt (string_of_datatype a)
+                                          end)) in
     M.show env
 
 let string_of_typing_environment {var_env=env} = string_of_environment env

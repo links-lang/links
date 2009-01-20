@@ -641,8 +641,8 @@ let rec ml_of_code c =
 let preamble = "open Num\nopen Mllib;;\n\n"
 let postamble = "\n\nlet _ = run entry"
 
-module BoxingCamlTranslater = Translater CamlBoxer
-module NonBoxingCamlTranslater = Translater FakeBoxer
+module BoxingCamlTranslater = Translater (CamlBoxer)
+module NonBoxingCamlTranslater = Translater (FakeBoxer)
 
 let ml_of_ir cps box env prelude (bs, tc) =
   let comp = prelude @ bs, tc in

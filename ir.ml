@@ -7,39 +7,39 @@ open PP
 type num = Num.num
 
 type scope = Var.scope
-  deriving (Show, Pickle)
+  deriving (Show)
 (* term variables *)
 type var = Var.var
-  deriving (Show, Pickle)
+  deriving (Show, Eq, Typeable, Pickle)
 type var_info = Var.var_info
-  deriving (Show, Pickle)
+  deriving (Show)
 type binder = Var.binder
-  deriving (Show, Pickle)
+  deriving (Show)
 
 (* type variables *)
 type tyvar = Types.quantifier
-  deriving (Show, Pickle)
+  deriving (Show)
 type tyarg = Types.type_arg
-  deriving (Show, Pickle)
+  deriving (Show)
 
 type name = string
-  deriving (Show, Pickle)
+  deriving (Show)
 
 type name_set = Utility.stringset
-  deriving (Show, Pickle)
+  deriving (Show)
 type 'a name_map = 'a Utility.stringmap
-  deriving (Show, Pickle)
+  deriving (Show)
 
 type language = string
-  deriving (Show, Pickle)
+  deriving (Show)
 
 let var_of_binder (x, _) = x
 
 type constant = Constant.constant
-  deriving (Show, Pickle)
+  deriving (Show)
 
 type location = Sugartypes.location
-  deriving (Show, Pickle)
+  deriving (Show)
 
 type value =
   [ `Constant of constant
@@ -79,7 +79,7 @@ and special =
   | `Query of (value * value) option * computation * Types.datatype
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
-  deriving (Show, Pickle)  
+  deriving (Show)  
 
 let letm (b, tc) = `Let (b, ([], tc))
 let letmv (b, v) = letm (b, `Return v)
@@ -99,7 +99,7 @@ let rec is_atom =
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
-  deriving (Show, Pickle)
+  deriving (Show)
 
 let string_of_var = string_of_int
 
@@ -952,7 +952,7 @@ end
 (* The closures type represents the set of free variables of a
 collection of functions *)
 type closures = intset intmap
-    deriving (Show, Pickle)
+    deriving (Show)
 
 (* Compute the closures in an IR expression *)
 (*

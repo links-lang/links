@@ -16,7 +16,7 @@ and  regex = | Range of (char * char)
 	     | Group of regex 
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
-	          deriving (Show, Pickle, Eq, Typeable, Shelve)
+	          deriving (Show)
 
 let string_of_regex : regex -> string = fun s ->
   (* Using points-free style here (i.e. omitting the s) triggers a bug in 

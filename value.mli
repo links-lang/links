@@ -41,7 +41,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
 
 type table = (database * string) * string * Types.row
-  deriving (Show, Pickle)
+  deriving (Show)
     
 type primitive_value = [
 | `Bool of bool
@@ -52,7 +52,10 @@ type primitive_value = [
 | `Int of Num.num
 | `XML of xmlitem 
 | `NativeString of string ]
-    deriving (Show, Pickle)       
+
+module Show_primitive_value : Show.Show 
+  with type a = primitive_value
+
 
 type t = [
 | primitive_value
@@ -65,7 +68,7 @@ type t = [
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env = (t * Ir.scope) Utility.intmap * Ir.closures
-    deriving (Show, Pickle)
+    deriving (Show)
 
 val toplevel_cont : continuation
 

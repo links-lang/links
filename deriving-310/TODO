@@ -1,0 +1,8 @@
+write an Ord class
+ (but it won't work well for mutable types.
+  either we have to have no ordering for mutable types
+  or give up the constraint that Ord.compare l r = 0 => Eq.eq l r)
+
+perhaps hide generated type declarations inside the generated module.
+   
+can we generate faster code than sexplib?
