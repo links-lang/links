@@ -256,7 +256,6 @@ let compress_primitive_value : primitive_value -> [> compressed_primitive_value]
   function
     | #primitive_value_basis as v -> v
     | `Table ((_database, db), table, row) ->
-(*         Debug.print ("compressing table: "^table); *)
         `Table (db, table, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
@@ -272,7 +271,6 @@ let localise env var =
     (empty_env (get_closures env))
 
 let rec compress_continuation cont : compressed_continuation =
-(*  Debug.print ("length cont: "^string_of_int (List.length cont));*)
   List.map
     (fun (_scope, var, locals, _body) ->
        (var, compress_env locals)) cont
@@ -393,7 +391,6 @@ let build_unmarshal_envs ((venv, closures), nenv, tyenv) program : unmarshal_env
     method bind_fun (fb, (xsb, e)) =
       let f = Var.var_of_binder fb in
       let xs = List.map Var.var_of_binder xsb in
-(*        Debug.print ("f: "^string_of_int f^" has arity: "^string_of_int (List.length xs));*)
       let funs = IntMap.add f (xs, e) funs in
         o#with_funs funs
 

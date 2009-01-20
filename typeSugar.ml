@@ -692,7 +692,6 @@ tab() ^ code (show_type lt) ^ nl() ^
 tab() ^ code (show_type rt))
 
     let bind_rec_rec ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-(*      Debug.print ("rt: "^Types.string_of_datatype rt);*)
       die pos ("\
 The recursive function definition has type" ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
@@ -1197,7 +1196,6 @@ let update_pattern_vars env =
     fun n ->      
       let update (x, _, pos) =
         let t = Env.lookup env x in
-(*          Debug.print ("x: "^x^", t: "^Types.string_of_datatype t);*)
           (x, Some t, pos)
       in
         match n with
@@ -1308,8 +1306,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (
               try
                 let (tyargs, t) = Utils.instantiate context.var_env v in
-(*                   Debug.print ("var "^v); *)
-(*                   Debug.print ("t: "^Types.string_of_datatype t); *)
                   tappl (`Var v, tyargs), t
               with
                   Errors.UndefinedVariable msg ->
@@ -1651,12 +1647,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let f = tc f
             and ps = List.map (tc) ps
             and rettyp = Types.fresh_type_variable `Any in
-(*               Debug.print ("f: "^Types.string_of_datatype (typ f)); *)
-(*               Debug.print ("args: "^Types.string_of_datatype (Types.make_tuple_type (List.map typ ps))); *)
               unify ~handle:Gripers.fun_apply
                 (pos_and_typ f, no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
                                                    context.effect_row, rettyp)));
-(*               Debug.print ("f(2): "^Types.string_of_datatype (typ f)); *)
               `FnAppl (erase f, List.map erase ps), rettyp
         | `TAppl (e, qs) ->
             let (e, _), t = tc e in e, t
@@ -1880,8 +1873,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let e = tc e in
               if Types.is_sub_type (t2, t1) then
                 begin
-(*                   Debug.print ("t1: "^Types.string_of_datatype t1); *)
-(*                   Debug.print ("t2: "^Types.string_of_datatype t2); *)
                   unify ~handle:Gripers.upcast_source (pos_and_typ e, no_pos t2);
                   `Upcast (erase e, t1', t2'), t1
                 end
@@ -2008,7 +1999,6 @@ and type_binding : context -> binding -> binding * context =
           let inner_env, patss =
             List.fold_left
               (fun (inner_env, patss) ((name,_,_), (_, (pats, body)), _, t, pos) ->
-(*                  Debug.print ("A("^name^")"); *)
                  let () = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
                  let inner =
@@ -2029,13 +2019,11 @@ and type_binding : context -> binding -> binding * context =
                      | Some (_, Some t) ->
                          let shape = make_ft pats (fresh_wild ()) (Types.fresh_type_variable `Any) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
-(*                            Debug.print ("ft: "^Types.string_of_datatype ft); *)
                            (* make sure the annotation has the right shape *)
                          let _, fti = Instantiate.typ ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in
                            ft
                  in
-(*                    Debug.print ("inner: "^Types.string_of_datatype inner); *)
                    Env.bind inner_env (name, inner), pats::patss)
               (Env.empty, []) defs in
           let patss = List.rev patss in
@@ -2051,20 +2039,16 @@ and type_binding : context -> binding -> binding * context =
               List.rev
                 (List.fold_left2
                    (fun defs ((name, _, name_pos), (_, (_, body)), location, t, pos) pats ->
-(*                       Debug.print ("B("^name^")"); *)
                       let context' = (List.fold_left
                                         fold_in_envs {context with var_env = body_env} pats) in
                       let effects = fresh_wild () in
-(*                        Debug.print ("ft(1): "^Types.string_of_datatype (Env.lookup body_env name)); *)
                       let body = type_check (bind_effects context' effects) body in
                       let shape = make_ft pats effects (typ body) in
-(*                         Debug.print ("shape: "^Types.string_of_datatype shape); *)
                         (* it is important to instantiate with rigid
                            type variables in order to ensure that the
                            inferred type is consistent with any
                            annotation *)
                         let _, ft = Instantiate.rigid context'.var_env name in
-(*                           Debug.print ("ft(2): "^Types.string_of_datatype ft); *)
                           let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
                             ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
 
@@ -2073,7 +2057,6 @@ and type_binding : context -> binding -> binding * context =
             let defs, outer_env =
               List.fold_left2
                 (fun (defs, outer_env) ((name, _, name_pos), (_, (pats, body)), location, t, pos) pats ->
-(*                    Debug.print ("C("^name^")"); *)
                    let inner = Env.lookup inner_env name in
                    let inner, outer, tyvars =
                      match inner with
@@ -2096,9 +2079,6 @@ and type_binding : context -> binding -> binding * context =
                            let outer = Instantiate.freshen_quantifiers outer in
                              (inner, extras), outer, tyvars in
 
-(*                      Debug.print ("typ body: "^Types.string_of_datatype (typ body)); *)
-(*                      Debug.print ("inner: "^Types.string_of_datatype (fst inner)); *)
-(*                      Debug.print ("outer: "^Types.string_of_datatype outer); *)
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
                      (((name, Some outer, name_pos), ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
@@ -2161,7 +2141,6 @@ struct
           | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->
               let body, typ = type_check (Types.extend_typing_environment tyenv tyenv') body in
-(*                  Debug.print ("checked type: " ^ Types.string_of_datatype typ);                 *)
                 (bindings, Some body), typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg

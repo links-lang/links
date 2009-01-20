@@ -11,7 +11,6 @@ let rec is_raw (e, pos) =
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
     | e ->
-(*        Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
         raise (ConcreteSyntaxError ("Invalid element in formlet literal", pos))
 
 let tt =
@@ -37,8 +36,6 @@ object (o : 'self_type)
             [(`Tuple []), dp], [(`TupleLit []), dp], [Types.unit_type]
         | `FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
-(*               Debug.print ("e: "^Sugartypes.Show_phrasenode.show e); *)
-(*               Debug.print ("ft: "^Types.string_of_datatype ft); *)
             let t = Types.fresh_type_variable `Any in
             let () =
               Unify.datatypes
@@ -173,7 +170,6 @@ object (o : 'self_type)
     | `Formlet (body, yields) ->
         (* pure (fun q^ -> [[e]]* ) <*> q^o *)
         let e_in = `Formlet (body, yields) in
-(*           Debug.print ("sugared formlet: "^Sugartypes.Show_phrasenode.show e_in); *)
         let dp = Sugartypes.dummy_position in
         let empty_eff = Types.make_empty_closed_row () in
         let (ps, _, ts) = o#formlet_patterns body in
@@ -197,7 +193,6 @@ object (o : 'self_type)
                 ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
                  [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], (pss, yields)), dp]), dp])
         in
-(*           Debug.print ("desugared formlet: "^Sugartypes.Show_phrasenode.show e); *)
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)             
     | e -> super#phrasenode e
 end

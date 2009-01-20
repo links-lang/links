@@ -358,10 +358,8 @@ struct
 
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
-(*         Debug.print ("closure: "^string_of_t (`Closure ((xs, body), closure_env))); *)
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env ->
-(*                                      Debug.print ("x: "^string_of_int x);*)
                                       bind env (x, arg)) xs args env in
           computation env body
     | `Primitive "AsList", [xs] ->
@@ -374,9 +372,6 @@ struct
         begin
           match f with
             | `Closure (([x], body), closure_env) ->
-(*                 Debug.print ("f: "^string_of_t f); *)
-(*                 Debug.print ("ConcatMap x: "^string_of_int x); *)
-(*                 Debug.print ("xs: "^string_of_t xs); *)
                 let env = env ++ closure_env in
                   reduce_for_source
                     env
@@ -415,9 +410,7 @@ struct
                       | `Closure (([x], os), closure_env) ->                
                           let os =
                             let env = env ++ closure_env in
-(*                               Debug.print ("xs: "^string_of_t xs); *)
                               let o = computation (bind env (x, tail_of_t xs)) os in
-(*                                 Debug.print ("o: "^string_of_t o); *)
                                 match o with
                                   | `Record fields ->
                                       List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
@@ -446,7 +439,6 @@ struct
               | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as fb, (_, args, body), _) ->
-(*                   Debug.print ("f: "^string_of_int f); *)
                   computation
                     (bind env (f, `Closure ((List.map fst args, body), env)))
                     (bs, tailcomp)
@@ -526,16 +518,13 @@ struct
           `For ([x, source], [], body)
   and reduce_where_condition (c, t) =
     assert (is_list t);
-    (*           Debug.print "list if"; *)
     if t = nil then nil
     else reduce_if_then (c, t, nil)
   and reduce_if_condition (c, t, e) =
-    (*     Debug.print ("if: "^string_of_t (`If (c, t, e))); *)
     match c with
       | `Constant (`Bool true) -> t
       | `Constant (`Bool false) -> e
       | c when is_list t ->
-          (*           Debug.print "list if"; *)
           if e = nil then
             if t = nil then nil
             else
@@ -749,9 +738,7 @@ struct
             end
       | `If (c, body, `Concat []) ->
           let c = base c in
-(*            Debug.print ("c: "^Show_base.show c);*)
           let body = query body in
-(*            Debug.print ("body: "^Show_query.show body);*)
             begin
               match body with
                 | `Select (fields, tables, c', os) ->

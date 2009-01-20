@@ -263,16 +263,11 @@ struct
             in
               `Extend (fields, base), t, o
         | `Project (name, v) ->
-            (*             Debug.print ("project_e: " ^ Show_value.show (`Project (name, v))); *)
             let (v, vt, o) = o#value v in
-(*               Debug.print ("project_vt: " ^ Types.string_of_datatype vt); *)
               `Project (name, v), deconstruct (project_type name) vt, o
         | `Erase (names, v) ->
-(*             Debug.print ("erase_e: " ^ Show_value.show (`Erase (name, v))); *)
             let (v, vt, o) = o#value v in
             let t = deconstruct (erase_type names) vt in
-(*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
-(*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
               `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
@@ -282,7 +277,6 @@ struct
             let t = Types.for_all (tyvars, t) in
               `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
-(*             Debug.print ("tapp: "^Show_value.show (`TApp (v, ts))); *)
             let v, t, o = o#value v in
             let t = Instantiate.apply_type t ts in
               `TApp (v, ts), t, o
@@ -316,7 +310,6 @@ struct
             let f, ft, o = o#value f in
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-(*               Debug.print ("apply: " ^ Show_tail_computation.show (`Apply (f, args))); *)
               `Apply (f, args), deconstruct return_type ft, o
         | `Special special ->
             let special, t, o = o#special special in
@@ -386,7 +379,6 @@ struct
 
     method computation : computation -> (computation * datatype * 'self_type) =
       fun (bs, tc) ->
-(*         Debug.print ("computation: " ^ Show_computation.show (bs, tc)); *)
         let bs, o = o#bindings bs in
         let tc, t, o = o#tail_computation tc in
           (bs, tc), t, o
@@ -396,8 +388,6 @@ struct
         | `Let (x, (tyvars, tc)) ->
             let (xv, (xt, _, _) as x), o = o#binder x in
             let tc, t, o = o#tail_computation tc in
-(*               Debug.print ("bound "^string_of_int(xv)^" of type "^string_of_datatype xt^ *)
-(*                              " to expression of type "^string_of_datatype t); *)
               `Let (x, (tyvars, tc)), o
         | `Fun (f, (tyvars, xs, body), location) ->
             let xs, body, o =
@@ -454,7 +444,6 @@ struct
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
-(*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
 
@@ -508,7 +497,6 @@ struct
   end
 
   let program typing_env p =
-(*    Debug.print (Show_computation.show p);*)
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 
@@ -739,9 +727,7 @@ struct
 
   let program tyenv p =
     let envs = count tyenv p in
-(*      Debug.print ("before elim dead defs: " ^ Show_computation.show p);*)
     let p, _, _ = (eliminator tyenv envs)#computation p in
-(*      Debug.print ("after elim dead defs: " ^ Show_computation.show p);*)
       p
 end
 
@@ -847,8 +833,6 @@ struct
         | [] -> o
         | `Let (x, (tyvars, body))::bs ->
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
-(*               Debug.print ("cont "^string_of_int (Var.var_of_binder x)^": "^ *)
-(*                              String.concat "," (List.map string_of_int (IntSet.elements fvs))); *)
             let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
               (o#close x fvs)#close_cont (IntSet.union fvs fvs') bs
         | `Fun (f, (_tyvars, xs, body), _)::bs ->

@@ -33,7 +33,8 @@ FEATURES
  * AJAX
  * Scalability through defunctionalised server continuations.
  * Statically typed database access a la Kleisli
- * Concurrent processes on the client and the server.
+ * Concurrent processes on the client and the server
  * Statically typed Erlang-esque message passing
  * Polymorphic records and variants
-
+ * An effect system for supporting abstraction over database queries
+whilst guaranteeing that they can be efficiently compiled to SQL

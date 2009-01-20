@@ -327,7 +327,6 @@ struct
   let var (x, t) = lift (`Variable x, t)
         
   let apply (s, ss) =
-(*     Debug.print ("sem_type s: "^Types.string_of_datatype (sem_type s)); *)
     let ss = lift_list ss in
     let t = TypeUtils.return_type (sem_type s) in
       bind s
@@ -500,7 +499,6 @@ struct
                 | `Function _ as ft' ->
                     let args = TypeUtils.arg_types ft' in
                       List.map (fun arg ->
-(*                                   Debug.print ("arg: "^Types.string_of_datatype arg); *)
                                   Var.fresh_binder_of_type arg) args
                 | _ -> assert false
             end in
@@ -511,8 +509,6 @@ struct
         (fun body p (xb : binder) ->
            let x = Var.var_of_binder xb in
            let xt = Var.type_of_binder xb in
-(*              Debug.print ("ft: "^Types.string_of_datatype ft); *)
-(*              Debug.print ("xt: "^Types.string_of_datatype xt); *)
              CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
         (reify body)
         ps
@@ -597,7 +593,7 @@ struct
         let x, xt = lookup_name_and_type name env in
           match tyargs with
             | [] -> I.var (x, xt)
-            | _ -> (* Debug.print ("name: "^name); *) I.tappl (I.var (x, xt), tyargs) in
+            | _ -> I.tappl (I.var (x, xt), tyargs) in
       let eff = lookup_effects env in
       let instantiate_mb name = instantiate name [`Row eff] in
       let cofv = I.comp_of_value in
@@ -653,10 +649,8 @@ struct
           | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) ->
-(*              Debug.print ("fnappl: "^Sugartypes.Show_phrase.show e);*)
               I.apply (ev e, evs es)
           | `TAppl (e, tyargs) ->
-(*              Debug.print ("tappl: "^Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));*)
               cofv (I.tappl (ev e, tyargs))
           | `TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
@@ -674,7 +668,6 @@ struct
                    (List.map (fun (name, e) -> (name, ev e)) fields,
                     opt_map ev rest))
           | `Projection (e, name) ->
-(*              Debug.print ("projection: "^Sugartypes.Show_phrasenode.show (`Projection (e, name))); *)
               cofv (I.project (ev e, name))
           | `With (e, fields) ->
               cofv (I.update
@@ -691,7 +684,6 @@ struct
               cofv (I.inject (name, ev e, t))
 
           | `Switch (e, cases, Some t) ->
-(*               Debug.print ("switch: "^Sugartypes.Show_phrasenode.show (`Switch (e, cases, Some t))); *)
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -809,7 +801,6 @@ struct
                         ps
                         ([], env) in
                     let body = eval body_env body in
-(*                       Debug.print ("f: "^f); *)
                       I.letfun
                         env
                         ((ft, f, scope), (tyvars, (ps, body)), location)
@@ -826,7 +817,6 @@ struct
                     let defs =
                       List.map
                         (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
-(*                            Debug.print ("rec f: "^f); *)
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->

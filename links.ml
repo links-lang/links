@@ -190,7 +190,6 @@ let interact envs =
                     let () =
                       Env.String.fold
                         (fun name spec () ->
-(*                            Debug.print ("name: "^name); *)
                              prerr_endline (name
                                             ^" = "^Types.string_of_tycon_spec spec); ())
                         (tyenv'.Types.tycon_env)
@@ -198,7 +197,6 @@ let interact envs =
                     let () =
                       Env.String.fold
                         (fun name var () ->
-(*                            Debug.print ("name: "^name); *)
                            let v = Value.find var valenv in
                            let t = Env.String.lookup tyenv'.Types.var_env name in
                              prerr_endline (name
@@ -226,12 +224,10 @@ let interact envs =
           | `Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
-(*                 Debug.print ("defs: "^Ir.Show_computation.show (defs, `Return (`Extend (StringMap.empty, None)))); *)
                 `Definitions (defs, nenv')
           | `Expression e     ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
-(*                Debug.print ("e: "^Ir.Show_computation.show e); *)
                 `Expression (e, t)
           | `Directive d      -> `Directive d
         in
@@ -296,7 +292,6 @@ let load_prelude () =
   let () = Lib.prelude_nenv := Some nenv in
 
   let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals in
-(*    Debug.print ("closures: "^String.concat "\n" (List.rev (IntMap.fold (fun name _ names -> (string_of_int name) :: names) closures [])));*)
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in
   let envs =
     (valenv,

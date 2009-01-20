@@ -290,7 +290,7 @@ directly in other XML quasis:
     var nameLine = <#> Name: <b>{name}</b> </#>;
     <div>
       {nameLine} <br />
-      &copy; 2005-2009 Links Team, University of Edinburgh
+      The Links Team
     </div>
 
 =head2 Forms
@@ -652,10 +652,10 @@ and bind it to the variable C<fac_table>, use:
   var parlors = table "ice_cream_parlors" 
                 with (name : String, fans : Int) from db;
 
-The variable C<parlors> then has type 
-C<TableHandle((name : String, fans : Int), (name : String, fans : Int))>.
-The two arguments to the C<TableHandle> type constructor together
-identify the type of a row and its constraints (See L<Table
+The variable C<parlors> then has type C<TableHandle((name : String,
+fans : Int), (name : String, fans : Int), (name : String, fans :
+Int))>.  The three arguments to the C<TableHandle> type constructor
+together identify the type of a row and its constraints (See L<Table
 constraints>).
 
 =head3 Using tables
@@ -816,9 +816,9 @@ until runtime.
 Still, Links guarantees at compile time that this is achievable--or
 gives a compile-time error if not. This involves analyzing the program
 to ensure that callers of C<selectedShops> never pass a function that
-Links cannot translate to SQL in the context of the above query. If so,
-an error is generated, usually at the call site, explaining that the 
-function passed was not "tame"--the Links term for a function that 
+Links cannot translate to SQL in the context of the above query. If
+so, an error is generated, usually at the call site, explaining that
+the function passed was "wild"--the Links term for a function that
 doesn't translate to SQL.
 
 How to determine at a glance whether your function will translate to
@@ -918,10 +918,10 @@ matching string against regex patterns.
 A regular expression is written between slashes, as
 C</this.is.a.regex/>.
 
-The operator C<~> tests the string on its left-hand side against the
+The operator C<=~> tests the string on its left-hand side against the
 regular expression on its right-hand side. For example:
 
-    if ("haystack" ~ /ne+dle/)
+    if ("haystack" =~ /ne+dle/)
       print("Found needle in haystack.")
     else
       print("No needle found in haystack.")
@@ -945,10 +945,10 @@ Unlike most other regex systems, Links regexes are anchored on both
 ends. So, to match a substring, you need to add C<.*> at both ends.
 For example:
 
-    links> "Portobello" ~ /bell/
+    links> "Portobello" =~ /bell/
     false : Bool
 
-    links> "Portobello" ~ /.*bell.*/
+    links> "Portobello" =~ /.*bell.*/
     true : Bool
 
 =head3 Special feature: regexes and the database
@@ -957,7 +957,7 @@ Certain uses of regular expressions can be translated to an SQL
 expression involving the C<LIKE> operator. For example, the expression
 
     for (uni <-- universities)
-    where (uni.city ~ /.*edinburgh.*/)
+    where (uni.city =~ /.*edinburgh.*/)
       [uni]
 
 should translate to an SQL query that selects all those unis from the
@@ -1180,7 +1180,7 @@ C<A>. In the future we plan to experiment with tracking other effects.
 In an effort to make function types more readable, syntactic sugar is
 provided for a number of common classes of function arrow. As well as
 being available to the programmer, the syntactic sugar is also used by
-the pretty-printer. The meta-variable C<X> stands for a rigid (C<a> or
+the pretty-printer. The meta-variable C<X> stands for a rigid (C< a> or
 C<_>) or flexible (C<?a> or C<?>) row variable.
 
   -X->           {|X}->

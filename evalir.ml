@@ -154,7 +154,6 @@ module Eval = struct
           match lookup n recs with
             | Some (args, body) ->
                 (* unfold recursive definitions once *)
-(*                 Debug.print ("calling: "^string_of_int n); *)
 
                 (* extend env with locals *)
                 let env = Value.shadow env ~by:locals in
@@ -190,8 +189,6 @@ module Eval = struct
             end
     | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
     | `ClientFunction name, args ->
-(*         Debug.print ("calling client function: "^name); *)
-(*         Debug.print ("args: "^mapstrcat "," Value.string_of_value args); *)
         client_call name cont args
     | `Continuation c,     [p] -> apply_cont c env p
     | `Continuation _,      _  ->
@@ -210,19 +207,15 @@ module Eval = struct
       scheduler env (cont, v) stepf
 
   and computation env cont (binders, tailcomp) : Value.t =
-(*    Debug.print ("comp: "^Ir.Show_program.show (binders, tailcomp));*)
     match binders with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
           | `Let ((var, _) as b, (_, tc)) ->
-(*               Debug.print ("var: "^string_of_int var); *)
               let locals = Value.localise env var in
                 tail_computation env (((Var.scope_of_binder b, var, locals, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-(*               Debug.print ("client f: "^string_of_int f); *)
               computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
-(*               Debug.print ("f: "^string_of_int f); *)
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
                 computation (Value.bind
@@ -255,7 +248,6 @@ module Eval = struct
               let env =
                 List.fold_right
                   (fun ((f, _) as fb, _, _) env ->
-                     (* Debug.print ("rec f: "^string_of_int f); *)
                      let scope = Var.scope_of_binder fb in
                        Value.bind f
                          (`RecFunction (bindings, locals, f, scope),
@@ -297,7 +289,6 @@ module Eval = struct
                apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, _t) ->
-(*         Debug.print ("t: "^Types.string_of_datatype t); *)
         let range =
           match range with
             | None -> None
@@ -340,12 +331,11 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Va
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (
-(*       Debug.print ("running..."); *)
       ignore 
         (Eval.eval env program);
       failwith "boom"
     ) with
-      | Eval.TopLevel (env, v) -> (* Debug.print ("ran"); *) (env, v)
+      | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =

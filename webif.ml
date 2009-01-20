@@ -76,9 +76,7 @@ let contin_invoke_req (valenv, nenv, tyenv) program params =
   let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
   let valenv = Value.with_closures valenv (closures) in
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
-    (* assert false *) (* TODO: implement this *)
     (* TBD: create a debug setting for printing webif modes. *)
-(*     Debug.print("Invoking " ^ string_of_cont(unmarshal_continuation valenv program pickled_continuation)); *)
       ContInvoke (Value.unmarshal_continuation unmarshal_envs pickled_continuation, params)
 
 (* Extract expression/environment pair from the parameters passed in over CGI.*)
@@ -195,24 +193,20 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) render_cont 
                let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
                  Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
            else
-             (*           Debug.print ("valenv domain: "^IntMap.fold (fun name _ s -> s ^ string_of_int name ^ "\n") valenv "\n");*)
              let program = locals, main in (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
              Debug.print "Running server program";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-(*                  Debug.print ("tenv domain: "^Env.Int.fold (fun name _ s -> s ^ string_of_int name ^ "\n") tenv "\n"); *)
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars (globals @ (fst program), snd program) in
-(*                  Debug.print ("closures: "^Ir.Show_closures.show closures); *)              
              let valenv = Value.with_closures valenv (closures) in
              let _env, v = Evalir.run_program valenv program in
                Value.string_of_value v)
 
 let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude filename =
   try 
-(*    let (valenv, nenv, tyenv) = envs in*)
-    let () = Debug.print ("Loading: "^filename^"...") in
+(*     let () = Debug.print ("Loading: "^filename^"...") in *)
     let (nenv', tyenv'), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
-    let () = Debug.print ("...loaded") in
+(*     let () = Debug.print ("...loaded") in *)
 
     let () =
       try
@@ -227,7 +221,6 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
             end;
             failwith ("Web programs must have type Page but this program has type "^Types.string_of_datatype t) in
 
-(*    let () = Debug.print ("program: "^Ir.Show_program.show (globals @ locals, main)) in *)
     let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
     let closures = Ir.ClosureTable.program (Var.varify_env (nenv, tyenv.Types.var_env)) Lib.primitive_vars (globals @ locals, main) in
 

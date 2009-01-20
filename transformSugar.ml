@@ -197,7 +197,6 @@ class transform (env : Types.typing_environment) =
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
       | `FunLit (Some argss, lam) ->
-(*          Debug.print ("funlit: "^Sugartypes.Show_phrasenode.show (`FunLit (Some argss, lam)));*)
           let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let t =
@@ -271,10 +270,6 @@ class transform (env : Types.typing_environment) =
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
-            (*             Debug.print ("infix"); *)
-(*             Debug.print ("t: "^Types.string_of_datatype t); *)
-(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
-(*             Debug.print ("exp: "^Show_phrasenode.show (`InfixAppl ((tyargs, op), e1, e1))); *)
             check_type_application
               (`InfixAppl ((tyargs, op), e1, e2), t)
               (fun () ->
@@ -287,10 +282,6 @@ class transform (env : Types.typing_environment) =
             (o, `Regex r, Instantiate.alias "Regex" [] tycon_env)
       | `UnaryAppl ((tyargs, op), e) ->
           let (o, op, t) = o#unary_op op in
-(*             Debug.print ("unary"); *)
-(*             Debug.print ("t: "^Types.string_of_datatype t); *)
-(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t); *)
-(*             Debug.print ("exp: "^Show_phrasenode.show (`UnaryAppl ((tyargs, op), e))); *)
             check_type_application
               (`UnaryAppl ((tyargs, op), e), t)
               (fun () ->
@@ -300,14 +291,9 @@ class transform (env : Types.typing_environment) =
       | `FnAppl (f, args) ->
           let (o, f, ft) = o#phrase f in
           let (o, args, _) = list o (fun o -> o#phrase) args in
-(*            Debug.print ("");*)
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
-(*             Debug.print "tappl"; *)
-(*             Debug.print ("t: "^Types.string_of_datatype t); *)
-(*             Debug.print ("t(verbose): "^Types.Show_datatype.show t);*)
-(*             Debug.print ("TAppl: "^Show_phrasenode.show (`TAppl (e, tyargs))); *)
             check_type_application
               (`TAppl (e, tyargs), t)
               (fun () ->

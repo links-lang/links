@@ -83,8 +83,6 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
     let fresh_binder (nenv, tenv, eff) =
       function
         | (name, Some t, _) ->
-(*             Debug.print ("name: "^ name); *)
-(*             Debug.print ("t: "^ Types.string_of_datatype t); *)
             let xb, x = Var.fresh_var (t, name, scope) in
               xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
         | _ -> assert false
@@ -218,9 +216,6 @@ type pattern_type = [ `List | `Variant | `Negative | `Record | `Constant | `Vari
 
 let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * Types.datatype -> computation =
   fun env pat (value, value_type) (body, body_type) ->
-(*     Debug.print ("pat: "^Show_pattern.show pat); *)
-(*     Debug.print ("value_type: "^Types.string_of_datatype value_type); *)
-
     let rec lp t pat value body =
       match pat with
         | `Nil ->

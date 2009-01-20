@@ -1,11 +1,14 @@
 # this file lists files in the repository, but not in the distribution
 COMANIFEST
+CHANGES
 RELEASE-CHECKLIST
 
 doc/quick-help.pod
+doc/grammar.tex
 doc/grammar.aux
 doc/grammar.log
 doc/grammar.toc
+doc/grammar.pdf
 
 examples/extras.js
 examples/document-replace.links
@@ -43,6 +46,9 @@ examples/tofix/web-include-test.links
 examples/tofix/xml-access.links
 examples/validate.links
 examples/tofix/xml_typing.links
+
+test.ml
+tests.ml
 
 links.el
 links-mode.el

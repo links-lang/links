@@ -983,13 +983,12 @@ struct
                          else
                            name) ^ sk k
                   | `Recursive (var, body) ->
-                      (*                    Debug.print ("rec var: " ^ IntMap.find var vars);*)
                       if TypeVarSet.mem var bound_vars then
                         Vars.find var vars
                       else
                         "mu " ^ Vars.find var vars ^ " . " ^
                           datatype (TypeVarSet.add var bound_vars) p body
-                  | `Body t -> (* Debug.print ("body"); *) sd t
+                  | `Body t -> sd t
               end
           | `Function (args, effects, t) ->
               let arrow =
@@ -1534,8 +1533,6 @@ let is_sub_type, is_sub_row =
 (* (\*           end *\) *)
 (*       | _, _ -> false in *)
   let rec is_sub_type = fun rec_vars (t, t') ->
-(*     Debug.print ("t: "^string_of_datatype t); *)
-(*     Debug.print ("t': "^string_of_datatype t'); *)
     match t, t' with
       | `Not_typed, `Not_typed -> true
       | `Primitive p, `Primitive q -> p=q

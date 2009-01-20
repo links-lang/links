@@ -201,9 +201,6 @@ object (o : 'self_type)
             ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
              [f; results])
         in
-(*           Debug.print ("comprehension: "^Show_phrasenode.show (`Iteration (generators, body, filter, sort))); *)
-(*           Debug.print ("body_type: "^Types.string_of_datatype body_type); *)
-(*           Debug.print ("desugared comprehension: "^Show_phrasenode.show e); *)
           (o, e, body_type)
     | e -> super#phrasenode e
 end
