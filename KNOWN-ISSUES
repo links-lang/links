@@ -15,4 +15,12 @@ KNOWN ISSUES
    - XML namespaces are not handled.
    - Non-ASCII characters are not handled.
 
+ * The effect analysis used to determine whether something is
+   convertible to a query fails to detect recursion that sneaks in via
+   recursive types.  For example,
 
+     query { (fun (x) { x.unroll(x)})
+             ((unroll = (fun (x) { x.unroll(x) }))) }
+
+   is accepted and loops for ever when infer_recursive_types is set to
+   "guarded" (the default) or "all".
