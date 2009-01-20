@@ -120,7 +120,7 @@ module Eval = struct
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
             | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
         end
-    | `Inject (label, v, _t) -> `Variant (label, value env v)
+    | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
     | `XmlNode (tag, attrs, children) ->
@@ -146,7 +146,7 @@ module Eval = struct
           ) with
             | TopLevel (_, v) -> atomic := false; v
         end
-    | `Coerce (v, _t) -> value env v
+    | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t = function
     | `RecFunction (recs, locals, n, scope), ps -> 
@@ -220,9 +220,7 @@ module Eval = struct
                 tail_computation env (((Var.scope_of_binder b, var, locals, (bs, tailcomp))::cont) : Value.continuation) tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
 (*               Debug.print ("client f: "^string_of_int f); *)
-              computation(Value.bind f (`ClientFunction (Var.name_of_binder fb),
-                                        Var.scope_of_binder fb) env) cont 
-                (bs, tailcomp)
+              computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
 (*               Debug.print ("f: "^string_of_int f); *)
               let scope = Var.scope_of_binder fb in
@@ -299,16 +297,15 @@ module Eval = struct
                apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, _t) ->
-(*         Debug.print ("t: "^Types.string_of_datatype _t); *)
+(*         Debug.print ("t: "^Types.string_of_datatype t); *)
         let range =
           match range with
             | None -> None
             | Some (limit, offset) ->
-                Some (Value.unbox_int (value env limit),
-                      Value.unbox_int (value env offset)) in
+                Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
           match Query.compile env (range, e) with
-            | None -> assert(false) (*computation env cont e*)
+            | None -> computation env cont e
             | Some (db, q, t) ->
                 let fields =
                   let (fields, _), _ = Types.unwrap_row (TypeUtils.extract_row t) in

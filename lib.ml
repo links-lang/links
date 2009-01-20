@@ -337,17 +337,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             with NotFound _ -> ());
            `Record []),
    datatype "(Mailbox (a), a) ~> ()",
+(* "(Process (send:a|_), a) ~> ()" *)
   IMPURE);
 
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
    datatype "() {:a}~> Mailbox (a)",
+(* "() e~> _) ~> Process (e)" *)
   IMPURE);
 
   "haveMail",
   (`PFun (fun _ -> 
             failwith "The haveMail function is not implemented on the server yet"),
-   datatype "() ~> Bool",
+   datatype "() {:_}~> Bool",
    IMPURE);
 
   "recv",
@@ -359,7 +361,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
     (`PFun (fun ([]) -> assert false),
-     datatype "() {:a}~> (a)",
+     datatype "() {:a}~> a",
   IMPURE);
 
   "spawn",
@@ -377,12 +379,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "(() {:b}~> d) ~> Mailbox (b)",
+   datatype "(() {:a}~> _) ~> Mailbox (a)",
+(* "(() e~> _) ~> Process (e)" *)
   IMPURE);
-(*   datatype "Mailbox (a) -> (Mailbox (b) -> c -> d) -> Mailbox (a) -> c -> Mailbox (b)");*)
 
   "spawnWait",
-  (`Client, datatype "(() {:b}~> d) ~> d",
+  (`Client, datatype "(() {:_}~> c) ~> c",
+(* "(() ~> a) ~> a" *)
   IMPURE);
 
   (** Lists and collections **)
@@ -1131,13 +1134,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(a) ~> b",
     PURE));
   
-  (** A silly server-side function, just for testing server-side primitives 
-      called from client. Remove this if there is a better one for testing. *)
-  ("server_concat",
-  (`Server (p2 (fun a b -> box_string (unbox_string a ^ unbox_string b))),
-   datatype "(String, String) ~> String",
-   IMPURE));
-
   (** non-deterministic random number generator *)
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),

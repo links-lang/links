@@ -14,11 +14,11 @@ let rec is_raw (phrase, pos) =
 (* DODGEYNESS:
 
    The first argument to desugar_page is an object which is only used
-   to lookup the mailbox type and to construct formlet types.
+   to lookup effecs and to construct formlet types.
 
    This code assumes that:
 
-     - the mailbox type is the same throughout the page literal
+     - the effecs are the same throughout the page literal
      - the environment is unchanged after calling o#phrase formlet
 *)
 let rec desugar_page (o, page_type) =

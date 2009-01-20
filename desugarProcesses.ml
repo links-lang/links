@@ -20,8 +20,8 @@ object (o : 'self_type)
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `Spawn (body, Some inner_eff) ->
-        (* bring the inner mailbox type into scope, then restore the
-           outer mailbox type afterwards *)
+        (* bring the inner effects into scope, then restore the
+           outer effects afterwards *)
         let mbt, inner_mb, other_effects = 
           let fields, row_var = inner_eff in
           let _, t = StringMap.find "hear" fields in
@@ -39,8 +39,8 @@ object (o : 'self_type)
         in
           (o, e, inner_mb)
     | `SpawnWait (body, Some inner_eff) ->
-        (* bring the inner mailbox type into scope, then restore the
-           outer mailbox type afterwards *)
+        (* bring the inner effects into scope, then restore the
+           outer effects afterwards *)
 
         let mbt, other_effects = 
           let fields, row_var = inner_eff in

@@ -16,13 +16,13 @@ struct
 
   type base =
       [ `If of base * base * base
-      | `Project of (Var.var * StringSet.t) * string 
-      | `Erase   of (Var.var * StringSet.t) * string
+      | `Project of (Var.var * StringSet.t) * string | `Erase of (Var.var * StringSet.t) * string
       | `Apply of string * base list
       | `Constant of Constant.constant ]
 
   type tail =
-      [ `Where of base * tail      | `SingletonRecord of base StringMap.t ]
+      [ `Where of base * tail
+      | `SingletonRecord of base StringMap.t ]
 
   type generator = Var.var * Value.table
   type comprehension = generator list * base list * tail
@@ -42,9 +42,7 @@ type t =
     | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
 
-let labels_of_fields fields =
-  StringMap.fold (fun name _ labels -> StringSet.add name labels) 
-    fields StringSet.empty
+let labels_of_fields fields = StringMap.fold (fun name _ labels -> StringSet.add name labels) fields StringSet.empty
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
   function
@@ -105,9 +103,7 @@ struct
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
       match v with
-        | `For (gs, os, b) ->
-            `For (List.map (fun (x, source) -> (x, bt source)) gs,
-                  List.map bt os, bt b)
+        | `For (gs, os, b) -> `For (List.map (fun (x, source) -> (x, bt source)) gs, List.map bt os, bt b)
         | `If (c, t, e) -> `If (bt c, bt t, bt e)
         | `Table t -> `Table t
         | `Singleton v -> `Singleton (bt v)
@@ -151,7 +147,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Project (`Var (x, _), name) ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
-      | `Apply (f, _) -> TypeUtils.return_type(Env.String.lookup Lib.type_env f)
+      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | _ -> assert false in
   let record env fields : Types.datatype =
     Types.make_record_type (StringMap.map (base env) fields) in
@@ -222,8 +218,7 @@ struct
       | `Record fields ->
           `Record
             (List.fold_left
-               (fun fields (name, v) ->
-                  StringMap.add name (expression_of_value v) fields)
+               (fun fields (name, v) -> StringMap.add name (expression_of_value v) fields)
                StringMap.empty
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
@@ -243,14 +238,11 @@ struct
   let lookup (val_env, exp_env) var =
     match Value.lookup var val_env, Env.Int.find exp_env var with
       | None, Some v -> v
-      | Some (`RecFunction ([(_, _)], _, f, _)), None 
-          when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
           `Primitive "ConcatMap"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None 
-          when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
           `Primitive "Map"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None
-          when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
           `Primitive "SortBy"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
@@ -399,8 +391,7 @@ struct
                 let env = env ++ closure_env in
                   reduce_for_source
                     env
-                    (fun env (x, v, body) -> 
-                       `Singleton (computation (bind env (x, v)) body)) 
+                    (fun env (x, v, body) -> `Singleton (computation (bind env (x, v)) body)) 
                     (x, xs, body)
             | _ -> assert false
         end
@@ -451,8 +442,7 @@ struct
             match b with
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
-                    computation (bind env (x, tail_computation env tc))
-                                (bs, tailcomp)
+                    computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as fb, (_, args, body), _) ->
@@ -551,8 +541,7 @@ struct
             else
               reduce_if_then (c, t, e)
           else
-            reduce_concat [reduce_if_condition (c, t, nil);
-                           reduce_if_condition (`Apply ("not", [c]), e, nil)]
+            reduce_concat [reduce_if_condition (c, t, nil); reduce_if_condition (`Apply ("not", [c]), e, nil)]
       | `If (c', t', `Constant (`Bool false)) ->
           reduce_if_then (`Apply ("&&", [c'; t']), t, e)
       | _ ->
@@ -587,7 +576,8 @@ struct
                     `If (c, t, e)
             end
 
-  let eval env e : t =
+
+  let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e);*)
     computation (env_of_value_env env) e
 end
@@ -708,14 +698,13 @@ struct
     let sb = string_of_base in
       match b with
         | `Case (c, t, e) ->
-            "case when " ^ sb c ^ " then " ^ sb t ^ " else " ^ sb e ^ " end"
+            "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
         | `Constant c -> Constant.string_of_constant c
         | `Project (var, label) ->
             string_of_table_var var ^ "." ^ label
         | `Apply (op, [l; r]) when Arithmetic.is op -> Arithmetic.gen (sb l, op, sb r)
         | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat"), [v]) -> sb v
         | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
-            (* insert SQL cast?*)
         | `Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
         | `Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
         | `Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
@@ -805,10 +794,10 @@ struct
           `Case (base c, base t, base e)
       | `Apply ("tilde", [s; r]) ->
           let r =
-            (* HACK
-               ----
-               This only works if the regexp doesn't include any
-               variables bound by the query *)
+            (* HACK:
+
+               this only works if the regexp doesn't include any variables bound by the query
+            *)
             `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
           in
             `Apply ("tilde", [base s; r])
@@ -835,8 +824,7 @@ struct
       string_of_query range q
 end
 
-let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> 
-              (Value.database * string * Types.datatype) option =
+let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
 (*     Debug.print ("e: "^Ir.Show_computation.show e); *)
     let v = Eval.eval env e in

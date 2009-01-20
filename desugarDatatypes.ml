@@ -190,27 +190,6 @@ struct
   (* Desugar a typename declaration.  Free variables are not allowed
      here (except for the parameters, of course). *)
   let typename alias_env name args (rhs : Sugartypes.datatype') = 
-(*     let mailbox_vars dt = *)
-(*       ((object *)
-(*           inherit SugarTraversals.fold as super *)
-(*           val tyvars = StringMap.empty *)
-            
-(*           method tyvars = tyvars *)
-            
-(*           method datatype = function *)
-(*             | FunctionType (f, ([], `Open (x, _)), t) ->  *)
-(*                 let var = `Flexible (Types.fresh_raw_variable(), `Any) in *)
-(*                 let self = {< tyvars = StringMap.add x (Unionfind.fresh var) tyvars >} in *)
-(*                 let o = self#list (fun o -> o#datatype) f in *)
-(*                 let o = o#datatype t in *)
-(*                   o *)
-(*             | dt -> super#datatype dt *)
-(*         end)#datatype' dt) # tyvars in *)
-(*     let name_of_quantifier = *)
-(*       function *)
-(*         | `TypeVar (x, _) *)
-(*         | `RowVar (x, _) *)
-(*         | `PresenceVar x -> x in *)
       try
         let empty_envs =
           {tenv=StringMap.empty; renv=StringMap.empty; penv=StringMap.empty} in
@@ -232,9 +211,6 @@ struct
                             ((q, Some (`PresenceVar (var, point)))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
           (args, datatype' envs alias_env rhs)
-(* {tenv=StringMap.empty; (\* StringMap.union_disjoint tmap (mailbox_vars rhs); *\) *)
-(*                             renv=StringMap.empty; *)
-(*                             penv=StringMap.empty} alias_env rhs) *)
       with UnexpectedFreeVar x ->
         failwith ("Free variable ("^ x ^") in definition of typename "^ name)
 
