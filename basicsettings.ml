@@ -41,14 +41,6 @@ end
 (* Installed preprocessor *)
 let pp = Settings.add_string("preprocessor", "", `System)
 
-(* Whether to print the IR rather than run it *)
-let pretty_print_ir = Settings.add_bool("pretty_print_ir", false, `User)
-
-(* Whether to compile the IR rather than run it *)
-let compile = Settings.add_bool("compile", false, `User)
-let nocps = Settings.add_bool("nocps", false, `User)
-let nobox = Settings.add_bool("nobox", false, `User)
-
 (* default database settings *)
 let database_driver = Settings.add_string("database_driver", "", `User)
 let database_args = Settings.add_string("database_args", "", `User)

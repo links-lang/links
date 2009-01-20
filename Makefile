@@ -106,8 +106,6 @@ SOURCES = $(OPC)                		\
           lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
-	  irtoml.mli irtoml.ml                  \
-	  lib/compiler/mllib.ml			\
           $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
           query.ml                              \
