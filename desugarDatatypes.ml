@@ -124,14 +124,22 @@ struct
         | `Absent -> `Absent
         | `Present -> `Present
         | `RigidVar name
-        | `Var name -> `Var (lookup_flag name)
+        | `Var name ->
+            begin
+              try `Var (lookup_flag name)
+              with NotFound _ -> raise (UnexpectedFreeVar name)
+            end
   and row ({tenv=tenv; renv=renv; penv=penv} as var_env) alias_env (fields, rv) =
     let lookup_row = flip StringMap.find renv in
     let seed =
       match rv with
         | `Closed -> Types.make_empty_closed_row ()
         | `OpenRigid (rv, _)
-        | `Open (rv, _) -> (StringMap.empty, lookup_row rv)
+        | `Open (rv, _) ->
+            begin
+              try (StringMap.empty, lookup_row rv)
+              with NotFound _ -> raise (UnexpectedFreeVar rv)
+            end
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Flexible (var, `Any)) in
@@ -211,8 +219,9 @@ struct
                             ((q, Some (`PresenceVar (var, point)))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
           (args, datatype' envs alias_env rhs)
-      with UnexpectedFreeVar x ->
-        failwith ("Free variable ("^ x ^") in definition of typename "^ name)
+      with 
+        | UnexpectedFreeVar x ->
+            failwith ("Free variable ("^ x ^") in definition of typename "^ name)
 
   (* Desugar a foreign function declaration.  Foreign declarations
      cannot use type variables from the context.  Any type variables
