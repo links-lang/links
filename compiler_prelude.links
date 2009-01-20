@@ -429,11 +429,11 @@ fun sortBy (f, l) {
 }
 
 #sig isInt : (String) -> Bool
-fun isInt(x) { true }
+fun isInt(x) { false }
 #fun isInt (x) { x ~ /-?[0-9]+$/ }
 
 sig isFloat : (String) -> Bool
-fun isFloat(x) { true }
+fun isFloat(x) { false }
 #fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 

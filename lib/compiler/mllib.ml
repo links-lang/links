@@ -4,6 +4,8 @@ module StringMap = Map.Make (String);;
 
 exception InternalError of string
 
+let cgi_parameters = ref []
+
 type xml = value list
 and xmlitem = 
   | Text of string
@@ -30,6 +32,14 @@ let xml_escape s =
     (Str.global_replace (Str.regexp "&") "&amp;" s))
 
 let mapstrcat glue f list = String.concat glue (List.map f list)
+
+let mapIndex (f : 'a -> int -> 'b) : 'a list -> 'b list =
+  let rec mi i =
+    function
+      | [] -> []
+      | (x :: xs) -> f x i :: mi (i+1) xs
+  in
+    mi 0
 
 let rec drop n = if n = (num_of_int 0) then identity else function
   | []     -> []
@@ -151,7 +161,8 @@ and
           
 (* Internal functions used by compiler *)
 let id = box_func identity
-let start = box_func (fun x -> x);;
+let start = id
+
 let project m k = StringMap.find (unbox_string k) (unbox_record m);;
 let build_xmlitem name attrs children =
     Node (name, List.map 
@@ -161,10 +172,35 @@ let unwrap_pair m =
   let m = unbox_record m in
     StringMap.find "1" m, StringMap.find "2" m
 
+let unwrap_triple m = 
+  let m = unbox_record m in
+    StringMap.find "1" m, StringMap.find "2" m, StringMap.find "3" m
+
 let marshal_value : value -> string =
   fun v -> Netencoding.Base64.encode (
     Marshal.to_string v [Marshal.Closures])
 
+let apply_2 f a1 a2 = 
+  (unbox_func ((unbox_func f) a1)) a2
+
+let apply_3 f a1 a2 a3 =
+  (unbox_func ((unbox_func ((unbox_func f) a1)) a2)) a3
+
+let apply_4 f a1 a2 a3 a4 =
+  (unbox_func ((unbox_func ((unbox_func ((unbox_func f) a1)) a2)) a3)) a4
+
+
+(* After several time-consuming attempts to nicely pull this out of
+   the compiled prelude, I decided to just duplicate the functionality
+   here. Bleh. *)
+let render_page page =
+  let n, k, fs = unwrap_triple page in
+  let ms, _ = unwrap_pair (apply_2 fs id (box_int (num_of_int 0))) in    
+  let zs =
+    mapIndex (fun m i zs -> apply_4 m id k zs (box_int (num_of_int i))) (unbox_list ms) in
+  let b_zs = box_list (List.map box_func zs) in
+    apply_2 k id (box_list  (List.map (fun z -> z b_zs) zs))
+      
 (* Library functions *)
 
 let l_nil = box_list ([])
@@ -221,7 +257,14 @@ let u__addAttributes x attrs =
   let attrs = List.map unwrap_pair attrs in
     List.map (add_attributes attrs) x
 
-let u__environment () = []
+let u__environment () = 
+  let is_internal s = Str.first_chars s 1 = "_" in
+  let mkpair (x1, x2) = box_record (
+    StringMap.add "1" (box_string x1)
+      (StringMap.add "2" (box_string x2)
+         StringMap.empty))
+  in
+    List.map mkpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters)
 
 let u__unsafePickleCont = marshal_value
 
@@ -233,19 +276,38 @@ let u__redirect s = assert false
 
 let u__exit k v = v
 
-(* Main stuff *)
+(* Main stuff--bits stolen from webif.ml *)
+
+let is_multipart () =
+  ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
+      Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
+
+let resume_with_cont cont =
+  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : value) in
+    (unbox_func cont) start
+
 let handle_request entry_f =
-  box_string ("Content-type: text/html\n\n" ^ (string_of_value (entry_f ())))
-    
-let resume_with_cont cont arg =
-  let cont = (Marshal.from_string (Netencoding.Base64.decode Sys.argv.(1)) 0 : value) in
-  let k = (box_func (fun _ -> assert false)) in
-    (unbox_func ((unbox_func cont) k)) arg
-      
-let run entry_f =  
-  let result = 
+  let cgi_args =
+    if is_multipart () then
+      List.map (fun (name, {Cgi.value=value}) ->
+                  (name, value)) (Cgi.parse_multipart_args ())
+    else
+      Cgi.parse_args () in
+
+    cgi_parameters := cgi_args;
+
+    let value =
+      if List.mem_assoc "_k" cgi_args then
+        resume_with_cont (List.assoc "_k" cgi_args)
+      else
+        entry_f ()
+    in
+      "Content-type: text/html\n\n" ^ (string_of_value (render_page value))
+          
+let run entry_f  =  
+  let s = 
     match getenv "REQUEST_METHOD" with
       | Some _ -> handle_request entry_f
-      | None -> entry_f ()
+      | None -> string_of_value (entry_f ())
   in
-    print_endline (string_of_value result)
+    print_endline s

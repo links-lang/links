@@ -361,6 +361,9 @@ struct
     method binder : binder -> string = fun (v, (_, name, _)) ->
       make_var_name v name
 
+    method top_binding : binding -> code = fun b ->
+      o#binding b (fun _ -> Empty)
+
     method virtual binding : binding -> ('self_type -> code) -> code
 
     method virtual program : program -> code
@@ -560,9 +563,12 @@ let rec ml_of_code c =
                  (fun (name, args, body) ->
                     nest 2 (
                       group (text name ^| args_doc args ^| text "=") 
-                      ^| ml_of_code body)) fs) ^|
-                  text "in") 
-          ^| ml_of_code rest)
+                      ^| ml_of_code body)) fs)) ^|
+              if rest = Empty then
+                text ";;"
+              else
+                text "in"
+                ^| ml_of_code rest)
 
     | Fun (args, body) ->
         parens (
@@ -640,17 +646,24 @@ module NonBoxingCamlTranslater = Translater FakeBoxer
 
 let ml_of_ir cps box env prelude (bs, tc) =
   let comp = prelude @ bs, tc in
-  let c = 
+  let c =
     if cps then 
-      if box then 
-        (new BoxingCamlTranslater.cps env)#program comp
-      else
-        (new NonBoxingCamlTranslater.cps env)#program comp
+      let t =
+        if box then
+          new BoxingCamlTranslater.cps env
+        else
+          new NonBoxingCamlTranslater.cps env
+      in 
+        t#program comp
     else
-      if box then 
-        (new BoxingCamlTranslater.direct env)#program comp
-      else
-        (new NonBoxingCamlTranslater.direct env)#program comp in
+      let t = 
+        if box then 
+          new BoxingCamlTranslater.direct env
+        else
+          new NonBoxingCamlTranslater.direct env
+      in 
+        t#program comp
+  in
     (* Hack: this needs to be fixed so top-level bindings are
        properly exposed. *)
     preamble ^
