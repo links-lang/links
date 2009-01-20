@@ -24,3 +24,12 @@ KNOWN ISSUES
 
    is accepted and loops for ever when infer_recursive_types is set to
    "guarded" (the default) or "all".
+
+ * Switch expressions are not currently accepted in queries.  For
+   example, the program
+
+     query { switch(A) { case A -> [] } }
+
+   causes Links to terminate abruptly at runtime.
+
+
