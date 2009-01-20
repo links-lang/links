@@ -1012,7 +1012,7 @@ fun freshResource() {
 # of the sendSuspend call. This continuation can be used in l:action
 # for example, to pass form values through as the return value
 # of sendSuspend.
-sig sendSuspend : (((a) -> Page) ~b~> Page) ~b~> a
+sig sendSuspend : (((a) ~> Page) ~b~> Page) ~b~> a
 fun sendSuspend(pagef) {
   escape returnf in {
     exit(renderPage(pagef(returnf)))

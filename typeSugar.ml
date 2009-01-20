@@ -205,6 +205,7 @@ sig
   val iteration_base_body : griper
 
   val escape : griper
+  val escape_outer : griper
 
   val projection : griper
 
@@ -462,21 +463,21 @@ tab () ^ code (show_type rt))
       die pos ("\
 Spawn blocks are wild" ^ nl() ^
 code (show_type rt) ^ nl() ^
-"but the current effect row is" ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
 code (show_type lt) ^ ".")
 
     let spawn_wait_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 Spawn wait blocks are wild" ^ nl() ^
 code (show_type rt) ^ nl() ^
-"but the current effect row is" ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
 code (show_type lt) ^ ".")
 
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 The query block has effects" ^ nl() ^
 code (show_type rt) ^ nl() ^
-"but the current effect row is" ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
 code (show_type lt) ^ ".")
 
     let query_base_row ~pos ~t1:(lexpr, lt) ~t2:(_, _rt) ~error:_ =
@@ -486,7 +487,7 @@ code (show_type lt) ^ ".")
       die pos ("\
 The current mailbox must always have a mailbox type" ^ nl() ^
 code (show_type rt) ^ nl() ^
-"but the current effect row is" ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
 code (show_type lt) ^ ".")
 
     let receive_patterns ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
@@ -505,7 +506,7 @@ tab () ^ code lexpr ^ nl() ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the argument passed to it has type" ^ nl() ^
 tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
-"and the current effects are" ^ nl() ^
+"and the currently allowed effects are" ^ nl() ^
 tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let infix_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
@@ -518,7 +519,7 @@ tab () ^ code (show_type lt) ^ nl () ^
 tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
 "and" ^ nl() ^
 tab () ^ code (show_type (List.hd (List.tl (TypeUtils.arg_types rt)))) ^ nl() ^
-"and the current effects are" ^ nl() ^
+"and the currently allowed effects are" ^ nl() ^
 tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let fun_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
@@ -532,7 +533,7 @@ String.concat
 (nl() ^ "and" ^ nl())
 (List.map (fun t ->
              tab() ^ code (show_type t)) (TypeUtils.arg_types rt)) ^ nl() ^
-"and the current effects are" ^ nl() ^
+"and the currently allowed effects are" ^ nl() ^
 tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
@@ -605,6 +606,13 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let escape ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "The argument to escape" t l
+
+    let escape_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Escape is wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
+code (show_type lt) ^ ".")
 
     let projection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
       die pos ("\
@@ -1801,12 +1809,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             *)
             let f = Types.fresh_type_variable `Any in
             let t = Types.fresh_type_variable `Any in
-            let eff = Types.make_empty_open_row `Any in
+
+            let eff = Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any in
+(*            let eff = Types.make_empty_open_row `Any in*)
 
             let cont_type = `Function (Types.make_tuple_type [f], eff, t) in
             let context' = {context 
                             with var_env = Env.bind context.var_env (name, cont_type)} in
             let e = type_check context' e in
+
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+              in
+                unify ~handle:Gripers.escape_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+
             let () = unify ~handle:Gripers.escape (pos_and_typ e, no_pos f) in
               `Escape ((name, Some cont_type, pos), erase e), typ e
         | `Conditional (i,t,e) ->
