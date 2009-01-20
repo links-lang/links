@@ -245,15 +245,8 @@ rule lex ctxt nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
-(*   | "-?->"                              { QUESTIONRARROW } *)
-(*   | "-?"                                { MINUSQUESTION } *)
   | "~>"                                { SQUIGRARROW }
-(*   | "~?~>"                              { QUESTIONSQUIGRARROW } *)
-(*   | "~?"                                { SQUIGQUESTION } *)
   | "=>"                                { FATRARROW }
-  | "-{"                                { MINUSLBRACE }
-(*   | "}->"                               { RBRACERARROW } *)
-(*   | "}~>"                               { RBRACESQUIGRARROW } *)
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }
@@ -273,7 +266,8 @@ rule lex ctxt nl = parse
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
-  | '~'                                 { ctxt#push_lexer (regex' ctxt nl); TILDE }
+  | '~'                                 { TILDE }
+  | "=~"                                { ctxt#push_lexer (regex' ctxt nl); EQUALSTILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | ".."                                { DOTDOT }

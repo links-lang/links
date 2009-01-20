@@ -37,8 +37,8 @@ fun newChannel() {
   (read, write)
 }
 
-sig get : (Channel (a)) e~> a
-fun get ((read, _)) { (read : () e~> a <- () {}~> (a))() }
+sig get : (Channel (a)) ~e~> a
+fun get ((read, _)) { (read : () ~e~> a <- () {}~> (a))() }
 
-sig put : (Channel (a), a) e~> ()
-fun put((_, write), v) { (write : (a) e~> () <- (a) {}~> ())(v) }
+sig put : (Channel (a), a) ~e~> ()
+fun put((_, write), v) { (write : (a) ~e~> () <- (a) {}~> ())(v) }

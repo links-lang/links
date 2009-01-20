@@ -339,7 +339,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
    datatype "() {:a}~> Mailbox (a)",
-(* "() e~> _) ~> Process (e)" *)
+(* "() ~e~> _) ~> Process (e)" *)
   IMPURE);
 
   "haveMail",
@@ -376,7 +376,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      d: the return type of the spawned process function (ignored)
    *)
    datatype "(() {:a}~> _) ~> Mailbox (a)",
-(* "(() e~> _) ~> Process (e)" *)
+(* "(() ~e~> _) ~> Process (e)" *)
   IMPURE);
 
   "spawnWait",
@@ -1181,10 +1181,10 @@ let patch_prelude_funs tyenv =
            (Env.String.bind
               (Env.String.bind
                  tyenv.Types.var_env
-                 ("map", datatype "((a) b-> c, [a]) b-> [c]"))
-              ("concatMap", datatype "((a) b-> [c], [a]) b-> [c]"))
-           ("sortByBase", datatype "((a) b-> (|_::Base), [a]) b-> [a]"))
-        ("filter", datatype "((a) b-> Bool, [a]) b-> [a]")}
+                 ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
+              ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
+           ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
+        ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None

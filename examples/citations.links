@@ -189,7 +189,7 @@ fun completions(authorPrefix, paperPrefix) server {
       if (paperPrefix == "") {
         query [10] {
           for (a <-- authorsTable)
-           where (a.name ~ /^{authorPrefix}.*/)
+           where (a.name =~ /^{authorPrefix}.*/)
            orderby (a.name)
             [(id=a.id, name=a.name)]
         }
@@ -199,8 +199,8 @@ fun completions(authorPrefix, paperPrefix) server {
            orderby (a.name)
            for (p <-- papersTable)
            for (r <-- paperauthorTable)
-             where (a.name ~ /^{authorPrefix}.*/ &&
-                    p.title ~ /^{paperPrefix}.*/ &&
+             where (a.name =~ /^{authorPrefix}.*/ &&
+                    p.title =~ /^{paperPrefix}.*/ &&
                     p.id == r.paperid && r.authorid == a.id)
               [(id=a.id, name=a.name)]
         }
@@ -213,7 +213,7 @@ fun completions(authorPrefix, paperPrefix) server {
       if (authorPrefix == "") {
         query [10] {
           for (p <-- papersTable)
-           where (p.title ~ /^{paperPrefix}.*/)
+           where (p.title =~ /^{paperPrefix}.*/)
            orderby (p.title)
             [(id=p.id, title=p.title)]
         }
@@ -224,8 +224,8 @@ fun completions(authorPrefix, paperPrefix) server {
              orderby (p.title)
               for (a <-- authorsTable)
               for (r <-- paperauthorTable)
-                where (a.name ~ /^{authorPrefix}.*/ &&
-                       p.title ~ /^{paperPrefix}.*/ &&
+                where (a.name =~ /^{authorPrefix}.*/ &&
+                       p.title =~ /^{paperPrefix}.*/ &&
                        p.id == r.paperid && r.authorid == a.id)
                  [(id=p.id, title=p.title)]
          })

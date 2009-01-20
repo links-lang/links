@@ -74,4 +74,4 @@ exit : 1
 
 Polymorphic effects for curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
-stdout : fun : ((a) b~> (c) b~> d) -> ([a]) -> ([c]) b~> [d]
+stdout : fun : ((a) ~b~> (c) ~b~> d) -> ([a]) -> ([c]) ~b~> [d]

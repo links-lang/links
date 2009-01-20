@@ -19,7 +19,7 @@ fun filter(p, l) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : ((a) b~> c, [a]) b~> [a]
+sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -33,7 +33,7 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get 
 # optimised away - it does if we eta reduce it
-sig sortByBase : ((a) b~> (| _::Base), [a]) b~> [a]
+sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
 fun all(p, l) {
@@ -243,7 +243,7 @@ fun join(glue,list) {
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
-sig takeWhile : ((a) b~> Bool, [a]) b~> [a]
+sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
   switch (list) {
     case [] -> []
@@ -255,7 +255,7 @@ fun takeWhile(pred, list) {
   }
 }
 
-sig dropWhile : ((a) b~> Bool, [a]) b~> [a]
+sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
   switch (list) {
     case [] -> []
@@ -350,7 +350,7 @@ fun isJust(x) {
 }
 
 
-sig search : ((a) b~> Bool, [a]) b~> Maybe (a)
+sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
 fun search(p,l) {
   switch (l) {
     case [] -> Nothing
@@ -359,7 +359,7 @@ fun search(p,l) {
   }
 }
 
-sig find : ((a) b~> Bool, [a]) b~> a
+sig find : ((a) ~b~> Bool, [a]) ~b~> a
 fun find(p,l) {
   switch (l) {
     case [] -> error("Not_found")
@@ -434,10 +434,10 @@ fun assocAll(x,l) {
 }
 
 sig isInt : (String) -> Bool
-fun isInt (x) { x ~ /-?[0-9]+$/ }
+fun isInt (x) { x =~ /-?[0-9]+$/ }
 
 sig isFloat : (String) -> Bool
-fun isFloat (x) { x ~ /-?[0-9]+(\.[0-9]+)?$/ }
+fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 fun asList(t) server {
   for (x <-- t) [x]
@@ -466,15 +466,15 @@ typename Attributes = [(String, String)];
 var multipart = [("enctype", "multipart/form-data")];
 
 infixr 0 $;
-sig $ : ((a) b-> c, a) b-> c
+sig $ : ((a) -b-> c, a) -b-> c
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a), d) ?-> (a,d)
+sig runState : (State (d,a), d) -?-> (a,d)
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : (State (d,a), (a) ?-> State(d,b)) ?-> State (d,b)
+sig >>= : (State (d,a), (a) -?-> State(d,b)) -?-> State (d,b)
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
@@ -482,7 +482,7 @@ op x >>= f {
 sig return : (a) -> State (b,a)
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : ((a) ?-> b, State (c,a)) ?-> State (c,b)
+sig fmap : ((a) -?-> b, State (c,a)) -?-> State (c,b)
 fun fmap(f, x) { x >>= return `compose` f } 
 
 sig pure : (a) -> Formlet(a)
@@ -493,7 +493,7 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe ((a) ?-> b), Maybe (a)) ?-> Maybe (b)
+sig applyE : (Maybe ((a) -?-> b), Maybe (a)) -?-> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -502,7 +502,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet ((a) ?-> b)) ?-> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a) -?-> b)) -?-> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
@@ -518,7 +518,7 @@ op m @@@ k {
 #   Returns a formlet that post-processes the formlet x by running its
 #   output through f.   (This is fmap for the Formlet functor.)
 #   (This could be written more efficiently.)
-sig @@=> : (Formlet(a), (a) ?-> b) ?-> Formlet(b)
+sig @@=> : (Formlet(a), (a) -?-> b) -?-> Formlet(b)
 op m @@=> f {
   m @@@ pure(f)
 }
@@ -529,7 +529,7 @@ fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 sig text : (String) ~> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : (XmlContext, Formlet (a)) ?-> Formlet (a)
+sig plug : (XmlContext, Formlet (a)) -?-> Formlet (a)
 op f `plug` m {
   m >>= fun((x,collector)){ return((f(x),
     fun (env) { var (xml,c) = collector (env); 
@@ -634,7 +634,7 @@ fun renderPagePure((n, k, fs)) {
 sig renderPage : (Page) ~> Xml
 fun renderPage(p) {
   # HACK: this allows us to use renderPage in effectful contexts
-  (renderPagePure : ((Page) ?~> Xml) <- ((Page) {}~> Xml))(p)
+  (renderPagePure : ((Page) ~?~> Xml) <- ((Page) {}~> Xml))(p)
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
@@ -812,7 +812,7 @@ var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroup : ([a], a, ([(Xml, a)]) ?-> Xml) ?-> 
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) -?-> Xml) -?-> 
                       Formlet (a) 
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
@@ -840,7 +840,7 @@ fun inputRadiogroup(items, selected, layout) {
 # ('choice' and 'choices'). Constructs an <option> element and an associated
 # function for determining whether this option was selected.
 sig preludeOptionKeyed : (String, (a,String), Bool) ~> 
-                         (Xml, ((String) c-> [a]) -> (String) c-> [a])
+                         (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
 fun preludeOptionKeyed (key, (data,text), selected) {
   if (selected) {
      ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
@@ -942,7 +942,7 @@ typename Either (a,b) = [|Left:a | Right : b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.
-sig satisfies : (Formlet (a), (a,Xml) ?-> Either(Xml,Xml)) ~> Formlet(a)
+sig satisfies : (Formlet (a), (a,Xml) -?-> Either(Xml,Xml)) ~> Formlet(a)
 fun satisfies(f, validate) {
    f >>= fun((xml,collector)) {
    return((xml, fun (env) { 
@@ -956,7 +956,7 @@ fun satisfies(f, validate) {
 }
 
 
-sig errorMsg : ((a) b~> Bool, (a) b~> String) -> (a,Xml) b~> Either (Xml,Xml)
+sig errorMsg : ((a) ~b~> Bool, (a) ~b~> String) -> (a,Xml) ~b~> Either (Xml,Xml)
 fun errorMsg (f, msg) (x,xml) {
   if (f(x)) Left (xml)
   else Right (<span class="errorinput">{xml} </span>
@@ -965,7 +965,7 @@ fun errorMsg (f, msg) (x,xml) {
 
 infixr 5 `errorMsg`;
 
-sig transform : (Formlet(a), (a) ?-> Bool, (a) ?-> String, (a) b~> c) b~> Formlet(c)
+sig transform : (Formlet(a), (a) -?-> Bool, (a) -?-> String, (a) ~b~> c) ~b~> Formlet(c)
 fun transform(f, predicate, error, g) {
   formlet
     <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
@@ -1012,7 +1012,7 @@ fun freshResource() {
 # of the sendSuspend call. This continuation can be used in l:action
 # for example, to pass form values through as the return value
 # of sendSuspend.
-sig sendSuspend : (((a) -> Page) b~> Page) b~> a
+sig sendSuspend : (((a) -> Page) ~b~> Page) ~b~> a
 fun sendSuspend(pagef) {
   escape returnf in {
     exit(renderPage(pagef(returnf)))

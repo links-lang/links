@@ -113,8 +113,8 @@ let datatype d = d, None
 
 %token END
 %token EQ IN
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP
-%token SQUIGRARROW RBRACESQUIGRARROW
+%token FUN RARROW FATRARROW MINUSLBRACE VAR OP
+%token SQUIGRARROW TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -139,7 +139,7 @@ let datatype d = d, None
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG INCLUDE
-%token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
+%token QUESTION EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
@@ -452,7 +452,7 @@ infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 | infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
-| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
+| infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
 
 infixl_4:
 | infixr_4                                                     { $1 }
@@ -725,7 +725,15 @@ datatype:
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
 | LBRACE fields RBRACE                                         { $2 }
-| nonrec_row_var                                               { ([], $1) }
+
+straight_arrow_prefix:
+| arrow_prefix                                                 { $1 }
+| MINUS nonrec_row_var                                         { ([], $2) }
+
+squig_arrow_prefix:
+| arrow_prefix                                                 { $1 }
+| TILDE nonrec_row_var                                         { ([], $2) }
+
 
 hear_arrow_prefix:
 | LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
@@ -744,13 +752,15 @@ hear_arrow_prefix:
                                                                       $5) }
 
 straight_arrow:
-| parenthesized_datatypes arrow_prefix RARROW datatype         { FunctionType ($1, $2, $4) }
+| parenthesized_datatypes
+  straight_arrow_prefix RARROW datatype                        { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
                                                                                ([], fresh_rigid_row_variable `Any),
                                                                                $3) }
 
 squiggly_arrow:
-| parenthesized_datatypes arrow_prefix SQUIGRARROW datatype    { FunctionType ($1,
+| parenthesized_datatypes
+  squig_arrow_prefix SQUIGRARROW datatype                      { FunctionType ($1,
                                                                                row_with
                                                                                  ("wild", (`Present, UnitType))
                                                                                  $2,

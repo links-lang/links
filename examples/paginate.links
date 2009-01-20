@@ -10,7 +10,7 @@ fun find(n,c) {
 # take(results_per_page,
 #  drop(results_per_page * (n-1),
 #   for (r <-- wordlist)
-#    where (r.word ~ /^{c}.*/)
+#    where (r.word =~ /^{c}.*/)
 #    orderby (r.word)
 #    [r]
 #  )
@@ -21,7 +21,7 @@ fun find(n,c) {
 
  query [limit,offset] {
    for (r <-- wordlist)
-    where (r.word ~ /^{c}.*/)
+    where (r.word =~ /^{c}.*/)
     orderby (r.word)
      [r]
  }

@@ -40,7 +40,7 @@ var acc = (
 
 ) : (
   pure  : (a) -> Accum (a),
-  apply : (Accum ((a) ~> b)) -> (Accum (a)) ?~> Accum (b),
+  apply : (Accum ((a) ~> b)) -> (Accum (a)) ~?~> Accum (b),
   plug  : (XmlContext) -> (Accum(a)) {}~> Accum(a)
 );
 
@@ -61,6 +61,6 @@ var form = (
   plug  = name.apply `compose` name.pure `compose` acc.plug
 ) : (
   pure  : (a) -> Form (a),
-  apply : (Form ((a) ~> b)) -> (Form (a)) ?~> Form (b),
+  apply : (Form ((a) ~> b)) -> (Form (a)) ~?~> Form (b),
   plug  : (XmlContext) -> (Form (a)) -> Form(a)
 );
