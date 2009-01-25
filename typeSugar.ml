@@ -150,11 +150,14 @@ sig
   val delete_table : griper
   val delete_pattern : griper
   val delete_where : griper
+  val delete_outer : griper
+
   val insert_table : griper
   val insert_values : griper
   val insert_read : griper
   val insert_write : griper
   val insert_needed : griper
+  val insert_outer : griper
 
   val insert_id : griper
   val update_table : griper
@@ -163,6 +166,7 @@ sig
   val update_read : griper
   val update_write : griper
   val update_needed : griper
+  val update_outer : griper
 
   val range_bound : griper
 
@@ -382,6 +386,13 @@ tab () ^ code (show_type lt) ^ nl () ^
 "while the read row has type" ^ nl () ^
 tab () ^ code (show_type rt))
 
+    let delete_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Database deletes are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
+code (show_type lt) ^ ".")
+
     let insert_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Tables" t l
 
@@ -422,6 +433,13 @@ tab () ^ code (show_type rt))
     let insert_id ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Identity variables" t l
 
+    let insert_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Database inserts are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
+code (show_type lt) ^ ".")
+
     let update_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Tables" t l
 
@@ -453,11 +471,18 @@ tab () ^ code (show_type lt) ^ nl () ^
 "while the needed row has type" ^ nl () ^
 tab () ^ code (show_type rt))
 
-    let range_bound ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      die pos "Range bounds must be integers."
-
     let update_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Where clauses" t l
+
+    let update_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Database updates are wild" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
+code (show_type lt) ^ ".")
+
+    let range_bound ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      die pos "Range bounds must be integers."
 
     let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
@@ -1448,7 +1473,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let where = opt_map (type_check (context ++ pattern_env pat)) where in
             let () =
               opt_iter
-                (fun e -> unify ~handle:Gripers.delete_where (pos_and_typ e, no_pos Types.bool_type)) where
+                (fun e -> unify ~handle:Gripers.delete_where (pos_and_typ e, no_pos Types.bool_type)) where in
+
+            (* delete is wild *)
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+              in
+                unify ~handle:Gripers.delete_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type
         | `DBInsert (into, labels, values, id) ->
@@ -1497,7 +1530,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () =
               opt_iter
                 (fun id ->
-                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id
+                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
+
+            (* insert is wild *)
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+              in
+                unify ~handle:Gripers.insert_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               `DBInsert (erase into, labels, erase values, opt_map erase id), Types.unit_type
         | `DBUpdate (pat, from, where, set) ->
@@ -1544,7 +1585,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             (* all fields being updated must be consistent with the needed row *)
             let () = unify ~handle:Gripers.update_needed
-              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Base)))
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Base))) in
+
+            (* update is wild *)
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+              in
+                unify ~handle:Gripers.update_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               `DBUpdate (erase_pat pat, erase from, opt_map erase where, 
                          List.map (fun (n,(p,_)) -> n, p) set), Types.unit_type

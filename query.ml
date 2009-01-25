@@ -42,6 +42,20 @@ type t =
     | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
 
+let unbox_pair =
+  function
+    | `Record fields ->
+        let x = StringMap.find "1" fields in
+        let y = StringMap.find "2" fields in
+          x, y
+    | _ -> failwith ("failed to unbox pair")
+
+let rec unbox_list =
+  function
+    | `Concat vs -> concat_map unbox_list vs
+    | `Singleton v -> [v]
+    | _ -> failwith ("failed to unbox list")
+
 let labels_of_fields fields = StringMap.fold (fun name _ labels -> StringSet.add name labels) fields StringSet.empty
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
@@ -704,7 +718,8 @@ struct
         | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
         | `Apply ("<=", [v; w]) -> "(" ^ sb v ^ ")" ^ " <= " ^ "(" ^ sb w ^ ")"
         | `Apply (">=", [v; w]) -> "(" ^ sb v ^ ")" ^ " >= " ^ "(" ^ sb w ^ ")"
-        | `Apply ("tilde", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
+        | `Apply ("RLIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
+        | `Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
         | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
         | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
 
@@ -780,14 +795,20 @@ struct
       | `If (c, t, e) ->
           `Case (base c, base t, base e)
       | `Apply ("tilde", [s; r]) ->
-          let r =
-            (* HACK:
-
-               this only works if the regexp doesn't include any variables bound by the query
-            *)
-            `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
-          in
-            `Apply ("tilde", [base s; r])
+          begin
+            match likeify r with
+              | Some r ->
+                  `Apply ("LIKE", [base s; `Constant (`String r)])
+              | None ->
+                  let r =
+                    (* HACK:
+                       
+                       this only works if the regexp doesn't include any variables bound by the query
+                    *)
+                    `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                  in
+                    `Apply ("RLIKE", [base s; r])
+          end
       | `Apply (f, vs) ->
           `Apply (f, List.map base vs)
       | `Project (`Var (x, _labels), name) ->
@@ -803,6 +824,70 @@ struct
                                   | `Singleton (`Constant (`Char c)) -> `Char c
                                   | _ -> assert false) cs))))
       | _ -> assert false
+
+  (* convert a regexp to a like if possible *)
+  and likeify v =
+    let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+      match v with
+        | `Variant ("Repeat", pair) ->
+            begin
+              match unbox_pair pair with
+                | `Variant ("Star", _), `Variant ("Any", _) -> Some ("%")
+                | _ -> None
+            end
+        | `Variant ("Simply", `Constant (`String s)) -> Some (quote s)
+        | `Variant ("Quote", `Variant ("Simply", v)) ->
+            (* TODO:
+               
+               detect variables and convert to a concatenation operation
+               (this needs to happen in RLIKE compilation as well)
+            *)
+           let rec string =
+              function
+                | `Constant (`String s) -> Some s
+                | `Singleton (`Constant (`Char c)) -> Some (string_of_char c)
+                | `Concat vs ->
+                    let rec concat =
+                      function
+                        | [] -> Some ""
+                        | v::vs ->
+                            begin
+                              match string v with
+                                | None -> None
+                                | Some s ->
+                                    begin
+                                      match concat vs with
+                                        | None -> None
+                                        | Some s' -> Some (s ^ s')
+                                    end
+                            end
+                    in
+                      concat vs
+                | _ -> None
+            in
+              opt_map quote (string v)
+        | `Variant ("Seq", rs) ->
+            let rec seq =
+              function
+                | [] -> Some ""
+                | r::rs ->
+                    begin
+                      match likeify r with
+                        | None -> None
+                        | Some s ->
+                            begin
+                              match seq rs with
+                                | None -> None
+                                | Some s' -> Some (s^s')
+                            end
+                    end
+            in
+              seq (unbox_list rs)
+        | `Variant ("StartAnchor", _) -> Some ""
+        | `Variant ("EndAnchor", _) -> Some ""
+        | _ -> assert false
+
+
 
   let query range v =
 (*     Debug.print ("v: "^string_of_t v); *)
