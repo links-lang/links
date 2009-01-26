@@ -36,11 +36,17 @@ type t =
     | `Singleton of t | `Concat of t list
     | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t
     | `Variant of string * t
+    | `XML of Value.xmlitem
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
     | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
+
+let unbox_xml =
+  function
+    | `XML xmlitem -> xmlitem
+    | _ -> failwith ("failed to unbox XML")
 
 let unbox_pair =
   function
@@ -55,6 +61,18 @@ let rec unbox_list =
     | `Concat vs -> concat_map unbox_list vs
     | `Singleton v -> [v]
     | _ -> failwith ("failed to unbox list")
+
+let unbox_string =
+  function
+    | `Constant (`String s) -> s
+    | (`Concat _ | `Singleton _) as v ->
+        implode
+          (List.map
+             (function
+                | `Constant (`Char c) -> c
+                | _ -> failwith ("failed to unbox string"))
+             (unbox_list v))
+    | _ -> failwith ("failed tounbox_string")
 
 let labels_of_fields fields = StringMap.fold (fun name _ labels -> StringSet.add name labels) fields StringSet.empty
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
@@ -108,6 +126,7 @@ struct
     | `Singleton of pt | `Concat of pt list
     | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t
     | `Variant of string * pt
+    | `XML of Value.xmlitem
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
@@ -124,6 +143,7 @@ struct
         | `Concat vs -> `Concat (List.map bt vs)
         | `Record fields -> `Record (StringMap.map bt fields)
         | `Variant (name, v) -> `Variant (name, bt v)
+        | `XML xmlitem -> `XML xmlitem
         | `Project (v, name) -> `Project (bt v, name)
         | `Erase (v, names) -> `Erase (bt v, names)
         | `Apply (f, vs) -> `Apply (f, List.map bt vs)
@@ -193,6 +213,7 @@ let rec value_of_expression : t -> Value.t = fun v ->
       | `Table t -> `Table t
       | `Concat vs -> `List (List.map value_of_singleton vs)
       | `Variant (name, v) -> `Variant (name, ve v)
+      | `XML xmlitem -> `XML xmlitem
       | `Record fields -> `Record (List.rev (StringMap.fold (fun name v fields -> (name, ve v)::fields) fields []))
       | _ -> assert false
 
@@ -236,11 +257,11 @@ struct
                StringMap.empty
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
+      | `XML xmlitem -> `XML xmlitem
       | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction f -> `Primitive f
-          (*     | `XML of xmlitem  *)
           (*     | `NativeString of string ] *)
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -346,22 +367,21 @@ struct
     | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
-        (*     | `XmlNode (tag, attrs, children) -> *)
-        (*         let children = *)
-        (*           List.fold_right *)
-        (*             (fun v children -> *)
-        (*                let v = value env v in *)
-        (*                  List.map Value.unbox_xml (Value.unbox_list v) @ children) *)
-        (*             children [] in *)
-        (*         let children = *)
-        (*           StringMap.fold  *)
-        (*             (fun name v attrs -> *)
-        (*                Value.Attr (name, Value.unbox_string (value env v)) :: attrs) *)
-        (*             attrs children *)
-        (*         in *)
-        (*           Value.box_list [Value.box_xml (Value.Node (tag, children))] *)
 
-    | `XmlNode _ -> assert false
+    | `XmlNode (tag, attrs, children) ->
+        let children =
+          List.fold_right
+            (fun v children ->
+               let v = value env v in
+                 List.map unbox_xml (unbox_list v) @ children)
+            children [] in
+        let children =
+          StringMap.fold
+            (fun name v attrs ->
+               Value.Attr (name, unbox_string (value env v)) :: attrs)
+            attrs children
+        in
+          `Singleton (`XML (Value.Node (tag, children)))
 
     | `ApplyPure (f, ps) -> 
         apply env (value env f, List.map (value env) ps)

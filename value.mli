@@ -39,6 +39,7 @@ type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
+  deriving (Show)
 
 type table = (database * string) * string * Types.row
   deriving (Show)
