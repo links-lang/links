@@ -621,7 +621,7 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let iteration_base_order ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
       with_but pos
-        ("An orderby clause in a database comprehension must return a list of records of base type")
+        ("An orderby clause must return a list of records of base type")
         (expr, t)
 
     let iteration_base_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
@@ -1812,15 +1812,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () =
               opt_iter (fun where -> unify ~handle:Gripers.iteration_where
                           (pos_and_typ where, no_pos Types.bool_type)) where in
+
+            let () =
+              opt_iter
+                (fun order ->
+                   unify ~handle:Gripers.iteration_base_order
+                     (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row `Base)))) orderby in
             let () =
               if is_query then
-                begin
-                  opt_iter (fun order ->
-                              unify ~handle:Gripers.iteration_base_order
-                                (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row `Base)))) orderby;
-                  unify ~handle:Gripers.iteration_base_body
-                    (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row `Base))))
-                end in
+                unify ~handle:Gripers.iteration_base_body
+                  (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row `Base)))) in
             let e = `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
               if is_query then
                 `Query (None, (e, pos), Some (typ body)), typ body

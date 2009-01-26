@@ -361,14 +361,11 @@ struct
         (*         in *)
         (*           Value.box_list [Value.box_xml (Value.Node (tag, children))] *)
 
-    | `Inject _
     | `XmlNode _ -> assert false
 
     | `ApplyPure (f, ps) -> 
         apply env (value env f, List.map (value env) ps)
     | `Coerce (v, _) -> value env v
-        (* TODO: replace comparisons with primitive functions *)
-    | `Comparison _ -> assert false
 
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
@@ -470,16 +467,25 @@ struct
     | `Special (`Query (None, e, _)) -> computation env e
     | `Special _s -> failwith "special not allowed in query block"
     | `Case (v, cases, default) ->
-        assert false
-          (*         (match value env v with *)
-          (*            | `Variant (label, _) as v -> *)
-          (*                (match StringMap.lookup label cases, default, v with *)
-          (*                   | Some ((var,_), c), _, `Variant (_, v) *)
-          (*                   | _, Some ((var,_), c), v -> *)
-          (*                       computation (Value.bind var (v, `Local) env) cont c *)
-          (*                   | None, _, #Value.t -> eval_error "Pattern matching failed" *)
-          (*                   | _ -> assert false (\* v not a variant *\)) *)
-          (*            | _ -> eval_error "Case of non-variant") *)
+        let rec reduce_case (v, cases, default) =
+          match v with
+            | `Variant (label, v) as w ->
+                begin
+                  match StringMap.lookup label cases, default with
+                    | Some ((x, _), c), _ ->
+                        computation (bind env (x, v)) c
+                    | None, Some ((z, _), c) ->
+                        computation (bind env (z, w)) c
+                    | None, None -> eval_error "Pattern matching failed"
+                end
+            | `If (c, t, e) ->
+                `If
+                  (c,
+                   reduce_case (t, cases, default),
+                   reduce_case (e, cases, default))
+            |  _ -> assert false
+        in
+          reduce_case (value env v, cases, default)
     | `If (c, t, e) ->
         let c = value env c in
         let t = computation env t in

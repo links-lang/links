@@ -177,15 +177,7 @@ object (o : 'self_type)
             | None, None -> results
             | Some sort, Some sort_type ->
                 let sort_by, sort_type_arg = 
-                  let is_query =
-                    List.exists (function
-                                   | `List _ -> false
-                                   | `Table _ -> true) generators
-                  in
-                    if is_query then
-                      "sortByBase", `Row (TypeUtils.extract_row sort_type)
-                    else
-                      "sortBy", `Type sort_type in
+                  "sortByBase", `Row (TypeUtils.extract_row sort_type) in
 
                 let g : phrase =
                   `FunLit
