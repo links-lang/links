@@ -19,11 +19,6 @@ exception WrongArgumentTypeError of (SourceCode.pos *
                                        string list * Types.datatype list *
 				       Types.datatype option)
 
-exception MistypedSendError of (SourceCode.pos *
-				       string * Types.datatype * 
-                                       string list * Types.datatype list *
-				       Types.datatype option)
-
 exception NonfuncAppliedTypeError of (SourceCode.pos * string * Types.datatype *
 					string list * Types.datatype list *
 					Types.datatype option)
@@ -114,19 +109,6 @@ let rec format_exception_html = function
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
-  | MistypedSendError(pos, fexpr, fntype, pexpr,
-                      ([`Application(mbtc, [`Type mbType]); msgType] as paramtypes),
-                      mb)
-      when Types.Abstype.Eq_t.eq mbtc Types.mailbox ->
-      let msg = "The expressions <code class=\"typeError\">" ^ 
-        mapstrcat "\n" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
-        "</code> have type <code class=\"typeError\">" ^ 
-        xml_escape (mapstrcat ", " string_of_datatype paramtypes) ^
-        "</code> and cannot be passed to function <code class=\"typeError\">"^ xml_escape(fexpr) ^
-        "</code>which has type <code class=\"typeError\">"^ xml_escape(string_of_datatype fntype) ^ "</code>" ^ " (this tries to send a message of type " ^ string_of_datatype msgType ^ " to a process expecting message of type " ^ string_of_datatype mbType ^ ")"
-      in
-        format_exception_html(Type_error(pos, msg))
-     
   | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
       let msg = "The expression(s) <pre class=\"typeError\">" ^ 
         mapstrcat "</pre><pre class=\"typeError\">" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^

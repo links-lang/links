@@ -21,12 +21,9 @@ object (o : 'self_type)
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `Spawn (body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
-           outer effects afterwards *)
-        let mbt, inner_mb, other_effects = 
-          let fields, row_var = inner_eff in
-          let _, t = StringMap.find "hear" fields in
-          let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in           
-            t, `Application (Types.mailbox, [`Type t]), other_effects in
+           outer effects afterwards *)       
+        let process_type = `Application (Types.process, [`Row inner_eff]) in
+
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
         let (o, body, body_type) = o#phrase body in
@@ -34,19 +31,13 @@ object (o : 'self_type)
 
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "spawn", dp), [`Type mbt; `Row other_effects; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var "spawn", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
         in
-          (o, e, inner_mb)
+          (o, e, process_type)
     | `SpawnWait (body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
-
-        let mbt, other_effects = 
-          let fields, row_var = inner_eff in
-          let _, t = StringMap.find "hear" fields in
-          let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in           
-            t, other_effects in
 
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
@@ -55,7 +46,7 @@ object (o : 'self_type)
           
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "spawnWait", dp), [ `Type mbt; `Row other_effects; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var "spawnWait", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
         in
           (o, e, body_type)

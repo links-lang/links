@@ -20,7 +20,7 @@ let alias_env : Types.tycon_environment =
       "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
-      "Mailbox" , `Abstract Types.mailbox;
+      "Process" , `Abstract Types.process;
       "DomNode" , `Abstract Types.dom_node;
     ]
 
@@ -332,15 +332,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
               Hashtbl.remove blocked_processes pid
             with NotFound _ -> ());
            `Record []),
-   datatype "(Mailbox (a), a) ~> ()",
-(* "(Process (send:a|_), a) ~> ()" *)
-  IMPURE);
+   datatype "(Process ({hear:a|_}), a) ~> ()",
+   IMPURE);
 
   "self",
   (`PFun (fun _ -> `Int (num_of_int !current_pid)),
-   datatype "() {:a|_}~> Mailbox (a)",
-(* "() ~e~> _) ~> Process (e)" *)
-  IMPURE);
+   datatype "() ~e~> Process ({ |e })",
+   IMPURE);
 
   "haveMail",
   (`PFun (fun _ -> 
@@ -367,22 +365,30 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            Hashtbl.add messages new_pid (Queue.create ());
            let var = Var.dummy_var in
            let cont = (`Local, var, Value.empty_env IntMap.empty, ([], `Apply (`Variable var, []))) in
-           Queue.push ((cont::Value.toplevel_cont, f), new_pid) suspended_processes;
-           (`Int (num_of_int new_pid))),
+             Queue.push ((cont::Value.toplevel_cont, f), new_pid) suspended_processes;
+             (`Int (num_of_int new_pid))),
    (*
      a: spawn's mailbox type (ignored, since spawn doesn't recv)
      b: the mailbox type of the spawned process
      c: the parameter expected by the process function
      d: the return type of the spawned process function (ignored)
    *)
-   datatype "(() {:a|_}~> _) ~> Mailbox (a)",
-(* "(() ~e~> _) ~> Process (e)" *)
-  IMPURE);
+   datatype "(() ~e~> _) ~> Process ({ |e })",
+   IMPURE);
 
   "spawnWait",
-  (`Client, datatype "(() {:_|_}~> c) ~> c",
-(* "(() ~> a) ~> a" *)
-  IMPURE);
+  (`Client,
+   datatype "(() ~> a) ~> a",
+   IMPURE);
+
+
+  (* If we add more effects then spawn and spawnWait shouldn't
+     necessarily mask them, so we might want to change their types to
+     something like this:
+
+     spawn : (() {wild{p},hear{q}:a|e}-> _) {hear{_}:_|e}~> Process({wild{p},hear{q}:a|e})"
+     spawnWait : (() {wild{_},hear{_}:_|e}-> a) {hear{_}:_|e}~> a"
+  *)
 
   (** Lists and collections **)
   "Nil",

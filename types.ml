@@ -66,11 +66,6 @@ struct
   let compare l r = String.compare l.id r.id
 end
 
-let mailbox  = {
-  Abstype.id = "Mailbox" ;
-  name       = "Mailbox" ;
-  arity      = [`Type] ;
-}
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
@@ -1198,8 +1193,8 @@ struct
   and type_arg bound_vars p =
     function
       | `Type t -> datatype bound_vars p t
-      | `Row r -> row "," bound_vars p r
-      | `Presence f -> presence bound_vars p f
+      | `Row r -> "{ " ^ row "," bound_vars p r ^ " }"
+      | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
 
   let tycon_spec bound_vars p =
     function
@@ -1683,7 +1678,7 @@ let make_tuple_type (ts : datatype list) : datatype =
           ts))
 
 let make_list_type t = `Application (list, [`Type t])
-let make_mailbox_type t = `Application (mailbox, [`Type t])
+let make_process_type r = `Application (process, [`Row r])
 
 let extend_row fields (fields', row_var) =
   (FieldEnv.fold

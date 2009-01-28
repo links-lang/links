@@ -211,14 +211,11 @@ class transform (env : Types.typing_environment) =
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
-          let inner_mb =
-            let fields, _ = inner_effects in
-            let _, t = StringMap.find "hear" fields in
-              `Application (Types.mailbox, [`Type t]) in
+          let process_type = `Application (Types.process, [`Row inner_effects]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (body, Some inner_effects)), inner_mb)
+            (o, (`Spawn (body, Some inner_effects)), process_type)
       | `SpawnWait (body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)

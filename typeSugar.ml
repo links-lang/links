@@ -1600,12 +1600,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
         (* concurrency *)
         | `Spawn (p, _) ->
-            (* (() -{b}-> d) -> Mailbox (b) *)
-            let mb_type = Types.fresh_type_variable `Any in
-            let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
-            let inner_effects =
-              Types.row_with ("wild", (`Present, Types.unit_type))
-                (Types.make_singleton_open_row ("hear", (`Present, mb_type)) `Any) in
+            (* (() -e-> _) -> Process (e) *)
+            let inner_effects = Types.make_empty_open_row `Any in
+            let pid_type = `Application (Types.process, [`Row inner_effects]) in
             let () =
               let outer_effects =
                 Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
@@ -1616,11 +1613,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Spawn (erase p, Some inner_effects), pid_type
         | `SpawnWait (p, _) ->
             (* (() -{b}-> d) -> d *)
-            let mb_type = Types.fresh_type_variable `Any in
-            let pid_type = `Application (Types.mailbox, [`Type mb_type]) in
-            let inner_effects =
-              Types.row_with ("wild", (`Present, Types.unit_type))
-                (Types.make_singleton_open_row ("hear", (`Present, mb_type)) `Any) in
+            let inner_effects = Types.make_empty_open_row `Any in
+            let pid_type = `Application (Types.process, [`Row inner_effects]) in
             let () =
               let outer_effects =
                 Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any

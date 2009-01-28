@@ -741,11 +741,13 @@ arrow_prefix:
 straight_arrow_prefix:
 | arrow_prefix                                                 { $1 }
 | MINUS nonrec_row_var                                         { ([], $2) }
+| MINUS kinded_nonrec_row_var                                  { ([], $2) }
 
 squig_arrow_prefix:
 | hear_arrow_prefix                                            { $1 }
 | arrow_prefix                                                 { $1 }
 | TILDE nonrec_row_var                                         { ([], $2) }
+| TILDE kinded_nonrec_row_var                                  { ([], $2) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
@@ -798,7 +800,7 @@ primary_datatype:
                                                                    | [] -> UnitType
                                                                    | [t] -> t
                                                                    | ts  -> TupleType ts }
-| LPAREN fields RPAREN                                         { RecordType $2 }
+| LPAREN rfields RPAREN                                        { RecordType $2 }
 
 | TABLEHANDLE
      LPAREN datatype COMMA datatype COMMA datatype RPAREN      { TableType ($3, $5, $7) }
@@ -838,6 +840,8 @@ type_arg_list:
 | TYPE LPAREN datatype RPAREN COMMA type_arg_list              { (`Type $3) :: $6 }
 | ROW LPAREN fields RPAREN COMMA type_arg_list                 { (`Row $3) :: $6 }
 | PRESENCE LPAREN presence_flag RPAREN COMMA type_arg_list     { (`Presence $3) :: $6 }
+| LBRACE fields RBRACE                                         { [`Row $2] }
+| LBRACE fields RBRACE COMMA type_arg_list                     { (`Row $2) :: $5 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -850,19 +854,37 @@ datatypes:
 fields:
 | field                                                        { [$1], `Closed }
 | field VBAR row_var                                           { [$1], $3 }
+| field VBAR kinded_row_var                                    { [$1], $3 }
 | VBAR row_var                                                 { [], $2 }
 | VBAR kinded_row_var                                          { [], $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
+| field_label                                                  { $1, (`Present, UnitType) }
+| field_label COLON datatype                                   { $1, (`Present, $3) }
+| field_label presence_flag                                    { $1, ($2, UnitType) }
+| field_label presence_flag COLON datatype                     { $1, ($2, $4) }
+
+field_label:
+| CONSTRUCTOR                                                  { $1 }
+| VARIABLE                                                     { $1 }
+| UINTEGER                                                     { Num.string_of_num $1 }
+
+rfields:
+| rfield                                                       { [$1], `Closed }
+| rfield VBAR row_var                                          { [$1], $3 }
+| rfield VBAR kinded_row_var                                   { [$1], $3 }
+| VBAR row_var                                                 { [], $2 }
+| VBAR kinded_row_var                                          { [], $2 }
+| rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
+
+rfield:
 | record_label COLON datatype                                  { $1, (`Present, $3) }
 | record_label presence_flag                                   { $1, ($2, UnitType) }
 | record_label presence_flag COLON datatype                    { $1, ($2, $4) }
 
 record_label:
-| CONSTRUCTOR                                                  { $1 }
-| VARIABLE                                                     { $1 }
-| UINTEGER                                                     { Num.string_of_num $1 }
+| field_label                                                  { $1 }
 
 vfields:
 | vfield                                                       { [$1], `Closed }
@@ -879,6 +901,7 @@ vfield:
 efields:
 | efield                                                       { [$1], `Closed }
 | efield VBAR nonrec_row_var                                   { [$1], $3 }
+| efield VBAR kinded_nonrec_row_var                            { [$1], $3 }
 | VBAR nonrec_row_var                                          { [], $2 }
 | VBAR kinded_nonrec_row_var                                   { [], $2 }
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }

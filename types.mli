@@ -48,7 +48,6 @@ sig
   val compare : t -> t -> int
 end
 
-val mailbox  : Abstype.t 
 val process  : Abstype.t
 val list     : Abstype.t 
 val event    : Abstype.t 
@@ -234,7 +233,7 @@ val extract_tuple : row -> datatype list
 (** type constructors *)
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
-val make_mailbox_type : datatype -> datatype
+val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype * datatype -> datatype
