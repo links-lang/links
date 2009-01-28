@@ -266,23 +266,23 @@ end =
 struct
   let builtin_ops =
     StringMap.from_alist
-      [ "+",   "+"  ;
-        "+.",  "+"  ;
-        "-",   "-"  ;
-        "-.",  "-"  ;
-        "*",   "*"  ;
-        "*.",  "*"  ;
-        "/",   ""   ;
-        "^",   ""   ;
-        "^.",  ""  ;
-        "/.",  "/"  ;
-        "mod", "%"  ]
+      [ "+",   Some "+"  ;
+        "+.",  Some "+"  ;
+        "-",   Some "-"  ;
+        "-.",  Some "-"  ;
+        "*",   Some "*"  ;
+        "*.",  Some "*"  ;
+        "/",   None      ;
+        "^",   None      ;
+        "^.",  None      ;
+        "/.",  Some "/"  ;
+        "mod", Some "%"  ]
 
   let is x = StringMap.mem x builtin_ops
-  let js_name op = StringMap.find op builtin_ops
+  let js_name op = val_of (StringMap.find op builtin_ops)
   let gen (l, op, r) =
     match op with
-      | "/" -> Call (Var "Math.floor", [Binop (l, js_name op, r)])
+      | "/" -> Call (Var "Math.floor", [Binop (l, "/", r)])
       | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
       | "^." -> Call (Var "Math.pow", [l; r])
       | _ -> Binop(l, js_name op, r)
