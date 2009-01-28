@@ -17,7 +17,10 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeStrin
     deriving (Show)
 
 type subkind = [ `Any | `Base ]
-      deriving (Show)
+    deriving (Show)
+
+type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
+    deriving (Show)
 
 type 't meta_type_var_basis =
     [ `Flexible of (int * subkind)
@@ -39,13 +42,14 @@ type 't meta_presence_var_basis =
 module Abstype :
 sig
   type t deriving (Show, Eq)
-  val make  : string -> int -> t
-  val arity : t -> int
+  val make  : string -> kind list -> t
+  val arity : t -> kind list
   val name  : t -> string
   val compare : t -> t -> int
 end
 
 val mailbox  : Abstype.t 
+val process  : Abstype.t
 val list     : Abstype.t 
 val event    : Abstype.t 
 val dom_node : Abstype.t

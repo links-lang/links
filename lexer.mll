@@ -205,11 +205,26 @@ let keywords = [
  "var"      , VAR; 
  "where"    , WHERE; 
  "with"     , WITH; 
-] 
+]
+
+let kinds = [
+ "Type"    , TYPE;
+ "BaseType", BASETYPE;
+ "Row"     , ROW;
+ "BaseRow" , BASEROW;
+ "Presence", PRESENCE;
+]
+
+let subkinds = [
+ "Any"    , ANY;
+ "Base"   , BASE;
+]
+
 exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
+let def_kind = ['A'-'Z'] def_id*
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
@@ -271,6 +286,12 @@ rule lex ctxt nl = parse
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | ".."                                { DOTDOT }
+  | "::" (def_kind as var)              { if List.mem_assoc var kinds then
+                                            List.assoc var kinds
+                                          else if List.mem_assoc var subkinds then
+                                            List.assoc var subkinds
+                                          else
+                                            raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
   | opchar + as op                      { ctxt#precedence op }

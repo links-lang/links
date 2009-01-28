@@ -656,20 +656,20 @@ struct
   struct
     let builtin_ops =
       StringMap.from_alist
-        [ "+",   "+"  ;
-          "+.",  "+"  ;
-          "-",   "-"  ;
-          "-.",  "-"  ;
-          "*",   "*"  ;
-          "*.",  "*"  ;
-          "/",   ""   ;
-          "^",   ""   ;
-          "^.",  ""   ;
-          "/.",  "/"  ;
-          "mod", "%"  ]
+        [ "+",   Some "+"  ;
+          "+.",  Some "+"  ;
+          "-",   Some "-"  ;
+          "-.",  Some "-"  ;
+          "*",   Some "*"  ;
+          "*.",  Some "*"  ;
+          "/",   None      ;
+          "^",   None      ;
+          "^.",  None      ;
+          "/.",  Some "/"  ;
+          "mod", Some "%"  ]
 
     let is x = StringMap.mem x builtin_ops
-    let sql_name op = StringMap.find op builtin_ops
+    let sql_name op = val_of (StringMap.find op builtin_ops)
     let gen (l, op, r) =
       match op with
         | "/" -> "floor("^l^"/"^r^")"

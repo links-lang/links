@@ -112,8 +112,10 @@ struct
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
               | Some (`Alias _) -> let ts = List.map (type_arg var_env alias_env) ts in
+                  (* TODO: check that the kinds match up *)
                   Instantiate.alias tycon ts alias_env
               | Some (`Abstract abstype) -> 
+                  (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
         | PrimitiveType k -> `Primitive k

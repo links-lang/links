@@ -18,7 +18,10 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeStrin
     deriving (Show)
 
 type subkind = [ `Any | `Base ]
-      deriving (Show)
+    deriving (Show)
+
+type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
+    deriving (Show, Eq)
 
 type 't meta_type_var_basis =
     [ `Flexible of int * subkind
@@ -45,11 +48,13 @@ struct
   let eq = (=)
 end
 
+(* arity should be replaced by a list of kinds *)
+
 module Abstype =
 struct
   type t = { id    : istring ;
              name  : istring ;
-             arity : int }
+             arity : kind list }
       deriving (Eq, Show)
   let make name arity = 
     let id = Utility.gensym ~prefix:"abstype:" () in
@@ -64,23 +69,28 @@ end
 let mailbox  = {
   Abstype.id = "Mailbox" ;
   name       = "Mailbox" ;
-  arity      = 1 ;
+  arity      = [`Type] ;
+}
+let process  = {
+  Abstype.id = "Process" ;
+  name       = "Process" ;
+  arity      = [`Row] ;
 }
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = 1 ;
+  arity      = [`Type] ;
 }
 
 let event    = {
   Abstype.id = "Event" ;
   name       = "Event" ;
-  arity      = 0 ;
+  arity      = [] ;
 }
 let dom_node = {
   Abstype.id = "DomNode" ;
   name       = "DomNode" ;
-  arity      = 0 ;
+  arity      = [] ;
 }
 
 type typ =

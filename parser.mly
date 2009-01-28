@@ -146,6 +146,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
+%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -279,9 +280,20 @@ typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
+kind:
+| TYPE                                                         { "Type" }
+| BASETYPE                                                     { "BaseType" }
+| ROW                                                          { "Row" }
+| BASEROW                                                      { "BaseRow" }
+| PRESENCE                                                     { "Presence" }
+
+subkind:
+| ANY                                                          { "Any" }
+| BASE                                                         { "Base" }
+
 typearg:
 | VARIABLE                                                     { (`TypeVar ($1, `Any), None) }
-| VARIABLE COLONCOLON CONSTRUCTOR                              { (attach_kind (pos()) ($1, $3), None) }
+| VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
 | typearg                                                      { [$1] }
@@ -815,11 +827,17 @@ type_var:
 | QUESTION                                                     { fresh_type_variable `Any }
 
 kinded_type_var:
-| type_var COLONCOLON CONSTRUCTOR                              { attach_subkind (pos()) ($1, $3) }
+| type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
 
 type_arg_list:
 | datatype                                                     { [`Type $1] }
 | datatype COMMA type_arg_list                                 { `Type $1 :: $3 }
+| TYPE LPAREN datatype RPAREN                                  { [`Type $3] }
+| ROW LPAREN fields RPAREN                                     { [`Row $3] }
+| PRESENCE LPAREN presence_flag RPAREN                         { [`Presence $3] }
+| TYPE LPAREN datatype RPAREN COMMA type_arg_list              { (`Type $3) :: $6 }
+| ROW LPAREN fields RPAREN COMMA type_arg_list                 { (`Row $3) :: $6 }
+| PRESENCE LPAREN presence_flag RPAREN COMMA type_arg_list     { (`Presence $3) :: $6 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -897,10 +915,10 @@ row_var:
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 kinded_nonrec_row_var:
-| nonrec_row_var COLONCOLON CONSTRUCTOR                        { attach_row_subkind (pos()) ($1, $3) }
+| nonrec_row_var subkind                                       { attach_row_subkind (pos()) ($1, $2) }
 
 kinded_row_var:
-| row_var COLONCOLON CONSTRUCTOR                               { attach_row_subkind (pos()) ($1, $3) }
+| row_var subkind                                              { attach_row_subkind (pos()) ($1, $2) }
 
 /*
  * Regular expression grammar
