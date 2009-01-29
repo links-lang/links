@@ -740,7 +740,9 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                           ("name", gv table_name);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
-      | `Query e -> Die "Attempt to run a query on the client"
+      | `Query _ -> Die "Attempt to run a query on the client"
+      | `Update _ -> Die "Attempt to run a database update on the client"
+      | `Delete _ -> Die "Attempt to run a database delete on the client"
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))

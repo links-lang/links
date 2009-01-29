@@ -63,9 +63,18 @@ fun load() server {
   map ((.name), items)
 }
 
+sig save : ([String]) ~> ()
 fun save(itemsList) server {
-  update (itemEntry <-- itemsTable())
-    set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
+  ignore(mapi(
+    fun (item, i) {
+      update (r <-- itemsTable())
+        where (r.i == i)
+          set (name=item)
+    },
+    itemsList))
+#  }
+#  update (itemEntry <-- itemsTable())
+#    set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 
 fun main() client {

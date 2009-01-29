@@ -1117,13 +1117,19 @@ instance, you can now define functions with the following signatures:
 It is also possible to define parameterised type aliases.
 
   links> typename Pair(a, b) = (a, b)
+  Pair = a,b.(a,b)
   links> (1, true) : Pair (?, ?)
   (1, true) : Pair (Int, Bool)
 
 It is even possible to parameterise type aliases over row variables.
 
-  links> typename Record(r::Row) = (x:Int|r);
-  Record = a.(x:Int|a)
+  links> typename R(r::Row) = (x:Int|r);
+  R = a.(x:Int|a)
+  links> (x=1, y=true) : R({x:Int, y:Bool});
+  (x=1,y=true) : R ({ x:Int,y:Bool })
+
+Curly braces indicate that an argument to a type alias is a row rather
+than a type.
 
 Currently type aliases are only allowed at the top-level.
 

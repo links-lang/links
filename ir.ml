@@ -77,6 +77,8 @@ and special =
   | `Database of value 
   | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
+  | `Update of (binder * value) * computation option * computation
+  | `Delete of (binder * value) * computation option
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show)  
@@ -361,6 +363,17 @@ struct
                 range in
             let e, t, o = o#computation e in
               `Query (range, e, t), t, o
+        | `Update ((x, source), where, body) ->
+            let source, _, o = o#value source in
+            let x, o = o#binder x in
+            let where, _, o = o#option (fun o -> o#computation) where in
+            let body, _, o = o#computation body in
+              `Update ((x, source), where, body), Types.unit_type, o
+        | `Delete ((x, source), where) ->
+            let source, _, o = o#value source in
+            let x, o = o#binder x in
+            let where, _, o = o#option (fun o -> o#computation) where in
+              `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
               `CallCC v, deconstruct return_type t, o
@@ -386,7 +399,7 @@ struct
     method binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, (tyvars, tc)) ->
-            let (xv, (xt, _, _) as x), o = o#binder x in
+            let x, o = o#binder x in
             let tc, t, o = o#tail_computation tc in
               `Let (x, (tyvars, tc)), o
         | `Fun (f, (tyvars, xs, body), location) ->

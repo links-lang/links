@@ -10,7 +10,7 @@ fun newDef(def) server {
 fun updateDef(def) server {
   update (d <-- defsTable)
    where (d.id == def.id)
-   set (word=def.word, meaning=def.meaning)
+    set (meaning=def.meaning)
 }
 
 fun deleteDef(id) server {

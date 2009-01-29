@@ -70,6 +70,8 @@ and special =
   | `Database of value
   | `Table of value * value * (Types.datatype * Types.datatype * Types.datatype)
   | `Query of (value * value) option * computation * Types.datatype
+  | `Update of (binder * value) * computation option * computation
+  | `Delete of (binder * value) * computation option
   | `CallCC of value ]
 and computation = binding list * tail_computation
   deriving (Show)

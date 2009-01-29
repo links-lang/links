@@ -369,6 +369,7 @@ struct
     | `TApp (v, _) -> value env v
 
     | `XmlNode (tag, attrs, children) ->
+        (* TODO: deal with variables in XML *)
         let children =
           List.fold_right
             (fun v children ->
@@ -698,7 +699,7 @@ struct
 
   let rec string_of_query q =
     let sq = string_of_query in
-    let sb = string_of_base in
+    let sb = string_of_base false in
       match q with
         | `UnionAll [] -> assert false
         | `UnionAll [q] -> sq q
@@ -723,14 +724,17 @@ struct
                 | _ ->  " where " ^ sb condition
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
-  and string_of_base b =
-    let sb = string_of_base in
+  and string_of_base one_table b =
+    let sb = string_of_base one_table in
       match b with
         | `Case (c, t, e) ->
             "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
         | `Constant c -> Constant.string_of_constant c
         | `Project (var, label) ->
-            string_of_table_var var ^ "." ^ label
+            if one_table then
+              label
+            else
+              string_of_table_var var ^ "." ^ label
         | `Apply (op, [l; r]) when Arithmetic.is op -> Arithmetic.gen (sb l, op, sb r)
         | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat"), [v]) -> sb v
         | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
@@ -920,6 +924,34 @@ struct
     dummy_counter := 0;
     let q = `UnionAll (List.map query (prepare_clauses v)) in
       string_of_query range q
+
+  let update ((x, table), where, body) =
+    let base = base ->- (string_of_base true) in
+    let where =
+      match where with
+        | None -> ""
+        | Some where ->
+            " where (" ^ base where ^ ")" in
+    let fields =
+      match body with
+        | `Record fields ->
+            String.concat ","
+              (List.map
+                 (fun (label, v) -> label ^ " = " ^ base v)
+                 (StringMap.to_alist fields))
+        | _ -> assert false
+    in
+      "update "^table^" set "^fields^where
+
+  let delete ((x, table), where) =
+    let base = base ->- (string_of_base true) in
+    let where =
+      match where with
+        | None -> ""
+        | Some where ->
+            " where (" ^ base where ^ ")"
+    in
+      "delete from "^table^where
 end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
@@ -933,3 +965,23 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
             let q = Sql.query range v in
               Debug.print ("Generated query: "^q);
               Some (db, q, t)
+
+let compile_update : Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option * Ir.computation) -> string =
+  fun env ((x, table, read_labels), where, body) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, read_labels)) in
+(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
+    let where = opt_map (Eval.computation env) where in
+(*       Debug.print ("body: "^Ir.Show_computation.show body); *)
+    let body = Eval.computation env body in
+    let q = Sql.update ((x, table), where, body) in
+      Debug.print ("Generated update query: "^q);
+      q
+
+let compile_delete : Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option) -> string =
+  fun env ((x, table, read_labels), where) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, read_labels)) in
+    let where = opt_map (Eval.computation env) where in
+    let q = Sql.delete ((x, table), where) in
+      Debug.print ("Generated update query: "^q);
+      q
+

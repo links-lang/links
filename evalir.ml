@@ -312,6 +312,38 @@ module Eval = struct
                   Database.execute_select fields q db
         in
           apply_cont cont env result
+    | `Update ((xb, source), where, body) ->
+        let db, table, read_labels =
+          match value env source with
+            | `Table ((db, _), table, (fields, _)) ->
+                let read_labels =
+                  StringMap.fold
+                    (fun label _ labels -> StringSet.add label labels)
+                    fields
+                    StringSet.empty
+                in
+                  db, table, read_labels
+            | _ -> assert false in
+        let update_query =
+          Query.compile_update env ((Var.var_of_binder xb, table, read_labels), where, body) in
+        let () = ignore (Database.execute_command update_query db) in
+          apply_cont cont env (`Record [])
+    | `Delete ((xb, source), where) ->
+        let db, table, read_labels =
+          match value env source with
+            | `Table ((db, _), table, (fields, _)) ->
+                let read_labels =
+                  StringMap.fold
+                    (fun label _ labels -> StringSet.add label labels)
+                    fields
+                    StringSet.empty
+                in
+                  db, table, read_labels
+            | _ -> assert false in
+        let delete_query =
+          Query.compile_delete env ((Var.var_of_binder xb, table, read_labels), where) in
+        let () = ignore (Database.execute_command delete_query db) in
+          apply_cont cont env (`Record [])
     | `CallCC f                   -> 
         apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 

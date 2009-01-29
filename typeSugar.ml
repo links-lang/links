@@ -1470,7 +1470,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Gripers.delete_table
               (pos_and_typ from, no_pos (`Table (read, write, needed))) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
-            let where = opt_map (type_check (context ++ pattern_env pat)) where in
+
+            let inner_effects = Types.make_empty_closed_row () in
+            let context' = bind_effects (context ++ pattern_env pat) inner_effects in
+
+            let where = opt_map (type_check context') where in
             let () =
               opt_iter
                 (fun e -> unify ~handle:Gripers.delete_where (pos_and_typ e, no_pos Types.bool_type)) where in
@@ -1552,7 +1556,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             (* the pattern should match the read type *)
             let () = unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read) in
-            let context' = context ++ pattern_env pat in
+
+            let inner_effects = Types.make_empty_closed_row () in
+            let context' = bind_effects (context ++ pattern_env pat) inner_effects in
+
             let where = opt_map (type_check context') where in
 
             (* check that the where clause is boolean *)

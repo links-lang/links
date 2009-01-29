@@ -127,6 +127,9 @@ sig
 
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
+  val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
+  val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
+
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
@@ -451,6 +454,37 @@ struct
   let alien (x_info, language, rest) =
     M.bind (alien_binding (x_info, language)) rest
 
+  let db_update env (p, source, where, body) =
+    let source_type = sem_type source in
+    let xt = TypeUtils.table_read_type source_type in
+    let xb, x = Var.fresh_var_of_type xt in
+      bind source
+        (fun source ->
+           match where with
+             | None ->
+                 let body_type = sem_type body in
+                 let body = CompilePatterns.let_pattern env p (`Variable x, xt) (reify body, body_type) in
+                   lift (`Special (`Update ((xb, source), None, body)), Types.unit_type)
+             | Some where ->
+                 let body_type = sem_type body in
+                 let wrap = CompilePatterns.let_pattern env p (`Variable x, xt) in
+                 let where = wrap (reify where, Types.bool_type) in
+                 let body = wrap (reify body, body_type) in
+                   lift (`Special (`Update ((xb, source), Some where, body)), Types.unit_type))
+
+  let db_delete env (p, source, where) =
+    let source_type = sem_type source in
+    let xt = TypeUtils.table_read_type source_type in
+    let xb, x = Var.fresh_var_of_type xt in
+      bind source
+        (fun source ->
+           match where with
+             | None ->
+                 lift (`Special (`Delete ((xb, source), None)), Types.unit_type)
+             | Some where ->
+                 let where = CompilePatterns.let_pattern env p (`Variable x, xt) (reify where, Types.bool_type) in
+                   lift (`Special (`Delete ((xb, source), Some where)), Types.unit_type))
+
   let query (range, s) =
     let bs, e = reify s in
       match range with
@@ -750,7 +784,28 @@ struct
           | `Block (bs, e) -> eval_bindings `Local env bs e
           | `Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
-              (* These things should all have been desugared already *)
+
+          | `DBUpdate (p, source, where, fields) ->
+              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let env' = env ++ penv in
+              let source = ev source in
+              let where =
+                opt_map
+                  (fun where -> eval env' where) 
+                  where in
+              let body = eval env' (`RecordLit (fields, None), dp) in
+                I.db_update env (p, source, where, body)
+          | `DBDelete (p, source, where) ->
+              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let env' = env ++ penv in
+              let source = ev source in
+              let where =
+                opt_map
+                  (fun where -> eval env' where) 
+                  where
+              in
+                I.db_delete env (p, source, where)
+                  (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _
           | `Receive _
@@ -759,8 +814,6 @@ struct
           | `Iteration _
           | `InfixAppl ((_, `RegexMatch _), _, _)
           | `DBInsert _
-          | `DBUpdate _
-          | `DBDelete _
           | `Regex _
           | `Formlet _
           | `Page _
