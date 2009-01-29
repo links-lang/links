@@ -41,23 +41,31 @@ struct
   DELETE_RULE Gram str_item: "type"; type_declaration END
   DELETE_RULE Gram sig_item: "type"; type_declaration END
 
+  let just_generated : (Type.is_generated * _) Type.NameMap.t as 'a -> 'a
+    = fun map ->
+      Type.NameMap.fold
+        (fun k ((generated, _) as v) map ->
+           if generated then Type.NameMap.add k v map
+           else map)
+        map
+        Type.NameMap.empty
+
   open Ast
 
   (*
-    TODO: 
     Suppose that we're generating an instance of a class C for a type t.
-
+    
     If we're not generating instances of the superclasses S1 ... Sn of
     C for t then we should generate instances of S1 ... Sn for the
     types generated from t.
   *)
-
   EXTEND Gram
   str_item:
   [[ "type"; types = type_declaration -> <:str_item< type $types$ >>
     | "type"; types = type_declaration; "deriving"; "("; classes = LIST0 [x = UIDENT -> x] SEP ","; ")" ->
-        let params, rhss = group_rhss (display_errors loc Type.Translate.decl types) in 
-        let tdecls = List.map (fun rhs -> <:str_item< type $list:Type.Untranslate.decl ~loc (params, rhs)$ >>) rhss in
+        let params, (rhss : (Type.is_generated * _) Type.NameMap.t list) = group_rhss (display_errors loc Type.Translate.decl types) in 
+        let generated_rhss = List.map just_generated rhss in
+        let generated_types = List.map (fun rhs -> <:str_item< type $list:Type.Untranslate.decl ~loc (params, rhs)$ >>) generated_rhss in
         let generated_rhss = 
           List.concat_map
             (fun rhs ->
@@ -78,7 +86,7 @@ struct
                                     let underived_superclasses = List.filter (fun cl -> not (List.mem cl classes)) superclasses in
                                     let superclass_instances = List.map (fun c -> derive_str loc params generated_rhss c) underived_superclasses in
                                       <:str_item< $list:superclass_instances$ $instance$ >>) classes in
-          <:str_item< $list:tdecls$ $list:instances$ >>
+          <:str_item< type $types$ $list:generated_types$ $list:instances$ >>
    ]]
   ;
   sig_item:
@@ -86,9 +94,10 @@ struct
    | "type"; types = type_declaration; "deriving"; "("; cl = LIST0 [x = UIDENT -> x] SEP "," ; ")" ->
        let params, rhss  = display_errors loc Type.Translate.sigdecl types in 
        let decl_cliques = Analyse.group_sigrhss rhss in
-       let tdecls = List.map (fun rhs -> <:sig_item< type $list:Type.Untranslate.sigdecl ~loc (params, rhs)$ >>) decl_cliques  in
-       let ms =  List.map (derive_sig loc params decl_cliques) cl  in
-         <:sig_item< $list:tdecls$ $list:ms$ >> ]]
+       let generated_rhss = List.map just_generated decl_cliques in
+       let tdecls = List.map (fun rhs -> <:sig_item< type $list:Type.Untranslate.sigdecl ~loc (params, rhs)$ >>) generated_rhss in
+       let ms = List.map (derive_sig loc params decl_cliques) cl in
+         <:sig_item< type $types$ $list:tdecls$ $list:ms$ >> ]]
   ;
   END
 
