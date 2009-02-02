@@ -11,6 +11,7 @@ and xmlitem =
   | Text of string
   | Node of string * (string * string) list * xml
 and value = 
+  | Unit
   | Bool of bool
   | Char of char
   | Int of Num.num
@@ -203,6 +204,7 @@ let render_page page =
       
 (* Library functions *)
 
+let l_unit = Unit
 let l_nil = box_list ([])
 
 let u_l_equals = (=)
@@ -218,14 +220,14 @@ let u_l_int_mult = ( */ )
 let u_l_int_div = (//)
 let u__negate = minus_num
 
+let u__tilde s r = assert false
+
 let u_l_int_gt = (>)
 let u_l_int_lt = (<)
 let u_l_int_gte = (>=)
 let u_l_int_lte = (<=)
 
 let u__mod = mod_num
-
-let u__tilde r s = false
 
 let u__hd = List.hd
 let u__tl = List.tl
@@ -259,7 +261,7 @@ let u__addAttributes x attrs =
   let attrs = List.map unwrap_pair attrs in
     List.map (add_attributes attrs) x
 
-let u__environment () = 
+let u__environment _ = 
   let is_internal s = Str.first_chars s 1 = "_" in
   let mkpair (x1, x2) = box_record (
     StringMap.add "1" (box_string x1)

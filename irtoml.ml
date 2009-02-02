@@ -24,7 +24,6 @@ type code =
   | Case of code * ((code * code) list) * ((code * code) option)
   | Die of code
   | Empty
-deriving (Show)
 
 module type Boxer =
 sig
@@ -46,6 +45,8 @@ sig
   val box_list : code -> code
 end
 
+let arg_names = mapIndex (fun _ i -> "arg_" ^ (string_of_int i))
+
 let wrap_with name v =
   match name with
     | "id" -> v
@@ -53,7 +54,18 @@ let wrap_with name v =
 
 module FakeBoxer : Boxer =
 struct
-  let wrap_func _ _ _ = Empty
+  let wrap_func cps (name, unboxers, _, needs_k) rest =
+    let unboxed_name = "u_" ^ name in
+    let f = 
+      if cps && not needs_k then
+        let args = arg_names unboxers in
+        let v_args = List.map (fun a -> Var a) args in
+          Fun("k"::args, Call (Var "k", [Call (Var unboxed_name,  v_args)]))
+      else
+        Var unboxed_name
+    in
+      Let (name, f, rest)
+
   let box_bool = identity
   let box_int = identity
   let box_char = identity
@@ -87,30 +99,29 @@ struct
       (fun arg c -> Call (Var "box_func", [Fun ([arg], c)])) args body
 
   let wrap_func cps (name, unboxers, boxer, needs_k) rest = 
-    let arg_names = List.rev (
-      fst (
-        List.fold_left ( 
-          fun (l, n) _ -> ("arg_" ^ (string_of_int n))::l, n + 1) ([], 0) unboxers)) in
-
-    let body_create arg_names unboxers =
+    let args = arg_names unboxers in
+    let v_args = List.map (fun a -> Var a) args in
+      
+    let body_create v_args unboxers =
       wrap_with boxer (
         Call (
-          Var ("u_" ^ name), 
-          List.map2 (fun ub arg -> wrap_with ub (Var arg)) unboxers arg_names))
-    in      
-      if needs_k && not cps then
-        (* Functions that require k should error when not using CPS *)
-        Die (NativeString (name ^ " cannot be used in direct style."))
-      else if needs_k then
-        let body = body_create ("k"::arg_names) ("unbox_func"::unboxers) in
-          Let (name, curry_box ("k"::arg_names) body, rest)
-      else if cps then
-        let body = Call (
-          wrap_with "unbox_func" (Var "k"), [body_create arg_names unboxers]) in
-          Let (name, curry_box ("k"::arg_names) body, rest)
-      else
-        let body = body_create arg_names unboxers in
-          Let (name, curry_box arg_names body, rest)
+          Var ("u_" ^ name),
+          List.map2 (fun ub arg -> wrap_with ub arg) unboxers v_args))
+    in
+      match (needs_k, cps) with
+        | (false, false) ->
+            let body = body_create v_args unboxers in
+              Let (name, curry_box args body, rest)
+        | (true, false) ->
+            let body = Die (NativeString (name ^ " cannot be used in direct style."))
+            in Let (name, curry_box args body, rest)
+        | (true, _) ->
+            let body = body_create ((Var "k")::v_args) ("unbox_func"::unboxers) in
+              Let (name, curry_box ("k"::args) body, rest)
+        | (_, true) ->
+            let body = Call (
+              wrap_with "unbox_func" (Var "k"), [body_create v_args unboxers]) in
+              Let (name, curry_box ("k"::args) body, rest)
 
   let box_fun = function
     | Fun (a, b) -> curry_box a b
@@ -126,8 +137,11 @@ struct
         in
           Rec (
             List.map 
-              (fun (n, arg::args, r) -> 
-                 (n, [arg], curry_box args (box_funcs funcs r))) funcs,
+              (fun (n, args, r) -> 
+                 match args with 
+                   | [] -> (n, [], (box_funcs funcs r))
+                   | arg::args ->
+                       (n, [arg], curry_box args (box_funcs funcs r))) funcs,
             box_funcs funcs rest)
     | _ -> assert false
 
@@ -205,7 +219,7 @@ let lib_funcs = [
   "l_int_lt", ["unbox_int"; "unbox_int"], "box_bool", false;
   "l_int_lte", ["unbox_int"; "unbox_int"], "box_bool", false;
 
-  "_tilde", ["id"; "id"], "box_bool", false;
+  "_tilde", ["unbox_string"; "id"], "box_bool", false;
 
   "l_equals", ["id"; "id"], "box_bool", false;
   "l_not_equals", ["id"; "id"], "box_bool", false;
@@ -430,9 +444,10 @@ struct
               Rec (
                 List.map (
                   fun (binder, (_, f_binders, comp), _) ->
+                    let args = List.map o'#binder f_binders in
                     let o'' = o'#add_bindings f_binders in
                       (o''#binder binder, 
-                       List.map o''#binder f_binders, 
+                       args, 
                        o''#computation comp)) funs,
                 rest_f o'))
             
@@ -561,9 +576,10 @@ let rec ml_of_code c =
                 doc_concat (break^^text "and"^^break)
               (List.map 
                  (fun (name, args, body) ->
-                    nest 2 (
-                      group (text name ^| args_doc args ^| text "=") 
-                      ^| ml_of_code body)) fs)) ^|
+                    let args = if args = [] then text "_" else args_doc args in
+                      nest 2 (
+                        group (text name ^| args ^| text "=") 
+                        ^| ml_of_code body)) fs)) ^|
               if rest = Empty then
                 text ";;"
               else
@@ -629,7 +645,7 @@ let rec ml_of_code c =
             text "]")
 
     | Call (f, args) -> 
-          let args = if args = [] then text "()" else doc_join ml_of_code args in
+          let args = if args = [] then text "l_unit" else doc_join ml_of_code args in
             parens (group (
                       nest 2 ((ml_of_code f) ^| args)))
 
@@ -638,21 +654,29 @@ let rec ml_of_code c =
 
     | Empty -> empty
 
-let preamble = "open Num\nopen Mllib;;\n\n"
 let postamble = "\n\nlet _ = run entry"
 
 module BoxingCamlTranslater = Translater (CamlBoxer)
 module NonBoxingCamlTranslater = Translater (FakeBoxer)
 
-let ml_of_ir cps box env prelude (bs, tc) =
-  let comp = prelude @ bs, tc in
+let ml_of_ir cps box no_prelude env prelude (bs, tc) =
+  let preamble = "open Num\n" ^
+    if box then "open Mllib;;\n\n" else "open Unboxed_mllib;;\n\n"
+  in
+
+  let comp = 
+    if box && not no_prelude then 
+      prelude @ bs, tc
+    else 
+      bs, tc in
+
   let c =
     if cps then 
       let t =
         if box then
           new BoxingCamlTranslater.cps env
         else
-          new NonBoxingCamlTranslater.cps env
+          new BoxingCamlTranslater.cps env
       in 
         t#program comp
     else
@@ -660,7 +684,7 @@ let ml_of_ir cps box env prelude (bs, tc) =
         if box then 
           new BoxingCamlTranslater.direct env
         else
-          new NonBoxingCamlTranslater.direct env
+          new BoxingCamlTranslater.direct env
       in 
         t#program comp
   in

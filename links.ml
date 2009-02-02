@@ -271,7 +271,8 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
-      (not (Settings.get_value nobox)) 
+      (not (Settings.get_value nobox))
+      (Settings.get_value noprelude)
       (invert_env nenv)
       prelude
       program 
@@ -356,6 +357,7 @@ let options : opt list =
     ('c',     "compile-ir",          set compile true,                 None);
     (noshort, "nocps",               set nocps true,                   None);
     (noshort, "nobox",               set nobox true,                   None);
+    (noshort, "noprelude",           set noprelude true,               None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
