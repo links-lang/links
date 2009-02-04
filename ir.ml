@@ -161,9 +161,9 @@ object (o : 'self_type)
 
   method add_bindings bs =
     let venv = List.fold_left 
-      (fun m (v, (_, n, _)) -> IntMap.add v (var_name v n) m) venv bs in
+      (fun e (v, (_, n, _)) -> Env.Int.bind e (v, (var_name v n))) venv bs in
       {< venv=venv >}
-  
+        
   method constant : constant -> doc = fun c ->
     let s = match c with
       | `Bool x -> string_of_bool x
@@ -183,7 +183,7 @@ object (o : 'self_type)
   method value : value -> doc = fun v ->
     match v with 
       | `Constant c -> o#constant c
-      | `Variable v -> text ((IntMap.find v venv) ^ "/" ^ (string_of_int v))
+      | `Variable v -> text ((Env.Int.lookup venv v) ^ "/" ^ (string_of_int v))
 
       | `Extend (r, v) ->
           (let r_doc = doc_concat (text "," ^^ break)
@@ -305,8 +305,8 @@ object (o : 'self_type)
 
 end
 
-let string_of_ir venv comp =
-  pretty 70 ((new stringIR venv)#computation comp)
+let string_of_ir env comp =
+  pretty 70 ((new stringIR (Env.invert_env env))#computation comp)
 
 (* Traversal with type reconstruction *)
 (*

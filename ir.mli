@@ -94,7 +94,7 @@ val string_of_special : special -> string
 val string_of_computation : computation -> string
 val string_of_program : program -> string
 
-val string_of_ir : string Utility.IntMap.t -> program -> string
+val string_of_ir : int Env.String.t -> program -> string
 
 module type TRANSFORM =
 sig

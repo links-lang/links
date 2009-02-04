@@ -67,3 +67,7 @@ module Int : S
   and module Dom = Utility.Set.Make(Utility.Int)
   and module Dom = Utility.IntSet
 (** Pre-built environment with integers for names *)
+
+val invert_env : int String.t -> string Int.t
+(** Given an environment mapping source names to IR names return
+    the inverse environment mapping IR names to source names. *)

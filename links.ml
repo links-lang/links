@@ -242,28 +242,11 @@ let interact envs =
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
 
-(* Given an environment mapping source names to IR names return
-   the inverse environment mapping IR names to source names.
-
-   It is silly that this takes an Env.String.t but returns an
-   IntMap.t. String_of_ir should really take an Env.Int.t instead of
-   an IntMap.t. Perhaps invert_env should be hidden or inlined inside
-   string_of_ir too.
-*)
-let invert_env env =
-  Env.String.fold
-    (fun name var env ->
-       if IntMap.mem var env then
-         failwith ("(invert_env) duplicate variable in environment")
-       else
-         IntMap.add var name env)
-    env IntMap.empty
-
 (* Read Links source code and pretty-print the IR *)
 let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
-    print_endline (Ir.string_of_ir (invert_env nenv) program) in
+    print_endline (Ir.string_of_ir nenv program) in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
 let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
@@ -273,7 +256,7 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox))
       (Settings.get_value noprelude)
-      (invert_env nenv)
+      nenv
       prelude
       program 
     in

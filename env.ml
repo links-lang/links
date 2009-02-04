@@ -45,3 +45,17 @@ module String
   = Make(Utility.String)
 module Int
   = Make(Utility.Int)
+
+(* Given an environment mapping source names to IR names return
+   the inverse environment mapping IR names to source names.
+
+   Moved here from links.ml. Takes an Env.String.t and now returns an
+   Env.Int.t instead of an IntMap.t, which makes much more sense. *)
+let invert_env env =
+  String.fold
+    (fun name var env ->
+       if Int.has env var then
+         failwith ("(invert_env) duplicate variable in environment")
+       else
+         Int.bind env (var, name))
+    env Int.empty

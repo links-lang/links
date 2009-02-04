@@ -308,7 +308,7 @@ struct
 
     method add_bindings : binder list -> 'self_type = fun bs ->
       let env = List.fold_left 
-        (fun m (v, (_, n, _)) -> IntMap.add v (make_var_name v n) m) env bs in
+        (fun e (v, (_, n, _)) -> Env.Int.bind e (v, (make_var_name v n))) env bs in
         {< env=env >}
           
     method constant : constant -> code = fun c ->
@@ -323,7 +323,7 @@ struct
       match v with 
         | `Constant c -> o#constant c
 
-        | `Variable v -> Var (get_var_name (IntMap.find v env))
+        | `Variable v -> Var (get_var_name (Env.Int.lookup env v))
 
         | `Extend (r, v) ->
             let record = B.box_record (
@@ -660,6 +660,8 @@ module BoxingCamlTranslater = Translater (CamlBoxer)
 module NonBoxingCamlTranslater = Translater (FakeBoxer)
 
 let ml_of_ir cps box no_prelude env prelude (bs, tc) =
+  let env = Env.invert_env env in
+
   let preamble = "open Num\n" ^
     if box then "open Mllib;;\n\n" else "open Unboxed_mllib;;\n\n"
   in
