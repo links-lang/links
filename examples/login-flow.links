@@ -4,22 +4,20 @@ sig login_widget : (String, Handler((username:String, pass:String))) ~> Page
 fun login_widget(msg, return) {
    page
     <html>
+      <style>
+      label {{float: left; width: 90pt; text-align: right; display: inline;
+               margin-right: 3pt; }}
+      </style>
       <body>
       <div class="error">{stringToXml(msg)}</div>
       <form l:action="{return((username=username, pass=pass))}" method="post">
-        <table>
-          <tr>
-            <td>Username:</td>
-            <td> <input l:name="username" value="" /></td>
-          </tr>
-          <tr>
-            <td>Password:</td>
-            <td><input type="password" l:name="pass" value="" /></td>
-          </tr>
-        </table>
-        <input type="submit" />
+        <label>Name:</label>
+        <div> <input l:name="username" /></div>
+        <label>Password:</label>
+        <div><input l:name="pass" type="password" /></div>
+        <input type="Submit" />
       </form>
-      <a l:href="{main()}">start again</a>
+      <a l:href="{main()}">Start over</a>
       </body>
     </html>
 }
