@@ -1,12 +1,3 @@
-(* Process management *)
-type pid
-type proc_state = Value.continuation * Value.t
-val main_process_pid : pid
-val suspended_processes : (proc_state * pid) Queue.t
-val blocked_processes : (pid, proc_state * pid) Hashtbl.t
-val messages : (pid, Value.t Queue.t) Hashtbl.t
-val current_pid : pid ref
-val debug_process_status : unit -> unit
 
 val http_response_headers : (string * string) list ref
 val http_response_code : int ref

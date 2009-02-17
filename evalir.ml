@@ -31,7 +31,11 @@ module Eval = struct
        
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
-       let call_package = Utility.base64encode (serialize_call_to_client (cont, name, args)) in
+       if not(Proc.singlethreaded()) then
+         (prerr_endline "Remaining procs on server at client call!";
+          assert(false));
+       let call_package = Utility.base64encode (serialize_call_to_client 
+                                                  (cont, name, args)) in
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
       
@@ -39,31 +43,32 @@ module Eval = struct
 
   (** {0 Scheduling} *)
 
-  (* could bundle these together with [globals] to get a global
-     'interpreter state' that we'd then thread through the whole
-     interpreter, making it re-entrant. *)
-  let process_steps = ref 0
+  (** Scheduler parameters.  
+      [switch_granularity]: The number of steps to take before 
+      switching threads.  *)
   let switch_granularity = 5
-  let atomic = ref false
 
   let rec switch_context env = 
-    if not (Queue.is_empty Lib.suspended_processes) then 
-      let (cont, value), pid = Queue.pop Lib.suspended_processes in
-        Lib.current_pid := pid;
-        apply_cont cont env value
-    else exit 0
-
+    match Proc.pop_ready_proc() with
+        Some((cont, value), pid) -> (
+          Proc.activate pid;
+          apply_cont cont env value)
+      | None -> exit 0
+          
   and scheduler env state stepf = 
-    incr process_steps;
-    if (!process_steps mod switch_granularity == 0) then 
-      begin
-        process_steps := 0;
-        Queue.push (state, !Lib.current_pid) Lib.suspended_processes;
+(*     if Proc.singlethreaded() then stepf() else (* No need to schedule if
+                                                     there are no threads...*)*)
+    let step_ctr = Proc.count_step() in
+      if step_ctr mod switch_granularity == 0 then
+        begin
+          Proc.reset_step_counter();
+          Proc.suspend_current state;
         switch_context env
       end
     else
       stepf()
 
+  (** {0 Evaluation} *)
   and value env : Ir.value -> Value.t = function
     | `Constant `Bool b -> `Bool b
     | `Constant `Int n -> `Int n
@@ -140,11 +145,11 @@ module Eval = struct
     | `ApplyPure (f, args) ->
         begin
           try (
-            atomic := true;
+            Proc.set_atomic(true);
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
-            | TopLevel (_, v) -> atomic := false; v
+            | TopLevel (_, v) -> Proc.set_atomic(false); v
         end
     | `Coerce (v, t) -> value env v
 
@@ -176,20 +181,18 @@ module Eval = struct
            the continuation (in the blocked_processes table)
            and let the scheduler choose a different thread.
         *)
-        let mqueue = Hashtbl.find Lib.messages !Lib.current_pid in
-          if not (Queue.is_empty mqueue) then
-            apply_cont cont env (Queue.pop mqueue)
-          else
-            begin
-              let recv = (`Local, Var.dummy_var, env, ([], `Apply (`Variable (Env.String.lookup Lib.nenv "recv"), []))) in
-                Hashtbl.add Lib.blocked_processes
-                  !Lib.current_pid
-                  ((recv::cont, `Record []), !Lib.current_pid);
-              switch_context env
-            end
+        begin match Proc.pop_message() with
+            Some message -> apply_cont cont env message
+          | None -> 
+              (* FIXME: why do we need to look up 'recv' just to
+                 create the continuation? *)
+              let recv = (`Local, Var.dummy_var, env,
+                          ([], `Apply (`Variable (Env.String.lookup Lib.nenv "recv"), []))) in
+                Proc.block_current (recv::cont, `Record []);
+                switch_context env
+        end
     | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
-    | `ClientFunction name, args ->
-        client_call name cont args
+    | `ClientFunction name, args -> client_call name cont args
     | `Continuation c,     [p] -> apply_cont c env p
     | `Continuation _,      _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -197,7 +200,7 @@ module Eval = struct
   and apply_cont cont env v : Value.t =
     let stepf() = 
       match cont with
-        | [] when !atomic || !Lib.current_pid == Lib.main_process_pid ->
+        | [] when Proc.get_atomic() || Proc.current_is_main() ->
             raise (TopLevel (Value.globals env, v))
         | [] -> switch_context env
         | (scope, var, locals, comp)::cont ->
@@ -350,7 +353,8 @@ module Eval = struct
     fun env -> computation env Value.toplevel_cont
 end
 
-let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Value.env * Value.t) =
+let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
+                            (Value.env * Value.t) =
   fun cont env program ->
     try (
       ignore 
@@ -358,7 +362,8 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Va
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+                                  " while interpreting.")
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
@@ -368,22 +373,28 @@ let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+                                  " while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
   fun env bs ->
-    let env, _ = run_program env (bs, `Return (`Extend (StringMap.empty, None))) in
+    let env, _value = 
+      run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
       env
 
-(* this is used to return the value returned by applying a continuation *)
-let apply_cont_safe cont env v = 
+(** [apply_cont_toplevel cont env v] applies a continuation to a value and
+returns the result. Finishing the main thread normally comes here
+immediately. *)
+let apply_cont_toplevel cont env v = 
   try Eval.apply_cont cont env v
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+                                " while interpreting.")
 
-let apply_safe env (f, vs) =
+let apply_toplevel env (f, vs) =
   try Eval.apply [] env (f, vs)
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound "^s^" while interpreting.")
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+                                " while interpreting.")

@@ -5,6 +5,7 @@ open List
 open Value
 open Types
 open Utility
+open Proc
 
 (* Alias environment *)
 module AliasEnv = Env.String
@@ -30,41 +31,12 @@ let alias_env : Types.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
-(* Data structures/utilities for proc mgmt *)
-
-type pid = int
-
-type proc_state = Value.continuation * Value.t 
-
-let suspended_processes = (Queue.create () : (proc_state * pid) Queue.t)
-and blocked_processes = (Hashtbl.create 10000 : (pid, (proc_state * pid)) Hashtbl.t)
-and messages = (Hashtbl.create 10000  : (int, Value.t Queue.t) Hashtbl.t)
-and current_pid = (ref 0 :  pid ref)
-and main_process_pid = 0
-
 let cgi_parameters = ref []
-
 (** http_response_headers: this is state for the webif interface. I hope we can
     find a better way for library functions to communicate with the web
     interface. *)
 let http_response_headers = ref []
 let http_response_code = ref 200
-
-let debug_process_status () =
-  prerr_endline("processes : " ^ 
-                  string_of_int (Queue.length suspended_processes));
-  prerr_endline ("blocked processes : " ^ 
-                   string_of_int (Hashtbl.length blocked_processes))
-
-let _ = Hashtbl.add messages 0 (Queue.create ())
-
-let fresh_pid =
-  let current_pid = (ref 0 : pid ref) in
-    fun () -> 
-      begin
-	incr current_pid;
-	!current_pid
-      end
 
 (*
   assumption:
@@ -322,21 +294,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p2 (fun pid msg -> 
          let pid = int_of_num (unbox_int pid) in
            (try 
-              Queue.push msg (Hashtbl.find messages pid)
-            with NotFound _ -> 
-              (* Is this really an internal error? Maybe target has finished? *)
-              failwith ("Internal error while sending message: no mailbox for "
-                        ^ string_of_int pid));
-           (try 
-              Queue.push(Hashtbl.find blocked_processes pid) suspended_processes;
-              Hashtbl.remove blocked_processes pid
-            with NotFound _ -> ());
+              Proc.send_message msg pid
+            with
+                (* FIXME: printing out the message might be more useful. *)
+                UnknownProcessID pid -> 
+                  failwith("Couldn't deliver message to process because it has no mailbox."));
+           Proc.awaken pid;
            `Record []),
    datatype "(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Int (num_of_int !current_pid)),
+  (`PFun (fun _ -> `Int (num_of_int(Proc.get_current_pid()))),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
@@ -348,8 +317,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "recv",
   (* this function is not used, as its application is a special case
-     in the interpreter. But we need it here, for now, because of its
-     type.  Ultimately we should probably not special-case it, but
+     in the interpreter. But we need it here (for now) to asign it a
+     type. Ultimately we should probably not special-case it, but
      rather provide a way to implement this primitive from here.
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
@@ -361,12 +330,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (p1 (fun f ->
-         let new_pid = fresh_pid () in
-           Hashtbl.add messages new_pid (Queue.create ());
-           let var = Var.dummy_var in
-           let cont = (`Local, var, Value.empty_env IntMap.empty, ([], `Apply (`Variable var, []))) in
-             Queue.push ((cont::Value.toplevel_cont, f), new_pid) suspended_processes;
-             (`Int (num_of_int new_pid))),
+         let var = Var.dummy_var in
+         let cont = (`Local, var, Value.empty_env IntMap.empty,
+                     ([], `Apply (`Variable var, []))) in
+         let new_pid = Proc.create_process (cont::Value.toplevel_cont, f) in
+           (`Int (num_of_int new_pid))),
    (*
      a: spawn's mailbox type (ignored, since spawn doesn't recv)
      b: the mailbox type of the spawned process
