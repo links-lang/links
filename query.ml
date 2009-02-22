@@ -599,8 +599,10 @@ struct
             end
         | _ ->
             begin
-              match e with
-                | `Constant (`Bool false) ->
+              match t, e with
+                | `Constant (`Bool true), _ ->
+                    `Apply ("||", [c; e])
+                | _, `Constant (`Bool false) ->
                     `Apply ("&&", [c; t])
                 | _ ->
                     `If (c, t, e)

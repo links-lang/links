@@ -72,9 +72,6 @@ fun save(itemsList) server {
           set (name=item)
     },
     itemsList))
-#  }
-#  update (itemEntry <-- itemsTable())
-#    set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
 }
 
 fun main() client {
