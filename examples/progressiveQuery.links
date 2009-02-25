@@ -31,8 +31,9 @@ fun wineriesByRegion(regionID) server {
 }
 
 fun wineCost(wineID) {
-  for (i <- (for (i <-- inventoryTable) [i]))
-  where (wineID == i.wine_id)
+  for (i <- (for (i <-- inventoryTable)
+             where (wineID == i.wine_id)
+               [i]))
     [i.cost]
 }
 

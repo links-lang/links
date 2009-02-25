@@ -1,3 +1,5 @@
+open Notfound
+
 open Utility
 
 module Eval = struct
@@ -32,8 +34,7 @@ module Eval = struct
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
        if not(Proc.singlethreaded()) then
-         (prerr_endline "Remaining procs on server at client call!";
-          assert(false));
+         failwith "Remaining procs on server at client call!";
        let call_package = Utility.base64encode (serialize_call_to_client 
                                                   (cont, name, args)) in
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
@@ -47,6 +48,8 @@ module Eval = struct
       [switch_granularity]: The number of steps to take before 
       switching threads.  *)
   let switch_granularity = 5
+
+  let atomic = ref false (* Unexplained hack of sjl. *)
 
   let rec switch_context env = 
     match Proc.pop_ready_proc() with
@@ -63,10 +66,10 @@ module Eval = struct
         begin
           Proc.reset_step_counter();
           Proc.suspend_current state;
-        switch_context env
-      end
-    else
-      stepf()
+          switch_context env
+        end
+      else
+        stepf()
 
   (** {0 Evaluation} *)
   and value env : Ir.value -> Value.t = function
@@ -88,10 +91,10 @@ module Eval = struct
                 (* HACK
 
                    Pre-pending the fields to r in this order shouldn't
-                   be necessary but without the List.rev deriving
-                   somehow manages to serialisee things in the wrong
+                   be necessary but without the List.rev, deriving
+                   somehow manages to serialise things in the wrong
                    order on the "Your Shopping Cart" page of the
-                   winestore example.  *)
+                   winestore example. *)
                 `Record (List.rev
                            (StringMap.fold 
                               (fun label v fs ->
@@ -145,11 +148,11 @@ module Eval = struct
     | `ApplyPure (f, args) ->
         begin
           try (
-            Proc.set_atomic(true);
+            atomic := true;
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
-            | TopLevel (_, v) -> Proc.set_atomic(false); v
+            | TopLevel (_, v) -> atomic := false; v
         end
     | `Coerce (v, t) -> value env v
 
@@ -159,10 +162,10 @@ module Eval = struct
           match lookup n recs with
             | Some (args, body) ->
                 (* unfold recursive definitions once *)
-
+                
                 (* extend env with locals *)
                 let env = Value.shadow env ~by:locals in
-
+                  
                 (* extend env with recs *)
                 let env =
                   List.fold_right
@@ -200,7 +203,7 @@ module Eval = struct
   and apply_cont cont env v : Value.t =
     let stepf() = 
       match cont with
-        | [] when Proc.get_atomic() || Proc.current_is_main() ->
+        | [] when !atomic || Proc.current_is_main() ->
             raise (TopLevel (Value.globals env, v))
         | [] -> switch_context env
         | (scope, var, locals, comp)::cont ->
