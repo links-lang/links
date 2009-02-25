@@ -183,7 +183,12 @@ object (o : 'self_type)
   method value : value -> doc = fun v ->
     match v with 
       | `Constant c -> o#constant c
-      | `Variable v -> text ((Env.Int.lookup venv v) ^ "/" ^ (string_of_int v))
+      | `Variable v ->
+          let name = match Env.Int.find venv v with
+            | Some n -> n
+            | None -> "NOT_FOUND"
+          in
+            text (name ^ "/" ^ (string_of_int v))
 
       | `Extend (r, v) ->
           (let r_doc = doc_concat (text "," ^^ break)
@@ -665,6 +670,54 @@ struct
   let program typing_env p =
 (*    Debug.print (Show_computation.show p);*)
     fst3 ((inliner typing_env IntMap.empty)#computation p)
+end
+
+module RemoveApplyPure =
+struct
+  let unapplypurifier tyenv =
+  object (o)
+    inherit Transform.visitor(tyenv) as super
+
+    val new_bindings = []
+
+    method get_new_bindings () = List.hd new_bindings
+
+    method add_binding = fun b -> 
+      {< new_bindings=(b::List.hd new_bindings)::List.tl new_bindings >}
+
+    method push () = {< new_bindings=[]::new_bindings >}
+
+    method pop () = {< new_bindings=List.tl new_bindings >}
+
+    method computation (bs, tc) =
+      let bs, o' = o#bindings bs in
+      let tc, t, o'' = (o'#push ())#tail_computation tc in
+        (bs @ List.rev (o''#get_new_bindings ()), tc), t, o''#pop ()
+
+    method bindings bs =
+      let bs, o = 
+        List.fold_left
+          (fun (bs, o) b ->
+             let (b, o) = (o#push ())#binding b in
+               ((b::o#get_new_bindings ()) @ bs, o#pop ()))
+          ([], o)
+          bs
+      in
+        List.rev bs, o
+
+    method value = fun v ->
+      match super#value v with
+        | `ApplyPure (f, args), t, o' ->
+            let new_binder, new_var = Var.fresh_var_of_type t in
+            let new_binding = `Let (new_binder, ([], `Apply (f, args))) in
+              (`Variable new_var), t, o'#add_binding new_binding
+        | v, t, o' -> v, t, o'
+
+  end
+
+let program tenv p =
+  fst3 ((unapplypurifier tenv)#computation p)
+
 end
 
 (*

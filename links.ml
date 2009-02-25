@@ -252,6 +252,8 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
 let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
+    let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+    let program = Ir.RemoveApplyPure.program tenv program in
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox))
