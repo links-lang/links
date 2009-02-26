@@ -53,7 +53,7 @@ fun formatPaperList(papers) server {
     <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
 }
 
-sig getPapersAndCollaborators : (Author) -> ([Paper], [Author])
+sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
 fun getPapersAndCollaborators(author) server {
   var papers =
     query {
@@ -111,7 +111,7 @@ fun getPapersAndCollaborators(author) server {
 #         [(id=a.id, name=a.name)]
 #     };
 
-  (papers, collaborators)
+  (papers, distinct(collaborators))
 }
 
 sig showAuthorInfo : (Author) ~> Page
@@ -242,7 +242,7 @@ fun distinct(xs) {
        switch (ys) {
          case [] -> [x]
          case (y::ys) ->
-           if(x.id == y.id) {ys} else {x::y::ys}
+           if(x.id == y.id) {y::ys} else {x::y::ys}
        }
     },
     [],

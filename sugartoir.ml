@@ -627,7 +627,16 @@ struct
         let x, xt = lookup_name_and_type name env in
           match tyargs with
             | [] -> I.var (x, xt)
-            | _ -> I.tappl (I.var (x, xt), tyargs) in
+            | _ ->
+                try
+                  I.tappl (I.var (x, xt), tyargs)
+                with
+                    Instantiate.ArityMismatch ->
+                      prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
+                      prerr_endline ("name: "^name);
+                      prerr_endline ("type: "^Types.string_of_datatype xt);
+                      prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
+                      failwith "fatal internal error" in
       let eff = lookup_effects env in
       let instantiate_mb name = instantiate name [`Row eff] in
       let cofv = I.comp_of_value in
@@ -685,7 +694,19 @@ struct
           | `FnAppl (e, es) ->
               I.apply (ev e, evs es)
           | `TAppl (e, tyargs) ->
-              cofv (I.tappl (ev e, tyargs))
+              let v = ev e in
+              let vt = I.sem_type v in
+                begin
+                  try
+                    cofv (I.tappl (v, tyargs))
+                  with
+                      Instantiate.ArityMismatch ->
+                        prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
+                        prerr_endline ("expression: " ^ Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));
+                        prerr_endline ("type: "^Types.string_of_datatype vt);
+                        prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
+                        failwith "fatal internal error"
+                end
           | `TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
                  but if there are we should get rid of them.
