@@ -280,8 +280,18 @@ struct
               `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
             let v, t, o = o#value v in
-            let t = Instantiate.apply_type t ts in
-              `TApp (v, ts), t, o
+              begin
+                try
+                  let t = Instantiate.apply_type t ts in
+                    `TApp (v, ts), t, o
+                with
+                    Instantiate.ArityMismatch ->
+                      prerr_endline ("Arity mismatch in type application (Ir.Transform)");
+                      prerr_endline ("expression: " ^ Show_value.show (`TApp (v, ts)));
+                      prerr_endline ("type: "^Types.string_of_datatype t);
+                      prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
+                      failwith "fatal internal error"
+              end
         | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children, children_types, o) = o#list (fun o -> o#value) children in

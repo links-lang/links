@@ -701,7 +701,7 @@ struct
                     cofv (I.tappl (v, tyargs))
                   with
                       Instantiate.ArityMismatch ->
-                        prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
+                        prerr_endline ("Arity mismatch in type application (Sugartoir)");
                         prerr_endline ("expression: " ^ Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));
                         prerr_endline ("type: "^Types.string_of_datatype vt);
                         prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
