@@ -92,9 +92,9 @@ sig
   type withref = WR of int * (int ref)
     deriving (Eq, Show, Typeable, Pickle)
 
-  module M : sig 
+(*  module M : sig 
     type t deriving (Show, Eq, Dump)
-  end
+  end*)
 
   module P : sig 
     type 'a t (* deriving (Show) *)
@@ -133,8 +133,8 @@ sig
   type poly0 deriving (Enum, Bounded, Show, Eq, Typeable, Pickle)
   type poly1 deriving (Dump, Eq, Show)
   type poly2 deriving (Dump, Eq, Show)
-  type poly3 deriving (Dump, Eq, Show, Typeable, Pickle) 
-  type poly3b deriving (Dump, Eq, Show, Typeable, Pickle) 
+  type poly3 deriving (Dump, Eq, Show, Typeable, Pickle)
+  type poly3b deriving (Dump, Eq, Show, Typeable, Pickle)
   type 'a poly7 
   and 'a poly8 deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
   type poly10 deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
@@ -153,7 +153,7 @@ sig
   type tup3 deriving (Dump, Eq, Show, Typeable, Pickle)
   type tup4 deriving (Dump, Eq, Show, Typeable, Pickle, Bounded)
   type withref deriving (Eq, Show, Typeable, Pickle)
-  module M : sig type t deriving (Show, Eq, Dump) end
+(*  module M : sig type t deriving (Show, Eq, Dump) end*)
   module P : sig type 'a t end
   type 'a constrained constraint 'a = int (*deriving (Functor) *)
   type p1 deriving (Show, Eq)
@@ -235,9 +235,9 @@ sig
   type tup4 = int * int * bool * unit
   type withref = WR of int * (int ref)
 
-  module M : sig 
+(*  module M : sig 
     type t
-  end
+  end*)
 
   module P : sig 
     type 'a t

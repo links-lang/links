@@ -29,7 +29,7 @@ struct
     | `Variant ("Plus", _)     -> Plus
     | `Variant ("Question", _) -> Question 
     | v                        -> failwith ("Internal error: attempt to treat " 
-                                           ^ Value.Show_t.show v ^ " as a repeat value")
+                                           ^ Show.show Value.show_t v ^ " as a repeat value")
   and ofLinksNGroups r = ofLinks r, 0
 end
 
@@ -101,7 +101,7 @@ struct
 	  let (re, count) = ofLinksCount count re in
 	  Replace(re, Value.unbox_string tmpl), count
       | v  -> failwith ("Internal error: attempt to treat " 
-			^ Value.Show_t.show v ^ " as a regex value") in
+			^ Show.show Value.show_t v ^ " as a regex value") in
     ofLinksCount 0 res
       
       

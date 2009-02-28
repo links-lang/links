@@ -11,7 +11,7 @@ module TypeVarSet : Utility.INTSET
 (* points *)
 type 'a point = 'a Unionfind.point 
 
-module Show_point (A : Show.Show) : Show.Show with type a = A.a Unionfind.point
+val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
     deriving (Show)

@@ -15,7 +15,7 @@
 module TypeRep :
 sig
   type t
-  type delayed = unit -> t
+  type delayed = t lazy_t
   val compare : t -> t -> int
   val eq : t -> t -> bool
   val mkFresh : string -> delayed list -> delayed
@@ -37,7 +37,7 @@ struct
       [`Variant of (delayed option StringMap.t)
       |`Gen of Interned.t * delayed list ] * int
 
-  and delayed = unit -> t
+  and delayed = t lazy_t
 
   let make_fresh row : t =
     (* Just allocate a pointer for now.  Dereference the row later *)
@@ -77,7 +77,7 @@ struct
                evidence to the contrary *)
             equal_rows (EqualMap.record_equality equalmap lid rid) lrow rrow
         | `Gen (lname, ls), `Gen (rname, rs) when Interned.eq lname rname ->
-            List.for_all2 (fun l r -> equal equalmap (l ()) (r ())) ls rs
+            List.for_all2 (fun l r -> equal equalmap (Lazy.force l) (Lazy.force r)) ls rs
         | _ -> false
   and equal_rows equalmap lfields rfields = 
     equal_names lfields rfields
@@ -87,7 +87,7 @@ struct
            match t, t' with
              | None, None -> eq
              | Some t, Some t' -> 
-                 equal equalmap (t ()) (t' ()) && eq
+                 equal equalmap (Lazy.force t) (Lazy.force t') && eq
              | _ -> false)
       lfields
       true
@@ -95,7 +95,8 @@ struct
     StringSet.equal (keys lmap) (keys rmap)
 
   let rec show : t -> string = 
-    fun (t, id) -> match t with
+    fun (t, id) -> 
+        match t with
       | `Variant fields ->
           "["^
             String.concat " | "
@@ -104,15 +105,16 @@ struct
                fields
                [])
           ^"]"
-        | `Gen (lname, []) -> Interned.name lname
+        | `Gen (lname, []) -> 
+              Interned.name lname
         | `Gen (lname, ts) -> 
             "(" ^ 
-              String.concat ", " (List.map (fun d -> show (d ())) ts)
+              String.concat ", " (List.map (fun d -> show (Lazy.force d)) ts)
             ^ ")" ^ Interned.name lname
 
   let mkFresh name args =
     let t : t = `Gen (Interned.intern name, args), fresh () in
-      fun () -> t
+      Lazy.lazy_from_val t
 
   let mkTuple args = 
     mkFresh (string_of_int (List.length args)) args
@@ -123,7 +125,7 @@ struct
     let initial = 
       List.fold_left
         (fun map extension ->
-           match fst (extension ()) with
+           match fst (Lazy.force extension) with
          | `Variant map' -> 
              StringMap.fold StringMap.add map map'
          | `Gen _ -> assert false)
@@ -137,7 +139,8 @@ struct
         initial
         args in
     let fresh = make_fresh row in
-      fun () -> fresh
+      Lazy.lazy_from_val fresh
+
   let eq = equal IntMap.empty
 
   let rec compare recargs (lrep,lid as l) (rrep,rid as r) = 
@@ -152,7 +155,7 @@ struct
                       List.fold_left2
                         (fun cmp l r -> 
                            if cmp <> 0 then cmp
-                           else compare recargs (l ()) (r ()))
+                           else compare recargs (Lazy.force l) (Lazy.force r))
                         0 ls rs
                   | n -> n
                 end
@@ -167,7 +170,7 @@ struct
       | 0 -> StringMap.compare 
           (fun l r -> match l, r with
              | None, None -> 0
-             | Some l, Some r -> compare recargs (l ()) (r ())
+             | Some l, Some r -> compare recargs (Lazy.force l) (Lazy.force r)
              | None, Some _ -> -1
              | Some _, None -> 1) lrow rrow
       | n -> n
@@ -184,111 +187,46 @@ let untag (obj, tag) target =
   else None
 
 (* Signature for type representations *)
-module type Typeable =
-sig
-  type a
-  val type_rep : unit -> TypeRep.t
-  val has_type : dynamic -> bool
-  val cast : dynamic -> a option
-  val throwing_cast : dynamic -> a
-  val make_dynamic : a -> dynamic
-  val mk : a -> dynamic
-end
+type 'a typeable = {type_rep : TypeRep.delayed }
 
 exception CastFailure of string
 
-module Defaults (T : (sig
-                        type a
-                        val type_rep : unit -> TypeRep.t
-                      end))
-  : Typeable with type a = T.a =
-struct
-  include T
-  let has_type o = tagOf o = type_rep ()
-  let cast d =
-    match untag d (type_rep ()) with
-      | Some c -> Some (Obj.obj c)
-      | None -> None
-  let make_dynamic o = (Obj.repr o, type_rep ())
-  let mk = make_dynamic
-  let throwing_cast d = 
-    match cast d with
-      | None -> 
-(*          raise (CastFailure ("cast from type "^
-                                TypeRep.show (tagOf d) ^" to type "^
-                                TypeRep.show (T.type_rep ()) ^" failed"))*)
-          raise (CastFailure "cast failed")
-      | Some s -> s
-end
+let has_type type_rep o = tagOf o = Lazy.force type_rep.type_rep
+let cast type_rep d =
+  match untag d (Lazy.force type_rep.type_rep) with
+    | Some c -> Some (Obj.obj c)
+    | None -> None
+let make_dynamic type_rep o = (Obj.repr o, Lazy.force type_rep.type_rep)
+let mk = make_dynamic
+let throwing_cast tr d = 
+  match cast tr d with
+    | None -> 
+        (*          raise (CastFailure ("cast from type "^
+                    TypeRep.show (tagOf d) ^" to type "^
+                    TypeRep.show (T.type_rep ()) ^" failed"))*)
+        raise (CastFailure "cast failed")
+    | Some s -> s
 
-module Typeable_list (A:Typeable) : Typeable with type a = A.a list = 
-  Defaults(struct type a = A.a list
-                  let type_rep = TypeRep.mkFresh "Primitive.list" [A.type_rep]
-           end)
+let typeable_list a = { type_rep = TypeRep.mkFresh "Primitive.list" [a.type_rep] }
+let typeable_option a = {type_rep = TypeRep.mkFresh "Primitive.option" [a.type_rep]}
 
-module Typeable_option (A:Typeable) : Typeable with type a = A.a option =
-  Defaults(struct type a = A.a option
-                  let type_rep = TypeRep.mkFresh "Primitive.option" [A.type_rep]
-           end)
+let primitive_typeable (magic : string) = { type_rep = TypeRep.mkFresh magic [] }
+let typeable_unit   = primitive_typeable "Primitive.unit"
+let typeable_int    = primitive_typeable "Primitive.int"
+let typeable_num    = primitive_typeable "Primitive.Num.num"
+let typeable_float  = primitive_typeable "Primitive.float"
+let typeable_bool   = primitive_typeable "Primitive.bool"
+let typeable_string = primitive_typeable "Primitive.string"
+let typeable_char   = primitive_typeable "Primitive.char"
 
-module Primitive_typeable (T : sig type t val magic : string end) : Typeable with type a = T.t =
-  Defaults(struct type a = T.t
-                  let type_rep = TypeRep.mkFresh T.magic []
-           end)
-module Typeable_unit   = Primitive_typeable(struct type t = unit let magic = "Primitive.unit" end)
-module Typeable_int    = Primitive_typeable(struct type t = int let magic = "Primitive.int" end)
-module Typeable_num    = Primitive_typeable(struct type t = Num.num let magic = "Primitive.Num.num" end)
-module Typeable_float  = Primitive_typeable(struct type t = float let magic = "Primitive.float" end)
-module Typeable_bool   = Primitive_typeable(struct type t = bool let magic = "Primitive.bool" end)
-module Typeable_string = Primitive_typeable(struct type t = string let magic = "Primitive.string" end)
-module Typeable_char   = Primitive_typeable(struct type t = char let magic = "Primitive.char" end)
+let typeable_ref a = {type_rep = TypeRep.mkFresh "Primitive.ref" [a.type_rep] }
 
-module Typeable_ref(A : Typeable) : Typeable with type a = A.a ref =
-  Defaults(struct type a = A.a ref
-                  let type_rep = TypeRep.mkFresh "Primitive.ref" [A.type_rep]
-           end)
+let typeable_6 a1 a2 a3 a4 a5 a6 = { type_rep = TypeRep.mkTuple [a1.type_rep; a2.type_rep; a3.type_rep; a4.type_rep; a5.type_rep; a6.type_rep] }
 
-module Typeable_6 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable) (A6 : Typeable) 
-  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a =
-  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
-                  let type_rep = TypeRep.mkTuple [A1.type_rep;
-                                                  A2.type_rep;
-                                                  A3.type_rep;
-                                                  A4.type_rep;
-                                                  A5.type_rep;
-                                                  A6.type_rep]
-           end)
+let typeable_5 a1 a2 a3 a4 a5 = { type_rep = TypeRep.mkTuple [a1.type_rep; a2.type_rep; a3.type_rep; a4.type_rep; a5.type_rep] }
 
-module Typeable_5 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable) (A5 : Typeable)
-  : Typeable with type a = A1.a * A2.a * A3.a * A4.a * A5.a =
-  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a * A5.a
-                  let type_rep = TypeRep.mkTuple [A1.type_rep;
-                                                  A2.type_rep;
-                                                  A3.type_rep;
-                                                  A4.type_rep;
-                                                  A5.type_rep]
-           end)
+let typeable_4 a1 a2 a3 a4 = { type_rep = TypeRep.mkTuple [a1.type_rep; a2.type_rep; a3.type_rep; a4.type_rep] }
 
-module Typeable_4 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable) (A4 : Typeable)
-  : Typeable with type a = A1.a * A2.a * A3.a * A4.a =
-  Defaults(struct type a = A1.a * A2.a * A3.a * A4.a
-                  let type_rep = TypeRep.mkTuple [A1.type_rep;
-                                                  A2.type_rep;
-                                                  A3.type_rep;
-                                                  A4.type_rep]
-           end)
+let typeable_3 a1 a2 a3 = { type_rep = TypeRep.mkTuple [a1.type_rep; a2.type_rep; a3.type_rep] }
 
-module Typeable_3 (A1 : Typeable) (A2 : Typeable) (A3 : Typeable)
-  : Typeable with type a = A1.a * A2.a * A3.a =
-  Defaults(struct type a = A1.a * A2.a * A3.a
-                  let type_rep = TypeRep.mkTuple [A1.type_rep;
-                                                  A2.type_rep;
-                                                  A3.type_rep]
-           end)
-
-module Typeable_2 (A1 : Typeable) (A2 : Typeable)
-  : Typeable with type a = A1.a * A2.a =
-  Defaults(struct type a = A1.a * A2.a
-                  let type_rep = TypeRep.mkTuple [A1.type_rep;
-                                                  A2.type_rep]
-           end)
+let typeable_2 a1 a2 = { type_rep = TypeRep.mkTuple [a1.type_rep; a2.type_rep] }

@@ -1,45 +1,43 @@
 (*pp deriving *)
 (** Primitive instanecs for bounded **)
 module Bounded = struct 
-module type Bounded = sig
-  type a
-  val min_bound : a
-  val max_bound : a
-end
+
+type 'a bounded = {
+  min_bound : 'a ;
+  max_bound : 'a 
+}
 
 module Bounded_integer(B : sig type t
                                val max_int : t
                                val min_int : t
-                       end) : Bounded with type a = B.t =
+                       end) =
 struct 
-  type a = B.t
-  let min_bound = B.min_int
-  let max_bound = B.max_int
+  let bounded = { min_bound = B.min_int ;
+                  max_bound = B.max_int }
 end
-module Bounded_int32 = Bounded_integer(Int32)
-module Bounded_int64 = Bounded_integer(Int64)
-module Bounded_nativeint = Bounded_integer(Nativeint)
-module Bounded_int = struct
-  type a = int
-  let min_bound = Pervasives.min_int
-  let max_bound = Pervasives.max_int
+let bounded_int32 = let module B = Bounded_integer(Int32) in B.bounded
+let bounded_int64 = let module B = Bounded_integer(Int64) in B.bounded
+let bounded_nativeint = let module B = Bounded_integer(Nativeint) in B.bounded
+let bounded_int = {
+  max_bound = Pervasives.max_int ;
+  min_bound = Pervasives.min_int ;
+}
+
+let bounded_bool = {
+  min_bound = false ;
+  max_bound = true 
+}
+let bounded_char = {
+  min_bound = (Char.chr 0) ;
+  max_bound = (Char.chr 0xff) (* Is this guaranteed? *)
+}
+
+let bounded_unit = {
+  min_bound = () ;
+  max_bound = ()
+}
 end
-module Bounded_bool = struct
-  type a = bool
-  let min_bound = false
-  let max_bound = true
-end
-module Bounded_char = struct
-  type a = char
-  let min_bound = Char.chr 0
-  let max_bound = Char.chr 0xff (* Is this guaranteed? *)
-end
-module Bounded_unit = struct
-  type a = unit
-  let min_bound = ()
-  let max_bound = ()
-end 
-end
+
 include Bounded
 type open_flag = Pervasives.open_flag  =
                  | Open_rdonly

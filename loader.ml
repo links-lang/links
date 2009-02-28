@@ -80,7 +80,7 @@ let load_file : envs -> string -> (envs * program) =
     the original file, as per the caching policy. *)
 let print_cache filename =
    let _envs, (globals, (locals, main), _t) = read_program filename in
-     print_string (Ir.Show_program.show (globals @ locals, main))
+     print_string (Show.show Ir.show_program (globals @ locals, main))
 
 (** precompile a cache file *)
 let precompile_cache envs infile : unit =

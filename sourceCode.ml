@@ -72,9 +72,9 @@ end
 
 type lexpos = Lexing.position 
 module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
-module Show_lexpos = Show.Show_unprintable (LexposType)
+let show_lexpos = Show.show_unprintable
 module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end
-module Show_source_code = Show.Show_unprintable (SourceCodePos)
+let show_source_code = Show.show_unprintable
 
 (** unresolved position *)
 (* start * end * code *)

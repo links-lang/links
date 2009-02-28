@@ -65,21 +65,18 @@ type poly2 = P of int * [`T0 | `T1 of int] * float
 
 (* `as'-recursion *)
 type poly3 = [`Nil | `Cons of int * 'c] as 'c
-    deriving (Dump, Eq, Show, Typeable, Pickle) 
+    deriving (Dump, Eq, Show, Typeable, Pickle)
 
 type poly3b = int * ([`Nil | `Cons of int * 'c] as 'c) * [`F]
-    deriving (Dump, Eq, Show, Typeable, Pickle) 
+    deriving (Dump, Eq, Show, Typeable, Pickle)
 
 (* <, >, =, > < polymorphic variants *)
 type 'a poly7 = Foo of [`F of 'a]
 and 'a poly8 = { x : [`G of [`H of [`I of 'a poly7]]] }
     deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
 
-
-(*
 type poly9 = [`F | [`G]]
     deriving (Dump, Eq, Show, Typeable, Pickle)
-  currently broken.*)
 
 type poly10 = [`F | poly3]
     deriving (Dump, Eq, Show(*, Functor*), Typeable, Pickle)
@@ -120,12 +117,14 @@ type withref = WR of int * (int ref)
   deriving (Eq, Show, Typeable, Pickle)
 
 (* through module boundaries *)
+(*
 module rec M : sig 
   type t deriving (Show, Eq, Dump)
 end =
 struct
   type t = [`N|`C of M.t] deriving (Show, Eq, Dump)
 end
+*)
 
 (* parameterized types through module boundaries *)
 module rec P : sig 

@@ -7,7 +7,7 @@ open Type
 let localrefs : NameSet.t fold = object
   inherit [NameSet.t] Type.fold as super
   method crush ls = List.fold_right NameSet.union ls NameSet.empty
-  method localtype (`Local l) = NameSet.singleton l
+  method localtype (`Local (l, _)) = NameSet.singleton l
 end
 
 module Graph :

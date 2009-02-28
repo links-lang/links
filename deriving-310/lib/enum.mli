@@ -1,26 +1,18 @@
-module type Enum =
-  sig
-    type a
-    val succ : a -> a
-    val pred : a -> a
-    val to_enum : int -> a
-    val from_enum : a -> int
-    val enum_from : a -> a list
-    val enum_from_then : a -> a -> a list
-    val enum_from_to : a -> a -> a list
-    val enum_from_then_to : a -> a -> a -> a list
-  end
+type 'a enum = {
+    succ : 'a -> 'a ;
+    pred : 'a -> 'a ;
+    to_enum : int -> 'a ;
+    from_enum : 'a -> int ;
+    enum_from : 'a -> 'a list ;
+    enum_from_then : 'a -> 'a -> 'a list ;
+    enum_from_to : 'a -> 'a -> 'a list ;
+    enum_from_then_to : 'a -> 'a -> 'a -> 'a list 
+}
 
-module Defaults
-  (E : sig type a val numbering : (a * int) list end)
-  : Enum with type a = E.a
+val from_numbering : ('a * int) list -> 'a enum
+val from_conversions : ('a -> int) -> (int -> 'a) -> 'a Bounded.bounded -> 'a enum
 
-module Defaults' 
-  (E : sig type a val from_enum : a -> int val to_enum : int -> a end) 
-  (B : Bounded.Bounded with type a = E.a)
-  : Enum with type a = B.a
-
-module Enum_bool : Enum with type a = bool
-module Enum_char : Enum with type a = char
-module Enum_int  : Enum with type a = int
-module Enum_unit : Enum with type a = unit
+val enum_bool : bool enum
+val enum_char : char enum
+val enum_int  : int enum
+val enum_unit : unit enum

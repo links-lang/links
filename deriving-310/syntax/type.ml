@@ -36,21 +36,18 @@ type param = name * [`Plus | `Minus] option
 
    this refers to one of the ti.
 *)
-type localtype = [`Local of name ]
+type localtype = [`Local of name * name list ]
 
 (* A reference to a type parameter *)
 type tyvar = [`Tyvar of name ]
 
 (* An "atomic" expression.  These are the only things allowed to
    appear as subexpressions. *)
-type atomic = [ localtype | tyvar ] 
-
-(* An application of a type constructor declared elsewhere *)
-type appl = [`Appl of qname * atomic list ]
+type atomic = [ localtype | tyvar | `Appl of qname * atomic list ]
 
 (* A polymorphic variant declaration *)
 type tagspec = [`Tag     of name * atomic option 
-               | localtype ]
+               | localtype | `Appl of qname * atomic list ]
 type variant = [`Variant of [`Gt | `Lt | `Eq ] * tagspec list ]
 
 (* A record type *)
@@ -67,7 +64,6 @@ type fresh = [ sum | record ]
 (* A type expression *)
 type expr = [ `Function of (atomic * atomic)
             | `Tuple    of atomic list
-            | appl
             | variant
             | atomic ]
 
@@ -101,16 +97,15 @@ object (self : 'self)
   method atomic (a : atomic) =
     self#crush (match a with
                   | #localtype as l -> [self#localtype l]
-                  | #tyvar     as t -> [self#tyvar t])
-
-  method appl (`Appl (_, ats) : appl) =
-    self#crush (List.map self#atomic ats)
+                  | #tyvar     as t -> [self#tyvar t]
+                  | `Appl (_, ats)  -> List.map self#atomic ats)
 
   method tagspec (t : tagspec) =
     self#crush (match t with
                   | `Tag (_, None)    -> []
                   | `Tag (_, Some at) -> [self#atomic at]
-                  | #localtype as at  -> [self#localtype at])
+                  | #localtype as at  -> [self#localtype at]
+                  | `Appl (_, ats)    -> List.map self#atomic ats)
 
   method variant (`Variant (_, tags) : variant) =
     self#crush (List.map self#tagspec tags)
@@ -136,7 +131,6 @@ object (self : 'self)
     self#crush (match e with
                   | `Function (l, r) -> [self#atomic l ; self#atomic r]
                   | `Tuple ats -> List.map self#atomic ats
-                  | #appl as a -> [self#appl a]
                   | #variant as v -> [self#variant v]
                   | #atomic as a -> [self#atomic a] )
 
@@ -181,14 +175,13 @@ object (self : 'self)
   method atomic : atomic -> atomic = function 
     | # localtype as l -> (self#localtype l :> atomic)
     | # tyvar     as t -> (self#tyvar t     :> atomic)
-
-  method appl : appl -> appl = function
-    | `Appl (q, ats) -> `Appl (q, List.map self#atomic ats)
+    | `Appl (q, ats)   -> `Appl (q, List.map self#atomic ats)
 
   method tagspec : tagspec -> tagspec = function
     | `Tag (n, None)    -> `Tag (n, None)
     | `Tag (n, Some at) -> `Tag (n, Some (self#atomic at))
     | #localtype as at  -> (self#localtype at :> tagspec)
+    | `Appl (q, ats)    -> `Appl (q, List.map self#atomic ats)
  
   method variant : variant -> variant = function
     | `Variant (spec, tagspecs) -> `Variant (spec, List.map self#tagspec tagspecs)
@@ -210,7 +203,6 @@ object (self : 'self)
   method expr : expr -> expr = function
     | `Function (lat, rat)         -> `Function (self#atomic lat, self#atomic rat)
     | `Tuple ats                   -> `Tuple (List.map self#atomic ats)
-    | #appl    as a                -> (self#appl a    :> expr)
     | #variant as v                -> (self#variant v :> expr)
     | #atomic  as a                -> (self#atomic a  :> expr)
 
@@ -370,17 +362,18 @@ struct
             | Ast.TyAli (_, t, Ast.TyQuo (_, name)) -> 
                 let name' = fresh_name () in
                 let e, binds = expr t in
-                  (`Local name', (bind_alias name name'
-                                    (bind_binding name' true (e :> sigrhs) binds)))
+                  (`Local (name', params),
+                   (bind_alias name name'
+                      (bind_binding name' true (e :> sigrhs) binds)))
             | Ast.TyArr (_,f, t)  -> 
                 let f, binds = atomic f and t, binds' = atomic t in
                   `Function (f, t), binds ++ binds'
             | Ast.TyApp _ as t    -> 
-                begin match application t with
+                begin match application t  with
                   | `Appl ([id], args), env 
                       when NameSet.mem id locals ->
                       if args = List.map (fun n -> `Tyvar n) params
-                      then `Local id, env
+                      then `Local (id, params), env
                       else unsupported loc "non-regular recursion"
                   | `Appl (tcon, args), env -> `Appl (tcon, args), env
                 end
@@ -389,7 +382,7 @@ struct
                   | ["a"] -> unsupported loc "types called 'a' (!)"
                   | [id] when NameSet.mem id locals ->
                       if params = []
-                      then `Local id, empty_env
+                      then `Local (id, params), empty_env
                       else unsupported loc "non-regular recursion"
                   | qid -> (*`Ctor qid*)`Appl (qid, []), empty_env
                 end
@@ -401,7 +394,7 @@ struct
         fun tags spec ->
           let tags, binds = List.split (list tagspec split_or tags) in
             `Variant (spec, tags), join_envs binds
-      and application : Ast.ctyp -> appl * env = function
+      and application : Ast.ctyp -> _ * env = function
         | Ast.TyApp (_, (Ast.TyApp _ as a), t) -> 
             let `Appl (tcon, args), binds = application a in
             let e, binds' = atomic t in
@@ -418,7 +411,7 @@ struct
         | t                                  -> 
             match atomic t with
               | (#localtype as typ, binds)
-(*              | (#appl      as typ, binds) *)-> typ, binds
+              | (`Appl _    as typ, binds) -> typ, binds
               | _                          -> assert false
       and atomic t : atomic * env = 
         match expr t with
@@ -426,7 +419,7 @@ struct
           | e            , binds -> 
               let name = fresh_name () in
               let e, binds = expr t in
-                (`Local name, bind_binding name true (e :> sigrhs) binds)
+                (`Local (name, params), bind_binding name true (e :> sigrhs) binds)
 
       let field : Ast.ctyp -> field * env = function 
         | Ast.TyCol (loc, Ast.TyId _, Ast.TyMut (_, Ast.TyPol _)) 
@@ -534,12 +527,12 @@ struct
        else ps in
      fun ps -> List.fold_right check_eq ps (List.hd ps)
 
-   let substitute_aliases : alias_map -> sigdecl -> sigdecl = fun map ->
+   let substitute_aliases params : alias_map -> sigdecl -> sigdecl = fun map ->
    object
      inherit transform as super
      method atomic = function
        | `Tyvar p when NameMap.mem p map ->
-           `Local (NameMap.find p map)
+           `Local (NameMap.find p map, List.map fst params)
        | e -> super#atomic e
    end # sigdecl
 
@@ -548,7 +541,7 @@ struct
      let params, decls : param list list * (name * Ast.ctyp) list = List.split (List.map extract_params decls) in
      let params        : param list        = check_params (Ast.loc_of_ctyp ctyp) params in
      let decls         : env               = rhss (List.map fst params) decls in 
-       substitute_aliases decls.aliases
+       substitute_aliases params decls.aliases
          (params, NameMap.fromList decls.bindings)
 
    let decl (ctyp : Ast.ctyp) : decl =
@@ -586,57 +579,58 @@ struct
   let and_  ~loc l r = <:ctyp< $l$ and $r$ >>
 
   let rec localtype ~loc params : name -> Ast.ctyp =
-    fun name -> app ~loc params <:ctyp< $lid:name$ >> 
-                 (List.map (fun (v, _) -> `Tyvar v) params)
+    fun name -> app ~loc <:ctyp< $lid:name$ >> 
+      (List.map (fun v -> `Tyvar v) params)
 
-  and atomic ~loc params : atomic -> Ast.ctyp = function
-    | `Local l -> localtype ~loc params l
+  and atomic ~loc : atomic -> Ast.ctyp = function
+    | `Local (l, params) -> localtype ~loc params l
     | `Tyvar t -> tyvar ~loc t    
+    | `Appl (tcon, args) -> app ~loc (Ast.TyId (loc, qname ~loc tcon)) args
 
-  and app ~loc params f = function
+  and app ~loc f = function
     | []    -> f
-    | [x]   -> <:ctyp< $atomic ~loc params x$ $f$ >>
-    | x::xs -> app ~loc params (<:ctyp< $atomic ~loc params x$ $f$ >>) xs
+    | [x]   -> <:ctyp< $atomic ~loc x$ $f$ >>
+    | x::xs -> app ~loc (<:ctyp< $atomic ~loc x$ $f$ >>) xs
 
-  let tagspec ~loc params : tagspec -> _ = function
+  let tagspec ~loc : tagspec -> _ = function
     | `Tag (c, None) -> <:ctyp< `$c$ >>
-    | `Tag (c, Some t) -> <:ctyp< `$c$ of $atomic ~loc params t$ >>
-    | `Local a -> localtype ~loc params a
+    | `Tag (c, Some t) -> <:ctyp< `$c$ of $atomic ~loc t$ >>
+    | `Local (a, params) -> localtype ~loc params a
+    | `Appl (tcon, args) -> app ~loc (Ast.TyId (loc, qname ~loc tcon)) args
 
-  let expr ~loc params : expr -> Ast.ctyp = 
-    let atomic = atomic ~loc params in
+  let expr ~loc : expr -> Ast.ctyp = 
+    let atomic = atomic ~loc in
     function
       | #atomic as a -> atomic a
       | `Function (f, t) -> <:ctyp< $atomic f$ -> $atomic t$ >>
       | `Tuple [t] -> atomic t
       | `Tuple ts -> Ast.TyTup (loc, unlist ~loc (pair ~loc) ts atomic)
-      | `Appl (tcon, args) -> app ~loc params (Ast.TyId (loc, qname ~loc tcon)) args
-      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
-      | `Variant (`Gt, tags) -> <:ctyp< [> $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
-      | `Variant (`Lt, tags) -> <:ctyp< [< $unlist ~loc (bar ~loc) tags (tagspec ~loc params)$ ] >>
+      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
+      | `Variant (`Gt, tags) -> <:ctyp< [> $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
+      | `Variant (`Lt, tags) -> <:ctyp< [< $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
 
 
-  let summand ~loc params (name, args) =
-    let args = unlist ~loc (and_ ~loc) args (atomic ~loc params) in
+  let summand ~loc (name, args) =
+    let args = unlist ~loc (and_ ~loc) args (atomic ~loc) in
       <:ctyp< $uid:name$ of $args$ >> 
 
-  let field ~loc params ((name, t, mut) : field) = match mut with
-    | `Mutable   -> <:ctyp< $lid:name$ : mutable $atomic ~loc params t$ >> (* mutable l : t doesn't work; perhaps a camlp4 bug *)
-    | `Immutable -> <:ctyp< $lid:name$ : $atomic ~loc params t$ >>
+  let field ~loc ((name, t, mut) : field) = match mut with
+    | `Mutable   -> <:ctyp< $lid:name$ : mutable $atomic ~loc t$ >> (* mutable l : t doesn't work; perhaps a camlp4 bug *)
+    | `Immutable -> <:ctyp< $lid:name$ : $atomic ~loc t$ >>
 
-  let repr ~loc params = function
-    | `Sum summands  -> Ast.TySum (loc, unlist ~loc (bar ~loc) summands (summand ~loc params))
-    | `Record fields -> <:ctyp< { $unlist ~loc (semi ~loc) fields (field ~loc params)$ }>>
+  let repr ~loc = function
+    | `Sum summands  -> Ast.TySum (loc, unlist ~loc (bar ~loc) summands (summand ~loc))
+    | `Record fields -> <:ctyp< { $unlist ~loc (semi ~loc) fields (field ~loc)$ }>>
 
-  let rhs ~loc params : rhs -> Ast.ctyp = function
-    | `Fresh (None, t, `Private) -> <:ctyp< private $repr ~loc params t$ >>
-    | `Fresh (None, t, `Public) -> repr ~loc params t
-    | `Fresh (Some e, t, `Private) -> <:ctyp< $expr ~loc params e$ = private $repr ~loc params t$ >>
-    | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr ~loc params e, repr ~loc params t)
-    | #expr as t          -> expr ~loc params t
+  let rhs ~loc : rhs -> Ast.ctyp = function
+    | `Fresh (None, t, `Private) -> <:ctyp< private $repr ~loc t$ >>
+    | `Fresh (None, t, `Public) -> repr ~loc t
+    | `Fresh (Some e, t, `Private) -> <:ctyp< $expr ~loc e$ = private $repr ~loc t$ >>
+    | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr ~loc e, repr ~loc t)
+    | #expr as t          -> expr ~loc t
 
-  let rrhs ~loc params : sigrhs -> Ast.ctyp = function
-    | #rhs as r -> rhs ~loc params r
+  let rrhs ~loc : sigrhs -> Ast.ctyp = function
+    | #rhs as r -> rhs ~loc r
     | `Nothing  -> <:ctyp< >>
           
   let rec app_params ~loc f = function
@@ -648,7 +642,7 @@ struct
     let params' = List.map (param ~loc) params in
     NameMap.fold
       (fun name (_, r) dcl ->
-         let rhs = rrhs ~loc params r in
+         let rhs = rrhs ~loc r in
            Ast.TyDcl (loc, name, params', rhs, []):: dcl)
       bindings
       []

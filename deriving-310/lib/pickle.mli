@@ -6,78 +6,53 @@ module Repr : sig
   val make : ?constructor:int -> id list -> t
 end 
 
+type write_state
+type read_state
+
 (* Utilities for serialization *)
-module Write : sig
-  type s
-  include Monad.Monad_state_type with type state = s
-  module Utils (T : Typeable.Typeable) (E : Eq.Eq with type a = T.a) : sig
-    val allocate : T.a -> (id -> unit m) -> id m
-    val store_repr : id -> Repr.t -> unit m
-  end
-end
+module Write : Monad.Monad_state_type with type state = write_state
+val allocate : 'a Typeable.typeable -> 'a Eq.eq -> 'a -> (id -> unit Write.m) -> id Write.m
+val store_repr : id -> Repr.t -> unit Write.m
 
 (* Utilities for deserialization *)
-module Read : sig
-  type s
-  include Monad.Monad_state_type with type state = s
-  module Utils (T : Typeable.Typeable) : sig
-    val sum    : (int * id list -> T.a m)  -> (id -> T.a m)
-    val tuple  : (id list -> T.a m)        -> (id -> T.a m)
-    val record : (T.a -> id list -> T.a m) -> int -> (id -> T.a m)
-  end
-end
+module Read : Monad.Monad_state_type with type state = read_state
+val sum    : 'a Typeable.typeable -> (int * id list -> 'a Read.m)  -> (id -> 'a Read.m)
+val tuple  : 'a Typeable.typeable -> (id list -> 'a Read.m)        -> (id -> 'a Read.m)
+val record : 'a Typeable.typeable -> ('a -> id list -> 'a Read.m) -> int -> (id -> 'a Read.m)
 
 exception UnpicklingError of string
 exception UnknownTag of int * string
 
-module type Pickle =
-sig
-  type a
-  module Typeable : Typeable.Typeable with type a = a
-  module Eq : Eq.Eq with type a = a
-  val pickle : a -> id Write.m
-  val unpickle : id -> a Read.m
-  val to_buffer : Buffer.t -> a -> unit
-  val to_string : a -> string
-  val to_channel : out_channel -> a -> unit
-  val from_stream : char Stream.t -> a
-  val from_string : string -> a
-  val from_channel : in_channel -> a
-end
+type 'a pickle = {
+  _Typeable : 'a Typeable.typeable ;
+  _Eq       : 'a Eq.eq ;
+  pickle : 'a -> id Write.m ;
+  unpickle : id -> 'a Read.m 
+}
 
-module Defaults
-  (S : sig
-     type a
-     module Typeable : Typeable.Typeable with type a = a
-     module Eq : Eq.Eq with type a = a
-     val pickle : a -> id Write.m
-     val unpickle : id -> a Read.m
-   end) : Pickle with type a = S.a
+val to_buffer    : 'a pickle -> Buffer.t -> 'a -> unit
+val to_string    : 'a pickle -> 'a -> string
+val to_channel   : 'a pickle -> out_channel -> 'a -> unit
 
-module Pickle_unit  : Pickle with type a = unit
-module Pickle_bool  : Pickle with type a = bool
-module Pickle_int   : Pickle with type a = int
-module Pickle_char  : Pickle with type a = char
-module Pickle_float : Pickle with type a = float
-module Pickle_num   : Pickle with type a = Num.num
-module Pickle_string : Pickle with type a = string
-module Pickle_option (V0 : Pickle) : Pickle with type a = V0.a option
-module Pickle_list (V0 : Pickle)  : Pickle with type a = V0.a list
-module Pickle_ref (S : Pickle) : Pickle with type a = S.a ref
+val from_stream  : 'a pickle -> char Stream.t -> 'a
+val from_string  : 'a pickle -> string -> 'a
+val from_channel : 'a pickle -> in_channel -> 'a
 
-module Pickle_from_dump
-  (P : Dump.Dump)
-  (E : Eq.Eq with type a = P.a)
-  (T : Typeable.Typeable with type a = P.a)
-  : Pickle with type a = P.a
+val pickle_unit  : unit pickle
+val pickle_bool  : bool pickle
+val pickle_int   : int pickle
+val pickle_char  : char pickle
+val pickle_float : float pickle
+val pickle_num   : Num.num pickle
+val pickle_string : string pickle
+val pickle_option : 'a pickle -> 'a option pickle
+val pickle_list : 'a pickle -> 'a list pickle
+val pickle_ref : 'a pickle -> 'a ref pickle
 
-module Pickle_6 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle) (A6 : Pickle) 
-  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
-module Pickle_5 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle) (A5 : Pickle)
-  : Pickle with type a = A1.a * A2.a * A3.a * A4.a * A5.a
-module Pickle_4 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle) (A4 : Pickle)
-  : Pickle with type a = A1.a * A2.a * A3.a * A4.a
-module Pickle_3 (A1 : Pickle) (A2 : Pickle) (A3 : Pickle)
-  : Pickle with type a = A1.a * A2.a * A3.a
-module Pickle_2 (A1 : Pickle) (A2 : Pickle)
-  : Pickle with type a = A1.a * A2.a
+val pickle_from_dump : 'a Dump.dump -> 'a Eq.eq -> 'a Typeable.typeable -> 'a pickle
+
+val pickle_6 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> 'a6 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) pickle
+val pickle_5 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) pickle
+val pickle_4 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> ('a1 * 'a2 * 'a3 * 'a4) pickle
+val pickle_3 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> ('a1 * 'a2 * 'a3) pickle
+val pickle_2 : 'a1 pickle -> 'a2 pickle -> ('a1 * 'a2) pickle

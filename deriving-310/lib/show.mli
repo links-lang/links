@@ -1,55 +1,45 @@
-module type Show =
-  sig
-    type a
-    val format : Format.formatter -> a -> unit
-    val format_list : Format.formatter -> a list -> unit
-    val show : a -> string
-    val show_list : a list -> string
-  end
+(** Pretty-printing *)
 
-module Defaults (S : 
-  sig
-    type a
-    val format : Format.formatter -> a -> unit 
-  end) : Show with type a = S.a
+(* Dictionary *)
+type -'a show = {
+  format : Format.formatter -> 'a -> unit ;
+}
 
-module Show_unprintable (S : sig type a end) : Show with type a = S.a
+(* Overloaded function *)
+val show : 'a show -> 'a -> string
 
-module Show_char      : Show with type a = char
-module Show_bool      : Show with type a = bool
-module Show_unit      : Show with type a = unit
-module Show_int       : Show with type a = int
-module Show_int32     : Show with type a = int32
-module Show_int64     : Show with type a = int64
-module Show_nativeint : Show with type a = nativeint
-module Show_num       : Show with type a = Num.num
-module Show_float     : Show with type a = float
-module Show_string    : Show with type a = string
+(* Instances *)
 
-module Show_list (S : Show)   : Show with type a = S.a list
-module Show_ref (S : Show)    : Show with type a = S.a ref
-module Show_option (S : Show) : Show with type a = S.a option
-module Show_array (S : Show)  : Show with type a = S.a array
+val show_unprintable : 'a show
 
-module Show_map
-  (O : Map.OrderedType) 
-  (K : Show with type a = O.t)
-  (V : Show)
-  : Show with type a = V.a Map.Make(O).t
+val show_char      : char show
+val show_bool      : bool show
+val show_unit      : unit show
+val show_int       : int show
+val show_int32     : int32 show
+val show_int64     : int64 show
+val show_nativeint : nativeint show
+val show_num       : Num.num show
+val show_float     : float show
+val show_string    : string show
+val show_open_flag : open_flag show
+val show_fpclass   : fpclass show
 
-module Show_set
-  (O : Set.OrderedType) 
-  (K : Show with type a = O.t)
-  : Show with type a = Set.Make(O).t
+val show_list   : 'a show -> 'a list show
+val show_ref    : 'a show -> 'a ref show
+val show_option : 'a show -> 'a option show
+val show_array  : 'a show -> 'a array show
 
-module Show_6 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show) (A6 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
-module Show_5 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a
-module Show_4 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a
-module Show_3 (A1 : Show) (A2 : Show) (A3 : Show)
-  : Show with type a = A1.a * A2.a * A3.a
-module Show_2 (A1 : Show) (A2 : Show)
-  : Show with type a = A1.a * A2.a
+module Show_map (O : Map.OrderedType) : sig
+  val show_t : O.t show -> 'a show -> 'a Map.Make(O).t show
+end
 
+module Show_set (O : Set.OrderedType) : sig
+  val show_t : O.t show -> Set.Make(O).t show
+end
+
+val show_6 : 'a1 show -> 'a2 show -> 'a3 show -> 'a4 show -> 'a5 show -> 'a6 show -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) show
+val show_5 : 'a1 show -> 'a2 show -> 'a3 show -> 'a4 show -> 'a5 show -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) show
+val show_4 : 'a1 show -> 'a2 show -> 'a3 show -> 'a4 show -> ('a1 * 'a2 * 'a3 * 'a4) show
+val show_3 : 'a1 show -> 'a2 show -> 'a3 show -> ('a1 * 'a2 * 'a3) show
+val show_2 : 'a1 show -> 'a2 show -> ('a1 * 'a2) show

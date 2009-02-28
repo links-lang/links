@@ -2,11 +2,7 @@
 
 open Typeable
 
-module Comp (T : Typeable) (E : Eq.Eq with type a = T.a) :
-sig
-  type a = T.a
-  val eq : dynamic -> dynamic -> bool
-end
+val comp : 'a typeable -> 'a Eq.eq -> dynamic -> dynamic -> bool
 
 module DynMap :
 sig

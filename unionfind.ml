@@ -42,7 +42,7 @@ and 'a info = {
   mutable descriptor: 'a
 }
 
-module Show_point (A : Show.Show) = Show.Show_unprintable (struct type a = A.a point  end)
+let show_point : 'a Show.show -> 'a point Show.show = fun _ -> Show.show_unprintable
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
 let fresh desc = {

@@ -8,17 +8,17 @@ let eq_types = Typeable.TypeRep.eq
 let _ =
   begin 
     assert (eq_types
-                   (Typeable_t1.type_rep ())
-                   (Typeable_t1.type_rep ()));
+                   (Lazy.force typeable_t1.type_rep)
+                   (Lazy.force typeable_t1.type_rep));
     assert (eq_types
-              (Typeable_t2.type_rep ())
-              (Typeable_t2.type_rep ()));
+              (Lazy.force typeable_t2.type_rep)
+              (Lazy.force typeable_t2.type_rep));
     assert (not (eq_types
-                   (Typeable_t1.type_rep ())
-                   (Typeable_t2.type_rep ())));
+                   (Lazy.force typeable_t1.type_rep)
+                   (Lazy.force typeable_t2.type_rep)));
     assert (not (eq_types
-                   (Typeable_t2.type_rep ())
-                   (Typeable_t1.type_rep ())));
+                   (Lazy.force typeable_t2.type_rep)
+                   (Lazy.force typeable_t1.type_rep)));
   end
 
 type t3 = int deriving (Typeable)
@@ -26,8 +26,8 @@ type t3 = int deriving (Typeable)
 let _ =
   begin 
     assert (eq_types
-              (Typeable.Typeable_int.type_rep ())
-              (Typeable_t3.type_rep ()));
+              (Lazy.force Typeable.typeable_int.type_rep)
+              (Lazy.force typeable_t3.type_rep));
   end
 
 
@@ -37,8 +37,8 @@ type t5 = [`T of t3] deriving (Typeable)
 let _ =
   begin
     assert (eq_types
-              (Typeable_t4.type_rep ())
-              (Typeable_t5.type_rep ()));
+              (Lazy.force typeable_t4.type_rep)
+              (Lazy.force typeable_t5.type_rep));
   end
 
 type t6 = [`T of t5]
@@ -47,8 +47,8 @@ type t6 = [`T of t5]
 let _ =
   begin
     assert (not (eq_types
-                   (Typeable_t5.type_rep ())
-                   (Typeable_t6.type_rep ())));
+                   (Lazy.force typeable_t5.type_rep)
+                   (Lazy.force typeable_t6.type_rep)));
 
   end
 
@@ -58,8 +58,8 @@ type t7 = [`T of t6]
 let _ =
   begin
     assert (not (eq_types
-                   (Typeable_t6.type_rep ())
-                   (Typeable_t7.type_rep ())));
+                   (Lazy.force typeable_t6.type_rep)
+                   (Lazy.force typeable_t7.type_rep)));
   end
 
 
@@ -69,8 +69,8 @@ type t9 = [`B | `A] deriving (Typeable)
 let _ =
   begin
     assert (eq_types
-              (Typeable_t8.type_rep ())
-              (Typeable_t9.type_rep ()));
+              (Lazy.force typeable_t8.type_rep)
+              (Lazy.force typeable_t9.type_rep));
   end
 
 
@@ -84,10 +84,10 @@ and l2 = int closedr deriving (Typeable)
 let _ =
   begin
     assert (eq_types 
-              (Typeable_l1.type_rep ())
-              (Typeable_l1.type_rep ()));
+              (Lazy.force typeable_l1.type_rep)
+              (Lazy.force typeable_l1.type_rep));
   end
-
+(*
 type nil = [`Nil] deriving (Typeable)
 type t10 = ([nil| `Cons of int * 'a ] as 'a) list
     deriving (Typeable)
@@ -97,6 +97,8 @@ let _ =
   begin
     assert 
       (eq_types
-         (Typeable_t10.type_rep ())
-         (Typeable_t11.type_rep ()));
+         (Lazy.force typeable_t10.type_rep)
+         (Lazy.force typeable_t11.type_rep));
   end
+
+*)

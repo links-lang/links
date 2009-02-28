@@ -104,7 +104,7 @@ struct
   EXTEND Gram
   expr: LEVEL "simple"
   [
-  [e1 = val_longident ; "<" ; t = ctyp; ">" ->
+  [e1 = val_longident ; "."; "<" ; t = ctyp; ">." ->
      match e1 with
        | <:ident< $uid:classname$ . $lid:methodname$ >> ->
          if not (Base.is_registered classname) then
@@ -117,16 +117,16 @@ struct
              else
                let utdecls = Type.Untranslate.decl ~loc decls in
                let tdecls = Analyse.group_rhss rhss in
-               let superclass_instances = List.map (derive_str loc params tdecls) (find_superclasses loc classname) in
+               let superclasses = find_superclasses loc classname in
+               let superclass_instances = List.map (derive_str loc params tdecls) superclasses in
                let instance = derive_str loc params tdecls classname in
-                 <:expr< let module $uid:classname$ = 
+                 <:expr< let module $uid:classname^"_"$ = 
                              struct
                                type $list:utdecls$
                                $list:superclass_instances$
                                $instance$ 
-                               include $uid:classname ^ "_inline"$
                              end
-                          in $uid:classname$.$lid:methodname$ >>
+                          in ($uid:classname$.$lid:methodname$ $uid:classname^"_"$.$lid:String.lowercase classname ^ "_inline"$) >>
        | _ -> 
            fatal_error loc ("deriving: this looks a bit like a method application, but "
                             ^"the syntax is not valid");

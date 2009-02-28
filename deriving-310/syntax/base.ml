@@ -79,13 +79,13 @@ let tuple ~loc ?(param="v") n : Ast.patt * Ast.expr =
           in
             Ast.PaTup (loc, patts), Ast.ExTup (loc, exprs)
 
-let rec modname_from_qname ~loc ~qname ~classname =
+let rec modname_from_qname ~loc ~typename qname =
   match qname with 
     | [] -> invalid_arg "modname_from_qname"
-    | [t] -> <:ident< $uid:classname ^ "_"^ t$ >>
-    | t::ts -> <:ident< $uid:t$.$modname_from_qname ~loc ~qname:ts ~classname$ >>
+    | [t] -> <:ident< $lid:typename ^ "_"^ t$ >>
+    | t::ts -> <:ident< $uid:t$.$modname_from_qname ~loc ~typename ts$ >>
 
-let make_safe : (name * rhs * Ast.module_binding) list -> (Ast.module_binding) list * [`Recursive | `Nonrecursive] =
+let make_safe : (name * rhs * Ast.binding) list -> (Ast.binding) list * [`Recursive | `Nonrecursive] =
   fun decls ->
   (* re-order a set of mutually recursive modules in an attempt to
      make initialization problems less likely *) 
@@ -118,159 +118,204 @@ let make_safe : (name * rhs * Ast.module_binding) list -> (Ast.module_binding) l
             let recursive = object
               inherit [bool] fold as default
               method crush = List.exists F.id
-              method localtype (`Local lname) = (lname = name)
+              method localtype (`Local (lname, _)) = (lname = name)
             end # rhs rhs in
               [mbind], if recursive then `Recursive else `Nonrecursive
         | _ -> (List.map (fun (_,_,b) -> b) sorted, `Recursive)
 
 
-let apply_functor ~loc (f : Ast.module_expr) (args : Ast.ident list) : Ast.module_expr =
-    List.fold_left (fun f p -> <:module_expr< $f$ ($id:p$) >>) f args
+let apply_functor ~loc (f : Ast.expr) (args : Ast.expr list) : Ast.expr =
+    List.fold_left (fun f p -> <:expr< $f$ $p$ >>) f args
     
-class virtual deriver ?default ~loc ~classname ~allow_private =
-object (self)
+module rec Deriver :
+sig
+class virtual deriver :
+  loc:Camlp4.PreCast.Ast.loc ->
+  classname:string ->
+  allow_private:bool ->
+  object
+    val classname : string
+    val loc : Camlp4.PreCast.Ast.loc
+    val virtual methods : Type.name list
+    val superclasses : Type.name list
+    val typename : string
+    method atomic : Type.atomic -> Camlp4.PreCast.Ast.expr
+    method atype : Type.name * Type.param list -> Camlp4.PreCast.Ast.ctyp
+    method constr : Type.qname * Type.atomic list -> Camlp4.PreCast.Ast.expr
+    method decls :
+      Type.param list ->
+      (Type.is_generated * Type.rhs) Type.NameMap.t list ->
+      Camlp4.PreCast.Ast.str_item
+    method expand : Camlp4.PreCast.Ast.expr -> Camlp4.PreCast.Ast.expr
+    method function_ : Type.atomic * Type.atomic -> Camlp4.PreCast.Ast.expr
+    method local : Type.name * Type.name list -> Camlp4.PreCast.Ast.expr
+    method mapply :
+      Camlp4.PreCast.Ast.expr -> Type.atomic list -> Camlp4.PreCast.Ast.expr
+    method mktype :
+      Type.NameMap.key -> Type.param list -> Camlp4.PreCast.Ast.ctyp
+    method virtual record :
+      Type.name * Type.param list ->
+      ?eq:Type.expr -> Type.field list -> Camlp4.PreCast.Ast.expr
+    method rhs :
+      Type.name * Type.param list -> Type.rhs -> Camlp4.PreCast.Ast.expr
+    method signature : Type.sigdecl -> Camlp4.PreCast.Ast.sig_item
+    method virtual sum :
+      Type.name * Type.param list ->
+      ?eq:Type.expr -> Type.summand list -> Camlp4.PreCast.Ast.expr
+    method superclasses : Type.name list
+    method virtual tuple :
+      Type.name * Type.param list ->
+      Type.atomic list -> Camlp4.PreCast.Ast.expr
+    method tyvar : Type.name -> Camlp4.PreCast.Ast.expr
+    method virtual variant :
+      Type.name * Type.param list ->
+      [ `Eq | `Gt | `Lt ] * Type.tagspec list -> Camlp4.PreCast.Ast.expr
+  end
+type generator = loc:Camlp4.PreCast.Ast.Loc.t -> deriver
+val derivers : (Type.name, generator) Hashtbl.t
+val register : Type.name -> generator -> unit
+val find : Type.name -> generator
+val is_registered : Type.name -> bool
+end =
+struct
+  type generator = loc:Ast.Loc.t -> Deriver.deriver
+  
+  let derivers : (name, generator) Hashtbl.t = Hashtbl.create 15
+  
+  let register c = Hashtbl.add derivers c
+  
+  let find classname = 
+    try Hashtbl.find derivers classname
+    with Not_found -> raise (NoSuchClass classname)
+  
+  let is_registered (classname : name) : bool =
+    try let _ = find classname in true
+    with NoSuchClass _ -> false
 
-  val loc = loc
-  val classname = classname
-
-  method mapply (funct : Ast.module_expr) (args : atomic list) =
-    apply_functor ~loc funct (List.map self#atomic args)
-
-  method atype (name, params : name * param list) : Ast.ctyp =
-    List.fold_left
-      (fun f (p, _) -> <:ctyp< $uid:tvar_name p$.a $f$ >>)
-      <:ctyp< $lid:name$ >>
-      params
-
-  method superclasses : name list = []
-  method virtual variant : name * param list ->  [`Gt | `Lt | `Eq ] * tagspec list -> Ast.module_expr
-  method virtual sum     : name * param list -> ?eq:expr -> summand list -> Ast.module_expr
-  method virtual record  : name * param list -> ?eq:expr -> field list -> Ast.module_expr
-  method virtual tuple   : name * param list -> atomic list -> Ast.module_expr
-
-  method decls params (decls : (is_generated * rhs) NameMap.t list) : Ast.str_item =
-    let () = List.iter (fun m -> assert (not (NameMap.is_empty m))) decls in
-
-    (* plan: 
-       set up an enclosing recursive module
-       generate functors for all types in the clique
-       project out the inner modules afterwards.
-       
-       later: generate simpler code for simpler cases:
-       - where there are no type parameters
-       - where there's only one type
-       - where there's no recursion
-       - etc.
-    *)
-    let wrapper_name = Printf.sprintf "%s_%s" classname (random_id 32)  in
-    let make_functor = 
-      List.fold_right 
-        (fun (p,_) rhs -> 
-           let arg = tvar_name p in
-             <:module_expr< functor ($arg$ : $uid:classname$.$uid:classname$) -> $rhs$ >>)
-        params in
-    let apply_defaults mexpr = match default with
-      | None -> mexpr
-      | Some default -> <:module_expr< $default$ ($mexpr$) >> in
-    let mbinds : (name * Type.rhs * Ast.module_binding) list list =
-      List.map
-        (fun decl -> 
-           NameMap.fold
-             (fun name (_, rhs) binds -> 
-                (name,
-                 rhs,
-                 <:module_binding< $uid:classname ^ "_"^ name$
-                                 : $uid:classname$.$uid:classname$ with type a = $self#atype (name, params)$
-                                 = $apply_defaults (self#rhs (name, params) rhs)$ >>) :: binds)
-             decl
-             [])
-        decls in
-    let sorted_mbinds : (Ast.module_binding list * _) list = List.map make_safe mbinds in
-    let mrecs
-        = List.fold_right (fun (m,recp) ms -> 
-                             match m, recp with
-                               | [ <:module_binding< $uid:u$ : $signature$ = $impl$ >> ], `Nonrecursive ->
-                                   <:str_item< module $uid:u$ : $signature$ = $impl$ $ms$ >>
-                               | _ ->
-                                   <:str_item< module rec $list:m$ $ms$ >>) sorted_mbinds <:str_item< >> in
-    let mrecs =
-      <:str_item< open $uid:classname$ $mrecs$ >> in
-      match params with
-        | [] -> mrecs
-        | _ ->
-            let fixed = make_functor <:module_expr< struct $mrecs$ end >> in
-            let applied = apply_functor ~loc
-                            <:module_expr< $uid:wrapper_name$ >> 
-                            (List.map (fun (p,_) -> Ast.IdUid (loc, tvar_name p)) params) in
-            let names : NameMap.key list = List.concat_map (fun map -> NameMap.fold (fun i _ is -> i :: is) map []) decls in
-            let projected =
-              List.map
-                (fun name -> 
-                   let modname = classname ^ "_"^ name in
-                   let rhs = <:module_expr< struct module P = $applied$ include P.$uid:modname$ end >> in
-                     (<:str_item< module $uid:modname$ = $make_functor rhs$>>))
-                names
-            in
-            let m = <:str_item< module $uid:wrapper_name$ = $fixed$ >> in
-              <:str_item< $m$ $list:projected$ >>
-
-
-  method signature (params, names : sigdecl) : Ast.sig_item =
-    (* TODO: distinguish generated names *)
-    let mktype (n : name) : Ast.module_type =
-      List.fold_right 
-        (fun (p,_) m -> <:module_type< functor ($tvar_name p$ : $uid:classname$.$uid:classname$) -> $m$ >>) 
+  class virtual deriver ~loc ~classname ~allow_private =
+  object (self)
+  
+    val loc = loc
+    val typename = String.lowercase classname
+    val classname = classname
+    val superclasses : name list = []
+    val virtual methods : name list
+  
+    method superclasses = superclasses
+  
+    method mapply (funct : Ast.expr) (args : atomic list) : Ast.expr =
+      apply_functor ~loc funct (List.map self#atomic args)
+  
+    method atype (name, params : name * param list) : Ast.ctyp =
+      List.fold_left
+        (fun f (p, _) -> <:ctyp< '$p$ $f$ >>)
+        <:ctyp< $lid:name$ >>
         params
-      <:module_type< $uid:classname$.$uid:classname$ with type a = $self#atype (n, params)$ >> 
-    in
-      NameMap.fold
-        (fun name rhs si ->
-           <:sig_item< module $uid:classname ^ "_" ^ name$ : $mktype name$
-                       $si$ >>)
-        names
-        <:sig_item< >>
-    
-  method tyvar tvar =
-    Ast.IdUid (loc, tvar_name tvar)
-
-  method ctor : qname -> Ast.ident =
-    fun qname -> modname_from_qname ~loc ~qname ~classname    
-
-  method atomic : atomic -> Ast.ident = function
-    | `Local l -> self#local l
-    | `Tyvar t -> self#tyvar t
-
-  method function_ f = raise (Underivable (loc, classname ^ " cannot be derived for function types"))
-
-  method constr (qname, args) = 
-    self#mapply <:module_expr< $id:self#ctor qname$ >> args
-
-  method local (n : name) : Ast.ident =
-    Ast.IdUid (loc, classname ^ "_" ^ n)
-
-  method rhs : name * param list -> rhs -> Ast.module_expr = fun ctyp -> function 
-    | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
-        raise (Underivable (loc, "The class "^ classname ^" cannot be derived for private types"))
-    | `Fresh (eq, `Sum summands, _) -> self#sum ctyp ?eq summands
-    | `Fresh (eq, `Record fields, _) -> self#record ctyp ?eq fields
-    | `Tyvar p    -> <:module_expr< $id:self#tyvar p$ >>
-    | `Function f -> self#function_  f
-    | `Appl c     -> self#constr     c
-    | `Tuple t    -> self#tuple      ctyp t
-    | `Local l    -> <:module_expr< $id:self#local l$ >>
-    | `Variant v  -> self#variant    ctyp v
+  
+    method virtual variant : name * param list ->  [`Gt | `Lt | `Eq ] * tagspec list -> Ast.expr
+    method virtual sum     : name * param list -> ?eq:expr -> summand list -> Ast.expr
+    method virtual record  : name * param list -> ?eq:expr -> field list -> Ast.expr
+    method virtual tuple   : name * param list -> atomic list -> Ast.expr
+  
+    method mktype name params : Ast.ctyp =
+      let maker, typ =
+        List.fold_left
+          (fun (maker, typ) (name, _) -> 
+             ((fun p -> maker <:ctyp< '$name$ $lid:typename$ -> $p$ >>),
+              <:ctyp< '$name$ $typ$ >>))
+          ((fun x -> x), <:ctyp< $lid:name$ >>)
+          params in
+        maker <:ctyp< $typ$ $lid:typename$ >>
+  
+    method decls params (decls : (is_generated * rhs) NameMap.t list) : Ast.str_item =
+      let () = List.iter (fun m -> assert (not (NameMap.is_empty m))) decls in
+      let mk_outer_fun =
+        List.fold_right 
+          (fun (param, _) rhs ->
+             <:expr< fun ($lid:param$ : '$param$ $lid:typename$ ) -> $rhs$ >>)
+          params in
+      let mbinds : (name * Type.rhs * Ast.binding) list list =
+        List.map
+          (fun decl -> 
+             NameMap.fold
+               (fun name (_, rhs) binds -> 
+                  (name,
+                   rhs,
+                   <:binding< $lid:typename ^ "_"^ name$
+                            : $self#mktype name params$
+                            = $mk_outer_fun (self#rhs (name, params) rhs)$ >>) :: binds)
+               decl
+               [])
+          decls in
+      let sorted_mbinds : (Ast.binding list * _) list = List.map make_safe mbinds in
+      let mrecs 
+          = List.fold_right (fun (m,recp) (ms : Ast.str_item) -> 
+                               match m, recp with
+                                 | [ <:binding< $lid:u$ : $signature$ = $impl$ >> ], `Nonrecursive ->
+                                     <:str_item< let $lid:u$ : $signature$ = $impl$ ;; $ms$ >>
+                                 | _ ->
+                                     <:str_item< let rec $list:m$ $ms$ >>) sorted_mbinds <:str_item< >> in
+  
+  
+        <:str_item< open $uid:classname$ $mrecs$ >> 
+  
+    method signature (params, names : sigdecl) : Ast.sig_item =
+      (* TODO: distinguish generated names *)
+        NameMap.fold
+          (fun name rhs si ->
+             <:sig_item< $si$ ;; val $lid:typename ^ "_" ^ name$ : $self#mktype name params$ >>)
+          names
+          <:sig_item< open $uid:classname$ >>
+      
+    method tyvar tvar =
+      <:expr< $lid:tvar$ >>
+  
+    method atomic : atomic -> Ast.expr = function
+      | `Local l -> self#local l
+      | `Tyvar t -> self#tyvar t
+      | `Appl c  -> self#constr c
+  
+    method function_ f = raise (Underivable (loc, classname ^ " cannot be derived for function types"))
+  
+    method constr (qname, args) = 
+      self#mapply <:expr< $id:modname_from_qname ~loc ~typename qname$ >> args
+  
+    method local (n, params: name * name list) : Ast.expr =
+      self#mapply (<:expr< $lid:typename ^ "_" ^ n$ >>)
+        (List.map (fun p -> `Tyvar p) params)
+  
+    method rhs : name * param list -> rhs -> Ast.expr = fun ctyp -> function 
+      | `Fresh (_, _, (`Private : [`Private|`Public])) when not allow_private ->
+          raise (Underivable (loc, "The class "^ classname ^" cannot be derived for private types"))
+      | `Fresh (eq, `Sum summands, _) -> self#sum ctyp ?eq summands
+      | `Fresh (eq, `Record fields, _) -> self#record ctyp ?eq fields
+      | `Tyvar p    -> self#tyvar      p
+      | `Function f -> self#function_  f
+      | `Appl c     -> self#expand (self#constr     c)
+      | `Tuple t    -> self#tuple      ctyp t
+      | `Local l    -> self#expand (self#local      l)
+      | `Variant v  -> self#variant    ctyp v
+  
+    method expand : Ast.expr -> Ast.expr = 
+      fun expr ->
+        let superclass_fields =
+          List.map (fun cl -> 
+                      let field = "_" ^ cl in
+                      let impl = find cl ~loc in
+                      let superexpr = <:expr< $expr$.$lid:field$ >> in
+                        <:rec_binding< $lid:field$ = $impl#expand superexpr$ >>) superclasses
+        and method_fields = 
+          List.map (fun meth -> <:rec_binding< $lid:meth$ = fun etavar -> ($expr$.$lid:meth$  etavar) >>) methods
+        in
+        let all_fields = superclass_fields @ method_fields in
+        let fields = 
+          List.fold_right
+            (fun r1 r2 -> <:rec_binding< $r1$ ; $r2$ >>)
+            (List.tl all_fields)
+            (List.hd all_fields) in
+          Ast.ExRec (loc, fields, <:expr< >>)
+  end
+  
 end
 
-type generator = loc:Ast.Loc.t -> deriver
-
-let derivers : (name, generator) Hashtbl.t = Hashtbl.create 15
-
-let register = Hashtbl.add derivers
-
-let find classname = 
-  try Hashtbl.find derivers classname
-  with Not_found -> raise (NoSuchClass classname)
-
-let is_registered (classname : name) : bool =
-  try let _ = find classname in true
-  with NoSuchClass _ -> false
+include Deriver

@@ -4,7 +4,7 @@ open Utility
 let unparse_label = function
   | `Char c -> String.make 1 c
   | `List (`Char _::_) as s -> Value.unbox_string s
-  | r -> (failwith "(json) error decoding label " ^ Value.Show_t.show r)
+  | r -> (failwith "(json) error decoding label " ^ Show.show Value.show_t r)
 
 %}
 

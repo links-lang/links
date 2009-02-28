@@ -1,129 +1,78 @@
-(*pp deriving *)
+type 'a eq = {
+  eq : 'a -> 'a -> bool
+}
 
-module type Eq =
-sig
-  type a
-  val eq : a -> a -> bool
-end
+let eq eq = eq.eq
 
-module Defaults (E : Eq) = E
+let eq_immutable = { eq = (=) }
+let eq_mutable = { eq = (==) }
 
-module Eq_immutable(S : sig type a end) :
-  Eq with type a = S.a =
+let eq_int = eq_immutable
+let eq_bool = eq_immutable
+let eq_float = eq_immutable
+let eq_unit = eq_immutable
+let eq_char = eq_immutable
+
+let eq_string = eq_mutable
+let eq_ref _ = eq_mutable
+let eq_array _ = eq_mutable
+
+let eq_option e =
+  { eq = fun l r -> match l, r with
+      | None, None -> true
+      | Some l, Some r -> e.eq l r
+      | _ -> false }
+
+module Eq_map_s_t (M : Map.S) =
 struct
-  type a = S.a
-  let eq = (=)
-end
-
-module Eq_mutable(S : sig type a end) :
-  Eq with type a = S.a =
-struct
-  type a = S.a
-  let eq = (==)
-end
-
-module Eq_int = Eq_immutable(struct type a = int end)
-module Eq_bool = Eq_immutable(struct type a = bool end)
-module Eq_float = Eq_immutable(struct type a = float end)
-module Eq_unit = Eq_immutable(struct type a = unit end)
-module Eq_char = Eq_immutable(struct type a = char end)
-
-module Eq_string = Eq_mutable(struct type a = string end)
-module Eq_ref (E : Eq) = Eq_mutable(struct type a = E.a ref end)
-module Eq_array (E : Eq) = Eq_mutable(struct type a = E.a array end)
-
-module Eq_option (E : Eq) 
-  : Eq with type a = E.a option =
-struct 
-  type a = E.a option
-  let eq l r = match l, r with
-    | None, None -> true
-    | Some l, Some r -> E.eq l r
-    | _ -> false
-end
-
-module Eq_map_s_t (E : Eq) (M : Map.S)
-  : Eq with type a = E.a M.t =
-struct
-  type a = E.a M.t
-  let eq = M.equal (E.eq)
+  let eq v = { eq = M.equal v.eq }
 end  
 
-module Eq_set_s_t (S : Set.S)
-  : Eq with type a = S.t =
+module Eq_set_s_t (S : Set.S) =
 struct
-  type a = S.t
-  let eq = S.equal
+  let eq = {eq = S.equal }
 end  
 
-module Eq_list (E : Eq) :
-  Eq with type a = E.a list =
-struct
-  type a = E.a list
+let eq_list e =
   let rec eq l r = match l, r with
     | [], [] -> true
-    | (lfst::lrst), (rfst::rrst) when E.eq lfst rfst -> eq lrst rrst
+    | (lfst::lrst), (rfst::rrst) when e.eq lfst rfst -> eq lrst rrst
     | _ -> false
-end
+  in { eq = eq }
 
-module Eq_num
-  : Eq with type a = Num.num =
-struct
-  type a = Num.num
-  let eq = Num.eq_num
-end
+let eq_num = { eq = Num.eq_num }
 
-module Eq_6 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq) (A6 : Eq) 
-  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a =
-struct
-  type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
-  let eq (l1, l2, l3, l4, l5, l6) (r1, r2, r3, r4, r5, r6) =
-    A1.eq l1 r1 &&
-    A2.eq l2 r2 &&
-    A3.eq l3 r3 &&
-    A4.eq l4 r4 &&
-    A5.eq l5 r5 &&
-    A6.eq l6 r6
-end
+let eq_6 a1 a2 a3 a4 a5 a6 =
+  {eq = (fun (l1, l2, l3, l4, l5, l6) (r1, r2, r3, r4, r5, r6) ->
+           a1.eq l1 r1 &&
+           a2.eq l2 r2 &&
+           a3.eq l3 r3 &&
+           a4.eq l4 r4 &&
+           a5.eq l5 r5 &&
+           a6.eq l6 r6)}
 
-module Eq_5 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq) (A5 : Eq) 
-  : Eq with type a = A1.a * A2.a * A3.a * A4.a * A5.a =
-struct
-  type a = A1.a * A2.a * A3.a * A4.a * A5.a
-  let eq (l1, l2, l3, l4, l5) (r1, r2, r3, r4, r5) =
-    A1.eq l1 r1 &&
-    A2.eq l2 r2 &&
-    A3.eq l3 r3 &&
-    A4.eq l4 r4 &&
-    A5.eq l5 r5
-end
+let eq_5 a1 a2 a3 a4 a5 =
+  {eq = (fun (l1, l2, l3, l4, l5) (r1, r2, r3, r4, r5) ->
+           a1.eq l1 r1 &&
+           a2.eq l2 r2 &&
+           a3.eq l3 r3 &&
+           a4.eq l4 r4 &&
+           a5.eq l5 r5)}
 
-module Eq_4 (A1 : Eq) (A2 : Eq) (A3 : Eq) (A4 : Eq)
-  : Eq with type a = A1.a * A2.a * A3.a * A4.a =
-struct
-  type a = A1.a * A2.a * A3.a * A4.a
-  let eq (l1, l2, l3, l4) (r1, r2, r3, r4) =
-    A1.eq l1 r1 &&
-    A2.eq l2 r2 &&
-    A3.eq l3 r3 &&
-    A4.eq l4 r4
-end
+let eq_4 a1 a2 a3 a4 =
+  {eq = (fun (l1, l2, l3, l4) (r1, r2, r3, r4) ->
+           a1.eq l1 r1 &&
+           a2.eq l2 r2 &&
+           a3.eq l3 r3 &&
+           a4.eq l4 r4)}
 
-module Eq_3 (A1 : Eq) (A2 : Eq) (A3 : Eq)
-  : Eq with type a = A1.a * A2.a * A3.a =
-struct
-  type a = A1.a * A2.a * A3.a
-  let eq (l1, l2, l3) (r1, r2, r3) =
-    A1.eq l1 r1 &&
-    A2.eq l2 r2 &&
-    A3.eq l3 r3
-end
+let eq_3 a1 a2 a3 =
+  {eq = (fun (l1, l2, l3) (r1, r2, r3) ->
+           a1.eq l1 r1 &&
+           a2.eq l2 r2 &&
+           a3.eq l3 r3)}
 
-module Eq_2 (A1 : Eq) (A2 : Eq)
-  : Eq with type a = A1.a * A2.a =
-struct
-  type a = A1.a * A2.a
-  let eq (l1, l2) (r1, r2) =
-    A1.eq l1 r1 &&
-    A2.eq l2 r2
-end
+let eq_2 a1 a2 =
+  {eq = (fun (l1, l2) (r1, r2) ->
+           a1.eq l1 r1 &&
+           a2.eq l2 r2)}

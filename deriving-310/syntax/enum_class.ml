@@ -8,7 +8,16 @@ open Camlp4.PreCast
 let classname = "Enum"
 class enum ~loc =
 object (self)
-  inherit Base.deriver ~loc  ~classname ~allow_private:false ?default:None
+  inherit Base.deriver ~loc  ~classname ~allow_private:false
+
+    val methods = [ "succ";
+                    "pred";
+                    "to_enum";
+                    "from_enum";
+                    "enum_from";
+                    "enum_from_then";
+                    "enum_from_to";
+                    "enum_from_then_to"]
 
     method sum (name, params) ?eq summands =
     let numbering = 
@@ -22,8 +31,7 @@ object (self)
         (List.range 0 (List.length summands))
         summands
         <:expr< [] >> in
-      <:module_expr< Enum.Defaults(struct type a = $self#atype (name, params)$ 
-                                          let numbering = $numbering$ end) >>
+      <:expr< Enum.from_numbering $numbering$ >>
 
     method variant atype (_, tags) = 
     let numbering = 
@@ -38,8 +46,7 @@ object (self)
         (List.range 0 (List.length tags))
         tags
         <:expr< [] >> in
-      <:module_expr< Enum.Defaults(struct type a = $self#atype atype$ 
-                                          let numbering = $numbering$ end) >>
+      <:expr< Enum.from_numbering $numbering$ >>
 
     method tuple _ _ = raise (Underivable (loc, "Enum cannot be derived for tuple types"))
     method record _ ?eq = raise (Underivable (loc, "Enum cannot be derived for record types"))

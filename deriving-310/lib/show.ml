@@ -2,187 +2,114 @@
 module Show = 
 struct 
 (** Show **)
-module type Show = sig
-  type a
-  val format : Format.formatter -> a -> unit
-  val format_list : Format.formatter -> a list -> unit
-  val show : a -> string
-  val show_list : a list -> string
-end
+type -'a show = {
+  format : Format.formatter -> 'a -> unit ;
+}
 
-module type SimpleFormatter = 
-sig
-  type a
-  val format : Format.formatter -> a -> unit
-end
+let show f item =
+  let b = Buffer.create 16 in 
+  let formatter = Format.formatter_of_buffer b in
+    Format.fprintf formatter "@[<hov 0>%a@]@?" (f).format item;
+    Buffer.sub b 0 (Buffer.length b)
 
-module ShowFormatterDefault (S : SimpleFormatter) =
-struct
-  include S
-  let format_list formatter items = 
-    let rec writeItems formatter = function
-      | []      -> ()
-      | [x]     -> S.format formatter x;
-      | x :: xs -> Format.fprintf formatter "%a;@;%a" S.format x writeItems xs
-    in 
-      Format.fprintf formatter "@[<hov 1>[%a]@]" writeItems items
-end
 
-module ShowDefaults' 
-  (S : (sig
-          type a
-          val format : Format.formatter -> a -> unit
-          val format_list : Format.formatter -> a list -> unit
-        end)) : Show with type a = S.a =
-struct
-  include S
-  let showFormatted f item =
-    let b = Buffer.create 16 in 
-    let formatter = Format.formatter_of_buffer b in
-      Format.fprintf formatter "@[<hov 0>%a@]@?" f item;
-      Buffer.sub b 0 (Buffer.length b)
+let show_unprintable = 
+  { format = fun formatter _ -> Format.pp_print_string formatter "..." }
 
-  (* Warning: do not eta-reduce either of the following *)
-  let show item = showFormatted S.format item
-  let show_list items = showFormatted S.format_list items
-end
-
-module Defaults (S : SimpleFormatter) : Show with type a = S.a =
-  ShowDefaults' (ShowFormatterDefault (S))
-
-module Show_unprintable (S : sig type a end) (*: Show with type a = S.a *) = 
-  Defaults (struct
-              type a = S.a
-              let format formatter _ = Format.pp_print_string formatter "..."
-            end)
-    
-(* instance Show a => Show [a] *)
-module Show_list (S : Show) : Show with type a = S.a list = 
-  Defaults (struct
-              type a = S.a list
-              let format = S.format_list
-            end)
+(* instance Show a => Show (a list) *)
+let show_list f =
+  let {format = format} = f in
+  let rec writeItems formatter = function
+    | []      -> ()
+    | [x]     -> format formatter x;
+    | x :: xs -> Format.fprintf formatter "%a;@;%a" format x writeItems xs
+  in 
+    { format = fun formatter items -> Format.fprintf formatter "@[<hov 1>[%a]@]" writeItems items }
     
 (* instance Show a => Show (a option) *)
-module Show_option (S : Show) : Show with type a = S.a option =
-  Defaults (struct
-              type a = S.a option
-              let format formatter = function
-                | None   -> Format.fprintf formatter "@[None@]"
-                | Some s -> Format.fprintf formatter "@[Some@;<1 2>%a@]" S.format s
-            end)
-    
-(* instance Show a => Show (a array) *)
-module Show_array (S : Show) : Show with type a = S.a array =
-  Defaults (struct
-              type a = S.a array
-              let format formatter obj = 
-                let writeItems formatter items = 
-                  let length = Array.length items in
-                    for i = 0 to length - 2 do
-                      Format.fprintf formatter "@[%a;@;@]" S.format (Array.get items i)
-                    done;
-                    if length <> 0 then
-                      S.format formatter (Array.get items (length -1));
-                in 
-                  Format.fprintf formatter "@[[|%a|]@]" writeItems obj
-            end)
+let show_option (s : _ show) =
+  let {format = format} = s in 
+  { format = 
+      fun formatter -> function
+        | None   -> Format.fprintf formatter "@[None@]"
+        | Some v -> Format.fprintf formatter "@[Some@;<1 2>%a@]" format v}
 
-module Show_map
-  (O : Map.OrderedType) 
-  (K : Show with type a = O.t)
-  (V : Show)
-  : Show with type a = V.a Map.Make(O).t =
-Defaults(
-  struct
-    module M = Map.Make(O)
-    type a = V.a M.t
-    let format formatter map = 
+(* instance Show a => Show (a array) *)
+let show_array (s : _ show) =
+  let {format = format} = s in 
+  {format =
+      fun formatter obj ->
+        let writeItems formatter items = 
+          let length = Array.length items in
+            for i = 0 to length - 2 do
+              Format.fprintf formatter "@[%a;@;@]" format (Array.get items i)
+            done;
+            if length <> 0 then
+              format formatter (Array.get items (length -1));
+        in 
+          Format.fprintf formatter "@[[|%a|]@]" writeItems obj}
+
+module Show_map (O : Map.OrderedType) =
+struct
+  module M = Map.Make(O)
+  let show_t show_k show_v =  {
+    format = fun formatter map ->
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
       M.iter (fun key value -> 
                 Format.pp_open_box formatter 0;
-                K.format formatter key;
+                (show_k).format formatter key;
                 Format.pp_print_string formatter " => ";
-                V.format formatter value;
+                (show_v).format formatter value;
                 Format.pp_close_box formatter ();
              ) map;
       Format.pp_print_string formatter "}";
       Format.pp_close_box formatter ();
-      
-  end)
+  }
+end
 
-module Show_set
-  (O : Set.OrderedType) 
-  (K : Show with type a = O.t)
-  : Show with type a = Set.Make(O).t =
-Defaults(
-  struct
-    module S = Set.Make(O)
-    type a = S.t
-    let format formatter set = 
+module Show_set (O : Set.OrderedType) =
+struct
+  module S = Set.Make(O)
+  let show_t show_k =  {
+    format = fun formatter set ->
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
       S.iter (fun elt -> 
                 Format.pp_open_box formatter 0;
-                K.format formatter elt;
+                (show_k).format formatter elt;
                 Format.pp_close_box formatter ();
              ) set;
       Format.pp_print_string formatter "}";
       Format.pp_close_box formatter ();
-  end)
+  }
+end
 
-module Show_bool = Defaults (struct
-  type a = bool
-  let format formatter item =
-    match item with
-      | true  -> Format.pp_print_string formatter "true"
-      | false -> Format.pp_print_string formatter "false"
-end) 
+let show_bool = 
+  {format = fun formatter -> function
+     | true  -> Format.pp_print_string formatter "true"
+     | false -> Format.pp_print_string formatter "false"}
 
-module Show_integer (S : sig type t val to_string : t -> string end) = Defaults (struct
-  type a = S.t
-  let format formatter item = Format.pp_print_string formatter (S.to_string item)
-end)
+let show_from_string_of (to_string : 'a -> string) = 
+  {format = fun formatter item -> Format.pp_print_string formatter (to_string item)}
  
-module Show_int32 = Show_integer(Int32)
-module Show_int64 = Show_integer(Int64)
-module Show_nativeint = Show_integer(Nativeint)
+let show_int32 = show_from_string_of Int32.to_string
+let show_int64 = show_from_string_of Int64.to_string
+let show_nativeint = show_from_string_of Nativeint.to_string
+let show_int = show_from_string_of string_of_int
+let show_num = show_from_string_of Num.string_of_num
+let show_float = show_from_string_of string_of_float
+let show_char =  
+  {format = fun formatter item -> Format.pp_print_string formatter ("'" ^ Char.escaped item ^ "'")}
 
-module Show_char = Defaults (struct
-  type a = char
-  let format formatter item = Format.pp_print_string formatter ("'" ^ Char.escaped item ^ "'")
-end)
-
-module Show_int = Defaults (struct
-  type a = int
-  let format formatter item = Format.pp_print_string formatter (string_of_int item)
-end)
-
-module Show_num = Defaults (struct
-  type a = Num.num
-  let format formatter item = Format.pp_print_string formatter (Num.string_of_num item)
-end)
-
-module Show_float = Defaults(struct
-    type a = float
-    let format formatter item = Format.pp_print_string formatter (string_of_float item)
-end)
-
-module Show_string = Defaults (struct
-  type a = string
-  let format formatter item = 
-    Format.pp_print_char formatter '"';
-    Format.pp_print_string formatter (String.escaped item);
-    Format.pp_print_char formatter '"'
-end)  
-
-module Show_unit = Defaults(struct
-  type a = unit
-  let format formatter () = Format.pp_print_string formatter "()"
-end)
+let show_string =  {format = fun formatter item ->
+                     Format.pp_print_char formatter '"';
+                     Format.pp_print_string formatter (String.escaped item);
+                     Format.pp_print_char formatter '"'}
+let show_unit =  {format = fun formatter () -> Format.pp_print_string formatter "()"}
 
 end
+
 include Show
 
 type open_flag = Pervasives.open_flag  =
@@ -208,64 +135,47 @@ type fpclass = Pervasives.fpclass =
 type 'a ref = 'a Pervasives.ref = { mutable contents : 'a; }
     deriving (Show)
 
+let show_6 s1 s2 s3 s4 s5 s6 =
+  {format =
+      fun formatter (a1, a2, a3, a4, a5, a6) ->
+        Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a,@;%a)@]"
+          (s1).format a1
+          (s2).format a2
+          (s3).format a3
+          (s4).format a4
+          (s5).format a5
+          (s6).format a6}
 
-module Show_6 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show) (A6 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a = Defaults (
-struct
-  type a = A1.a * A2.a * A3.a * A4.a * A5.a * A6.a
-  let format formatter (a1, a2, a3, a4, a5, a6) =
-    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a,@;%a)@]"
-      A1.format a1
-      A2.format a2
-      A3.format a3
-      A4.format a4
-      A5.format a5
-      A6.format a6
-end)
+let show_5 s1 s2 s3 s4 s5 =
+  {format =
+      fun formatter (a1, a2, a3, a4, a5) ->
+        Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a)@]"
+          (s1).format a1
+          (s2).format a2
+          (s3).format a3
+          (s4).format a4
+          (s5).format a5}
 
-module Show_5 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show) (A5 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a * A5.a = Defaults (
-struct
-  type a = A1.a * A2.a * A3.a * A4.a * A5.a
-  let format formatter (a1, a2, a3, a4, a5) =
-    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a)@]"
-      A1.format a1
-      A2.format a2
-      A3.format a3
-      A4.format a4
-      A5.format a5
-end)
+let show_4 s1 s2 s3 s4 =
+  {format =
+      fun formatter (a1, a2, a3, a4) ->
+        Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a)@]"
+          (s1).format a1
+          (s2).format a2
+          (s3).format a3
+          (s4).format a4}
 
-module Show_4 (A1 : Show) (A2 : Show) (A3 : Show) (A4 : Show)
-  : Show with type a = A1.a * A2.a * A3.a * A4.a = Defaults (
-struct
-  type a = A1.a * A2.a * A3.a * A4.a
-  let format formatter (a1, a2, a3, a4) =
-    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a)@]"
-      A1.format a1
-      A2.format a2
-      A3.format a3
-      A4.format a4
-end)
-
-module Show_3 (A1 : Show) (A2 : Show) (A3 : Show)
-  : Show with type a = A1.a * A2.a * A3.a = Defaults (
-struct
-  type a = A1.a * A2.a * A3.a
-  let format formatter (a1, a2, a3) =
-    Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a)@]"
-      A1.format a1
-      A2.format a2
-      A3.format a3
-end)
-
-module Show_2 (A1 : Show) (A2 : Show)
-  : Show with type a = A1.a * A2.a = Defaults (
-struct
-  type a = A1.a * A2.a
-  let format formatter (a1, a2) =
-    Format.fprintf formatter "@[<hov 1>(%a,@;%a)@]"
-      A1.format a1
-      A2.format a2
-end)
-
+let show_3 s1 s2 s3 =
+  {format =
+      fun formatter (a1, a2, a3) ->
+        Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a)@]"
+          (s1).format a1
+          (s2).format a2
+          (s3).format a3}
+    
+let show_2 s1 s2 =
+  {format =
+      fun formatter (a1, a2) ->
+        Format.fprintf formatter "@[<hov 1>(%a,@;%a)@]"
+          (s1).format a1
+          (s2).format a2}

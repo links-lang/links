@@ -416,7 +416,7 @@ struct
                 match cont with
                   | `TApp (`Variable f, _)
                   | `Variable f -> f
-                  | v -> failwith ("don't know how to pickle this value on the client: "^Ir.Show_value.show v) in
+                  | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
               let e, t, o = super#tail_computation e in
               let stringifyB64 = `Variable (Env.String.lookup nenv "stringifyB64") in
               let concat = `Variable (Env.String.lookup nenv "Concat") in

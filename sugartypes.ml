@@ -48,11 +48,7 @@ let string_of_binop =
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
-module Show_position = Show.Defaults(
-struct
-  type a = position
-  let format formatter _ = Format.pp_print_string formatter "..."
-end)
+let show_position = Show.show_unprintable
 
 type binder = name * Types.datatype option * position
     deriving (Show)

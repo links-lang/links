@@ -42,11 +42,8 @@ type 't meta_presence_var_basis =
 
 
 type istring = string deriving (Show)
-module Eq_istring : Eq.Eq with type a = istring  =
-struct
-  type a = istring
-  let eq = (=)
-end
+let eq_istring : istring Eq.eq = { Eq.eq = (=) }
+
 
 (* arity should be replaced by a list of kinds *)
 
@@ -120,7 +117,7 @@ type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 let rec is_base_type : typ -> bool =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.Eq_t.eq l list -> true
+    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
     | `Alias (_, t) -> is_base_type t
     | `MetaTypeVar point ->
         begin
@@ -156,7 +153,7 @@ let rec is_base_row (fields, row_var) =
 let rec is_baseable_type : typ -> bool =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.Eq_t.eq l list -> true
+    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
     | `Alias (_, t) -> is_baseable_type t
     | `MetaTypeVar point ->
         begin
@@ -190,7 +187,7 @@ let rec is_baseable_row (fields, row_var) =
 let rec basify_type =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float)) -> ()
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.Eq_t.eq l list -> ()
+    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> ()
     | `Alias (_, t) -> basify_type t
     | `MetaTypeVar point ->
         begin
@@ -1126,7 +1123,7 @@ struct
           (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
           | `Alias ((s,[]), t) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
-          | `Application (l, [elems]) when Abstype.Eq_t.eq l list ->  "["^ (type_arg bound_vars p) elems ^"]"
+          | `Application (l, [elems]) when Abstype.eq_t.Eq.eq l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
 
@@ -1368,19 +1365,13 @@ let string_of_type_arg arg = string_of_type_arg arg
 let string_of_row_var r = string_of_row_var r
 let string_of_tycon_spec s = string_of_tycon_spec s
 
-module Show_datatype =
-  Show.Defaults(struct
-                  type a = datatype
-                  let format fmt a = 
-                    Format.pp_print_string fmt (string_of_datatype a)
-                end)
+let show_datatype =
+  { format = fun fmt a ->
+      Format.pp_print_string fmt (string_of_datatype a) }
 
-module Show_tycon_spec =
-  Show.Defaults(struct
-                  type a = tycon_spec
-                  let format fmt a = 
-                    Format.pp_print_string fmt (string_of_tycon_spec a)
-                end)
+let show_tycon_spec =
+  { format = fun fmt a ->
+      Format.pp_print_string fmt (string_of_tycon_spec a) }
 
 type environment        = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
@@ -1395,13 +1386,7 @@ let extend_typing_environment
     {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment = 
   {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
 
-let string_of_environment env =
-  let module M = Env.Show_t(Show.Defaults(struct
-                                            type a = datatype
-                                            let format fmt a = 
-                                              Format.pp_print_string fmt (string_of_datatype a)
-                                          end)) in
-    M.show env
+let string_of_environment = Show.show show_environment
 
 let string_of_typing_environment {var_env=env} = string_of_environment env
 

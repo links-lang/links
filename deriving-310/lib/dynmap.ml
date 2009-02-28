@@ -2,17 +2,13 @@
 
 open Typeable
 
-module Comp (T : Typeable) (E : Eq.Eq with type a = T.a) =
-struct
-  type a = T.a
-  let adjust_comparator : (T.a -> T.a -> bool) -> dynamic -> dynamic -> bool 
+let comp (t : 'a typeable) (e : 'a Eq.eq) =
+  let adjust_comparator : ('a -> 'a -> bool) -> dynamic -> dynamic -> bool 
     = fun comparator d1 d2 ->
-      match T.cast d1, T.cast d2 with
+      match cast t d1, cast t d2 with
         | Some l, Some r -> comparator l r
-        | _ -> assert false
-  let eq = adjust_comparator E.eq
-end
-
+        | _ -> assert false in
+    adjust_comparator e.Eq.eq
 
 module DynMap =
 struct

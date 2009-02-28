@@ -9,11 +9,8 @@ object
   method show : string
 end
 
-module Show_otherfield = Show.Defaults(
-  struct
-    type a = otherfield
-    let format formatter obj = Format.pp_print_string formatter (obj # show)
-  end)
+let show_otherfield () = 
+  { Show.format = fun formatter obj -> Format.pp_print_string formatter (obj # show) }
 
 type db_status = [ `QueryOk | `QueryError of string ]
   deriving (Show)
@@ -40,15 +37,9 @@ class virtual database = object(self)
       failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
 end
 
-module Eq_database = Eq.Eq_mutable(struct type a = database end)
-module Typeable_database 
-  : Typeable.Typeable with type a = database = 
-  Typeable.Defaults
-    (struct
-       type a = database
-       let type_rep = Typeable.TypeRep.mkFresh "database" []
-     end)
-module Show_database = Show_unprintable (struct type a = database end)
+let eq_database = Eq.eq_mutable
+let typeable_database  = { Typeable.type_rep = Typeable.TypeRep.mkFresh "database" [] }
+let show_database = show_unprintable
 
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
@@ -250,7 +241,7 @@ and compressed_t = [
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
   function
@@ -450,14 +441,14 @@ exception Match of string
 let escape = 
   Str.global_replace (Str.regexp "\\\"") "\\\""
 
-let string_of_cont = Show_continuation.show
+let string_of_cont = Show.show show_continuation
 
 exception Not_tuple
 
 let rec char_of_primchar = function 
     `Char c -> c
   | o ->
-      raise (Match (Show_t.show o))
+      raise (Match (Show.show show_t o))
 
 and charlist_as_string chlist = 
   match chlist with
@@ -590,10 +581,10 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   { save = marshal_save ; load = marshal_load };
   
   "Pickle",
-  { save = Pickle_compressed_continuation.to_string ; load = Pickle_compressed_continuation.from_string };
+  { save = Pickle.to_string pickle_compressed_continuation ; load = Pickle.from_string pickle_compressed_continuation };
 
   "Dump",
-  { save = Dump_compressed_continuation.to_string ; load = Dump_compressed_continuation.from_string }
+  { save = Dump.to_string dump_compressed_continuation ; load = Dump.from_string dump_compressed_continuation }
 ]
 
 let value_serialisers : (string * compressed_t serialiser) list = [
@@ -601,10 +592,10 @@ let value_serialisers : (string * compressed_t serialiser) list = [
   { save = marshal_save ; load = marshal_load };
   
   "Pickle",
-  { save = Pickle_compressed_t.to_string ; load = Pickle_compressed_t.from_string };
+  { save = Pickle.to_string pickle_compressed_t ; load = Pickle.from_string pickle_compressed_t };
 
   "Dump",
-  { save = Dump_compressed_t.to_string ; load = Dump_compressed_t.from_string };
+  { save = Dump.to_string dump_compressed_t ; load = Dump.from_string dump_compressed_t };
 ]
 
 let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =

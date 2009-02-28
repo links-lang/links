@@ -1,37 +1,30 @@
-module type Dump =
-  sig
-    type a
-    val to_buffer : Buffer.t -> a -> unit
-    val to_string : a -> string
-    val to_channel : out_channel -> a -> unit
-    val from_stream : char Stream.t -> a
-    val from_string : string -> a
-    val from_channel : in_channel -> a
-  end
+type 'a dump = {
+  to_buffer : Buffer.t -> 'a -> unit ;
+  from_stream : char Stream.t -> 'a 
+}
 
-module Defaults
-  (P : sig
-     type a
-     val to_buffer : Buffer.t -> a -> unit
-     val from_stream : char Stream.t -> a
-   end) : Dump with type a = P.a
+val to_string    : 'a dump -> 'a -> string
+val to_channel   : 'a dump -> out_channel -> 'a -> unit
+val to_buffer    : 'a dump -> Buffer.t -> 'a -> unit
+val from_string  : 'a dump -> string -> 'a
+val from_channel : 'a dump -> in_channel -> 'a
+val from_stream  : 'a dump -> char Stream.t -> 'a
 
 exception Dump_error of string
 
-module Dump_int32     : Dump with type a = Int32.t
-module Dump_int64     : Dump with type a = Int64.t
-module Dump_nativeint : Dump with type a = Nativeint.t
-module Dump_int       : Dump with type a = int
-module Dump_char      : Dump with type a = char
-module Dump_string    : Dump with type a = string
-module Dump_float     : Dump with type a = float
-module Dump_num       : Dump with type a = Num.num
-module Dump_bool      : Dump with type a = bool
-module Dump_unit      : Dump with type a = unit
-module Dump_list   (P : Dump) : Dump with type a = P.a list
-module Dump_option (P : Dump) : Dump with type a = P.a option
+val dump_int32     : Int32.t dump
+val dump_int64     : Int64.t dump
+val dump_nativeint : Nativeint.t dump
+val dump_int       : int dump
+val dump_char      : char dump
+val dump_string    : string dump
+val dump_float     : float dump
+val dump_num       : Num.num dump
+val dump_bool      : bool dump
+val dump_unit      : unit dump
 
-module Dump_undumpable (P : sig type a val tname : string end) 
-  : Dump with type a = P.a
-module Dump_via_marshal (P : sig type a end) 
-  : Dump with type a = P.a
+val dump_list      : 'a dump ->  'a list dump
+val dump_option    : 'a dump -> 'a option dump
+
+val dump_undumpable : string -> 'a dump
+val dump_via_marshal : 'a dump

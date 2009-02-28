@@ -3,13 +3,11 @@
 module Env = Bimap.Make(String)
 
 type name = string deriving (Show, Dump, Typeable)
-module Eq_name : Eq.Eq with type a = name =
-struct
-  type a = name
-  let eq = (=)
-end 
-module Pickle_name
-  = Pickle.Pickle_from_dump(Dump_name)(Eq_name)(Typeable_name)
+let eq_name : name Eq.eq =
+{ Eq.eq = (=) }
+
+let pickle_name
+  = Pickle.pickle_from_dump(dump_name)(eq_name)(typeable_name)
 
 module rec Exp :
 sig
@@ -19,10 +17,9 @@ sig
                deriving (Eq,Show,Pickle,Typeable,Dump)
 end =
 struct
-  module Eq_exp = struct 
-    open Exp
-    type a = exp
-    let eq : exp -> exp -> bool
+  open Exp
+  let eq_exp = 
+    { Eq.eq
       = let rec alpha_eq env l r = match l, r with
         | Var l, Var r when Env.mem l env -> 
             Env.find l env = r
@@ -33,8 +30,7 @@ struct
         | Abs (vl,bl), Abs (vr,br) ->
             alpha_eq (Env.add vl vr env) bl br
         | _ -> false
-      in alpha_eq Env.empty
-  end
+      in alpha_eq Env.empty }
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp

@@ -152,7 +152,7 @@ struct
         | `Var v -> `Var v
         | `Constant c -> `Constant c
           
-  let t = Show_pt.show -<- pt_of_t
+  let t = Show.show show_pt -<- pt_of_t
 end
 let string_of_t = S.t
 

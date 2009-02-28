@@ -18,7 +18,7 @@ SOURCES = show.ml           show.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
           pickle.ml	    pickle.mli    	\
-          functor.ml        functor.mli		\
+#          functor.ml        functor.mli		\
 
 
 RESULT  = deriving
