@@ -146,6 +146,11 @@ sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
 
+module RemoveApplyPure :
+sig
+  val program : Types.datatype Env.Int.t -> program -> program
+end
+
 module ElimDeadDefs :
 sig
   val program : Types.datatype Env.Int.t -> program -> program
