@@ -702,20 +702,25 @@ struct
   let rec string_of_query q =
     let sq = string_of_query in
     let sb = string_of_base false in
+    let string_of_fields =
+      function
+        | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
+        | fields -> mapstrcat "," (fun (b, l) -> "(" ^ sb b ^ ") as "^string_of_label l) fields
+    in
       match q with
         | `UnionAll [] -> assert false
         | `UnionAll [q] -> sq q
         | `UnionAll qs ->
             mapstrcat " union all " (fun q -> "(" ^ sq q ^ ")") qs
         | `Select (fields, [], `Constant (`Bool true), _os) ->
-            let fields = mapstrcat "," (fun (b, l) -> "(" ^ sb b ^ ") as "^string_of_label l) fields in
+            let fields = string_of_fields fields in
               "select " ^ fields
         | `Select (fields, [], condition, _os) ->
-            let fields = mapstrcat "," (fun (b, l) -> "(" ^ sb b ^ ") as "^string_of_label l) fields in
+            let fields = string_of_fields fields in
               "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
         | `Select (fields, tables, condition, os) ->
             let tables = mapstrcat "," (fun (t, x) -> t ^ " as " ^ (string_of_table_var x)) tables in
-            let fields = mapstrcat "," (fun (b, l) -> "(" ^ sb b ^ ") as "^string_of_label l) fields in
+            let fields = string_of_fields fields in
             let orderby =
               match os with
                 | [] -> ""

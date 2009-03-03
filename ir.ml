@@ -287,7 +287,7 @@ struct
                 with
                     Instantiate.ArityMismatch ->
                       prerr_endline ("Arity mismatch in type application (Ir.Transform)");
-                      prerr_endline ("expression: " ^ Show.show show_value (`TApp (v, ts)));
+                      prerr_endline ("expression: "^Show.show show_value (`TApp (v, ts)));
                       prerr_endline ("type: "^Types.string_of_datatype t);
                       prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
                       failwith "fatal internal error"
