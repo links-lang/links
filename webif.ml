@@ -1,5 +1,7 @@
 (*pp deriving *)
 
+open Notfound
+
 open Performance
 open Utility
 
@@ -13,7 +15,7 @@ type web_request =
   | EvalMain
       deriving (Show)
 
-(* Does at least one of the functions have to run on the client? *)
+(** Does at least one of the functions have to run on the client? *)
 let is_client_program : Ir.program -> bool =
   fun (bs, main) ->
     List.exists
@@ -60,11 +62,12 @@ let is_cont_apply_param (key, _) = key == "_cont"
 let string_dict_to_charlist_dict =
   alistmap Value.string_as_charlist
 
-(** This invocation mode (ContApply) is used by the freshResource
-    function defined in the prelude, which creates an explicit
-    link using a _cont parameter.
+(* The invocation mode [ContApply] is used by the [freshResource]
+   function defined in the prelude, which creates an explicit
+   link using a [_cont] parameter.
 *)
-(* Extract continuation from the parameters passed in over CGI.*)
+
+(** Extract continuation from the parameters passed in over CGI.*)
 let parse_cont_apply (valenv, nenv, tyenv) program params =
   Debug.print ("Invoking a server continuation");
   let pickled_continuation = List.assoc "_cont" params in
@@ -77,7 +80,7 @@ let parse_cont_apply (valenv, nenv, tyenv) program params =
     (* TBD: create a debug setting for printing webif modes. *)
       ContApply (Value.unmarshal_continuation unmarshal_envs pickled_continuation, params)
 
-(* Extract expression/environment pair from the parameters passed in over CGI.*)
+(** Extract expression/environment pair from the parameters passed in over CGI.*)
 let parse_expr_eval (valenv, nenv, tyenv) program params =
   Debug.print ("eval expression request");
   let string_pair (l, r) =
@@ -159,13 +162,13 @@ let get_cgi_args() =
   else
     Cgi.parse_args()
 
-(* We wrap the continuation of the whole program in a call to
-   renderPage. We also return the resulting continuation so that we
-   can use it elsewhere (i.e. in processing ExprEval).
+(* In web mode, we wrap the continuation of the whole program in a
+   call to renderPage. We also return the resulting continuation so
+   that we can use it elsewhere (i.e. in processing ExprEval).
 *)
 let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (bs, body) =
   let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
-  let tail = `Apply (`Variable (Env.String.lookup nenv "renderPage"), [`Variable x]) in
+  let tail = Ir.var_appln nenv "renderPage" [`Variable x] in
   let cont = fun env -> [(`Local, x, env, ([], tail))] in
     (bs @ [`Let (xb, ([], body))], tail), cont
 
@@ -173,8 +176,8 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
   function
     | ContApply(cont, params) ->
         ("text/html",
-          (Value.string_of_value
-             (Evalir.apply_cont_toplevel cont valenv (`Record params))))
+         (Value.string_of_value
+            (Evalir.apply_cont_toplevel cont valenv (`Record params))))
     | ExprEval(expr, locals) ->        
         let env = Value.shadow valenv ~by:locals in
         let v = snd (Evalir.run_program_with_cont 
@@ -201,7 +204,8 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
              Debug.print "Running client program.";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
-               Irtojs.generate_program_page (closures, Lib.nenv, Lib.typing_env) program
+               Irtojs.generate_program_page(closures, Lib.nenv, Lib.typing_env) 
+                 program
          else
            let program = locals, main in (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
              Debug.print "Running server program";
@@ -239,6 +243,7 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
       Lib.primitive_vars
       (globals @ locals, main) in
 
+      (* FIXME: why is this evaluating the definitions? *)
     let valenv = Evalir.run_defs(Value.with_closures valenv closures) globals in
 
     let valenv, nenv, tyenv  =
@@ -271,8 +276,8 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude fil
       in
         Lib.print_http_response [("Content-type", content_type)] content
   with
-      (* FIXME: errors need to be handled differently
-         between user-facing and remote-call modes. *)
+      (* FIXME: errors need to be handled differently between
+         user-facing (text/html) and remote-call (text/plain) modes. *)
       Failure msg as e -> 
         prerr_endline msg;
         Lib.print_http_response [("Content-type", "text/html; charset=utf-8")] 

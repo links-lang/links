@@ -147,7 +147,8 @@ struct
 
     let find elem map = 
       try find elem map 
-      with NotFound _ -> raise (NotFound (Show.show Ord.show_t elem))
+      with NotFound _ -> raise (NotFound (Show.show Ord.show_t elem ^ 
+                                  " (in Map.find)"))
       
     let for_all p m =
       fold (fun _ v b -> b && p v) m true

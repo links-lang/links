@@ -1,6 +1,8 @@
-(*
+(**
   Compiler settings
 *)
+open Notfound
+
 open Utility
 module SettingsMap = Utility.StringMap
 

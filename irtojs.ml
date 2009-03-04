@@ -1,7 +1,8 @@
 (*pp deriving *)
-(* js.ml
-    JavaScript generation.
-*)
+
+(** JavaScript generation *)
+
+open Notfound
 
 open Utility
 

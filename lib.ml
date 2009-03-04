@@ -2,6 +2,8 @@ open Sys
 open Num
 open List
 
+open Notfound
+
 open Value
 open Types
 open Utility
@@ -292,14 +294,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (p2 (fun pid msg -> 
+         if Settings.get_value Basicsettings.web_mode then
+           failwith "Can't send messages at server in web mode."
+         else
          let pid = int_of_num (unbox_int pid) in
            (try 
-              Proc.send_message msg pid
+              Proc.send_message msg pid;
+              Proc.awaken pid
             with
                 (* FIXME: printing out the message might be more useful. *)
                 UnknownProcessID pid -> 
-                  failwith("Couldn't deliver message to process because it has no mailbox."));
-           Proc.awaken pid;
+                  failwith("Couldn't deliver message because destination process has no mailbox."));
            `Record []),
    datatype "(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
@@ -310,13 +315,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "haveMail",
-  (`PFun (fun _ -> 
-            failwith "The haveMail function is not implemented on the server yet"),
+  (`PFun(fun _ -> 
+           failwith "The haveMail function is not implemented on the server yet"),
    datatype "() {:_|_}~> Bool",
    IMPURE);
 
   "recv",
-  (* this function is not used, as its application is a special case
+  (* This function is not used, as its application is a special case
      in the interpreter. But we need it here (for now) to asign it a
      type. Ultimately we should probably not special-case it, but
      rather provide a way to implement this primitive from here.
@@ -330,6 +335,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (p1 (fun f ->
+         if Settings.get_value Basicsettings.web_mode then
+           failwith "Can't spawn processes at server in web mode."
+         else
          let var = Var.dummy_var in
          let cont = (`Local, var, Value.empty_env IntMap.empty,
                      ([], `Apply (`Variable var, []))) in
@@ -561,6 +569,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(DomNode) ~> ()",
   IMPURE);
 
+  "cloneNode",
+  (`Client, datatype "(DomNode, Bool) ~> (DomNode)",
+  IMPURE);
+
   "replaceChildren",
   (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE);
@@ -729,8 +741,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      present or that the header is ill-formed (in debug mode a warning
      will also be sent to stderr if the header is ill-formed).
 
-     When we add exceptions we may want to change the semantics to throw an
-     exception instead of returning "".
+     Ideally, perhaps, a malformed header from the client should
+     be ignored at this level (let the HTTP agents handle it).
+ 
+     An absent cookie should probably be indicated by a None value in
+     the Maybe(String) type.
   *)
   "getCookie",
   (p1 (fun name ->
@@ -1244,7 +1259,7 @@ let apply_pfun name args =
         begin
           match Env.Int.lookup (value_env) var with
             | Some (#Value.t as r) ->
-                failwith("Attempt to apply primitive non-function (" ^ name ^ ")")
+                failwith("Attempt to apply primitive non-function (" ^name^ ").")
             | Some (`PFun p) -> p args
             | None -> assert false
         end
@@ -1260,6 +1275,11 @@ let is_pure_primitive name =
   else
     false
 
+(** Construct IR for application of the primitive [name] to the
+    arguments [args]. *)
+let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name), 
+                                  args)
+  
 (** Output the headers and content to stdout *)
 let print_http_response headers body =
   let headers = headers @ !http_response_headers @
@@ -1270,3 +1290,4 @@ let print_http_response headers body =
       (fun (name, value) -> print_endline(name ^ ": " ^ value));
     print_endline "";
     print_string body
+

@@ -1,3 +1,5 @@
+open Notfound
+
 let show_json = Settings.add_bool("show_json", false, `User)
 
 (*

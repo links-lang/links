@@ -1,7 +1,9 @@
-(* A few graph algorithms.  Pure interfaces, but impure
+(** A few graph algorithms.  Pure interfaces, but impure
    implementations.  A graph is represented as node lists + adjacency
-   list.  Some abstraction might be nice.
+   list.
 *)
+
+open Notfound
 
 open Utility
 open List

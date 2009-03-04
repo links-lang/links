@@ -1,6 +1,8 @@
 (*pp deriving *)
 (** Monadic IR *)
 
+open Notfound
+
 open Utility
 open PP
 
@@ -980,3 +982,7 @@ struct
 
   let program = computation
 end
+
+let var_appln env name args =
+  (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
+  

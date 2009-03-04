@@ -1,3 +1,5 @@
+open Notfound
+
 module type S = 
 sig
   type name

@@ -1,3 +1,5 @@
+open Notfound
+
 open Performance
 open Getopt
 open Utility
@@ -38,11 +40,12 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     printer t v;
     valenv, v
 
-(* Read Links source code, then optimise and run it. *)
+(** Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   handle_errors
     (fun x ->
        let (program, t), (nenv', tyenv') = measure "parse" parse (nenv, tyenv) x in
+         
        let valenv, v = process_program envs (program, t) in
          (valenv,
           Env.String.extend nenv nenv',
@@ -186,25 +189,26 @@ let interact envs =
                       process_program
                         ~printer:(fun _ _ -> ())
                         envs
-                        ((defs, `Return (`Extend (StringMap.empty, None))), Types.unit_type) in
-                    let () =
-                      Env.String.fold
+                        ((defs, `Return (`Extend (StringMap.empty, None))),
+                         Types.unit_type) in
+
+                      Env.String.fold (* TBD: Make Env.String.foreach. *)
                         (fun name spec () ->
-                             prerr_endline (name
-                                            ^" = "^Types.string_of_tycon_spec spec); ())
+                             prerr_endline (name ^" = "^
+                                            Types.string_of_tycon_spec spec); ())
                         (tyenv'.Types.tycon_env)
-                        () in
-                    let () =
+                        ();
+
                       Env.String.fold
                         (fun name var () ->
                            let v = Value.find var valenv in
                            let t = Env.String.lookup tyenv'.Types.var_env name in
-                             prerr_endline (name
-                                            ^" = "^Value.string_of_value v
-                                            ^" : "^Types.string_of_datatype t); ())
+                             prerr_endline(name
+                                           ^" = "^Value.string_of_value v
+                                           ^" : "^Types.string_of_datatype t);())
                         nenv'
-                        ()
-                    in
+                        ();
+
                       (valenv,
                        Env.String.extend nenv nenv',
                        Types.extend_typing_environment tyenv tyenv')
@@ -220,6 +224,8 @@ let interact envs =
       let parse_and_desugar input =
         let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
         let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
+          (* FIXME: What's going on here? Why is this not part of 
+             Frontend.Pipeline.interactive?*)
         let sentence' = match sentence with
           | `Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
@@ -238,7 +244,7 @@ let interact envs =
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
 
-(* Given an environment mapping source names to IR names return
+(** Given an environment mapping source names to IR names, return
    the inverse environment mapping IR names to source names.
 
    It is silly that this takes an Env.String.t but returns an
@@ -264,7 +270,7 @@ let run_file prelude envs filename =
       ((globals @ locals, main), t), (nenv, tyenv)
   in
     if Settings.get_value web_mode then
-      Webif.serve_request envs prelude filename
+       Webif.serve_request envs prelude filename
     else 
       ignore (evaluate parse_and_desugar envs filename) 
           
@@ -344,7 +350,7 @@ let main () =
      | Some file -> Settings.load_file file);
 
   let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
-    
+
   let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)
 

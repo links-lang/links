@@ -124,7 +124,10 @@ type unmarshal_envs =
     env * Ir.scope Utility.IntMap.t *
       Ir.computation Utility.IntMap.t * (Ir.var list * Ir.computation) Utility.IntMap.t
 
-val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment -> Ir.program -> unmarshal_envs
+val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
+  -> Ir.program -> unmarshal_envs
 
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
 val unmarshal_value : unmarshal_envs -> string -> t
+
+val tailcomp_to_continuation : env -> Ir.tail_computation -> continuation

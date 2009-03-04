@@ -164,3 +164,6 @@ sig
   val bindings : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding list -> t
   val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
 end
+
+val var_appln : var Env.String.t -> Env.String.name -> value list -> 
+  tail_computation

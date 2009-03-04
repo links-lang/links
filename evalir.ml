@@ -187,17 +187,15 @@ module Eval = struct
         begin match Proc.pop_message() with
             Some message -> apply_cont cont env message
           | None -> 
-              (* FIXME: why do we need to look up 'recv' just to
-                 create the continuation? *)
-              let recv = (`Local, Var.dummy_var, env,
-                          ([], `Apply (`Variable (Env.String.lookup Lib.nenv "recv"), []))) in
-                Proc.block_current (recv::cont, `Record []);
+              let recv = Value.tailcomp_to_continuation env 
+                           (Lib.prim_appln "recv" [])
+              in Proc.block_current (recv@cont, `Record []);
                 switch_context env
         end
     | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
     | `ClientFunction name, args -> client_call name cont args
-    | `Continuation c,     [p] -> apply_cont c env p
-    | `Continuation _,      _  ->
+    | `Continuation c,      [p] -> apply_cont c env p
+    | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont env v : Value.t =
@@ -304,15 +302,16 @@ module Eval = struct
           match Query.compile env (range, e) with
             | None -> computation env cont e
             | Some (db, q, t) ->
+                let (fieldMap, _), _ = 
+                  Types.unwrap_row(TypeUtils.extract_row t) in
                 let fields =
-                  let (fields, _), _ = Types.unwrap_row (TypeUtils.extract_row t) in
                     StringMap.fold
-                      (fun name t fields->
+                      (fun name t fields ->
                          match t with
                            | `Present, t -> (name, t)::fields
                            | `Absent, _ -> assert false
                            | `Var _, t -> assert false)
-                      fields
+                      fieldMap
                       []
                 in
                   Database.execute_select fields q db

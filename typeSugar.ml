@@ -1936,7 +1936,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               `Switch (erase e, erase_cases binders, Some body_type), body_type
     in (e, pos), t
 
-(*
+(** [type_binding] takes XXX YYY (FIXME)
   The input context is the environment in which to type the bindings.
 
   The output context is the environment resulting from typing the

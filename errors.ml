@@ -1,3 +1,5 @@
+open Notfound
+
 open Types
 open Lexing
 open Utility

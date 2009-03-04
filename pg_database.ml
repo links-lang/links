@@ -97,10 +97,11 @@ class pg_database host port dbname user password = object(self)
 
   val connection =
     try
-      new connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
+      new connection ~host:host ~port:port ~dbname:dbname
+                     ~user:user ~password:password ()
     with
         Postgresql.Error msg ->
-          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
+          failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method driver_name () = "postgresql"
   method exec : string -> Value.dbvalue = fun query ->
     try
@@ -108,12 +109,13 @@ class pg_database host port dbname user password = object(self)
         new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
-          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
+          failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method escape_string s = Postgresql.escape_string s
   method make_insert_query (table_name, field_names, vss) =
     "insert into " ^ table_name ^
       "("^String.concat "," field_names ^") "^
-      String.concat " union all " (List.map (fun vs -> "select " ^ String.concat "," vs) vss)
+      String.concat " union all " (List.map (fun vs -> "select " ^ 
+                                               String.concat "," vs) vss)
   (* 
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
@@ -127,6 +129,7 @@ let get_pg_database_by_string args =
     | (name::host::port::user::pass::_) ->
         (new pg_database host port name user pass, 
          Value.reconstruct_db_string (driver_name, args))
-    | _ -> failwith "Insufficient arguments when establishing postgresql connection"
+    | _ ->
+        failwith "Insufficient arguments when establishing postgresql connection"
 
 let _ = Value.register_driver (driver_name, get_pg_database_by_string)

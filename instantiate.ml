@@ -1,3 +1,5 @@
+open Notfound
+
 open Utility
 open Types
 
@@ -250,7 +252,8 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t tyargs ->
+let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = 
+  fun t tyargs ->
   let vars =
     match t with
       | `ForAll (vars, _) -> vars

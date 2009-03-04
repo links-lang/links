@@ -1,6 +1,7 @@
 (*pp deriving *)
 open Num
 open Utility
+open Notfound
 
 let serialiser = Settings.add_string ("serialiser", "Dump", `User)
 
@@ -84,8 +85,8 @@ let db_connect driver params =
     match StringMap.lookup s !database_connections with
       | None ->
           let db = constructor params in
-          let () = database_connections := StringMap.add s db (!database_connections) in
-            db
+          database_connections := StringMap.add s db (!database_connections);
+          db
       | Some db -> db
 
 class null_database =
@@ -153,7 +154,8 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t 
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var * Ir.scope)
+| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
+                     env * Ir.var * Ir.scope)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of continuation ]
@@ -161,18 +163,17 @@ and env = (t * Ir.scope) Utility.intmap * Ir.closures
 (* and env = (int * (t * Ir.scope)) list * Ir.closures *)
   deriving (Show)
 
-
-
-(* environment stuff *)
+(** {1 Environment stuff} *)
 let empty_env closures = IntMap.empty, closures
 let bind name v (env, closures) = IntMap.add name v env, closures
 let find name (env, _closures) = fst (IntMap.find name env)
-let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env)
+let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env) 
 let lookupS name (env, _closures) = IntMap.lookup name env
 let shadow (outers, closures) ~by:(by, _closures') =
 (* WARNING:
 
    The commented out code causes an enormous slowdown.
+   Note: This is not an acceptable description of the problem! --ez
 *)
 (*   let closures = *)
 (*     IntMap.fold *)
@@ -306,7 +307,8 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
         let database = db_connect driver params in
           `Database database
 
-let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont : continuation =
+let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont
+    : continuation =
   List.map
     (fun (var, env) ->
        let scope = IntMap.find var scopes in
@@ -336,11 +338,13 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs) v : t =
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
+  try
   List.fold_left
     (fun env (name, v) ->
        bind name (uncompress_t envs v, IntMap.find name scopes) env)
     (empty_env (get_closures globals))
     env
+  with NotFound str -> failwith("In uncompress_env: " ^ str)
 
 type unmarshal_envs =
     env * Ir.scope IntMap.t *
@@ -348,10 +352,13 @@ type unmarshal_envs =
 
 let build_unmarshal_envs ((venv, closures), nenv, tyenv) program : unmarshal_envs =
   let tyenv =
+    try
     Env.String.fold
-      (fun name t tyenv -> Env.Int.bind tyenv (Env.String.lookup nenv name, t))    
+      (fun name t tyenv -> Env.Int.bind tyenv (Env.String.lookup nenv name, t))
       tyenv.Types.var_env
-      Env.Int.empty in
+      Env.Int.empty 
+    with NotFound str -> failwith("In build_unmarshal_envs: " ^ str)
+  in
   let build =
   object (o)
     inherit Ir.Transform.visitor(tyenv) as super
@@ -633,3 +640,9 @@ let unmarshal_value envs : string -> t =
   fun s ->
     let { load = load } = value_serialiser () in
       uncompress_t envs (load (base64decode s))
+
+let tailcomp_to_continuation (env:env) expr = (((`Local : Ir.scope),
+                                                (Var.dummy_var : Ir.var),
+                                                env,
+                                                (([], expr) : Ir.computation))
+                                               :: toplevel_cont)
