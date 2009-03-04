@@ -42,7 +42,7 @@ object (self)
     method private polycase : tagspec -> Ast.match_case = function
       | `Tag (name, None) -> 
           <:match_case< `$uid:name$ -> 
-                        Format.pp_print_string formatter $str:"`" ^ name ^" "$ >>
+                        Format.pp_print_string formatter $str:"`" ^ name$ >>
       | `Tag (name, Some e) ->
           <:match_case< `$uid:name$ x ->
                          $in_hovbox ~loc <:expr< 

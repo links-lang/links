@@ -63,7 +63,7 @@ struct
                 (show_v).format formatter value;
                 Format.pp_close_box formatter ();
              ) map;
-      Format.pp_print_string formatter "}";
+      Format.pp_print_string formatter "}, ";
       Format.pp_close_box formatter ();
   }
 end
@@ -80,7 +80,7 @@ struct
                 (show_k).format formatter elt;
                 Format.pp_close_box formatter ();
              ) set;
-      Format.pp_print_string formatter "}";
+      Format.pp_print_string formatter "}, ";
       Format.pp_close_box formatter ();
   }
 end
