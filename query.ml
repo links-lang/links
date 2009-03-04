@@ -74,7 +74,9 @@ let unbox_string =
              (unbox_list v))
     | _ -> failwith ("failed tounbox_string")
 
-let labels_of_fields fields = StringMap.fold (fun name _ labels -> StringSet.add name labels) fields StringSet.empty
+let labels_of_fields fields = 
+  StringMap.fold (fun name _ labels -> StringSet.add name labels)
+    fields StringSet.empty
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
   function
@@ -83,7 +85,7 @@ let rec labels_of_list =
     | `Table (_, _, (fields, _)) -> labels_of_fields fields
     | _ -> assert false
 
-(* Returns which database was used if any.
+(** Returns which database was used if any.
 
    Currently this assumes that at most one database is used.
 *)
@@ -118,7 +120,7 @@ let used_database v : Value.database option =
 
 module S =
 struct
-  (* printable version of t *)
+  (** [pt]: A printable version of [t] *)
   type pt =
     [ `For of (Var.var * pt) list * pt list * pt
     | `If of pt * pt * pt
@@ -136,7 +138,10 @@ struct
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
       match v with
-        | `For (gs, os, b) -> `For (List.map (fun (x, source) -> (x, bt source)) gs, List.map bt os, bt b)
+        | `For (gs, os, b) -> 
+            `For (List.map (fun (x, source) -> (x, bt source)) gs, 
+                  List.map bt os, 
+                  bt b)
         | `If (c, t, e) -> `If (bt c, bt t, bt e)
         | `Table t -> `Table t
         | `Singleton v -> `Singleton (bt v)
@@ -163,7 +168,7 @@ let rec tail_of_t : t -> t = fun v ->
       | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-(* return the type of rows associated with a top-level non-empty expression *)
+(** return the type of rows associated with a top-level non-empty expression *)
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec generators env : _ -> Types.datatype Env.Int.t =
     function
@@ -214,7 +219,10 @@ let rec value_of_expression : t -> Value.t = fun v ->
       | `Concat vs -> `List (List.map value_of_singleton vs)
       | `Variant (name, v) -> `Variant (name, ve v)
       | `XML xmlitem -> `XML xmlitem
-      | `Record fields -> `Record (List.rev (StringMap.fold (fun name v fields -> (name, ve v)::fields) fields []))
+      | `Record fields ->
+          `Record (List.rev (StringMap.fold (fun name v fields ->
+                                               (name, ve v)::fields) 
+                               fields []))
       | _ -> assert false
 
 module Eval =
@@ -346,7 +354,8 @@ struct
         let rec erase (r, labels) =
           match r with
             | `Record fields ->
-                assert (StringSet.for_all (fun label -> StringMap.mem label fields) labels);
+                assert (StringSet.for_all
+                          (fun label -> StringMap.mem label fields) labels);
                 `Record
                   (StringMap.fold
                      (fun label v fields ->
@@ -584,18 +593,17 @@ struct
         | `For (gs, os, body) ->
             `For (gs, os, rt (c, body, e))
         | `Record then_fields ->
-            begin
-              match e with
-                | `Record else_fields ->
-                    assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
-                    `Record
-                      (StringMap.fold
-                         (fun name t fields ->
-                            let e = StringMap.find name else_fields in
-                              StringMap.add name (rt (c, t, e)) fields)
-                         then_fields
-                         StringMap.empty)
-                | _ -> eval_error "Mismatched fields"
+            begin match e with
+              | `Record else_fields ->
+                  assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
+                  `Record
+                    (StringMap.fold
+                       (fun name t fields ->
+                          let e = StringMap.find name else_fields in
+                            StringMap.add name (rt (c, t, e)) fields)
+                       then_fields
+                       StringMap.empty)
+              | _ -> eval_error "Mismatched fields"
             end
         | _ ->
             begin
@@ -646,7 +654,7 @@ struct
 
   let string_of_label label =
     if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "'" ^ label ^ "'"
+      "\"" ^ label ^ "\""
     else
       label
 
@@ -705,7 +713,10 @@ struct
     let string_of_fields =
       function
         | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
-        | fields -> mapstrcat "," (fun (b, l) -> "(" ^ sb b ^ ") as "^string_of_label l) fields
+        | fields -> mapstrcat ","
+                      (* Note this fails in MySQL if [l] is non-alphabetic. *)
+                      (fun (b, l) -> "(" ^ sb b ^ ") as "^ string_of_label l) 
+                      fields
     in
       match q with
         | `UnionAll [] -> assert false
@@ -742,8 +753,10 @@ struct
               label
             else
               string_of_table_var var ^ "." ^ label
-        | `Apply (op, [l; r]) when Arithmetic.is op -> Arithmetic.gen (sb l, op, sb r)
-        | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat"), [v]) -> sb v
+        | `Apply (op, [l; r]) when Arithmetic.is op
+            -> Arithmetic.gen (sb l, op, sb r)
+        | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
+                  | "stringToFloat"), [v]) -> sb v
         | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
         | `Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
         | `Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
@@ -923,7 +936,6 @@ struct
         | `Variant ("StartAnchor", _) -> Some ""
         | `Variant ("EndAnchor", _) -> Some ""
         | _ -> assert false
-
 
 
   let query range v =
