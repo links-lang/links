@@ -75,13 +75,20 @@ struct
     format = fun formatter set ->
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
-      S.iter (fun elt -> 
-                Format.pp_open_box formatter 0;
-                (show_k).format formatter elt;
-                Format.pp_close_box formatter ();
-             ) set;
-      Format.pp_print_string formatter "}, ";
-      Format.pp_close_box formatter ();
+      let remaining = ref (S.cardinal set) in
+        begin
+          S.iter (fun elt -> 
+                    decr remaining ;
+                    Format.pp_open_box formatter 0;
+                    (show_k).format formatter elt;
+                    if (!remaining <> 0) then
+                      Format.pp_print_string formatter ", "
+                    else ();
+                    Format.pp_close_box formatter ();
+                 ) set;
+          Format.pp_print_string formatter "}";
+          Format.pp_close_box formatter ()
+        end
   }
 end
 
