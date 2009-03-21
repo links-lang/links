@@ -24,9 +24,9 @@ let find_nonclashing_tag : (Type.name * _) list -> int =
       else candidate
     in aux 0
 
-let wrap ~loc ~atype ~tymod ~eqmod ~picklers ~unpickler =
+let wrap ~loc ~atype ~tymod ~hashmod ~picklers ~unpickler =
   <:expr< { _Typeable = $tymod$ ;
-            _Eq = $eqmod$ ;
+            _Hash = $hashmod$ ;
             pickle = (function $list:picklers$) ; 
             unpickle = $unpickler$ } >>
 
@@ -34,7 +34,7 @@ class pickle ~loc =
 object (self)
   inherit Base.deriver ~loc  ~classname ~allow_private:false
 
-  val superclasses = ["Eq"; "Typeable"]
+  val superclasses = ["Hash"; "Typeable"]
   val methods = ["pickle"; "unpickle"]
 
   method private extension atype tname ts : Ast.match_case =
@@ -62,17 +62,17 @@ object (self)
     in <:match_case< n,[x] -> $inner$ >>
 
     method private polycase atype extension_tag tagspec : Ast.match_case = 
-      let typeable = self#typeable_instance atype and eq = self#eq_instance atype in
+      let typeable = self#typeable_instance atype and hash = self#hash_instance atype in
       match tagspec with
     | `Tag (name, None) -> <:match_case<
         (`$name$ as obj) ->
-          allocate $typeable$ $eq$ obj
+          allocate $typeable$ $hash$ obj
               (fun thisid -> 
                  store_repr thisid
                     (Repr.make ~constructor:$`int:(tag_hash name)$ [])) >>
     | `Tag (name, Some t) -> <:match_case<
         (`$name$ v1 as obj) ->
-           allocate $typeable$ $eq$ obj
+           allocate $typeable$ $hash$ obj
             (fun thisid ->
              $wbind ~loc$ ($self#atomic t$.pickle v1)
                     (fun mid -> 
@@ -83,7 +83,7 @@ object (self)
            not to clash.  *)
           <:match_case<
             (# $lid:c$) as obj ->
-            allocate $typeable$ $eq$ obj
+            allocate $typeable$ $hash$ obj
             (fun thisid ->
                $wbind ~loc$ ($self#local t$.pickle obj)
                  (fun mid -> 
@@ -92,7 +92,7 @@ object (self)
     | `Appl (qname, _ as t) -> 
           <:match_case<
             (# $id:Untranslate.qname ~loc qname$) as obj ->
-            allocate $typeable$ $eq$ obj
+            allocate $typeable$ $hash$ obj
             (fun thisid ->
                $wbind ~loc$ ($self#constr t$.pickle obj)
                  (fun mid -> 
@@ -121,12 +121,12 @@ object (self)
           ~loc
           ~atype:(self#atype atype)
           ~tymod:(self#typeable_instance atype)
-          ~eqmod:(self#eq_instance atype)
+          ~hashmod:(self#hash_instance atype)
           ~picklers:(List.map (self#polycase atype extension_tag) tagspec)
           ~unpickler
 
 
-    method tuple (name, params as atype) ts : Ast.expr = 
+    method tuple atype ts : Ast.expr = 
       let nts = List.length ts in
         if List.mem nts tuple_functors then
           apply_functor ~loc <:expr< $lid:Printf.sprintf "pickle_%d" nts$ >> 
@@ -136,8 +136,8 @@ object (self)
           let eidlist = expr_list ~loc (List.map (fun (id,_) -> <:expr< $lid:id$ >>) ids) in
           let pidlist = patt_list ~loc (List.map (fun (id,_) -> <:patt< $lid:id$ >>) ids) in
           let tpatt,texpr = tuple ~loc ~param:"id" nts in
-          let tymod = self#typeable_instance (name, params)
-          and eqmod = self#eq_instance (name, params)
+          let tymod = self#typeable_instance atype
+          and hashmod = self#hash_instance atype
           and picklers =
             let inner = 
               List.fold_right
@@ -147,7 +147,7 @@ object (self)
                 ids
               <:expr< store_repr this (Repr.make $eidlist$) >> in
               [ <:match_case< ($tpatt$ as obj) -> 
-                               allocate $self#typeable_instance atype$ $self#eq_instance atype$ obj (fun this -> $inner$) >>]
+                               allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this -> $inner$) >>]
                 
           and unpickler = 
             let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
@@ -161,8 +161,8 @@ object (self)
                                   (function 
                                      | $pidlist$ -> $inner$
                                      | _ -> raise (UnpicklingError $str:msg$))) c >>
-          and atype = self#atype (name, params) in
-            wrap ~loc ~atype ~tymod ~eqmod ~picklers ~unpickler
+          and atype = self#atype atype in
+            wrap ~loc ~atype ~tymod ~hashmod ~picklers ~unpickler
 
     method private case atype (name, params' : summand) (n : int) : Ast.match_case * Ast.match_case = 
       let nparams = List.length params' in
@@ -177,10 +177,10 @@ object (self)
           <:expr< store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ~loc ids$) >> in
         match params' with
           | [] -> <:match_case< $uid:name$ as obj -> 
-                                allocate $self#typeable_instance atype$ $self#eq_instance atype$ obj (fun thisid -> $exp$) >>,
+                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid -> $exp$) >>,
                   <:match_case< $`int:n$, [] -> Read.return $uid:name$ >>
           | _  -> <:match_case< $uid:name$ $fst (tuple ~loc ~param:"v" nparams)$ as obj -> 
-                                allocate $self#typeable_instance atype$ $self#eq_instance atype$ obj (fun thisid -> $exp$) >>,
+                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid -> $exp$) >>,
       let _, tuple = tuple ~loc ~param:"id" nparams in
       let patt, exp = 
         List.fold_right2 
@@ -194,13 +194,13 @@ object (self)
         <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
 
-    method sum (tname, params as atype) ?eq (summands : summand list) : Ast.expr =
+    method sum (tname, _ as atype) ?eq (summands : summand list) : Ast.expr =
       let picklers, unpicklers = List.split (List.mapn (self#case atype) summands) in
       wrap
         ~loc
-        ~atype:(self#atype (tname, params))
-        ~tymod:(self#typeable_instance (tname, params))
-        ~eqmod:(self#eq_instance (tname, params))
+        ~atype:(self#atype atype)
+        ~tymod:(self#typeable_instance atype)
+        ~hashmod:(self#hash_instance atype)
         ~picklers
         ~unpickler:<:expr< fun id -> 
                            let f = function
@@ -221,7 +221,7 @@ object (self)
                         $expr_list ~loc (List.map (fun (id,_,_) -> <:expr< $lid:id$ >>) fields)$)) >>
         in
           [ <:match_case< ($record_pattern ~loc fields$ as obj) ->
-            allocate $self#typeable_instance atype$ $self#eq_instance atype$ obj (fun this -> $inner$) >> ] in
+            allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this -> $inner$) >> ] in
 
       let unpickle_record_bindings e = 
         (* TODO: 
@@ -268,7 +268,7 @@ object (self)
           wrap ~loc ~picklers ~unpickler
             ~atype:(self#atype (tname, params))
             ~tymod:(self#typeable_instance (tname, params))
-            ~eqmod:(self#eq_instance (tname, params))
+            ~hashmod:(self#hash_instance (tname, params))
 
     method private typeable_instance (name, params) =
       let args = List.map (fun (a, _) -> `Tyvar a) params in
@@ -276,11 +276,11 @@ object (self)
         <:expr< $lid:"typeable_"^ name$ >>  
           (List.map (fun a -> <:expr< $self#atomic a$._Typeable >>) args)
 
-    method private eq_instance (name, params) =
+    method private hash_instance (name, params) =
       let args = List.map (fun (a, _) -> `Tyvar a) params in
         apply_functor ~loc
-        <:expr< $lid:"eq_"^ name$ >>  
-          (List.map (fun a -> <:expr< $self#atomic a$._Eq >>) args)
+        <:expr< $lid:"hash_"^ name$ >>  
+          (List.map (fun a -> <:expr< $self#atomic a$._Hash >>) args)
 end
 
 let () = Base.register classname (new pickle)

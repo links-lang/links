@@ -3,7 +3,7 @@
 open Defs
 
 let test (s : 'a Pickle.pickle) =
-  fun v -> s.Pickle._Eq.Eq.eq (Pickle.from_string s (Pickle.to_string s v)) v
+  fun v -> s.Pickle._Hash.Hash._Eq.Eq.eq (Pickle.from_string s (Pickle.to_string s v)) v
 
 
 let sum =
@@ -87,7 +87,7 @@ let uses_seqs =
                     Cons (0.0, Cons(10.0, Nil))));
   end
 
-type permute0 = [`T3 | `T1 | `T2 | `T0] deriving (Typeable, Eq, Pickle)
+type permute0 = [`T3 | `T1 | `T2 | `T0] deriving (Typeable, Eq, Hash, Pickle)
 let poly0 =
   begin
     let test v = eq_permute0.Eq.eq (Pickle.from_string pickle_permute0 (Pickle.to_string pickle_poly0 v)) v in
@@ -97,7 +97,7 @@ let poly0 =
       assert (test `T3);
   end
 
-type permute3 = [`Nil | `Cons of int * permute3] deriving (Typeable, Eq, Pickle)
+type permute3 = [`Nil | `Cons of int * permute3] deriving (Typeable, Eq, Hash, Pickle)
 let _ =
   begin
     let test v = eq_permute3.Eq.eq (Pickle.from_string pickle_permute3 (Pickle.to_string pickle_poly3 v)) v in
@@ -214,7 +214,7 @@ let t =
  end
 
 type refobj = A | B of refobj ref
-  deriving (Eq, Typeable, Pickle)
+  deriving (Eq, Hash, Typeable, Pickle)
 
 let circular = 
   let s = ref A in
@@ -238,7 +238,7 @@ type mut = {
   mutable x : mut option;
   mutable y : mut option;
   z : int;
-} deriving (Eq, Typeable, Pickle)
+} deriving (Eq, Hash, Typeable, Pickle)
 
 let circularm =
   let i = {z = 1; x = None; y = None} in
@@ -267,7 +267,7 @@ let _ =
 
 type t1 = { mutable x : t2 option }
 and  t2 = { y : t1 option }
-    deriving (Eq, Typeable, Pickle)
+    deriving (Eq, Hash, Typeable, Pickle)
 
 let circular_a = 
   let a = { x = None } in

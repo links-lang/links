@@ -2,12 +2,12 @@
 
 module Env = Bimap.Make(String)
 
-type name = string deriving (Show, Dump, Typeable)
+type name = string deriving (Show, Dump, Hash, Typeable)
 let eq_name : name Eq.eq =
 { Eq.eq = (=) }
 
 let pickle_name
-  = Pickle.pickle_from_dump(dump_name)(eq_name)(typeable_name)
+  = Pickle.pickle_from_dump dump_name hash_name typeable_name
 
 module rec Exp :
 sig
@@ -31,6 +31,13 @@ struct
             alpha_eq (Env.add vl vr env) bl br
         | _ -> false
       in alpha_eq Env.empty }
+  let rec hash_exp = {
+    hash = (fun state -> function
+              | Var _ -> state <!> 1
+              | App (f, p) -> state <!> 2; hash_exp.hash state f; hash_exp.hash state p
+              | Abs (_, body) -> state <!> 3; hash_exp.hash state body);
+    _Eq = eq_exp ;
+  }
   type exp = Var of name
            | App of exp * exp 
            | Abs of name * exp

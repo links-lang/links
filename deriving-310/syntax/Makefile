@@ -28,6 +28,7 @@ SOURCES = id.ml                 \
           enum_class.ml         \
           bounded_class.ml      \
           eq_class.ml           \
+          hash_class.ml         \
           typeable_class.ml     \
           pickle_class.ml       \
           extend.ml             \

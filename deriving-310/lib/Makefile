@@ -11,6 +11,7 @@ LIBS       = nums str unix
 SOURCES = show.ml           show.mli		\
           interned.mli      interned.ml		\
           eq.ml             eq.mli		\
+          hash.ml           hash.mli		\
           bounded.ml        bounded.mli		\
           enum.ml           enum.mli		\
           monad.ml          monad.mli		\

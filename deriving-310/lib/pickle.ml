@@ -65,8 +65,8 @@ module Write = Monad.Monad_state (struct type state = write_state end)
 
 open Write
 
-let allocate typeable eq o f =
-  let comparator = Dynmap.comp typeable eq in
+let allocate typeable hash o f =
+  let comparator = Dynmap.comp typeable hash.Hash._Eq in
       
   let obj = Typeable.make_dynamic typeable o in
     get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
@@ -162,7 +162,7 @@ let record typeable f size id =
 
 type 'a pickle = {
   _Typeable : 'a Typeable.typeable ;
-  _Eq       : 'a Eq.eq ;
+  _Hash     : 'a Hash.hash ;
   pickle : 'a -> id Write.m ;
   unpickle : id -> 'a Read.m 
 }
@@ -316,16 +316,16 @@ let to_string s = doPickle s (Dump.to_string dump_do_pair)
 
 let pickle_from_dump
     (p : 'a Dump.dump)
-    (eq : 'a Eq.eq)
+    (hash : 'a Hash.hash)
     (typeable : 'a Typeable.typeable)
     : 'a pickle =
-  let comp = Dynmap.comp typeable eq in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
 (*  let w = Read.utils typeable eq in
   let u = Write.utils typeable in*)
     { _Typeable = typeable;
-      _Eq = eq;
+      _Hash = hash;
       pickle = (fun obj ->
-                  allocate typeable eq obj
+                  allocate typeable hash obj
                     (fun id -> store_repr id (Repr.of_string (Dump.to_string p obj))));
       unpickle = (fun id ->
                     Read.(>>=) (find_by_id id) (fun (repr, dynopt) ->
@@ -337,25 +337,25 @@ let pickle_from_dump
                                                     | Some obj -> Read.return (Typeable.throwing_cast typeable obj)))
     }
 
-let pickle_unit   = pickle_from_dump Dump.dump_unit   Eq.eq_unit   Typeable.typeable_unit
-let pickle_bool   = pickle_from_dump Dump.dump_bool   Eq.eq_bool   Typeable.typeable_bool
-let pickle_int    = pickle_from_dump Dump.dump_int    Eq.eq_int    Typeable.typeable_int
-let pickle_char   = pickle_from_dump Dump.dump_char   Eq.eq_char   Typeable.typeable_char
-let pickle_float  = pickle_from_dump Dump.dump_float  Eq.eq_float  Typeable.typeable_float
-let pickle_num    = pickle_from_dump Dump.dump_num    Eq.eq_num    Typeable.typeable_num
-let pickle_string = pickle_from_dump Dump.dump_string Eq.eq_string Typeable.typeable_string
+let pickle_unit   = pickle_from_dump Dump.dump_unit   Hash.hash_unit   Typeable.typeable_unit
+let pickle_bool   = pickle_from_dump Dump.dump_bool   Hash.hash_bool   Typeable.typeable_bool
+let pickle_int    = pickle_from_dump Dump.dump_int    Hash.hash_int    Typeable.typeable_int
+let pickle_char   = pickle_from_dump Dump.dump_char   Hash.hash_char   Typeable.typeable_char
+let pickle_float  = pickle_from_dump Dump.dump_float  Hash.hash_float  Typeable.typeable_float
+let pickle_num    = pickle_from_dump Dump.dump_num    Hash.hash_num    Typeable.typeable_num
+let pickle_string = pickle_from_dump Dump.dump_string Hash.hash_string Typeable.typeable_string
 
 let pickle_option (v0 : 'a pickle) : 'a option pickle =
   let typeable = Typeable.typeable_option v0._Typeable in
-  let eq = Eq.eq_option v0._Eq  in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_option v0._Hash  in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle =
       function
           None as obj ->
-            allocate typeable eq obj
+            allocate typeable hash obj
               (fun id -> store_repr id (Repr.make ~constructor:0 []))
         | Some v as obj ->
-            allocate typeable eq obj
+            allocate typeable hash obj
               (fun thisid ->
                  v0.pickle v >>= fun id0 ->
                    store_repr thisid (Repr.make ~constructor:1 [id0])) in
@@ -368,18 +368,18 @@ let pickle_option (v0 : 'a pickle) : 'a option pickle =
                             ^"option : " ^ string_of_int n)) in
       sum typeable f
   in 
-  { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+  { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_list (pickler : 'a pickle) : 'a list pickle =
   let typeable = Typeable.typeable_list pickler._Typeable in
-  let eq = Eq.eq_list pickler._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_list pickler._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle = function
       [] as obj ->
-        allocate typeable eq obj
+        allocate typeable hash obj
           (fun this -> store_repr this (Repr.make ~constructor:0 []))
     | (v0::v1) as obj ->
-        allocate typeable eq obj
+        allocate typeable hash obj
           (fun this -> pickler.pickle v0 >>= fun id0 ->
                                pickle v1 >>= fun id1 ->
                                  store_repr this (Repr.make ~constructor:1 [id0; id1])) in
@@ -398,7 +398,7 @@ let pickle_list (pickler : 'a pickle) : 'a list pickle =
     end in
       sum typeable M.f id
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
  end 
  include Pickle 
@@ -409,8 +409,8 @@ type 'a ref = 'a Pervasives.ref = { mutable contents : 'a }
 let pickle_6 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pickle) (a5 : 'a5 pickle) (a6 : 'a6 pickle)
     :  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) pickle =
   let typeable = Typeable.typeable_6 a1._Typeable a2._Typeable a3._Typeable a4._Typeable a5._Typeable a6._Typeable in
-  let eq = Eq.eq_6 a1._Eq a2._Eq a3._Eq a4._Eq a5._Eq a6._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_6 a1._Hash a2._Hash a3._Hash a4._Hash a5._Hash a6._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle (a1, a2, a3, a4, a5, a6) = assert false in
   let rec unpickle =
     let module M = struct
@@ -431,13 +431,13 @@ let pickle_6 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
                             ^"6-tuple : " ^ string_of_int (List.length l))))
     end in M.v
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_5 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pickle) (a5 : 'a5 pickle)
     :  ('a1 * 'a2 * 'a3 * 'a4 * 'a5) pickle =
   let typeable = Typeable.typeable_5 a1._Typeable a2._Typeable a3._Typeable a4._Typeable a5._Typeable in
-  let eq = Eq.eq_5 a1._Eq a2._Eq a3._Eq a4._Eq a5._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_5 a1._Hash a2._Hash a3._Hash a4._Hash a5._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle (a1, a2, a3, a4, a5) = assert false in
   let rec unpickle =
     let module M = struct
@@ -457,13 +457,13 @@ let pickle_5 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
                             ^"5-tuple : " ^ string_of_int (List.length l))))
     end in M.v
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_4 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pickle) 
     :  ('a1 * 'a2 * 'a3 * 'a4) pickle =
   let typeable = Typeable.typeable_4 a1._Typeable a2._Typeable a3._Typeable a4._Typeable in
-  let eq = Eq.eq_4 a1._Eq a2._Eq a3._Eq a4._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_4 a1._Hash a2._Hash a3._Hash a4._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle (a1, a2, a3, a4) = assert false in
   let rec unpickle =
     let module M = struct
@@ -482,12 +482,12 @@ let pickle_4 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
                             ^"4-tuple : " ^ string_of_int (List.length l))))
     end in M.v
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_3 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) :  ('a1 * 'a2 * 'a3) pickle =
   let typeable = Typeable.typeable_3 a1._Typeable a2._Typeable a3._Typeable in
-  let eq = Eq.eq_3 a1._Eq a2._Eq a3._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_3 a1._Hash a2._Hash a3._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle (a1, a2, a3) = assert false in
   let rec unpickle =
     let module M = struct
@@ -505,12 +505,12 @@ let pickle_3 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) :  ('a1 * 'a2
                             ^"3-tuple : " ^ string_of_int (List.length l))))
     end in M.v
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_2 (a1 : 'a1 pickle) (a2 : 'a2 pickle) :  ('a1 * 'a2) pickle =
   let typeable = Typeable.typeable_2 a1._Typeable a2._Typeable in
-  let eq = Eq.eq_2 a1._Eq a2._Eq in
-  let comp = Dynmap.comp typeable eq in
+  let hash = Hash.hash_2 a1._Hash a2._Hash in
+  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle (a1, a2) = assert false in
   let rec unpickle =
     let module M = struct
@@ -527,7 +527,7 @@ let pickle_2 (a1 : 'a1 pickle) (a2 : 'a2 pickle) :  ('a1 * 'a2) pickle =
                             ^"2-tuple : " ^ string_of_int (List.length l))))
     end in M.v
   in
-    { _Typeable = typeable ; _Eq = eq ; pickle = pickle ; unpickle = unpickle }
+    { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 (* Idea: keep pointers to values that we've serialized in a global
    weak hash table so that we can share structure with them if we

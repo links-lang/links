@@ -11,7 +11,7 @@ type read_state
 
 (* Utilities for serialization *)
 module Write : Monad.Monad_state_type with type state = write_state
-val allocate : 'a Typeable.typeable -> 'a Eq.eq -> 'a -> (id -> unit Write.m) -> id Write.m
+val allocate : 'a Typeable.typeable -> 'a Hash.hash -> 'a -> (id -> unit Write.m) -> id Write.m
 val store_repr : id -> Repr.t -> unit Write.m
 
 (* Utilities for deserialization *)
@@ -25,7 +25,7 @@ exception UnknownTag of int * string
 
 type 'a pickle = {
   _Typeable : 'a Typeable.typeable ;
-  _Eq       : 'a Eq.eq ;
+  _Hash     : 'a Hash.hash ;
   pickle : 'a -> id Write.m ;
   unpickle : id -> 'a Read.m 
 }
@@ -49,7 +49,7 @@ val pickle_option : 'a pickle -> 'a option pickle
 val pickle_list : 'a pickle -> 'a list pickle
 val pickle_ref : 'a pickle -> 'a ref pickle
 
-val pickle_from_dump : 'a Dump.dump -> 'a Eq.eq -> 'a Typeable.typeable -> 'a pickle
+val pickle_from_dump : 'a Dump.dump -> 'a Hash.hash -> 'a Typeable.typeable -> 'a pickle
 
 val pickle_6 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> 'a6 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) pickle
 val pickle_5 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) pickle

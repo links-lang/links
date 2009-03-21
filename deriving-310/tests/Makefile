@@ -14,6 +14,7 @@ SOURCES = defs.ml               \
 	  typeable_tests.ml     \
 	  bounded_tests.ml      \
 	  eq_tests.ml           \
+	  hash_tests.ml         \
 	  dump_tests.ml         \
 	  enum_tests.ml         \
 	  show_tests.ml         \

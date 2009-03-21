@@ -202,5 +202,7 @@ let _ =
   (* Sanity check to make sure the function doesn't change underneath
      us *)
   assert (tag_hash "premiums" = tag_hash "squigglier");
-  assert (tag_hash "deriving" = 398308260)
+  assert (tag_hash "premiums" = (Obj.magic `premiums));
+  assert (tag_hash "deriving" = 398308260);
+  assert (tag_hash "deriving" = (Obj.magic `deriving))
 
