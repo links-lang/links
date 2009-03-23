@@ -103,7 +103,7 @@ type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Eq, Pickle, Dump)
+    deriving (Typeable, Show, Eq, Hash, Pickle, Dump)
 
 let is_attr = function
   | Attr _ -> true
@@ -139,7 +139,7 @@ type primitive_value_basis =  [
 | `Int of num
 | `XML of xmlitem 
 | `NativeString of string ]
-  deriving (Show, Typeable, Eq, Pickle, Dump)
+  deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
 
 type primitive_value = [
 | primitive_value_basis
@@ -228,7 +228,7 @@ type compressed_primitive_value = [
 | `Table of string * string * string
 | `Database of string
 ]
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  deriving (Show, Eq, Typeable, Hash, Pickle, Dump)
 
 type compressed_continuation = (Ir.var * compressed_env) list
 and compressed_t = [
@@ -242,7 +242,7 @@ and compressed_t = [
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
-  deriving (Show, Eq, Typeable, Dump, Pickle)
+  deriving (Show, Eq, Typeable, Dump, Hash, Pickle)
 
 let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
   function

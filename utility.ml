@@ -90,9 +90,6 @@ sig
   (** divide the map by a predicate *)
 
   val show_t : 'a Show.show -> 'a t Show.show
-
-  module Functor_t : 
-    Functor.Functor with type 'a f = 'a t
 end
 
 module String = struct
@@ -203,12 +200,6 @@ struct
 
     module S = Show.Show_map(Ord)
     let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
-
-    module Functor_t =
-    struct
-      type 'a f = 'a t
-      let map = map
-    end
   end
 end
 
