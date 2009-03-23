@@ -146,43 +146,43 @@ let show_6 s1 s2 s3 s4 s5 s6 =
   {format =
       fun formatter (a1, a2, a3, a4, a5, a6) ->
         Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a,@;%a)@]"
-          (s1).format a1
-          (s2).format a2
-          (s3).format a3
-          (s4).format a4
-          (s5).format a5
-          (s6).format a6}
+          s1.format a1
+          s2.format a2
+          s3.format a3
+          s4.format a4
+          s5.format a5
+          s6.format a6}
 
 let show_5 s1 s2 s3 s4 s5 =
   {format =
       fun formatter (a1, a2, a3, a4, a5) ->
         Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a,@;%a)@]"
-          (s1).format a1
-          (s2).format a2
-          (s3).format a3
-          (s4).format a4
-          (s5).format a5}
+          s1.format a1
+          s2.format a2
+          s3.format a3
+          s4.format a4
+          s5.format a5}
 
 let show_4 s1 s2 s3 s4 =
   {format =
       fun formatter (a1, a2, a3, a4) ->
         Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a,@;%a)@]"
-          (s1).format a1
-          (s2).format a2
-          (s3).format a3
-          (s4).format a4}
+          s1.format a1
+          s2.format a2
+          s3.format a3
+          s4.format a4}
 
 let show_3 s1 s2 s3 =
   {format =
       fun formatter (a1, a2, a3) ->
         Format.fprintf formatter "@[<hov 1>(%a,@;%a,@;%a)@]"
-          (s1).format a1
-          (s2).format a2
-          (s3).format a3}
+          s1.format a1
+          s2.format a2
+          s3.format a3}
     
 let show_2 s1 s2 =
   {format =
       fun formatter (a1, a2) ->
         Format.fprintf formatter "@[<hov 1>(%a,@;%a)@]"
-          (s1).format a1
-          (s2).format a2}
+          s1.format a1
+          s2.format a2}

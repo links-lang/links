@@ -139,8 +139,8 @@ let sum typeable f id = whizzy typeable f id decode_repr_ctor
 let tuple typeable f id = whizzy typeable f id decode_repr_noctor
 let record_tag = 0
 let record typeable f size id s =
-  let (repr, obj), s' = find_by_id id s in
-    match obj with
+  let (repr, dynopt), s' = find_by_id id s in
+    match dynopt with
       | None ->
           let this = Obj.magic (Obj.new_block record_tag size) in
             (this,
@@ -345,11 +345,9 @@ let pickle_option (v0 : 'a pickle) : 'a option pickle =
                  let v, s' = v0.pickle v s in
                    store_repr thisid (Repr.make ~constructor:1 [v]) s') in
   let unpickle =
-    let f = function
-      | 0, [] -> (fun state -> (None, state)) 
-      | 1, [id] -> (fun state -> 
-                      let v, s' = v0.unpickle id state in
-                        Some v, s')
+    let f x state = match x with
+      | 0, [] -> (None, state) 
+      | 1, [id] -> let v, s' = v0.unpickle id state in Some v, s'
         | n, _ -> raise (UnpicklingError
                            ("Unexpected tag encountered unpickling "
                             ^"option : " ^ string_of_int n)) in
@@ -372,15 +370,12 @@ let pickle_list (pickler : 'a pickle) : 'a list pickle =
                store_repr this (Repr.make ~constructor:1 [v; w]) state) in
   let rec unpickle id =
     let module M = struct
-      let f = function
-        | 0, [] -> 
-            (fun state -> ([], state)) 
+      let f x state = match x with
+        | 0, [] -> ([], state)
         | 1, [car;cdr] ->
-            (fun s -> 
-               let car, s'  = pickler.unpickle car s in 
-               let cdr, s'' = unpickle cdr s' in
-                 car :: cdr, s'')
-              
+            let car, state  = pickler.unpickle car state in 
+            let cdr, state = unpickle cdr state in
+                 car :: cdr, state
         | n, _ -> raise (UnpicklingError
                                  ("Unexpected tag encountered unpickling "
                                   ^"option : " ^ string_of_int n)) 
@@ -412,16 +407,15 @@ let pickle_6 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
               store_repr this (Repr.make [ id1; id2; id3; id4; id5; id6 ]) state)) in
   let unpickle =
     tuple typeable
-      (function
+      (fun s state -> match s with
          | [v1;v2;v3;v4;v5;v6] ->
-             (fun s -> 
-                let b1, s = a1.unpickle v1 s in
-                let b2, s = a2.unpickle v2 s in
-                let b3, s = a3.unpickle v3 s in
-                let b4, s = a4.unpickle v4 s in
-                let b5, s = a5.unpickle v5 s in
-                let b6, s = a6.unpickle v6 s in
-                  (b1, b2, b3, b4, b5, b6), s)
+             let b1, state = a1.unpickle v1 state in
+             let b2, state = a2.unpickle v2 state in
+             let b3, state = a3.unpickle v3 state in
+             let b4, state = a4.unpickle v4 state in
+             let b5, state = a5.unpickle v5 state in
+             let b6, state = a6.unpickle v6 state in
+               (b1, b2, b3, b4, b5, b6), state
          | l -> raise (UnpicklingError
                          ("Unexpected number of elements encountered when unpickling "
                           ^"6-tuple : " ^ string_of_int (List.length l))))
@@ -444,15 +438,14 @@ let pickle_5 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
               store_repr this (Repr.make [ id1; id2; id3; id4; id5 ]) state)) in
   let unpickle =
     tuple typeable
-      (function
+      (fun s state -> match s with
          | [v1;v2;v3;v4;v5] ->
-             (fun s ->
-                let b1, s = a1.unpickle v1 s in
-                let b2, s = a2.unpickle v2 s in
-                let b3, s = a3.unpickle v3 s in
-                let b4, s = a4.unpickle v4 s in
-                let b5, s = a5.unpickle v5 s in
-                  (b1, b2, b3, b4, b5), s)
+             let b1, state = a1.unpickle v1 state in
+             let b2, state = a2.unpickle v2 state in
+             let b3, state = a3.unpickle v3 state in
+             let b4, state = a4.unpickle v4 state in
+             let b5, state = a5.unpickle v5 state in
+               (b1, b2, b3, b4, b5), state
          | l -> raise (UnpicklingError
                          ("Unexpected number of elements encountered when unpickling "
                           ^"5-tuple : " ^ string_of_int (List.length l))))
@@ -474,14 +467,13 @@ let pickle_4 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
               store_repr this (Repr.make [ id1; id2; id3; id4 ]) state)) in
   let unpickle =
     tuple typeable
-      (function
+      (fun s state -> match s with
          | [v1;v2;v3;v4] ->
-             (fun s ->
-                let b1, s = a1.unpickle v1 s in
-                let b2, s = a2.unpickle v2 s in
-                let b3, s = a3.unpickle v3 s in
-                let b4, s = a4.unpickle v4 s in
-                    (b1, b2, b3, b4), s)
+             let b1, state = a1.unpickle v1 state in
+             let b2, state = a2.unpickle v2 state in
+             let b3, state = a3.unpickle v3 state in
+             let b4, state = a4.unpickle v4 state in
+                    (b1, b2, b3, b4), state
          | l -> raise (UnpicklingError
                          ("Unexpected number of elements encountered when unpickling "
                           ^"4-tuple : " ^ string_of_int (List.length l))))
@@ -501,13 +493,12 @@ let pickle_3 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) :  ('a1 * 'a2
               store_repr this (Repr.make [ id1; id2; id3 ]) state)) in
   let unpickle =
     tuple typeable
-      (function
+      (fun s state -> match s with
          | [v1;v2;v3] ->
-             (fun s ->
-                let b1, s = a1.unpickle v1 s in
-                let b2, s = a2.unpickle v2 s in
-                let b3, s = a3.unpickle v3 s in
-                  (b1, b2, b3), s)
+             let b1, state = a1.unpickle v1 state in
+             let b2, state = a2.unpickle v2 state in
+             let b3, state = a3.unpickle v3 state in
+               (b1, b2, b3), state
          | l -> raise (UnpicklingError
                          ("Unexpected number of elements encountered when unpickling "
                           ^"3-tuple : " ^ string_of_int (List.length l))))
@@ -526,12 +517,11 @@ let pickle_2 (a1 : 'a1 pickle) (a2 : 'a2 pickle) :  ('a1 * 'a2) pickle =
               store_repr this (Repr.make [ id1; id2 ]) state)) in
   let unpickle =
     tuple typeable
-      (function
+      (fun s state -> match s with
          | [v1;v2] ->
-             (fun s ->
-                let b1, s = a1.unpickle v1 s in
-                let b2, s = a2.unpickle v2 s in
-                  (b1, b2), s)
+             let b1, state = a1.unpickle v1 state in
+             let b2, state = a2.unpickle v2 state in
+               (b1, b2), state
          | l -> raise (UnpicklingError
                          ("Unexpected number of elements encountered when unpickling "
                           ^"2-tuple : " ^ string_of_int (List.length l))))

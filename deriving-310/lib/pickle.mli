@@ -20,9 +20,9 @@ val store_repr : id -> Repr.t -> write_state -> write_state
 
 (* Utilities for deserialization *)
 type 'a read_m = read_state -> 'a * read_state
-val sum    : 'a typeable -> (int * id list -> 'a read_m)  -> (id -> 'a read_m)
-val tuple  : 'a typeable -> (id list -> 'a read_m)        -> (id -> 'a read_m)
-val record : 'a typeable -> ('a -> id list -> 'a read_m) -> int -> (id -> 'a read_m)
+val sum    : 'a typeable -> (int * id list -> read_state -> 'a * read_state)  -> id -> read_state -> 'a * read_state
+val tuple  : 'a typeable -> (id list -> read_state -> 'a * read_state)        -> id -> read_state -> 'a * read_state
+val record : 'a typeable -> ('a -> id list ->read_state -> 'a * read_state) -> int -> id -> read_state -> 'a * read_state
 
 exception UnpicklingError of string
 exception UnknownTag of int * string
@@ -31,7 +31,7 @@ type 'a pickle = {
   _Typeable : 'a typeable ;
   _Hash     : 'a hash ;
   pickle    : 'a -> write_state -> id * write_state ;
-  unpickle  : id -> 'a read_m 
+  unpickle  : id -> read_state -> 'a * read_state
 }
 
 val to_buffer    : 'a pickle -> Buffer.t -> 'a -> unit

@@ -47,10 +47,10 @@ object (self)
            match spec with
              | `Local t -> 
                  (<:expr< try $exp$
-                          with UnknownTag _ -> ($self#local t$.unpickle x :> $atype$ read_m) >>)
+                          with UnknownTag _ -> ($self#local t$.unpickle x state :> $atype$ * read_state) >>)
              | `Appl (qname, _ as c) ->
                  (<:expr< try $exp$
-                          with UnknownTag _ -> ($self#constr c$.unpickle x :> $atype$ read_m) >>))
+                          with UnknownTag _ -> ($self#constr c$.unpickle x state :> $atype$ * read_state) >>))
         ts
         <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unpickling of "
                                        ^tname$))) >>
@@ -92,8 +92,8 @@ object (self)
         *)
 
     method private polycase_un tagspec : Ast.match_case = match tagspec with
-    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> (fun state -> (`$name$, state)) >>
-    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> (fun state -> `$name$ (fst ($self#atomic t$.unpickle x state)), state) >>
+    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] ->  `$name$, state >>
+    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> `$name$ (fst ($self#atomic t$.unpickle x state)), state >> (* TODO: is this right? *)
 
     method variant (tname, params as atype) (_, tagspec) : Ast.expr =
       let unpickler, extension_tag = 
@@ -101,7 +101,7 @@ object (self)
           (function (`Tag (name,t)) -> Left (name,t) | (`Local _) as t -> Right t | `Appl _ as t -> Right t) tagspec in
         let tag_cases : Ast.match_case list = List.map self#polycase_un tags in
         let extension_case : Ast.match_case = self#extension (self#atype atype) tname extensions in
-          (<:expr< fun id -> sum $self#typeable_instance atype$ (function $list:tag_cases @ [extension_case]$) id >>,
+          (<:expr< fun id -> sum $self#typeable_instance atype$ (fun o state -> match o with $list:tag_cases @ [extension_case]$) id >>,
            find_nonclashing_tag tags)
       in
         wrap
@@ -144,8 +144,8 @@ object (self)
                 ids
               <:expr< ($texpr$, state) >> in
               <:expr< fun c -> (tuple $self#typeable_instance atype$
-                                  (function 
-                                     | $pidlist$ -> fun (state : read_state) -> $inner$
+                                  (fun o state -> match o with 
+                                     | $pidlist$ -> $inner$
                                      | _ -> raise (UnpicklingError $str:msg$))) c >>
           and atype = self#atype atype in
             wrap ~loc ~atype ~tymod ~hashmod ~picklers ~unpickler
@@ -163,7 +163,7 @@ object (self)
         match params' with
           | [] -> <:match_case< $uid:name$ as obj -> 
                                 allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid state -> $exp$) >>,
-                  <:match_case< $`int:n$, [] -> (fun state -> ($uid:name$, state)) >>
+                  <:match_case< $`int:n$, [] -> ($uid:name$, state) >>
           | _  -> <:match_case< $uid:name$ $fst (tuple ~loc ~param:"v" nparams)$ as obj -> 
                                 allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid state -> $exp$) >>,
       let _, tuple = tuple ~loc ~param:"id" nparams in
@@ -176,7 +176,7 @@ object (self)
           (List.range 0 nparams)
           params'
         (<:patt< [] >>, <:expr< ($uid:name$ $tuple$, state) >>) in
-        <:match_case< $`int:n$, $patt$ -> (fun state -> $exp$) >>
+        <:match_case< $`int:n$, $patt$ -> $exp$ >>
 
 
     method sum (tname, _ as atype) ?eq (summands : summand list) : Ast.expr =
@@ -187,12 +187,11 @@ object (self)
         ~tymod:(self#typeable_instance atype)
         ~hashmod:(self#hash_instance atype)
         ~picklers
-        ~unpickler:<:expr< fun id -> 
-                           let f = function
-                                    $list:unpicklers$ 
-                                   | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
-                                                                    ^tname^": "$^ string_of_int n))
-                           in sum $self#typeable_instance atype$ f id >>
+        ~unpickler:<:expr< fun id -> sum $self#typeable_instance atype$
+                           (fun o state -> match o with
+                                $list:unpicklers$ 
+                              | n,_ -> raise (UnpicklingError ($str:"Unexpected tag when unpickling "
+                                                                    ^tname^": "$^ string_of_int n))) id >>
 
     method record (tname, params as atype) ?eq (fields : Type.field list) : Ast.expr =
       let picklers =
@@ -246,8 +245,8 @@ object (self)
           let ttype = List.fold_left (fun t (p, _) -> <:ctyp< '$p$ $t$ >>) <:ctyp< Mutable.t >> params in
             unpickle_record_bindings
               (<:expr< record $self#typeable_instance atype$
-                 (fun self -> function
-                    | $idpat$ -> let this = (Obj.magic self : $ttype$) in (fun state -> $inner$)
+                 (fun self -> fun o state -> match o with
+                    | $idpat$ -> let this = (Obj.magic self : $ttype$) in $inner$
                     | _ -> raise (UnpicklingError $str:msg$)) $`int:List.length fields$ >>)
         in 
           wrap ~loc ~picklers ~unpickler
