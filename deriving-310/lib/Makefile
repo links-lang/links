@@ -14,12 +14,12 @@ SOURCES = show.ml           show.mli		\
           hash.ml           hash.mli		\
           bounded.ml        bounded.mli		\
           enum.ml           enum.mli		\
-          monad.ml          monad.mli		\
           dump.ml           dump.mli		\
           typeable.ml       typeable.mli	\
           dynmap.ml         dynmap.mli		\
           pickle.ml	    pickle.mli    	\
-          functor.ml        functor.mli		\
+                                                 \
+          monad.ml          monad.mli
 
 
 RESULT  = deriving

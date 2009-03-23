@@ -1,16 +1,9 @@
 (* Finite map : dynamic |-> t *)
 
+open Hash
 open Typeable
 
-val comp : 'a typeable -> 'a Eq.eq -> dynamic -> dynamic -> bool
-
-module DynMap :
-sig
-  type comparator = dynamic -> dynamic -> bool
-  type 'a t
-   val empty : 'a t
-   val add : dynamic -> 'a -> comparator -> 'a t -> 'a t 
-   val mem : dynamic -> 'a t -> bool 
-   val find : dynamic -> 'a t -> 'a option
-   val iter : (dynamic -> 'a -> unit) -> 'a t -> unit
-end
+type 'a t
+val empty : 'a t
+val add  : 'k hash -> 'k typeable -> 'k -> 'v -> 'v t -> 'v t
+val find : 'k hash -> 'k typeable -> 'k -> 'v t -> 'v option

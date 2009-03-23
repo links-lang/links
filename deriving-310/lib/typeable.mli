@@ -21,6 +21,7 @@ val cast          : 'a typeable -> dynamic -> 'a option
 val throwing_cast : 'a typeable -> dynamic -> 'a
 val make_dynamic  : 'a typeable -> 'a -> dynamic
 val mk            : 'a typeable -> 'a -> dynamic
+val type_rep      : 'a typeable -> TypeRep.t
 
 val typeable_list   : 'a typeable -> 'a list typeable
 val typeable_option : 'a typeable -> 'a option typeable

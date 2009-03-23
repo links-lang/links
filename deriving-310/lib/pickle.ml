@@ -51,46 +51,34 @@ type repr = Repr.t
 
 type write_state = {
   nextid : Id.t;
-  obj2id : Id.t Dynmap.DynMap.t;
+  obj2id : Id.t Dynmap.t;
   id2rep : repr IdMap.t;
 }
 
 let initial_output_state : write_state = {
-    nextid = Id.initial;
-    obj2id = Dynmap.DynMap.empty;
-    id2rep = IdMap.empty;
-  }
+  nextid = Id.initial;
+  obj2id = Dynmap.empty;
+  id2rep = IdMap.empty;
+}
 
-module Write = Monad.Monad_state (struct type state = write_state end)
+type 'a write_m = write_state -> 'a * write_state
 
-open Write
-
-let allocate typeable hash o f =
-  let comparator = Dynmap.comp typeable hash.Hash._Eq in
-      
-  let obj = Typeable.make_dynamic typeable o in
-    get >>= fun ({nextid=nextid;obj2id=obj2id} as t) ->
-      match Dynmap.DynMap.find obj obj2id with
-        | Some id -> return id
-        | None -> 
-            let id, nextid = nextid, Id.next nextid in
-              put {t with
-                     obj2id = Dynmap.DynMap.add obj id comparator obj2id;
-                     nextid = nextid} >>
-                f id >> return id
+let allocate typeable hash o f ({nextid=nextid;obj2id=obj2id} as t) =
+  match Dynmap.find hash typeable o obj2id with
+    | Some id -> (id, t)
+    | None -> 
+        let id, nextid = nextid, Id.next nextid in
+          (id, f id {t with
+                       obj2id = Dynmap.add hash typeable o id obj2id;
+                       nextid = nextid})
                   
-let store_repr id repr =
-  get >>= fun state ->
-    put {state with id2rep = IdMap.add id repr state.id2rep}
+let store_repr id repr s = {s with id2rep = IdMap.add id repr s.id2rep}
 
 type read_state = (repr * (Typeable.dynamic option)) IdMap.t
 
-module Read = Monad.Monad_state (struct type state = read_state end)
+type 'a read_m = read_state -> 'a * read_state
 
-open Read
-
-let find_by_id id =
-  get >>= fun state -> return (IdMap.find id state)
+let find_by_id id state = IdMap.find id state, state
 
 let decode_repr_ctor c = match Repr.unpack_ctor c with
   | (Some c, ids) -> (c, ids)
@@ -102,12 +90,11 @@ let decode_repr_noctor c = match Repr.unpack_ctor c with
       
 let update_map typeable id obj =
   let dynamic = Typeable.make_dynamic typeable obj in
-    get >>= fun state -> 
-      match IdMap.find id state with 
+    (fun state -> 
+       (match IdMap.find id state with 
         | (repr, None) ->     
-            put (IdMap.add id (repr, Some dynamic) state)
-        | (_, Some _) -> 
-            return ()
+            ((),  (IdMap.add id (repr, Some dynamic) state))
+        | (_, Some _) -> (), state
               (* Checking for id already present causes unpickling to fail 
                  when there is circularity involving immutable values (even 
                  if the recursion wholly depends on mutability).
@@ -135,36 +122,40 @@ let update_map typeable id obj =
                  8. lookup the contents in the dictionary (there)
                  9. insert "B{...}" into the dictionary.
                  10. insert "B{...}" into the dictionary.
-              *)
+              *)))
+    
 
-let whizzy typeable f id decode =
-  find_by_id id >>= fun (repr, dynopt) ->
+let whizzy typeable f id decode s =
+  let (repr, dynopt), s' =  find_by_id id s in
     match dynopt with 
       | None ->
-          f (decode repr) >>= fun obj ->
-            update_map typeable id obj >>
-              return obj
-      | Some obj -> return (Typeable.throwing_cast typeable obj)
+          let v, s' = f (decode repr) s' in
+            (v, (snd (update_map typeable id v s')))
+      | Some obj -> 
+          (Typeable.throwing_cast typeable obj, s')
 
+    
 let sum typeable f id = whizzy typeable f id decode_repr_ctor
 let tuple typeable f id = whizzy typeable f id decode_repr_noctor
 let record_tag = 0
-let record typeable f size id =
-  find_by_id id >>= fun (repr, obj) ->
+let record typeable f size id s =
+  let (repr, obj), s' = find_by_id id s in
     match obj with
       | None ->
-          let this = Obj.magic  (Obj.new_block record_tag size) in
-            update_map typeable id this >>
-              f this (decode_repr_noctor repr) >>
-              return this
-      | Some obj -> return (Typeable.throwing_cast typeable obj)
+          let this = Obj.magic (Obj.new_block record_tag size) in
+            (this,
+             snd (f this (decode_repr_noctor repr) (snd (update_map typeable id this s))))
+      | Some obj -> 
+          (Typeable.throwing_cast typeable obj,
+           s')
 
+    
 
 type 'a pickle = {
   _Typeable : 'a Typeable.typeable ;
   _Hash     : 'a Hash.hash ;
-  pickle : 'a -> id Write.m ;
-  unpickle : id -> 'a Read.m 
+  pickle : 'a -> id write_m ;
+  unpickle : id -> 'a read_m 
 }
 
 type ids = (Id.t * Repr.t) list
@@ -279,8 +270,6 @@ let read_discriminated (f : 'b -> 'a) : 'b -> Id.t * (Id.t * Repr.t) list
     let (root,dmap) = unorder rmap in
       (root, undiscriminate dmap)
         
-open Write
-        
 let decode_pickled_string (f : 'a -> Id.t * discriminated_ordered) : 'b -> Id.t * read_state =
   fun s -> 
     let (id, state : dumpable) = 
@@ -299,12 +288,12 @@ let encode_pickled_string f =
       write_discriminated f input_state
         
 let doPickle s f v : 'a = 
-  let id, state = runState (s.pickle v) initial_output_state in
+  let id, state =  (s.pickle v) initial_output_state in
     encode_pickled_string f (id, state)
       
 let doUnpickle s f input = 
   let id, initial_input_state = decode_pickled_string f input in  
-  let value, _ = Read.runState (s.unpickle id) initial_input_state in
+  let value, _ = s.unpickle id initial_input_state in
     value
       
 let from_channel s = doUnpickle s (Dump.from_channel dump_do_pair)
@@ -319,22 +308,19 @@ let pickle_from_dump
     (hash : 'a Hash.hash)
     (typeable : 'a Typeable.typeable)
     : 'a pickle =
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-(*  let w = Read.utils typeable eq in
-  let u = Write.utils typeable in*)
     { _Typeable = typeable;
       _Hash = hash;
       pickle = (fun obj ->
                   allocate typeable hash obj
                     (fun id -> store_repr id (Repr.of_string (Dump.to_string p obj))));
-      unpickle = (fun id ->
-                    Read.(>>=) (find_by_id id) (fun (repr, dynopt) ->
-                                                  match dynopt with
-                                                    | None ->
-                                                        let obj : 'a = Dump.from_string p (Repr.to_string repr) in
-                                                          Read.(>>)
-                                                            (update_map typeable id obj) (Read.return obj)
-                                                    | Some obj -> Read.return (Typeable.throwing_cast typeable obj)))
+      unpickle = (fun id s ->
+                    let (repr, dynopt), state = find_by_id id s in
+                      match dynopt with
+                        | None ->
+                            let obj : 'a = Dump.from_string p (Repr.to_string repr) in
+                              (obj, (snd (update_map typeable id obj state)))
+                        | Some obj -> 
+                            (Typeable.throwing_cast typeable obj, state))
     }
 
 let pickle_unit   = pickle_from_dump Dump.dump_unit   Hash.hash_unit   Typeable.typeable_unit
@@ -348,7 +334,6 @@ let pickle_string = pickle_from_dump Dump.dump_string Hash.hash_string Typeable.
 let pickle_option (v0 : 'a pickle) : 'a option pickle =
   let typeable = Typeable.typeable_option v0._Typeable in
   let hash = Hash.hash_option v0._Hash  in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle =
       function
           None as obj ->
@@ -356,13 +341,15 @@ let pickle_option (v0 : 'a pickle) : 'a option pickle =
               (fun id -> store_repr id (Repr.make ~constructor:0 []))
         | Some v as obj ->
             allocate typeable hash obj
-              (fun thisid ->
-                 v0.pickle v >>= fun id0 ->
-                   store_repr thisid (Repr.make ~constructor:1 [id0])) in
+              (fun thisid s ->
+                 let v, s' = v0.pickle v s in
+                   store_repr thisid (Repr.make ~constructor:1 [v]) s') in
   let unpickle =
     let f = function
-      | 0, [] -> Read.return None
-      | 1, [id] -> Read.(>>=) (v0.unpickle id) (fun obj -> Read.return (Some obj))
+      | 0, [] -> (fun state -> (None, state)) 
+      | 1, [id] -> (fun state -> 
+                      let v, s' = v0.unpickle id state in
+                        Some v, s')
         | n, _ -> raise (UnpicklingError
                            ("Unexpected tag encountered unpickling "
                             ^"option : " ^ string_of_int n)) in
@@ -373,26 +360,28 @@ let pickle_option (v0 : 'a pickle) : 'a option pickle =
 let pickle_list (pickler : 'a pickle) : 'a list pickle =
   let typeable = Typeable.typeable_list pickler._Typeable in
   let hash = Hash.hash_list pickler._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
   let rec pickle = function
       [] as obj ->
         allocate typeable hash obj
           (fun this -> store_repr this (Repr.make ~constructor:0 []))
     | (v0::v1) as obj ->
         allocate typeable hash obj
-          (fun this -> pickler.pickle v0 >>= fun id0 ->
-                               pickle v1 >>= fun id1 ->
-                                 store_repr this (Repr.make ~constructor:1 [id0; id1])) in
+          (fun this state -> 
+             let v, state = pickler.pickle v0 state in   
+             let w, state = pickle v1 state in
+               store_repr this (Repr.make ~constructor:1 [v; w]) state) in
   let rec unpickle id =
     let module M = struct
-      open Read
       let f = function
-        | 0, [] -> return []
+        | 0, [] -> 
+            (fun state -> ([], state)) 
         | 1, [car;cdr] ->
-            pickler.unpickle car >>= fun car ->
-              unpickle cdr >>= fun cdr ->
-                return (car :: cdr)
-              | n, _ -> raise (UnpicklingError
+            (fun s -> 
+               let car, s'  = pickler.unpickle car s in 
+               let cdr, s'' = unpickle cdr s' in
+                 car :: cdr, s'')
+              
+        | n, _ -> raise (UnpicklingError
                                  ("Unexpected tag encountered unpickling "
                                   ^"option : " ^ string_of_int n)) 
     end in
@@ -410,26 +399,32 @@ let pickle_6 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
     :  ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) pickle =
   let typeable = Typeable.typeable_6 a1._Typeable a2._Typeable a3._Typeable a4._Typeable a5._Typeable a6._Typeable in
   let hash = Hash.hash_6 a1._Hash a2._Hash a3._Hash a4._Hash a5._Hash a6._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-  let rec pickle (a1, a2, a3, a4, a5, a6) = assert false in
-  let rec unpickle =
-    let module M = struct
-      open Read
-      let v = 
-        tuple typeable
-        (function
-           | [v1;v2;v3;v4;v5;v6] ->
-               (a1.unpickle v1 >>= fun b1 ->
-                  a2.unpickle v2 >>= fun b2 ->
-                    a3.unpickle v3 >>= fun b3 ->
-                      a4.unpickle v4 >>= fun b4 ->
-                        a5.unpickle v5 >>= fun b5 ->
-                          a6.unpickle v6 >>= fun b6 ->
-                            return (b1, b2, b3, b4, b5, b6))
-           | l -> raise (UnpicklingError
-                           ("Unexpected number of elements encountered when unpickling "
-                            ^"6-tuple : " ^ string_of_int (List.length l))))
-    end in M.v
+  let pickle = 
+    (fun ((id1, id2, id3, id4, id5, id6) as obj) ->
+       allocate typeable hash obj
+         (fun this state ->
+            let id1, state = a1.pickle id1 state in
+            let id2, state = a2.pickle id2 state in
+            let id3, state = a3.pickle id3 state in
+            let id4, state = a4.pickle id4 state in
+            let id5, state = a5.pickle id5 state in
+            let id6, state = a6.pickle id6 state in
+              store_repr this (Repr.make [ id1; id2; id3; id4; id5; id6 ]) state)) in
+  let unpickle =
+    tuple typeable
+      (function
+         | [v1;v2;v3;v4;v5;v6] ->
+             (fun s -> 
+                let b1, s = a1.unpickle v1 s in
+                let b2, s = a2.unpickle v2 s in
+                let b3, s = a3.unpickle v3 s in
+                let b4, s = a4.unpickle v4 s in
+                let b5, s = a5.unpickle v5 s in
+                let b6, s = a6.unpickle v6 s in
+                  (b1, b2, b3, b4, b5, b6), s)
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"6-tuple : " ^ string_of_int (List.length l))))
   in
     { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
@@ -437,25 +432,30 @@ let pickle_5 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
     :  ('a1 * 'a2 * 'a3 * 'a4 * 'a5) pickle =
   let typeable = Typeable.typeable_5 a1._Typeable a2._Typeable a3._Typeable a4._Typeable a5._Typeable in
   let hash = Hash.hash_5 a1._Hash a2._Hash a3._Hash a4._Hash a5._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-  let rec pickle (a1, a2, a3, a4, a5) = assert false in
-  let rec unpickle =
-    let module M = struct
-      open Read
-      let v = 
-        tuple typeable
-        (function
-           | [v1;v2;v3;v4;v5] ->
-               (a1.unpickle v1 >>= fun b1 ->
-                  a2.unpickle v2 >>= fun b2 ->
-                    a3.unpickle v3 >>= fun b3 ->
-                      a4.unpickle v4 >>= fun b4 ->
-                        a5.unpickle v5 >>= fun b5 ->
-                            return (b1, b2, b3, b4, b5))
-           | l -> raise (UnpicklingError
-                           ("Unexpected number of elements encountered when unpickling "
-                            ^"5-tuple : " ^ string_of_int (List.length l))))
-    end in M.v
+  let pickle =
+    (fun ((id1, id2, id3, id4, id5) as obj) ->
+       allocate typeable hash obj
+         (fun this state ->
+            let id1, state = a1.pickle id1 state in
+            let id2, state = a2.pickle id2 state in
+            let id3, state = a3.pickle id3 state in
+            let id4, state = a4.pickle id4 state in
+            let id5, state = a5.pickle id5 state in
+              store_repr this (Repr.make [ id1; id2; id3; id4; id5 ]) state)) in
+  let unpickle =
+    tuple typeable
+      (function
+         | [v1;v2;v3;v4;v5] ->
+             (fun s ->
+                let b1, s = a1.unpickle v1 s in
+                let b2, s = a2.unpickle v2 s in
+                let b3, s = a3.unpickle v3 s in
+                let b4, s = a4.unpickle v4 s in
+                let b5, s = a5.unpickle v5 s in
+                  (b1, b2, b3, b4, b5), s)
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"5-tuple : " ^ string_of_int (List.length l))))
   in
     { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
@@ -463,69 +463,78 @@ let pickle_4 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) (a4 : 'a4 pic
     :  ('a1 * 'a2 * 'a3 * 'a4) pickle =
   let typeable = Typeable.typeable_4 a1._Typeable a2._Typeable a3._Typeable a4._Typeable in
   let hash = Hash.hash_4 a1._Hash a2._Hash a3._Hash a4._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-  let rec pickle (a1, a2, a3, a4) = assert false in
-  let rec unpickle =
-    let module M = struct
-      open Read
-      let v = 
-        tuple typeable
-        (function
-           | [v1;v2;v3;v4] ->
-               (a1.unpickle v1 >>= fun b1 ->
-                  a2.unpickle v2 >>= fun b2 ->
-                    a3.unpickle v3 >>= fun b3 ->
-                      a4.unpickle v4 >>= fun b4 ->
-                            return (b1, b2, b3, b4))
-           | l -> raise (UnpicklingError
-                           ("Unexpected number of elements encountered when unpickling "
-                            ^"4-tuple : " ^ string_of_int (List.length l))))
-    end in M.v
+  let pickle = 
+    (fun ((id1, id2, id3, id4) as obj) ->
+       allocate typeable hash obj
+         (fun this state ->
+            let id1, state = a1.pickle id1 state in
+            let id2, state = a2.pickle id2 state in
+            let id3, state = a3.pickle id3 state in
+            let id4, state = a4.pickle id4 state in
+              store_repr this (Repr.make [ id1; id2; id3; id4 ]) state)) in
+  let unpickle =
+    tuple typeable
+      (function
+         | [v1;v2;v3;v4] ->
+             (fun s ->
+                let b1, s = a1.unpickle v1 s in
+                let b2, s = a2.unpickle v2 s in
+                let b3, s = a3.unpickle v3 s in
+                let b4, s = a4.unpickle v4 s in
+                    (b1, b2, b3, b4), s)
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"4-tuple : " ^ string_of_int (List.length l))))
   in
     { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_3 (a1 : 'a1 pickle) (a2 : 'a2 pickle) (a3 : 'a3 pickle) :  ('a1 * 'a2 * 'a3) pickle =
   let typeable = Typeable.typeable_3 a1._Typeable a2._Typeable a3._Typeable in
   let hash = Hash.hash_3 a1._Hash a2._Hash a3._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-  let rec pickle (a1, a2, a3) = assert false in
-  let rec unpickle =
-    let module M = struct
-      open Read
-      let v = 
-        tuple typeable
-        (function
-           | [v1;v2;v3] ->
-               (a1.unpickle v1 >>= fun b1 ->
-                  a2.unpickle v2 >>= fun b2 ->
-                    a3.unpickle v3 >>= fun b3 ->
-                            return (b1, b2, b3))
-           | l -> raise (UnpicklingError
-                           ("Unexpected number of elements encountered when unpickling "
-                            ^"3-tuple : " ^ string_of_int (List.length l))))
-    end in M.v
+  let pickle = 
+    (fun ((id1, id2, id3) as obj) ->
+       allocate typeable hash obj
+         (fun this state ->
+            let id1, state = a1.pickle id1 state in
+            let id2, state = a2.pickle id2 state in
+            let id3, state = a3.pickle id3 state in
+              store_repr this (Repr.make [ id1; id2; id3 ]) state)) in
+  let unpickle =
+    tuple typeable
+      (function
+         | [v1;v2;v3] ->
+             (fun s ->
+                let b1, s = a1.unpickle v1 s in
+                let b2, s = a2.unpickle v2 s in
+                let b3, s = a3.unpickle v3 s in
+                  (b1, b2, b3), s)
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"3-tuple : " ^ string_of_int (List.length l))))
   in
     { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 
 let pickle_2 (a1 : 'a1 pickle) (a2 : 'a2 pickle) :  ('a1 * 'a2) pickle =
   let typeable = Typeable.typeable_2 a1._Typeable a2._Typeable in
   let hash = Hash.hash_2 a1._Hash a2._Hash in
-  let comp = Dynmap.comp typeable hash.Hash._Eq in
-  let rec pickle (a1, a2) = assert false in
-  let rec unpickle =
-    let module M = struct
-      open Read
-      let v = 
-        tuple typeable
-        (function
-           | [v1;v2] ->
-               (a1.unpickle v1 >>= fun b1 ->
-                  a2.unpickle v2 >>= fun b2 ->
-                    return (b1, b2))
-           | l -> raise (UnpicklingError
-                           ("Unexpected number of elements encountered when unpickling "
-                            ^"2-tuple : " ^ string_of_int (List.length l))))
-    end in M.v
+  let pickle = 
+    (fun ((id1, id2) as obj) ->
+       allocate typeable hash obj
+         (fun this state ->
+            let id1, state = a1.pickle id1 state in
+            let id2, state = a2.pickle id2 state in
+              store_repr this (Repr.make [ id1; id2 ]) state)) in
+  let unpickle =
+    tuple typeable
+      (function
+         | [v1;v2] ->
+             (fun s ->
+                let b1, s = a1.unpickle v1 s in
+                let b2, s = a2.unpickle v2 s in
+                  (b1, b2), s)
+         | l -> raise (UnpicklingError
+                         ("Unexpected number of elements encountered when unpickling "
+                          ^"2-tuple : " ^ string_of_int (List.length l))))
   in
     { _Typeable = typeable ; _Hash = hash ; pickle = pickle ; unpickle = unpickle }
 

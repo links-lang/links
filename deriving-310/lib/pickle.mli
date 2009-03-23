@@ -1,3 +1,6 @@
+open Typeable
+open Hash
+
 type id
 
 (* representation of values of user-defined types *)
@@ -10,24 +13,25 @@ type write_state
 type read_state
 
 (* Utilities for serialization *)
-module Write : Monad.Monad_state_type with type state = write_state
-val allocate : 'a Typeable.typeable -> 'a Hash.hash -> 'a -> (id -> unit Write.m) -> id Write.m
-val store_repr : id -> Repr.t -> unit Write.m
+type 'a write_m = write_state -> 'a * write_state
+val allocate : 'a typeable -> 'a hash ->
+                'a -> (id -> write_state -> write_state) -> write_state -> id * write_state
+val store_repr : id -> Repr.t -> write_state -> write_state
 
 (* Utilities for deserialization *)
-module Read : Monad.Monad_state_type with type state = read_state
-val sum    : 'a Typeable.typeable -> (int * id list -> 'a Read.m)  -> (id -> 'a Read.m)
-val tuple  : 'a Typeable.typeable -> (id list -> 'a Read.m)        -> (id -> 'a Read.m)
-val record : 'a Typeable.typeable -> ('a -> id list -> 'a Read.m) -> int -> (id -> 'a Read.m)
+type 'a read_m = read_state -> 'a * read_state
+val sum    : 'a typeable -> (int * id list -> 'a read_m)  -> (id -> 'a read_m)
+val tuple  : 'a typeable -> (id list -> 'a read_m)        -> (id -> 'a read_m)
+val record : 'a typeable -> ('a -> id list -> 'a read_m) -> int -> (id -> 'a read_m)
 
 exception UnpicklingError of string
 exception UnknownTag of int * string
 
 type 'a pickle = {
-  _Typeable : 'a Typeable.typeable ;
-  _Hash     : 'a Hash.hash ;
-  pickle : 'a -> id Write.m ;
-  unpickle : id -> 'a Read.m 
+  _Typeable : 'a typeable ;
+  _Hash     : 'a hash ;
+  pickle    : 'a -> write_state -> id * write_state ;
+  unpickle  : id -> 'a read_m 
 }
 
 val to_buffer    : 'a pickle -> Buffer.t -> 'a -> unit
@@ -46,10 +50,10 @@ val pickle_float : float pickle
 val pickle_num   : Num.num pickle
 val pickle_string : string pickle
 val pickle_option : 'a pickle -> 'a option pickle
-val pickle_list : 'a pickle -> 'a list pickle
-val pickle_ref : 'a pickle -> 'a ref pickle
+val pickle_list   : 'a pickle -> 'a list pickle
+val pickle_ref    : 'a pickle -> 'a ref pickle
 
-val pickle_from_dump : 'a Dump.dump -> 'a Hash.hash -> 'a Typeable.typeable -> 'a pickle
+val pickle_from_dump : 'a Dump.dump -> 'a hash -> 'a typeable -> 'a pickle
 
 val pickle_6 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> 'a6 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) pickle
 val pickle_5 : 'a1 pickle -> 'a2 pickle -> 'a3 pickle -> 'a4 pickle -> 'a5 pickle -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) pickle

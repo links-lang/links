@@ -5,15 +5,10 @@ open Utils
 open Type
 open Camlp4.PreCast
 
-(*let tuple_functors = [2;3;4;5;6]*)
+let tuple_functors = [2;3;4;5;6]
 let tuple_functors = []
 
 let classname = "Pickle"
-
-let wbind ~loc = let bindop = ">>=" in <:expr< Write.$lid:bindop$ >>
-let rbind ~loc = let bindop = ">>=" in <:expr< Read.$lid:bindop$ >>
-let wseq  ~loc = let seqop  = ">>"  in <:expr< Write.$lid:seqop$  >>
-let rseq  ~loc = let seqop  = ">>"  in <:expr< Read.$lid:seqop$  >>
 
 let find_nonclashing_tag : (Type.name * _) list -> int =
   fun tags ->
@@ -52,10 +47,10 @@ object (self)
            match spec with
              | `Local t -> 
                  (<:expr< try $exp$
-                          with UnknownTag _ -> ($self#local t$.unpickle x :> $atype$ Read.m) >>)
+                          with UnknownTag _ -> ($self#local t$.unpickle x :> $atype$ read_m) >>)
              | `Appl (qname, _ as c) ->
                  (<:expr< try $exp$
-                          with UnknownTag _ -> ($self#constr c$.unpickle x :> $atype$ Read.m) >>))
+                          with UnknownTag _ -> ($self#constr c$.unpickle x :> $atype$ read_m) >>))
         ts
         <:expr< raise (UnknownTag (n, ($str:"Unexpected tag encountered during unpickling of "
                                        ^tname$))) >>
@@ -67,46 +62,38 @@ object (self)
     | `Tag (name, None) -> <:match_case<
         (`$name$ as obj) ->
           allocate $typeable$ $hash$ obj
-              (fun thisid -> 
+              (fun thisid state -> 
                  store_repr thisid
-                    (Repr.make ~constructor:$`int:(tag_hash name)$ [])) >>
+                   (Repr.make ~constructor:$`int:(tag_hash name)$ []) state) >>
     | `Tag (name, Some t) -> <:match_case<
         (`$name$ v1 as obj) ->
            allocate $typeable$ $hash$ obj
-            (fun thisid ->
-             $wbind ~loc$ ($self#atomic t$.pickle v1)
-                    (fun mid -> 
-                    (store_repr thisid
-                        (Repr.make ~constructor:$`int:(tag_hash name)$ [mid])))) >>
+            (fun thisid state ->
+               let mid, state = $self#atomic t$.pickle v1 state in
+                 (store_repr thisid (Repr.make ~constructor:$`int:tag_hash name$ [mid])) state) >>
     | `Local (c, _ as t) -> 
         (* TODO: Find a tag number for each type that is guaranteed
            not to clash.  *)
           <:match_case<
             (# $lid:c$) as obj ->
             allocate $typeable$ $hash$ obj
-            (fun thisid ->
-               $wbind ~loc$ ($self#local t$.pickle obj)
-                 (fun mid -> 
-                    (store_repr thisid
-                       (Repr.make ~constructor:$`int:extension_tag$ [mid])))) >>
+            (fun thisid state ->
+               let mid, state = $self#local t$.pickle obj state in
+                 (store_repr thisid (Repr.make ~constructor:$`int:extension_tag$ [mid])) state) >>
     | `Appl (qname, _ as t) -> 
           <:match_case<
             (# $id:Untranslate.qname ~loc qname$) as obj ->
             allocate $typeable$ $hash$ obj
-            (fun thisid ->
-               $wbind ~loc$ ($self#constr t$.pickle obj)
-                 (fun mid -> 
-                    (store_repr thisid
-                       (Repr.make ~constructor:$`int:extension_tag$ [mid])))) >>
-
+            (fun thisid state ->
+               let mid, state = $self#constr t$.pickle obj state in
+                 store_repr thisid (Repr.make ~constructor:$`int:extension_tag$ [mid]) state) >>
         (*
           <:match_case< (# $lid:t$) as obj -> $self#local t$.pickle obj >>
         *)
 
     method private polycase_un tagspec : Ast.match_case = match tagspec with
-    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> Read.return `$name$ >>
-    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> 
-      $rbind ~loc$ ($self#atomic t$.unpickle x) (fun o -> Read.return (`$name$ o)) >>
+    | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] -> (fun state -> (`$name$, state)) >>
+    | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> (fun state -> `$name$ (fst ($self#atomic t$.unpickle x state)), state) >>
 
     method variant (tname, params as atype) (_, tagspec) : Ast.expr =
       let unpickler, extension_tag = 
@@ -142,24 +129,23 @@ object (self)
             let inner = 
               List.fold_right
                 (fun (id,t) expr -> 
-                   <:expr< $wbind ~loc$ ($self#atomic t$.pickle $lid:id$) 
-                              (fun $lid:id$ -> $expr$) >>)
+                   <:expr< let $lid:id$, state = $self#atomic t$.pickle $lid:id$ state in $expr$ >>)
                 ids
-              <:expr< store_repr this (Repr.make $eidlist$) >> in
+              <:expr< store_repr this (Repr.make $eidlist$) state >> in
               [ <:match_case< ($tpatt$ as obj) -> 
-                               allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this -> $inner$) >>]
+                               allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this state -> $inner$) >>]
                 
           and unpickler = 
             let msg = "unexpected object encountered unpickling "^string_of_int nts^"-tuple" in
             let inner = 
               List.fold_right 
                 (fun (id,t) expr ->
-                   <:expr< $rbind ~loc$ ($self#atomic t$.unpickle $lid:id$) (fun $lid:id$ -> $expr$) >>)
+                   <:expr< let $lid:id$, state = $self#atomic t$.unpickle $lid:id$ state in $expr$ >>)
                 ids
-              <:expr< Read.return $texpr$ >> in
+              <:expr< ($texpr$, state) >> in
               <:expr< fun c -> (tuple $self#typeable_instance atype$
                                   (function 
-                                     | $pidlist$ -> $inner$
+                                     | $pidlist$ -> fun (state : read_state) -> $inner$
                                      | _ -> raise (UnpicklingError $str:msg$))) c >>
           and atype = self#atype atype in
             wrap ~loc ~atype ~tymod ~hashmod ~picklers ~unpickler
@@ -170,28 +156,27 @@ object (self)
       let exp = 
         List.fold_right2
           (fun p n tail -> 
-             <:expr< $wbind ~loc$ ($self#atomic p$.pickle $lid:Printf.sprintf "v%d" n$)
-                            (fun $lid:Printf.sprintf "id%d" n$ -> $tail$)>>)
+             <:expr< let $lid:Printf.sprintf "id%d" n$, state =  $self#atomic p$.pickle $lid:Printf.sprintf "v%d" n$ state in $tail$ >>)
           params'
           (List.range 0 nparams)
-          <:expr< store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ~loc ids$) >> in
+          <:expr< store_repr thisid (Repr.make ~constructor:$`int:n$ $expr_list ~loc ids$) state >> in
         match params' with
           | [] -> <:match_case< $uid:name$ as obj -> 
-                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid -> $exp$) >>,
-                  <:match_case< $`int:n$, [] -> Read.return $uid:name$ >>
+                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid state -> $exp$) >>,
+                  <:match_case< $`int:n$, [] -> (fun state -> ($uid:name$, state)) >>
           | _  -> <:match_case< $uid:name$ $fst (tuple ~loc ~param:"v" nparams)$ as obj -> 
-                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid -> $exp$) >>,
+                                allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun thisid state -> $exp$) >>,
       let _, tuple = tuple ~loc ~param:"id" nparams in
       let patt, exp = 
         List.fold_right2 
           (fun n t (pat, exp) ->
              let id = Printf.sprintf "id%d" n in
              <:patt< $lid:id$ :: $pat$ >>,
-             <:expr< $rbind ~loc$ ($self#atomic t$.unpickle $lid:id$) (fun $lid:id$ -> $exp$) >>)
+             <:expr< let $lid:id$, state = $self#atomic t$.unpickle $lid:id$ state in $exp$ >>)
           (List.range 0 nparams)
           params'
-        (<:patt< [] >>, <:expr< Read.return ($uid:name$ $tuple$) >>) in
-        <:match_case< $`int:n$, $patt$ -> $exp$ >>
+        (<:patt< [] >>, <:expr< ($uid:name$ $tuple$, state) >>) in
+        <:match_case< $`int:n$, $patt$ -> (fun state -> $exp$) >>
 
 
     method sum (tname, _ as atype) ?eq (summands : summand list) : Ast.expr =
@@ -214,14 +199,14 @@ object (self)
         let inner =
           List.fold_right 
             (fun (id,t,_) e ->
-               <:expr< $wbind ~loc$ ($self#atomic t$.pickle $lid:id$) (fun $lid:id$ -> $e$) >>)
+               <:expr< let $lid:id$, state = $self#atomic t$.pickle $lid:id$ state in $e$ >>)
             fields
           <:expr< (store_repr this
                      (Repr.make
-                        $expr_list ~loc (List.map (fun (id,_,_) -> <:expr< $lid:id$ >>) fields)$)) >>
+                        $expr_list ~loc (List.map (fun (id,_,_) -> <:expr< $lid:id$ >>) fields)$) state) >>
         in
           [ <:match_case< ($record_pattern ~loc fields$ as obj) ->
-            allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this -> $inner$) >> ] in
+            allocate $self#typeable_instance atype$ $self#hash_instance atype$ obj (fun this state -> $inner$) >> ] in
 
       let unpickle_record_bindings e = 
         (* TODO: 
@@ -250,11 +235,11 @@ object (self)
               (fun (id,_,_) exp ->
                  <:expr< this.Mutable.$lid:id$ <- $lid:id$; $exp$ >>)
               fields
-            <:expr< Read.return self >> in
+            <:expr< (self, state) >> in
           let inner = 
             List.fold_right
               (fun (id,t,_) exp ->
-                 <:expr< $rbind ~loc$ ($self#atomic t$.unpickle $lid:id$) (fun $lid:id$ -> $exp$) >>)
+                 <:expr< let $lid:id$, state =  $self#atomic t$.unpickle $lid:id$ state in $exp$ >>)
               fields
               assignments in
           let idpat = patt_list ~loc (List.map (fun (id,_,_) -> <:patt< $lid:id$ >>) fields) in
@@ -262,7 +247,7 @@ object (self)
             unpickle_record_bindings
               (<:expr< record $self#typeable_instance atype$
                  (fun self -> function
-                    | $idpat$ -> let this = (Obj.magic self : $ttype$) in $inner$
+                    | $idpat$ -> let this = (Obj.magic self : $ttype$) in (fun state -> $inner$)
                     | _ -> raise (UnpicklingError $str:msg$)) $`int:List.length fields$ >>)
         in 
           wrap ~loc ~picklers ~unpickler

@@ -7,11 +7,11 @@ type 'a hash = {
   hash : state -> 'a -> unit ;
   _Eq  : 'a Eq.eq ;
   (* Constraint:
-     eq x y => hash x = hash y
+     eq x y => eq (hash x) (hash y)
   *)
 }
 
-val hash : 'a hash -> 'a -> int
+val hash : 'a hash -> ?depth:int -> 'a -> int
 val eq : 'a hash -> 'a -> 'a -> bool
 
 val hash_int    : int hash

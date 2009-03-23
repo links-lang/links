@@ -7,9 +7,11 @@ type state = {
   mutable size : int
 }
 
-let initial_state () : state = {
+let default_depth = 5
+
+let initial_state depth : state = {
   code = 0;
-  size = 5
+  size = depth
 }
 
 type 'a hash = {
@@ -35,8 +37,8 @@ let (<!>) state value =
 let primitive_hash : state -> 'a -> unit
   = fun state v -> state <!> Hashtbl.hash v
 
-let hash hash v = 
-  let s = initial_state () in
+let hash hash ?(depth=default_depth) v = 
+  let s = initial_state depth in
     try hash.hash s v; s.code
     with Done code -> code
 

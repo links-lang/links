@@ -198,6 +198,7 @@ let cast type_rep d =
     | None -> None
 let make_dynamic type_rep o = (Obj.repr o, Lazy.force type_rep.type_rep)
 let mk = make_dynamic
+let type_rep t = Lazy.force t.type_rep
 let throwing_cast tr d = 
   match cast tr d with
     | None -> 
