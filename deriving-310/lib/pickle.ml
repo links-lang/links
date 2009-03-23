@@ -61,8 +61,6 @@ let initial_output_state : write_state = {
   id2rep = IdMap.empty;
 }
 
-type 'a write_m = write_state -> 'a * write_state
-
 let allocate typeable hash o f ({nextid=nextid;obj2id=obj2id} as t) =
   match Dynmap.find hash typeable o obj2id with
     | Some id -> (id, t)
@@ -75,8 +73,6 @@ let allocate typeable hash o f ({nextid=nextid;obj2id=obj2id} as t) =
 let store_repr id repr s = {s with id2rep = IdMap.add id repr s.id2rep}
 
 type read_state = (repr * (Typeable.dynamic option)) IdMap.t
-
-type 'a read_m = read_state -> 'a * read_state
 
 let find_by_id id state = IdMap.find id state, state
 
@@ -154,8 +150,8 @@ let record typeable f size id s =
 type 'a pickle = {
   _Typeable : 'a Typeable.typeable ;
   _Hash     : 'a Hash.hash ;
-  pickle : 'a -> id write_m ;
-  unpickle : id -> 'a read_m 
+  pickle    : 'a -> write_state -> id * write_state ;
+  unpickle  : id -> read_state -> 'a * read_state
 }
 
 type ids = (Id.t * Repr.t) list

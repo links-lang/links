@@ -13,13 +13,11 @@ type write_state
 type read_state
 
 (* Utilities for serialization *)
-type 'a write_m = write_state -> 'a * write_state
 val allocate : 'a typeable -> 'a hash ->
                 'a -> (id -> write_state -> write_state) -> write_state -> id * write_state
 val store_repr : id -> Repr.t -> write_state -> write_state
 
 (* Utilities for deserialization *)
-type 'a read_m = read_state -> 'a * read_state
 val sum    : 'a typeable -> (int * id list -> read_state -> 'a * read_state)  -> id -> read_state -> 'a * read_state
 val tuple  : 'a typeable -> (id list -> read_state -> 'a * read_state)        -> id -> read_state -> 'a * read_state
 val record : 'a typeable -> ('a -> id list ->read_state -> 'a * read_state) -> int -> id -> read_state -> 'a * read_state

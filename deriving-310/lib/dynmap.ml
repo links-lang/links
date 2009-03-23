@@ -4,6 +4,10 @@ open Eq
 open Hash
 open Typeable
 
+let debug_hash n = 
+  let () = prerr_endline ("Hash : " ^ string_of_int n) in
+    n
+
 module OrdType :
 sig
   type t = int * TypeRep.t
@@ -32,7 +36,7 @@ type 'v t = (('v * dynamic) list * eqtest) CombinedMap.t
 let empty = CombinedMap.empty
   
 let add hsh typeable key value map =
-let mapKey = hash hsh key, type_rep typeable  in
+let mapKey = debug_hash (hash hsh key), type_rep typeable  in
 let matches, eqtest = (try CombinedMap.find mapKey map 
                            with Not_found ->  [], comp typeable hsh._Eq.eq) in
   CombinedMap.add mapKey (((value, mk typeable key) :: matches), eqtest) map

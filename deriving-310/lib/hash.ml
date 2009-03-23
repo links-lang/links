@@ -20,12 +20,9 @@ type 'a hash = {
 }
 
 let alpha = 65599
-let beta = 19
 
-let combine n hash_accu = hash_accu * alpha * n
-let combine_small n hash_accu = hash_accu * beta * n
+let combine n hash_accu = hash_accu * alpha + n
 
-let (<&>) = combine
 let (<!>) state value = 
   if state.size > 0 then
     begin
@@ -49,8 +46,8 @@ let hash_bool = { hash = primitive_hash ; _Eq = eq_bool }
 let hash_float = { hash = primitive_hash ; _Eq = eq_float }
 let hash_unit = { hash = primitive_hash ; _Eq = eq_unit }
 let hash_char = { hash = primitive_hash ; _Eq = eq_char }
-
 let hash_string = { hash = primitive_hash ; _Eq = eq_string }
+
 let hash_ref h = { hash = (fun state v -> h.hash state (!v)) ; _Eq = eq_ref h._Eq }
 let hash_array h = {
   hash = (fun state array -> 
