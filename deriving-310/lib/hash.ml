@@ -4,7 +4,7 @@ exception Done of int
 
 type state = {
   mutable code : int ;
-  mutable size : int
+  mutable size : int ;
 }
 
 let default_depth = 5

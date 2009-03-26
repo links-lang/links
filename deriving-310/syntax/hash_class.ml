@@ -35,7 +35,7 @@ object (self)
   method private polycase : Type.tagspec -> int -> Ast.match_case = 
     fun spec n -> match spec with
     | `Tag (name, None)   -> <:match_case< `$name$ -> _state <!> $`int:tag_hash name$ >>
-    | `Tag (name, Some e) -> <:match_case< `$name$ l -> $self#atomic e$.hash _state l >>
+    | `Tag (name, Some e) -> <:match_case< `$name$ l -> _state <!> $`int:tag_hash name$; $self#atomic e$.hash _state l >>
     | `Local (c, _ as a) -> <:match_case< (# $lid:c$ as l) -> $self#local a$.hash _state l >>
     | `Appl (qname, _ as a) -> let cname = Untranslate.qname ~loc qname in
         <:match_case< (# $id:cname$ as l) -> $self#constr a$.hash _state l >>

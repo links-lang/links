@@ -234,7 +234,7 @@ object (self)
               (fun (id,_,_) exp ->
                  <:expr< this.Mutable.$lid:id$ <- $lid:id$; $exp$ >>)
               fields
-            <:expr< (self, state) >> in
+            <:expr< state >> in
           let inner = 
             List.fold_right
               (fun (id,t,_) exp ->

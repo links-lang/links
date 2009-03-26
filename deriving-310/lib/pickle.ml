@@ -9,6 +9,18 @@ struct
 exception UnknownTag of int * string
 exception UnpicklingError of string
 
+type ('a,'b) either = Left of 'a | Right of 'b
+let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
+    : 'b list * 'c list =
+  let rec aux (lefts, rights) = function
+    | [] -> (List.rev lefts, List.rev rights)
+    | x::xs ->
+        match f x with 
+          | Left l  -> aux (l :: lefts, rights) xs
+          | Right r -> aux (lefts, r :: rights) xs
+  in aux ([], []) l
+       
+
 module Id :
 sig
   type t deriving (Show, Dump, Eq)
@@ -72,9 +84,7 @@ let allocate typeable hash o f ({nextid=nextid;obj2id=obj2id} as t) =
                   
 let store_repr id repr s = {s with id2rep = IdMap.add id repr s.id2rep}
 
-type read_state = (repr * (Typeable.dynamic option)) IdMap.t
-
-let find_by_id id state = IdMap.find id state, state
+type read_state = (repr, Typeable.dynamic) either IdMap.t
 
 let decode_repr_ctor c = match Repr.unpack_ctor c with
   | (Some c, ids) -> (c, ids)
@@ -84,66 +94,59 @@ let decode_repr_noctor c = match Repr.unpack_ctor c with
   | (None, ids) -> ids
   | _ -> invalid_arg "decode_repr_ctor"
       
-let update_map typeable id obj =
-  let dynamic = Typeable.make_dynamic typeable obj in
-    (fun state -> 
-       (match IdMap.find id state with 
-        | (repr, None) ->     
-            ((),  (IdMap.add id (repr, Some dynamic) state))
-        | (_, Some _) -> (), state
-              (* Checking for id already present causes unpickling to fail 
-                 when there is circularity involving immutable values (even 
-                 if the recursion wholly depends on mutability).
-                 
-                 For example, consider the code
-
-                 type t = A | B of t ref deriving (Typeable, Eq, Pickle)
-                 let s = ref A in
-                 let r = B s in
-                 s := r;
-                 let pickled = Pickle_t.pickleS r in
-                   Pickle_t.unpickleS r
-                 
-                 which results in the value
-                 B {contents = B {contents = B { ... }}}
-                 
-                 During deserialization the following steps occur:
-                 1. lookup "B {...}" in the dictionary (not there)
-                 2. unpickle the contents of B:
-                 3. lookup the contents in the dictionary (not there)
-                 4. create a blank reference, insert it into the dictionary
-                 5. unpickle the contents of the reference:
-                 6. lookup ("B {...}") in the dictionary (not there)
-                 7. unpickle the contents of B:
-                 8. lookup the contents in the dictionary (there)
-                 9. insert "B{...}" into the dictionary.
-                 10. insert "B{...}" into the dictionary.
-              *)))
+let update_map typeable id obj state =
+  match IdMap.find id state with 
+    | Left repr -> IdMap.add id (Right (Typeable.mk typeable obj)) state
+    | Right _ -> state
+        (* Checking for id already present causes unpickling to fail 
+           when there is circularity involving immutable values (even 
+           if the recursion wholly depends on mutability).
+           
+           For example, consider the code
+           
+            type t = A | B of t ref deriving (Typeable, Eq, Pickle)
+           let s = ref A in
+           let r = B s in
+           s := r;
+           let pickled = Pickle_t.pickleS r in
+           Pickle_t.unpickleS r
+           
+           which results in the value
+           B {contents = B {contents = B { ... }}}
+           
+           During deserialization the following steps occur:
+           1. lookup "B {...}" in the dictionary (not there)
+           2. unpickle the contents of B:
+           3. lookup the contents in the dictionary (not there)
+           4. create a blank reference, insert it into the dictionary
+           5. unpickle the contents of the reference:
+           6. lookup ("B {...}") in the dictionary (not there)
+           7. unpickle the contents of B:
+           8. lookup the contents in the dictionary (there)
+           9. insert "B{...}" into the dictionary.
+           10. insert "B{...}" into the dictionary.
+        *)
     
 
 let whizzy typeable f id decode s =
-  let (repr, dynopt), s' =  find_by_id id s in
-    match dynopt with 
-      | None ->
-          let v, s' = f (decode repr) s' in
-            (v, (snd (update_map typeable id v s')))
-      | Some obj -> 
-          (Typeable.throwing_cast typeable obj, s')
+  match IdMap.find id s with 
+    | Left repr ->
+        let v, s' = f (decode repr) s in
+          (v, update_map typeable id v s')
+    | Right obj -> 
+        (Typeable.throwing_cast typeable obj, s)
 
     
 let sum typeable f id = whizzy typeable f id decode_repr_ctor
 let tuple typeable f id = whizzy typeable f id decode_repr_noctor
 let record_tag = 0
 let record typeable f size id s =
-  let (repr, dynopt), s' = find_by_id id s in
-    match dynopt with
-      | None ->
-          let this = Obj.magic (Obj.new_block record_tag size) in
-            (this,
-             snd (f this (decode_repr_noctor repr) (snd (update_map typeable id this s))))
-      | Some obj -> 
-          (Typeable.throwing_cast typeable obj,
-           s')
+  match IdMap.find id s with
+  | Left repr ->
+      let this = Obj.magic (Obj.new_block record_tag size) in
+        (this, f this (decode_repr_noctor repr) (update_map typeable id this s))
+  | Right obj -> 
+      (Typeable.throwing_cast typeable obj, s)
 
     
 
@@ -216,17 +219,6 @@ let unorder : Id.t * discriminated_ordered -> Id.t * discriminated
     let  _, c = number_sequentially id c in
       (root, (a,b,c))
         
-type ('a,'b) either = Left of 'a | Right of 'b
-let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
-    : 'b list * 'c list =
-  let rec aux (lefts, rights) = function
-    | [] -> (List.rev lefts, List.rev rights)
-    | x::xs ->
-        match f x with 
-          | Left l  -> aux (l :: lefts, rights) xs
-          | Right r -> aux (lefts, r :: rights) xs
-  in aux ([], []) l
-       
 type discriminated_dumpable = Id.t * discriminated deriving (Dump) 
     
 let discriminate : (Id.t * Repr.t) list -> discriminated
@@ -272,7 +264,7 @@ let decode_pickled_string (f : 'a -> Id.t * discriminated_ordered) : 'b -> Id.t 
       read_discriminated f s
     in
       id, (List.fold_right 
-             (fun (id,repr) map -> IdMap.add id (repr,None) map)
+             (fun (id,repr) map -> IdMap.add id (Left repr) map)
              state
              IdMap.empty)
         
@@ -310,13 +302,12 @@ let pickle_from_dump
                   allocate typeable hash obj
                     (fun id -> store_repr id (Repr.of_string (Dump.to_string p obj))));
       unpickle = (fun id s ->
-                    let (repr, dynopt), state = find_by_id id s in
-                      match dynopt with
-                        | None ->
+                      match IdMap.find id s with
+                        | Left repr ->
                             let obj : 'a = Dump.from_string p (Repr.to_string repr) in
-                              (obj, (snd (update_map typeable id obj state)))
-                        | Some obj -> 
-                            (Typeable.throwing_cast typeable obj, state))
+                              (obj, update_map typeable id obj s)
+                        | Right obj -> 
+                            (Typeable.throwing_cast typeable obj, s))
     }
 
 let pickle_unit   = pickle_from_dump Dump.dump_unit   Hash.hash_unit   Typeable.typeable_unit

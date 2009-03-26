@@ -20,7 +20,7 @@ val store_repr : id -> Repr.t -> write_state -> write_state
 (* Utilities for deserialization *)
 val sum    : 'a typeable -> (int * id list -> read_state -> 'a * read_state)  -> id -> read_state -> 'a * read_state
 val tuple  : 'a typeable -> (id list -> read_state -> 'a * read_state)        -> id -> read_state -> 'a * read_state
-val record : 'a typeable -> ('a -> id list ->read_state -> 'a * read_state) -> int -> id -> read_state -> 'a * read_state
+val record : 'a typeable -> ('a -> id list ->read_state -> read_state) -> int -> id -> read_state -> 'a * read_state
 
 exception UnpicklingError of string
 exception UnknownTag of int * string
