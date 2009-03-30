@@ -1,10 +1,8 @@
 (* A module for hashing.
 *)
 type state
-val (<!>) : state -> int -> unit
-
 type 'a hash = {
-  hash : state -> 'a -> unit ;
+  hash : 'a -> state -> state ;
   _Eq  : 'a Eq.eq ;
   (* Constraint:
      eq x y => eq (hash x) (hash y)

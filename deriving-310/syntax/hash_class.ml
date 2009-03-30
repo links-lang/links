@@ -8,13 +8,8 @@ open Camlp4.PreCast
 let classname = "Hash"
 
 let wrap ~loc ~atype ~eq hash =
-  <:expr< { _Eq = $eq$ ; hash = fun _state -> $hash$ } >>
+  <:expr< { _Eq = $eq$ ; hash = fun v _state -> $hash$ v} >>
 
-let rec seq ~loc : Ast.expr list -> Ast.expr  = function
-  | [] -> <:expr< () >>
-  | [x] -> <:expr< $x$ >>
-  | x :: xs -> <:expr< $x$ ; $seq ~loc xs$ >>
-  
 class hash ~loc = 
 object (self)
   inherit Base.deriver ~loc  ~classname ~allow_private:true
@@ -24,8 +19,12 @@ object (self)
 
   method private nargs : atomic list -> Ast.expr = 
     fun args ->
-      seq ~loc 
-        (List.mapn (fun at n -> <:expr< $self#atomic at$.hash _state $lid:Printf.sprintf "v%d" n$ >>) args)
+      snd
+        (List.fold_left
+           (fun (n, e) at -> (n+1, <:expr< $self#atomic at$.hash $lid:Printf.sprintf "v%d" n$ $e$ >>))
+           (0, <:expr< _state >>)
+           args)
+
 
   method tuple atype args = 
     let nargs = List.length args in
@@ -34,21 +33,21 @@ object (self)
   
   method private polycase : Type.tagspec -> int -> Ast.match_case = 
     fun spec n -> match spec with
-    | `Tag (name, None)   -> <:match_case< `$name$ -> _state <!> $`int:tag_hash name$ >>
-    | `Tag (name, Some e) -> <:match_case< `$name$ l -> _state <!> $`int:tag_hash name$; $self#atomic e$.hash _state l >>
-    | `Local (c, _ as a) -> <:match_case< (# $lid:c$ as l) -> $self#local a$.hash _state l >>
+    | `Tag (name, None)   -> <:match_case< `$name$ -> hash_int.hash $`int:tag_hash name$ _state >>
+    | `Tag (name, Some e) -> <:match_case< `$name$ l ->  $self#atomic e$.hash l (hash_int.hash  $`int:tag_hash name$ _state); >>
+    | `Local (c, _ as a) -> <:match_case< (# $lid:c$ as l) -> $self#local a$.hash l _state >>
     | `Appl (qname, _ as a) -> let cname = Untranslate.qname ~loc qname in
-        <:match_case< (# $id:cname$ as l) -> $self#constr a$.hash _state l >>
+        <:match_case< (# $id:cname$ as l) -> $self#constr a$.hash l _state >>
 
   method private case : Type.summand -> int -> Ast.match_case =
     fun (name,args) n ->
       match args with 
-        | [] -> <:match_case< $uid:name$ -> _state <!> $`int:n$ >>
+        | [] -> <:match_case< $uid:name$ -> hash_int.hash $`int:n$ _state >>
         | _ -> let patt, _ = tuple ~loc ~param:"v" (List.length args) in
-                  <:match_case< $uid:name$ $patt$ -> _state <!> $`int:n$; $self#nargs args$ >> 
+                  <:match_case< $uid:name$ $patt$ -> let _state = hash_int.hash $`int:n$ _state in $self#nargs args$ >> 
               
-  method private field : Type.field -> Ast.expr =
-    (fun (name, typ, _) -> <:expr< $self#atomic typ$.hash _state _v.$lid:name$ >>)
+  method private field : Type.field -> Ast.expr -> Ast.expr =
+    (fun (name, typ, _) e -> <:expr< $self#atomic typ$.hash _v.$lid:name$ $e$ >>)
 
   method sum atype ?eq summands =
     wrap ~loc ~atype ~eq:(self#eq_instance atype)
@@ -56,10 +55,9 @@ object (self)
 
   method record atype ?eq fields = 
   let projs = 
-    seq ~loc
-      (List.map self#field fields) in
-        wrap ~loc ~atype ~eq:(self#eq_instance atype)
-        (<:expr< fun _v -> $projs$ >>)
+    List.fold_right self#field fields <:expr< _state >> in
+    wrap ~loc ~atype ~eq:(self#eq_instance atype)
+      (<:expr< fun _v -> $projs$ >>)
            
   method variant atype (spec, tags) = 
     wrap ~loc ~atype ~eq:(self#eq_instance atype)

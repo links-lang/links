@@ -73,14 +73,12 @@ let initial_output_state : write_state = {
   id2rep = IdMap.empty;
 }
 
-let allocate typeable hash o f ({nextid=nextid;obj2id=obj2id} as t) =
+let allocate typeable hash o f ({nextid=id;obj2id=obj2id} as t) =
   match Dynmap.find hash typeable o obj2id with
     | Some id -> (id, t)
-    | None -> 
-        let id, nextid = nextid, Id.next nextid in
-          (id, f id {t with
-                       obj2id = Dynmap.add hash typeable o id obj2id;
-                       nextid = nextid})
+    | None    -> (id, f id {t with
+                              obj2id = Dynmap.add hash typeable o id obj2id;
+                              nextid = Id.next id})
                   
 let store_repr id repr s = {s with id2rep = IdMap.add id repr s.id2rep}
 
@@ -94,49 +92,14 @@ let decode_repr_noctor c = match Repr.unpack_ctor c with
   | (None, ids) -> ids
   | _ -> invalid_arg "decode_repr_ctor"
       
-let update_map typeable id obj state =
-  match IdMap.find id state with 
-    | Left repr -> IdMap.add id (Right (Typeable.mk typeable obj)) state
-    | Right _ -> state
-        (* Checking for id already present causes unpickling to fail 
-           when there is circularity involving immutable values (even 
-           if the recursion wholly depends on mutability).
-           
-           For example, consider the code
-           
-            type t = A | B of t ref deriving (Typeable, Eq, Pickle)
-           let s = ref A in
-           let r = B s in
-           s := r;
-           let pickled = Pickle_t.pickleS r in
-           Pickle_t.unpickleS r
-           
-           which results in the value
-           B {contents = B {contents = B { ... }}}
-           
-           During deserialization the following steps occur:
-           1. lookup "B {...}" in the dictionary (not there)
-           2. unpickle the contents of B:
-           3. lookup the contents in the dictionary (not there)
-           4. create a blank reference, insert it into the dictionary
-           5. unpickle the contents of the reference:
-           6. lookup ("B {...}") in the dictionary (not there)
-           7. unpickle the contents of B:
-           8. lookup the contents in the dictionary (there)
-           9. insert "B{...}" into the dictionary.
-           10. insert "B{...}" into the dictionary.
-        *)
-    
-
 let whizzy typeable f id decode s =
   match IdMap.find id s with 
     | Left repr ->
         let v, s' = f (decode repr) s in
-          (v, update_map typeable id v s')
+          (v, IdMap.add id (Right (Typeable.mk typeable v)) s')
     | Right obj -> 
         (Typeable.throwing_cast typeable obj, s)
 
-    
 let sum typeable f id = whizzy typeable f id decode_repr_ctor
 let tuple typeable f id = whizzy typeable f id decode_repr_noctor
 let record_tag = 0
@@ -144,7 +107,7 @@ let record typeable f size id s =
   match IdMap.find id s with
   | Left repr ->
       let this = Obj.magic (Obj.new_block record_tag size) in
-        (this, f this (decode_repr_noctor repr) (update_map typeable id this s))
+        (this, f this (decode_repr_noctor repr) (IdMap.add id (Right (Typeable.mk typeable this)) s))
   | Right obj -> 
       (Typeable.throwing_cast typeable obj, s)
 
@@ -305,7 +268,7 @@ let pickle_from_dump
                       match IdMap.find id s with
                         | Left repr ->
                             let obj : 'a = Dump.from_string p (Repr.to_string repr) in
-                              (obj, update_map typeable id obj s)
+                              (obj,   IdMap.add id (Right (Typeable.mk typeable obj)) s)
                         | Right obj -> 
                             (Typeable.throwing_cast typeable obj, s))
     }

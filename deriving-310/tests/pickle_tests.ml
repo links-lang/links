@@ -219,11 +219,8 @@ type refobj = A | B of refobj ref
 let circular = 
   let s = ref A in
   let r = B s in
-     s := r;
-    r
-
-let _ = 
-  let v = Pickle.from_string pickle_refobj (Pickle.to_string pickle_refobj circular) in
+  let () = s := r in
+  let v = Pickle.from_string pickle_refobj (Pickle.to_string pickle_refobj r) in
   let (B {contents = 
            B {contents = 
                B {contents = 
@@ -231,8 +228,7 @@ let _ =
                        B {contents = 
                            B {contents = 
                                B {contents = _ }}}}}}}) = v in
-    ()
-    
+    test pickle_refobj r
 
 type mut = {
   mutable x : mut option;
@@ -282,4 +278,3 @@ let _ =
                      {x = Some {y = Some _}}}}}}}} = 
     Pickle.from_string pickle_t1 (Pickle.to_string pickle_t1 circular_a) in
     ()
-

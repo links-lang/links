@@ -32,10 +32,10 @@ struct
         | _ -> false
       in alpha_eq Env.empty }
   let rec hash_exp = {
-    hash = (fun state -> function
-              | Var _ -> state <!> 1
-              | App (f, p) -> state <!> 2; hash_exp.hash state f; hash_exp.hash state p
-              | Abs (_, body) -> state <!> 3; hash_exp.hash state body);
+    hash = (fun v state -> match v with
+              | Var _ -> hash_int.hash 1 state
+              | App (f, p) -> hash_exp.hash f (hash_exp.hash p (hash_int.hash 2 state)) 
+              | Abs (_, body) -> hash_exp.hash body (hash_int.hash 3 state));
     _Eq = eq_exp ;
   }
   type exp = Var of name
