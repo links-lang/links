@@ -183,20 +183,18 @@ let random_id length =
 
 (* The function used in OCaml to convert variant labels to their
    integer representations.  The formula is given in Jacques
-   Garrigue's 1998 ML workshop paper.
+   Garrigue's 1998 ML workshop paper.  This implementation is taken
+   from typing/btype.ml in the OCaml distribution.
 *)
-let tag_hash s = 
-  let wrap = 0x40000000 in
-  let acc = ref 0 in
-  let mul = ref 1 in
-  let len = String.length s in
-    for i = 0 to len - 1 do
-      let c = String.unsafe_get s (len - i - 1) in
-      let n = Char.code c in
-        acc := (!acc + n * !mul) mod wrap;
-        mul := (!mul * 223) mod wrap;
+let tag_hash s =
+  let accu = ref 0 in
+    for i = 0 to String.length s - 1 do
+      accu := 223 * !accu + Char.code s.[i]
     done;
-    !acc
+    (* reduce to 31 bits *)
+  accu := !accu land (1 lsl 31 - 1);
+  (* make it signed for 64 bits architectures *)
+  if !accu > 0x3FFFFFFF then !accu - (1 lsl 31) else !accu
 
 let _ = 
   (* Sanity check to make sure the function doesn't change underneath
