@@ -204,7 +204,8 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
              Debug.print "Running client program.";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
-               Irtojs.generate_program_page(closures, Lib.nenv, Lib.typing_env) 
+               Irtojs.generate_program_page
+                 (closures, Lib.nenv, Lib.typing_env) 
                  program
          else
            let program = locals, main in (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)

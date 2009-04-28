@@ -31,11 +31,19 @@ type sdoc =
   | SText of string * sdoc
   | SLine of int * sdoc (* newline + spaces *)
 
-let rec sdocToString = function
-  | SNil -> ""
-  | SText(s,d) -> s ^ sdocToString d
-  | SLine(i,d) -> let prefix = String.make i ' '
-    in nl ^ prefix ^ sdocToString d
+let rec sdocToString buf = function
+  | SNil -> ()
+  | SText(s,d) -> Buffer.add_string buf s; sdocToString buf d
+  | SLine(i,d) ->
+      let prefix = String.make i ' ' in
+        Buffer.add_string buf nl;
+        Buffer.add_string buf prefix;
+        sdocToString buf d
+
+let sdocToString d =
+  let buf = Buffer.create 16 in
+    sdocToString buf d;
+    Buffer.contents buf
 
 type mode =
   | Flat
