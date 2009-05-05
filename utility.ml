@@ -31,7 +31,7 @@ include Functional
 let ( <| ) arg f = f arg
 let ( |> ) f arg = f arg
 
-(* Maps and sets *)
+(** {0 Maps and sets} *)
 module type OrderedShow = sig
   type t
   val compare : t -> t -> int
@@ -162,6 +162,8 @@ struct
     let from_alist l =
       List.fold_right (uncurry add) l empty 
         
+    (** Transform each key-value pair in [m] to a new key-value pair
+        by calling [f] and return the resulting [Map]. *)
     let megamap f m = fold (fun k v -> uncurry add (f (k, v))) m empty
 
     let pop item map = 
@@ -198,6 +200,8 @@ struct
              p, add i v q)
         m (empty, empty)
 
+    let defined_on m x = (match lookup x m with None -> false | Some _ -> true)
+
     module S = Show.Show_map(Ord)
     let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
   end
@@ -206,9 +210,9 @@ end
 module type Set =
 sig
   include Set.S
-  
+    
   val union_all : t list -> t
-  (** Take the union of a collection of sets *)
+    (** Take the union of a collection of sets *)
 
   val from_list : elt list -> t
   (** Construct a set from a list *)
@@ -246,7 +250,6 @@ module type CHARSET = Set with type elt = char
 module CharSet : CHARSET = Set.Make(Char)
 module CharMap = Map.Make(Char)
 
-
 type stringset = StringSet.t
     deriving (Show)
 
@@ -266,7 +269,7 @@ type intset = IntSet.t
 type 'a intmap = 'a IntMap.t
     deriving (Show)
 
-(** {1 Lists} *)
+(** {0 Lists} *)
 module ListUtils = 
 struct
   let fromTo f t = 
@@ -408,10 +411,19 @@ struct
 
   let push_back f list = list := !list @ [f]
   let push_front f list = list := f :: !list
+
+  let split3 xyzs = 
+    List.fold_right (fun (x, y, z) (xs, ys, zs) -> x::xs,y::ys,z::zs)
+      xyzs
+      ([],[],[]) 
+
+  let split4 wxyzs = 
+    List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
+      wxyzs
+      ([],[],[],[]) 
 end
 include ListUtils
 
-  
 (** {1 Association-list utilities} *)
 module AList = 
 struct
@@ -680,7 +692,12 @@ struct
   let perhaps_apply f p =
     match f p with
       | None -> p
-      | Some x -> x  
+      | Some x -> x
+
+  let opt_as_list = function
+    | None -> []
+    | Some x -> [x]
+
 (*
   NOTE:
   

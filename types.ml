@@ -903,7 +903,7 @@ struct
   let find_spec = IntMap.find
 end
 
-(* Type printers *)
+(** Type printers *)
 
 module Print =
 struct

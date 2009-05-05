@@ -1,9 +1,8 @@
 open Utility
 open Sugartypes
 
-
-(** refine_bindings locates mutually-recursive sccs in sequences of
-    bindings.  (As a side effect we also dispense with `Infix
+(** [refine_bindings] locates mutually-recursive sccs in sequences of
+    bindings.  (As a side effect we also dispense with [`Infix]
     declarations, which are only used during the parsing stage.)
 *)
 let refine_bindings : binding list -> binding list =

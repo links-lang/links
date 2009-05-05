@@ -45,7 +45,7 @@ open Sugartypes
 
 let dp = Sugartypes.dummy_position
 
-(*
+(**
   This function generates the code to extract the results.
   It roughly corresponds to [[qs]].
 *)
@@ -103,13 +103,14 @@ class desugar_fors env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  (*
-    extract a quadruple (sources, patterns, constructors, types)
+  (**
+    Extract a quadruple (sources, patterns, constructors, types)
     from a list of qualifiers
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.pattern list * Sugartypes.name list * Types.datatype list) =
+      (Sugartypes.phrase list * Sugartypes.pattern list * Sugartypes.name list *
+         Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =
         List.fold_left
@@ -118,7 +119,7 @@ object (o : 'self_type)
                | `List (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
-
+                     
                    let t = TypeUtils.element_type t in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
@@ -126,13 +127,14 @@ object (o : 'self_type)
                | `Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
-
+                     
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
                    let n = `Type (TypeUtils.table_needed_type t) in
                    let eff = `Row (o#lookup_effects) in
-
-                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp), [r; w; n; eff]), dp), [e]), dp in
+                     
+                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp), 
+                                             [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
                      o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, t::ts))
@@ -141,7 +143,9 @@ object (o : 'self_type)
       in
         o, (List.rev es, List.rev ps, List.rev xs, List.rev ts)
 
-  method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+  method phrasenode : Sugartypes.phrasenode -> 
+    ('self_type * Sugartypes.phrasenode * Types.datatype) = 
+    function
     | `Iteration (generators, body, filter, sort) ->
         let eff = o#lookup_effects in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
@@ -197,7 +201,8 @@ object (o : 'self_type)
     | e -> super#phrasenode e
 end
 
-let desugar_fors env = ((new desugar_fors env) : desugar_fors :> TransformSugar.transform)
+let desugar_fors env = ((new desugar_fors env)
+                          : desugar_fors :> TransformSugar.transform)
 
 let has_no_fors =
 object

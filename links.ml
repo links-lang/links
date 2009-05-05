@@ -63,7 +63,8 @@ let rec directives
     "directives", 
     (ignore_envs 
        (fun _ -> 
-          iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h) (Lazy.force directives)),
+          iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h)
+            (Lazy.force directives)),
      "list available directives");
     
     "settings",
@@ -98,10 +99,13 @@ let rec directives
 
     "typeenv",
     ((fun ((_, _, {Types.var_env = typeenv; Types.tycon_env = tycon_env}) as envs) _ ->
-        StringSet.iter (fun k ->
-                          let t = Env.String.lookup typeenv k in
-                            Printf.fprintf stderr " %-16s : %s\n" k (Types.string_of_datatype t))
-          (StringSet.diff (Env.String.domain typeenv) (Env.String.domain Lib.type_env));
+        StringSet.iter 
+          (fun k ->
+             let t = Env.String.lookup typeenv k in
+               Printf.fprintf stderr " %-16s : %s\n" k 
+                 (Types.string_of_datatype t))
+          (StringSet.diff (Env.String.domain typeenv) 
+             (Env.String.domain Lib.type_env));
         envs),
      "display the current type environment");
 
@@ -171,7 +175,7 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
     flush stderr;
     envs
 
-(* Interactive loop *)
+(** Interactive loop *)
 let interact envs =
   let make_dotter ps1 =
     let dots = String.make (String.length ps1 - 1) '.' ^ " " in
@@ -315,12 +319,23 @@ let run_tests tests () =
 let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []
 
+let set_web_mode() = (
+  (* When forcing web mode using the command-line argument, default the
+     required CGI environment variables to a GET request with no params--
+     i.e. start running with the main expression. *)
+  if not(is_some(getenv "REQUEST_METHOD")) then
+    Unix.putenv "REQUEST_METHOD" "GET";
+  if not(is_some(getenv "QUERY_STRING")) then
+    Unix.putenv "QUERY_STRING" "";
+  Settings.set_value web_mode true
+  )
+
 let config_file   : string option ref = ref None
 let options : opt list = 
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
-    ('w',     "web-mode",            set web_mode true,                None);
+    ('w',     "web-mode",            Some set_web_mode,                None);
 (*    ('O',     "optimize",            set Optimiser.optimising true,    None);*)
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
