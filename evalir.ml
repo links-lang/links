@@ -33,6 +33,8 @@ module Eval = struct
        
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
+       if not(Settings.get_value Basicsettings.web_mode) then
+         failwith "Can't make client call outside web mode.";
        if not(Proc.singlethreaded()) then
          failwith "Remaining procs on server at client call!";
        let call_package = Utility.base64encode (serialize_call_to_client 
