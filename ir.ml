@@ -114,6 +114,12 @@ let string_of_special _ = "[SPECIAL]"
 let string_of_computation _ = "[COMPUTATION]"
 let string_of_program _ = "[PROGRAM]"
 
+(** Traversal with type reconstruction
+
+  Essentially this is a map-fold operation over the IR datatypes that also
+  constructs the type as it goes along (using type annotations on
+  binders).
+*)
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
@@ -157,12 +163,6 @@ sig
   end
 end
 
-(* Traversal with type reconstruction *)
-(*
-  Essentially this is a map-fold operation over the IR datatypes that also
-  constructs the type as it goes along (using type annotations on
-  binders).
-*)
 module Transform : TRANSFORM =
 struct
   open Types
@@ -282,17 +282,16 @@ struct
               `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
             let v, t, o = o#value v in
-              begin
-                try
-                  let t = Instantiate.apply_type t ts in
-                    `TApp (v, ts), t, o
-                with
-                    Instantiate.ArityMismatch ->
-                      prerr_endline ("Arity mismatch in type application (Ir.Transform)");
-                      prerr_endline ("expression: "^Show.show show_value (`TApp (v, ts)));
-                      prerr_endline ("type: "^Types.string_of_datatype t);
-                      prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
-                      failwith "fatal internal error"
+              begin try
+                let t = Instantiate.apply_type t ts in
+                  `TApp (v, ts), t, o
+              with
+                  Instantiate.ArityMismatch ->
+                    prerr_endline ("Arity mismatch in type application (Ir.Transform)");
+                    prerr_endline ("expression: "^Show.show show_value (`TApp (v, ts)));
+                    prerr_endline ("type: "^Types.string_of_datatype t);
+                    prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
+                    failwith "fatal internal error"
               end
         | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
@@ -756,7 +755,7 @@ struct
       p
 end
 
-(* Compute free variables *)
+(** Compute free variables *)
 module FreeVars =
 struct
   class visitor tenv bound_vars =
@@ -809,13 +808,12 @@ struct
   let program = computation
 end
 
-(* The closures type represents the set of free variables of a
-collection of functions *)
+(** The [closures] type represents the set of free variables of a
+    collection of functions *)
 type closures = intset intmap
     deriving (Show)
 
-(* Compute the closures in an IR expression *)
-(*
+(** Compute the closures in an IR expression 
 
   This computes the free variables for every function
   and every continuation in an IR expression.
@@ -844,7 +842,7 @@ struct
         else
           b, o
 
-    (* Incrementally compute the free variables for every possible
+    (** Incrementally compute the free variables for every possible
        continuation arising from a computation.
 
        The first argument is the free variables in the tail. The

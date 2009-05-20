@@ -33,19 +33,9 @@ let serialize_call_to_client (continuation, name, arg) =
   Json.jsonize_call continuation name arg
 
 let parse_remote_call lookup cgi_args = 
-  let untuple r =
-    let rec un n accum list = 
-      match List.partition (fst ->- (=) (string_of_int n)) list with
-        | [_,item], rest -> un (n+1) (item::accum) rest
-        | [], [] -> List.rev accum
-        | _ -> assert false
-    in match r with
-      | `Record args -> un 1 [] args
-      | _ -> assert false in
-
   let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
   let args = Utility.base64decode (List.assoc "__args" cgi_args) in
-  let args = untuple (Json.parse_json args) in
+  let args = Value.untuple (Json.parse_json args) in
   let func = lookup fname in
     Debug.print ("client --> server call: "^fname);
     RemoteCall(func, args)
@@ -162,11 +152,12 @@ let get_cgi_args() =
   else
     Cgi.parse_args()
 
-(* In web mode, we wrap the continuation of the whole program in a
+(** In web mode, we wrap the continuation of the whole program in a
    call to renderPage. We also return the resulting continuation so
    that we can use it elsewhere (i.e. in processing ExprEval).
 *)
-let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_}) (bs, body) =
+let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
+                          (bs, body) =
   let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
   let tail = Ir.var_appln nenv "renderPage" [`Variable x] in
   let cont = fun env -> [(`Local, x, env, ([], tail))] in
@@ -217,25 +208,24 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
              let _env, v = Evalir.run_program valenv program in
                Value.string_of_value v)
 
-let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) prelude filename =
+let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) 
+                  prelude filename =
   try 
 (*     let () = Debug.print ("Loading: "^filename^"...") in *)
     let (nenv', tyenv'), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
 (*     let () = Debug.print ("...loaded") in *)
 
-    let () =
-      try
-        Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)
-      with
-          Unify.Failure error ->
-            begin
-              match error with
-                | `Msg s -> Debug.print ("Unification error: " ^ s)
-                | _ -> ()
-            end;
-            failwith("Web programs must have type Page but this program has type "
-                     ^ Types.string_of_datatype t) in
+    try
+      Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)
+    with
+        Unify.Failure error ->
+          begin match error with
+            | `Msg s -> Debug.print ("Unification error: " ^ s)
+            | _ -> ()
+          end;
+          failwith("Web programs must have type Page but this program has type "
+                   ^ Types.string_of_datatype t);
 
     let (locals, main), render_cont = 
       wrap_with_render_page (nenv, tyenv) (locals, main) in

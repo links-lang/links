@@ -1,7 +1,9 @@
 open Utility
 open Ir
 
-(* This module implements a compiler from the syntactic sugar to the
+(* {0 Sugar To IR}
+
+   This module implements a compiler from the syntactic sugar to the
    IR.
 
    It is based on the Compileir module which compiled the old IR to

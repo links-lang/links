@@ -343,12 +343,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                      ([], `Apply (`Variable var, []))) in
          let new_pid = Proc.create_process (cont::Value.toplevel_cont, f) in
            (`Int (num_of_int new_pid))),
-   (*
-     a: spawn's mailbox type (ignored, since spawn doesn't recv)
-     b: the mailbox type of the spawned process
-     c: the parameter expected by the process function
-     d: the return type of the spawned process function (ignored)
-   *)
    datatype "(() ~e~> _) ~> Process ({ |e })",
    IMPURE);
 

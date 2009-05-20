@@ -46,8 +46,8 @@ module Eval = struct
 
   (** {0 Scheduling} *)
 
-  (** Scheduler parameters.  
-      [switch_granularity]: The number of steps to take before 
+  (** {1 Scheduler parameters} *)
+  (** [switch_granularity]: The number of steps to take before 
       switching threads.  *)
   let switch_granularity = 5
 
@@ -387,8 +387,8 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
       env
 
 (** [apply_cont_toplevel cont env v] applies a continuation to a value and
-returns the result. Finishing the main thread normally comes here
-immediately. *)
+    returns the result. Finishing the main thread normally comes here
+    immediately. *)
 let apply_cont_toplevel cont env v = 
   try Eval.apply_cont cont env v
   with

@@ -272,6 +272,9 @@ type 'a intmap = 'a IntMap.t
 (** {0 Lists} *)
 module ListUtils = 
 struct
+  (** [fromTo a b] is the list of consecutive integers starting with
+      [a] and ending with [b-1]. Throws [Invalid_argument "fromTo"]
+      if [b < a]. *)
   let fromTo f t = 
     let rec aux f t result = 
       if f = t then result
@@ -458,7 +461,7 @@ struct
     
   (** [[map2alist f list]]
       makes an alist that maps [[x]] to [[f x]] for each item in [[list]].
-      In category theory this is called the `graph' of f (restricted by [list]).
+      This is called the `graph' of f on the domain [list].
   *)
   let map2alist f list = List.map (fun x -> (x, f x)) list
   let graph_func = map2alist

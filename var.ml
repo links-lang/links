@@ -1,11 +1,11 @@
 (*pp deriving *)
-(** IR variables *)
+(** {0 IR variables} *)
 
 open Utility
 
 type scope = [ `Local | `Global ]
   deriving (Show)
-(* term variables *)
+(** Term variables *)
 type var = int
   deriving (Show, Eq, Hash, Typeable, Pickle, Dump)
 type var_info = Types.datatype * string * scope
@@ -15,23 +15,30 @@ type binder = var * var_info
 
 let dummy_var = 0
 
-(* Generation of fresh variables *)
+(** {0 Generation of fresh variables} *)
 let variable_counter = ref dummy_var
 
+(** Generate just a fresh identifier *)
 let fresh_raw_var : unit -> var =
   fun () ->
     incr variable_counter;
     !variable_counter
 
+(** Given metadata, generate a full binder *)
 let fresh_binder : var_info -> binder =
   fun info ->
     let var = fresh_raw_var () in
       (var, info)
 
+(** Given metadata, generate a full binder and pair it with the new
+    variable identifer; note this identifier is already the first
+    component of the [binder] value *)
 let fresh_var : var_info -> binder * var =
   fun info ->
     let (var, info) = fresh_binder info in
       (var, info), var
+
+(** {0 Manipulate binder metadata} *)
 
 let info_type (t, _, _) = t
 let info_of_type t = (t, "", `Local)
@@ -47,8 +54,8 @@ let type_of_binder (var, (t, _, _)) = t
 let name_of_binder (_, (_, name, _)) = name
 let scope_of_binder (_, (_, _, scope)) = scope
 
-(* create a copy of a type environment mapping vars (= ints) to types
-   instead of strings to types
+(** Create a copy of a type environment mapping vars (= ints) to types
+    instead of strings to types
 *)
 let varify_env (nenv, tenv) : Types.datatype Env.Int.t =
   Env.String.fold

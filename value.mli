@@ -62,7 +62,8 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t 
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * env * Ir.var * Ir.scope)
+| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * 
+                     env * Ir.var * Ir.scope)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of continuation ]
@@ -122,7 +123,8 @@ val marshal_continuation : continuation -> string
 
 type unmarshal_envs =
     env * Ir.scope Utility.IntMap.t *
-      Ir.computation Utility.IntMap.t * (Ir.var list * Ir.computation) Utility.IntMap.t
+      Ir.computation Utility.IntMap.t *
+      (Ir.var list * Ir.computation) Utility.IntMap.t
 
 val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
   -> Ir.program -> unmarshal_envs

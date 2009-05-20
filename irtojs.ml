@@ -11,7 +11,7 @@ let js_pretty_print = Basicsettings.Js.pp
 
 let get_js_lib_url () = Settings.get_value js_lib_url
 
-(* Intermediate language *)
+(** Intermediate language *)
 type code = | Var    of string
             | Lit    of string
             | DeclareVar of string * code option
@@ -36,13 +36,13 @@ type code = | Var    of string
   deriving (Show)
 
 
-(* IR variable environment *)
+(** IR variable environment *)
 module VEnv = Env.Int
 
-(* type of environments mapping IR variables to source variables *)
+(** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
-(*
+(**
   Runtime required (JavaScript functions used should be documented here)
 
   LINKS.concat(a, b)
@@ -69,7 +69,7 @@ type venv = string VEnv.t
   Also, any `builtin' functions from Lib.value_env.
  *)
 
-(* Ugly printer for JavaScript code *)
+(** Ugly printer for JavaScript code *)
 module UP :
 sig
   val show : code -> string
@@ -129,7 +129,7 @@ struct
         | Die msg -> "error('" ^ msg ^ "', __kappa)"
 end
 
-(* Pretty printer for JavaScript code *)
+(** Pretty printer for JavaScript code *)
 module PP :
 sig
   val show : code -> string
@@ -227,15 +227,16 @@ let show =
   else
     UP.show
 
-(* create a string literal, quoting special characters *)
+(** Create a string literal, quoting special characters *)
 let string_js_quote s =
   let sub old repl s = Str.global_replace (Str.regexp old) repl s in
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
 
-(** [strlit] produces a JS literal string from an OCaml string. *)
+(** Return a JS literal string from an OCaml string. *)
 let strlit s = Lit (string_js_quote s)
+(** Return a JS literal string from an OCaml character. *)
 let chrlit ch = Lit(string_js_quote(string_of_char ch))
-(** [chrlistlit] produces a JS literal for the representation of a Links string. *)
+(** Return a literal for the JS representation of a Links string. *)
 let chrlistlit s  = Lst(List.map chrlit (explode s))
 
 (* Specialness:
@@ -519,7 +520,7 @@ struct
     else name  
 end
 
-(* generate a JavaScript name from a binder *)
+(** Generate a JavaScript name from a binder *)
 let name_binder (x, info) =
   let name =
     match info with
@@ -555,10 +556,10 @@ let apply_yielding (f, args) =
 let callk_yielding kappa arg =
   Call(Var "_yieldCont", [kappa; arg]) 
 
-(** generate
-    Generate javascript code for a Links expression
+(** [generate]
+    Generates JavaScript code for a Links expression
     
-    With CPS transform, result of generate is always : (a -> w) -> b
+    With CPS transform, result of generate is always of type : (a -> w) -> b
 *)
 let rec generate_value env : Ir.value -> code =
   let gv v = generate_value env v in
@@ -672,35 +673,34 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code = fu
       | `Return v ->           
           callk_yielding kappa (gv v)
       | `Apply (f, vs) ->
-            let f =
-              match f with
-                | `TApp (f, _) -> f
-                | f -> f
-            in
-              begin
-                match f with
-                  | `Variable f ->
-                      let f_name = VEnv.lookup env f in
-                        begin
-                          match vs with
-                            | [l; r] when Arithmetic.is f_name ->
-                                callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
-                            | [l; r] when Comparison.is f_name ->
-                                callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
-                            | [v] when f_name = "negate" || f_name = "negatef" ->
-                                callk_yielding kappa (Unop ("-", gv v))
-                            | _ ->
-                                if Lib.is_primitive f_name
-                                  && not (List.mem f_name cps_prims)
-                                  && Lib.primitive_location f_name <> `Server 
-                                then
-                                  Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
-                                else
-                                  apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
-                        end
-                  | _ ->
-                      apply_yielding (gv f, [Lst (List.map gv vs); kappa])
-              end
+          let f =
+            match f with
+              | `TApp (f, _) -> f
+              | f -> f
+          in
+            begin match f with
+              | `Variable f ->
+                  let f_name = VEnv.lookup env f in
+                    begin
+                      match vs with
+                        | [l; r] when Arithmetic.is f_name ->
+                            callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
+                        | [l; r] when Comparison.is f_name ->
+                            callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
+                        | [v] when f_name = "negate" || f_name = "negatef" ->
+                            callk_yielding kappa (Unop ("-", gv v))
+                        | _ ->
+                            if Lib.is_primitive f_name
+                              && not (List.mem f_name cps_prims)
+                              && Lib.primitive_location f_name <> `Server 
+                            then
+                              Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
+                            else
+                              apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
+                    end
+              | _ ->
+                  apply_yielding (gv f, [Lst (List.map gv vs); kappa])
+            end
       | `Special special ->
           generate_special env special kappa
       | `Case (v, cases, default) ->
@@ -751,16 +751,16 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
 and generate_computation env : Ir.computation -> code -> (venv * code) = fun (bs, tc) kappa -> 
   let rec gbs env c =
     function
-      | [] ->
-          env, c (generate_tail_computation env tc kappa)
       | b :: bs -> 
           let env, c' = generate_binding env b in
             gbs env (c -<- c') bs
+      | [] ->
+          env, c (generate_tail_computation env tc kappa)
   in
     gbs env (fun code -> code) bs
 
-and generate_binding env : Ir.binding -> (venv * (code -> code)) = fun binding ->
-  match binding with
+and generate_binding env : Ir.binding -> (venv * (code -> code)) = 
+  function
     | `Let (b, (_, `Return v)) ->
         let (x, x_name) = name_binder b in
         let env' = VEnv.bind env (x, x_name) in
@@ -781,7 +781,8 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) = fun binding -
            fun code ->
              let body =
                match location with
-                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                 | `Client | `Unknown ->
+                     snd (generate_computation body_env body (Var "__kappa"))
                  | `Server -> generate_remote_call f_name xs_names
                  | `Native -> failwith ("Not implemented native calls yet")
              in
@@ -805,7 +806,8 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) = fun binding -
                      let body_env = List.fold_left VEnv.bind env (fs @ bs) in
                      let body =
                        match location with
-                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                         | `Client | `Unknown -> 
+                             snd (generate_computation body_env body (Var "__kappa"))
                          | `Server -> generate_remote_call f_name xs_names
                          | `Native -> failwith ("Not implemented native calls yet")
                      in
@@ -818,9 +820,8 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) = fun binding -
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
-and generate_declaration env
-    : Ir.binding -> (venv * (code -> code)) = fun binding ->
-  match binding with
+and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
+  function 
     | `Let (b, (_, `Return v)) ->
         let (x, x_name) = name_binder b in
         let env' = VEnv.bind env (x, x_name) in
@@ -846,7 +847,8 @@ and generate_declaration env
            fun code ->
              let body =
                match location with
-                 | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                 | `Client | `Unknown -> 
+                     snd (generate_computation body_env body (Var "__kappa"))
                  | `Server -> generate_remote_call f_name xs_names
                  | `Native -> failwith ("Not implemented native calls yet")
              in
@@ -870,7 +872,8 @@ and generate_declaration env
                      let body_env = List.fold_left VEnv.bind env (fs @ bs) in
                      let body =
                        match location with
-                         | `Client | `Unknown -> snd (generate_computation body_env body (Var "__kappa"))
+                         | `Client | `Unknown -> 
+                             snd (generate_computation body_env body (Var "__kappa"))
                          | `Server -> generate_remote_call f_name xs_names
                          | `Native -> failwith ("Not implemented native calls yet")
                      in

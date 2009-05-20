@@ -30,7 +30,7 @@ let state = {
 (* Create the main process's message queue *)
 let _ = Hashtbl.add state.message_queues 0 (Queue.create ())
 
-(** Is there is only one thread total (the running one)? *)
+(** Test that there is only one thread total (the running one)? *)
 let singlethreaded () = 
   Hashtbl.length state.blocked == 0 &&
     Queue.length state.suspended == 0
@@ -42,7 +42,10 @@ let debug_process_status () =
   prerr_endline ("blocked processes : " ^ 
                    string_of_int (Hashtbl.length state.blocked))
 
-(** [fresh_pid()] returns a new globally-fresh process ID. *)
+(** [fresh_pid()] returns a new globally-fresh process ID.
+    Server-spawned processes have even PIDs, client-spawned
+    have odd PIDs.
+*)
 let fresh_pid =
   let current_pid = (ref 0 : pid ref) in
     fun () -> 
