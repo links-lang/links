@@ -47,30 +47,31 @@ let decode_continuation (cont : string) : Value.continuation =
     Str.global_replace (Str.regexp " ") "+" 
   in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
 
-let is_cont_apply_param (key, _) = key == "_cont"
+let make_unmarshal_envs (valenv, nenv, tyenv) program = 
+  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
+  let valenv = Value.with_closures valenv closures in
+  let unmarshal_envs= Value.build_unmarshal_envs(valenv, nenv, tyenv) program in
+    closures, unmarshal_envs
 
-let string_dict_to_charlist_dict =
-  alistmap Value.string_as_charlist
-
-(* The invocation mode [ContApply] is used by the [freshResource]
-   function defined in the prelude, which creates an explicit
-   link using a [_cont] parameter.
+(** NOTE: The invocation mode [ContApply] is used by the
+    [freshResource] function defined in the prelude, which creates an
+    explicit link using a [_cont] parameter.
 *)
+
+let is_cont_apply_param (key, _) = key == "_cont"
 
 (** Extract continuation from the parameters passed in over CGI.*)
 let parse_cont_apply (valenv, nenv, tyenv) program params =
   Debug.print ("Invoking a server continuation");
   let pickled_continuation = List.assoc "_cont" params in
   let params = List.filter (not -<- is_cont_apply_param) params in
-  let params = string_dict_to_charlist_dict params in
-  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
-  let valenv = Value.with_closures valenv (closures) in
-  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
+  let params = alistmap Value.string_as_charlist params in
+  let _, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) program in
     (* TBD: create a debug setting for printing webif modes. *)
       ContApply (Value.unmarshal_continuation unmarshal_envs pickled_continuation, params)
 
-(** Extract expression/environment pair from the parameters passed in over CGI.*)
+(** Extract expression/environment pair from the CGI parameters.*)
 let parse_expr_eval (valenv, nenv, tyenv) program params =
   Debug.print ("eval expression request");
   let string_pair (l, r) =
@@ -78,10 +79,8 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
       (StringMap.from_alist [("1", `Constant (`String l));
                              ("2", `Constant (`String r))],
        None) in
-  let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
-  let valenv = Value.with_closures valenv (closures) in
-  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
+  let closures, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) 
+    program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
         | `RecFunction ([(f, (_xs, _body))], locals, _, _) as v ->
@@ -153,8 +152,8 @@ let get_cgi_args() =
     Cgi.parse_args()
 
 (** In web mode, we wrap the continuation of the whole program in a
-   call to renderPage. We also return the resulting continuation so
-   that we can use it elsewhere (i.e. in processing ExprEval).
+    call to renderPage. We also return the resulting continuation so
+    that we can use it elsewhere (i.e. in processing ExprEval).
 *)
 let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
                           (bs, body) =

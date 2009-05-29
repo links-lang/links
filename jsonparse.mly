@@ -8,7 +8,8 @@ let unparse_label = function
 
 %}
 
-%token LBRACE RBRACE COLON COMMA LBRACKET RBRACKET TRUE FALSE NULL 
+%token LBRACE RBRACE LBRACKET RBRACKET 
+%token COLON COMMA TRUE FALSE NULL 
 %token <string> STRING
 %token <Num.num> INT
 %token <float> FLOAT

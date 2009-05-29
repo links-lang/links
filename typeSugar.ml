@@ -2,7 +2,8 @@
 open Utility
 open Sugartypes
 
-let constrain_absence_types = Settings.add_bool ("constrain_absence_types", false, `User)
+let constrain_absence_types = Settings.add_bool ("constrain_absence_types", 
+                                                 false, `User)
 
 type var_env =
     Types.meta_type_var StringMap.t *
@@ -13,9 +14,13 @@ module Env = Env.String
 
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
-  val instantiate : Types.environment -> string -> (Types.type_arg list * Types.datatype)
-  val generalise : Types.environment -> Types.datatype -> ((Types.quantifier list * Types.type_arg list) * Types.datatype)
+  val instantiate : Types.environment -> string -> 
+                    (Types.type_arg list * Types.datatype)
+  val generalise : Types.environment -> Types.datatype -> 
+                   ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
+  val is_pure : phrase -> bool
+  val is_pure_binding : binding -> bool
   val is_generalisable : phrase -> bool
 end =
 struct
@@ -23,40 +28,42 @@ struct
   let instantiate = Instantiate.var
   let generalise = Generalise.generalise
 
-  let rec opt_generalisable o = opt_app is_generalisable true o
-  and is_generalisable (p, _) = match p with
+  let rec opt_generalisable o = opt_app is_pure true o
+  and is_pure (p, _) = match p with
     | `Constant _
     | `Var _
     | `FunLit _
+    | `DatabaseLit _
+    | `TableLit _
     | `TextNode _
     | `Section _ -> true
 
     | `ListLit (ps, _)
-    | `TupleLit ps -> List.for_all is_generalisable ps
-    | `RangeLit (e1, e2) -> is_generalisable e1 && is_generalisable e2
+    | `TupleLit ps -> List.for_all is_pure ps
+    | `RangeLit (e1, e2) -> is_pure e1 && is_pure e2
     | `TAppl (p, _)
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
     | `Upcast (p, _, _)
-    | `Escape (_, p) -> is_generalisable p
+    | `Escape (_, p) -> is_pure p
     | `ConstructorLit (_, p, _) -> opt_generalisable p
     | `RecordLit (fields, p) ->
-        List.for_all (snd ->- is_generalisable) fields && opt_generalisable p
+        List.for_all (snd ->- is_pure) fields && opt_generalisable p
     | `With (p, fields) ->
-        List.for_all (snd ->- is_generalisable) fields && is_generalisable p
+        List.for_all (snd ->- is_pure) fields && is_pure p
     | `Block (bindings, e) -> 
-        List.for_all is_generalisable_binding bindings && is_generalisable e
+        List.for_all is_pure_binding bindings && is_pure e
     | `Conditional (p1, p2, p3) ->
-        is_generalisable p1 
-     && is_generalisable p2
-     && is_generalisable p3 
+        is_pure p1 
+     && is_pure p2
+     && is_pure p3 
     | `Xml (_, attrs, attrexp, children) -> 
-        List.for_all (snd ->- List.for_all is_generalisable) attrs
+        List.for_all (snd ->- List.for_all is_pure) attrs
      && opt_generalisable attrexp
-     && List.for_all (is_generalisable) children
+     && List.for_all (is_pure) children
     | `Formlet (p1, p2) ->
-        is_generalisable p1 && is_generalisable p2
-    | `Regex r -> is_generalisable_regex r
+        is_pure p1 && is_pure p2
+    | `Regex r -> is_pure_regex r
     | `Iteration _ (* could do a little better in some of these cases *)
     | `Page _
     | `FormletPlacement _
@@ -70,12 +77,10 @@ struct
     | `FnAppl _
     | `Switch _
     | `Receive _
-    | `DatabaseLit _
-    | `TableLit _
     | `DBDelete _
     | `DBInsert _
     | `DBUpdate _ -> false
-  and is_generalisable_binding (bind, _ : binding) = match bind with
+  and is_pure_binding (bind, _ : binding) = match bind with
       (* need to check that pattern matching cannot fail *) 
     | `Fun _
     | `Funs _
@@ -83,9 +88,9 @@ struct
     | `Type _
     | `Include _
     | `Foreign _ -> true
-    | `Exp p -> is_generalisable p
+    | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
-        is_safe_pattern pat && is_generalisable rhs
+        is_safe_pattern pat && is_pure rhs
   and is_safe_pattern (pat, _) = match pat with
       (* safe patterns cannot fail *)
     | `Nil 
@@ -103,7 +108,7 @@ struct
     | `Tuple ps -> List.for_all is_safe_pattern ps
     | `HasType (p, _)
     | `As (_, p) -> is_safe_pattern p
-  and is_generalisable_regex = function 
+  and is_pure_regex = function 
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
     | `Range _
@@ -113,12 +118,14 @@ struct
     | `EndAnchor -> true
     | `Group r
     | `Repeat (_, r)
-    | `Quote r -> is_generalisable_regex r
-    | `Seq rs -> List.for_all is_generalisable_regex rs
-    | `Alternate (r1, r2) -> is_generalisable_regex r1 && is_generalisable_regex r2
-    | `Splice p -> is_generalisable p
-    | `Replace (r, `Literal _) -> is_generalisable_regex r
-    | `Replace (r, `Splice p) -> is_generalisable_regex r && is_generalisable p
+    | `Quote r -> is_pure_regex r
+    | `Seq rs -> List.for_all is_pure_regex rs
+    | `Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
+    | `Splice p -> is_pure p
+    | `Replace (r, `Literal _) -> is_pure_regex r
+    | `Replace (r, `Splice p) -> is_pure_regex r && is_pure p
+
+  let is_generalisable = is_pure
 end
 
 module Gripers :
@@ -763,8 +770,8 @@ tab() ^ code expr ^ nl() ^
 tab() ^ code label)
       | `Msg msg -> raise (Errors.Type_error (pos, msg))
 
-  let pattern_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-    die pos ("\
+    let pattern_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
 The inferred type of the pattern" ^ nl() ^
 tab() ^ code lexpr ^ nl() ^
 "is" ^ nl() ^
@@ -2003,7 +2010,7 @@ and type_binding : context -> binding -> binding * context =
           let effects = Types.make_empty_open_row `Any in
           let return_type = Types.fresh_type_variable `Any in
 
-          (* Check that any annotation matches the shape of the function *)
+          (** Check that any annotation matches the shape of the function *)
           let ft =
             match t with
               | None ->
@@ -2178,7 +2185,8 @@ and type_bindings (globals : context)  bindings =
   in
     tyenv, List.rev bindings
 
-let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
+let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",
+                                              false, `User)
 
 module Check =
 struct
@@ -2206,6 +2214,3 @@ struct
             `Expression body, t, tyenv
       | `Directive d -> `Directive d, Types.unit_type, tyenv
 end
-
-
-

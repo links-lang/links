@@ -160,25 +160,24 @@ module Eval = struct
 
   and apply cont env : Value.t * Value.t list -> Value.t = function
     | `RecFunction (recs, locals, n, scope), ps -> 
-        begin
-          match lookup n recs with
-            | Some (args, body) ->
-                (* unfold recursive definitions once *)
+        begin match lookup n recs with
+          | Some (args, body) ->
+              (* unfold recursive definitions once *)
+              
+              (* extend env with locals *)
+              let env = Value.shadow env ~by:locals in
                 
-                (* extend env with locals *)
-                let env = Value.shadow env ~by:locals in
-                  
-                (* extend env with recs *)
-                let env =
-                  List.fold_right
-                    (fun (name, _) env ->
-                       Value.bind name (`RecFunction (recs, locals, name, scope), scope) env)
-                    recs env in
-
-                (* extend env with arguments *)
-                let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
-                  computation env cont body
-            | None -> eval_error "Error looking up recursive function definition"
+              (* extend env with recs *)
+              let env =
+                List.fold_right
+                  (fun (name, _) env ->
+                     Value.bind name (`RecFunction (recs, locals, name, scope), scope) env)
+                  recs env in
+                
+              (* extend env with arguments *)
+              let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
+                computation env cont body
+          | None -> eval_error "Error looking up recursive function definition"
         end
     | `PrimitiveFunction "recv", [] ->
         (* If there are any messages, take the first one and
@@ -218,16 +217,22 @@ module Eval = struct
       | b::bs -> match b with
           | `Let ((var, _) as b, (_, tc)) ->
               let locals = Value.localise env var in
-                tail_computation env (((Var.scope_of_binder b, var, locals, (bs, tailcomp))::cont) : Value.continuation) tc
+              let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
+                           ::cont) : Value.continuation) in
+                tail_computation env cont' tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-              computation (Value.bind f (`ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb) env) cont (bs, tailcomp)
+              let env' = Value.bind f (`ClientFunction (Var.name_of_binder fb),
+                                       Var.scope_of_binder fb) env in
+                computation env' cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
-                computation (Value.bind
-                               f
-                               (`RecFunction ([f, (List.map fst args, body)], locals, f, scope),
-                                scope) env) cont (bs, tailcomp)
+              let env' = 
+                Value.bind f
+                  (`RecFunction ([f, (List.map fst args, body)], 
+                                 locals, f, scope), scope) env
+              in
+                computation env' cont (bs, tailcomp)
           | `Rec defs ->
               (* partition the defs into client defs and non-client defs *)
               let client_defs, defs =
@@ -280,7 +285,7 @@ module Eval = struct
                   | None, _, #Value.t -> eval_error "Pattern matching failed"
                   | _ -> assert false (* v not a variant *))
            | _ -> eval_error "Case of non-variant")
-    | `If (c,t,e)    -> 
+    | `If (c,t,e)    ->
         computation env cont
           (match value env c with
              | `Bool true     -> t
@@ -386,9 +391,9 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
       run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
       env
 
-(** [apply_cont_toplevel cont env v] applies a continuation to a value and
-    returns the result. Finishing the main thread normally comes here
-    immediately. *)
+(** [apply_cont_toplevel cont env v] applies a continuation to a value
+    and returns the result. Finishing the main thread normally comes
+    here immediately. *)
 let apply_cont_toplevel cont env v = 
   try Eval.apply_cont cont env v
   with

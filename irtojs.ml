@@ -43,7 +43,7 @@ module VEnv = Env.Int
 type venv = string VEnv.t
 
 (**
-  Runtime required (JavaScript functions used should be documented here)
+  Required runtime support (documenting any JavaScript functions used):
 
   LINKS.concat(a, b)
      concatenate two sequences: either strings or lists
@@ -227,7 +227,7 @@ let show =
   else
     UP.show
 
-(** Create a string literal, quoting special characters *)
+(** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
   let sub old repl s = Str.global_replace (Str.regexp old) repl s in
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
@@ -338,7 +338,7 @@ struct
       | _ ->  Call(Var (js_name op), [l; r])
 end
 
-(* This transformation is supposed to pre-pickle any continuations
+(**This transformation is supposed to pre-pickle any continuations
    that might need to be invoked from the client.
 
    As it is currently implemented it is rather brittle. It only works
@@ -386,7 +386,7 @@ struct
         {< nenv = nenv; venv = venv >}
 
     method bind_fun f lam =
-      {< fun_env = VEnv.bind fun_env (f, lam) >}      
+      {< fun_env = VEnv.bind fun_env (f, lam) >}
 
     method super_binding b = super#binding b
 
@@ -398,7 +398,8 @@ struct
         | `Rec defs ->
             let o =
               List.fold_right
-                (fun (f, lam, _location) o -> o#bind_fun (Var.var_of_binder f) lam)
+                (fun (f, lam, _location) o ->
+                   o#bind_fun (Var.var_of_binder f) lam)
                 defs
                 o
             in
@@ -420,7 +421,7 @@ struct
                   | `Variable f -> f
                   | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
               let e, t, o = super#tail_computation e in
-              let stringifyB64 = `Variable (Env.String.lookup nenv "stringifyB64") in
+              let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
               let concat = `Variable (Env.String.lookup nenv "Concat") in
 
               let lam = 
@@ -428,15 +429,18 @@ struct
                   (List.map Var.var_of_binder xsb, body) in
               let fv = IntMap.find f closures in
 
-              let func = Value.marshal_value (`RecFunction ([f, lam], Value.empty_env closures, f, `Local)) in
+              let func = Value.marshal_value
+                (`RecFunction([f, lam],
+                              Value.empty_env closures, 
+                              f, `Local)) in
+              let fields =
+                IntSet.fold
+                  (fun x fields ->
+                     StringMap.add (string_of_int x) (`Variable x) fields)
+                  fv
+                  StringMap.empty
+              in
               let json_args =
-                let fields =
-                  IntSet.fold
-                    (fun x fields ->
-                       StringMap.add (string_of_int x) (`Variable x) fields)
-                    fv
-                    StringMap.empty
-                in
                   `ApplyPure (stringifyB64,
                               [`Extend (fields, None)])
               in
@@ -458,86 +462,16 @@ end
     direct-style.  A bit hackish, this list. *)
 let cps_prims = ["recv"; "sleep"; "spawnWait"]
 
-(** {0 Code generation} *)
-
-
-module Symbols =
-struct
-  let words =
-    CharMap.from_alist
-      [ '!', "bang";
-        '$', "dollar";
-        '%', "percent";
-        '&', "and";
-        '*', "star";
-        '+', "plus";
-        '/', "slash";
-        '<', "lessthan";
-        '=', "equals";
-        '>', "greaterthan";
-        '?', "huh";
-        '@', "monkey";
-        '\\', "backslash";
-        '^', "caret";
-        '-', "hyphen";
-        '.', "fullstop";
-        '|', "pipe";
-        '_', "underscore"]
-
-  let js_keywords = ["break";"else";"new";"var";"case";"finally";"return";"void";
-                     "catch";"for";"switch";"while";"continue";"function";"this";
-                     "with";"default";"if";"throw";"delete";"in";"try";"do";
-                     "instanceof";"typeof";
-                     (* "future keywords" *)
-                     "abstract";"enum";"int";"short";"boolean";"export";
-                     "interface";"static";"byte";"extends";"long";"super";"char";
-                     "final";"native";"synchronized";"class";"float";"package";
-                     "throws";"const";"goto";"private";"transient";"debugger";
-                     "implements";"protected";"volatile";
-                    ]
-
-  let has_symbols name =
-    not (Lib.is_primitive name) &&
-      List.exists (not -<- Utility.Char.isWord) (explode name)
-
-  let wordify name = 
-    if has_symbols name then 
-      ("_" ^ 
-         mapstrcat "_" 
-         (fun ch ->
-            if (Utility.Char.isWord ch) then
-              String.make 1 ch
-            else if CharMap.mem ch words then
-              CharMap.find ch words
-            else
-              failwith("Internal error: unknown symbol character: "^String.make 1 ch))
-         (Utility.explode name))
-        (* TBD: it would be better if this split to chunks maximally matching
-           (\w+)|(\W)
-           then we would not split apart words in partly-symbolic idents. *)
-    else if List.mem name js_keywords then
-      "_" ^ name (* FIXME: this could conflict with Links names. *)
-    else name  
-end
-
-(** Generate a JavaScript name from a binder *)
+(** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
-  let name =
-    match info with
-      | (_, "", `Local) -> "_" ^ string_of_int x
-      | (_, name, `Local) when (Str.string_match (Str.regexp "^_g[0-9]") name 0) ->
-          "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
-      | (_, name, `Local) -> name ^ "_" ^ string_of_int x
-      | (_, name, `Global) -> name
-  in
-    x, Symbols.wordify name
+  (x, Js.name_binder (x,info))
 
 let bind_continuation kappa body =
   match kappa with
     | Var _ -> body kappa
     | _ ->
-        (* It is important to generate a unique name for continuation bindings because
-           in the JavaScript code:
+        (* It is important to generate a unique name for continuation 
+           bindings because in the JavaScript code:
            
            var f = e;
            var f = function (args) {C[f]};
@@ -584,7 +518,9 @@ let rec generate_value env : Ir.value -> code =
           (* HACK *)
           let name = VEnv.lookup env var in
             if Arithmetic.is name then
-              Fn (["x"; "y"; "__kappa"], callk_yielding (Var "__kappa") (Arithmetic.gen (Var "x", name, Var "y")))
+              Fn (["x"; "y"; "__kappa"],
+                  callk_yielding (Var "__kappa")
+                    (Arithmetic.gen (Var "x", name, Var "y")))
             else if Comparison.is name then
               Var (Comparison.js_name name)
             else
@@ -606,7 +542,8 @@ let rec generate_value env : Ir.value -> code =
       | `Project (name, v) ->
           Call (Var "LINKS.project", [gv v; strlit name])
       | `Erase (names, v) ->
-          Call (Var "LINKS.erase", [gv v; Lst (List.map strlit (StringSet.elements names))])
+          Call (Var "LINKS.erase",
+                [gv v; Lst (List.map strlit (StringSet.elements names))])
       | `Inject (name, v, _t) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
@@ -654,7 +591,8 @@ let rec generate_value env : Ir.value -> code =
 and generate_xml env tag attrs children =
   Call(Var "LINKS.XML",
        [strlit tag;
-        Dict (StringMap.fold (fun name v bs -> (name, generate_value env v) :: bs) attrs []);
+        Dict (StringMap.fold (fun name v bs ->
+                                (name, generate_value env v) :: bs) attrs []);
         Lst (List.map (generate_value env) children)])
 
 let generate_remote_call f_name xs_names =
@@ -748,7 +686,8 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
 
-and generate_computation env : Ir.computation -> code -> (venv * code) = fun (bs, tc) kappa -> 
+and generate_computation env : Ir.computation -> code -> (venv * code) =
+  fun (bs, tc) kappa -> 
   let rec gbs env c =
     function
       | b :: bs -> 
@@ -829,14 +768,14 @@ and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
            fun code ->
              Seq (DeclareVar (x_name, Some (generate_value env v)), code))
     | `Let (b, (_, tc)) ->
-        if Settings.get_value (Basicsettings.allow_impure_defs) then
+        if not(Settings.get_value (Basicsettings.allow_impure_defs)) then
+          failwith "Top-level definitions must be values"
+        else
           let (x, x_name) = name_binder b in
           let env' = VEnv.bind env (x, x_name) in
             (env',
              fun code ->
                Seq (DeclareVar (x_name, None), code))
-        else
-          failwith "Top-level definitions must be values"
     | `Fun (fb, (_, xsb, body), location) ->
         let (f, f_name) = name_binder fb in
         let bs = List.map name_binder xsb in
@@ -931,7 +870,7 @@ let script_tag body =
 
 let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
-  let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^ 
+  let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
   in
   let extLibs = ext_script_tag "json.js"^"
@@ -958,7 +897,7 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   <script type='text/javascript'>
   _startTimer();" ^ body ^ ";
   </script>")
-    
+
 let wrap_with_server_stubs (code : code) : code = 
   let server_library_funcs =
     List.rev

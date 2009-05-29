@@ -16,6 +16,8 @@ let constant_type = function
   | `String _ ->  Types.string_type
 
 let string_of_constant =
+  (* This function is actually specific to database query generation;
+     it should be moved to the database module(s). *)
   function
     | `Bool value -> string_of_bool value
     | `Int value -> Num.string_of_num value

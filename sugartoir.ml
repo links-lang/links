@@ -164,8 +164,6 @@ sig
   val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
 end
 
-
-
 module BindingListMonad : BINDINGMONAD =
 struct
   type 'a sem = binding list * 'a
@@ -249,9 +247,11 @@ struct
     val comp_binding : var_info * tail_computation -> var M.sem
 
     val fun_binding :
-      Var.var_info * (tyvar list * binder list * computation) * location -> Var.var M.sem
+      Var.var_info * (tyvar list * binder list * computation) * location -> 
+      Var.var M.sem
     val rec_binding :
-      (Var.var_info * (tyvar list * binder list * (Var.var list -> computation)) * location) list ->
+      (Var.var_info * (tyvar list * binder list * (Var.var list -> computation))
+       * location) list ->
       (Var.var list) M.sem
 
     val alien_binding : var_info * language -> var M.sem
@@ -449,7 +449,8 @@ struct
     bind database
       (fun database ->
          bind table
-           (fun table -> lift (`Special (`Table (database, table, (r, w, n))), `Table (r, w, n))))
+           (fun table -> lift (`Special (`Table (database, table, (r, w, n))),
+                               `Table (r, w, n))))
 
   let wrong t = lift (`Special (`Wrong t), t)
 
@@ -520,23 +521,23 @@ struct
     let body = reify body in
     let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
     let f_info = (ft, "", `Local) in      
-    let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)), body_type) in        
+    let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)),
+                                              body_type) in        
       M.bind (fun_binding (f_info, ([], [kb], body), `Unknown)) rest
        
   let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
     let xsb : binder list =
-      (* It is important to rename the quantifiers in the type to be those used in 
-         the body of the function. *)
+      (* It is important to rename the quantifiers in the type to be
+         those used in the body of the function. *)
       match Instantiate.replace_quantifiers ft tyvars with
         | `ForAll (_, t')
         | t' ->
-            begin
-              match TypeUtils.concrete_type t' with
-                | `Function _ as ft' ->
-                    let args = TypeUtils.arg_types ft' in
-                      List.map (fun arg ->
-                                  Var.fresh_binder_of_type arg) args
-                | _ -> assert false
+            begin match TypeUtils.concrete_type t' with
+              | `Function _ as ft' ->
+                  let args = TypeUtils.arg_types ft' in
+                    List.map (fun arg ->
+                                Var.fresh_binder_of_type arg) args
+              | _ -> assert false
             end in
       
     let body_type = sem_type body in
@@ -563,12 +564,11 @@ struct
              match Instantiate.replace_quantifiers ft tyvars with
                | `ForAll (_, t')
                | t' ->
-                   begin
-                     match TypeUtils.concrete_type t' with
-                       | `Function _ as ft' ->
-                           let args = TypeUtils.arg_types ft' in
-                             List.map (Var.fresh_binder_of_type) args
-                       | _ -> assert false
+                   begin match TypeUtils.concrete_type t' with
+                     | `Function _ as ft' ->
+                         let args = TypeUtils.arg_types ft' in
+                           List.map (Var.fresh_binder_of_type) args
+                     | _ -> assert false
                    end in
            let body fs =
              let body = body fs in
@@ -794,11 +794,10 @@ struct
                                 instantiate "Concat" [`Type Types.char_type; `Row eff],
                                 tag, attrs, children)
                   in
-                    begin
-                      match attrexp with
-                        | None -> cofv body
-                        | Some e ->
-                            cofv (I.apply_pure (instantiate_mb "addAttributes", [body; ev e]))
+                    begin match attrexp with
+                      | None -> cofv body
+                      | Some e ->
+                          cofv (I.apply_pure (instantiate_mb "addAttributes", [body; ev e]))
                     end
           | `TextNode name ->
               cofv
@@ -931,7 +930,8 @@ struct
      The locals list contains all top-level binding on which global
      bindings may not depend, i.e., all top-level bindings after the
      last global binding. *)
-  let partition_program : program -> binding list * computation * nenv = fun (bs, main) ->
+  let partition_program : program -> binding list * computation * nenv = 
+    fun (bs, main) ->
     let rec partition (globals, locals, nenv) =
       function
         | [] -> List.rev globals, List.rev locals, nenv

@@ -469,6 +469,13 @@ struct
   let range alist = List.map snd alist
   let dom alist = List.map fst alist
 
+  (** [lookup_in alist] is a function that looks up its argument in [alist] *)
+  let lookup_in alist x = List.assoc x alist
+
+  (** lookup is like assoc but uses option types instead of
+      exceptions to signal absence *)
+  let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
+
 end
 include AList
 
@@ -610,18 +617,10 @@ let absolute_path filename =
 let getuid_owns file = 
   Unix.getuid() == (Unix.stat file).Unix.st_uid
 
-
-
-(** [lookup_in alist] is a function that looks up its argument in [alist] *)
-let lookup_in alist x = List.assoc x alist
-
-(** lookup is like assoc but uses option types instead of
-    exceptions to signal absence *)
-let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
+(** {0 3-way assoc-list} *)
 
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
-
 
 (** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b

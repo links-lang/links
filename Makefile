@@ -98,8 +98,9 @@ SOURCES = $(OPC)                		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
           compilePatterns.ml                    \
-          jsonparse.mly         		\
+          jsonparse.mly                         \
           jsonlex.mll           		\
+          js.ml                                 \
           json.ml                               \
           database.mli database.ml 		\
           linksregex.ml                         \

@@ -116,9 +116,9 @@ let string_of_program _ = "[PROGRAM]"
 
 (** Traversal with type reconstruction
 
-  Essentially this is a map-fold operation over the IR datatypes that also
-  constructs the type as it goes along (using type annotations on
-  binders).
+    Essentially this is a map-fold operation over the IR datatypes
+    that also constructs the type as it goes along (using type
+    annotations on binders).
 *)
 module type TRANSFORM =
 sig
@@ -148,7 +148,7 @@ sig
       'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
     method var : var -> (var * Types.datatype * 'self_type)
     method value : value -> (value * Types.datatype * 'self_type)
-                                                
+      
     method tail_computation :
       tail_computation -> (tail_computation * Types.datatype * 'self_type)
     method special : special -> (special * Types.datatype * 'self_type)      
@@ -213,7 +213,7 @@ struct
           | Some v ->
               let v, t, o = f o v in
                 Some v, Some t, o
-        
+                  
     method list :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -228,7 +228,7 @@ struct
             v
         in
           List.rev vs, List.rev ts, o
-          
+            
     method name_map :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
