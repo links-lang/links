@@ -210,12 +210,10 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
 let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) 
                   prelude filename =
   try 
-(*     let () = Debug.print ("Loading: "^filename^"...") in *)
     let (nenv', tyenv'), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
-(*     let () = Debug.print ("...loaded") in *)
 
-    try
+    begin try
       Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)
     with
         Unify.Failure error ->
@@ -224,7 +222,8 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment))
             | _ -> ()
           end;
           failwith("Web programs must have type Page but this program has type "
-                   ^ Types.string_of_datatype t);
+                   ^ Types.string_of_datatype t)
+    end;
 
     let (locals, main), render_cont = 
       wrap_with_render_page (nenv, tyenv) (locals, main) in

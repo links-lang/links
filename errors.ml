@@ -159,8 +159,6 @@ let rec format_exception_html = function
           "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>" 
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
-(*   | Value.UnrealizableContinuation -> *)
-(*       "<h1>Links Error: Unrealizable continuation</h1> <div>Perhaps the code changed after the previous page was served?</div>" *)
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
       (*raise exn (* use for backtraces *) *)
 

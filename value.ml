@@ -163,7 +163,10 @@ and env = (t * Ir.scope) Utility.intmap * Ir.closures
 (* and env = (int * (t * Ir.scope)) list * Ir.closures *)
   deriving (Show)
 
+let toplevel_cont : continuation = []
+
 (** {1 Environment stuff} *)
+(** {2 IntMap-based implementation} *)
 let empty_env closures = IntMap.empty, closures
 let bind name v (env, closures) = IntMap.add name v env, closures
 let find name (env, _closures) = fst (IntMap.find name env)
@@ -193,10 +196,8 @@ let get_closures (_, closures) = closures
 let find_closure (_, closures) var = IntMap.find var closures
 let with_closures (env, closures') closures =
   (env, IntMap.fold IntMap.add closures closures')
-(* env of environment stuff *)
 
-
-(* list environment implementation *)
+(** {2 List-based environment implementation (disabled)} *)
 (* let empty_env closures = [], closures *)
 (* let bind name v (env, closures) = (name, v)::env, closures *)
 (* let find name (env, _closures) = *)
@@ -218,11 +219,9 @@ let with_closures (env, closures') closures =
 (* let find_closure (_, closures) var = IntMap.find var closures *)
 (* let with_closures (env, closures') closures = *)
 (*   (env, IntMap.fold IntMap.add closures closures') *)
-(* env of environment stuff *)
 
 
-
-(* compressed types for more efficient pickling *)
+(** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
 | primitive_value_basis
 | `Table of string * string * string
@@ -438,19 +437,19 @@ let build_unmarshal_envs ((venv, closures), nenv, tyenv) program : unmarshal_env
   in
     globals, scopes, conts, funs
 
-let toplevel_cont : continuation = []
-
 let string_as_charlist s : t =
   `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
 
-exception Match of string
-
 let escape = 
-  Str.global_replace (Str.regexp "\\\"") "\\\""
+  Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
+
+(** {1 Pretty-printing values} *)
 
 let string_of_cont = Show.show show_continuation
 
 exception Not_tuple
+
+exception Match of string
 
 let rec char_of_primchar = function 
     `Char c -> c
@@ -521,6 +520,10 @@ and string_of_element_value = function
   | `Char c -> String.make 1 c
   | otherwise -> string_of_value otherwise
 
+(** {1 Record manipulations} *)
+
+(** [project field value] returns projects the field labeled [field] 
+    from the Links value [value], provided [value] is a record. *)
 let project name = function
   | (`Record fields) -> List.assoc name fields
   | _ -> failwith ("Match failure in record projection")
@@ -538,7 +541,7 @@ let untuple : t -> t list =
     | `Record fields -> aux 1 [] fields
     | _ -> assert false
 
-(* boxing and unboxing of primitive types *)
+(** {1 Boxing and unboxing of primitive types} *)
 let box_bool b = `Bool b
 and unbox_bool : t -> bool   = function
   | `Bool b  -> b | _ -> failwith "Type error unboxing bool"
@@ -568,17 +571,12 @@ let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
 
-let links_fst x = fst (unbox_pair x)
-let links_snd x = snd (unbox_pair x)
-
-let links_project name = function
-  | (`Record fields) -> List.assoc name fields
-  | _ -> failwith ("Match failure in record projection")
-
 type 'a serialiser = {
   save : 'a -> string;
   load : string -> 'a;
 }
+
+(** {1 Serialization of values. } *)
 
 let marshal_save : 'a -> string = fun v -> Marshal.to_string v []
 and marshal_load : string -> 'a = fun v -> Marshal.from_string v 0
@@ -629,8 +627,6 @@ let marshal_value : t -> string =
   fun v ->
     let { save = save } = value_serialiser () in
       base64encode (save (compress_t v))
-
-exception UnrealizableContinuation
 
 let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
     let { load = load } = continuation_serialiser () in

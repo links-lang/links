@@ -168,7 +168,7 @@ let rec tail_of_t : t -> t = fun v ->
       | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-(** return the type of rows associated with a top-level non-empty expression *)
+(** Return the type of rows associated with a top-level non-empty expression *)
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec generators env : _ -> Types.datatype Env.Int.t =
     function

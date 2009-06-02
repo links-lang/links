@@ -108,10 +108,6 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val unbox_pair : t -> (t * t)
 
-val links_fst : [> `Record of ('a * 'b) list ] -> 'b
-val links_snd : [> `Record of ('a * 'b) list ] -> 'b
-val links_project : string -> [> `Record of (string * 'b) list ] -> 'b
-
 val string_as_charlist : string -> t
 val charlist_as_string : t -> string
 val string_of_value : t -> string
