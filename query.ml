@@ -42,6 +42,7 @@ type t =
     | `Primitive of string
     | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
+    deriving (Show)
 
 let unbox_xml =
   function
