@@ -187,7 +187,10 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | _ -> assert false in
+      | `Concat (xs) when List.for_all
+          (function `Singleton `Constant `Char x -> true|_->false) xs ->
+          Types.string_type
+      | e -> Debug.print(Show.show show_t e); assert false in
   let record env fields : Types.datatype =
     Types.make_record_type (StringMap.map (base env) fields) in
   let rec tail env : t -> Types.datatype =
@@ -311,6 +314,12 @@ struct
 
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
+    | `Concat xs when List.for_all (* HACKISH: handle Links string constants *)
+        (function `Singleton `Constant `Char x -> true|_->false) xs ->
+        `Constant (`String(mapstrcat ""
+                             (function `Singleton `Constant `Char x ->
+                                string_of_char x)
+                             xs))
     | `Variable var ->
         begin
           match lookup env var with
@@ -654,7 +663,8 @@ struct
 
   let string_of_label label =
     if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "\"" ^ label ^ "\""
+      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier; 
+                                 works in MySQL and PostgreSQL *)
     else
       label
 
@@ -714,7 +724,6 @@ struct
       function
         | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
         | fields -> mapstrcat ","
-                      (* Note this fails in MySQL if [l] is non-alphabetic. *)
                       (fun (b, l) -> "(" ^ sb b ^ ") as "^ string_of_label l) 
                       fields
     in

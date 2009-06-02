@@ -26,30 +26,22 @@ var wineryTable = table "winery" with
 fun wineriesByRegion(regionID) server {
   query { for (winery <-- wineryTable) 
           where (winery.region_id == regionID)
-            [(id=winery.winery_id)]
+            [winery]
   }
 }
 
 fun wineCost(wineID) {
-  for (i <- (for (i <-- inventoryTable)
-             where (wineID == i.wine_id)
-               [i]))
+  for (i <- asList(inventoryTable))
+  where (wineID == i.wine_id)
     [i.cost]
 }
 
-fun wineryByWine(wine) {
-  for (winery <- (for (w <-- wineryTable) [w]))
-  where (winery.winery_id == wine.winery_id)
-    [winery.winery_name]
-}
-
-fun winesByWinery(wineryId) {
+fun winesByWinery(winery) {
   query {
     for (wine <-- wineTable)
-    where (wine.winery_id == wineryId)
+    where (wine.winery_id == winery.winery_id)
     for (cost <- wineCost(wine.wine_id))
-    for (winery <- wineryByWine(wine))
-      [(name=wine.wine_name, cost=cost, winery=winery)]
+      [(name=wine.wine_name, cost=cost, winery=winery.winery_name)]
   }
 }
 
@@ -62,14 +54,14 @@ fun foreach(xs, f) {
 
 fun progressiveSearch(wineries) server {
   foreach(wineriesByRegion(wineries), fun (winery) {
-    showProgress(winesByWinery(winery.id))
+    showProgress(winesByWinery(winery))
   });
 }
 
 page
  <html>
   <body>
-   <form l:onsubmit="{progressiveSearch(stringToInt(regionID))}">
+   <form l:onchange="{progressiveSearch(stringToInt(regionID))}">
     Region: <input l:name="regionID" />
     <input type="submit"/>
    </form>

@@ -15,6 +15,9 @@ let constant_type = function
   | `Char _   -> `Primitive `Char
   | `String _ ->  Types.string_type
 
+let escape_string s = (* SQL standard for escaping single quotes in a string *)
+  Str.global_replace (Str.regexp "'") "''" s
+
 let string_of_constant =
   (* This function is actually specific to database query generation;
      it should be moved to the database module(s). *)
@@ -22,5 +25,5 @@ let string_of_constant =
     | `Bool value -> string_of_bool value
     | `Int value -> Num.string_of_num value
     | `Char c -> "'"^ Char.escaped c ^"'" 
-    | `String s -> "\"" ^ s ^ "\""
+    | `String s -> "'" ^ escape_string s ^ "'"
     | `Float value   -> string_of_float value
