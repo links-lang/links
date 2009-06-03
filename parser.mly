@@ -382,7 +382,7 @@ op:
 | INFIX9                                                       { $1, pos() }
 | INFIXL9                                                      { $1, pos() }
 | INFIXR9                                                      { $1, pos() }
- 
+
 postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }

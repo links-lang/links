@@ -56,7 +56,6 @@ type primitive_value = [
 
 val show_primitive_value : primitive_value Show.show
 
-
 type t = [
 | primitive_value
 | `List of t list
@@ -64,6 +63,7 @@ type t = [
 | `Variant of string * t 
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * 
                      env * Ir.var * Ir.scope)
+| `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of continuation ]
@@ -84,6 +84,7 @@ val globals : env -> env
 val get_closures : env -> Ir.closures
 val find_closure : env -> Ir.var -> Utility.IntSet.t
 val with_closures : env -> Ir.closures -> env
+val extend : env -> (t*Ir.scope) Utility.intmap -> env
 
 val localise : env -> Ir.var -> env
 
@@ -108,11 +109,14 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val unbox_pair : t -> (t * t)
 
+val intmap_of_record : t -> t Utility.intmap option
+
 val string_as_charlist : string -> t
 val charlist_as_string : t -> string
 val string_of_value : t -> string
 val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
+val string_of_cont : continuation -> string
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
@@ -128,4 +132,5 @@ val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
 val unmarshal_value : unmarshal_envs -> string -> t
 
-val tailcomp_to_continuation : env -> Ir.tail_computation -> continuation
+val expr_to_contframe : env -> Ir.tail_computation -> 
+  (Ir.scope * Ir.var * env * Ir.computation)

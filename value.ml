@@ -156,6 +156,7 @@ and t = [
 | `Variant of string * t 
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
                      env * Ir.var * Ir.scope)
+| `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of continuation ]
@@ -172,11 +173,11 @@ let bind name v (env, closures) = IntMap.add name v env, closures
 let find name (env, _closures) = fst (IntMap.find name env)
 let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env) 
 let lookupS name (env, _closures) = IntMap.lookup name env
+let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
 let shadow (outers, closures) ~by:(by, _closures') =
 (* WARNING:
-
    The commented out code causes an enormous slowdown.
-   Note: This is not an acceptable description of the problem! --ez
+   (NOTE: This is not an acceptable description of the problem! --ez)
 *)
 (*   let closures = *)
 (*     IntMap.fold *)
@@ -243,7 +244,7 @@ and compressed_t = [
 and compressed_env = (Ir.var * compressed_t) list
   deriving (Show, Eq, Typeable, Dump, Hash, Pickle)
 
-let compress_primitive_value : primitive_value -> [> compressed_primitive_value] =
+let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
     | #primitive_value_basis as v -> v
     | `Table ((_database, db), table, row) ->
@@ -261,19 +262,21 @@ let localise env var =
     (find_closure env var)
     (empty_env (get_closures env))
 
-let rec compress_continuation cont : compressed_continuation =
+let rec compress_continuation (cont:continuation) : compressed_continuation =
   List.map
     (fun (_scope, var, locals, _body) ->
        (var, compress_env locals)) cont
-and compress_t v : compressed_t =
+and compress_t (v : t) : compressed_t =
   let cv = compress_t in
     match v with
       | #primitive_value as v -> compress_primitive_value v
       | `List vs -> `List (List.map cv vs)
-      | `Record fields -> `Record (List.map (fun (name, v) -> (name, cv v)) fields)
+      | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
+      | `FunctionPtr(x, env) -> assert false    (* Should already be resolved. *)
       | `RecFunction (defs, locals, f, `Local) ->
-          `LocalFunction (List.map (fun (f, (_xs, _body)) -> f) defs, compress_env locals, f)
+          `LocalFunction (List.map (fun (f, (_xs, _body)) -> f) defs, 
+                          compress_env locals, f)
       | `RecFunction (defs, _env, f, `Global) ->
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
       | `PrimitiveFunction f -> `PrimitiveFunction f
@@ -289,6 +292,11 @@ and compress_env env : compressed_env =
             (name, compress_t v)::compressed)
        env
        [])
+
+type unmarshal_envs =
+    env * Ir.scope IntMap.t *
+      Ir.computation IntMap.t * 
+      (Ir.var list * Ir.computation) IntMap.t
 
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
@@ -316,7 +324,7 @@ let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont
        let locals = localise env var in
          (scope, var, locals, body))
     cont
-and uncompress_t ((globals, _scopes, _conts, funs) as envs) v : t =
+and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t =
   let uv = uncompress_t envs in
     match v with
       | #compressed_primitive_value as v -> uncompress_primitive_value v
@@ -324,12 +332,12 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs) v : t =
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
       | `LocalFunction (defs, env, var) ->
-          `RecFunction (List.map (fun f -> (f, IntMap.find f funs)) defs,
+          `RecFunction (List.map (fun f -> f, IntMap.find f funs) defs,
                         uncompress_env envs env,
                         var,
                         `Local)
       | `GlobalFunction (defs, f) ->
-          `RecFunction (List.map (fun f -> (f, IntMap.find f funs)) defs,
+          `RecFunction (List.map (fun f -> f, IntMap.find f funs) defs,
                         localise globals f,
                         f,
                         `Global)
@@ -345,17 +353,14 @@ and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
     env
   with NotFound str -> failwith("In uncompress_env: " ^ str)
 
-type unmarshal_envs =
-    env * Ir.scope IntMap.t *
-      Ir.computation IntMap.t * (Ir.var list * Ir.computation) IntMap.t
-
-let build_unmarshal_envs ((venv, closures), nenv, tyenv) program : unmarshal_envs =
+let build_unmarshal_envs ((venv, closures), nenv, tyenv) program
+    : unmarshal_envs =
   let tyenv =
     try
-    Env.String.fold
-      (fun name t tyenv -> Env.Int.bind tyenv (Env.String.lookup nenv name, t))
-      tyenv.Types.var_env
-      Env.Int.empty 
+      Env.String.fold
+        (fun name t tyenv-> Env.Int.bind tyenv (Env.String.lookup nenv name, t))
+        tyenv.Types.var_env
+        Env.Int.empty 
     with NotFound str -> failwith("In build_unmarshal_envs: " ^ str)
   in
   let build =
@@ -465,17 +470,18 @@ and charlist_as_string chlist =
 
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
+  | `FunctionPtr (x, env) -> string_of_int x ^ string_of_environment env
   | `PrimitiveFunction (name) -> name
   | `ClientFunction (name) -> name
-    (* Choose from fancy or simple printing of functions: *)
-  | `RecFunction(defs, env, name, _scope) -> 
+  | `RecFunction(defs, env, var, _scope) -> 
+      (* Choose from fancy or simple printing of functions: *)
       if Settings.get_value(Basicsettings.printing_functions) then
         "{ " ^ (mapstrcat " "
                   (fun (_name, (formals, body)) ->
                      "fun (" ^ String.concat "," (List.map Ir.string_of_var formals) ^ ") {" ^
                        Ir.string_of_computation body ^ "}")
                   defs) ^
-          " " ^ Ir.string_of_var name ^ " }[" ^ string_of_environment env ^ "]"
+          " " ^ Ir.string_of_var var ^ " }[" ^ string_of_environment env ^ "]"
       else
         "fun"
   | `Record fields ->
@@ -515,7 +521,7 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
-(* this looks a bit dodgey *)
+(* TBD: Can someone explain how this works? *)
 and string_of_element_value = function 
   | `Char c -> String.make 1 c
   | otherwise -> string_of_value otherwise
@@ -570,6 +576,12 @@ and unbox_unit : t -> unit = function
 let unbox_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
+
+let intmap_of_record = function
+  | `Record members ->
+      Some(IntMap.from_alist(
+             List.map (fun (k,v) -> int_of_string k, v ) members))
+  | _ -> None
 
 type 'a serialiser = {
   save : 'a -> string;
@@ -637,8 +649,10 @@ let unmarshal_value envs : string -> t =
     let { load = load } = value_serialiser () in
       uncompress_t envs (load (base64decode s))
 
-let tailcomp_to_continuation (env:env) expr = (((`Local : Ir.scope),
-                                                (Var.dummy_var : Ir.var),
-                                                env,
-                                                (([], expr) : Ir.computation))
-                                               :: toplevel_cont)
+(** Return the continuation frame that evaluates the given expression
+    in the given environment. *)
+let expr_to_contframe env expr =
+  ((`Local        : Ir.scope),
+   (Var.dummy_var : Ir.var),
+   (env           : env),
+   (([], expr)    : Ir.computation))

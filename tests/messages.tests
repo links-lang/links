@@ -26,11 +26,11 @@ stderr : @.*Type error.*
 exit : 1
 
 Basic send/receive test.
-var p = spawn { recv() ! "The end" } ! self(); recv()
+fun main() { var p = spawn { recv() ! "The end" } ! self(); recv() } main()
 stdout : @"The end" : .*
 
 Mailboxes are not polymorphic [1]
-var p = spawn { recv() ! "The end" } ! self(); recv()
+fun main() { var p = spawn { recv() ! "The end" } ! self(); recv() } main()
 stdout : "The end" : String
 
 Mailboxes are not polymorphic [2]

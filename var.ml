@@ -49,10 +49,11 @@ let make_global_info (t, name) = (t, name, `Global)
 let fresh_binder_of_type = info_of_type ->- fresh_binder
 let fresh_var_of_type = info_of_type ->- fresh_var
 
-let var_of_binder (var, _) = var
-let type_of_binder (var, (t, _, _)) = t
-let name_of_binder (_, (_, name, _)) = name
-let scope_of_binder (_, (_, _, scope)) = scope
+let var_of_binder (var, _ : binder) = var
+let info_of_binder (_, info : binder) = info
+let type_of_binder (var, (t, _, _) : binder) = t
+let name_of_binder (_, (_, name, _) : binder) = name
+let scope_of_binder (_, (_, _, scope) : binder) = scope
 
 (** Create a copy of a type environment mapping vars (= ints) to types
     instead of strings to types

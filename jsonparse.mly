@@ -8,8 +8,9 @@ let unparse_label = function
 
 %}
 
-%token LBRACE RBRACE LBRACKET RBRACKET 
-%token COLON COMMA TRUE FALSE NULL 
+%token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
+%token COLON COMMA UNDERSCORE TRUE FALSE NULL 
+%token CLOSURETABLE SERVERFUNC
 %token <string> STRING
 %token <Num.num> INT
 %token <float> FLOAT
@@ -112,6 +113,7 @@ elements:
 | elements COMMA value               { $3 :: $1 }
 
 value:
+| func                               { $1 }
 | string                             { $1 }
 | number                             { $1 }
 | object_                            { $1 }
@@ -119,6 +121,23 @@ value:
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
 | NULL                               { `Record [] (* Or an error? *) } 
+
+func:
+| CLOSURETABLE LBRACKET INT RBRACKET { `ClientFunction("_closureTable["^
+                                                       Num.string_of_num $3^"]")
+                                     }
+| SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE RBRACE
+                                     { (* The underscore here is a nuisance; would be good to remove it. *)
+                                       `FunctionPtr(Num.int_of_num $4,
+                                                    (Utility.IntMap.empty,
+                                                     Utility.IntMap.empty)) }
+| SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE members RBRACE
+                                     { `FunctionPtr(Num.int_of_num $4,
+                                                    (Utility.IntMap.from_alist
+                                                        (List.map (fun (x,y) ->
+                                                            (int_of_string x,
+                                                                (y,`Local))) $7),
+                                                     Utility.IntMap.empty)) }
 
 string:
 | STRING                             { if String.length $1 == 1 then Value.box_char (String.get $1 0)

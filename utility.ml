@@ -269,9 +269,15 @@ type intset = IntSet.t
 type 'a intmap = 'a IntMap.t
     deriving (Show)
 
+let list_to_set xs = 
+  List.fold_right (fun x set -> IntSet.add x set) xs IntSet.empty
+
 (** {0 Lists} *)
 module ListUtils = 
 struct
+  (** Test whether the argument is the empty list. *)
+  let empty = function [] -> true | _ -> false
+
   (** [fromTo a b] is the list of consecutive integers starting with
       [a] and ending with [b-1]. Throws [Invalid_argument "fromTo"]
       if [b < a]. *)

@@ -81,3 +81,4 @@ let var_name_var x = "_" ^ string_of_int x
 (** Generate a JavaScript name from a binder based on the unique
     integer for that binder. *)
 let var_name_binder (x, info) = var_name_var x
+open Utility

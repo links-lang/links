@@ -37,11 +37,13 @@ module Eval = struct
          failwith "Can't make client call outside web mode.";
        if not(Proc.singlethreaded()) then
          failwith "Remaining procs on server at client call!";
-       let call_package = Utility.base64encode (serialize_call_to_client 
-                                                  (cont, name, args)) in
+(*        Debug.print("Making client call to " ^ name); *)
+(*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
+       let call_package = Utility.base64encode
+                            (serialize_call_to_client (cont, name, args)) in
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
-      
+
   let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
   (** {0 Scheduling} *)
@@ -51,15 +53,21 @@ module Eval = struct
       switching threads.  *)
   let switch_granularity = 5
 
-  let atomic = ref false (* Unexplained hack of sjl. *)
+  let atomic = ref false (* FIXME: This needs some documentation *)
 
   let rec switch_context env = 
     match Proc.pop_ready_proc() with
         Some((cont, value), pid) -> (
           Proc.activate pid;
           apply_cont cont env value)
-      | None -> exit 0
-          
+      | None -> 
+          if not(Proc.singlethreaded()) then
+            failwith("Server stuck with suspended threads, none runnable.")
+          (* Outside web mode, this case indicates deadlock:
+               all running processes are blocked. *)
+          else 
+            exit 0
+
   and scheduler env state stepf = 
 (*     if Proc.singlethreaded() then stepf() else (* No need to schedule if
                                                      there are no threads...*)*)
@@ -158,7 +166,8 @@ module Eval = struct
         end
     | `Coerce (v, t) -> value env v
 
-  and apply cont env : Value.t * Value.t list -> Value.t = function
+  and apply cont env : Value.t * Value.t list -> Value.t =
+    function
     | `RecFunction (recs, locals, n, scope), ps -> 
         begin match lookup n recs with
           | Some (args, body) ->
@@ -171,7 +180,8 @@ module Eval = struct
               let env =
                 List.fold_right
                   (fun (name, _) env ->
-                     Value.bind name (`RecFunction (recs, locals, name, scope), scope) env)
+                     Value.bind name
+                       (`RecFunction (recs, locals, name, scope), scope) env)
                   recs env in
                 
               (* extend env with arguments *)
@@ -179,18 +189,43 @@ module Eval = struct
                 computation env cont body
           | None -> eval_error "Error looking up recursive function definition"
         end
+    | `PrimitiveFunction "send", [pid; msg] ->
+        if Settings.get_value Basicsettings.web_mode then
+           client_call "_sendWrapper" cont [pid; msg]
+        else
+          let pid = Num.int_of_num (Value.unbox_int pid) in
+            (try 
+               Proc.send_message msg pid;
+               Proc.awaken pid
+             with
+                 Proc.UnknownProcessID pid -> 
+                   (* FIXME: printing out the message might be more useful. *)
+                   failwith("Couldn't deliver message because destination process has no mailbox."));
+            apply_cont cont env (`Record [])
+    | `PrimitiveFunction "spawn", [func] ->
+        if Settings.get_value Basicsettings.web_mode then
+           client_call "_spawnWrapper" cont [func]
+        else 
+          apply_cont cont env (apply_prim "spawn" [func])
     | `PrimitiveFunction "recv", [] ->
-        (* If there are any messages, take the first one and
-           apply the continuation to it.  Otherwise, suspend
-           the continuation (in the blocked_processes table)
-           and let the scheduler choose a different thread.
-        *)
+        (* If there are any messages, take the first one and apply the
+           continuation to it.  Otherwise, block the process (put its
+           continuation in the blocked_processes table) and let the
+           scheduler choose a different thread.  *)
+(*         if (Settings.get_value Basicsettings.web_mode) then *)
+(*             Debug.print("receive in web server mode--not implemented."); *)
+        if Settings.get_value Basicsettings.web_mode then
+           client_call "_recvWrapper" cont []
+        else 
         begin match Proc.pop_message() with
-            Some message -> apply_cont cont env message
+            Some message -> 
+              Debug.print("delivered message.");
+              apply_cont cont env message
           | None -> 
-              let recv = Value.tailcomp_to_continuation env 
-                           (Lib.prim_appln "recv" [])
-              in Proc.block_current (recv@cont, `Record []);
+              let recv_frame = Value.expr_to_contframe 
+                env (Lib.prim_appln "recv" [])
+              in 
+                Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
     | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
@@ -211,8 +246,8 @@ module Eval = struct
     in
       scheduler env (cont, v) stepf
 
-  and computation env cont (binders, tailcomp) : Value.t =
-    match binders with
+  and computation env cont (bindings, tailcomp) : Value.t =
+    match bindings with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
           | `Let ((var, _) as b, (_, tc)) ->
@@ -221,7 +256,8 @@ module Eval = struct
                            ::cont) : Value.continuation) in
                 tail_computation env cont' tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-              let env' = Value.bind f (`ClientFunction (Var.name_of_binder fb),
+              let env' = Value.bind f (`ClientFunction
+                                         (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) -> 
@@ -229,7 +265,7 @@ module Eval = struct
               let locals = Value.localise env f in
               let env' = 
                 Value.bind f
-                  (`RecFunction ([f, (List.map fst args, body)], 
+                  (`RecFunction ([f, (List.map fst args, body)],
                                  locals, f, scope), scope) env
               in
                 computation env' cont (bs, tailcomp)
@@ -249,8 +285,9 @@ module Eval = struct
               let env =
                 List.fold_left
                   (fun env ((f, _) as fb, _lam, _location) ->
-                     let v = `ClientFunction (Var.name_of_binder fb), Var.scope_of_binder fb in
-                       Value.bind f v env)
+                     let v = `ClientFunction (Js.var_name_binder fb),
+                             Var.scope_of_binder fb
+                     in Value.bind f v env)
                   env client_defs in
 
               (* add the server defs to the environment *)
@@ -275,8 +312,8 @@ module Eval = struct
     | `Apply (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont s
-    | `Case (v, cases, default) -> 
-        (match value env v with
+    | `Case (v, cases, default) ->
+        begin match value env v with
            | `Variant (label, _) as v ->
                (match StringMap.lookup label cases, default, v with
                   | Some ((var,_), c), _, `Variant (_, v)
@@ -284,7 +321,8 @@ module Eval = struct
                       computation (Value.bind var (v, `Local) env) cont c
                   | None, _, #Value.t -> eval_error "Pattern matching failed"
                   | _ -> assert false (* v not a variant *))
-           | _ -> eval_error "Case of non-variant")
+           | _ -> eval_error "Case of non-variant"
+        end
     | `If (c,t,e)    ->
         computation env cont
           (match value env c with
@@ -384,6 +422,7 @@ let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
                                   " while interpreting.")
+      | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
   fun env bs ->
@@ -403,6 +442,13 @@ let apply_cont_toplevel cont env v =
 
 let apply_toplevel env (f, vs) =
   try Eval.apply [] env (f, vs)
+  with
+    | Eval.TopLevel s -> snd s
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+                                " while interpreting.")
+
+let eval_toplevel env program =
+  try Eval.eval env program
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 

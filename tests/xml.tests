@@ -16,7 +16,7 @@ Backslashes
 stdout : <p>A backslash \ </p> : Xml
 
 Top-level-bound XML object
-var x = for (i <- []) <br/>; <f>{x}</f>
+fun main() { var x = for (i <- []) <br/>; <f>{x}</f> } main()
 stdout : <f/> : Xml
 
 Let-bound XML object

@@ -167,3 +167,5 @@ end
 
 val var_appln : var Env.String.t -> Env.String.name -> value list -> 
   tail_computation
+
+val funcmap : program -> (Var.var * binding) list

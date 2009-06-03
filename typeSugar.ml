@@ -225,6 +225,8 @@ sig
  
   val value_restriction : SourceCode.pos -> Types.datatype -> 'a
 
+  val toplevel_purity_restriction : SourceCode.pos -> Sugartypes.binding -> 'a
+
   val duplicate_names_in_pattern : SourceCode.pos -> 'a
 
   val type_annotation : griper
@@ -678,6 +680,11 @@ code (show_type t2) ^ ".")
 "Because of the value restriction there can be no" ^ nl() ^
 "free rigid type variables at an ungeneralisable binding site," ^ nl() ^
 "but the type " ^ code (show_type t) ^ " has free rigid type variables.")
+
+    let toplevel_purity_restriction pos b =
+      die pos (
+"Side effects are not allowed outside of" ^ nl() ^
+"function definitions. This binding may have a side effect.")
 
     let duplicate_names_in_pattern pos =
       die pos ("Duplicate names are not allowed in patterns.")
@@ -1779,7 +1786,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let is_query =
               List.exists (function
                              | `List _ -> false
-                             | `Table _ -> true) generators in
+                             | `Table _ -> false) generators in
             let context =              
               if is_query then
                 {context with effect_row = Types.make_empty_closed_row ()}
@@ -2188,6 +2195,11 @@ and type_bindings (globals : context)  bindings =
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",
                                               false, `User)
 
+let binding_purity_check bindings =
+  List.map (fun ((_, pos) as b) -> if Utils.is_pure_binding b then ()
+                else Gripers.toplevel_purity_restriction pos b)
+    bindings
+
 module Check =
 struct
   let program tyenv (bindings, body) =
@@ -2196,6 +2208,7 @@ struct
         (fun () ->
            "before type checking: "^Show.show show_program (bindings, body));
       let tyenv', bindings = type_bindings tyenv bindings in 
+        binding_purity_check bindings; (* TBD: do this only in web mode? *)
         match body with
           | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->

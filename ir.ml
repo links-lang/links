@@ -984,3 +984,28 @@ end
 let var_appln env name args =
   (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
   
+let rec funcmap_of_binding = function
+  | `Let (b, (_, tc)) -> funcmap_of_tailcomp tc
+  | (`Fun (b, (_,_,body), _) as f) -> 
+      (Var.var_of_binder b, f) :: funcmap_of_computation body
+  | `Rec defs -> concat_map (fun ((b, (_,_,body), _) as def) -> 
+                               (Var.var_of_binder b, `Rec defs) :: 
+                                 funcmap_of_computation body) defs
+  | `Alien (b, _lang) -> []
+  | `Module _ -> failwith "Not implemented."
+and funcmap_of_tailcomp = function
+  | `Return _ | `Apply _ | `Special _ -> []
+  | `Case (_, branches, default) ->
+      List.concat(StringMap.to_list
+                    (fun _ (_, comp) -> funcmap_of_computation comp)
+                    branches)
+      @ (match default with
+           | None -> []
+           | Some (_, comp) -> funcmap_of_computation comp)
+  | `If (_, t, f) ->
+      funcmap_of_computation t @ funcmap_of_computation f
+and funcmap_of_computation =
+  fun (bs, tc) ->
+    concat_map funcmap_of_binding bs @ funcmap_of_tailcomp tc
+
+let funcmap = funcmap_of_computation

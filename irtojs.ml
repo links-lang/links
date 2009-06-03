@@ -415,11 +415,15 @@ struct
         match e with
           | `Apply (`TApp (`Variable v, _), [cont])
           | `Apply (`Variable v, [cont]) when VEnv.lookup venv v = "pickleCont" ->
+              (* an instance of [pickleCont(cont)] *)
               let f =
                 match cont with
                   | `TApp (`Variable f, _)
                   | `Variable f -> f
                   | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
+
+              (* hereafter [cont] is a variable, [`Variable f] *)
+
               let e, t, o = super#tail_computation e in
               let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
               let concat = `Variable (Env.String.lookup nenv "Concat") in
@@ -595,16 +599,87 @@ and generate_xml env tag attrs children =
                                 (name, generate_value env v) :: bs) attrs []);
         Lst (List.map (generate_value env) children)])
 
-let generate_remote_call f_name xs_names =
+let generate_remote_call f_name xs_names env =
   Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
-       [strlit f_name; Dict (
+       [strlit f_name;
+        env;
+        Dict (
           List.map2
             (fun n v -> string_of_int n, Var v) 
             (Utility.fromTo 1 (1 + List.length xs_names))
             xs_names
         )])
 
-let rec generate_tail_computation env : Ir.tail_computation -> code -> code = fun tc kappa ->
+(** The [lambdalift] operations build up a [code->code] function (effectively 
+    a code context consisting of definitions) by function composition. *)
+let rec lambdalift_function
+    ((fb, (_, xsb, body), location)
+    : (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location)) =
+  let body_fs = lambdalift_computation body in
+    let f_var, f_name = fb in
+    let bs = List.map name_binder xsb in
+    let xs, xs_names = List.split bs in
+    let fbody = 
+      match location with
+        | `Client | `Native -> Ret(Var (snd(name_binder fb)))
+            (* Note: this is wrong for nested functions--those with
+               free variables. But these stubs are only used for
+               server->client calls. Such calls, when they involve
+               nested closures, will use the _closureTable mechanism
+               rather than this one. For unlabeled functions (below)
+               we treat them as server functions, for the same
+               reason. *)
+        | `Server | `Unknown ->
+            Ret(Fn(xs_names@["__kappa"],
+                   generate_remote_call (string_of_int f_var) xs_names
+                     (Var "_env")))
+    in
+    let f_lifted = fun code ->
+      LetFun((Js.var_name_binder fb, ["_env"],
+              (* Note: This function is unlike regular compiled Links
+                 functions in that it is not in CPS; it is applied only in the
+                 [_resolveFunctions] routine in jslib.js. *)
+              fbody,
+              `Client),
+             code)
+    in f_lifted -<- body_fs
+and lambdalift_binding =
+  function
+  | `Fun def -> lambdalift_function def
+  | `Rec defs -> List.fold_right (-<-) 
+      (List.map (lambdalift_function) defs) 
+        identity
+  | `Let (_x, (_tbs, tc)) ->
+      lambdalift_tailcomp tc
+  | `Alien _ -> identity
+  | _ -> failwith "Not implemented"
+and lambdalift_tailcomp : Ir.tail_computation -> (code->code) = 
+  function
+  | `Apply _
+  | `Special _
+  | `Return _ -> identity
+  | `Case (_, branches, default) -> 
+      ((StringMap.fold (fun _lbl (_b, comp) acc -> 
+                          acc -<- lambdalift_computation comp)
+          branches) identity
+       -<-
+         begin match default with
+             None -> identity
+           | Some (_b, comp) ->
+               lambdalift_computation comp
+         end)
+  | `If (_, t, f) -> 
+      lambdalift_computation t -<-
+      lambdalift_computation f 
+and lambdalift_computation (bindings, tailcomp : Ir.computation)
+    : code -> code = 
+  (List.fold_right (-<-) 
+     (List.map (lambdalift_binding) bindings) identity
+     : code -> code)
+  -<- (lambdalift_tailcomp tailcomp : code->code)
+          
+let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
+  fun tc kappa ->
   let gv v = generate_value env v in
   let gc c kappa = snd (generate_computation env c kappa) in
     match tc with
@@ -698,6 +773,26 @@ and generate_computation env : Ir.computation -> code -> (venv * code) =
   in
     gbs env (fun code -> code) bs
 
+and generate_function env fs :
+    (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location) ->
+    (string * string list * code * Ir.location) = 
+  fun (fb, (_, xsb, body), location) ->
+  let (f, f_name) = name_binder fb in
+  let bs = List.map name_binder xsb in
+  let _xs, xs_names = List.split bs in
+  let body_env = List.fold_left VEnv.bind env (fs @ bs) in
+  let body =
+    match location with
+      | `Client | `Unknown ->
+          snd (generate_computation body_env body (Var "__kappa"))
+      | `Server -> generate_remote_call (string_of_int f) xs_names (Dict [])
+      | `Native -> failwith ("Not implemented native calls yet")
+  in
+    (f_name,
+     xs_names @ ["__kappa"],
+     body,
+     location)
+
 and generate_binding env : Ir.binding -> (venv * (code -> code)) = 
   function
     | `Let (b, (_, `Return v)) ->
@@ -709,64 +804,27 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
     | `Let (b, (_, tc)) ->
         let (x, x_name) = name_binder b in
         let env' = VEnv.bind env (x, x_name) in
-          env', (fun code -> generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun (fb, (_, xsb, body), location) ->
+          (env', fun code ->
+                   generate_tail_computation env tc (Fn ([x_name], code)))
+    | `Fun ((fb, _, location) as def) ->
         let (f, f_name) = name_binder fb in
-        let bs = List.map name_binder xsb in
-        let xs, xs_names = List.split bs in
-        let body_env = List.fold_left VEnv.bind env bs in
         let env' = VEnv.bind env (f, f_name) in
-          (env',
-           fun code ->
-             let body =
-               match location with
-                 | `Client | `Unknown ->
-                     snd (generate_computation body_env body (Var "__kappa"))
-                 | `Server -> generate_remote_call f_name xs_names
-                 | `Native -> failwith ("Not implemented native calls yet")
-             in
-               LetFun
-                 ((f_name,
-                   xs_names @ ["__kappa"],
-                   body,
-                   location),
-                  code))        
+        let (f_name, args, _, _) as def_header = generate_function env [] def in
+          (env', fun code -> 
+             LetFun (def_header, code))
     | `Rec defs ->
         let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
         let env' = List.fold_left VEnv.bind env fs in
-          (env',
-           fun code ->
-             LetRec
-               (List.fold_right
-                  (fun (fb, (_, xsb, body), location) (defs, code) ->
-                     let (f, f_name) = name_binder fb in
-                     let bs = List.map name_binder xsb in
-                     let _, xs_names = List.split bs in
-                     let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-                     let body =
-                       match location with
-                         | `Client | `Unknown -> 
-                             snd (generate_computation body_env body (Var "__kappa"))
-                         | `Server -> generate_remote_call f_name xs_names
-                         | `Native -> failwith ("Not implemented native calls yet")
-                     in
-                       (f_name,
-                        xs_names @ ["__kappa"],
-                        body,
-                        location) :: defs, code)
-                  defs ([], code)))
+          (env', fun code ->
+             LetRec (List.map (generate_function env fs) defs, code))
     | `Module _
     | `Alien _
     | `Alias _ -> env, (fun code -> code)
 
 and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
   function 
-    | `Let (b, (_, `Return v)) ->
-        let (x, x_name) = name_binder b in
-        let env' = VEnv.bind env (x, x_name) in
-          (env',
-           fun code ->
-             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
+    | `Let (b, (_, `Return v)) as binding ->
+        generate_binding env binding
     | `Let (b, (_, tc)) ->
         if not(Settings.get_value (Basicsettings.allow_impure_defs)) then
           failwith "Top-level definitions must be values"
@@ -776,55 +834,7 @@ and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
             (env',
              fun code ->
                Seq (DeclareVar (x_name, None), code))
-    | `Fun (fb, (_, xsb, body), location) ->
-        let (f, f_name) = name_binder fb in
-        let bs = List.map name_binder xsb in
-        let xs, xs_names = List.split bs in
-        let body_env = List.fold_left VEnv.bind env bs in
-        let env' = VEnv.bind env (f, f_name) in
-          (env',
-           fun code ->
-             let body =
-               match location with
-                 | `Client | `Unknown -> 
-                     snd (generate_computation body_env body (Var "__kappa"))
-                 | `Server -> generate_remote_call f_name xs_names
-                 | `Native -> failwith ("Not implemented native calls yet")
-             in
-               LetFun
-                 ((f_name,
-                   xs_names @ ["__kappa"],
-                   body,
-                   location),
-                  code))        
-    | `Rec defs ->
-        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
-        let env' = List.fold_left VEnv.bind env fs in
-          (env',
-           fun code ->
-             LetRec
-               (List.fold_right
-                  (fun (fb, (_, xsb, body), location) (defs, code) ->
-                     let (f, f_name) = name_binder fb in
-                     let bs = List.map name_binder xsb in
-                     let _, xs_names = List.split bs in
-                     let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-                     let body =
-                       match location with
-                         | `Client | `Unknown -> 
-                             snd (generate_computation body_env body (Var "__kappa"))
-                         | `Server -> generate_remote_call f_name xs_names
-                         | `Native -> failwith ("Not implemented native calls yet")
-                     in
-                       (f_name,
-                        xs_names @ ["__kappa"],
-                        body,
-                        location) :: defs, code)
-                  defs ([], code)))
-    | `Module _
-    | `Alien _
-    | `Alias _ -> env, (fun code -> code)
-
+    | binding -> generate_binding env binding
 
 and generate_definition env
     : Ir.binding -> code -> code =
@@ -862,8 +872,9 @@ and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
       else
         env, with_declarations
 
-and generate_program env : Ir.program -> (venv * code) = fun c ->
-  generate_computation env c (Var "_start")
+and generate_program env : Ir.program -> (venv * code) = fun comp ->
+  let (venv, code) = generate_computation env comp (Var "_start") in
+    (venv, lambdalift_computation comp code)
 
 let script_tag body = 
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
@@ -879,7 +890,7 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
   "            ^ext_script_tag "yahoo/event.js" in
   let db_config_script = script_tag("    function _getDatabaseConfig() {
       return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
-    "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
+      "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
     }
     var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n")
   in
@@ -925,7 +936,7 @@ let wrap_with_server_stubs (code : code) : code =
                         None -> []
                     | Some arity ->
                         let args = some_vars arity in
-                          [(name, args, generate_remote_call name args)])
+                          [(name, args, generate_remote_call name args (Dict[]))])
       server_library_funcs
   in
     List.fold_right 
@@ -968,7 +979,7 @@ let initialise_envs (nenv, tyenv) =
       VEnv.empty in
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
-     
+
 let generate_program_page ?(onload = "") (closures, nenv, tyenv) program =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let program = FixPickles.program (closures, nenv, venv, tenv) program in
@@ -984,6 +995,3 @@ let generate_program_defs (closures, nenv, tyenv) bs =
   let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
   let _, code = generate_defs venv bs in
     [show (code Nothing)]
-
-(* let generate_program_defs global_names defs root_names = *)
-(*   generate_program_defs Library.typing_env global_names defs root_names *)

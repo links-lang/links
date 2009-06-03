@@ -1,4 +1,5 @@
 open Notfound
+open Utility
 
 let show_json = Settings.add_bool("show_json", false, `User)
 
@@ -73,19 +74,31 @@ let jsonize_primitive : Value.primitive_value -> string = function
 
 let rec jsonize_value : Value.t -> string = function
   | `PrimitiveFunction _
-  | `ClientFunction _
   | `Continuation _
-  | `RecFunction _ as r ->
-      prerr_endline ("Can't yet jsonize " ^ Value.string_of_value r); ""
+      as r ->
+      failwith ("Can't yet jsonize " ^ Value.string_of_value r);
+  | `FunctionPtr _ -> assert false (* should've been resolved when 1st parsed. *)
+  | `ClientFunction name -> "{\"function\":\"" ^ name ^ "\"}"
+  | `RecFunction(defs, env, f, _scope) ->
+      "{\"function\":\"" ^ Js.var_name_var f ^ "\"," ^
+      " \"location\":\"server\"," ^
+      " \"environment\": {" ^ 
+        String.concat "," (IntMap.to_list(fun k (v,_) -> 
+                                            string_of_int k ^ ":" ^
+                                              jsonize_value v) (fst env))
+      ^ "}}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
-  | `Record fields -> "{" ^ String.concat "," (List.map (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields) ^ "}"
+  | `Record fields ->
+      "{" ^ 
+        mapstrcat "," (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields
+      ^ "}"
   | `List [] -> "[]"
   | `List (elems) ->
       "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
 
 let encode_continuation (cont : Value.continuation) : string =
-  Utility.base64encode (Marshal.to_string cont [Marshal.Closures])
+  Value.marshal_continuation cont
 
 let jsonize_value value = 
   Debug.if_set show_json
@@ -95,11 +108,20 @@ let jsonize_value value =
       (fun () -> "jsonize_value <= " ^ rv);
     rv
 
-let rec jsonize_call continuation name args = 
+(** [jsonize_call] creates the JSON object representing a client call,
+    its server-side continuation, and the complete state of the
+    scheduler. Note that [continuation], [name] and [args] arguments are
+    all [Value]-style objects, while the last argument,
+    [sched_state_json], is already JSONized--a nonuniform interface. This
+    is because the [proc.ml] file keeps the scheduler state as an abstract
+    type so we can't inspect it here. Consider changing this.
+*)
+let jsonize_call continuation name args =
   Printf.sprintf 
     "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
-    (encode_continuation continuation) name 
-    (String.concat ", " (List.map jsonize_value args))
+    (encode_continuation continuation) 
+    name
+    (Utility.mapstrcat ", " jsonize_value args)
 
 let parse_json str =
   Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)

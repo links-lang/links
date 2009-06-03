@@ -294,18 +294,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (p2 (fun pid msg -> 
-         if Settings.get_value Basicsettings.web_mode then
-           failwith "Can't send messages at server in web mode."
-         else
-         let pid = int_of_num (unbox_int pid) in
-           (try 
-              Proc.send_message msg pid;
-              Proc.awaken pid
-            with
-                (* FIXME: printing out the message might be more useful. *)
-                UnknownProcessID pid -> 
-                  failwith("Couldn't deliver message because destination process has no mailbox."));
-           `Record []),
+         assert(false)), (* Now handled in evalir.ml *)
    datatype "(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
 
@@ -336,8 +325,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* This should also be a primitive, as described in the ICFP paper. *)
   (p1 (fun f ->
          if Settings.get_value Basicsettings.web_mode then
-           failwith "Can't spawn processes at server in web mode."
-         else
+           failwith("Can't spawn at the server in web mode.");
          let var = Var.dummy_var in
          let cont = (`Local, var, Value.empty_env IntMap.empty,
                      ([], `Apply (`Variable var, []))) in
@@ -1204,7 +1192,8 @@ let venv =
 
 let value_env = 
   List.fold_right
-    (fun (name, (p, _, _)) env -> Env.Int.bind env (Env.String.lookup nenv name, impl p))
+    (fun (name, (p, _, _)) env -> 
+       Env.Int.bind env (Env.String.lookup nenv name, impl p))
     env
     Env.Int.empty
 

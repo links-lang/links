@@ -15,13 +15,18 @@ let def_blank = [' ' '\t' '\n']
 rule jsonlex = parse
   | '{'                                  { Jsonparse.LBRACE }
   | '}'                                  { Jsonparse.RBRACE }
-  | ':'                                  { Jsonparse.COLON }
-  | ','                                  { Jsonparse.COMMA }
+  | '('                                  { Jsonparse.LPAREN }
+  | ')'                                  { Jsonparse.RPAREN }
   | '['                                  { Jsonparse.LBRACKET }
   | ']'                                  { Jsonparse.RBRACKET }
+  | ':'                                  { Jsonparse.COLON }
+  | ','                                  { Jsonparse.COMMA }
+  | '_'                                  { Jsonparse.UNDERSCORE }
   | "true"                               { Jsonparse.TRUE }
   | "false"                              { Jsonparse.FALSE }
   | "null"                               { Jsonparse.NULL }
+  | "_closureTable"                      { Jsonparse.CLOSURETABLE }
+  | "serverFunc"                         { Jsonparse.SERVERFUNC }
   | ('\"' (string_contents as var) '\"') { Jsonparse.STRING (Utility.decode_escapes var) }
   | def_integer as var                   { Jsonparse.INT (Num.num_of_string var) }
   | def_float as var                     { Jsonparse.FLOAT (float_of_string var) }

@@ -94,11 +94,11 @@ SOURCES = $(OPC)                		\
           desugarFuns.mli desugarFuns.ml                \
           desugarProcesses.mli desugarProcesses.ml      \
           desugarInners.mli desugarInners.ml            \
-          typeSugar.mli typeSugar.ml			\
+          typeSugar.mli typeSugar.ml		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
           compilePatterns.ml                    \
-          jsonparse.mly                         \
+          jsonparse.mly               	        \
           jsonlex.mll           		\
           js.ml                                 \
           json.ml                               \

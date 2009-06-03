@@ -1,6 +1,7 @@
 (*pp deriving *)
 
 open Notfound
+open List
 
 open Performance
 open Utility
@@ -10,20 +11,23 @@ type query_params = (string * Value.t) list deriving (Show)
 type web_request =
   | ContApply of Value.continuation * query_params
   | ExprEval of Ir.tail_computation * Value.env
-  | ClientReturn of Value.continuation * Value.t
-  | RemoteCall of Value.t * Value.t list
+  | ClientReturn of Value.continuation * (* continuation *)
+      Value.t                            (* argument *)
+  | RemoteCall of Value.t *            (* function *)
+      Value.env *                      (* closure environment *)
+      Value.t list                     (* argument *)
   | EvalMain
       deriving (Show)
 
 (** Does at least one of the functions have to run on the client? *)
 let is_client_program : Ir.program -> bool =
   fun (bs, main) ->
-    List.exists
+    exists
       (function
          | `Fun (_, _, `Client)
          | `Alien (_, "javascript") -> true
          | `Rec defs ->
-             List.exists
+             exists
                (fun (_, _, location) -> location = `Client)
                defs
          | _ -> false)
@@ -32,20 +36,68 @@ let is_client_program : Ir.program -> bool =
 let serialize_call_to_client (continuation, name, arg) = 
   Json.jsonize_call continuation name arg
 
-let parse_remote_call lookup cgi_args = 
-  let fname = Utility.base64decode (List.assoc "__name" cgi_args) in
-  let args = Utility.base64decode (List.assoc "__args" cgi_args) in
-  let args = Value.untuple (Json.parse_json args) in
-  let func = lookup fname in
-    Debug.print ("client --> server call: "^fname);
-    RemoteCall(func, args)
+let resolve_function funcmap x env =
+  let binding = assoc x funcmap in
+    Evalir.eval_toplevel env ([binding], `Return(`Variable x))  
 
-let decode_continuation (cont : string) : Value.continuation =
-  let fixup_cont = 
-  (* At some point, '+' gets replaced with ' ' in our base64-encoded
-     string.  Here we put it back as it was. *)
-    Str.global_replace (Str.regexp " ") "+" 
-  in Marshal.from_string (Utility.base64decode (fixup_cont cont)) 0
+let rec resolve_functions closures funcmap = 
+  function
+    | `FunctionPtr(x, (env, _)) -> 
+        let env = IntMap.map (fun (x,s) -> 
+                                resolve_functions closures funcmap x,s) env in
+          resolve_function funcmap x (env, closures)
+(* Q: incorporate valenv here? *)
+    | `List elems -> `List (map (resolve_functions closures funcmap) elems)
+    | `Record fields -> `Record(alistmap (resolve_functions closures funcmap) fields)
+    | `Variant(l, v) -> `Variant(l, resolve_functions closures funcmap v)
+    | `RecFunction(defs, (env, clos), f, scope) ->
+        let env = Utility.IntMap.map
+          (fun (x,s) -> resolve_functions closures funcmap x, s) env
+        in `RecFunction(defs,
+                        (env, clos),
+                        f, scope)
+    | `ClientFunction _ as x -> x
+    | `Continuation _ as x -> assert false      (* Unimplemented. Traverse it? *)
+    | `PrimitiveFunction _ as x -> x
+    | #Value.primitive_value as x -> x
+
+let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args = 
+  let funcmap = Ir.funcmap program in (* FIXME: Quite slow... *)
+  let closures = snd valenv in
+  let fname = Utility.base64decode (assoc "__name" cgi_args) in
+  let args = Utility.base64decode (assoc "__args" cgi_args) in
+  let args = Value.untuple (Json.parse_json args) in
+  let args = map (resolve_functions closures funcmap) args in
+  let local_env = Json.parse_json_b64 (assoc "__env" cgi_args) in
+  let local_env = 
+    (* Unpack the record to an alist *)
+    match Value.intmap_of_record local_env with
+        Some x -> x
+      | None -> failwith "Decoding remote-call request, __env was not a record."
+  in
+  let local_env = IntMap.map (fun v -> resolve_functions closures funcmap v) 
+    local_env in
+  let local_env = IntMap.map (fun x -> (x, `Local)) local_env in
+  let env = Value.extend valenv local_env in
+  Debug.print("Resolving server call to " ^ fname);
+    (* [fname] may be in the (int-indexed) funcmap, if it is a nested
+       function, or in [nenv] if a global, or in [Lib.primitive_stub].
+       NOTE: in fact, the funcmap contains top-level functions, so
+       we can ditch the [nenv] lookup. *)
+  let func = try (* Try finding it in the funcmap as a nested closure *)
+    let f_var = int_of_string fname in
+      (* FIXME: use resolve_function here *)
+    let binding = assoc f_var funcmap in
+      Evalir.eval_toplevel env ([binding], `Return(`Variable f_var))
+  with _ -> 
+    (* Try the nenv, which maps the global functions *)
+    let var = Env.String.lookup nenv fname in
+      match Value.lookup var valenv with
+        | Some v -> v
+            (* Try the primitives. *)
+        | None -> Lib.primitive_stub fname
+  in
+    RemoteCall(func, env, args)
 
 let make_unmarshal_envs (valenv, nenv, tyenv) program = 
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
@@ -53,6 +105,15 @@ let make_unmarshal_envs (valenv, nenv, tyenv) program =
   let valenv = Value.with_closures valenv closures in
   let unmarshal_envs= Value.build_unmarshal_envs(valenv, nenv, tyenv) program in
     closures, unmarshal_envs
+
+let decode_continuation envs program (cont : string) : Value.continuation =
+  let fixup_cont = 
+  (* At some point, '+' gets replaced with ' ' in our base64-encoded
+     string.  Here we put it back as it was. *)
+    Str.global_replace (Str.regexp " ") "+" 
+  in
+  let _, envs = make_unmarshal_envs envs program in
+    Value.unmarshal_continuation envs (fixup_cont cont)
 
 (** NOTE: The invocation mode [ContApply] is used by the
     [freshResource] function defined in the prelude, which creates an
@@ -63,17 +124,16 @@ let is_cont_apply_param (key, _) = key == "_cont"
 
 (** Extract continuation from the parameters passed in over CGI.*)
 let parse_cont_apply (valenv, nenv, tyenv) program params =
-  Debug.print ("Invoking a server continuation");
-  let pickled_continuation = List.assoc "_cont" params in
-  let params = List.filter (not -<- is_cont_apply_param) params in
+  let pickled_continuation = assoc "_cont" params in
+  let params = filter (not -<- is_cont_apply_param) params in
   let params = alistmap Value.string_as_charlist params in
   let _, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) program in
     (* TBD: create a debug setting for printing webif modes. *)
-      ContApply (Value.unmarshal_continuation unmarshal_envs pickled_continuation, params)
+    ContApply(Value.unmarshal_continuation unmarshal_envs pickled_continuation,
+              params)
 
 (** Extract expression/environment pair from the CGI parameters.*)
 let parse_expr_eval (valenv, nenv, tyenv) program params =
-  Debug.print ("eval expression request");
   let string_pair (l, r) =
     `Extend
       (StringMap.from_alist [("1", `Constant (`String l));
@@ -82,13 +142,13 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
   let closures, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) 
     program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
-    match Value.unmarshal_value unmarshal_envs (List.assoc "_k" params) with
+    match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
         | `RecFunction ([(f, (_xs, _body))], locals, _, _) as v ->
           let json_env =
-            if List.mem_assoc "_jsonArgs" params then
-              match Json.parse_json_b64 (List.assoc "_jsonArgs" params) with
+            if mem_assoc "_jsonArgs" params then
+              match Json.parse_json_b64 (assoc "_jsonArgs" params) with
                 | `Record fields ->
-                       List.fold_left
+                       fold_left
                          (fun env (name, v) ->
                             Value.bind (int_of_string name) (v, `Local) env)
                          (Value.empty_env closures)
@@ -100,34 +160,39 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
           (* we don't need to pass the args in here as they are read using the environment
              function *)
 
-          (*           let params = List.filter (not -<- is_cont_apply_param) params in *)            
+          (*           let params = filter (not -<- is_cont_apply_param) params in *)            
           (*           let args = *)
-          (*             List.fold_right *)
+          (*             fold_right *)
           (*               (fun pair env -> *)
           (*                  `ApplyPure (`Variable (Env.String.lookup nenv "Cons"), [string_pair pair; env])) *)
           (*               params *)
           (*               (`Variable (Env.String.lookup nenv "Nil")) in *)
 
-
-          let env = Value.shadow (Value.bind f (v, `Local) locals) ~by:json_env in
+          let env = Value.shadow(Value.bind f (v, `Local) locals) ~by:json_env in
             ExprEval (`Apply (`Variable f, []), env)
       | _ -> assert false
 
 let is_remote_call params =
-  List.mem_assoc "__name" params && List.mem_assoc "__args" params
+  mem_assoc "__name" params && mem_assoc "__args" params
 
 let is_client_return params = 
-  List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
+  mem_assoc "__continuation" params && mem_assoc "__result" params
 
 let is_cont_apply params = 
-  List.mem_assoc "_cont" params
+  mem_assoc "_cont" params
 
 let is_expr_eval args =
-  List.mem_assoc "_k" args
+  mem_assoc "_k" args
         
-let parse_client_return cgi_args = 
-  let continuation = decode_continuation (List.assoc "__continuation" cgi_args) in
-  let arg = Json.parse_json_b64 (List.assoc "__result" cgi_args) in
+let parse_client_return envs program cgi_args = 
+  let continuation =
+    decode_continuation envs program (assoc "__continuation" cgi_args) in
+  let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
+    (* FIXME: refactor *)
+  let funcmap = Ir.funcmap program in (* FIXME: Quite slow... *)
+  let (valenv, _, _) = envs in
+  let closures = snd valenv in
+  let arg = resolve_functions closures funcmap arg in
     ClientReturn(continuation, arg)
 
 let error_page_stylesheet = 
@@ -146,7 +211,7 @@ let is_multipart () =
 
 let get_cgi_args() =
   if is_multipart() then
-    List.map (fun (name, {Cgi.value=value}) -> (name, value))
+    map (fun (name, {Cgi.value=value}) -> (name, value))
       (Cgi.parse_multipart_args())
   else
     Cgi.parse_args()
@@ -165,10 +230,12 @@ let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
 let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
   function
     | ContApply(cont, params) ->
+        Debug.print("Doing ContApply");
         ("text/html",
          (Value.string_of_value
             (Evalir.apply_cont_toplevel cont valenv (`Record params))))
     | ExprEval(expr, locals) ->        
+        Debug.print("Doing ExprEval");
         let env = Value.shadow valenv ~by:locals in
         let v = snd (Evalir.run_program_with_cont 
                        (cont (Value.empty_env (Value.get_closures env)))
@@ -176,18 +243,21 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
           ("text/html",
            Value.string_of_value v)
     | ClientReturn(cont, arg) ->
+        Debug.print("Doing ClientReturn ");
         let result = Evalir.apply_cont_toplevel cont valenv arg in
         let result_json = Json.jsonize_value result in
           ("text/plain",
            Utility.base64encode result_json)
-    | RemoteCall(func, args) -> 
-        let result = Evalir.apply_toplevel valenv (func, args) in
+    | RemoteCall(func, env, args) -> 
+        Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
+        let result = Evalir.apply_toplevel env (func, args) in
           if not(Proc.singlethreaded()) then
             (prerr_endline "Remaining procs on server after remote call!";
              assert(false));
           ("text/plain",
            Utility.base64encode (Json.jsonize_value result))
     | EvalMain -> 
+        Debug.print("Doing EvalMain");
         ("text/html",
          if is_client_program (globals @ locals, main) then
            let program = (globals @ locals, main) in
@@ -195,10 +265,11 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
                Irtojs.generate_program_page
-                 (closures, Lib.nenv, Lib.typing_env) 
+                 (closures, Lib.nenv, Lib.typing_env)
                  program
          else
-           let program = locals, main in (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
+           let program = locals, main in 
+             (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
              Debug.print "Running server program";
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars 
@@ -209,6 +280,7 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
 
 let serve_request (valenv, nenv, (tyenv : Types.typing_environment)) 
                   prelude filename =
+
   try 
     let (nenv', tyenv'), (globals, (locals, main), t) =
       Errors.display_fatal Loader.load_file (nenv, tyenv) filename in
@@ -221,19 +293,21 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment))
             | `Msg s -> Debug.print ("Unification error: " ^ s)
             | _ -> ()
           end;
-          failwith("Web programs must have type Page but this program has type "
+          failwith("Web programs must have type Page but this one has type "
                    ^ Types.string_of_datatype t)
     end;
-
+    
     let (locals, main), render_cont = 
       wrap_with_render_page (nenv, tyenv) (locals, main) in
-    let closures = Ir.ClosureTable.program
-      (Var.varify_env (nenv, tyenv.Types.var_env)) 
-      Lib.primitive_vars
-      (globals @ locals, main) in
 
-      (* FIXME: why is this evaluating the definitions? *)
-    let valenv = Evalir.run_defs(Value.with_closures valenv closures) globals in
+    let closures = Ir.ClosureTable.program
+                    (Var.varify_env (nenv, tyenv.Types.var_env)) 
+                    Lib.primitive_vars
+                    (globals @ locals, main) in
+    let valenv = Value.with_closures valenv closures in
+
+    (* We can evaluate the definitions here because we know they are pure. *)
+    let valenv = Evalir.run_defs valenv globals in
 
     let valenv, nenv, tyenv  =
       (valenv,
@@ -242,16 +316,11 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment))
     let globals = prelude @ globals in
     let cgi_args = get_cgi_args() in
       Lib.cgi_parameters := cgi_args;
-      let lookup name =
-        let var = Env.String.lookup nenv name in
-          match Value.lookup var valenv with
-            | Some v -> v
-            | None -> Lib.primitive_stub name in
       let request =
         if is_remote_call cgi_args then
-          parse_remote_call lookup cgi_args
+          parse_remote_call (valenv, nenv, tyenv) (globals@locals,main) cgi_args
         else if is_client_return cgi_args then
-          parse_client_return cgi_args
+          parse_client_return(valenv, nenv, tyenv) (globals@locals,main) cgi_args
         else if (is_cont_apply cgi_args) then
           parse_cont_apply (valenv, nenv, tyenv) (globals@locals, main) cgi_args
         else if (is_expr_eval cgi_args) then
@@ -271,7 +340,7 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment))
         prerr_endline msg;
         Lib.print_http_response [("Content-type", "text/html; charset=utf-8")] 
           (error_page (Errors.format_exception_html e))
-    | exc -> Lib.print_http_response [("Content-type", "text/html; charset=utf-8")]
+    | exc -> Lib.print_http_response[("Content-type","text/html; charset=utf-8")]
         (error_page (Errors.format_exception_html exc))
           
 let serve_request envs prelude filename =
