@@ -100,7 +100,6 @@ SOURCES = $(OPC)                		\
           compilePatterns.ml                    \
           jsonparse.mly                         \
           jsonlex.mll           		\
-          js.ml                                 \
           json.ml                               \
           database.mli database.ml 		\
           linksregex.ml                         \
