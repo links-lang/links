@@ -59,7 +59,7 @@ fun fst(pair) {
 }
 
 fun map_comprehension(f, l) {
-  for (var x <- l) [f(x)]
+  for (x <- l) [f(x)]
 }
 
 fun range(n) {
@@ -111,46 +111,64 @@ fun assocd(x, l, d) {
   }
 }
 
+# This function demonstrates that we can now support abstraction
+# over queries.
+sig firstField : (TableHandle (r, w, n), (r) {}-> Bool, (r) {}-> a) ~e~> (a::Base)
+fun firstField(t, p, body) {
+  var matches =
+    for (r <-- t)
+     where (p(r))
+      [(v=body(r))];
+  hd(matches).v
+}
+
 fun wineTypeName(wine_type_id) {
-  for (var wineType <-- wineTypeTable)
-  where (wineType.wine_type_id == wine_type_id)
-    stringToXml(wineType.wine_type)
+  stringToXml
+    (firstField
+      (wineTypeTable,
+       fun (wineType) {wineType.wine_type_id == wine_type_id},
+       (.wine_type)))
 }
 
 fun wine_name(wine_id) {
-  var matches = 
-      for (var wine <-- wineTable)
-      where (wine.wine_id == wine_id)
-        [wine.wine_name];
-  hd(matches)
+  var matches =
+    for (wine <-- wineTable)
+     where (wine.wine_id == wine_id)
+      [(name=wine.wine_name)];
+  hd(matches).name
 }
 
 fun get_region_name(region_id) {
-  for (var region <-- regionTable)
-  where (region_id == region.region_id)
-    region.region_name
+  var matches =
+    for (region <-- regionTable)
+     where (region_id == region.region_id)
+      [(region=region.region_name)];
+  hd(matches).region
 }
 
 fun get_wine_price(wine_id) {
-  hd(for (var cost_rec <-- inventoryTable)
-     where (wine_id == cost_rec.wine_id) 
-       [cost_rec.cost])
+  firstField
+    (inventoryTable,
+     fun (costRec) {wine_id == costRec.wine_id},
+     (.cost))
 }
 
 fun cust_id_next() {  # WARNING: race condition here
-  var ids = for (var u <-- usersTable)
-              [u.cust_id];
+  var ids =
+    map((.1),
+      for (u <-- usersTable)
+        [(1=u.cust_id)]);
   maximum(0, ids) + 1
 }
 
 fun claimCart(order_id, to_cust_id) {
  # FIXME: This normally fails to do an update, because Links is 
  # trying to select NULL-valued rows by checking against ''.
- update (var x <-- shortOrderTable)
+ update (x <-- shortOrderTable)
   where (x.order_id == order_id && x.cust_id == -1)
     set (cust_id = to_cust_id,
          order_id = x.order_id);
-  update (var x <-- shortCartItemsTable)
+  update (x <-- shortCartItemsTable)
    where (x.order_id == order_id && x.cust_id == -1)
     set (cust_id = to_cust_id,
          order_id = x.order_id);
@@ -160,7 +178,7 @@ fun htmlHead() {
   <head> <link href="wine.css" rel="StyleSheet"/> </head>
 }
 
-sig sign_up : (Int, String, String) -> Page
+sig sign_up : (Int, String, String) ~> Page
 fun sign_up(order_id, username, password)  {
   var new_cust_id = cust_id_next();
 
@@ -198,16 +216,16 @@ fun sign_up_form(order_id) {
 }
 
 fun sign_in(order_id, username, password) {
-  var cust_id = 
-    for (var u <-- usersTable)
-    where (u.user_name == username &&
-           u.password == password)
-      [u.cust_id];    
+  var cust_id =
+    for (u <-- usersTable)
+     where (u.user_name == username &&
+            u.password == password)
+      [(1=u.cust_id)];
 
   if (cust_id == [])
     errorPage("Incorrect username/password combination")
   else {
-    var cust_id = hd(cust_id);
+    var cust_id = hd(cust_id).1;
     if (order_id <> -1)
       claimCart(order_id, cust_id)
     else ();
@@ -251,13 +269,14 @@ fun errorPage(msg) {
 }
 
 fun customerName(cust_id) {
-  for (var cust <-- usersTable)
-  where (cust.cust_id == cust_id)
-    stringToXml(cust.user_name)
+  stringToXml
+    (firstField
+      (usersTable,
+       fun (cust) {cust.cust_id == cust_id},
+       (.user_name)))
 }
 
-sig header : (Int, Int) -> Xml
-
+sig header : (Int, Int) ~> Xml
 fun header(cust_id, order_id) {
   if (cust_id == -1)
     <div align="right">
@@ -303,15 +322,18 @@ fun purchase_confirmation(cust_id, order_id, total) {
          <th class="total-col"> Total </th>
        </tr>
        {
-         for (var item <-- cartItemsTable)
-           for (var wine <-- wineTable)
-             where (item.wine_id == wine.wine_id && item.order_id == order_id)
-               <tr>
-                 <td class="quantity-col"> {intToXml(item.qty)} </td>
-                 <td class="wine-name-col"> {stringToXml(wine.wine_name)} </td>
-                 <td class="price-col"> ${floatToXml(item.price)} </td>
-                 <td class="total-col"> ${floatToXml(item.price *. intToFloat(item.qty))} </td>
-               </tr>
+         var items =
+           for (item <-- cartItemsTable)
+             for (wine <-- wineTable)
+               where (item.wine_id == wine.wine_id && item.order_id == order_id)
+                 [(name=wine.wine_name, qty=item.qty, price=item.price)];
+         for (item <- items)
+           <tr>
+             <td class="quantity-col"> {intToXml(item.qty)} </td>
+             <td class="wine-name-col"> {stringToXml(item.name)} </td>
+             <td class="price-col"> ${floatToXml(item.price)} </td>
+             <td class="total-col"> ${floatToXml(item.price *. intToFloat(item.qty))} </td>
+           </tr>
        }
      <tr>
       <td colspan="3">Total of this order:</td>
@@ -327,20 +349,20 @@ fun purchase_confirmation(cust_id, order_id, total) {
    </html>
 }
 
-sig order_total : (Int, Int) -> Float
+sig order_total : (Int, Int) ~> Float
 fun order_total(cust_id, order_id) {
   sum_float(
-    for (var item <-- cartItemsTable)
-    where (item.cust_id == cust_id && item.order_id == order_id)
-      [item.price *. intToFloat(item.qty)]
-  )
+    map ((.1),
+        for (item <-- cartItemsTable)
+        where (item.cust_id == cust_id && item.order_id == order_id)
+          [(1=item.price *. intToFloat(item.qty))]))
 }
 
 fun getOrder(cust_id, order_id) {
-  var the_orders = 
-    for (var x <-- orderTable )
-    where (cust_id == x.cust_id && order_id == x.order_id)
-      [x];
+  var the_orders =
+    for (x <-- orderTable )
+      where (cust_id == x.cust_id && order_id == x.order_id)
+        [x];
   switch (the_orders) {
     case [] -> None
     case (order::_) -> Some(order)
@@ -358,7 +380,7 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
         case None -> errorPage("Internal error: You have no shopping cart. (**This may be due to a bug with claiming your cart; try signing in before adding items to your cart**) (" 
                ++ intToString(cust_id) ++ ", " ++ intToString(order_id) ++ ")")
         case Some(order) -> {
-          update (var x <-- orderTable)
+          update (x <-- orderTable)
            where (x.order_id == order_id && cust_id == x.cust_id)
              set (cust_id = order.cust_id,
                   order_id = order.order_id,
@@ -420,11 +442,11 @@ fun withButton(label, frm) {
     result
 }
 
-sig update_cart : (Int, Int, [(Int,Int)]) -> ()
+sig update_cart : (Int, Int, [(Int,Int)]) ~> ()
 fun update_cart(cust_id, order_id, qtys) {
   # Gosh, here's an ugly idiom:
-  ignore(for (var (item_id, newQty) <- qtys) {
-    update (var item <-- cartItemsTable)
+  ignore(for ((item_id, newQty) <- qtys) {
+    update (item <-- cartItemsTable)
      where (item.cust_id == cust_id && item.order_id == order_id 
              && item.item_id == item_id)
        set (qty = newQty,
@@ -441,20 +463,21 @@ fun update_cart(cust_id, order_id, qtys) {
 fun cart_itemlist(cust_id, order_id) {
   debug("starting cart_itemlist");
 
-  var cart_items = 
-    for (var cart_item <-- cartItemsTable)
+  var cart_items =
+    for (cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
            cart_item.cust_id == cust_id)
     {
-        for (var wine <-- wineTable)
+      for (wine <-- wineTable)
         where (wine.wine_id == cart_item.wine_id)
         {
-            for (var cost_rec <-- inventoryTable)
+          for (cost_rec <-- inventoryTable)
             where (cost_rec.wine_id == wine.wine_id)
               [(id=cart_item.item_id, qty=cart_item.qty,
                 name=wine.wine_name, cost=cost_rec.cost)]
         }
     };
+
   debug("got results in cart_items");
   if (length(cart_items) == 0)
     page <p>Your cart is empty.</p>
@@ -477,7 +500,7 @@ fun cart_itemlist(cust_id, order_id) {
               <th class="total-col"> Total </th>
             </tr>
             {
-              formlets(for (var cartItem <- cart_items) {
+              formlets(for (cartItem <- cart_items) {
                   [formlet
                    <tr>
                        <td>{inputIntValue(cartItem.qty) -> qty}
@@ -523,7 +546,7 @@ fun cart_itemlist(cust_id, order_id) {
   }
 }
 
-sig show_cart : (Int, Int, String) -> Page
+sig show_cart : (Int, Int, String) ~> Page
 fun show_cart(cust_id, order_id, msg) {
  page
   <html> {htmlHead()}
@@ -538,32 +561,33 @@ fun show_cart(cust_id, order_id, msg) {
   </html>
 }
 
-sig cartStats : (Int, Int) -> (Float, Int)
+sig cartStats : (Int, Int) ~> (Float, Int)
 fun cartStats(cust_id, order_id) {
   var cart_items = 
-    for (var cart_item <-- cartItemsTable)
+    for (cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
            cart_item.cust_id == cust_id)
     {
-        for (var wine <-- wineTable)
+        for (wine <-- wineTable)
         where (wine.wine_id == cart_item.wine_id)
-          for (var cost_rec <-- inventoryTable)
+          for (cost_rec <-- inventoryTable)
           where (wine.wine_id == cost_rec.wine_id)
             [(cart_item.qty, cost_rec.cost)]
     };
-  var total_cost = sum_float(map(snd, cart_items));
+  var total_cost = sum_float(map(fun ((q, c)) {intToFloat(q) *. c}, cart_items));
   var total_items = sum_int(map(fst, cart_items));
   (total_cost, total_items)
 }
 
-sig add_to_cart : (Int, Int, Int) -> Page
+sig add_to_cart : (Int, Int, Int) ~> Page
 fun add_to_cart(cust_id, order_id, wine_id) {
   var price = get_wine_price(wine_id);
   var max_item_id = maximum(0,
-        for (var cart_item <-- cartItemsTable)
-        where (cart_item.order_id == order_id
-               && cart_item.cust_id == cust_id)
-          [cart_item.item_id]
+        map ((.1),
+          for (cart_item <-- cartItemsTable)
+          where (cart_item.order_id == order_id
+                 && cart_item.cust_id == cust_id)
+            [(1=cart_item.item_id)])
         );
   var new_item_id = max_item_id + 1;
         
@@ -587,9 +611,10 @@ fun sessionCart() {
 
 # create_cart: make a new cart
 fun create_cart(cust_id) {
-  var orders = for (var cart <-- shortOrderTable)
-             [cart.order_id];
-  var order_id = 1 + maximum(0, orders);
+  var orders =
+    for (cart <-- shortOrderTable)
+      [(1=cart.order_id)];
+  var order_id = 1 + maximum(0, map ((.1), orders));
   insert (shortOrderTable) values 
          [(cust_id = cust_id, order_id = order_id)];
   setCookie("order_id", intToString(order_id));
@@ -599,20 +624,21 @@ fun create_cart(cust_id) {
 
 fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
   var result = 
-    take(page_size, drop(pageNum * page_size,
-      for (var wine <-- wineTable )
+    query [page_size, pageNum * page_size] {
+      for (wine <-- wineTable )
       where (wine_type == 1 || wine.wine_type == wine_type)
       {
-        for (var winery <-- wineryTable)
+        for (winery <-- wineryTable)
            where (winery.winery_id == wine.winery_id
                   && (region_id == 1 || winery.region_id == region_id))
            { 
-               for (var cost_rec <-- inventoryTable)
+               for (cost_rec <-- inventoryTable)
                where (wine.wine_id == cost_rec.wine_id)
                  [(wine.wine_id, wine.wine_name, cost_rec.cost,
                    wine.year, winery.winery_name)]
            }
-      }));
+      }
+    };
 
   var (order_id, cust_id) = 
     if (order_id <> -1) (order_id, cust_id)
@@ -620,7 +646,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
 
   # create_cart is idempotent, so we don't need freshResource here.
 
-  for (var (id, name, cost, year, winery) <- result)
+  for ((id, name, cost, year, winery) <- result)
   {
       <li>
         {stringToXml(intToString(year))}
@@ -638,20 +664,20 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
 
 fun wine_count(region_id, wine_type) {
   var result = 
-    for (var wine <-- wineTable)
+    for (wine <-- wineTable)
     where (wine_type == 1 || wine.wine_type == wine_type)
     {
-      for (var winery <-- wineryTable)
+      for (winery <-- wineryTable)
          where (winery.winery_id == wine.winery_id
                 && (region_id == 1 || winery.region_id == region_id))
          { 
-             for (var cost_rec <-- inventoryTable)
+             for (cost_rec <-- inventoryTable)
              where (wine.wine_id == cost_rec.wine_id)
                [(wine.wine_id, wine.wine_name, cost_rec.cost,
                  wine.year, winery.winery_name)]
          }
     };
-   length(result)
+  length(result)
 }
 
 fun deadend() {
@@ -669,7 +695,7 @@ fun cartSummary(cust_id, order_id) {
   </div>
 }
 
-sig search_results : (Int, Int, Int, Int, Int) -> Page
+sig search_results : (Int, Int, Int, Int, Int) ~> Page
 fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
   var numWines = wine_count(region_id, wine_type);
   var numPages = numWines/page_size;
@@ -684,14 +710,14 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
            <table>
             <tr><td class="label">Region:</td>
              <td>
-              {choiceDefault(for (var region <-- regionTable)
+              {choiceDefault(for (region <-- regionTable)
                                [(region.region_id, region.region_name)],
                              region_id) -> search_region_id}
              </td></tr>
              <tr>
               <td class="label">Wine type:</td>
               <td>
-               {choiceDefault(for (var type <-- wineTypeTable)
+               {choiceDefault(for (type <-- wineTypeTable)
                                 [(type.wine_type_id, type.wine_type)],
                               wine_type) -> search_wine_type}
               </td>
@@ -707,7 +733,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
            search_results(cust_id, order_id,
             search_region_id,
             search_wine_type,
-            1)) => id
+            0)) => id
           }
      </div>
      <h1>Wines for region {stringToXml(get_region_name(region_id))},
@@ -720,20 +746,20 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
        {intToXml(page_size*pageNum+winesOnThisPage)}.<br />
      {if (pageNum <> 0)
        <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum-1)}">Previous</a> else []}
-     {for (var i <- range(numPages-1)) {
+     {for (i <- range(numPages-1)) {
         (if (i == pageNum) {intToXml(i+1)}
         else 
           <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
         ++ <span> </span> 
      }}
-     {if (pageNum <> numPages)
+     {if (pageNum < numPages-1)
        <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum+1)}">Next</a> else []
      }
      {footer(cust_id)}
    </html>
 }
 
-sig main : () -> Page
+sig main : () ~> Page
 fun main() {
   search_results(-1, -1, 1, 1, 0)
 }

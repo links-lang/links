@@ -5,7 +5,7 @@ fun request(s) client {
      <form l:onsubmit="{response(t)}" l:onkeyup="{replaceDocument(request(t))}">
       <input type="text" value="{s}" l:name="t"/>
       {
-      if (s ~ /^[0-9]+/)
+      if (s =~ /^[0-9]+/)
        <input type="submit"/>
       else
        <input type="submit" disabled="disabled"/>
@@ -23,7 +23,7 @@ fun response(s) client {
    <body>
     <h1>Factorials up to {intToXml(n)}</h1>
     <table><tbody>{
-     for (var (i,f) <- lookupFactorials(n))
+     for ((i=i,f=f) <- lookupFactorials(n))
       <tr>
        <td>{intToXml(i)}</td>
        <td>{intToXml(f)}</td>
@@ -38,10 +38,12 @@ fun lookupFactorials(n) server {
  var db = database "factorials";
  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
- for (var row <-- factorials)
-  where (row.i <= n)
-  orderby (row.i)
-  [(row.i, row.f)]
+ query {
+   for (row <-- factorials)
+    where (row.i <= n)
+    orderby (row.i)
+     [(i=row.i, f=row.f)]
+ }
 }
 
 page

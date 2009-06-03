@@ -1,6 +1,6 @@
 Lexical scoping at top-level
 var x = 3; fun y(a) { x + a } var x = 4; y(10)
-stdout : 13
+stdout : 13 : Int
 exit : 0
 
 Nested scopes

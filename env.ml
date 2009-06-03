@@ -1,3 +1,5 @@
+open Notfound
+
 module type S = 
 sig
   type name
@@ -14,8 +16,7 @@ sig
 
   val map : ('a -> 'b) -> 'a t -> 'b t
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-  module Show_t (A : Show.Show) 
-    : Show.Show with type a = A.a t
+  val show_t : 'a Show.show -> 'a t Show.show
 end
 
 module Make (Ord : Utility.OrderedShow) :
@@ -38,7 +39,7 @@ struct
   let range map = M.fold (fun _ v l -> v::l) map []
   let map = M.map
   let fold = M.fold
-  module Show_t = M.Show_t
+  let show_t = M.show_t
 end
 
 module String

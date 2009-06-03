@@ -1,5 +1,4 @@
 open Sqlite3
-open Result
 
 (* TODO: Better type/error handling *)
 
@@ -45,39 +44,39 @@ let data_to_string data =
 ;;
 
 class lite3_result (stmt: stmt) = object
-  inherit dbresult
+  inherit Value.dbvalue
   val result_list_and_status =
     let rec get_results (results,status) = 
       match status with
-        QueryOk -> (
+        `QueryOk -> (
           match step stmt with
             Rc.OK|Rc.ROW -> 
             let data = Array.to_list (row_data stmt) in 
             let row = List.map data_to_string data in 
-            get_results (row::results,QueryOk )
+            get_results (row::results,`QueryOk )
           | Rc.DONE -> 
-            results,QueryOk 
-          | e -> results, QueryError (error_as_string e)
+            results,`QueryOk 
+          | e -> results, `QueryError (error_as_string e)
         )
       | _ -> (results,status)
     in 
-    get_results ([],QueryOk)
+    get_results ([],`QueryOk)
   
-  method status : db_status = snd(result_list_and_status)
+  method status : Value.db_status = snd(result_list_and_status)
   method nfields : int =  column_count stmt
   method fname n : string = column_name stmt n
   method get_all_lst : string list list = fst(result_list_and_status)
   method error : string = 
     match snd(result_list_and_status) with
-      QueryError(msg) -> msg
-    | QueryOk -> "OK"
+      `QueryError(msg) -> msg
+    | `QueryOk -> "OK"
 end
 
 
 class lite3_database file = object(self)
-  inherit database
+  inherit Value.database
   val connection = db_open file
-  method exec query : dbresult =
+  method exec query : Value.dbvalue =
     let stmt = prepare connection query in
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
@@ -86,7 +85,7 @@ class lite3_database file = object(self)
 end
 
 let driver_name = "sqlite3"
-let _ = register_driver (driver_name, 
-			 fun args -> 
-			   new lite3_database args, 
-			   reconstruct_db_string (driver_name, args))
+let _ = Value.register_driver (driver_name, 
+			       fun args -> 
+			         new lite3_database args, 
+			         Value.reconstruct_db_string (driver_name, args))

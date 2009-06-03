@@ -46,12 +46,12 @@ let desugar_regex phrase regex_type pos : regex -> phrasenode =
 let appl pos name tyargs args = 
   (`FnAppl ((tappl (`Var name, tyargs), pos), args), pos : phrase)
 
-let desugar_regexes {Types.var_env=var_env; Types.tycon_env=tycon_env'} =
+let desugar_regexes env =
 object(self)
   (*  inherit SugarTraversals.map as super*)
-  inherit (TransformSugar.transform (var_env, tycon_env')) as super
+  inherit (TransformSugar.transform env) as super
     
-  val regex_type = Instantiate.alias "Regex" [] tycon_env'
+  val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
 
   method phrase (p, pos) = match p with
     | `InfixAppl ((tyargs, `RegexMatch flags), e1, (`Regex((`Replace(_,_) as r)), _)) -> 

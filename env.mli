@@ -42,8 +42,7 @@ sig
 
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 
-  module Show_t (A : Show.Show) 
-    : Show.Show with type a = A.a t
+  val show_t : 'a Show.show -> 'a t Show.show
   (** Printing for environments *)
 end
 (** Output signature of the functor {!Env.Make}. *)

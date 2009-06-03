@@ -104,7 +104,7 @@ fun numbers(start, l) {
     (start, hd(l)) :: numbers(start+.1.0, tl(l))
 }
 
-sig mandelBlock : (Float, Float, Float, Float, Float, Float) -> Xml
+sig mandelBlock : (Float, Float, Float, Float, Float, Float) ~> Xml
 fun mandelBlock(pixSize, x, y, regionSize, r, i) {
   var halfPixSize = pixSize /. 2.0;
   pixeldiv(x, y, halfPixSize, mandelbrot(r, i, the_limit)) ++

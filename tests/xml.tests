@@ -1,5 +1,5 @@
 Braced XML
-<f>{for (var i <- []) <br/>}</f>
+<f>{for (i <- []) <br/>}</f>
 stdout : <f/> : Xml
 
 Escaped braces
@@ -16,11 +16,11 @@ Backslashes
 stdout : <p>A backslash \ </p> : Xml
 
 Top-level-bound XML object
-var x = for (var i <- []) <br/>; <f>{x}</f>
+var x = for (i <- []) <br/>; <f>{x}</f>
 stdout : <f/> : Xml
 
 Let-bound XML object
-{var x = for (var i <- []) <br/>; <f>{x}</f>}
+{var x = for (i <- []) <br/>; <f>{x}</f>}
 stdout : <f/> : Xml
 
 Whitespace preservation
@@ -68,7 +68,7 @@ Accept okay l:name attributes
 stdout : @<form action="#">.*</form> : Xml
 
 Looping in XML quasis
-var things = [1, 2]; <ul>{for (var x <- things) <br/>}</ul>
+var things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
 stdout : <ul><br/><br/></ul> : Xml
 
 Amp-encoding (OK)
@@ -85,7 +85,7 @@ var x = "this & that"; <xml>{stringToXml(x)}</xml>
 stdout : <xml>this &amp; that</xml> : Xml
 
 Looping in XML quasis, with multiple content elements.
-var things = [1, 2];<ul>{for (var x <- things) <#><li>{stringToXml(intToString(x))}</li><li>1</li></#>}</ul>
+var things = [1, 2];<ul>{for (x <- things) <#><li>{stringToXml(intToString(x))}</li><li>1</li></#>}</ul>
 stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : Xml
 
 XML forest
@@ -94,4 +94,4 @@ stdout : foo<a/><b>bar</b>fubar : Xml
 
 Labelization bug
 (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
-stdout : @.* : Xml
+stdout : @.* : \[XmlItem\]

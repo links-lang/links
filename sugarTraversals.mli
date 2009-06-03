@@ -24,15 +24,14 @@ class map :
     method unary_op        : unary_op -> unary_op
     method tyunary_op      : tyarg list * unary_op -> tyarg list * unary_op
     method binder          : binder -> binder
-    method sentence'       : sentence' -> sentence'
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
+    method subkind         : subkind -> subkind
     method row_var         : row_var -> row_var
     method row             : row -> row
     method replace_rhs     : replace_rhs -> replace_rhs
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
-    method quantifier      : quantifier -> quantifier
     method position        : position -> position
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
@@ -46,10 +45,13 @@ class map :
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
+    method presence_flag   : presence_flag -> presence_flag
+    method quantifier      : quantifier -> quantifier
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
     method datatype'       : datatype' -> datatype'
+    method type_arg        : type_arg -> type_arg
     method constant        : constant -> constant
     method binop           : binop -> binop
     method tybinop         : tyarg list * binop -> tyarg list * binop
@@ -85,15 +87,14 @@ class fold :
     method unary_op        : unary_op -> 'self
     method tyunary_op      : tyarg list * unary_op -> 'self
     method binder          : binder -> 'self
-    method sentence'       : sentence' -> 'self
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
+    method subkind         : subkind -> 'self
     method row_var         : row_var -> 'self
     method row             : row -> 'self
     method replace_rhs     : replace_rhs -> 'self
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
-    method quantifier      : quantifier -> 'self
     method position        : position -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
@@ -106,11 +107,14 @@ class fold :
     method location        : location -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
+    method presence_flag   : presence_flag -> 'self
+    method quantifier      : quantifier -> 'self
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
     method datatype        : datatype -> 'self
     method datatype'       : datatype' -> 'self
+    method type_arg        : type_arg -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
     method tybinop         : tyarg list * binop -> 'self
@@ -162,6 +166,7 @@ object ('self)
   method phrase          : phrase -> 'self * phrase
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : position -> 'self * position
+  method presence_flag   : presence_flag -> 'self * presence_flag
   method program         : program -> 'self * program
   method quantifier      : quantifier -> 'self * quantifier
   method regex           : regex -> 'self * regex
@@ -171,9 +176,10 @@ object ('self)
   method row_var         : row_var -> 'self * row_var
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
-  method sentence'       : sentence' -> 'self * sentence'
   method string          : name -> 'self * name
-  method unary_op        : unary_op -> 'self * unary_op
+  method subkind         : subkind -> 'self * subkind
+  method type_arg        : type_arg -> 'self * type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
+  method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a
 end

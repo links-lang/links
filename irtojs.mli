@@ -1,13 +1,12 @@
 (* JavaScript code generation *)
 
 val generate_program_defs : 
-  string list -> 
-  Syntax.definition list -> Utility.StringSet.t -> string list
+  (Ir.closures * Var.var Env.String.t * Types.typing_environment) ->
+  Ir.binding list -> string list
 
 val generate_program_page : ?onload:string -> 
-  Types.typing_environment ->
-  string list -> 
-  Syntax.program -> string
+  (Ir.closures * Var.var Env.String.t * Types.typing_environment) ->
+  Ir.program -> string
 
 val make_boiler_page : 
   ?onload:string -> 

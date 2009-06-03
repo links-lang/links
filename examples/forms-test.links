@@ -1,7 +1,7 @@
 # An ugly page that exercises the various types of input fields in a form.
 
 fun radioGroupVertical(items) {
-  for(var (xml, label) <- items)
+  for((xml, label) <- items)
     <#>
     <label>
       {xml} {stringToXml(label)}

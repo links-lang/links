@@ -31,12 +31,11 @@ include Functional
 let ( <| ) arg f = f arg
 let ( |> ) f arg = f arg
 
-(* Maps and sets *)
+(** {0 Maps and sets} *)
 module type OrderedShow = sig
   type t
   val compare : t -> t -> int
-  module Show_t : Show.Show 
-    with type a = t
+  val show_t : t Show.show 
 end
 
 module type Map = 
@@ -90,28 +89,24 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
-  module Show_t (V : Show.Show) :
-    Show.Show with type a = V.a t
-
-  module Functor_t : 
-    Functor.Functor with type 'a f = 'a t
+  val show_t : 'a Show.show -> 'a t Show.show
 end
 
 module String = struct
   include String
-  module Show_t = Primitives.Show_string
+  let show_t = Show.show_string
 end
 
 module Int = struct
   type t = int
   let compare = Pervasives.compare
-  module Show_t = Primitives.Show_int
+  let show_t = Show.show_int
 end
 
 module Char = 
 struct
   include Char
-  module Show_t = Primitives.Show_char
+  let show_t = Show.show_char
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
   let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
   let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
@@ -149,7 +144,8 @@ struct
 
     let find elem map = 
       try find elem map 
-      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem))
+      with NotFound _ -> raise (NotFound (Show.show Ord.show_t elem ^ 
+                                  " (in Map.find)"))
       
     let for_all p m =
       fold (fun _ v b -> b && p v) m true
@@ -166,6 +162,8 @@ struct
     let from_alist l =
       List.fold_right (uncurry add) l empty 
         
+    (** Transform each key-value pair in [m] to a new key-value pair
+        by calling [f] and return the resulting [Map]. *)
     let megamap f m = fold (fun k v -> uncurry add (f (k, v))) m empty
 
     let pop item map = 
@@ -180,7 +178,7 @@ struct
     let union_disjoint a b = 
       fold
         (fun k v r -> 
-           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
+           if (mem k r) then raise (Not_disjoint (k, Show.show Ord.show_t k)) 
            else
              add k v r) b a
 
@@ -202,28 +200,24 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    module Show_t (V : Show.Show) = Show.Show_map(Ord)(Ord.Show_t)(V)
+    let defined_on m x = (match lookup x m with None -> false | Some _ -> true)
 
-    module Functor_t =
-    struct
-      type 'a f = 'a t
-      let map = map
-    end
+    module S = Show.Show_map(Ord)
+    let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
   end
 end
 
 module type Set =
 sig
   include Set.S
-  
+    
   val union_all : t list -> t
-  (** Take the union of a collection of sets *)
+    (** Take the union of a collection of sets *)
 
   val from_list : elt list -> t
   (** Construct a set from a list *)
 
-  module Show_t : Show.Show
-    with type a = t
+  val show_t : t Show.show
 end
 
 module Set :
@@ -239,7 +233,8 @@ struct
     include Set.Make(Ord)
     let union_all sets = List.fold_right union sets empty
     let from_list l = List.fold_right add l empty
-    module Show_t = Show.Show_set(Ord)(Ord.Show_t)
+    module S = Show.Show_set(Ord)
+    let show_t = S.show_t Ord.show_t
   end
 end
 
@@ -255,35 +250,36 @@ module type CHARSET = Set with type elt = char
 module CharSet : CHARSET = Set.Make(Char)
 module CharMap = Map.Make(Char)
 
+type stringset = StringSet.t
+    deriving (Show)
+
+module Eq_stringset :
+sig
+  val eq : StringSet.t Eq.eq
+end = Eq.Eq_set_s_t (StringSet)
+
+let typeable_stringset : stringset Typeable.typeable = 
+  { Typeable.type_rep = Typeable.TypeRep.mkFresh "stringset" [] }
+
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
 
-module Typeable_stringmap (A : Typeable.Typeable) : Typeable.Typeable with type a = A.a stringmap = 
-Typeable.Typeable_defaults(struct
-  type a = A.a stringmap
-  let typeRep = 
-    let t = Typeable.TypeRep (Typeable.Tag.fresh(), [A.typeRep()])
-    in fun _ -> t
-end)
-module Pickle_stringmap (A : Pickle.Pickle) = Pickle.Pickle_unpicklable (struct type a = A.a stringmap let tname ="stringmap"  end)
-module Functor_stringmap = StringMap.Functor_t
-module Eq_stringmap (E : Eq.Eq) = Eq.Eq_map_s_t (E)(StringMap)
-module Shelve_stringmap (S : Shelve.Shelve) = 
-struct
-  module Typeable = Typeable_stringmap(S.Typeable)
-  module Eq = Eq_stringmap(S.Eq)
-  type a = S.a stringmap
-  let shelve  _ = failwith "shelve stringmap nyi"
-end
+type intset = IntSet.t
+    deriving (Show)
+type 'a intmap = 'a IntMap.t
+    deriving (Show)
 
-(** {1 Lists} *)
+(** {0 Lists} *)
 module ListUtils = 
 struct
+  (** [fromTo a b] is the list of consecutive integers starting with
+      [a] and ending with [b-1]. Throws [Invalid_argument "fromTo"]
+      if [b < a]. *)
   let fromTo f t = 
     let rec aux f t result = 
       if f = t then result
       else aux (f+1) t (f::result)
-    in if t < f then raise (Invalid_argument "fromTo")
+    in if (t) < f then raise (Invalid_argument "fromTo")
       else List.rev (aux f t [])
 
   (** map with index *)
@@ -418,10 +414,19 @@ struct
 
   let push_back f list = list := !list @ [f]
   let push_front f list = list := f :: !list
+
+  let split3 xyzs = 
+    List.fold_right (fun (x, y, z) (xs, ys, zs) -> x::xs,y::ys,z::zs)
+      xyzs
+      ([],[],[]) 
+
+  let split4 wxyzs = 
+    List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
+      wxyzs
+      ([],[],[],[]) 
 end
 include ListUtils
 
-  
 (** {1 Association-list utilities} *)
 module AList = 
 struct
@@ -456,13 +461,20 @@ struct
     
   (** [[map2alist f list]]
       makes an alist that maps [[x]] to [[f x]] for each item in [[list]].
-      In category theory this is called the `graph' of f (restricted by [list]).
+      This is called the `graph' of f on the domain [list].
   *)
   let map2alist f list = List.map (fun x -> (x, f x)) list
   let graph_func = map2alist
 
-  let rng alist = List.map snd alist
+  let range alist = List.map snd alist
   let dom alist = List.map fst alist
+
+  (** [lookup_in alist] is a function that looks up its argument in [alist] *)
+  let lookup_in alist x = List.assoc x alist
+
+  (** lookup is like assoc but uses option types instead of
+      exceptions to signal absence *)
+  let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
 
 end
 include AList
@@ -494,7 +506,7 @@ struct
       (explode str)
 
   let implode : char list -> string = 
-    (String.concat "") -<- (List.map (String.make 1))
+    (String.concat "") -<- (List.rev -<- (List.rev_map (String.make 1)))
 
   let contains p = explode ->- List.exists p
       
@@ -605,22 +617,14 @@ let absolute_path filename =
 let getuid_owns file = 
   Unix.getuid() == (Unix.stat file).Unix.st_uid
 
-
-
-(** [lookup_in alist] is a function that looks up its argument in [alist] *)
-let lookup_in alist x = List.assoc x alist
-
-(** lookup is like assoc but uses option types instead of
-    exceptions to signal absence *)
-let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
+(** {0 3-way assoc-list} *)
 
 let mem_assoc3 key : ('a * 'b * 'c) list -> bool = 
   List.exists (fun (x,_,_) -> x = key)
 
-
 (** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b
-  deriving (Show, Eq, Typeable, Pickle, Shelve)
+  deriving (Show)
 
 let inLeft l = Left l
 let inRight r = Right r
@@ -690,7 +694,12 @@ struct
   let perhaps_apply f p =
     match f p with
       | None -> p
-      | Some x -> x  
+      | Some x -> x
+
+  let opt_as_list = function
+    | None -> []
+    | Some x -> [x]
+
 (*
   NOTE:
   

@@ -28,7 +28,7 @@ ifdef POSTGRESQL_LIBDIR
    DB_LIBS    += postgresql
 endif
 
-DERIVING_DIR=deriving
+DERIVING_DIR=deriving-310
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
@@ -39,7 +39,7 @@ OCAMLC := ocamlc.opt
 # (it doesn't exist for all OCaml installations)
 OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
-PATH := $(PATH):deriving/syntax
+PATH := $(PATH):$(DERIVING_DIR)/syntax
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
@@ -61,31 +61,27 @@ SOURCES = $(OPC)                		\
           settings.mli settings.ml 		\
           basicsettings.ml                      \
           debug.mli debug.ml    		\
-          rewrite.ml            		\
           performance.mli performance.ml	\
           graph.ml                              \
           types.mli types.ml 	                \
           constant.ml                           \
-          syntaxutils.ml                        \
-          sqlQuery.ml               		\
           sourceCode.ml                         \
-          syntax.mli syntax.ml        		\
-          sqlcompile.ml                         \
           regex.ml                              \
-          result.mli result.ml         		\
           sugartypes.ml                         \
           parser.mly            		\
           lexer.mli lexer.mll         		\
-          errors.mli errors.ml                  \
-          parse.mli parse.ml    		\
-          instantiate.mli instantiate.ml        \
 	  typeUtils.mli typeUtils.ml            \
+          instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
-          callgraph.ml					\
+          var.ml                                \
+          ir.mli ir.ml                          \
+          errors.mli errors.ml                  \
+          parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
+          value.mli value.ml                    \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
           desugarLAttributes.mli desugarLAttributes.ml	\
@@ -93,33 +89,37 @@ SOURCES = $(OPC)                		\
           desugarPages.mli desugarPages.ml		\
           desugarFormlets.mli desugarFormlets.ml        \
           desugarRegexes.mli desugarRegexes.ml		\
+          desugarFors.mli desugarFors.ml                \
+          desugarDbs.mli desugarDbs.ml                  \
+          desugarFuns.mli desugarFuns.ml                \
+          desugarProcesses.mli desugarProcesses.ml      \
+          desugarInners.mli desugarInners.ml            \
           typeSugar.mli typeSugar.ml			\
-          sugar.mli sugar.ml    		\
           frontend.ml                           \
 	  dumpTypes.ml                          \
-          $(DB_CODE)            		\
-          database.mli database.ml 		\
-          inference.mli inference.ml 		\
-          jsonparse.mly         		\
-          jsonlex.mll           		\
-          json.ml               		\
-          linksregex.ml                         \
-          library.mli library.ml 		\
-          optimiser.mli optimiser.ml    	\
-          var.ml                                \
-          ir.mli ir.ml                          \
           compilePatterns.ml                    \
-          value.mli value.ml                    \
-          compileir.ml                          \
+          jsonparse.mly                         \
+          jsonlex.mll           		\
+          js.ml                                 \
+          json.ml                               \
+          database.mli database.ml 		\
+          linksregex.ml                         \
+          proc.mli proc.ml                      \
+          lib.mli lib.ml                        \
+          sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
+          $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
-          interpreter.mli interpreter.ml 	\
+          query.ml                              \
           evalir.ml                             \
-          webif.mli webif.ml           	        \
-          test.ml                               \
-          tests.ml                              \
-          sqlcompileTest.ml                     \
+          webif.mli webif.ml                    \
           links.ml              		\
+
+# TODO: get these working again
+#
+#          test.ml                               \
+#          tests.ml                              \
+
 
 LIBS    = unix nums str $(DB_LIBS) deriving
 RESULT  = links

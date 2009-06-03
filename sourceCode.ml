@@ -71,29 +71,15 @@ object (self)
 end
 
 type lexpos = Lexing.position 
-module Typeable_lexpos = Typeable.Primitive_typeable(struct type t = lexpos end)
-module Eq_lexpos : Eq.Eq with type a = lexpos = 
-struct
-  type a = lexpos
-  let eq = (==)
-end
 module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
-module Show_lexpos = Show.Show_unprintable (LexposType)
-(*module Pickle_lexpos = Pickle_unpicklable (LexposType)*)
-
-module Typeable_source_code = Typeable.Primitive_typeable(struct type t = source_code end)
-module Eq_source_code : Eq.Eq with type a = source_code = 
-struct
-  type a = source_code
-  let eq = (==)
-end
+let show_lexpos = Show.show_unprintable
 module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end
-module Show_source_code = Show.Show_unprintable (SourceCodePos)
+let show_source_code = Show.show_unprintable
 
 (** unresolved position *)
 (* start * end * code *)
 type pos = lexpos * lexpos * source_code option
-    deriving (Typeable, Show,  Eq)
+    deriving (Show)
 let dummy_pos = (Lexing.dummy_pos, Lexing.dummy_pos, None)
 
 
@@ -103,7 +89,7 @@ let dummy_pos = (Lexing.dummy_pos, Lexing.dummy_pos, None)
 *)
 (* start * source line * source expression *)
 type position = lexpos * string * string
-    deriving (Typeable, Show,  Eq)
+    deriving (Show)
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
 
 (* generic syntax error *)

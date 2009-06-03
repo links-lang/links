@@ -1,16 +1,14 @@
 # A test of client stubs / server stubs called from the other side.
-
 fun f() client {
-  alertDialog(server_concat("the concatenation", " did succeed"))
+  alertDialog(intToString(serverTime()))
 }
 
 fun g() server { 
-  debug("hello, server's g here.");
   alertDialog("this is the server talking.")
 }
 
 page
   <html>
-    <p><a href="#" l:onclick="{f()}">Run concat on server</a></p>
-    <a href="#" l:onclick="{g()}">Run client's alertDialog from server</a>
+    <p><a href="#" l:onclick="{f()}">Call serverTime from the client</a></p>
+    <a href="#" l:onclick="{g()}">Call alertDialog from the server</a>
   </html>

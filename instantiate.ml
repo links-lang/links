@@ -1,3 +1,5 @@
+open Notfound
+
 open Utility
 open Types
 
@@ -12,127 +14,211 @@ type inst_type_env = meta_type_var IntMap.t
 type inst_row_env = meta_row_var IntMap.t
 type inst_env = inst_type_env * inst_row_env
 
-let instantiate_datatype : (datatype IntMap.t * row_var IntMap.t) -> datatype -> datatype =
-  fun (tenv, renv) ->
+exception ArityMismatch
+
+let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag IntMap.t) -> datatype -> datatype =
+  fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
-	match datatype with
-	  | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
-	  | `Primitive _  -> datatype
-	  | `MetaTypeVar point ->
-	      let t = Unionfind.find point in
-		(match t with
-		   | `Flexible var
-		   | `Rigid var ->
-		       if IntMap.mem var tenv then
-			 IntMap.find var tenv
-		       else
-			 datatype
-		   | `Recursive (var, t) ->
-		       Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
-
-		       if IntMap.mem var rec_type_env then
-			 (`MetaTypeVar (IntMap.find var rec_type_env))
-		       else
-			 (
-			   let var' = Types.fresh_raw_variable () in
-			   let point' = Unionfind.fresh (`Flexible var') in
-			   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-			   let _ = Unionfind.change point' (`Recursive (var', t')) in
-			     `MetaTypeVar point'
-			 )
-		   | `Body t -> inst rec_env t)
-	  | `Function (f, m, t) -> `Function (inst rec_env f, inst rec_env m, inst rec_env t)
-	  | `Record row -> `Record (inst_row rec_env row)
-	  | `Variant row -> `Variant (inst_row rec_env row)
-	  | `Table (r, w) -> `Table (inst rec_env r, inst rec_env w)
+        match datatype with
+          | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+          | `Primitive _  -> datatype
+          | `MetaTypeVar point ->
+              let t = Unionfind.find point in
+                begin
+                  match t with
+                    | `Flexible (var, _)
+                    | `Rigid (var, _) ->
+                        if IntMap.mem var tenv then
+                          IntMap.find var tenv
+                        else
+                          datatype
+                    | `Recursive (var, t) ->
+                        Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
+                        
+                        if IntMap.mem var rec_type_env then
+                          (`MetaTypeVar (IntMap.find var rec_type_env))
+                        else
+                          begin
+                            let var' = Types.fresh_raw_variable () in
+                            let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                            let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+                            let _ = Unionfind.change point' (`Recursive (var', t')) in
+                              `MetaTypeVar point'
+                          end
+                    | `Body t -> inst rec_env t
+                end
+          | `Function (f, m, t) -> `Function (inst rec_env f, inst_row rec_env m, inst rec_env t)
+          | `Record row -> `Record (inst_row rec_env row)
+          | `Variant row -> `Variant (inst_row rec_env row)
+          | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
           | `ForAll (_,t) -> inst rec_env t
           | `Alias ((name, ts), d) -> 
-              `Alias ((name, List.map (inst rec_env) ts), inst rec_env d)
-	  | `Application (n, elem_type) ->
-	      `Application (n, List.map (inst rec_env) elem_type)
+              `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
+          | `Application (n, elem_type) ->
+              `Application (n, List.map (inst_type_arg rec_env) elem_type)
+    and inst_presence : inst_env -> presence_flag -> presence_flag = fun rec_env ->
+      function
+        | `Present -> `Present
+        | `Absent -> `Absent
+        | `Var point ->
+            begin
+              match Unionfind.find point with
+                | `Flexible var
+                | `Rigid var ->
+                    if IntMap.mem var penv then
+                      IntMap.find var penv
+                    else
+                      `Var point
+                | `Body f ->
+                    inst_presence rec_env f                    
+            end
     and inst_row : inst_env -> row -> row = fun rec_env row ->
+      (* BUG?
+         
+         If we change this to unwrap_row then it sometimes leads to
+         divergence during type inference. Is this the correct
+         behaviour? Why does this happen? *)
       let field_env, row_var = flatten_row row in
-	
+        
       let is_closed =
         match Unionfind.find row_var with
           | `Closed -> true
           | _ -> false in
 
       let field_env' = StringMap.fold
-	(fun label field_spec field_env' ->
-	   match field_spec with
-	     | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-	     | `Absent ->
-		 if is_closed then field_env'
-		 else StringMap.add label `Absent field_env'
-	) field_env StringMap.empty in
-      let row_var' = inst_row_var rec_env row_var
-      in
-	field_env', row_var'
+        (fun label (f, t) field_env' ->
+           let rec add =
+             function
+               | `Present -> StringMap.add label (`Present, inst rec_env t) field_env'
+               | `Absent ->
+                   if is_closed then field_env'
+                   else StringMap.add label (`Absent, inst rec_env t) field_env'
+               | `Var point ->
+                   match Unionfind.find point with
+                     | `Flexible var
+                     | `Rigid var ->
+                         let f =
+                           if IntMap.mem var penv then
+                             IntMap.find var penv
+                           else
+                             `Var point
+                         in
+                           StringMap.add label (f, inst rec_env t) field_env'
+                     | `Body f ->
+                         add f                           
+           in
+             add f)
+        field_env
+        StringMap.empty in
+      let field_env'', row_var' = inst_row_var rec_env row_var in
+        StringMap.fold StringMap.add field_env' field_env'', row_var'
           (* precondition: row_var has been flattened *)
-    and inst_row_var : inst_env -> row_var -> row_var = fun (rec_type_env, rec_row_env) row_var ->
+    and inst_row_var : inst_env -> row_var -> row = fun (rec_type_env, rec_row_env) row_var ->
       match row_var with
-	| point ->
-	    begin
+        | point ->
+            begin
               match Unionfind.find point with
-	        | `Closed -> row_var
-                | `Flexible var
-                | `Rigid var ->
-		    if IntMap.mem var renv then
-		      IntMap.find var renv
-		    else
-		      row_var
-	        | `Recursive (var, rec_row) ->
-		    if IntMap.mem var rec_row_env then
-		      IntMap.find var rec_row_env
-		    else
-		      begin
-		        let var' = Types.fresh_raw_variable () in
-		        let point' = Unionfind.fresh (`Flexible var') in
-		        let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
-		        let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
-			  point'
-		      end
-	        | `Body _ -> assert(false)
+                | `Closed -> (StringMap.empty, row_var)
+                | `Flexible (var, _)
+                | `Rigid (var, _) ->
+                    if IntMap.mem var renv then
+                      IntMap.find var renv
+                    else
+                      (StringMap.empty, row_var)
+                | `Recursive (var, rec_row) ->
+                    if IntMap.mem var rec_row_env then
+                      (StringMap.empty, IntMap.find var rec_row_env)
+                    else
+                      begin
+                        let var' = Types.fresh_raw_variable () in
+                        let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                        let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
+                        let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
+                          (StringMap.empty, point')
+                      end
+                | `Body row -> inst_row (rec_type_env, rec_row_env) row
             end
+    and inst_type_arg : inst_env -> type_arg -> type_arg = fun rec_env ->
+      function
+        | `Type t -> `Type (inst rec_env t)
+        | `Row r -> `Row (inst_row rec_env r)
+        | `Presence f -> `Presence (inst_presence rec_env f)
     in
       inst (IntMap.empty, IntMap.empty)
 
 (** instantiate_typ t
+
     remove any quantifiers and rename bound type vars accordingly
 *)
 let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
-  let rec collapse qs t =
-    match qs, t with
-      | qs, `ForAll (qs', t) -> collapse (qs @ qs') t
-      | [], t -> t
-      | qs, t -> `ForAll (qs, t)
-  in
-    match t with
-      | `ForAll (quantifiers, t) as dtype ->
-	(
-	  let () = Debug.if_set (show_instantiation)
-	    (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
+  match t with
+    | `ForAll (quantifiers, t) as dtype ->
+        let () =
+          Debug.if_set (show_instantiation)
+            (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
+          
+        let typ (var, subkind) (tenv, renv, penv, tys) =
+          let t = fresh_type_variable subkind in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys in
 
-          let typ var (tenv, renv, tys) =
-            let t = fresh_type_variable () in
-              IntMap.add var t tenv, renv, `Type t :: tys in
+        let row (var, subkind) (tenv, renv, penv, tys) =
+          let r = make_empty_open_row subkind in
+            tenv, IntMap.add var r renv, penv, `Row r :: tys in
 
-          let row var (tenv, renv, tys) =
-            let r = fresh_row_variable () in
-              tenv, IntMap.add var r renv, `Row (StringMap.empty, r) :: tys in
+        let presence var (tenv, renv, penv, tys) =
+          let t = fresh_presence_variable () in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
 
-	  let tenv, renv, tys = List.fold_left
-	    (fun env -> function
-	       | `TypeVar var
-	       | `RigidTypeVar var -> typ var env
-	       | `RowVar var
-	       | `RigidRowVar var -> row var env
-	    ) (IntMap.empty, IntMap.empty, []) quantifiers in
-          let tys = List.rev tys in
-	    tys, instantiate_datatype (tenv, renv) t)
-      | t -> [], t
+        let tenv, renv, penv, tys =
+          List.fold_left
+            (fun env ->
+               function
+                 | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
+                 | `RowVar ((var, subkind), _) -> row (var, subkind) env
+                 | `PresenceVar (var, _) -> presence var env)
+            (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
+
+        let tys = List.rev tys in
+          tys, instantiate_datatype (tenv, renv, penv) t
+    | t -> [], t
+
+
+(** instantiate_rigid t
+    
+    as instantiate_typ, but instantiates the bound type variables with fresh
+    rigid type variables
+*)
+let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
+  match t with
+    | `ForAll (quantifiers, t) as dtype ->
+        let () =
+          Debug.if_set (show_instantiation)
+            (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in
+          
+        let typ (var, subkind) (tenv, renv, penv, tys) =
+          let t = fresh_rigid_type_variable subkind in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys in
+
+        let row (var, subkind) (tenv, renv, penv, tys) =
+          let r = fresh_rigid_row_variable subkind in
+            tenv, IntMap.add var (StringMap.empty, r) renv, penv, `Row (StringMap.empty, r) :: tys in
+
+        let presence var (tenv, renv, penv, tys) =
+          let t = fresh_rigid_presence_variable () in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
+
+        let tenv, renv, penv, tys = List.fold_left
+          (fun env -> function
+             | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
+             | `RowVar ((var, subkind), _) -> row (var, subkind) env
+             | `PresenceVar (var, _) -> presence var env
+          ) (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
+
+        let tys = List.rev tys in
+          tys, instantiate_datatype (tenv, renv, penv) t
+    | t -> [], t
+
 
 (** instantiate env var
     Get the type of `var' from the environment, and rename bound typevars.
@@ -146,10 +232,19 @@ let instantiate : environment -> string -> type_arg list * datatype =
       try
         Env.String.lookup env var
       with NotFound _ ->
-        raise (Errors.UndefinedVariable ("Variable '"^ var ^
-                                         "' does not refer to a declaration"))
+        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
     in
       instantiate_typ t
+
+let rigid : environment -> string -> type_arg list * datatype =
+  fun env var ->
+    let t =
+      try
+        Env.String.lookup env var
+      with NotFound _ ->
+        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
+    in
+      instantiate_rigid t
         
 let var = instantiate
 let typ = instantiate_typ
@@ -157,19 +252,20 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t tyargs ->
+let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = 
+  fun t tyargs ->
   let vars =
     match t with
       | `ForAll (vars, _) -> vars
       | _ -> [] in
-  let tenv, renv =
-    assert (List.length vars = List.length tyargs);
+  let tenv, renv, penv =
+    if (List.length vars <> List.length tyargs) then raise ArityMismatch;
     List.fold_right2
-      (fun var t (tenv, renv) ->
+      (fun var t (tenv, renv, penv) ->
          match (var, t) with
-           | ((`TypeVar var | `RigidTypeVar var), `Type t) ->
-               (IntMap.add var t tenv, renv)
-           | ((`RowVar var | `RigidRowVar var), `Row row) ->
+           | (`TypeVar ((var, _subkind), _), `Type t) ->
+               (IntMap.add var t tenv, renv, penv)
+           | (`RowVar ((var, _subkind), _), `Row row) ->
                (* 
                   QUESTION:
                   
@@ -182,15 +278,20 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun t
                begin
                  match row with
                    | fields, row_var when StringMap.is_empty fields ->
-                       (tenv, IntMap.add var row_var renv)
+                       (tenv, IntMap.add var (StringMap.empty, row_var) renv, penv)
                    | _ ->
-                       (tenv, IntMap.add var (Unionfind.fresh (`Body row)) renv)
+                       (tenv, IntMap.add var row renv, penv)
                end
+           | (`PresenceVar (var, _), `Presence f) ->
+               (tenv, renv, IntMap.add var f penv)
            | _ -> assert false)
-      vars tyargs (IntMap.empty, IntMap.empty)
+      vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
   in
-    instantiate_datatype (tenv, renv) t
+    instantiate_datatype (tenv, renv, penv) t
 
+(*
+  ensure that t has fresh quantifiers
+*)
 let freshen_quantifiers t =
   match t with
     | `ForAll (qs, _) ->
@@ -198,52 +299,81 @@ let freshen_quantifiers t =
           List.split
             (List.map
                (function
-                  | `TypeVar _ ->
-                      let q, t = Types.fresh_flexible_type_quantifier () in
+                  | `TypeVar ((_, subkind), _) ->
+                      let q, t = Types.fresh_type_quantifier subkind in
                         q, `Type t
-                  | `RigidTypeVar _ ->
-                      let q, t = Types.fresh_type_quantifier () in
-                        q, `Type t
-                  | `RowVar _ ->
-                      let q, row_var = Types.fresh_flexible_row_quantifier () in
-                        q, `Row (StringMap.empty, row_var)
-                  | `RigidRowVar _ ->
-                      let q, row_var = Types.fresh_row_quantifier () in
-                        q, `Row (StringMap.empty, row_var))
+                  | `RowVar ((_, subkind), _) ->
+                      let q, r = Types.fresh_row_quantifier subkind in
+                        q, `Row r
+                  | `PresenceVar _ ->
+                      let q, f = Types.fresh_presence_quantifier () in
+                        q, `Presence f)
                qs)
         in
           `ForAll (qs, apply_type t tyargs)
     | t -> t
 
-let alias name ts env = 
+(*
+  replace the quantifiers in t with qs'
+*)
+let replace_quantifiers t qs' =
+  match t with
+    | `ForAll (qs, _) ->
+        let tyargs =
+          List.map2
+            (fun q q' ->
+               match q, q' with
+                 | `TypeVar _, `TypeVar (_, point)  ->
+                     `Type (`MetaTypeVar point)
+                 | `RowVar _, `RowVar (_, row_var) ->
+                     `Row (StringMap.empty, row_var)
+                 | `PresenceVar _, `PresenceVar (_, point)  ->
+                     `Presence (`Var point))
+            qs
+            qs'
+        in
+          `ForAll (qs, apply_type t tyargs)
+    | t -> t
+
+let alias name tyargs env = 
   (* This is just type application.
-  
+     
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
   match (SEnv.find env name : Types.tycon_spec option) with
-    | None -> 
+    | None ->
         failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
     | Some (`Abstract _) ->
         failwith (Printf.sprintf "The type constructor: %s is abstract, not an alias" name)
-    | Some (`Alias (vars, _)) when List.length vars <> List.length ts ->
+    | Some (`Alias (vars, _)) when List.length vars <> List.length tyargs ->
         failwith (Printf.sprintf
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
-                    name (List.length ts) (List.length vars))
+                    name (List.length tyargs) (List.length vars))
     | Some (`Alias (vars, body)) ->
-        (* BUG:
-             
-           Need to distinguish TypeVars from RowTypeVars
-        *)
-        let tenv = List.fold_right2 IntMap.add vars ts IntMap.empty in
+        let tenv, renv, penv =
+          List.fold_right2
+            (fun q arg (tenv, renv, penv) ->
+               match q, arg with
+                 | `TypeVar ((x, _), _), `Type t ->
+                     IntMap.add x t tenv, renv, penv
+                 | `RowVar ((x, _), _), `Row row ->
+                     tenv, IntMap.add x row renv, penv
+                 | `PresenceVar (x, _), `Presence f  ->
+                     tenv, renv, IntMap.add x f penv)
+            vars
+            tyargs
+            (IntMap.empty, IntMap.empty, IntMap.empty) in
 
         (* freshen any free flexible type variables in the type alias *)
-        let bound_vars = List.fold_right TypeVarSet.add vars TypeVarSet.empty in
+        let bound_vars =
+          List.fold_right (Types.var_of_quantifier ->- TypeVarSet.add) vars TypeVarSet.empty in
         let ftvs = Types.flexible_type_vars bound_vars body in
-        let qs = TypeVarSet.fold (fun var qs -> `TypeVar var::qs) ftvs [] in
+
+        let qs = IntMap.fold (fun _ q qs -> q::qs) ftvs [] in
         let body =
           match freshen_quantifiers (`ForAll (qs, body)) with
             | `ForAll (_, body) -> body
             | _ -> assert false
         in
-          `Alias ((name, ts),
-                  instantiate_datatype (tenv, IntMap.empty) body)
+          `Alias ((name, tyargs),
+                  instantiate_datatype (tenv, renv, penv) body)

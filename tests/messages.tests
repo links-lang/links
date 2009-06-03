@@ -40,4 +40,4 @@ exit : 1
 
 Built-in functions are polymorphic in their mailbox types
 fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)
-stdout : (fun, fun) : (() -{Int}-> String, (Int) -{()}-> String)
+stdout : (fun, fun) : (() {:Int|_}~> String, (Int) {:()|_}~> String)

@@ -1,9 +1,8 @@
 open Utility
 open Sugartypes
 
-
-(** refine_bindings locates mutually-recursive sccs in sequences of
-    bindings.  (As a side effect we also dispense with `Infix
+(** [refine_bindings] locates mutually-recursive sccs in sequences of
+    bindings.  (As a side effect we also dispense with [`Infix]
     declarations, which are only used during the parsing stage.)
 *)
 let refine_bindings : binding list -> binding list =
@@ -61,7 +60,12 @@ let refine_bindings : binding list -> binding list =
       let sccs = Graph.topo_sort_sccs graph in
         List.map
           (fun scc ->
-             `Funs (List.map (find_fun ->- unFun) scc), pos)
+             let funs = List.map (find_fun ->- unFun) scc in
+               match funs with
+                 | [(((n, _, _) as b), ((tyvars, _), body), location, dt, pos)]
+                     when not (StringSet.mem n (Freevars.funlit body)) -> `Fun (b, (tyvars, body), location, dt), pos
+                 | _ -> `Funs (funs), pos)
+      
           sccs
     in 
       (* refine a group of bindings *)

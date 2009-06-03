@@ -1,8 +1,8 @@
 (*pp deriving *)
+open Utility
 
 (* Representation for a very limited subset of (OCaml) regular
    expressions. *)
-
 
 type repeat = Star | Plus | Question
 and  regex = | Range of (char * char)
@@ -16,11 +16,9 @@ and  regex = | Range of (char * char)
 	     | Group of regex 
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
-	          deriving (Show, Pickle, Eq, Typeable, Shelve)
+	          deriving (Show)
 
-
-let compile_ocaml : regex -> Str.regexp = 
-
+let string_of_regex : regex -> string = fun s ->
   (* Using points-free style here (i.e. omitting the s) triggers a bug in 
      versions of OCaml before about 3.09.0, so don't do that. *)
   let group s = Printf.sprintf "\\(%s\\)" s  in
@@ -39,8 +37,10 @@ let compile_ocaml : regex -> Str.regexp =
     | Alternate (r1,r2) -> (compile r1) ^ "\\|" ^ (compile r2)
     | Group s -> group (compile s)
     | Repeat (s, r) ->  (compile r ^ compile_repeat s)
-  in fun s -> 
-    Str.regexp (compile s) 
+  in 
+    compile s
+
+let compile_ocaml : regex -> Str.regexp = Str.regexp -<- string_of_regex
 	
 let tests : (string * regex * string * bool) list = 
   [

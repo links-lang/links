@@ -8,9 +8,29 @@ open Sugartypes
       
 let type_variable_counter = ref 0
   
-let fresh_type_variable : unit -> datatype =
+let fresh_type_variable : subkind -> datatype =
+  function subkind -> 
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
+  
+let fresh_rigid_type_variable : subkind -> datatype =
+  function subkind -> 
+    incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
+
+let fresh_row_variable : subkind -> row_var =
+  function subkind -> 
+    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind)
+
+let fresh_rigid_row_variable : subkind -> row_var =
+  function subkind -> 
+    incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter), subkind)
+
+let fresh_presence_variable : unit -> presence_flag =
   function () -> 
-    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter))
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter))
+  
+let fresh_rigid_presence_variable : unit -> presence_flag =
+  function () -> 
+    incr type_variable_counter; `RigidVar ("_" ^ string_of_int (!type_variable_counter))
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -36,6 +56,49 @@ let annotate (signame, datatype) : _ -> binding =
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
+let attach_kind pos (t, k) =
+   match k with
+     | "Type" -> `TypeVar (t, `Any)
+     | "Base" -> `TypeVar (t, `Base)
+     | "Row" -> `RowVar (t, `Any)
+     | "BaseRow" -> `RowVar (t, `Base)
+     | "Presence" -> `PresenceVar t
+     | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
+
+let attach_subkind pos (t, k) =
+   match k with
+     | "Any" -> t
+     | "Base" ->
+         begin
+           match t with
+             | TypeVar (x, _) -> TypeVar (x, `Base)
+             | RigidTypeVar (x, _) -> RigidTypeVar (x, `Base)
+             | _ -> assert false
+         end
+     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
+
+let attach_row_subkind pos (r, k) =
+   match k with
+     | "Any" -> r
+     | "Base" ->
+         begin
+           match r with
+             | `Open (x, _) -> `Open (x, `Base)
+             | `OpenRigid (x, _) -> `OpenRigid (x, `Base)
+             | _ -> assert false
+         end
+     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
+
+let row_with field (fields, row_var) = field::fields, row_var
+
+(* this preserves 1-tuples *)
+let make_tuple pos =
+  function
+    | [e] -> `RecordLit ([("1", e)], None), pos
+    | es -> `TupleLit es, pos
+
+let labels = List.map fst
+
 let parseRegexFlags f =
   let rec asList f i l = 
     if (i == String.length f) then
@@ -49,8 +112,9 @@ let datatype d = d, None
 %}
 
 %token END
-%token EQ IN 
-%token FUN RARROW FATRARROW MINUSLBRACE RBRACERARROW VAR OP ABS APP
+%token EQ IN
+%token FUN RARROW FATRARROW MINUSLBRACE VAR OP
+%token SQUIGRARROW TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -59,9 +123,9 @@ let datatype d = d, None
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE WITH YIELDS ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
-%token READONLY IDENTITY
+%token READONLY DEFAULT
 %token ESCAPE
 %token CLIENT SERVER NATIVE
 %token SEMICOLON
@@ -71,17 +135,18 @@ let datatype d = d, None
 %token <float> UFLOAT 
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD QUOTEDVAR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU ALIEN SIG INCLUDE
-%token QUESTION TILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
+%token QUESTION EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
+%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -215,9 +280,24 @@ typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
+kind:
+| TYPE                                                         { "Type" }
+| BASETYPE                                                     { "BaseType" }
+| ROW                                                          { "Row" }
+| BASEROW                                                      { "BaseRow" }
+| PRESENCE                                                     { "Presence" }
+
+subkind:
+| ANY                                                          { "Any" }
+| BASE                                                         { "Base" }
+
+typearg:
+| VARIABLE                                                     { (`TypeVar ($1, `Any), None) }
+| VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
+
 varlist:
-| VARIABLE                                                     { [$1, None] }
-| VARIABLE COMMA varlist                                       { ($1, None) :: $3 }
+| typearg                                                      { [$1] }
+| typearg COMMA varlist                                        { $1 :: $3 }
 
 fixity:
 | INFIX                                                        { `None, $1 }
@@ -309,6 +389,11 @@ postfix_expression:
 | block                                                        { `Block $1, pos () }
 | SPAWN block                                                  { `Spawn ((`Block $2, pos()), None), pos () }
 | SPAWNWAIT block                                              { `SpawnWait ((`Block $2, pos()), None), pos () }
+| QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
+| QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
+                                                                               (`Constant (`Int (Num.num_of_int 0)), pos ())),
+                                                                         (`Block $5, pos ()), None), pos () }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
@@ -324,7 +409,6 @@ unary_expression:
 | MINUS unary_expression                                       { `UnaryAppl (([], `Minus),      $2), pos() }
 | MINUSDOT unary_expression                                    { `UnaryAppl (([], `FloatMinus), $2), pos() }
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
-| ABS unary_expression                                         { `UnaryAppl (([], `Abs), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 
@@ -380,7 +464,7 @@ infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 | infixl_5 INFIXR4   infixr_4                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
-| infixr_5 TILDE     regex                                     { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
+| infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in `InfixAppl (([], `RegexMatch flags), $1, r), pos() }
 
 infixl_4:
 | infixr_4                                                     { $1 }
@@ -415,7 +499,6 @@ infixl_1:
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 APP       infixl_1                                  { `InfixAppl (([], `App), $1, $3), pos() }
 | infixl_1 INFIX0    infixl_1                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 | infixl_1 INFIXR0   infixr_0                                  { `InfixAppl (([], `Name $2), $1, $3), pos() }
 
@@ -539,10 +622,10 @@ generator:
 | table_generator                                              { `Table $1 }
 
 list_generator:
-| VAR pattern LARROW exp                                       { ($2, $4) }
+| pattern LARROW exp                                           { ($1, $3) }
 
 table_generator:
-| VAR pattern LLARROW exp                                      { ($2, $4) }
+| pattern LLARROW exp                                          { ($1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None }
@@ -550,7 +633,7 @@ perhaps_where:
 
 perhaps_orderby:
 | /* empty */                                                  { None }
-| ORDERBY LPAREN exp RPAREN                                    { Some $3 }
+| ORDERBY LPAREN exps RPAREN                                   { Some (make_tuple (pos()) $3) }
 
 escape_expression:
 | iteration_expression                                         { $1 }
@@ -579,7 +662,7 @@ field_constraints:
 
 field_constraint:
 | READONLY                                                     { `Readonly }
-| IDENTITY                                                     { `Identity }
+| DEFAULT                                                      { `Default }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }
@@ -591,10 +674,23 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES exp                                        { `DBInsert ($2, $4, None), pos() }
-| INSERT exp VALUES db_expression
-  RETURNING VARIABLE                                           { `DBInsert ($2, $4, Some (`Constant (`String $6), pos())), pos() }
+| INSERT exp VALUES LPAREN RPAREN exp                          { `DBInsert ($2, [], $6, None), pos() }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { `DBInsert ($2, $5, $7, None), pos() }
+| INSERT exp VALUES
+  LBRACKET LPAREN labeled_exps RPAREN RBRACKET                 { `DBInsert ($2,
+                                                                            labels $6,
+                                                                            (`ListLit ([`RecordLit ($6, None), pos()], None), pos()),
+                                                                            None),
+                                                                 pos() }
+| INSERT exp VALUES LPAREN RPAREN db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, [], $6, Some (`Constant (`String $8), pos())), pos() }
+| INSERT exp VALUES LPAREN record_labels RPAREN db_expression
+  RETURNING VARIABLE                                           { `DBInsert ($2, $5, $7, Some (`Constant (`String $9), pos())), pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
+
+record_labels:
+| record_label COMMA record_labels                             { $1 :: $3 }
+| record_label                                                 { [$1] }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
@@ -635,13 +731,62 @@ just_datatype:
 
 datatype:
 | mu_datatype                                                  { $1 }
+| straight_arrow                                               { $1 }
+| squiggly_arrow                                               { $1 }
+
+arrow_prefix:
+| LBRACE RBRACE                                                { ([], `Closed) }
+| LBRACE efields RBRACE                                        { $2 }
+
+straight_arrow_prefix:
+| arrow_prefix                                                 { $1 }
+| MINUS nonrec_row_var                                         { ([], $2) }
+| MINUS kinded_nonrec_row_var                                  { ([], $2) }
+
+squig_arrow_prefix:
+| hear_arrow_prefix                                            { $1 }
+| arrow_prefix                                                 { $1 }
+| TILDE nonrec_row_var                                         { ([], $2) }
+| TILDE kinded_nonrec_row_var                                  { ([], $2) }
+
+hear_arrow_prefix:
+| LBRACE COLON datatype COMMA efields RBRACE                   { row_with
+                                                                   ("wild", (`Present, UnitType))
+                                                                   (row_with
+                                                                      ("hear", (`Present, $3))
+                                                                      $5) }
+| LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  `Closed) }
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  $5) }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", (`Present, UnitType));
+                                                                   ("hear", (`Present, $3))],
+                                                                  $5) }
+
+straight_arrow:
+| parenthesized_datatypes
+  straight_arrow_prefix RARROW datatype                        { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               fresh_type_variable (),
+                                                                               ([], fresh_rigid_row_variable `Any),
                                                                                $3) }
-| parenthesized_datatypes 
-       MINUSLBRACE datatype RBRACERARROW datatype              { FunctionType ($1,
-                                                                               TypeApplication ("Mailbox", [$3]),
-                                                                               $5) }
+
+squiggly_arrow:
+| parenthesized_datatypes
+  squig_arrow_prefix SQUIGRARROW datatype                      { FunctionType ($1,
+                                                                               row_with
+                                                                                 ("wild", (`Present, UnitType))
+                                                                                 $2,
+                                                                               $4) }
+/*| parenthesized_datatypes hear_arrow_prefix
+  SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
+*/
+| parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
+                                                                               ([("wild", (`Present, UnitType))],
+                                                                                 fresh_rigid_row_variable `Any),
+                                                                                $3) }
+
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
 | primary_datatype                                             { $1 }
@@ -650,20 +795,20 @@ parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
-
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> UnitType
                                                                    | [t] -> t
                                                                    | ts  -> TupleType ts }
-| LPAREN fields RPAREN                                         { RecordType $2 }
+| LPAREN rfields RPAREN                                        { RecordType $2 }
 
-| TABLEHANDLE LPAREN datatype COMMA datatype RPAREN            { TableType ($3, $5) }
+| TABLEHANDLE
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { TableType ($3, $5, $7) }
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
-| VARIABLE                                                     { RigidTypeVar $1 }
-| QUOTEDVAR                                                    { TypeVar $1 }
+| type_var                                                     { $1 }
+| kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { match $1 with 
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int
@@ -675,11 +820,28 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 
-| CONSTRUCTOR LPAREN datatype_list RPAREN                      { TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
-datatype_list:
-| datatype                                                     { [$1] }
-| datatype COMMA datatype_list                                 { $1 :: $3 }
+type_var:
+| VARIABLE                                                     { RigidTypeVar ($1, `Any) }
+| QUESTIONVAR                                                  { TypeVar ($1, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable `Any }
+| QUESTION                                                     { fresh_type_variable `Any }
+
+kinded_type_var:
+| type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
+
+type_arg_list:
+| datatype                                                     { [`Type $1] }
+| datatype COMMA type_arg_list                                 { `Type $1 :: $3 }
+| TYPE LPAREN datatype RPAREN                                  { [`Type $3] }
+| ROW LPAREN fields RPAREN                                     { [`Row $3] }
+| PRESENCE LPAREN presence_flag RPAREN                         { [`Presence $3] }
+| TYPE LPAREN datatype RPAREN COMMA type_arg_list              { (`Type $3) :: $6 }
+| ROW LPAREN fields RPAREN COMMA type_arg_list                 { (`Row $3) :: $6 }
+| PRESENCE LPAREN presence_flag RPAREN COMMA type_arg_list     { (`Presence $3) :: $6 }
+| LBRACE fields RBRACE                                         { [`Row $2] }
+| LBRACE fields RBRACE COMMA type_arg_list                     { (`Row $2) :: $5 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -691,33 +853,95 @@ datatypes:
 
 fields:
 | field                                                        { [$1], `Closed }
-| field VBAR row_variable                                      { [$1], $3 }
-| VBAR row_variable                                            { [], $2 }
+| field VBAR row_var                                           { [$1], $3 }
+| field VBAR kinded_row_var                                    { [$1], $3 }
+| VBAR row_var                                                 { [], $2 }
+| VBAR kinded_row_var                                          { [], $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
-vfields:
-| vfield                                                       { [$1], `Closed }
-| row_variable                                                 { [], $1 }
-| vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
-
-vfield:
-| CONSTRUCTOR COLON datatype                                   { $1, `Present $3 }
-| CONSTRUCTOR MINUS                                            { $1, `Absent }
-| CONSTRUCTOR                                                  { $1, `Present UnitType }
-
 field:
-| record_label COLON datatype                                  { $1, `Present $3 }
-| record_label MINUS                                           { $1, `Absent }
+| field_label                                                  { $1, (`Present, UnitType) }
+| field_label COLON datatype                                   { $1, (`Present, $3) }
+| field_label presence_flag                                    { $1, ($2, UnitType) }
+| field_label presence_flag COLON datatype                     { $1, ($2, $4) }
 
-record_label:
+field_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
 
-row_variable:
-| VARIABLE                                                     { `OpenRigid $1 }
-| QUOTEDVAR                                                    { `Open $1 }
+rfields:
+| rfield                                                       { [$1], `Closed }
+| rfield VBAR row_var                                          { [$1], $3 }
+| rfield VBAR kinded_row_var                                   { [$1], $3 }
+| VBAR row_var                                                 { [], $2 }
+| VBAR kinded_row_var                                          { [], $2 }
+| rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
+
+rfield:
+| record_label COLON datatype                                  { $1, (`Present, $3) }
+| record_label presence_flag                                   { $1, ($2, UnitType) }
+| record_label presence_flag COLON datatype                    { $1, ($2, $4) }
+
+record_label:
+| field_label                                                  { $1 }
+
+vfields:
+| vfield                                                       { [$1], `Closed }
+| row_var                                                      { [], $1 }
+| kinded_row_var                                               { [], $1 }
+| vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
+
+vfield:
+| CONSTRUCTOR                                                  { $1, (`Present, UnitType) }
+| CONSTRUCTOR COLON datatype                                   { $1, (`Present, $3) }
+| CONSTRUCTOR presence_flag                                    { $1, ($2, UnitType) }
+| CONSTRUCTOR presence_flag COLON datatype                     { $1, ($2, $4) }
+
+efields:
+| efield                                                       { [$1], `Closed }
+| efield VBAR nonrec_row_var                                   { [$1], $3 }
+| efield VBAR kinded_nonrec_row_var                            { [$1], $3 }
+| VBAR nonrec_row_var                                          { [], $2 }
+| VBAR kinded_nonrec_row_var                                   { [], $2 }
+| efield COMMA efields                                         { $1 :: fst $3, snd $3 }
+
+efield:
+| effect_label                                                 { $1, (`Present, UnitType) }
+| effect_label COLON datatype                                  { $1, (`Present, $3) }
+| effect_label presence_flag                                   { $1, ($2, UnitType) }
+| effect_label presence_flag COLON datatype                    { $1, ($2, $4) }
+
+effect_label:
+| CONSTRUCTOR                                                  { $1 }
+| VARIABLE                                                     { $1 }
+
+presence_flag:
+| PLUS                                                         { `Present }
+| LBRACE RBRACE                                                { `Present }
+| LBRACE PLUS RBRACE                                           { `Present }
+| MINUS                                                        { `Absent }
+| LBRACE MINUS RBRACE                                          { `Absent }
+| LBRACE VARIABLE RBRACE                                       { `RigidVar $2 }
+| LBRACE QUESTIONVAR RBRACE                                    { `Var $2 }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
+| LBRACE QUESTION RBRACE                                       { fresh_presence_variable () }
+
+nonrec_row_var:
+| VARIABLE                                                     { `OpenRigid ($1, `Any) }
+| QUESTIONVAR                                                  { `Open ($1, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable `Any }
+| QUESTION                                                     { fresh_row_variable `Any }
+
+row_var:
+| nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
+
+kinded_nonrec_row_var:
+| nonrec_row_var subkind                                       { attach_row_subkind (pos()) ($1, $2) }
+
+kinded_row_var:
+| row_var subkind                                              { attach_row_subkind (pos()) ($1, $2) }
 
 /*
  * Regular expression grammar
@@ -802,17 +1026,17 @@ primary_pattern:
 | parenthesized_pattern                                     { $1 }
 
 patterns:
-| pattern                                                 { [$1] }
-| pattern COMMA patterns                                { $1 :: $3 }
+| pattern                                                   { [$1] }
+| pattern COMMA patterns                                    { $1 :: $3 }
 
 labeled_patterns:
 | record_label EQ pattern                                   { [($1, $3)] }
 | record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
 
 multi_args:
-| LPAREN patterns RPAREN                                  { $2 }
+| LPAREN patterns RPAREN                                    { $2 }
 | LPAREN RPAREN                                             { [] }
 
 arg_lists:
-| multi_args { [$1] }
-| multi_args arg_lists { $1 :: $2 }
+| multi_args                                                { [$1] }
+| multi_args arg_lists                                      { $1 :: $2 }

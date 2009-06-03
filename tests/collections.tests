@@ -1,9 +1,9 @@
 Iteration
-for (var i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
+for (i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
 stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
 
 Where clause
-for (var i <- [1,2,3,4,5]) where (i <> 3) [i, i]
+for (i <- [1,2,3,4,5]) where (i <> 3) [i, i]
 stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
 
 Concatenation/union
@@ -98,7 +98,7 @@ stdout : 2 : Int
 
 Case-patterns (redundancy) [10]
 fun (x) { switch (x) { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}
-stdout : @fun : \(\(\[[a-z]+\], \[[a-z]+\]\)\) -> Int
+stdout : @fun : \(\(\[_\], \[_\]\)\) -> Int
 
 Case-patterns (singleton list pattern)
 switch ([1]) { case [x] -> 2 case x -> 1 }
@@ -121,11 +121,11 @@ map(curry((+))(1), [1,2,3])
 stdout : [2, 3, 4] : [Int]
 
 Sorting:
-for (var i <- [2,1,3]) orderby (i) [i]
+for (i <- [2,1,3]) orderby (i) [i]
 stdout : [1, 2, 3] : [Int]
 
 Sorting:
-for (var i <- [2,1,3]) orderby (-i) [i]
+for (i <- [2,1,3]) orderby (-i) [i]
 stdout : [3, 2, 1] : [Int]
 
 Empty-list comparison (1)
@@ -149,5 +149,5 @@ for () [1]
 stdout : [1] : [Int]
 
 For comprehensions with multiple generators
-for (var x <- [1,2], var y <- [true, false], var z <- ["foo", "bar"]) [(x,y,z)]
+for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]
 stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : [(Int, Bool, String)]

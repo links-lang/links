@@ -26,21 +26,24 @@ fun dragging(id, elem) client {
  }
 }
 
-fun format(item) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px;">{stringToXml(item)}</li>
+fun format(text) {
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; 
+               border:1px solid #C5DEA1; cursor: move; margin: 0px;">
+    {stringToXml(text)}</li>
 }
 
 fun draggableList(id, items)
 {
   var x = id;
   var dragger = spawn { waiting(id) };
-   <ul id="{id}" style="width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+   <ul id="{id}" style="width: 200px; 
+        list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{dragger ! MouseUp}"
       l:onmouseuppage = "{dragger ! MouseUp}"
       l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
       l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}"
    >
-    {for (var item <- items)
+    {for (item <- items)
          format(item)}
   </ul>
 
@@ -54,7 +57,8 @@ page
  <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
  {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
  <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
- {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus","Sus scrofa cristatus","Sus scrofa taiwanus"])}
+ {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                         "Sus scrofa cristatus","Sus scrofa taiwanus"])}
  </body>
  </html>
 

@@ -1,16 +1,16 @@
 fun lowercase(s) {
-  for (var c <- s) [toLower(c)]
+  for (c <- s) [toLower(c)]
 }
 
-fun suggest(prefixx) client {
+fun suggest(pre) client {
  replaceChildren(
-  format(completions(lowercase(prefixx))),
+  format(completions(lowercase(pre))),
   getNodeById("suggestions") 
  )
 } 
 
 fun format(words) {
- for (var w <- words)
+ for (w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>
    <i>{stringToXml(w.type)}</i>:
@@ -19,22 +19,24 @@ fun format(words) {
   </span>
 }
 
-fun completions(prefixx) server {
- var wordlist = table "wordlist" with (
-   word : String, 
-   type : String, 
-   meaning : String
- ) from (database "dictionary");
+fun completions(pre) server {
+  var wordlist = table "wordlist" with (
+    word : String, 
+    type : String, 
+    meaning : String
+  ) from (database "dictionary");
 
- debug("prefixx: " ++ prefixx);
+  debug("pre: " ++ pre);
 
- if (prefixx == "") []
- else {
-  take(10, for (var w <-- wordlist)
-            where (w.word ~ /^{prefixx}.*/)
-            orderby (w.word)
-            [w])
- }
+  if (pre == "") []
+  else {
+    query [10] {
+      for (w <-- wordlist)
+       where (w.word =~ /^{pre}.*/)
+       orderby (w.word)
+        [w]
+    }
+  }
 }
 
 fun main() {
@@ -50,8 +52,8 @@ fun main() {
    </head>
   <body>
    <h1>Dictionary suggest</h1>
-   <form l:onkeyup="{suggest(prefixx)}">
-    <input type="text" l:name="prefixx"
+   <form l:onkeyup="{suggest(pre)}">
+    <input type="text" l:name="pre"
            class="input" autocomplete="off"/>
    </form>
    <div id="suggestions" class="suggestions"/>

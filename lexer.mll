@@ -159,13 +159,12 @@ let bump_lines lexbuf n =
 let count_newlines = StringUtils.count '\n'
 
 let keywords = [
- "abs"      , ABS;
- "app"      , APP;
  "alien"    , ALIEN;
  "as"       , AS;
  "case"     , CASE;
  "client"   , CLIENT; 
  "database" , DATABASE;
+ "default"  , DEFAULT;
  "delete"   , DELETE;
  "else"     , ELSE; 
  "escape"   , ESCAPE; 
@@ -181,13 +180,13 @@ let keywords = [
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
- "identity" , IDENTITY; 
  "insert"   , INSERT; 
  "mu"       , MU; 
  "native"   , NATIVE;
  "orderby"  , ORDERBY;
  "op"       , OP; 
  "page"     , PAGE;
+ "query"    , QUERY;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING; 
@@ -206,11 +205,26 @@ let keywords = [
  "var"      , VAR; 
  "where"    , WHERE; 
  "with"     , WITH; 
-] 
+]
+
+let kinds = [
+ "Type"    , TYPE;
+ "BaseType", BASETYPE;
+ "Row"     , ROW;
+ "BaseRow" , BASEROW;
+ "Presence", PRESENCE;
+]
+
+let subkinds = [
+ "Any"    , ANY;
+ "Base"   , BASE;
+]
+
 exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
+let def_kind = ['A'-'Z'] def_id*
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
@@ -227,7 +241,7 @@ let directive_prefix = ['' '@' '$' '%']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '?' '@' '\\' '^' '-' '.' '|' '_' ]
+let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 
@@ -246,9 +260,8 @@ rule lex ctxt nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
+  | "~>"                                { SQUIGRARROW }
   | "=>"                                { FATRARROW }
-  | "-{"                                { MINUSLBRACE }
-  | "}->"                               { RBRACERARROW }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }
@@ -268,10 +281,17 @@ rule lex ctxt nl = parse
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
-  | '~'                                 { ctxt#push_lexer (regex' ctxt nl); TILDE }
+  | '~'                                 { TILDE }
+  | "=~"                                { ctxt#push_lexer (regex' ctxt nl); EQUALSTILDE }
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | ".."                                { DOTDOT }
+  | "::" (def_kind as var)              { if List.mem_assoc var kinds then
+                                            List.assoc var kinds
+                                          else if List.mem_assoc var subkinds then
+                                            List.assoc var subkinds
+                                          else
+                                            raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
   | opchar + as op                      { ctxt#precedence op }
@@ -293,7 +313,8 @@ rule lex ctxt nl = parse
                                           with Not_found | NotFound _ -> 
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
-  | "'" def_id as var                   { QUOTEDVAR var }
+  | "?" def_id as var                   { QUESTIONVAR var }
+  | '?'                                 { QUESTION }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse

@@ -1,109 +1,109 @@
 Range [1]
-"3" ~ /[0-9]/ 
+"3" =~ /[0-9]/ 
 stdout : true : Bool
 
 Range [2]
-"0" ~ /[0-9]/
+"0" =~ /[0-9]/
 stdout : true : Bool
 
 Range [3]
-"9" ~ /[0-9]/
+"9" =~ /[0-9]/
 stdout : true : Bool
 
 Range [4]
-"." ~ /[0-9]/
+"." =~ /[0-9]/
 stdout : false : Bool
 
 Range [5]
-"p" ~ /[a-z]/
+"p" =~ /[a-z]/
 stdout : true : Bool
 
 Range [6]
-"p" ~ /[A-Z]/
+"p" =~ /[A-Z]/
 stdout : false : Bool
 
 Escaping metacharacter
-"some .*string$\" ++?" ~ /some \.\*string\$\" \+\+\?/
+"some .*string$\" ++?" =~ /some \.\*string\$\" \+\+\?/
 stdout : true : Bool
 
 Star [1]
-"23r2r3" ~ /.*/
+"23r2r3" =~ /.*/
 stdout : true : Bool
 
 Star [2]
-"" ~ /.*/
+"" =~ /.*/
 stdout : true : Bool
 
 Star [3]
-"abc" ~ /(abc)*/
+"abc" =~ /(abc)*/
 stdout : true : Bool
 
 Star [4]
-"abcabc" ~ /(abc)*/
+"abcabc" =~ /(abc)*/
 stdout : true : Bool
 
 Star [5]
-"" ~ /(abc)*/
+"" =~ /(abc)*/
 stdout : true : Bool
 
 Star [6]
-"a" ~ /(abc)*/
+"a" =~ /(abc)*/
 stdout : true : Bool
 
 Star [7]
-"abca" ~ /(abc)*/
+"abca" =~ /(abc)*/
 stdout : true : Bool
 
 Plus [1]
-"23r2r3" ~ /.+/
+"23r2r3" =~ /.+/
 stdout : true : Bool
 
 Plus [2]
-"" ~ /.+/
+"" =~ /.+/
 stdout : false : Bool
 
 Plus [3]
-"abc" ~ /(abc)+/
+"abc" =~ /(abc)+/
 stdout : true : Bool
 
 Plus [4]
-"abcabc" ~ /(abc)+/
+"abcabc" =~ /(abc)+/
 stdout : true : Bool
 
 Plus [5]
-"" ~ /(abc)+/
+"" =~ /(abc)+/
 stdout : false : Bool
 
 Plus [6]
-"a" ~ /(abc)+/
+"a" =~ /(abc)+/
 stdout : false : Bool
 
 Plus [7]
-"abca" ~ /(abc)+/
+"abca" =~ /(abc)+/
 stdout : true : Bool
 
 Plus/grouping [1]
-"ABBB" ~ /AB+/
+"ABBB" =~ /AB+/
 stdout : true : Bool
 
 Plus/grouping [2]
-"ABAB" ~ /AB+/
+"ABAB" =~ /AB+/
 stdout : true : Bool
 
 Plus/grouping [3]
-"ABAB" ~ /((A)(B))+/
+"ABAB" =~ /((A)(B))+/
 stdout : true : Bool
 
 Plus/grouping [4]
-"ABBB" ~ /((A)(B))+/
+"ABBB" =~ /((A)(B))+/
 stdout : true : Bool
 
 Interpolation [1]
-var x = "a"; "aaa" ~ /{x}*/
+var x = "a"; "aaa" =~ /{x}*/
 stdout : true : Bool
 
 Interpolation [2]
-var x = "a"; "abc" ~ /{x}*/
+var x = "a"; "abc" =~ /{x}*/
 stdout : true : Bool
 
 WikiParser [1]

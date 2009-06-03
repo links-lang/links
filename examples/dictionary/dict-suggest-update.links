@@ -4,27 +4,29 @@ var defsTable =
   where id readonly from database "dictionary";
 
 fun newDef(def) server {
-  insert defsTable values [def]
+  insert defsTable values (word, meaning) [def]
 }
 
 fun updateDef(def) server {
-  update (var d <-- defsTable)
+  update (d <-- defsTable)
    where (d.id == def.id)
-   set (word=def.word, meaning=def.meaning)
+    set (meaning=def.meaning)
 }
 
 fun deleteDef(id) server {
-  delete (var def <-- defsTable)
+  delete (def <-- defsTable)
    where (def.id == id)
 }
 
 fun completions(s) server {
   if (s == "") []
   else {
-    take(10, for (var def <-- defsTable)
-              where (def.word ~ /^{s}.*/)
-              orderby (def.word)
-               [def])
+    query [10] {
+      for (def <-- defsTable)
+       where (def.word =~ /^{s}.*/)
+       orderby (def.word)
+        [def]
+    }
   }
 }
 
@@ -69,7 +71,7 @@ fun format(defs) {
   <div class="section">
    <div class="tip">Click a definition to edit it.</div>
    <table>
-     { for (var def <- defs)
+     { for (def <- defs)
          <tr class="entry">
            <td class="label-col entry-word">{stringToXml(def.word)}</td>
            <td class="def" id="def:{def.id}">
@@ -93,55 +95,59 @@ fun addForm(handler) {
   </form>
 }
 
-var handler = spawn {
-  fun receiver(s) {
-    receive {
-      case Suggest(s) -> suggest(s); receiver(s)
-      case NewDef(def) ->
-        newDef(def);
-        replaceChildren(addForm(self()), getNodeById("add"));
-        if (s <> "") suggest(s) else (); receiver(s)
+fun main() {
+  var handler = spawn {
+    fun receiver(s) {
+      receive {
+        case Suggest(s) -> suggest(s); receiver(s)
+        case NewDef(def) ->
+          newDef(def);
+          replaceChildren(addForm(self()), getNodeById("add"));
+          if (s <> "") suggest(s) else (); receiver(s)
+      }
     }
-  }
-  receiver("")
-};
+    receiver("")
+  };
 
-page
- <html>
-  <head>
-   <title>Dictionary suggest</title>
-   <style>
-     body {{ font-family: trebuchet, "trebuchet ms", helvetica, 
-                          arial, sans-serif; }}
-     h3 {{ padding: 4px 0 4px 0; margin: 0px; }}
-     td {{ vertical-align: top; }}
-     td.label-col {{ text-align: right; }}
-     .tip {{ margin-left: 1in; font-style: italic; }}
-     .btw {{ float: right; color: #555; font-size: 10pt }}
-     .entry {{ font-size: 11pt; }}
-     .entry-word {{ padding-right: 6px; font-weight: bold; }}
-     .def {{ color:blue }}
-     .section {{ background-color: #ffffb6;
-                 border: 1px solid gray;
-                 padding: 12px;
-                 margin-top: 4pc; }}
-     .edit-def {{ border: 1px solid gray;
-                  background-color: #c8c8dd; 
-                  padding: 4px; }}
-   </style>
-  </head>
-  <body>
-   <h1>Dictionary suggest</h1>
-   <h3>Search for definitions</h3>
-   <form l:onkeyup="{handler!Suggest(s)}">
-    Search: <input type="text" l:name="s" autocomplete="off"/>
-   </form>
-   <div id="suggestions"/>
-   <div class="section">
-   <h3>New definition</h3>
-   <div id="add">
-    {addForm(handler)}
-   </div>
-   </div>
-  </body>
- </html>
+  page
+   <html>
+    <head>
+     <title>Dictionary suggest</title>
+     <style>
+       body {{ font-family: trebuchet, "trebuchet ms", helvetica, 
+                            arial, sans-serif; }}
+       h3 {{ padding: 4px 0 4px 0; margin: 0px; }}
+       td {{ vertical-align: top; }}
+       td.label-col {{ text-align: right; }}
+       .tip {{ margin-left: 1in; font-style: italic; }}
+       .btw {{ float: right; color: #555; font-size: 10pt }}
+       .entry {{ font-size: 11pt; }}
+       .entry-word {{ padding-right: 6px; font-weight: bold; }}
+       .def {{ color:blue }}
+       .section {{ background-color: #ffffb6;
+                   border: 1px solid gray;
+                   padding: 12px;
+                   margin-top: 4pc; }}
+       .edit-def {{ border: 1px solid gray;
+                    background-color: #c8c8dd; 
+                    padding: 4px; }}
+     </style>
+    </head>
+    <body>
+     <h1>Dictionary suggest</h1>
+     <h3>Search for definitions</h3>
+     <form l:onkeyup="{handler!Suggest(s)}">
+      Search: <input type="text" l:name="s" autocomplete="off"/>
+     </form>
+     <div id="suggestions"/>
+     <div class="section">
+     <h3>New definition</h3>
+     <div id="add">
+      {addForm(handler)}
+     </div>
+     </div>
+    </body>
+   </html>
+}
+
+main()

@@ -20,13 +20,16 @@ let concrete_type t =
           begin
             match Unionfind.find point with
               | `Body t -> ct rec_names t
-              | `Recursive (_, t) ->
-                  ct rec_names t
+              | `Recursive (var, t) ->
+                  if IntSet.mem var rec_names then
+                    `MetaTypeVar point
+                  else
+                    ct (IntSet.add var rec_names) t
               | _ -> t
           end
       | _ -> t
   in
-    ct (StringSet.empty) t
+    ct (IntSet.empty) t
 
 let rec extract_row t = match concrete_type t with
   | `Record row -> row
@@ -41,9 +44,11 @@ let split_row name row =
   let t =
     if StringMap.mem name field_env then
       match (StringMap.find name field_env) with
-        | `Present t -> t
-        | `Absent -> 
+        | `Present, t -> t
+        | `Absent, _ ->
             error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+        | `Var _, _ ->
+            error ("Attempt to split row "^string_of_row row ^" on var field" ^ name)
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
   in
@@ -60,7 +65,7 @@ let rec split_variant_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
   | `Variant row ->
       let t, row = split_row name row in
-        `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
+        `Variant (make_singleton_closed_row (name, (`Present, t))), `Variant row
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
@@ -72,10 +77,10 @@ let rec project_type name t = match concrete_type t with
   | t -> 
       error ("Attempt to project non-record type "^string_of_datatype t)
     
-let rec erase_type name t = match concrete_type t with
-  | `ForAll (_, t) -> erase_type name t
+let rec erase_type names t = match concrete_type t with
+  | `ForAll (_, t) -> erase_type names t
   | `Record row ->
-      let t, row = split_row name row in
+      let row = StringSet.fold (fun name row -> snd (split_row name row)) names row in
         `Record row
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
 
@@ -92,15 +97,39 @@ let rec arg_types t = match concrete_type t with
   | t ->
       error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
+let rec effect_row t = match concrete_type t with
+  | `ForAll (_, t) -> effect_row t
+  | `Function (_, effects, _) -> effects
+  | t ->
+      error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
+
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t
-  | `Application (l, [t])
-      when Types.Abstype.Eq_t.eq l Types.list -> t
+  | `Application (l, [`Type t])
+      when Eq.eq Types.Abstype.eq_t l Types.list -> t
   | t ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
 
+let rec table_read_type t = match concrete_type t with
+  | `ForAll (_, t) -> table_read_type t
+  | `Table (r, _, _) -> r
+  | t ->
+      error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
+
+let rec table_write_type t = match concrete_type t with
+  | `ForAll (_, t) -> table_write_type t
+  | `Table (_, w, _) -> w
+  | t ->
+      error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
+
+let rec table_needed_type t = match concrete_type t with
+  | `ForAll (_, t) -> table_needed_type t
+  | `Table (_, _, n) -> n
+  | t ->
+      error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
+
 let inject_type name t =
-  `Variant (make_singleton_open_row (name, `Present t))
+  `Variant (make_singleton_open_row (name, (`Present, t)) `Any)
 
 let abs_type _ = assert false
 let app_type _ _ = assert false
@@ -119,11 +148,11 @@ let record_without t names =
         else
           `Record
             (StringMap.mapi
-               (fun name t ->
+               (fun name (flag, t) ->
                   if StringSet.mem name names then
-                    `Absent
+                    `Absent, t
                   else
-                    t)
+                    flag, t)
                fields,
              row_var)
     | _ -> assert false

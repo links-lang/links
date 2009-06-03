@@ -1,35 +1,33 @@
 var noMsg = "";
 
-sig login_widget : (String, Handler((username:String, pass:String))) -> Page
+sig login_widget : (String, Handler((username:String, pass:String))) ~> Page
 fun login_widget(msg, return) {
    page
     <html>
+      <style>
+      label {{float: left; width: 90pt; text-align: right; display: inline;
+               margin-right: 3pt; }}
+      </style>
       <body>
       <div class="error">{stringToXml(msg)}</div>
       <form l:action="{return((username=username, pass=pass))}" method="post">
-        <table>
-          <tr>
-            <td>Username:</td>
-            <td> <input l:name="username" value="" /></td>
-          </tr>
-          <tr>
-            <td>Password:</td>
-            <td><input type="password" l:name="pass" value="" /></td>
-          </tr>
-        </table>
-        <input type="submit" />
+        <label>Name:</label>
+        <div> <input l:name="username" /></div>
+        <label>Password:</label>
+        <div><input l:name="pass" type="password" /></div>
+        <input type="Submit" />
       </form>
-      <a l:href="{main()}">start again</a>
+      <a l:href="{main()}">Start over</a>
       </body>
     </html>
 }
 
 sig validAuth : (String, String) -> Bool
 fun validAuth(name, pass) {
-  name == "ezra" && pass == "knock"
+  name == "foo" && pass == "bar"
 }
 
-sig get_user : (String) -> String
+sig get_user : (String) ~> String
 fun get_user(msg) {
   var current_user = getCookie("loginname");
   if (current_user <> "")     # User is logged in! Return creds.
@@ -47,12 +45,12 @@ fun get_user(msg) {
   }
 }
 
-sig logout : () -> ()
+sig logout : () ~> ()
 fun logout() {
   setCookie("loginname", "");
 }
 
-sig logoutLink : (() -> Page) -> Xml
+sig logoutLink : (() ~> Page) ~> Xml
 fun logoutLink(target) {
   <a l:href="{logout(); freshResource(); target()}">Logout</a>
 }

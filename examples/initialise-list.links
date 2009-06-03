@@ -21,13 +21,13 @@ fun map(f, xs) {
 fun foldr(f, xs, y) {
   switch (xs) {
     case [] -> y
-    case (x::xs) -> foldr(f, xs, f(x)(y))
+    case (x::xs) -> foldr(f, xs, f(x,y))
   }
 }
 
 fun filter(xs, p) {
   foldr(
-    fun(x)(ys) {
+    fun(x,ys) {
      if(p(x)) {x :: ys}
      else {ys}
     }, xs, [])
@@ -37,7 +37,7 @@ fun mem(y, xs) {
   not (filter (xs, fun (x) {x == y}) == [])
 }
 
-fun diff(xs)(ys) {
+fun diff(xs,ys) {
   filter(xs, fun (x) {not(mem(x, ys))})
 }
 
@@ -70,14 +70,18 @@ fun select(xs, i) {
 fun insertItems(itemsTable, itemsList) {
   var n = length(itemsList);
   
-  update (var itemEntry <-- itemsTable)
-    where (0 <= itemEntry.i && itemEntry.i < n)
-    set (i=itemEntry.i, name=select(itemsList, itemEntry.i));
-  delete (var itemEntry <-- itemsTable)
+  ignore(mapi(
+    fun (item, i) {
+      update (r <-- itemsTable)
+        where (r.i == i)
+          set (name=item)
+    },
+    itemsList));
+  delete (itemEntry <-- itemsTable)
     where (itemEntry.i < 0 || n < itemEntry.i);
-  var indexes = for (var itemEntry <-- itemsTable) [itemEntry.i];
-  insert itemsTable values
-    for (var i <- upto(0,n-1) `diff` indexes)
+  var indexes = for (itemEntry <- asList(itemsTable)) [itemEntry.i];
+  insert itemsTable values (i, name)
+    for (i <- upto(0,n-1) `diff` indexes)
       [(i=i, name=select(itemsList, i))];
 }
 

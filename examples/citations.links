@@ -16,7 +16,7 @@ var paperId = "paper";
 var authorLabel = "Author";
 var paperLabel = "Paper";
 
-sig header : (String) -> Xml
+sig header : (String) ~> Xml
 fun header(title) {
   <head>
    <title>{stringToXml(title)}</title>
@@ -28,7 +28,7 @@ fun header(title) {
   </head>
 }
 
-sig suggest : (String, String) -> ()
+sig suggest : (String, String) ~> ()
 fun suggest(authorPrefix, paperPrefix) client {
   var (authorList, paperList) = completions(authorPrefix, paperPrefix);
   replaceChildren(
@@ -41,41 +41,80 @@ fun suggest(authorPrefix, paperPrefix) client {
   )
 }
 
-sig formatAuthorList : ([Author]) -> Xml
+sig formatAuthorList : ([Author]) ~> Xml
 fun formatAuthorList(authors) server {
-  for (var a <- authors)
+  for (a <- authors)
     <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
 }
 
-sig formatPaperList : ([Paper]) -> Xml
+sig formatPaperList : ([Paper]) ~> Xml
 fun formatPaperList(papers) server {
-  for (var p <- papers)
+  for (p <- papers)
     <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
 }
 
-sig getPapersAndCollaborators : (Author) -> ([Paper], [Author])
+sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
 fun getPapersAndCollaborators(author) server {
   var papers =
-   for (var r <-- paperauthorTable)
-   where (r.authorid == author.id)
-    for (var p <-- papersTable)
-    where (p.id == r.paperid)
-     [(id=p.id, title=p.title)];
+    query {
+      for (r <-- paperauthorTable)
+      where (r.authorid == author.id)
+       for (p <-- papersTable)
+       where (p.id == r.paperid)
+        [(id=p.id, title=p.title)]
+    };
 
-# this can't be used because it isn't being optimised
+  # return all papers for which authorid is a co-author
+  fun lookupPapers(authorid) {
+    for (r <-- paperauthorTable)
+      where (r.authorid == authorid)
+      [(paperid=r.paperid)]
+  }
+
+  # return the authors of paper p satisfying the predicate f
+  fun lookupAuthors(p, f) {
+    for (r <-- paperauthorTable)
+      where (p.paperid == r.paperid && f(r.authorid))
+      [(id=r.authorid)]
+  }
+
+  # return the details for author c
+  fun lookupAuthorDetails(c) {
+    for (a <-- authorsTable)
+      where (c.id == a.id)
+      [(id=a.id, name=a.name)]
+  }
+
+  var collaborators =
+    query {
+      # papers written by author.id
+      var papers = lookupPapers(author.id);
+
+      # collaborators == authors \ {author.id}
+      var collaborators =
+        for (p <- papers)
+          lookupAuthors(p, fun (id) {id <> author.id});
+
+      for (c <- collaborators)
+        lookupAuthorDetails(c)
+     };
+
+
 #  var collaborators =
-#   for (var r <-- paperauthorTable)
-#   for (var q <-- paperauthorTable)
-#   for (var a <-- authorsTable)
-#    where (r.authorid == author.id &&
-#           r.paperid == q.paperid && not (q.authorid == author.id) &&
-#           q.authorid == a.id)
-#      [(id=a.id, name=a.name)];
+#    query {
+#      for (r <-- paperauthorTable)
+#      for (q <-- paperauthorTable)
+#      for (a <-- authorsTable)
+#       where (r.authorid == author.id &&
+#              r.paperid == q.paperid && not (q.authorid == author.id) &&
+#              q.authorid == a.id)
+#         [(id=a.id, name=a.name)]
+#     };
 
-  (papers, [])
+  (papers, distinct(collaborators))
 }
 
-sig showAuthorInfo : (Author) -> Page
+sig showAuthorInfo : (Author) ~> Page
 fun showAuthorInfo(author) server {
   var (papers, collaborators) = getPapersAndCollaborators(author);
 
@@ -90,27 +129,25 @@ fun showAuthorInfo(author) server {
      </form>
      <h2>Papers</h2>
      <div class="suggestions">{formatPaperList(papers)}</div>
+     <h2>Collaborators</h2>
+     <div class="suggestions">{formatAuthorList(collaborators)}</div>
     </body>
    </html>
-
-
-# Removed because the query isn't being optimised properly
-#
-#    <h2>Collaborators</h2>
-#    <div class="suggestions">{formatAuthorList(collaborators)}</div>
 }
 
 sig getAuthors : (Paper) -> [Author]
 fun getAuthors(paper) server {
-  for (var r <-- paperauthorTable)
-  where (paper.id == r.paperid)
-   for (var a <-- authorsTable)
-   where (r.authorid == a.id)
-    [(id=a.id, name=a.name)]
+  query {
+    for (r <-- paperauthorTable)
+    where (paper.id == r.paperid)
+     for (a <-- authorsTable)
+     where (r.authorid == a.id)
+      [(id=a.id, name=a.name)]
+  }
 }
 
 fun updatePaper(paper) server {
-  update (var p <-- papersTable)
+  update (p <-- papersTable)
    where (p.id == paper.id)
    set (title=paper.title);
 
@@ -118,14 +155,14 @@ fun updatePaper(paper) server {
 }
 
 fun updateAuthor(author) server {
-  update (var a <-- authorsTable)
+  update (a <-- authorsTable)
    where (a.id == author.id)
    set (name=author.name);
 
   showAuthorInfo(author)
 }
 
-sig showPaperInfo : (Paper) -> Page
+sig showPaperInfo : (Paper) ~> Page
 fun showPaperInfo(paper) server {
   var authors = getAuthors(paper);
 
@@ -144,26 +181,29 @@ fun showPaperInfo(paper) server {
    </html>
 }
 
-sig completions : (String, String) -> (Xml, Xml)
+sig completions : (String, String) ~> (Xml, Xml)
 fun completions(authorPrefix, paperPrefix) server {
   var authors =
     if (authorPrefix == "") []
     else {
       if (paperPrefix == "") {
-        take(10, for (var a <-- authorsTable)
-                  where (a.name ~ /^{authorPrefix}.*/)
-                  orderby (a.name)
-                   [(id=a.id, name=a.name)])
+        query [10] {
+          for (a <-- authorsTable)
+           where (a.name =~ /^{authorPrefix}.*/)
+           orderby (a.name)
+            [(id=a.id, name=a.name)]
+        }
       } else {
-        distinct(
-          take(10, for (var a <-- authorsTable)
-                   orderby (a.name)
-                   for (var p <-- papersTable)
-                   for (var r <-- paperauthorTable)
-                     where (a.name ~ /^{authorPrefix}.*/ &&
-                            p.title ~ /^{paperPrefix}.*/ &&
-                            p.id == r.paperid && r.authorid == a.id)
-                      [(id=a.id, name=a.name)]))
+        query [10] {
+          for (a <-- authorsTable)
+           orderby (a.name)
+           for (p <-- papersTable)
+           for (r <-- paperauthorTable)
+             where (a.name =~ /^{authorPrefix}.*/ &&
+                    p.title =~ /^{paperPrefix}.*/ &&
+                    p.id == r.paperid && r.authorid == a.id)
+              [(id=a.id, name=a.name)]
+        }
       }
     };
 
@@ -171,43 +211,47 @@ fun completions(authorPrefix, paperPrefix) server {
     if (paperPrefix == "") []
     else {
       if (authorPrefix == "") {
-        take(10, for (var p <-- papersTable)
-                  where (p.title ~ /^{paperPrefix}.*/)
-                  orderby (p.title)
-                   [(id=p.id, title=p.title)])
+        query [10] {
+          for (p <-- papersTable)
+           where (p.title =~ /^{paperPrefix}.*/)
+           orderby (p.title)
+            [(id=p.id, title=p.title)]
+        }
       } else {
         distinct(
-          take(10, for (var p <-- papersTable)
-                  orderby (p.title)
-                   for (var a <-- authorsTable)
-                   for (var r <-- paperauthorTable)
-                     where (a.name ~ /^{authorPrefix}.*/ &&
-                            p.title ~ /^{paperPrefix}.*/ &&
-                            p.id == r.paperid && r.authorid == a.id)
-                      [(id=p.id, title=p.title)]))
+          query [10] {
+            for (p <-- papersTable)
+             orderby (p.title)
+              for (a <-- authorsTable)
+              for (r <-- paperauthorTable)
+                where (a.name =~ /^{authorPrefix}.*/ &&
+                       p.title =~ /^{paperPrefix}.*/ &&
+                       p.id == r.paperid && r.authorid == a.id)
+                 [(id=p.id, title=p.title)]
+         })
       }
     };
 
   (formatAuthorList(authors), formatPaperList(papers))
 }
 
-sig distinct : ([(id:Int|r)]) -> [(id:Int|r)]
+sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
 fun distinct(xs) {
   fold_left(
     fun (ys, x) {
        switch (ys) {
          case [] -> [x]
          case (y::ys) ->
-           if(x.id == y.id) {ys} else {x::y::ys}
+           if(x.id == y.id) {y::ys} else {x::y::ys}
        }
     },
     [],
     xs)
 }
 
-
+fun main () {
   # granularity of server requests
-  var w = 10;
+  var w = 1;
     fun startSuggester(handler) {
       spawn {
         fun suggester(a, p, t) {
@@ -217,7 +261,7 @@ fun distinct(xs) {
               # because JavaScript is so slow that sending the
               # message back and forth has the desired effect
               # but this is what the code should look like
-              var u = serverTime();        
+              var u = clientTime();        
               if(u-t < w) { sleep(w-(u-t)) } else {()};
 
               handler!GetCurrentState;
@@ -236,7 +280,7 @@ fun distinct(xs) {
               error("Didn't ask for a suggestion!");
           }
         }
-        var t = serverTime();
+        var t = clientTime();
         suggester("", "", t)
       }
     }
@@ -293,3 +337,6 @@ page
     </form>
    </body>
   </html>
+}
+
+main()

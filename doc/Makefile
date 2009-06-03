@@ -1,4 +1,4 @@
-all: quick-help.html grammar.pdf
+all: quick-help.html
 
 grammar.pdf: grammar.tex
 	pdflatex grammar && pdflatex grammar

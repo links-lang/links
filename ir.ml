@@ -1,13 +1,18 @@
 (*pp deriving *)
 (** Monadic IR *)
 
+open Notfound
+
 open Utility
+open PP
+
+type num = Num.num
 
 type scope = Var.scope
   deriving (Show)
 (* term variables *)
 type var = Var.var
-  deriving (Show)
+  deriving (Show, Eq, Hash, Typeable, Pickle, Dump)
 type var_info = Var.var_info
   deriving (Show)
 type binder = Var.binder
@@ -21,6 +26,9 @@ type tyarg = Types.type_arg
 
 type name = string
   deriving (Show)
+
+type name_set = Utility.stringset
+  deriving (Show)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
@@ -32,7 +40,7 @@ let var_of_binder (x, _) = x
 type constant = Constant.constant
   deriving (Show)
 
-type location = Syntax.location
+type location = Sugartypes.location
   deriving (Show)
 
 type value =
@@ -40,18 +48,16 @@ type value =
   | `Variable of var
   | `Extend of (value name_map * value option)
   | `Project of (name * value)
-  | `Erase of (name * value)
+  | `Erase of (name_set * value)
   | `Inject of (name * value * Types.datatype)
 
+  | `TAbs of tyvar list * value
   | `TApp of value * tyarg list
 
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
-  (* should really be implemented as constants *)
-  | `Comparison of (value * Syntaxutils.comparison * value)
 
   | `Coerce of (value * Types.datatype)
-  | `Abs of value
   ]
 and tail_computation =
   [ `Return of (value)
@@ -69,11 +75,12 @@ and binding =
   | `Alien of (binder * language)
   | `Module of (string * binding list option) ]
 and special =
-  [ `App of value * value
-  | `Wrong of Types.datatype
-  | `Database of value
-  | `Query of SqlQuery.sqlQuery
-  | `Table of (value * value * (Types.datatype * Types.datatype))
+  [ `Wrong of Types.datatype
+  | `Database of value 
+  | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
+  | `Query of (value * value) option * computation * Types.datatype
+  | `Update of (binder * value) * computation option * computation
+  | `Delete of (binder * value) * computation option
   | `CallCC of (value) ]
 and computation = binding list * tail_computation
   deriving (Show)  
@@ -90,13 +97,13 @@ let rec is_atom =
     | `Constant (`Float _)
     | `Variable _ -> true
     | `Erase (_, v)
-    | `Coerce (v, _)
-    | `Abs v -> is_atom v
+    | `Coerce (v, _) -> is_atom v
     | _ -> false
 
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
+  deriving (Show)
 
 let string_of_var = string_of_int
 
@@ -107,6 +114,12 @@ let string_of_special _ = "[SPECIAL]"
 let string_of_computation _ = "[COMPUTATION]"
 let string_of_program _ = "[PROGRAM]"
 
+(** Traversal with type reconstruction
+
+    Essentially this is a map-fold operation over the IR datatypes
+    that also constructs the type as it goes along (using type
+    annotations on binders).
+*)
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
@@ -117,6 +130,10 @@ sig
 
     method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
+    method optionu :
+      'a.
+      ('self_type -> 'a -> ('a * 'self_type)) ->
+      'a option -> 'a option * 'self_type
     method option :
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
@@ -131,7 +148,7 @@ sig
       'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
     method var : var -> (var * Types.datatype * 'self_type)
     method value : value -> (value * Types.datatype * 'self_type)
-                                                
+      
     method tail_computation :
       tail_computation -> (tail_computation * Types.datatype * 'self_type)
     method special : special -> (special * Types.datatype * 'self_type)      
@@ -139,15 +156,13 @@ sig
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
-  end  
+
+    method program : program -> (program * Types.datatype * 'self_type)
+
+    method get_type_environment : environment
+  end
 end
 
-(* Traversal with type reconstruction *)
-(*
-  Essentially this is a map-fold operation over the IR datatypes that also
-  constructs the type as it goes along (using type annotations on
-  binders).
-*)
 module Transform : TRANSFORM =
 struct
   open Types
@@ -157,26 +172,7 @@ struct
 
   let info_type (t, _, _) = t
 
-  (*
-    HACK:
-
-    The ir_ignore_type_errors setting tries to ignore any type errors
-    during type deconstruction. It is only necessary because the
-    optimisations on Syntax.expression don't maintain type correctness.
-
-    In fact, now that it is possible to run type inference after
-    optimisation (to restore type correctness), this setting is
-    unnecessary.
-  *)
-  let ignore_type_errors = Settings.add_bool("ir_ignore_type_errors", false, `User)
-  let deconstruct f t =
-    if not (Settings.get_value ignore_type_errors) then
-      f t
-    else
-      try
-        f t
-      with
-          TypeDestructionError _ -> t
+  let deconstruct f t = f t
 
   module Env = Env.Int
 
@@ -195,6 +191,18 @@ struct
         | `String _ -> c, string_type, o
         | `Float _ -> c, float_type, o
 
+
+    method optionu :
+      'a.
+      ('self_type -> 'a -> ('a * 'self_type)) ->
+      'a option -> 'a option * 'self_type =
+      fun f v ->
+        match v with
+          | None -> None, o
+          | Some v ->
+              let v, o = f o v in
+                Some v, o
+
     method option :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -205,7 +213,7 @@ struct
           | Some v ->
               let v, t, o = f o v in
                 Some v, Some t, o
-        
+                  
     method list :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -220,7 +228,7 @@ struct
             v
         in
           List.rev vs, List.rev ts, o
-          
+            
     method name_map :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -259,23 +267,32 @@ struct
             in
               `Extend (fields, base), t, o
         | `Project (name, v) ->
-            (*             Debug.print ("project_e: " ^ Show_value.show (`Project (name, v))); *)
             let (v, vt, o) = o#value v in
-(*               Debug.print ("project_vt: " ^ Types.string_of_datatype vt); *)
               `Project (name, v), deconstruct (project_type name) vt, o
-        | `Erase (name, v) ->
-(*             Debug.print ("erase_e: " ^ Show_value.show (`Erase (name, v))); *)
+        | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type name) vt in
-(*               Debug.print ("erase_vt: " ^ Types.string_of_datatype vt); *)
-(*               Debug.print ("erase_t: " ^ Types.string_of_datatype t); *)
-              `Erase (name, v), t, o
+            let t = deconstruct (erase_type names) vt in
+              `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
               `Inject (name, v, t), t, o
+        | `TAbs (tyvars, v) ->
+            let v, t, o = o#value v in
+            let t = Types.for_all (tyvars, t) in
+              `TAbs (tyvars, v), t, o
         | `TApp (v, ts) ->
             let v, t, o = o#value v in
-              `TApp (v, ts), t, o
+              begin try
+                let t = Instantiate.apply_type t ts in
+                  `TApp (v, ts), t, o
+              with
+                  Instantiate.ArityMismatch ->
+                    prerr_endline ("Arity mismatch in type application (Ir.Transform)");
+                    prerr_endline ("expression: "^Show.show show_value (`TApp (v, ts)));
+                    prerr_endline ("type: "^Types.string_of_datatype t);
+                    prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
+                    failwith "fatal internal error"
+              end
         | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children, children_types, o) = o#list (fun o -> o#value) children in
@@ -290,18 +307,10 @@ struct
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `ApplyPure (f, args), deconstruct return_type ft, o
-        | `Comparison (v, op, w) ->
-            let v, _, o = o#value v in
-            let w, _, o = o#value w in
-              `Comparison (v, op, w), bool_type, o
-            (* TODO: get rid of comparison *)
         | `Coerce (v, t) ->
             let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
               `Coerce (v, t), t, o
-        | `Abs v ->
-            let v, t, o = o#value v in
-              `Abs v, abs_type t, o
 
     method tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) =
@@ -314,7 +323,6 @@ struct
             let f, ft, o = o#value f in
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-(*               Debug.print ("apply: " ^ Show_tail_computation.show (`Apply (f, args))); *)
               `Apply (f, args), deconstruct return_type ft, o
         | `Special special ->
             let special, t, o = o#special special in
@@ -348,29 +356,35 @@ struct
                  
     method special : special -> (special * datatype * 'self_type) =
       function
-        | `App (v, w) ->
-            let v, vt, o = o#value v in
-            let w, wt, o = o#value w in
-              `App (v, w), app_type vt wt, o
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `Query q ->
-            let row =
-	      (List.fold_right
-	         (fun (expr, alias) env ->
-                    match expr with 
-                      | `F field -> 
-                          StringMap.add alias (`Present field.SqlQuery.ty) env
-                      | _ -> assert(false) (* can't handle other kinds of expressions *))
-	         q.SqlQuery.cols StringMap.empty, Unionfind.fresh `Closed) in
-            let t =  `Application (Types.list, [`Record row]) in
-              `Query q, t, o
-        | `Table (db, table_name, (rt, wt)) ->
+        | `Table (db, table_name, (rt, wt, nt)) ->
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in
-              `Table (db, table_name, (rt, wt)), `Table (rt, wt), o
+              `Table (db, table_name, (rt, wt, nt)), `Table (rt, wt, nt), o
+        | `Query (range, e, t) ->
+            let range, o =
+              o#optionu
+                (fun o (limit, offset) ->
+                   let limit, _, o = o#value limit in
+                   let offset, _, o = o#value offset in
+                     (limit, offset), o)
+                range in
+            let e, t, o = o#computation e in
+              `Query (range, e, t), t, o
+        | `Update ((x, source), where, body) ->
+            let source, _, o = o#value source in
+            let x, o = o#binder x in
+            let where, _, o = o#option (fun o -> o#computation) where in
+            let body, _, o = o#computation body in
+              `Update ((x, source), where, body), Types.unit_type, o
+        | `Delete ((x, source), where) ->
+            let source, _, o = o#value source in
+            let x, o = o#binder x in
+            let where, _, o = o#option (fun o -> o#computation) where in
+              `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
               `CallCC v, deconstruct return_type t, o
@@ -389,7 +403,6 @@ struct
 
     method computation : computation -> (computation * datatype * 'self_type) =
       fun (bs, tc) ->
-(*         Debug.print ("computation: " ^ Show_computation.show (bs, tc)); *)
         let bs, o = o#bindings bs in
         let tc, t, o = o#tail_computation tc in
           (bs, tc), t, o
@@ -397,10 +410,8 @@ struct
     method binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, (tyvars, tc)) ->
-            let (xv, (xt, _, _) as x), o = o#binder x in
+            let x, o = o#binder x in
             let tc, t, o = o#tail_computation tc in
-(*               Debug.print ("bound "^string_of_int(xv)^" of type "^string_of_datatype xt^ *)
-(*                              " to expression of type "^string_of_datatype t); *)
               `Let (x, (tyvars, tc)), o
         | `Fun (f, (tyvars, xs, body), location) ->
             let xs, body, o =
@@ -457,9 +468,12 @@ struct
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
-(*        Debug.print ("var: "^string_of_int var^", type: "^(Types.string_of_datatype (info_type info)));*)
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
+
+    method program : program -> (program * datatype * 'self_type) = o#computation
+
+    method get_type_environment : environment = tyenv
   end
 end
 
@@ -483,7 +497,7 @@ struct
 
     method value =
       function
-        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
+        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o          
         | v -> super#value v
 
     method bindings =
@@ -493,7 +507,12 @@ struct
               begin
                 match b with
                   | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) when is_inlineable_value v ->
-                      (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
+                      let v =
+                        match tyvars with
+                          | [] -> v
+                          | tyvars -> `TAbs (tyvars, v)
+                      in
+                        (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
                   | _ ->
                       let bs, o = o#bindings bs in
                         b :: bs, o
@@ -502,7 +521,6 @@ struct
   end
 
   let program typing_env p =
-(*    Debug.print (Show_computation.show p);*)
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 
@@ -733,8 +751,236 @@ struct
 
   let program tyenv p =
     let envs = count tyenv p in
-(*      Debug.print ("before elim dead defs: " ^ Show_computation.show p);*)
     let p, _, _ = (eliminator tyenv envs)#computation p in
-(*      Debug.print ("after elim dead defs: " ^ Show_computation.show p);*)
       p
 end
+
+(** Compute free variables *)
+module FreeVars =
+struct
+  class visitor tenv bound_vars =
+  object (o)
+    inherit Transform.visitor(tenv) as super
+      
+    val free_vars = IntSet.empty
+    val bound_vars = bound_vars
+
+    method bound x =
+      {< bound_vars = IntSet.add x bound_vars >}
+
+    method free x =
+      if IntSet.mem x bound_vars then o
+      else {< free_vars = IntSet.add x free_vars >}
+
+    method binder =
+      fun b ->
+        let b, o = super#binder b in
+          b, o#bound (Var.var_of_binder b)
+            
+    method var =
+      fun x ->
+        let x, t, o = super#var x in
+          x, t, o#free x
+            
+    method get_free_vars = free_vars
+  end
+
+  let value tyenv bound_vars v =
+    let _, _, o = (new visitor tyenv bound_vars)#value v in
+      o#get_free_vars
+
+  let tail_computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
+      o#get_free_vars
+
+  let binding tyenv bound_vars bs =
+    let _, o = (new visitor tyenv bound_vars)#binding bs in
+      o#get_free_vars
+
+  let bindings tyenv bound_vars bs =
+    let _, o = (new visitor tyenv bound_vars)#bindings bs in
+      o#get_free_vars
+
+  let computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#computation e in
+      o#get_free_vars
+
+  let program = computation
+end
+
+(** The [closures] type represents the set of free variables of a
+    collection of functions *)
+type closures = intset intmap
+    deriving (Show)
+
+(** Compute the closures in an IR expression 
+
+  This computes the free variables for every function
+  and every continuation in an IR expression.
+*)
+module ClosureTable =
+struct
+  type t = closures
+
+  class visitor tyenv bound_vars =
+  object (o)
+    inherit Transform.visitor(tyenv) as super
+      
+    val globals = bound_vars
+    val relevant_vars = IntMap.empty
+
+    method close f vars =
+      {< relevant_vars = IntMap.add (Var.var_of_binder f) vars relevant_vars >}
+
+    method global x =
+      {< globals = IntSet.add x globals >}
+
+    method binder b =
+      let b, o = super#binder b in
+        if Var.scope_of_binder b = `Global then
+          b, o#global (Var.var_of_binder b)
+        else
+          b, o
+
+    (** Incrementally compute the free variables for every possible
+       continuation arising from a computation.
+
+       The first argument is the free variables in the tail. The
+       second argument is the list of bindings in reverse order.
+
+       The list of bindings is in reverse order in order to make
+       things both easier to express and more efficient.
+    *)
+    method close_cont fvs =
+      function
+        | [] -> o
+        | `Let (x, (tyvars, body))::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder x) fvs in
+            let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
+              (o#close x fvs)#close_cont (IntSet.union fvs fvs') bs
+        | `Fun (f, (_tyvars, xs, body), _)::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
+            let bound_vars =
+              List.fold_right
+                (fun x bound_vars ->
+                   IntSet.add (Var.var_of_binder x) bound_vars)
+                xs
+                globals in
+            let fvs' = FreeVars.computation o#get_type_environment bound_vars body in
+            let o = o#close f fvs' in
+              o#close_cont (IntSet.union fvs fvs') bs
+        | `Rec defs::bs ->
+            let fvs, bound_vars =
+              List.fold_right
+                (fun (f, (_tyvars, xs, _body), _) (fvs, bound_vars) ->
+                   let f = Var.var_of_binder f in
+                   let fvs = IntSet.remove f fvs in
+                   let bound_vars =
+                     List.fold_right
+                       (fun x bound_vars ->
+                          IntSet.add (Var.var_of_binder x) bound_vars)
+                       xs
+                       (IntSet.add f bound_vars) in
+                     fvs, bound_vars)
+                defs
+                (fvs, globals) in
+
+            let fvs' =
+              List.fold_left
+                (fun fvs' (_f, (_tyvars, _xs, body), _location) ->
+                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars body))
+                (IntSet.empty)
+                defs in
+
+            let o =
+              List.fold_left
+                (fun o (f, _, _) -> o#close f fvs')
+                o
+                defs
+            in
+              o#close_cont (IntSet.union fvs fvs') bs
+        | `Alien (f, _language)::bs ->
+            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
+              o#close_cont fvs bs            
+        | `Module _::bs ->
+            assert false
+
+    method computation : computation -> (computation * Types.datatype * 'self_type) =
+      fun (bs, tc) ->
+        let bs, o = o#bindings bs in
+        let tc, t, o = o#tail_computation tc in
+
+        let free_vars = FreeVars.tail_computation o#get_type_environment globals tc in
+        let o = o#close_cont free_vars (List.rev bs) in
+          (bs, tc), t, o
+
+    method binding b =
+      match b with
+(*         | `Fun (f, (tyvars, xs, body), location) ->              *)
+(*             let xs, body, o = *)
+(*               let (xs, o, bound_vars) = *)
+(*                 List.fold_right *)
+(*                   (fun x (xs, o, bound_vars) -> *)
+(*                      let x, o = o#binder x in *)
+(*                        (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars)) *)
+(*                   xs *)
+(*                   ([], o, globals) in *)
+(*              let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in *)
+(*               let body, _, o = o#computation body in *)
+(*                 xs, body, o in *)
+(*             let f, o = o#binder f in *)
+(*               `Fun (f, (tyvars, xs, body), location), o *)
+(*         | `Rec defs -> *)
+(*             let _, o = *)
+(*               List.fold_right *)
+(*                 (fun (f, _, _) (fs, o) -> *)
+(*                    let f, o = o#binder f in *)
+(*                      (f::fs, o)) *)
+(*                 defs *)
+(*                 ([], o) in *)
+
+(*             let defs, o = *)
+(*               List.fold_left *)
+(*                 (fun (defs, o) (f, (tyvars, xs, body), location) -> *)
+(*                    let xs, o, bound_vars = *)
+(*                      List.fold_right *)
+(*                        (fun x (xs, o, bound_vars) -> *)
+(*                           let (x, o) = o#binder x in *)
+(*                             (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars)) *)
+(*                        xs *)
+(*                        ([], o, globals) in *)
+(*                    let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in *)
+(*                    let body, _, o = o#computation body in *)
+(*                      (f, (tyvars, xs, body), location)::defs, o) *)
+(*                 ([], o) *)
+(*                 defs in *)
+(*             let defs = List.rev defs in *)
+(*               `Rec defs, o *)
+        | _ -> super#binding b
+            
+    method get_relevant_vars = relevant_vars
+  end
+
+  let value tyenv bound_vars v =
+    let _, _, o = (new visitor tyenv bound_vars)#value v in
+      o#get_relevant_vars
+
+  let tail_computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
+      o#get_relevant_vars
+
+  let bindings tyenv bound_vars bs =
+    let o = new visitor tyenv bound_vars in
+    let _, _, o = o#computation (bs, `Return (`Extend (StringMap.empty, None))) in
+      o#get_relevant_vars
+
+  let computation tyenv bound_vars e =
+    let _, _, o = (new visitor tyenv bound_vars)#computation e in
+      o#get_relevant_vars
+
+  let program = computation
+end
+
+let var_appln env name args =
+  (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
+  

@@ -65,9 +65,8 @@ stderr : @.
 exit : 1
 
 Tables must have table type.
-fun (t) { for (var x <-- t) [x.y] }
-stdout : 0
-exit : 0
+fun (t) { for (x <-- t) [x.y] }
+stdout : @fun : \(TableHandle\(.*\)\) -> .*
 
 Duplicate fields
 (x=3,x=3)

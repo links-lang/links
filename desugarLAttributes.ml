@@ -31,12 +31,15 @@ let desugar_lhref : phrasenode -> phrasenode = function
       when mem_assoc "l:href" attrs -> 
       let attrs =
         match partition (fst ->- (=)"l:href") attrs with
-          | [_,[href]], rest ->
+          | [_,[target]], rest ->
               (("href",
                 [`Constant (`String "?_k="), dummy_pos;
-                 apply dummy_pos "pickleCont" [`FunLit (None, ([[]], href)), dummy_pos]]))
+                 apply dummy_pos "pickleCont" [`FunLit (None, ([[]], target)), 
+                                               dummy_pos]]))
               :: rest 
-          | _ -> assert false (* multiple l:hrefs, or an invalid rhs *)
+          | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
+                                 NOTE: this is a user error and should
+                                 be reported as such --ez.*)
       in 
         `Xml (a, attrs, attrexp, children)
   | e -> e
@@ -45,23 +48,24 @@ let desugar_laction : phrasenode -> phrasenode = function
   | `Xml (("form"|"FORM") as form, attrs, attrexp, children) 
       when mem_assoc "l:action" attrs ->
       begin match partition (fst ->- (=)"l:action") attrs with
-        | [_,[laction]], rest ->
+        | [_,[action_expr]], rest ->
             let hidden : phrase = 
               `Xml ("input",
                     ["type",  [`Constant (`String "hidden"), dummy_pos];
                      "name",  [`Constant (`String "_k"), dummy_pos];
                      "value", [apply dummy_pos "pickleCont"
-                                 [`FunLit (None, ([[]], laction)), dummy_pos]]],
+                                [`FunLit(None,([[]],action_expr)), dummy_pos]]],
                     None,
                     []), dummy_pos
             and action = ("action", [`Constant (`String "#"), dummy_pos]) 
             in 
               `Xml (form, action::rest, attrexp, hidden::children)
-        | _ -> assert false (* multiple l:actions, or an invalid rhs *)
+        | _ -> assert false (* multiple l:actions, or an invalid rhs;
+                               NOTE: this is a user error and should
+                               be reported as such --ez. *)
       end
   | e -> e
-      
-      
+
 let desugar_lonevent : phrasenode -> phrasenode = 
   let pair pos = function
     | (name, [rhs]) ->

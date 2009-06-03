@@ -19,13 +19,12 @@ type unary_op = [
 | `Minus
 | `FloatMinus
 | `Name of name
-| `Abs
 ]
 and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
     deriving (Show)
 type logical_binop = [`And | `Or ]
     deriving (Show)
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name | `App ]
+type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
 deriving (Show)
 type operator = [ unary_op | binop | `Project of name ]
 deriving (Show)
@@ -35,7 +34,6 @@ let string_of_unary_op =
     | `Minus -> "-"
     | `FloatMinus -> ".-"
     | `Name name -> name
-    | `Abs -> "abs"
 
 let string_of_binop =
   function
@@ -46,16 +44,11 @@ let string_of_binop =
     | `Or -> "||"
     | `Cons -> "::"    
     | `Name name -> name
-    | `App -> "app"
 
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
-module Show_position = Show.ShowDefaults(
-struct
-  type a = position
-  let format formatter _ = Format.pp_print_string formatter "..."
-end)
+let show_position = Show.show_unprintable
 
 type binder = name * Types.datatype option * position
     deriving (Show)
@@ -73,41 +66,57 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-type location = Syntax.location
+type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
-type datatype = 
-  | TypeVar         of name
-  | RigidTypeVar    of name
-  | FunctionType    of datatype list * datatype * datatype
+
+type subkind = [`Any | `Base]
+    deriving (Show)
+
+type datatype =
+  | TypeVar         of name * subkind
+  | RigidTypeVar    of name * subkind
+  | FunctionType    of datatype list * row * datatype
   | MuType          of name * datatype
   | UnitType
   | TupleType       of (datatype list)
   | RecordType      of row
   | VariantType     of row
-  | TableType       of datatype * datatype
+  | TableType       of datatype * datatype * datatype
   | ListType        of datatype
-  | TypeApplication of (string * datatype list)
+  | TypeApplication of (string * type_arg list)
   | PrimitiveType   of Types.primitive
   | DBType
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
-    | `Open of name
-    | `OpenRigid of name
+    | `Open of name * subkind
+    | `OpenRigid of name * subkind
     | `Recursive of name * row ]
-and fieldspec = [`Present of datatype | `Absent]
-    deriving (Show)
+and presence_flag = [ `Present | `Absent | `RigidVar of name | `Var of name ]
+and fieldspec = presence_flag * datatype
+and type_arg =
+    [ `Type of datatype
+    | `Row of row
+    | `Presence of presence_flag ]
+      deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = datatype * Types.datatype option
     deriving (Show)
 
-type quantifier =
-    [ `TypeVar of name | `RigidTypeVar of name
-    | `RowVar of name | `RigidRowVar of name ]
+type type_variable =
+    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
+    | `RowVar of name * subkind | `RigidRowVar of name * subkind
+    | `PresenceVar of name | `RigidPresenceVar of name ]
       deriving (Show)
 
-type fieldconstraint = [ `Readonly | `Identity ]
+type quantifier =
+    [ `TypeVar of name * subkind
+    | `RowVar of name * subkind
+    | `PresenceVar of name ]
+      deriving (Show)
+
+type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type constant = Constant.constant
@@ -157,9 +166,10 @@ and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.datatype) list) option * funlit
-| `Spawn            of phrase * Types.datatype option
-| `SpawnWait        of phrase * Types.datatype option
+| `FunLit           of ((Types.datatype * Types.row) list) option * funlit
+| `Spawn            of phrase * Types.row option
+| `SpawnWait        of phrase * Types.row option
+| `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
@@ -184,9 +194,9 @@ and phrasenode = [
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
 | `DBDelete         of pattern * phrase * phrase option
-| `DBInsert         of phrase * phrase * phrase option
+| `DBInsert         of phrase * name list * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
 | `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
 | `TextNode         of string
@@ -207,10 +217,10 @@ and bindingnode = [
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * ((tyvar list * Types.datatype option) * funlit) * location * datatype' option * position) list
+| `Funs    of (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
-| `Type    of name * (name * int option) list * datatype'
+| `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
 ]
@@ -219,10 +229,6 @@ and directive = string * string list
 and sentence = [ 
 | `Definitions of binding list
 | `Expression  of phrase
-| `Directive   of directive ]
-and sentence' = [ 
-| `Definitions of Syntax.untyped_definition list
-| `Expression  of Syntax.untyped_expression
 | `Directive   of directive ]
     deriving (Show)
 
@@ -295,6 +301,9 @@ struct
     | `ListLit (ps, _)
     | `TupleLit ps -> union_map phrase ps
 
+    | `Query (None, p, _) -> phrase p
+    | `Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]
+
     | `Escape ((v,_,_), p) -> diff (phrase p) (singleton v)
     | `FormletPlacement (p1, p2, p3)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
@@ -314,7 +323,7 @@ struct
     | `ConstructorLit (_, popt, _) -> option_map phrase popt
     | `DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | `DBInsert (p1, p2, popt) ->
+    | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
     | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
     | `Xml (_, attrs, attrexp, children) -> 

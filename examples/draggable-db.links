@@ -27,7 +27,7 @@ fun step(state, id, items) client {
 
 fun draw(id, items) {
  replaceChildren(
-  for (var item <- items)
+  for (item <- items)
    <li class="draggable_element">{stringToXml(item)}</li>,
   getNodeById(id)
  )
@@ -42,7 +42,7 @@ fun draggableList(id, items) client
        l:onmouseuppage = "{dragger ! MouseUp}"
        l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
        l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
-    {for (var item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
+    {for (item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
    </ul>,
    fun () {spawnWait { dragger ! GetList(self()); receive { case v -> v} }},
    fun (items) {dragger ! SetList(items);}
@@ -55,14 +55,23 @@ fun itemsTable() server {
 }
 
 fun load() server {
-  for (var item <-- itemsTable())
-    orderby (item.i)
-    [item.name]
+  var t = itemsTable();
+  var items =
+    for (item <-- t)
+     orderby (item.i)
+      [(name=item.name)];
+  map ((.name), items)
 }
 
+sig save : ([String]) ~> ()
 fun save(itemsList) server {
-  update (var itemEntry <-- itemsTable())
-    set (i=itemEntry.i, name=(select(itemsList, itemEntry.i)));
+  ignore(mapi(
+    fun (item, i) {
+      update (r <-- itemsTable())
+        where (r.i == i)
+          set (name=item)
+    },
+    itemsList))
 }
 
 fun main() client {

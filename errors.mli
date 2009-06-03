@@ -4,30 +4,14 @@ type synerrspec = {filename : string; linespec : string;
                    message : string; linetext : string;
                    marker : string}
 
+
+exception Runtime_error of string
 exception UndefinedVariable of string
 
-exception NoMainExpr
-exception ManyMainExprs of Syntax.expression list
 exception MultiplyDefinedToplevelNames of 
   ((SourceCode.pos list) Utility.stringmap)
 exception Type_error of (SourceCode.pos * string)
 exception RichSyntaxError of synerrspec
-
-
-val mistyped_application : SourceCode.pos ->
-  (Syntax.expression * Types.datatype) ->
-  (Syntax.expression list * Types.datatype list) ->
-  Types.datatype option ->
-  'a
-               
-val mistype : SourceCode.pos ->
-  Syntax.expression * Types.datatype ->
-  Types.datatype ->
-  'a              
-
-val letrec_nonfunction : SourceCode.pos -> 
-  (Syntax.expression * Types.datatype) ->
-  'a
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string

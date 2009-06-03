@@ -1,5 +1,5 @@
 fun lowercase(s) {
-  for (var c <- s) [toLower(c)]
+  for (c <- s) [toLower(c)]
 }
 
 fun suggest(pre) client {
@@ -10,7 +10,7 @@ fun suggest(pre) client {
 } 
 
 fun format(words) {
- for (var w <- words)
+ for (w <- words)
   <span>
    <b>{stringToXml(w.word)}</b>
    <i>{stringToXml(w.type)}</i>:
@@ -28,10 +28,12 @@ fun completions(pre) server {
 
  if (pre == "") []
  else {
-  take(10, for (var w <-- wordlist)
-            where (w.word ~ /^{pre}.*/)
-            orderby (w.word)
-            [w])
+  query [10] {
+   for (w <-- wordlist)
+    where (w.word =~ /^{pre}.*/)
+    orderby (w.word)
+     [w]
+  }
  }
 }
 

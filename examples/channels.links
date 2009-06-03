@@ -1,6 +1,6 @@
-typename Channel (a) = ((() -> a), ((a) -> ()));
+typename Channel (a) = ((() {}~> a), ((a) {}~> ()));
 
-sig newChannel : () -> Channel (a)
+sig newChannel : () ~> Channel (a)
 fun newChannel() {
   var p =
     spawn {
@@ -37,8 +37,8 @@ fun newChannel() {
   (read, write)
 }
 
-sig gett : (Channel (a)) -> a
-fun gett ((read, _)) { read() }
+sig get : (Channel (a)) ~e~> a
+fun get ((read, _)) { (read : () ~e~> a <- () {}~> (a))() }
 
-sig putt : (Channel (a), a) -> ()
-fun putt((_, write), v) { write(v) }
+sig put : (Channel (a), a) ~e~> ()
+fun put((_, write), v) { (write : (a) ~e~> () <- (a) {}~> ())(v) }

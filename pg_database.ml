@@ -1,13 +1,11 @@
-
 open Postgresql
 open Utility
-open Result
 
 (* Pg_database 
-   Implements the Result.database interface
+   Implements the Value.database interface
    for Postgresql back ends *)
 
-class otherfield (thing : Postgresql.ftype) : Result.otherfield =
+class otherfield (thing : Postgresql.ftype) : Value.otherfield =
 object (self)
   method show = match thing with
     | BOOL -> "bool"
@@ -73,20 +71,20 @@ object (self)
 end
 
 class pg_dbresult (pgresult:Postgresql.result) = object
-  inherit dbresult
+  inherit Value.dbvalue
   val original = pgresult
-  method status : db_status = match original#status with
+  method status : Value.db_status = match original#status with
       Command_ok 
-    | Tuples_ok -> QueryOk
+    | Tuples_ok -> `QueryOk
         
-    | Empty_query     -> QueryError ("String sent to the backend was empty"); 
-    | Command_ok      -> QueryError ("Successful completion of a command returning no data"); 
-    | Tuples_ok       -> QueryError ("The query successfully executed")
-    | Copy_out        -> QueryError ("Copy Out (from server) data transfer started")
-    | Copy_in         -> QueryError ("Copy In (to server) data transfer started")
-    | Bad_response    -> QueryError ("Bad_response : The server's response was not understood")
-    | Nonfatal_error  -> QueryError ("Nonfatal_error : The server's response was not understood")
-    | Fatal_error     -> QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
+    | Empty_query     -> `QueryError ("String sent to the backend was empty"); 
+    | Command_ok      -> `QueryError ("Successful completion of a command returning no data"); 
+    | Tuples_ok       -> `QueryError ("The query successfully executed")
+    | Copy_out        -> `QueryError ("Copy Out (from server) data transfer started")
+    | Copy_in         -> `QueryError ("Copy In (to server) data transfer started")
+    | Bad_response    -> `QueryError ("Bad_response : The server's response was not understood")
+    | Nonfatal_error  -> `QueryError ("Nonfatal_error : The server's response was not understood")
+    | Fatal_error     -> `QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
         
   method nfields : int = original#nfields
   method fname : int -> string = original#fname
@@ -95,27 +93,29 @@ class pg_dbresult (pgresult:Postgresql.result) = object
 end
 
 class pg_database host port dbname user password = object(self)
-  inherit database
+  inherit Value.database
 
   val connection =
     try
-      new connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
+      new connection ~host:host ~port:port ~dbname:dbname
+                     ~user:user ~password:password ()
     with
         Postgresql.Error msg ->
-          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
+          failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method driver_name () = "postgresql"
-  method exec : string -> dbresult = fun query ->
+  method exec : string -> Value.dbvalue = fun query ->
     try
       let raw_result = connection#exec query in
         new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
-          failwith("PostgreSQL returned error: " ^ Postgresql.string_of_error msg)
+          failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method escape_string s = Postgresql.escape_string s
   method make_insert_query (table_name, field_names, vss) =
     "insert into " ^ table_name ^
       "("^String.concat "," field_names ^") "^
-      String.concat " union all " (List.map (fun vs -> "select " ^ String.concat "," vs) vss)
+      String.concat " union all " (List.map (fun vs -> "select " ^ 
+                                               String.concat "," vs) vss)
   (* 
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
@@ -128,7 +128,8 @@ let get_pg_database_by_string args =
   match Utility.split_string args ':' with
     | (name::host::port::user::pass::_) ->
         (new pg_database host port name user pass, 
-         reconstruct_db_string (driver_name, args))
-    | _ -> failwith "Insufficient arguments when establishing postgresql connection"
+         Value.reconstruct_db_string (driver_name, args))
+    | _ ->
+        failwith "Insufficient arguments when establishing postgresql connection"
 
-let _ = register_driver (driver_name, get_pg_database_by_string)
+let _ = Value.register_driver (driver_name, get_pg_database_by_string)

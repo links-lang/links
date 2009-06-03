@@ -2,7 +2,7 @@ INSTALLATION OVERVIEW
 
 To install Links, you'll need:
 
-  * OCaml version 3.08.4 or later
+  * OCaml version 3.10.X
   * A webserver that can run CGI programs.
 
 If you want to use a database, you should have the database as well as
@@ -12,10 +12,10 @@ Links are PostgreSQL, MySQL, and SQLite.
 SYSTEM REQUIREMENTS
 
 If you can run OCaml, you should be able to compile and run Links. It
-is known to build from source with OCaml versions 3.08.4 and greater
-on Linux, Cygwin, and MacOS X.
+is known to build from source with OCaml versions 3.10.X on Linux,
+Cygwin, and MacOS X.
 
-Eventually we will provide a Links binary for Windows. It is currently
+Eventually we will provide a Links binary for Windows. It may be
 possible to use the MinGW version of OCaml, though this requires
 Cygwin to be installed, and linking to external database libraries is
 somewhat involved.
@@ -23,7 +23,7 @@ somewhat involved.
 INSTALLING OCAML
 
 Visit http://caml.inria.fr/ and look for a "Download" link. Download
-the latest stable OCaml package and follow the instructions provided
+the OCaml 3.10 package and follow the instructions provided
 with the OCaml for installing it on your platform.
 
 BUILDING LINKS

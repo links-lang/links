@@ -15,12 +15,26 @@ let prelude_file = Settings.add_string ("prelude", "prelude.links", `System)
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
+"  _     _ __   _ _  __  ___
+ / |   | |  \\ | | |/ / / ._\\
+ | |   | | , \\| |   /  \\  \\
+ | |___| | |\\ \\ | |\\ \\ _\\  \\
+ |_____|_|_| \\__|_| \\_|____/
+Welcome to Links version 0.5 (Murrayfield)", `System)
+
+(* (* Alternative banner designs *)
 "  _     _ __    _ _  __  ___
- / |   | |  \\  | | |/ / / ._\\
+ / |   | |  \\  |   |/ / / ._\\
  | |   | | , \\ | |   /  \\  \\
- | |___| | |\\ \\  | |\\ \\ _\\  \\
- |_____|_|_| \\___|_| \\_|____/
-Welcome to Links version 0.4 (Crostorfyn)", `System)
+ | |___| | |\\ \\  | |\\ \\__\\  \\
+ |_____._._| \\___|_| \\______/",
+"                                         _
+  _     _ __    _ _  _ ___        <>    |_>
+ / |   | |  \\  | | |'// ._\\      //     |  
+ | |   | | , \\ | |  / \\  \\      //      |
+ | |___| | |\\ \\  | | \\_\\  \\  ,-//      _|_
+ |_____._._| \\___|_|\\_____/  \\_/      <_|_>"
+*)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
@@ -35,13 +49,22 @@ struct
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 end
 
-(* Caveat: don't [Open basicsettings] because the above module
+(** Caveat: don't [Open basicsettings] because the above module
    conflicts with the Js module from js.ml*)
 
-(* Installed preprocessor *)
+(** Installed preprocessor *)
 let pp = Settings.add_string("preprocessor", "", `System)
 
+(** Default database settings *)
+let database_driver = Settings.add_string("database_driver", "", `User)
+let database_args = Settings.add_string("database_args", "", `User)
+
 (** Set this to [true] to print the body and environment of a
-    function. When [false], functions are simply printed as "fun" *)
+    function. When [false], functions are simply printed as [fun] *)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
+(** Caching *)
+let cache_directory = 
+  Settings.add_string ("cache_directory", "", `User)
+let use_cache = Settings.add_bool("use_cache", true, `System)
+let make_cache = Settings.add_bool("make_cache", true, `System)

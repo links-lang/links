@@ -1,3 +1,5 @@
+open Notfound
+
 open Regex
 open Utility
 
@@ -7,9 +9,9 @@ module type Links_type =
 sig
   type a 
   val datatype : string
-  val ofLinks : Result.result -> a
-  val ofLinksNGroups : Result.result -> (a * int)
-  val asLinks : a -> Result.result
+  val ofLinks : Value.t -> a
+  val ofLinksNGroups : Value.t -> (a * int)
+  val asLinks : a -> Value.t
 end
 
 (* These conversions (and conversions from OCaml values generally)
@@ -20,16 +22,16 @@ struct
 
   let datatype = "[| Star | Plus | Question |]"
 
-  let rec asLinks : repeat -> Result.result = function
+  let rec asLinks : repeat -> Value.t = function
     | Star      -> `Variant ("Star", unit)
     | Plus      -> `Variant ("Plus", unit)
     | Question  -> `Variant ("Question", unit)
-  and ofLinks : Result.result -> repeat = function
+  and ofLinks : Value.t -> repeat = function
     | `Variant ("Star", _)     -> Star
     | `Variant ("Plus", _)     -> Plus
     | `Variant ("Question", _) -> Question 
-    | r                       -> failwith ("Internal error: attempt to treat " 
-                                           ^ Result.Show_result.show r ^ " as a repeat value")
+    | v                        -> failwith ("Internal error: attempt to treat " 
+                                           ^ Show.show Value.show_t v ^ " as a repeat value")
   and ofLinksNGroups r = ofLinks r, 0
 end
 
@@ -53,10 +55,10 @@ struct
       |]
       )
       "
-  let rec asLinks : regex -> Result.result = function
+  let rec asLinks : regex -> Value.t = function
     | Range (f,t)        -> `Variant ("Range", `Record [("1", `Char f);
                                                         ("2", `Char t)])
-    | Simply s           -> `Variant ("Simply", Result.box_string s)
+    | Simply s           -> `Variant ("Simply", Value.box_string s)
     | Quote s           -> `Variant ("Quote", asLinks s)
     | Any                -> `Variant ("Any", unit)
     | StartAnchor       -> `Variant ("StartAnchor", unit)
@@ -68,14 +70,14 @@ struct
     | Repeat (repeat, r) -> `Variant ("Repeat", `Record [("1", Repeat.asLinks repeat);
                                                          ("2", asLinks r)])
     | Replace(re, tmpl) -> `Variant ("Replace", `Record [("1", asLinks re);
-							  ("2", Result.box_string tmpl)])
+							  ("2", Value.box_string tmpl)])
 
   let ofLinksNGroups res = 
-    let rec ofLinksCount count : Result.result -> (regex*int) = function 
+    let rec ofLinksCount count : Value.t -> (regex*int) = function 
       | `Variant ("Range", `Record ( [("1", `Char f); ("2", `Char t)]
       | [("2", `Char t); ("1", `Char f)]))
 	-> (Range (f,t), count)
-      | `Variant ("Simply", s)     -> Simply (Result.unbox_string s), count
+      | `Variant ("Simply", s)     -> Simply (Value.unbox_string s), count
       | `Variant ("Quote", s)     -> Quote (fst (ofLinksCount 0 s)), count
       | `Variant ("Any", _)        -> Any, count
       | `Variant ("StartAnchor", _)        -> StartAnchor, count
@@ -99,9 +101,9 @@ struct
       | `Variant ("Replace", `Record ([("1", re); ("2", tmpl)]))
 	-> 
 	  let (re, count) = ofLinksCount count re in
-	  Replace(re, Result.unbox_string tmpl), count
-      | r  -> failwith ("Internal error: attempt to treat " 
-			^ Result.Show_result.show r ^ " as a regex value") in
+	  Replace(re, Value.unbox_string tmpl), count
+      | v  -> failwith ("Internal error: attempt to treat " 
+			^ Show.show Value.show_t v ^ " as a regex value") in
     ofLinksCount 0 res
       
       

@@ -1,20 +1,31 @@
 var results_per_page = 10;
 
-fun query(n,c) {
+fun find(n,c) {
  var db = database "dictionary";
  var wordlist = table "wordlist" with (
   word: String,
   meaning: String
  ) from db;
 
- take(results_per_page,
-  drop(results_per_page * (n-1),
-   for (var r <-- wordlist)
-    where (r.word ~ /^{c}.*/)
+# take(results_per_page,
+#  drop(results_per_page * (n-1),
+#   for (r <-- wordlist)
+#    where (r.word =~ /^{c}.*/)
+#    orderby (r.word)
+#    [r]
+#  )
+# )
+
+ var limit = results_per_page;
+ var offset = results_per_page * (n-1);
+
+ query [limit,offset] {
+   for (r <-- wordlist)
+    where (r.word =~ /^{c}.*/)
     orderby (r.word)
-    [r]
-  )
- )
+     [r]
+ }
+
 }
 
 fun showPage(n, c) {
@@ -26,7 +37,7 @@ fun showPage(n, c) {
    <body>
     <h1>{title}</h1>
     <dl>
-     {for (var result <- query(n, c))
+     {for (result <- find(n, c))
      <#><dt><b>{stringToXml(result.word)}</b></dt><dd>{stringToXml(result.meaning)}</dd></#>}
     </dl>
     {if (n <> 1) <a l:href="{showPage(n-1,c)}">previous</a> else <span/>}
@@ -41,7 +52,7 @@ page
   <body>
    <h1>Dictionary browser</h1>
     <ul>
-     {for (var c <- "abcdefghijklmnopqrstuvwxyz")
+     {for (c <- "abcdefghijklmnopqrstuvwxyz")
      <li><a l:href="{showPage(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
     </ul>
   </body>
