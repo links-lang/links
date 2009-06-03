@@ -49,7 +49,7 @@ parenthesized-pattern &::=& '(' < pattern < ',' patterns >> ) \\
 &&                         '(' labeled-patterns < ! pattern > ) \\
 \\
 primary-pattern &::=& 'VARIABLE' \\
-&&                     '-' \\
+&&                     '_' \\
 &&                     special-constant \\
 &&                     '[' < patterns > ']' \\
 &&                     parenthesized-pattern \\
@@ -157,7 +157,9 @@ infix-op &::=&  '`' 'VARIABLE' '`' \\
 \\
 postfix-expression &::=&  primary-expression \\
 &&                        block \\
+&&                        'query' block \\
 &&                        'spawn' block \\
+&&                        'spawnWait' block \\
 &&                        postfix-expression '.' record-label \\
 &&                        postfix-expression '(' < exps > ')' \\
 \\
@@ -220,17 +222,16 @@ iteration-expression &::=& case-expression \\
 generator &::=&  list-generator \\
 &&               table-generator \\
 \\
-list-generator  &::=& 'var' pattern '<-' exp \\
-table-generator &::=& 'var' pattern '<--' exp \\
+list-generator  &::=&  pattern '<-' exp \\
+table-generator &::=& pattern '<--' exp \\
 \\
 escape-expression &::=& iteration-expression \\
 &&                      'escape' 'VARIABLE' 'in' postfix-expression \\
 \\
-handle-with-expression &::=& escape-expression \\
-&&                          'handle' exp 'with' 'VARIABLE' '->' exp \\
-&&                          'formlet' xml-forest 'yields' exp \\
+formlet-expression &::=& escape-expression \\
+&&                       'formlet' xml-contents-list 'yields' exp \\
 \\
-table-expression &::=&  handle-with-expression \\
+table-expression &::=&  formlet-expression \\
 &&                      'table' exp 'with' datatype < 'where' constraints > 'from' exp \\
 \\
 constraints &::=& record-label 'readonly' < ',' constraints > \\
