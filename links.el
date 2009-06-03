@@ -56,7 +56,9 @@
 (defun initialize-font-lock-defaults ()
   (make-local-variable 'font-lock-defaults)
   (setq font-lock-defaults
-        '(links-font-lock-keywords nil nil ((?' . "w") (?_ . "w"))))
+        '(links-font-lock-keywords nil nil ((?' . "w") (?_ . "w")) nil))
+  ; TBD: the last argument is SYNTAX-BEGIN, for determining the
+  ; beginning of a syntactic feature.
   )
 
 (defun links-mode ()
