@@ -1542,7 +1542,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             (* all fields being inserted must be consistent with the needed row *)
             let () = unify ~handle:Gripers.insert_needed
-              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable `Base))) in
+              (no_pos needed, no_pos (`Record (needed_env, Unionfind.fresh `Closed))) in
 
             (* insert returning ... *)
             let () =
