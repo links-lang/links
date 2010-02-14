@@ -200,7 +200,7 @@ and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
     match Unionfind.find row_var with
       | `Closed -> false
       | `Flexible (var', _)
-      | `Rigid (var', _) -> var=var;
+      | `Rigid (var', _) -> var=var'
       | `Recursive (var', row) ->
           not (TypeVarSet.mem var' bound_vars) &&
             is_positive_row (TypeVarSet.add var' bound_vars) var row
