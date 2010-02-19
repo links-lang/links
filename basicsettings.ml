@@ -49,6 +49,10 @@ struct
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 end
 
+module Ferry = struct
+  let output_ir_dot = Settings.add_bool("output_ir_dot", false, `User)
+end
+
 (** Caveat: don't [Open basicsettings] because the above module
    conflicts with the Js module from js.ml*)
 

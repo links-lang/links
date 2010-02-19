@@ -3,8 +3,8 @@ OCAMLMAKEFILE = ../OCamlMakefile
 PATH       := $(PATH):../syntax
 
 OCAMLOPT   = ocamlopt.opt
-OCAMLC     = ocamlc.opt
-OCAMLDEP   = ocamldep.opt
+OCAMLC     = ocamlc
+OCAMLDEP   = ocamldep
 OCAMLFLAGS =-w ae -g
 LIBS       = nums str unix
 

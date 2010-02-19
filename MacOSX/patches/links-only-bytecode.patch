@@ -1,0 +1,52 @@
+Index: deriving-310/lib/Makefile
+===================================================================
+--- deriving-310/lib/Makefile	(revision 1750)
++++ deriving-310/lib/Makefile	(working copy)
+@@ -3,8 +3,8 @@
+ PATH       := $(PATH):../syntax
+ 
+ OCAMLOPT   = ocamlopt.opt
+-OCAMLC     = ocamlc.opt
+-OCAMLDEP   = ocamldep.opt
++OCAMLC     = ocamlc
++OCAMLDEP   = ocamldep
+ OCAMLFLAGS =-w ae -g
+ LIBS       = nums str unix
+ 
+Index: deriving-310/syntax/Makefile
+===================================================================
+--- deriving-310/syntax/Makefile	(revision 1750)
++++ deriving-310/syntax/Makefile	(working copy)
+@@ -1,6 +1,6 @@
+ OCAMLMAKEFILE = ../OCamlMakefile
+ 
+-OCAMLC     = ocamlc.opt
++OCAMLC     = ocamlc
+ OCAMLOPT   = ocamlopt.opt
+ OCAMLDEP   = ocamldep.opt
+ ANNOTATE   = yes
+Index: deriving-310/Makefile
+===================================================================
+--- deriving-310/Makefile	(revision 1750)
++++ deriving-310/Makefile	(working copy)
+@@ -1,6 +1,6 @@
+ built:
+ 	cd syntax && make
+-	cd lib && make ncl bcl
++	cd lib && make bcl
+ 
+ clean:
+ 	cd syntax && make clean
+Index: Makefile
+===================================================================
+--- Makefile	(revision 1750)
++++ Makefile	(working copy)
+@@ -33,7 +33,7 @@
+ AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
+ 
+ OCAMLOPT := ocamlopt.opt
+-OCAMLC := ocamlc.opt
++OCAMLC := ocamlc
+ 
+ # use ocamldep.opt if it exists
+ # (it doesn't exist for all OCaml installations)

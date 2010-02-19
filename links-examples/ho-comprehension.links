@@ -1,0 +1,9 @@
+var t = [(b=true, name="foo"), (b=false, name="bar"), (b=true, name="baz")];
+var z = 45;
+
+for (f <- for (r <- t)
+            if(r.b)
+              [fun (x) {(x+z, r.name)}]
+            else
+              [fun (x) {(x+z-13, r.name)}])
+  [f(42)] 

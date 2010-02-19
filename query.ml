@@ -986,6 +986,8 @@ end
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
 (*     Debug.print ("e: "^Ir.Show_computation.show e); *)
+    if Settings.get_value Basicsettings.Ferry.output_ir_dot then
+      Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
       match used_database v with
         | None -> None

@@ -33,7 +33,7 @@ DERIVING_DIR=deriving-310
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
 OCAMLOPT := ocamlopt.opt
-OCAMLC := ocamlc.opt
+OCAMLC := ocamlc
 
 # use ocamldep.opt if it exists
 # (it doesn't exist for all OCaml installations)
@@ -52,7 +52,7 @@ TRASH=*.tmp *.output *.cache
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
-      getopt.ml getopt.mli PP.ml
+      getopt.ml getopt.mli PP.ml xmlm.ml xmlm.mli
 
 SOURCES = $(OPC)                		\
           notfound.ml				\
@@ -94,11 +94,11 @@ SOURCES = $(OPC)                		\
           desugarFuns.mli desugarFuns.ml                \
           desugarProcesses.mli desugarProcesses.ml      \
           desugarInners.mli desugarInners.ml            \
-          typeSugar.mli typeSugar.ml		\
+          typeSugar.mli typeSugar.ml			\
           frontend.ml                           \
 	  dumpTypes.ml                          \
           compilePatterns.ml                    \
-          jsonparse.mly               	        \
+          jsonparse.mly                         \
           jsonlex.mll           		\
           js.ml                                 \
           json.ml                               \
@@ -110,10 +110,13 @@ SOURCES = $(OPC)                		\
           loader.mli loader.ml                  \
           $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
+	  irtodot.ml				\
           query.ml                              \
           evalir.ml                             \
           webif.mli webif.ml                    \
+	  algebra.ml				\
           links.ml              		\
+
 
 # TODO: get these working again
 #

@@ -1,0 +1,59 @@
+This describes the procedure to get a working Ocaml environment for
+Links development on Mac OS X 10.6 (Snow Leopard). The problem is that
+Links needs an older OCaml version (3.10.2) due to a regression in
+CamlP4. On the other hand, Mac OS X's switch to a 64 bit environment
+in 10.6 causes problems with this older OCaml version. We didn't
+manage to get the native code compiler ocamlopt to work. At the
+moment, only the bytecode compiler ocamlc can be used.
+
+The necessary patches can be found in the patches/ directory.
+
+* Install OCaml 3.10.2 (only ocamlc) in /opt/ocaml-310:
+
+  http://caml.inria.fr/pub/distrib/ocaml-3.10/ocaml-3.10.2.tar.gz	
+
+  $ tar -xvz -f ocaml-3.10.2.tar.gz
+  $ cd ocaml-3.10.2
+  $ patch -p0 < ocaml-3.10.2-m32-configure.patch
+  $ ./configure -prefix /opt/ocaml-310 -cc "gcc -m32"
+  $ make world
+  $ sudo make install
+
+* Set the PATH so that it contains no other OCaml compilers. For example:
+
+  $ export PATH=/opt/ocaml-310/bin/:/usr/bin:/bin:/usr/sbin:/sbin
+
+* Install ocamlfind: http://download.camlcity.org/download/findlib-1.2.5.tar.gz
+
+  $ tar -xvz -f findlib-1.2.5.tar.gz
+  $ cd findlib-1.2.5
+  $ ./configure
+  $ make all
+  $ sudo make install
+
+* install PostgresQL via the Mac OS X Installer:
+  http://www.postgresql.org/download/macosx
+
+  $ export PATH=/Library/PostgreSQL/8.4/bin:$PATH
+
+* Install Mercurial (e.g. via Macports)
+
+* install the ocaml-postgresql bindings. We need an older version because of an API change
+  in OCaml 3.11.
+
+  $ /opt/local/bin/hg clone http://hg.ocaml.info/release/postgresql-ocaml
+  $ cd postgresql-ocaml
+  $ /opt/local/bin/hg update 551e77a8decc
+  $ patch -p1 < ~/dev/postgresql-ocaml-bytecode-only.patch
+  $ CC="gcc -m32" make
+  $ sudo make install
+
+* (Install Xmlm (XML library for OCaml))
+
+* Build Links with PostGreSQL support.
+
+  $ cd branches/sand
+  $ cp Makefile.sample.config Makefile.config
+  $ echo "POSTGRESQL_LIBDIR=/opt/ocaml-310/lib/site-lib/postgresql" >> Makefile.config
+  $ make
+

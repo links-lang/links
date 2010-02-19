@@ -1,0 +1,9 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+fun x(pred) {
+query {
+for (x <-- t) where (pred(x.foo)) [(foo = x.foo)]
+}
+}
+fun y(z) { z > 10 }
+x(y)

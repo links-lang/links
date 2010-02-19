@@ -1,0 +1,3 @@
+fun foo(x) { x + 2 }
+fun apply(f, y) { f(y) }
+apply(foo, 5)

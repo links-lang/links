@@ -889,3 +889,9 @@ let num_of_float f =
           let i = String.index s '.' in
           let s = String.sub s 0 i in
             Num.num_of_string s
+
+let apply f x ~finally y = 
+  let result = try f x with exn -> finally y; raise exn in
+    finally y;
+    result
+

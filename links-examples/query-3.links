@@ -1,0 +1,9 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+
+for (r <-- t)
+if (r.foo > 10)
+[(y=fun (x) { x + 2 } (r.foo))]
+else
+[(y=fun (x) {x + 3 } (r.foo))]
+

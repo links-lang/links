@@ -1,0 +1,24 @@
+diff -r 551e77a8decc Makefile
+--- a/Makefile	Wed Dec 10 13:22:01 2008 -0500
++++ b/Makefile	Tue Jan 26 14:02:26 2010 +0100
+@@ -2,7 +2,7 @@
+ 
+ .PHONY: all
+ all:
+-	@cd lib && $(MAKE) byte-code-library native-code-library
++	@cd lib && $(MAKE) byte-code-library
+ 
+ .PHONY:	examples
+ examples:
+diff -r 551e77a8decc lib/Makefile
+--- a/lib/Makefile	Wed Dec 10 13:22:01 2008 -0500
++++ b/lib/Makefile	Tue Jan 26 14:02:26 2010 +0100
+@@ -11,7 +11,7 @@
+ 
+ all:
+ 
+-install:	libinstall
++install:	libinstall-byte-code
+ uninstall:	libuninstall
+ 
+ clean::	clean-doc

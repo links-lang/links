@@ -1,0 +1,11 @@
+--- configure.old	2010-01-14 13:22:21.000000000 +0100
++++ configure	2010-01-14 13:22:27.000000000 +0100
+@@ -678,6 +678,8 @@
+                     aspp='gcc'; asppflags='-c -DSYS_$(SYSTEM) -Wa,-xexplicit';;
+   amd64,*,*)        aspp='gcc'; asppflags='-c -DSYS_$(SYSTEM)';;
+ esac
++asflags='-arch i386'
++asppflags='-m32 -c'
+ 
+ cc_profile='-pg'
+ case "$arch,$model,$system" in

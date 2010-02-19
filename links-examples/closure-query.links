@@ -1,0 +1,9 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+
+var x = 56;
+fun f(y) { x + y }
+
+query {
+for (r <-- t) [(bar=f(r.foo))]
+}

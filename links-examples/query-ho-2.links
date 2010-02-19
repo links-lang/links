@@ -1,0 +1,10 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+
+for (f <- for (r <-- t)
+              if(r.foo > 10)
+                [fun (x) {x+1}]
+              else
+                [fun (x) {x}])
+    [(foo = f(42))] 
+
