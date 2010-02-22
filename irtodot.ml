@@ -170,10 +170,7 @@ and tree_of_value id value env recnodes =
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
     | `TApp (value, _) ->
-	(* TODO: add tyargs to label *)
-	let label = "tapp" in
-	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
-	  (next_id, Node (id, label, Value, [subtree]))
+	tree_of_value id value env recnodes
     | `XmlNode _ ->
 	(* TODO: handle subtree and label *)
 	let label = "xmlnode\\(subtree)" in
