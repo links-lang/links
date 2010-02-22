@@ -500,10 +500,43 @@ let out_binary_op out op id left_child_id right_child_id =
 module Dag :
 sig
   type dag
-  val mkbinnode : binary_op -> dag ref -> dag ref -> dag
-  val mkunnode : unary_op -> dag ref -> dag
-  val mknullnode : nullary_op -> dag
-  val export_plan : string -> dag -> unit
+
+  (* binary node constructors *)
+  val mk_eqjoin : eqjoin_info -> dag ref -> dag ref -> dag ref
+  val mk_semijoin : eqjoin_info -> dag ref -> dag ref -> dag ref
+  val mk_thetajoin : thetajoin_info -> dag ref -> dag ref -> dag ref
+  val mk_disjunion : dag ref -> dag ref -> dag ref
+  val mk_difference : dag ref -> dag ref -> dag ref
+  val mk_serializerel : serialize_rel_info -> dag ref -> dag ref -> dag ref
+  val mk_cross : dag ref -> dag ref -> dag ref
+
+  (* unary node constructors *)
+  val mk_rownum : rownum_info -> dag ref -> dag ref
+  val mk_rowid : rowid_info -> dag ref -> dag ref
+  val mk_rowrank : rank_info -> dag ref -> dag ref
+  val mk_rank : rank_info -> dag ref -> dag ref
+  val mk_project : project_info -> dag ref -> dag ref
+  val mk_select : select_info -> dag ref -> dag ref
+  val mk_posselect : pos_select_info -> dag ref -> dag ref
+  val mk_distinct : dag ref -> dag ref
+  val mk_attach : attach_info -> dag ref -> dag ref
+  val mk_cast : cast_info -> dag ref -> dag ref
+  val mk_funnumeq : binop_info -> dag ref -> dag ref
+  val mk_funnumgt : binop_info -> dag ref -> dag ref
+  val mk_fun1to1 : fun_1to1_info -> dag ref -> dag ref
+  val mk_funbooland : binop_info -> dag ref -> dag ref
+  val mk_funboolor : binop_info -> dag ref -> dag ref
+  val mk_funboolnot : unop_info -> dag ref -> dag ref
+  val mk_funaggr : fun_aggr_info -> dag ref -> dag ref
+  val mk_funaggrcount : fun_aggr_count_info -> dag ref -> dag ref
+
+  (* nullary node constructors *)
+  val mk_littbl : lit_tbl_info -> dag ref 
+  val mk_emptytbl : schema_infos -> dag ref
+  val mk_tblref : tbl_ref_info -> dag ref
+  val mk_nil : dag ref
+
+  val export_plan : string -> dag ref -> unit
 end =
 struct
   type node_id = int
@@ -521,13 +554,45 @@ struct
       s
 
   let mkbinnode op left_child right_child =
-    BinaryNode (op, (id ()), left_child, right_child)
+    ref (BinaryNode (op, (id ()), left_child, right_child))
 
   let mkunnode op child =
-    UnaryNode (op, (id ()), child)
+    ref (UnaryNode (op, (id ()), child))
 
   let mknullnode op =
-    NullaryNode (op, (id ()))
+    ref (NullaryNode (op, (id ())))
+
+  let mk_eqjoin info = mkbinnode (EqJoin info)
+  let mk_semijoin info = mkbinnode (SemiJoin info)
+  let mk_thetajoin info = mkbinnode (ThetaJoin info)
+  let mk_disjunion = mkbinnode DisjunctUnion
+  let mk_difference = mkbinnode Difference
+  let mk_serializerel info = mkbinnode (SerializeRel info)
+  let mk_cross = mkbinnode (Cross)
+
+  let mk_rownum info = mkunnode (RowNum info)
+  let mk_rowid info = mkunnode (RowID info)
+  let mk_rowrank info = mkunnode (RowRank info)
+  let mk_rank info = mkunnode (Rank info)
+  let mk_project info = mkunnode (Project info)
+  let mk_select info = mkunnode (Select info)
+  let mk_posselect info = mkunnode (PosSelect info)
+  let mk_distinct = mkunnode (Distinct)
+  let mk_attach info = mkunnode (Attach info)
+  let mk_cast info = mkunnode (Cast info)
+  let mk_funnumeq info = mkunnode (FunNumEq info)
+  let mk_funnumgt info = mkunnode (FunNumGt info)
+  let mk_fun1to1 info = mkunnode (Fun1to1 info)
+  let mk_funbooland info = mkunnode (FunBoolAnd info)
+  let mk_funboolor info = mkunnode (FunBoolOr info)
+  let mk_funboolnot info = mkunnode (FunBoolNot info)
+  let mk_funaggr info = mkunnode (FunAggr info)
+  let mk_funaggrcount info = mkunnode (FunAggrCount info)
+
+  let mk_littbl info = mknullnode (LitTbl info)
+  let mk_emptytbl info = mknullnode (EmptyTbl info)
+  let mk_tblref info = mknullnode (TblRef info)
+  let mk_nil = mknullnode Nil
 
   let id_of_node = function
     | NullaryNode (_, id) -> id
@@ -580,20 +645,16 @@ struct
       ignore (out_dag arg);
       out `El_end;
     in
-      apply wrap (out, ref dag, IntSet.empty) ~finally:close_out oc
+      apply wrap (out, dag, IntSet.empty) ~finally:close_out oc
 end
 
 let test () =
-  let c1 = (ref (Dag.mknullnode (TblRef ("t1", [("item0", "foo", NatType); ("item1", "bar", NatType)], [["foo"; "bar"]])))) in
+  let c1 = Dag.mk_tblref ("t1", [("item0", "foo", NatType); ("item1", "bar", NatType)], [["foo"; "bar"]]) in
   let t =
-    Dag.mkbinnode 
-      (SerializeRel ("item0", "item0", ["item0"; "item1"]))
-      (ref (Dag.mkunnode
-	 Distinct
-	 c1))
-      (ref (Dag.mkunnode
-	 (Attach ((ResultAttrName "foo"), (Int 5)))
-	 c1))
+    Dag.mk_serializerel
+      ("item0", "item0", ["item0"; "item1"])
+      (Dag.mk_distinct c1)
+      (Dag.mk_attach ((ResultAttrName "foo"), (Int 5)) c1)
   in
     Dag.export_plan "plan.xml" t
       
