@@ -1,0 +1,14 @@
+*.annot
+*.cmi
+*.cmo
+jsonlex.ml
+jsonparse.ml
+jsonparse.mli
+*.output
+links
+parser.ml
+parser.mli
+lexer.ml
+*.swp
+\#*
+*.cma
