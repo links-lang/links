@@ -536,6 +536,7 @@ sig
   val mk_tblref : tbl_ref_info -> dag ref
   val mk_nil : dag ref
 
+  val prune_empty : dag -> dag
   val export_plan : string -> dag ref -> unit
 end =
 struct
@@ -634,6 +635,72 @@ struct
 	  in
 	    out_binary_op out op id lchild_id rchild_id;
 	    visited
+
+  let is_emptytbl dag =
+    match dag with
+      | NullaryNode ((EmptyTbl _), _id) -> true
+      | _ -> false
+
+  let emptytbl_schema dag =
+    match dag with
+      | NullaryNode ((EmptyTbl schema), id) -> 
+	  Some (schema, id)
+      | _ ->
+	  None
+	  
+  let rec prune_empty = function
+    | BinaryNode (binop, _id, ch1, ch2) as n ->
+	if not (is_emptytbl !ch1) then
+	  ch1 := prune_empty !ch1;
+	if not (is_emptytbl !ch2) then
+	  ch2 := prune_empty !ch2;
+	(match binop with
+	  | EqJoin _
+	  | SemiJoin _
+	  | ThetaJoin _
+	  | Cross ->
+	      (match (emptytbl_schema !ch1), (emptytbl_schema !ch2) with
+		| (Some (schema1, id1)), (Some (_schema2, _id2)) ->
+		    NullaryNode ((EmptyTbl schema1, id1))
+		| (Some (schema1, id1)), None ->
+		    NullaryNode ((EmptyTbl schema1, id1))
+		| None, (Some (schema2, id2)) ->
+		    NullaryNode ((EmptyTbl schema2, id2))
+		| None, None ->
+		    n)
+	  | DisjunctUnion ->
+	      (match (emptytbl_schema !ch1), (emptytbl_schema !ch2) with
+		 | (Some (schema1, id1)), (Some (_schema2, _id2)) ->
+		     NullaryNode ((EmptyTbl schema1, id1))
+		 | (Some (_schema1, _id1)), None ->
+		     !ch1
+		 | None, (Some (_schema2, _id2)) ->
+		     !ch2
+		 | None, None ->
+		     n)
+	  | Difference ->
+	      (match (emptytbl_schema !ch1), (emptytbl_schema !ch2) with
+		 | (Some (schema1, id1)), (Some (_schema2, _id2)) ->
+		     NullaryNode ((EmptyTbl schema1, id1))
+		 | (Some (schema1, id1)), None ->
+		     NullaryNode ((EmptyTbl schema1, id1))
+		 | None, (Some (_schema2, _id2)) ->
+		     !ch1
+		 | None, None ->
+		     n)
+
+	  | SerializeRel _ -> n)
+    | UnaryNode (_unop, _id, ch) as n ->
+	if not (is_emptytbl !ch) then
+	  ch := prune_empty !ch;
+	(match (emptytbl_schema !ch) with
+	   | Some (schema, id) ->
+	       NullaryNode ((EmptyTbl schema), id)
+	   | None ->
+	       n)
+    | NullaryNode (_nullop, _id) as n ->
+	n
+	
 	      
   let export_plan fname dag =
     let oc = open_out fname in
@@ -649,12 +716,15 @@ struct
 end
 
 let test () =
-  let c1 = Dag.mk_tblref ("t1", [("item0", "foo", NatType); ("item1", "bar", NatType)], [["foo"; "bar"]]) in
-  let t =
-    Dag.mk_serializerel
-      ("item0", "item0", ["item0"; "item1"])
-      (Dag.mk_distinct c1)
-      (Dag.mk_attach ((ResultAttrName "foo"), (Int 5)) c1)
-  in
-    Dag.export_plan "plan.xml" t
+
+    let et = Dag.mk_emptytbl [("iter", IntType); ("pos", IntType); ("item0", IntType)] in
+    let r = Dag.mk_tblref ("t1", [("item0", "foo", IntType)], [["item0"]]) in
+      let t =
+	Dag.mk_serializerel
+	  ("iter", "pos", ["item0"])
+	  (Dag.mk_disjunion r et)
+	  (Dag.mk_distinct et)
+      in
+      (*let t = ref (Dag.prune_empty !t) in *)
+	Dag.export_plan "plan.xml" t;
       
