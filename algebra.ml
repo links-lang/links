@@ -1,18 +1,7 @@
 open Utility
 
-type base_type = IntType | StrType | BoolType | DecType | DblType | NatType
-
-(* is it necessary to distinguish between float and double?
-   should we use 32/64 bit int types, i.e. Int32/Int64? *)
-type base_value = 
-  | Int of int
-  | Str of string
-  | Bool of bool
-  | Double of float
-  | Dec of float
-  | Nat of int
-
-(*type aggr = Avg | Max | Min | Sum | Count | Segty1 | All | Prod | Distinct*)
+(*FIXME: should char constants be allowed *)
+type base_type = IntType | StrType | BoolType | CharType | FloatType
 
 (* aggregate functions *)
 type aggr = Avg | Max | Min | Sum
@@ -50,8 +39,8 @@ type select_info = selection_attr_name
 type pos_select_info = int * sort_infos * partitioning_attr_name option
 type eqjoin_info = left_attr_name * right_attr_name
 type thetajoin_info = (join_comparison * (left_attr_name * right_attr_name)) list
-type lit_tbl_info = base_value list list * schema_infos
-type attach_info = result_attr_name * base_value
+type lit_tbl_info = Constant.constant list list * schema_infos
+type attach_info = result_attr_name * Constant.constant
 type cast_info = result_attr_name * attr_name * base_type
 type binop_info = result_attr_name * (left_attr_name * right_attr_name)
 type unop_info = result_attr_name * attr_name
@@ -118,26 +107,16 @@ let string_of_base_type = function
   | IntType -> "int"
   | StrType -> "str"
   | BoolType -> "bool"
-  | DecType -> "dec"
-  | DblType -> "dbl"
-  | NatType -> "nat"
+  | CharType -> "char"
+  | FloatType -> "dbl"
 
-let string_of_base_value = function
-  | Int i -> string_of_int i
-  | Str s -> s
-  | Bool b -> string_of_bool b
-  | Double d -> string_of_float d
-  | Dec d -> string_of_float d
-  | Nat n -> string_of_int n
-
-let typestring_of_base_value = function
-  | Int _ -> "int"
-  | Str _ -> "str"
-  | Bool _ -> "bool"
-  | Double _ -> "dbl"
-  | Dec _ -> "dec"
-  | Nat _ -> "nat"
-
+let typestring_of_constant = function
+  | `Float _ -> "dbl"
+  | `Int _ -> "int"
+  | `String _ -> "string"
+  | `Bool _ -> "bool"
+  | `Char _ -> "char"
+    
 let string_of_func = function
   | Add -> "add"
   | Subtract -> "subtract"
@@ -289,8 +268,8 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 		 out_el_childs
 		   out 
 		   "value" 
-		   [("type", typestring_of_base_value value)]
-		   (fun () -> out (`Data (string_of_base_value value))))
+		   [("type", typestring_of_constant value)]
+		   (fun () -> out (`Data (typestring_of_constant value))))
 	      values
 	  in
 	    out_col_childs out [("name", fst info)] c)
@@ -303,7 +282,7 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 let out_attach_info out (ResultAttrName result_attr, value) =
   out (`El_start (tag "content"));
   let xml_attrs = [("name", result_attr); ("new", "true")] in
-  let f () = out (`Data (string_of_base_value value)) in
+  let f () = out (`Data (Constant.string_of_constant value)) in
     out_col_childs out xml_attrs f;
     out `El_end
       
