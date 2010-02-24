@@ -1,6 +1,6 @@
 open Utility
 
-type base_type = IntType | StrType | BoolType | DblType 
+type base_type = IntType | StrType | BoolType | DecType | DblType | NatType
 
 (* is it necessary to distinguish between float and double?
    should we use 32/64 bit int types, i.e. Int32/Int64? *)
@@ -9,6 +9,8 @@ type base_value =
   | Str of string
   | Bool of bool
   | Double of float
+  | Dec of float
+  | Nat of int
 
 (*type aggr = Avg | Max | Min | Sum | Count | Segty1 | All | Prod | Distinct*)
 
@@ -116,19 +118,25 @@ let string_of_base_type = function
   | IntType -> "int"
   | StrType -> "str"
   | BoolType -> "bool"
+  | DecType -> "dec"
   | DblType -> "dbl"
+  | NatType -> "nat"
 
 let string_of_base_value = function
   | Int i -> string_of_int i
   | Str s -> s
   | Bool b -> string_of_bool b
   | Double d -> string_of_float d
+  | Dec d -> string_of_float d
+  | Nat n -> string_of_int n
 
 let typestring_of_base_value = function
   | Int _ -> "int"
   | Str _ -> "str"
   | Bool _ -> "bool"
   | Double _ -> "dbl"
+  | Dec _ -> "dec"
+  | Nat _ -> "nat"
 
 let string_of_func = function
   | Add -> "add"
@@ -710,7 +718,7 @@ end
 let test () =
 
     let et = Dag.mk_emptytbl [("iter", IntType); ("pos", IntType); ("item0", IntType)] in
-    let r = Dag.mk_tblref ("t1", [("iter", "bar", IntType); ("pos", "baz", IntType); ("item0", "foo", IntType)], [["item0"]]) in
+    let r = Dag.mk_tblref ("t1", [("item0", "foo", IntType)], [["item0"]]) in
       let t =
 	Dag.mk_serializerel
 	  ("iter", "pos", ["item0"])
