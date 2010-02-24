@@ -96,7 +96,9 @@ type node =
   | NullaryNode of nullary_op
 
 let string_of_attr_name = function
+  | Iter 0 -> "iter"
   | Iter i -> "iter" ^ (string_of_int i)
+  | Pos 0 -> "pos"
   | Pos i -> "pos" ^ (string_of_int i)
   | Item i -> "item" ^ (string_of_int i)
 

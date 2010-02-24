@@ -115,6 +115,7 @@ SOURCES = $(OPC)                		\
           evalir.ml                             \
           webif.mli webif.ml                    \
 	  algebra.ml				\
+	  compileQuery.ml			\
           links.ml              		\
 
 
