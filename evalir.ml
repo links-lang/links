@@ -344,6 +344,7 @@ module Eval = struct
             | Some (limit, offset) ->
                 Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
+	  CompileQuery.compile env e;
           match Query.compile env (range, e) with
             | None -> computation env cont e
             | Some (db, q, t) ->
@@ -355,7 +356,7 @@ module Eval = struct
                          match t with
                            | `Present, t -> (name, t)::fields
                            | `Absent, _ -> assert false
-                           | `Var _, t -> assert false)
+                           | `Var _, xt -> assert false)
                       fieldMap
                       []
                 in

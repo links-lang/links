@@ -43,6 +43,14 @@ and xml = xmlitem list
 
 type table = (database * string) * string * Types.row
   deriving (Show)
+
+type primitive_value_basis =  [
+| `Bool of bool
+| `Char of char
+| `Float of float
+| `Int of Num.num
+| `XML of xmlitem 
+| `NativeString of string ]
     
 type primitive_value = [
 | `Bool of bool
