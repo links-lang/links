@@ -283,7 +283,7 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 		   out 
 		   "value" 
 		   [("type", typestring_of_constant value)]
-		   (fun () -> out (`Data (typestring_of_constant value))))
+		   (fun () -> out (`Data (Constant.string_of_constant value))))
 	      values
 	  in
 	    out_col_childs out [("name", (string_of_attr_name (fst info)))] c)
@@ -296,10 +296,13 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 let out_attach_info out (result_attr, value) =
   out (`El_start (tag "content"));
   let xml_attrs = [("name", (string_of_attr_name result_attr)); ("new", "true")] in
-  let f () = out (`Data (Constant.string_of_constant value)) in
+  let f () = 
+    out (`El_start (tag_attr "value" [("type", typestring_of_constant value)]));
+    out (`Data (Constant.string_of_constant value));
+    out `El_end
+  in
     out_col_childs out xml_attrs f;
     out `El_end
-      
 
 let out_cast_info out (result_attr, name, base_type) =
   out (`El_start (tag "content"));
@@ -398,7 +401,7 @@ let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
 let out_nullary_op out op id =
   match op with
     | LitTbl lit_tbl_info ->
-	let xml_attrs = [id_a id; kind_a "node"] in
+	let xml_attrs = [id_a id; kind_a "table"] in
 	  out (`El_start (tag_attr "node" xml_attrs));
 	  out_lit_tbl_info out lit_tbl_info;
 	  out `El_end
