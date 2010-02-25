@@ -671,9 +671,9 @@ struct
 		 | (Some (schema1, id1)), (Some (_schema2, _id2)) ->
 		     NullaryNode ((EmptyTbl schema1, id1))
 		 | (Some (_schema1, _id1)), None ->
-		     !ch1
-		 | None, (Some (_schema2, _id2)) ->
 		     !ch2
+		 | None, (Some (_schema2, _id2)) ->
+		     !ch1
 		 | None, None ->
 		     n)
 	  | Difference ->
@@ -699,18 +699,18 @@ struct
     | NullaryNode (_nullop, _id) as n ->
 	n
 	
-	      
   let export_plan fname dag =
     let oc = open_out fname in
     let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
     let out = Xmlm.output o in
+    let dag = prune_empty !dag in
     let wrap arg =
       out (`Dtd None);
       out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
       ignore (out_dag arg);
       out `El_end;
     in
-      apply wrap (out, dag, IntSet.empty) ~finally:close_out oc
+      apply wrap (out, (ref dag), IntSet.empty) ~finally:close_out oc
 end
 
 let test () =
