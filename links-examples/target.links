@@ -1,3 +1,4 @@
+var l = [(foo = 1, bar = 34.3), (foo = 2, bar=45.6)];
 query {
-    [(foo = 5)]
+l
 }
