@@ -116,7 +116,7 @@ and compile_cons (env, aenv) loop e1 e2 =
     A.Dag.mk_project
       ((proj_single iter) :: ((pos, pos') :: proj_list (Cs.items_of_offsets (Cs.leafs (fused_cs)))))
       (ref (A.Dag.mk_rank
-	      (pos, [(ord, A.Ascending); (pos, A.Ascending)])
+	      (pos', [(ord, A.Ascending); (pos, A.Ascending)])
 	      (ref (A.Dag.mk_disjunion
 		      (ref (A.Dag.mk_attach
 			      (ord, `Int (Num.Int 1))
@@ -150,7 +150,7 @@ and compile_constant loop (const : Constant.constant) =
     (A.Dag.mk_attach
        (A.Item 1, const)
        (ref (A.Dag.mk_attach
-	       (A.Pos 1, `Int (Num.Int 1))
+	       (A.Pos 0, `Int (Num.Int 1))
 	       loop)))
   in
     (q, cs, dummy, dummy)
@@ -222,7 +222,7 @@ let compile env e =
   let dag = 
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, Cs.items_of_offsets (Cs.leafs cs))
-      q
       (ref (A.Dag.mk_nil))
+      q
   in
     A.Dag.export_plan "plan.xml" (ref dag)
