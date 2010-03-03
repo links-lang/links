@@ -87,26 +87,26 @@ and extend_record (env, aenv) loop ext_fields =
 	let new_names_q2 = Cs.items_of_offsets (incr leafs2 (Cs.cardinality cs1)) in
 	let old_names_q2 = Cs.items_of_offsets leafs2 in
 	let names_q1 = Cs.items_of_offsets (Cs.leafs cs1) in
+	let iter = A.Iter 0 in
+	let iter' = A.Iter 1 in
 	let q =
 	  A.Dag.mk_project
 	    (proj_list ([A.Iter 0; A.Pos 0] @ new_names_q2 @ names_q1))
 	    (ref (A.Dag.mk_eqjoin
-		    (A.Iter 0, A.Iter 1)
+		    (iter, iter')
 		    (ref q1)
-		    (ref (A.Dag.mk_project
-			    [(A.Iter 1, A.Iter 0)]
-			    (ref (A.Dag.mk_project
-				    (proj_list_map new_names_q2 old_names_q2)
-				    (ref q2)))))))
+		    (ref ((A.Dag.mk_project
+			     ((iter', iter) :: (proj_list_map new_names_q2 old_names_q2))
+			     (ref q2))))))
 	in
 	let cs = Cs.append cs1 cs2 in
 	  (q, cs, dummy, dummy)
     | [] ->
 	failwith "CompileQuery.extend_record: empty ext_fields"
 	  
-and compile_cons (env, aenv) loop e1 e2 =
-  let (q1, cs1, _, _) = compile_value_node (env, aenv) loop e1 in
-  let (q2, cs2, _, _) = compile_value_node (env, aenv) loop e2 in
+and compile_cons (env, aenv) loop hd_e tl_e =
+  let (q1, cs1, _, _) = compile_value_node (env, aenv) loop hd_e in
+  let (q2, cs2, _, _) = compile_value_node (env, aenv) loop tl_e in
   let fused_cs = Cs.fuse cs1 cs2 in
   let ord = A.Pos 2 in
   let pos = A.Pos 0 in
