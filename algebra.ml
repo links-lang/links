@@ -192,6 +192,7 @@ let out_sort_infos out l =
 	    ("name", (string_of_attr_name sort_attr_name));
 	    ("direction", string_of_sort_direction dir);
 	    ("position", string_of_int i);
+	    ("function", "sort");
 	    ("new", "false")]
 	  in
 	    out_col out xml_attributes;
@@ -286,7 +287,7 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 		   (fun () -> out (`Data (Constant.string_of_constant value))))
 	      values
 	  in
-	    out_col_childs out [("name", (string_of_attr_name (fst info)))] c)
+	    out_col_childs out [("name", (string_of_attr_name (fst info))); ("new", "true")] c)
        values_per_col
        schema_infos
    with Invalid_argument _ -> 
@@ -703,14 +704,14 @@ struct
     let oc = open_out fname in
     let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
     let out = Xmlm.output o in
-    let dag = prune_empty !dag in
+    let dag = ref (prune_empty !dag) in
     let wrap arg =
       out (`Dtd None);
       out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
       ignore (out_dag arg);
       out `El_end;
     in
-      apply wrap (out, (ref dag), IntSet.empty) ~finally:close_out oc
+      apply wrap (out, dag, IntSet.empty) ~finally:close_out oc
 end
 
 let test () =
