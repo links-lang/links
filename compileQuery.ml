@@ -41,14 +41,21 @@ module Cs = struct
       cs1
     else
       cs2
-	
+
+  let is_operand cs =
+    if List.length cs <> 1 then
+      false
+    else
+      match (List.hd cs) with
+	| Offset _ -> true
+	| _ -> false
 end
 
 let incr l i = List.map (fun j -> j + i) l
 
-let proj_single col = (col, col)
+let proj1 col = (col, col)
 
-let proj_list = List.map proj_single
+let proj_list = List.map proj1
 
 let proj_list_map new_cols old_cols = 
   List.map2 (fun a b -> (a, b)) new_cols old_cols
@@ -70,8 +77,43 @@ let constant_of_primitive_value (value : Value.primitive_value_basis) : Constant
     | `Bool b -> `Bool b
     | `Char c -> `Char c
 
+let wrap_1to1 f res c c' algexpr =
+  A.Dag.mk_fun1to1
+    (f, res, [c; c'])
+    (ref algexpr)
+
+let wrap_eq res c c' algexpr =
+  A.Dag.mk_funnumeq
+    (res, (c, c'))
+    (ref algexpr)
+
+let incr_col = function
+  | A.Iter i -> A.Iter (i + 1)
+  | A.Pos i -> A.Pos (i + 1)
+  | A.Item i -> A.Item (i + 1)
+
+let wrap_ne res c c' algexpr =
+  let res' = incr_col res in
+    A.Dag.mk_funboolnot
+      (res, res')
+      (ref (A.Dag.mk_funnumeq
+	      (res', (c, c'))
+	      (ref algexpr)))
+
+let wrap_gt res c c' algexpr =
+  A.Dag.mk_funnumgt
+    (res, (c, c'))
+    (ref algexpr)
+
+let wrap_not res op_attr algexpr =
+  A.Dag.mk_funboolnot
+    (res, op_attr)
+    (ref algexpr)
+
+(* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.IntType); (A.Pos 0, A.IntType)])
 
+(* record values and extend *)
 let rec singleton_record (env, aenv) loop (name, e) =
   let (q, cs, _, _) = compile_value_node (env, aenv) loop e in
     (q, [Cs.Mapping (name, cs)], dummy, dummy)
@@ -129,7 +171,8 @@ and compile_record_value (env, aenv) loop r =
 	    merge_records f (compile_record_value (env, aenv) loop tl)
       | [] ->
 	  failwith "CompileQuery.compile_record_value: empty record"
-	    
+
+(* list values and cons *)
 and compile_cons (env, aenv) loop hd_e tl_e =
   let hd = compile_value_node (env, aenv) loop hd_e in
   let tl = compile_value_node (env, aenv) loop tl_e in
@@ -154,7 +197,7 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   let iter = A.Iter 0 in
   let q =
     A.Dag.mk_project
-      ((proj_single iter) :: ((pos, pos') :: proj_list (Cs.items_of_offsets (Cs.leafs (fused_cs)))))
+      ((proj1 iter) :: ((pos, pos') :: proj_list (Cs.items_of_offsets (Cs.leafs (fused_cs)))))
       (ref (A.Dag.mk_rank
 	      (pos', [(ord, A.Ascending); (pos, A.Ascending)])
 	      (ref (A.Dag.mk_disjunion
@@ -167,11 +210,70 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   in
     (q, fused_cs, dummy, dummy)
 
-and op_dispatch (env, aenv) loop op args =
+
+and compile_binop (env, aenv) loop wrapper operands =
+  assert ((List.length operands) = 2);
+  let (op1_q, op1_cs, _, _) = compile_value_node (env, aenv) loop (List.hd operands) in
+  let (op2_q, op2_cs, _, _) = compile_value_node (env, aenv) loop (List.nth operands 1) in
+    assert (Cs.is_operand op1_cs);
+    assert (Cs.is_operand op2_cs);
+    let iter = A.Iter 0 in
+    let iter' = A.Iter 1 in
+    let pos = A.Pos 0 in
+    let c = A.Item 1 in
+    let c' = A.Item 2 in
+    let res = A.Item 3 in
+    let q = 
+      A.Dag.mk_project
+	[(proj1 iter); (proj1 pos); (c, res)]
+	(ref (wrapper 
+		res c c'
+		(A.Dag.mk_eqjoin
+		   (iter, iter')
+		   (ref op1_q)
+		   (ref (A.Dag.mk_project
+			   [(iter', iter); (c', c)]
+			   (ref op2_q))))))
+    in
+      (q, op1_cs, dummy, dummy)
+
+and compile_unop (env, aenv) loop wrapper operands =
+  assert ((List.length operands) = 1);
+  let (op_q, op_cs, _, _) = compile_value_node (env, aenv) loop (List.hd operands) in
+    assert (Cs.is_operand op_cs);
+    let c = A.Item 1 in
+    let res = A.Item 2 in
+    let pos = A.Pos 0 in
+    let iter = A.Iter 0 in
+    let q = 
+      A.Dag.mk_project
+	[proj1 iter; proj1 pos; (c, res)]
+	(ref (wrapper
+		res c
+		op_q))
+    in
+      (q, op_cs, dummy, dummy)
+
+and function_dispatch (env, aenv) loop op args =
   match op with
     | `PrimitiveFunction "Cons" ->
 	assert ((List.length args) = 2);
 	compile_cons (env, aenv) loop (List.nth args 0) (List.nth args 1)
+    | `PrimitiveFunction "+" 
+    | `PrimitiveFunction "+." -> compile_binop (env, aenv) loop (wrap_1to1 A.Add) args
+    | `PrimitiveFunction "-" 
+    | `PrimitiveFunction "-." -> compile_binop (env, aenv) loop (wrap_1to1 A.Subtract) args
+    | `PrimitiveFunction "*"
+    | `PrimitiveFunction "*." -> compile_binop (env, aenv) loop (wrap_1to1 A.Multiply) args
+    | `PrimitiveFunction "/" 
+    | `PrimitiveFunction "/." -> compile_binop (env, aenv) loop (wrap_1to1 A.Divide) args
+    | `PrimitiveFunction "==" -> compile_binop (env, aenv) loop wrap_eq args
+    | `PrimitiveFunction ">" -> compile_binop (env, aenv) loop wrap_gt args
+    | `PrimitiveFunction "<" -> compile_binop (env, aenv) loop wrap_gt (List.rev args)
+    | `PrimitiveFunction "<>" -> compile_binop (env, aenv) loop wrap_ne args
+    | `PrimitiveFunction "not" -> compile_unop (env, aenv) loop wrap_not args
+    | `PrimitiveFunction ">="
+    | `PrimitiveFunction "<="
     | _ ->
 	failwith "CompileQuery.op_dispatch: not implemented"
 	  (*
@@ -195,6 +297,7 @@ and compile_constant loop (const : Constant.constant) =
   in
     (q, cs, dummy, dummy)
 
+(* values from the environment (value.ml) *)
 and compile_value (env, aenv) loop v =
   match v with
     | #Value.primitive_value_basis as p ->
@@ -213,6 +316,7 @@ and compile_value (env, aenv) loop v =
     | _ ->
 	failwith "CompileQuery.compile_value: not implemented"
 
+(* value nodes from the IR (ir.ml) *)
 and compile_value_node (env, aenv) loop e =
   match e with
     | `Constant c->
@@ -232,7 +336,7 @@ and compile_value_node (env, aenv) loop e =
 		   | Some v -> v
 		   | None -> failwith "CompileQuery.compile_value_node: var not found"
 	       in
-		 op_dispatch (env, aenv) loop value args
+		 function_dispatch (env, aenv) loop value args
 	   | _ ->
 	       failwith "CompileQuery.compile_value_node: `ApplyPure no `TApp value")
     | `TApp (v, _) ->
