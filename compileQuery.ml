@@ -34,7 +34,7 @@ module Cs = struct
   let append cs1 cs2 =
     cs1 @ (shift cs2 (cardinality cs1))
 
-  let items_of_offsets = List.map (fun i -> A.Item i)
+
 
   let fuse cs1 cs2 =
     if (List.length cs1) > (List.length cs2) then
@@ -49,9 +49,24 @@ module Cs = struct
       match (List.hd cs) with
 	| Offset _ -> true
 	| _ -> false
+
+  let record_field cs field =
+    let rec loop = function
+      | (Offset _) :: tl ->
+	   loop tl
+      | (Mapping (key, cs)) :: tl ->
+	  if key = field then
+	    cs
+	  else
+	    loop tl
+      | [] ->
+	  failwith "Cs.get_mapping: unknown field name"
+    in
+      loop cs
 end
 
 let incr l i = List.map (fun j -> j + i) l
+let items_of_offsets = List.map (fun i -> A.Item i)
 
 let proj1 col = (col, col)
 
@@ -135,14 +150,14 @@ and extend_record (env, aenv) loop ext_fields r =
 
 and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
   let r2_leafs = Cs.leafs r2_cs in
-  let new_names_r2 = Cs.items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
-  let old_names_r2 = Cs.items_of_offsets r2_leafs in
-  let names_r1 = Cs.items_of_offsets (Cs.leafs r1_cs) in
+  let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
+  let old_names_r2 = items_of_offsets r2_leafs in
+  let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
   let iter = A.Iter 0 in
   let iter' = A.Iter 1 in
   let q =
     A.Dag.mk_project
-      (proj_list ([A.Iter 0; A.Pos 0] @ new_names_r2 @ names_r1))
+      (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
       (ref (A.Dag.mk_eqjoin
 	      (iter, iter')
 	      (ref r1_q)
@@ -153,6 +168,21 @@ and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
   let cs = Cs.append r1_cs r2_cs in
     (q, cs, dummy, dummy)
 
+and project_record (env, aenv) loop field r =
+  let (q_r, cs_r, _, _) = compile_value_node (env, aenv) loop r in
+  let field_cs' = Cs.record_field cs_r field in
+  let c_old = Cs.leafs field_cs' in
+  let offset = List.hd c_old in
+  let c_new = incr c_old (-offset + 1) in
+  let field_cs = Cs.shift field_cs' (-offset + 1) in
+  let iter = A.Iter 0 in
+  let pos = A.Pos 0 in
+  let q =
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
+      (ref q_r)
+  in
+    (q, field_cs, dummy, dummy)
 
 and singleton_record_value (env, aenv) loop (name, v) =
   let (q, cs, _, _) = compile_value (env, aenv) loop v in
@@ -197,7 +227,7 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   let iter = A.Iter 0 in
   let q =
     A.Dag.mk_project
-      ((proj1 iter) :: ((pos, pos') :: proj_list (Cs.items_of_offsets (Cs.leafs (fused_cs)))))
+      ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
       (ref (A.Dag.mk_rank
 	      (pos', [(ord, A.Ascending); (pos, A.Ascending)])
 	      (ref (A.Dag.mk_disjunion
@@ -328,6 +358,8 @@ and compile_value_node (env, aenv) loop e =
 	   | Some value ->
 	       let record_value = compile_value_node (env, aenv) loop value in
 		 extend_record (env, aenv) loop (StringMap.to_alist ext_fields) (Some record_value))
+    | `Project (field_name, r) ->
+	project_record (env, aenv) loop field_name r
     | `ApplyPure (f, args) ->
 	(match f with
 	   | `TApp (`Variable var, _) ->
@@ -367,7 +399,7 @@ let compile env e =
   let q = ref q in
   let dag = 
     A.Dag.mk_serializerel 
-      (A.Iter 0, A.Pos 0, Cs.items_of_offsets (Cs.leafs cs))
+      (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
       (ref (A.Dag.mk_nil))
       q
   in
