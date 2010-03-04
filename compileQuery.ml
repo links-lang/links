@@ -1,8 +1,5 @@
 open Utility
 
-module A = Algebra
-
-let dummy = ()
 
 module Cs = struct
 
@@ -64,6 +61,14 @@ module Cs = struct
     in
       loop cs
 end
+
+module A = Algebra
+module AEnv = Env.Int
+
+type tblinfo_node = A.Dag.dag ref * Cs.cs * unit * unit
+type aenv = tblinfo_node AEnv.t
+
+let dummy = ()
 
 let incr l i = List.map (fun j -> j + i) l
 let items_of_offsets = List.map (fun i -> A.Item i)
@@ -383,19 +388,34 @@ and compile_value_node (env, aenv) loop e =
     | _ ->
 	failwith "CompileQuery.value_node: not implemented"
 
-and compile_computation (env, aenv) loop (_binders, tailcomp) =
+and compile_tail_computation (env, aenv) loop tailcomp =
   match tailcomp with
     | `Return value ->
 	compile_value_node (env, aenv) loop value
     | _ ->
-	failwith "CompileQuery.compile_computation: not implemented"
+	failwith "CompileQuery.compile_tail_computation: not implemented"
+
+and compile_computation (env, aenv) loop (bindings, tailcomp) =
+  let aenv = 
+    List.fold_left
+      (fun aenv' binding ->
+	match binding with
+	 | `Let (binder, (_tyvars, tailcomp)) ->
+	     let tin = compile_tail_computation (env, aenv) loop tailcomp in
+	       AEnv.bind aenv' ((Var.var_of_binder binder), tin)
+	 | _ ->
+	     failwith "CompileQuery.compile_computation: not implemented")
+      aenv
+      bindings
+  in
+    compile_tail_computation (env, aenv) loop tailcomp
 
 let compile env e =
   let loop = 
     (ref (A.Dag.mk_littbl
 	    ([[`Int (Num.Int 1)]], [(A.Iter 0, A.IntType)])))
   in
-  let (q, cs, _, _) = compile_computation (env, ()) loop e in
+  let (q, cs, _, _) = compile_computation (env, AEnv.empty) loop e in
   let q = ref q in
   let dag = 
     A.Dag.mk_serializerel 
