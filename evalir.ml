@@ -356,7 +356,7 @@ module Eval = struct
                          match t with
                            | `Present, t -> (name, t)::fields
                            | `Absent, _ -> assert false
-                           | `Var _, xt -> assert false)
+                           | `Var _, t -> assert false)
                       fieldMap
                       []
                 in
