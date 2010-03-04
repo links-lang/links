@@ -89,11 +89,8 @@ let constant_of_primitive_value (value : Value.primitive_value_basis) : Constant
   match value with
     | `NativeString s -> `String s
     | `XML _ -> failwith "no xml in query allowed"
-    | `Database _ -> failwith "foo" 
-    | `Table _ -> failwith "foo"
     | `Float f -> `Float f
     | `Int i -> `Int i
-    | `String s -> `String s
     | `Bool b -> `Bool b
     | `Char c -> `Char c
 
@@ -219,8 +216,6 @@ and compile_list_value (env, aenv) loop list =
 	let hd = compile_value (env, aenv) loop hd_value in
 	let tl = compile_list_value (env, aenv) loop tl_value in
 	  compile_list hd tl
-    | value :: [] ->
-	compile_value (env, aenv) loop value
     | [] -> 
 	(!nil, [], dummy, dummy)
 
