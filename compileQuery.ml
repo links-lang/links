@@ -80,7 +80,7 @@ let proj_list = List.map proj1
 let proj_list_map new_cols old_cols = 
   List.map2 (fun a b -> (a, b)) new_cols old_cols
 
-let lookup_var var env =
+let lookup_env var env =
   match Value.lookup var env with
     | Some v -> Some v
     | None -> Some (Lib.primitive_stub (Lib.primitive_name var))
@@ -89,7 +89,7 @@ let constant_of_primitive_value (value : Value.primitive_value_basis) : Constant
   match value with
     | `NativeString s -> `String s
     | `XML _ -> failwith "no xml in query allowed"
-    | `Database _ -> failwith "foo"
+    | `Database _ -> failwith "foo" 
     | `Table _ -> failwith "foo"
     | `Float f -> `Float f
     | `Int i -> `Int i
@@ -369,7 +369,7 @@ and compile_value_node (env, aenv) loop e =
 	(match f with
 	   | `TApp (`Variable var, _) ->
 	       let value = 
-		 match lookup_var var env with
+		 match lookup_env var env with
 		   | Some v -> v
 		   | None -> failwith "CompileQuery.compile_value_node: var not found"
 	       in
@@ -379,12 +379,12 @@ and compile_value_node (env, aenv) loop e =
     | `TApp (v, _) ->
 	compile_value_node (env, aenv) loop v
     | `Variable var -> 
-	let value = 
-	  match lookup_var var env with
-	    | Some v -> v
-	    | None -> failwith "CompileQuery.compile_value_node: var not found"
-	in
-	  compile_value (env, aenv) loop value
+	(try
+	  AEnv.lookup aenv var
+	with NotFound _ ->
+	  (match lookup_env var env with
+	    | Some v -> compile_value (env, aenv) loop v
+	    | None -> failwith "CompileQuery.compile_value_node: var not found"))
     | _ ->
 	failwith "CompileQuery.value_node: not implemented"
 
