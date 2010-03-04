@@ -131,7 +131,7 @@ and tree_of_value id value env recnodes =
 		   let label = label ^ "\\n" ^ value_string in
 		     ((id + 1), Leaf (id, label, Variable)))
 	with NotFound _ -> 
-	  let label = "var " ^ (string_of_int var) ^ "\\nnotfounf" in
+	  let label = "var " ^ (string_of_int var) ^ "\\nnotfound" in
 	    ((id + 1), Leaf (id, label, Variable)))
     | `Extend (fields, r) ->
 	(* fields: value name_map = map string -> value *)
