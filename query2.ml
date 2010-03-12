@@ -116,13 +116,6 @@ struct
 end
 let string_of_t = S.t
 
-let rec tail_of_t : t -> t = fun v ->
-  let tt = tail_of_t in
-    match v with
-      | `For (_gs, _os, `Singleton (`Record fields)) -> `Record fields
-      | `For (_gs, _os, `If (_c, t, `Append [])) -> tt (`For (_gs, _os, t))
-      | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
-
 (** Return the type of rows associated with a top-level non-empty expression *)
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec generators env : _ -> Types.datatype Env.Int.t =
@@ -186,6 +179,21 @@ let rec value_of_expression : t -> Value.t = fun v ->
 module Eval =
 struct
   exception DbEvaluationError of string
+
+  let rec replace_var old_var new_var e =
+    let rep = replace_var old_var new_var in
+      match e with
+	| `If (c, t, e) -> `If (rep c, rep t, rep e)
+	| `Singleton e -> `Singleton (rep e)
+	| `Append l -> `Append (List.map rep l)
+	| `Record fields -> `Record (StringMap.map rep fields)
+	| `Project (e, s) -> `Project (rep e, s)
+	| `Erase (e, labels) -> `Erase (rep e, labels)
+	| `Extend (record, ext_fields) -> `Extend (opt_map rep record, StringMap.map rep ext_fields)
+	| `Variant (s, t) -> `Variant (s, rep t)
+	| `Apply (f, args) -> `Apply (f, List.map rep args)
+	| `Var v when v = old_var -> `Var new_var
+	| n -> n
 
   let nil = `Append []
 
@@ -417,6 +425,9 @@ struct
             (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
   and reduce_for_source env eval_body (x, source, body) =
       match source with
+	  (* merge for-comprehension with its orderby clause *)
+	| `For ([y, source'], ((_ :: _) as os), (`Var y')) when y = y' ->
+	    `For ([x, source'], (List.map (replace_var y x) os), source')
         | `Singleton _ 
         | `Append _ 
         | `If _ 
