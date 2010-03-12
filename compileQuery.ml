@@ -1,6 +1,5 @@
 open Utility
 
-
 module Cs = struct
 
   type offset = int
@@ -48,7 +47,7 @@ module Cs = struct
   let record_field cs field =
     let rec loop = function
       | (Offset _) :: tl ->
-	   loop tl
+	  loop tl
       | (Mapping (key, cs)) :: tl ->
 	  if key = field then
 	    cs
@@ -63,8 +62,8 @@ end
 module A = Algebra
 module AEnv = Env.Int
 
-type tblinfo_node = A.Dag.dag ref * Cs.cs * unit * unit
-type aenv = tblinfo_node AEnv.t
+type tblinfo = A.Dag.dag ref * Cs.cs * unit * unit
+type aenv = tblinfo AEnv.t
 
 let dummy = ()
 
@@ -95,12 +94,12 @@ let constant_of_primitive_value (value : Value.primitive_value_basis) : Constant
 let wrap_1to1 f res c c' algexpr =
   A.Dag.mk_fun1to1
     (f, res, [c; c'])
-    (ref algexpr)
+    algexpr
 
 let wrap_eq res c c' algexpr =
   A.Dag.mk_funnumeq
     (res, (c, c'))
-    (ref algexpr)
+    algexpr
 
 let incr_col = function
   | A.Iter i -> A.Iter (i + 1)
@@ -113,20 +112,34 @@ let wrap_ne res c c' algexpr =
       (res, res')
       (ref (A.Dag.mk_funnumeq
 	      (res', (c, c'))
-	      (ref algexpr)))
+	      algexpr))
 
 let wrap_gt res c c' algexpr =
   A.Dag.mk_funnumgt
     (res, (c, c'))
-    (ref algexpr)
+    algexpr
 
 let wrap_not res op_attr algexpr =
   A.Dag.mk_funboolnot
     (res, op_attr)
-    (ref algexpr)
+    algexpr
 
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.IntType); (A.Pos 0, A.IntType)])
+
+let map_inwards map (q, cs, _, _) =
+  let iter = A.Iter 0 in
+  let inner = A.Iter 1 in
+  let pos = A.Pos 0 in
+  let q' =
+    (ref (A.Dag.mk_project
+	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
+	    (ref (A.Dag.mk_eqjoin
+		    (iter, inner)
+		    q
+		    map))))
+  in
+    (q', cs, dummy, dummy)
 
 (* list values and cons *)
 let rec compile_concat env loop l =
@@ -138,7 +151,7 @@ let rec compile_concat env loop l =
 	let tl = compile_concat env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	(!nil, [], dummy, dummy)
+	(nil, [], dummy, dummy)
 
 and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
@@ -147,17 +160,17 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   let pos' = A.Pos 1 in
   let iter = A.Iter 0 in
   let q =
-    A.Dag.mk_project
-      ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
-      (ref (A.Dag.mk_rank
-	      (pos', [(ord, A.Ascending); (pos, A.Ascending)])
-	      (ref (A.Dag.mk_disjunion
-		      (ref (A.Dag.mk_attach
-			      (ord, `Int (Num.Int 1))
-			      (ref hd_q)))
-		      (ref (A.Dag.mk_attach
-			      (ord, `Int (Num.Int 2))
-			      (ref tl_q)))))))
+    ref (A.Dag.mk_project
+	   ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
+	   (ref (A.Dag.mk_rank
+		   (pos', [(ord, A.Ascending); (pos, A.Ascending)])
+		   (ref (A.Dag.mk_disjunion
+			   (ref (A.Dag.mk_attach
+				   (ord, `Int (Num.Int 1))
+				   hd_q))
+			   (ref (A.Dag.mk_attach
+				   (ord, `Int (Num.Int 2))
+				   tl_q)))))))
   in
     (q, fused_cs, dummy, dummy)
 
@@ -174,16 +187,16 @@ and compile_binop env loop wrapper operands =
     let c' = A.Item 2 in
     let res = A.Item 3 in
     let q = 
-      A.Dag.mk_project
-	[(proj1 iter); (proj1 pos); (c, res)]
-	(ref (wrapper 
-		res c c'
-		(A.Dag.mk_eqjoin
-		   (iter, iter')
-		   (ref op1_q)
-		   (ref (A.Dag.mk_project
-			   [(iter', iter); (c', c)]
-			   (ref op2_q))))))
+      ref (A.Dag.mk_project
+	     [(proj1 iter); (proj1 pos); (c, res)]
+	     (ref (wrapper 
+		     res c c'
+		     (ref (A.Dag.mk_eqjoin
+			     (iter, iter')
+			     op1_q
+			     (ref (A.Dag.mk_project
+				     [(iter', iter); (c', c)]
+				     op2_q)))))))
     in
       (q, op1_cs, dummy, dummy)
 
@@ -196,11 +209,11 @@ and compile_unop env loop wrapper operands =
     let pos = A.Pos 0 in
     let iter = A.Iter 0 in
     let q = 
-      A.Dag.mk_project
-	[proj1 iter; proj1 pos; (c, res)]
-	(ref (wrapper
-		res c
-		op_q))
+      ref (A.Dag.mk_project
+	     [proj1 iter; proj1 pos; (c, res)]
+	     (ref (wrapper
+		     res c
+		     op_q)))
     in
       (q, op_cs, dummy, dummy)
 
@@ -233,37 +246,49 @@ and compile_apply env loop f args =
 	    | `PrimitiveFunction "tl" ->
 	  *)
 
-(*
-and compile_concatmap (env, aenv) loop (e1 : Value.t) (e2 : ) (e1 : Value.t) =
+
+and compile_for env loop v e1 e2 =
   let iter = A.Iter 0 in
   let inner = A.Iter 1 in
   let outer = A.Iter 2 in
   let pos = A.Pos 0 in
   let pos' = A.Pos 1 in
-  let (q1, cs1, _, _) = compile_value (env, aenv) loop l in
-  let q1 = ref q1 in
-  let q_v =
-    ref (A.Dag.mk_attach
-	   (pos, `Int (Num.Int 1))
-	   (ref (A.Dag.mk_project
-		   ([(iter, inner)] @ (proj_list items_of_offsets (Cs.leafs cs1)))
-		   (ref (A.Dag.mk_rownum
-			   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-			   q1)))))
+  let (q1, cs1, _, _) = compile_expression env loop e1 in
+  let q_v = 
+    ref (A.Dag.mk_rownum
+	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	   q1)
   in
   let map =
     ref (A.Dag.mk_project
 	   [(outer, iter); proj1 inner]
-	   qv)
+	   q_v)
   in
   let loop_v =
     ref (A.Dag.mk_project
 	   [(iter, inner)]
-	   qv)
+	   q_v)
   in
-  let aenv_lift = AEnv.map (map_inwards map) aenv in
-  let (q2, cs2, _, _) = compile_value_node (env, AEnv.bind v q_v aenv) 
-*)    
+  let q_v' =
+    ref (A.Dag.mk_attach
+	   (pos, `Int (Num.Int 1))
+	   (ref (A.Dag.mk_project
+		   ([(iter, inner)] @ (proj_list (items_of_offsets (Cs.leafs cs1))))
+		   q_v)))
+  in
+  let env = AEnv.map (map_inwards map) env in
+  let (q2, cs2, _, _) = compile_expression (AEnv.bind env (v, (q_v', cs1, dummy, dummy))) loop_v e2 in
+  let q =
+    ref (A.Dag.mk_project
+	   ([(iter, outer); (pos, pos')] @ (proj_list (items_of_offsets (Cs.leafs cs2))))
+	   (ref (A.Dag.mk_rank
+		   (pos', [(iter, A.Ascending); (pos, A.Ascending)])
+		   (ref (A.Dag.mk_eqjoin
+			   (inner, iter)
+			   map
+			   q2)))))
+  in
+    (q, cs2, dummy, dummy)
 
 and singleton_record env loop (name, e) =
   let (q, cs, _, _) = compile_expression env loop e in
@@ -293,14 +318,14 @@ and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
   let iter = A.Iter 0 in
   let iter' = A.Iter 1 in
   let q =
-    A.Dag.mk_project
-      (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
-      (ref (A.Dag.mk_eqjoin
-	      (iter, iter')
-	      (ref r1_q)
-	      (ref ((A.Dag.mk_project
-		       ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
-		       (ref r2_q))))))
+    ref (A.Dag.mk_project
+	   (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
+	   (ref (A.Dag.mk_eqjoin
+		   (iter, iter')
+		   r1_q
+		   (ref ((A.Dag.mk_project
+			    ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
+			    r2_q))))))
   in
   let cs = Cs.append r1_cs r2_cs in
     (q, cs, dummy, dummy)
@@ -315,9 +340,9 @@ and compile_project env loop field r =
   let iter = A.Iter 0 in
   let pos = A.Pos 0 in
   let q =
-    A.Dag.mk_project
-      ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
-      (ref q_r)
+    ref (A.Dag.mk_project
+	   ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
+	   q_r)
   in
     (q, field_cs, dummy, dummy)
 
@@ -334,15 +359,15 @@ and compile_record env loop r =
 and compile_constant loop (const : Constant.constant) =
   let cs = [Cs.Offset 1] in
   let q =
-    (A.Dag.mk_attach
-       (A.Item 1, const)
-       (ref (A.Dag.mk_attach
-	       (A.Pos 0, `Int (Num.Int 1))
-	       loop)))
+    (ref (A.Dag.mk_attach
+	    (A.Item 1, const)
+	    (ref (A.Dag.mk_attach
+		    (A.Pos 0, `Int (Num.Int 1))
+		    loop))))
   in
     (q, cs, dummy, dummy)
 
-and compile_expression env loop e =
+and compile_expression env loop e : tblinfo =
   match e with
     | `Constant c -> compile_constant loop c
     | `Apply (f, args) -> compile_apply env loop f args
@@ -354,7 +379,8 @@ and compile_expression env loop e =
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
     | `Singleton e -> compile_expression env loop e
     | `Concat l -> compile_concat env loop l
-    | `For _
+    | `For ([x, l], [], body) -> compile_for env loop x l body
+    | `For _ -> failwith "compile_expression: only simple for implemented"
     | `If _ 
     | `Table _
     | `Erase _
@@ -369,7 +395,6 @@ let compile e =
 	    ([[`Int (Num.Int 1)]], [(A.Iter 0, A.IntType)])))
   in
   let (q, cs, _, _) = compile_expression AEnv.empty loop e in
-  let q = ref q in
   let dag = 
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
