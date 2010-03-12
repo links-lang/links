@@ -51,6 +51,7 @@ end
 
 module Ferry = struct
   let output_ir_dot = Settings.add_bool("output_ir_dot", false, `User)
+  let output_algebra = Settings.add_bool("output_algebra", false, `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module
