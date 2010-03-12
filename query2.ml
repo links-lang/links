@@ -21,14 +21,6 @@ let unbox_xml =
     | `XML xmlitem -> xmlitem
     | _ -> failwith ("failed to unbox XML")
 
-let unbox_pair =
-  function
-    | `Record fields ->
-        let x = StringMap.find "1" fields in
-        let y = StringMap.find "2" fields in
-          x, y
-    | _ -> failwith ("failed to unbox pair")
-
 let rec unbox_list =
   function
     | `Concat vs -> concat_map unbox_list vs
@@ -53,7 +45,7 @@ let labels_of_fields fields =
 let table_labels (_, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
   function
-    | `Concat (v::vs) -> labels_of_list v
+    | `Concat (v :: _vs) -> labels_of_list v
     | `Singleton (`Record fields) -> labels_of_fields fields
     | `Table (_, _, (fields, _)) -> labels_of_fields fields
     | _ -> assert false
@@ -74,7 +66,7 @@ let used_database v : Value.database option =
           end
   and used =
     function
-      | `For (gs, os, _body) -> generators gs
+      | `For (gs, _os, _body) -> generators gs
       | `Table ((db, _), _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
@@ -138,7 +130,7 @@ let rec tail_of_t : t -> t = fun v ->
   let tt = tail_of_t in
     match v with
       | `For (_gs, _os, `Singleton (`Record fields)) -> `Record fields
-      | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
+      | `For (_gs, _os, `If (_c, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
 (** Return the type of rows associated with a top-level non-empty expression *)
@@ -151,17 +143,17 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | _ -> assert false in
   let rec base env : t -> Types.datatype =
     function
-      | `Constant (`Bool b) -> Types.bool_type
-      | `Constant (`Int i) -> Types.int_type
-      | `Constant (`Char c) -> Types.char_type
-      | `Constant (`Float f) -> Types.float_type
-      | `Constant (`String s) -> Types.string_type
+      | `Constant (`Bool _) -> Types.bool_type
+      | `Constant (`Int _) -> Types.int_type
+      | `Constant (`Char _) -> Types.char_type
+      | `Constant (`Float _) -> Types.float_type
+      | `Constant (`String _) -> Types.string_type
       | `Project (`Var (x, _), name) ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | `Concat (xs) when List.for_all
-          (function `Singleton `Constant `Char x -> true|_->false) xs ->
+          (function `Singleton `Constant `Char _ -> true|_->false) xs ->
           Types.string_type
       | e -> Debug.print(Show.show show_t e); assert false in
   let record env fields : Types.datatype =
@@ -174,7 +166,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | _ -> assert false
   in
     match v with
-      | `Concat (v::vs) -> type_of_expression v
+      | `Concat (v :: _) -> type_of_expression v
       | `For (gens, _os, body) -> tail (generators Env.Int.empty gens) body
       | _ -> tail Env.Int.empty v
 
@@ -288,7 +280,7 @@ struct
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Concat xs when List.for_all (* HACKISH: handle Links string constants *)
-        (function `Singleton `Constant `Char x -> true|_->false) xs ->
+        (function `Singleton `Constant `Char _c -> true|_->false) xs ->
         `Constant (`String(mapstrcat ""
                              (function `Singleton `Constant `Char x ->
                                 string_of_char x)
@@ -355,7 +347,7 @@ struct
             | _ -> eval_error "Error erasing from record"
         in
           erase (value env r, labels)
-    | `Inject (label, v, t) -> `Variant (label, value env v)
+    | `Inject (label, v, _t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
 
@@ -388,9 +380,9 @@ struct
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; xs] ->
-        reduce_concat [`Singleton x; xs]
+	reduce_concat [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
-        reduce_concat [xs; ys]
+	reduce_concat [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
@@ -459,13 +451,13 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
+              | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _) ->
+              | `Fun ((f, _) as _fb, (_, args, body), _) ->
                   computation
                     (bind env (f, `Closure ((List.map fst args, body), env)))
                     (bs, tailcomp)
-              | `Rec defs ->
+              | `Rec _defs ->
                   eval_error "Recursive function"
               | `Alien _ 
               | `Alias _ -> (* just skip it *)
@@ -605,7 +597,7 @@ struct
 end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
-  fun env (range, e) ->
+  fun env (_range, e) ->
 (*     Debug.print ("e: "^Ir.Show_computation.show e); *)
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";

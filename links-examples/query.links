@@ -1,7 +1,6 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
 var t = table "test1" with (foo : Int, bar : Int ) from db;
 query {
-for (x <-- t) 
-for (y <- [1,2,3,4])
-[(foo = x.foo + y)]
+for (r <-- t) 
+[(r with bar = intToFloat(r.foo) +. 5.4)]
 }
