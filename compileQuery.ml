@@ -31,8 +31,6 @@ module Cs = struct
   let append cs1 cs2 =
     cs1 @ (shift cs2 (cardinality cs1))
 
-
-
   let fuse cs1 cs2 =
     if (List.length cs1) > (List.length cs2) then
       cs1
@@ -240,7 +238,6 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   in
     (q, fused_cs, dummy, dummy)
 
-
 and compile_binop (env, aenv) loop wrapper operands =
   assert ((List.length operands) = 2);
   let (op1_q, op1_cs, _, _) = compile_value_node (env, aenv) loop (List.hd operands) in
@@ -315,6 +312,37 @@ and function_dispatch (env, aenv) loop op args =
 	    | `PrimitiveFunction "hd" ->
 	    | `PrimitiveFunction "tl" ->
 	  *)
+(*
+and compile_concatmap (env, aenv) loop (e1 : Value.t) (e2 : ) (e1 : Value.t) =
+  let iter = A.Iter 0 in
+  let inner = A.Iter 1 in
+  let outer = A.Iter 2 in
+  let pos = A.Pos 0 in
+  let pos' = A.Pos 1 in
+  let (q1, cs1, _, _) = compile_value (env, aenv) loop l in
+  let q1 = ref q1 in
+  let q_v =
+    ref (A.Dag.mk_attach
+	   (pos, `Int (Num.Int 1))
+	   (ref (A.Dag.mk_project
+		   ([(iter, inner)] @ (proj_list items_of_offsets (Cs.leafs cs1)))
+		   (ref (A.Dag.mk_rownum
+			   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+			   q1)))))
+  in
+  let map =
+    ref (A.Dag.mk_project
+	   [(outer, iter); proj1 inner]
+	   qv)
+  in
+  let loop_v =
+    ref (A.Dag.mk_project
+	   [(iter, inner)]
+	   qv)
+  in
+  let aenv_lift = AEnv.map (map_inwards map) aenv in
+  let (q2, cs2, _, _) = compile_value_node (env, AEnv.bind v q_v aenv) 
+*)    
 
 and compile_constant loop (const : Constant.constant) =
   let cs = [Cs.Offset 1] in
@@ -387,6 +415,8 @@ and compile_tail_computation (env, aenv) loop tailcomp =
   match tailcomp with
     | `Return value ->
 	compile_value_node (env, aenv) loop value
+(*    | `Apply (f, args) -> *)
+	
     | _ ->
 	failwith "CompileQuery.compile_tail_computation: not implemented"
 
