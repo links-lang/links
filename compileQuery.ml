@@ -355,6 +355,27 @@ and compile_record env loop r =
     | [] ->
 	failwith "CompileQuery.compile_record_value: empty record"
 
+(* HACK HACK HACK *)
+and compile_table loop ((_db, _params), tblname, _row) =
+  Printf.printf "tblname = %s\n" tblname;
+  flush stdout;
+  assert (tblname = "test1");
+  let columns = ["foo"; "bar"] in
+  let items = snd (List.fold_left (fun (i, l) c -> (i + 1, (c, A.Item i) :: l)) (1, []) columns) in
+  let cs = List.map (function (tname, A.Item i) -> Cs.Mapping (tname, [Cs.Offset i]) | _ -> assert false) items in
+  let pos = A.Pos 0 in
+  let key_infos = [[A.Iter 0]] in
+  let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
+  let q =
+    ref (A.Dag.mk_cross
+	   loop
+	   (ref (A.Dag.mk_rank
+		   (pos, (List.map (fun (_, name) -> (name, A.Ascending)) items))
+		   (ref (A.Dag.mk_tblref
+			   (tblname, attr_infos, key_infos))))))
+  in
+    (q, cs, dummy, dummy)
+
 and compile_constant loop (const : Constant.constant) =
   let cs = [Cs.Offset 1] in
   let q =
@@ -378,10 +399,10 @@ and compile_expression env loop e : tblinfo =
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
     | `Singleton e -> compile_expression env loop e
     | `Append l -> compile_append env loop l
+    | `Table t -> compile_table loop t
     | `For ([x, l], [], body) -> compile_for env loop x l body
     | `For _ -> failwith "compile_expression: only simple for implemented"
     | `If _ 
-    | `Table _
     | `Erase _
     | `Closure _
     | `Variant _
