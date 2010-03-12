@@ -353,46 +353,23 @@ struct
                     (x, xs, body)
             | _ -> assert false
         end
-    | `Primitive "SortBy", [_f; _xs] ->
-	failwith "orderby not implemented"
-	(*
+    | `Primitive "SortBy", [f; xs] ->
 	begin
 	  match f with
 	    | `Closure (([x], body), closure_env) ->
 		let env = env ++ closure_env in
-	*)	  
-	(*
-        begin
-          match xs with
-            | `Concat [] -> `Concat []
-            | _ ->
-                let gs, os', body =
-                  match xs with
-                    | `For (gs, os', body) -> gs, os', body
-                    | `Concat (_::_)
-                    | `Singleton _
-                    | `Table _ ->
-                        (* eta-expand the list *)
-                        eta_expand_list xs
-                    | _ -> assert false in
-                let xs = `For (gs, os', body) in
-                  begin
-                    match f with
-                      | `Closure (([x], os), closure_env) ->                
-                          let os =
-                            let env = env ++ closure_env in
-                              let o = computation (bind env (x, tail_of_t xs)) os in
-				print_endline (string_of_t o);
-                                match o with
-                                  | `Record fields ->
-                                      List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
-                                  | _ -> assert false
-                          in
-                            `For (gs, os @ os', body)
-                      | _ -> assert false
-                  end
-        end
-	*)
+		let os_fun = computation (bind env (x, `Var x)) body in
+		  begin
+		    match os_fun with
+		      | `Extend (_r, ext_fields) ->
+			  let l = StringMap.fold (fun k v l -> (int_of_string k, v) :: l) ext_fields [] in
+			  let l = List.sort compare l in
+			  let os = List.map snd l in
+			    `For ([x, xs], os, `Var x)
+		      | _ -> assert false
+		  end
+	    | _ -> assert false
+	end	    
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->
