@@ -6,13 +6,13 @@ type t =
     | `If of t * t * t
     | `Table of Value.table
     | `Singleton of t | `Concat of t list
-    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t
+    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t * t StringMap.t
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
-    | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
     deriving (Show)
 
@@ -38,17 +38,6 @@ let unbox_string =
                 | _ -> failwith ("failed to unbox string"))
              (unbox_list v))
     | _ -> failwith ("failed tounbox_string")
-
-let labels_of_fields fields = 
-  StringMap.fold (fun name _ labels -> StringSet.add name labels)
-    fields StringSet.empty
-let table_labels (_, _, (fields, _)) = labels_of_fields fields
-let rec labels_of_list =
-  function
-    | `Concat (v :: _vs) -> labels_of_list v
-    | `Singleton (`Record fields) -> labels_of_fields fields
-    | `Table (_, _, (fields, _)) -> labels_of_fields fields
-    | _ -> assert false
 
 (** Returns which database was used if any.
 
@@ -91,13 +80,13 @@ struct
     | `If of pt * pt * pt
     | `Table of Value.table
     | `Singleton of pt | `Concat of pt list
-    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t
+    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt * pt StringMap.t
     | `Variant of string * pt
     | `XML of Value.xmlitem
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
-    | `Var of (Var.var * StringSet.t) | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant ]
       deriving (Show)
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -112,6 +101,7 @@ struct
         | `Singleton v -> `Singleton (bt v)
         | `Concat vs -> `Concat (List.map bt vs)
         | `Record fields -> `Record (StringMap.map bt fields)
+	| `Extend (r, ext_fields) -> `Extend (bt r, StringMap.map bt ext_fields)
         | `Variant (name, v) -> `Variant (name, bt v)
         | `XML xmlitem -> `XML xmlitem
         | `Project (v, name) -> `Project (bt v, name)
@@ -148,7 +138,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Constant (`Char _) -> Types.char_type
       | `Constant (`Float _) -> Types.float_type
       | `Constant (`String _) -> Types.string_type
-      | `Project (`Var (x, _), name) ->
+      | `Project (`Var x, name) ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
@@ -264,19 +254,6 @@ struct
       | Some v -> expression_of_value v
       | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
 
-  let eta_expand_var (x, labels) =
-    `Record
-      (StringSet.fold
-         (fun name fields ->
-            StringMap.add name (`Project (`Var (x, labels), name)) fields)
-         labels
-         StringMap.empty)
-
-  let eta_expand_list xs =
-    let x = Var.fresh_raw_var () in
-    let labels = labels_of_list xs in
-      ([x, xs], [], `Singleton (eta_expand_var (x, labels)))        
-
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Concat xs when List.for_all (* HACKISH: handle Links string constants *)
@@ -288,13 +265,11 @@ struct
     | `Variable var ->
         begin
           match lookup env var with
-            | `Var (x, labels) ->
-                (* eta-expand record variables *)
-                eta_expand_var (x, labels)
             | `Primitive "Nil" -> nil
             | v -> v
         end
     | `Extend (ext_fields, r) -> 
+(*
         begin
           match opt_app (value env) (`Record StringMap.empty) r with
             | `Record fields ->
@@ -310,43 +285,16 @@ struct
                            fields)
             | _ -> eval_error "Error adding fields: non-record"
         end
+*)
+	let r = opt_app (value env) (`Record StringMap.empty) r in
+	  `Extend (r, (StringMap.fold 
+		       (fun label v fields -> StringMap.add label (value env v) fields)
+		       ext_fields
+		       StringMap.empty))
     | `Project (label, r) ->
-        let rec project (r, label) =
-          match r with
-            | `Record fields ->
-                assert (StringMap.mem label fields);
-                StringMap.find label fields
-            | `If (c, t, e) ->
-                `If (c, project (t, label), project (e, label))
-            | `Var (x, labels) ->
-                assert (StringSet.mem label labels);
-                `Project (`Var (x, labels), label)
-            | _ -> eval_error "Error projecting from record"
-        in
-          project (value env r, label)
+        `Project (value env r, label)
     | `Erase (labels, r) ->
-        let rec erase (r, labels) =
-          match r with
-            | `Record fields ->
-                assert (StringSet.for_all
-                          (fun label -> StringMap.mem label fields) labels);
-                `Record
-                  (StringMap.fold
-                     (fun label v fields ->
-                        if StringSet.mem label labels then
-                          fields
-                        else
-                          StringMap.add label v fields)
-                     fields
-                     StringMap.empty)
-            | `If (c, t, e) ->
-                `If (c, erase (t, labels), erase (e, labels))
-            | `Var (x, labels') ->
-                assert (StringSet.subset labels labels');
-                `Erase (`Var (x, labels'), labels)
-            | _ -> eval_error "Error erasing from record"
-        in
-          erase (value env r, labels)
+        `Erase (value env r, labels)
     | `Inject (label, v, _t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
@@ -405,7 +353,15 @@ struct
                     (x, xs, body)
             | _ -> assert false
         end
-    | `Primitive "SortBy", [f; xs] ->
+    | `Primitive "SortBy", [_f; _xs] ->
+	failwith "orderby not implemented"
+	(*
+	begin
+	  match f with
+	    | `Closure (([x], body), closure_env) ->
+		let env = env ++ closure_env in
+	*)	  
+	(*
         begin
           match xs with
             | `Concat [] -> `Concat []
@@ -426,6 +382,7 @@ struct
                           let os =
                             let env = env ++ closure_env in
                               let o = computation (bind env (x, tail_of_t xs)) os in
+				print_endline (string_of_t o);
                                 match o with
                                   | `Record fields ->
                                       List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
@@ -435,6 +392,7 @@ struct
                       | _ -> assert false
                   end
         end
+	*)
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->
@@ -500,14 +458,11 @@ struct
   and reduce_for_source env eval_body (x, source, body) =
       match source with
         | `Singleton _ 
-        | `Concat _
+        | `Concat _ 
         | `If _ 
-        | `For _ ->
-	    let labels = StringSet.empty in
-	      `For ([x, source], [], eval_body env (x, `Var (x, labels), body))
-        | `Table table ->
-            let labels = table_labels table in
-	      `For ([x, source], [], eval_body env (x, `Var (x, labels), body))
+        | `For _ 
+        | `Table _ ->
+	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
 
   let eval env e =
@@ -521,4 +476,4 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
-      Debug.print ("query2: "^string_of_t v)
+      Debug.print ("query2:\n "^string_of_t v)
