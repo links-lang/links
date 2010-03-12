@@ -269,23 +269,6 @@ struct
             | v -> v
         end
     | `Extend (ext_fields, r) -> 
-(*
-        begin
-          match opt_app (value env) (`Record StringMap.empty) r with
-            | `Record fields ->
-                `Record (StringMap.fold 
-                           (fun label v fields ->
-                              if StringMap.mem label fields then 
-                                eval_error
-                                  "Error adding fields: label %s already present"
-                                  label
-                              else
-                                StringMap.add label (value env v) fields)
-                           ext_fields
-                           fields)
-            | _ -> eval_error "Error adding fields: non-record"
-        end
-*)
 	let r = opt_map (value env) r in
 	  `Extend (r, (StringMap.fold 
 		       (fun label v fields -> StringMap.add label (value env v) fields)
