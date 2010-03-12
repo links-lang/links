@@ -797,7 +797,7 @@ struct
       | v -> [v]
 
   let rec query : t -> query = fun v ->
-(*    Debug.print ("query: "^string_of_t v);*)
+    (* Debug.print ("query: "^string_of_t v); *)
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
@@ -989,6 +989,7 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
+      Debug.print ("query: "^string_of_t v);
       match used_database v with
         | None -> None
         | Some db -> 
