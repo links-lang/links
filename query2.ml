@@ -380,9 +380,9 @@ struct
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; xs] ->
-	reduce_concat [`Singleton x; xs]
+	`Concat [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
-	reduce_concat [xs; ys]
+	`Concat [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
@@ -509,41 +509,17 @@ struct
         | [`Singleton v] -> `Singleton v
         | vs -> `Concat vs
   and reduce_for_source env eval_body (x, source, body) =
-    let rs = reduce_for_source env eval_body in
-    let rb = reduce_for_body in
       match source with
-        | `Singleton v -> eval_body env (x, v, body)
-        | `Concat vs ->
-            reduce_concat (List.map (fun v -> rs (x, v, body)) vs)
-        | `If (c, t, e) ->
-            assert (e = nil);
-            reduce_for_source
-              env
-              (fun env (x, v, body) ->
-                reduce_where_condition (c, eval_body env (x, v, body)))
-              (x, t, body)
-        | `For (gs, os, v) ->
-            begin
-              match rs (x, v, body) with
-                | `For (gs', os', w) -> `For (gs @ gs', os @ os', w)
-                | w -> `For (gs, os, w)
-            end
+        | `Singleton _ 
+        | `Concat _
+        | `If _ 
+        | `For _ ->
+	    let labels = StringSet.empty in
+	      `For ([x, source], [], eval_body env (x, `Var (x, labels), body))
         | `Table table ->
             let labels = table_labels table in
-              rb (x, source, eval_body env (x, `Var (x, labels), body))
+	      `For ([x, source], [], eval_body env (x, `Var (x, labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
-  and reduce_for_body (x, source, body) =
-    match body with
-      | `Concat vs ->
-          reduce_concat (List.map (fun v -> reduce_for_body (x, source, v)) vs)
-      | `For (gs, os, body) ->
-          `For ((x, source)::gs, os, body)
-      | _ ->
-          `For ([x, source], [], body)
-  and reduce_where_condition (c, t) =
-    assert (is_list t);
-    if t = nil then nil
-    else reduce_if_then (c, t, nil)
   and reduce_if_condition (c, t, e) =
     match c with
       | `Constant (`Bool true) -> t

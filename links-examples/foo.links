@@ -1,8 +1,6 @@
 fun f(x) { x + 3 }
 query {
 	for (i <- [1,2,3,4,65])
-		if (i > 3)
+		for (j <- [42,43])
 			[(foo = 2)]
-		else
-			[(foo = 3)]
 }
