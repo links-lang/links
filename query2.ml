@@ -5,7 +5,7 @@ type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
     | `Table of Value.table
-    | `Singleton of t | `Concat of t list
+    | `Singleton of t | `Append of t list
     | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t StringMap.t
     | `Variant of string * t
     | `XML of Value.xmlitem
@@ -23,14 +23,14 @@ let unbox_xml =
 
 let rec unbox_list =
   function
-    | `Concat vs -> concat_map unbox_list vs
+    | `Append vs -> concat_map unbox_list vs
     | `Singleton v -> [v]
     | _ -> failwith ("failed to unbox list")
 
 let unbox_string =
   function
     | `Constant (`String s) -> s
-    | (`Concat _ | `Singleton _) as v ->
+    | (`Append _ | `Singleton _) as v ->
         implode
           (List.map
              (function
@@ -69,7 +69,7 @@ let used_database v : Value.database option =
           end
   in
     match v with
-      | `Concat vs -> comprehensions vs
+      | `Append vs -> comprehensions vs
       | v -> used v
 
 module S =
@@ -79,7 +79,7 @@ struct
     [ `For of (Var.var * pt) list * pt list * pt
     | `If of pt * pt * pt
     | `Table of Value.table
-    | `Singleton of pt | `Concat of pt list
+    | `Singleton of pt | `Append of pt list
     | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt option * pt StringMap.t
     | `Variant of string * pt
     | `XML of Value.xmlitem
@@ -99,7 +99,7 @@ struct
         | `If (c, t, e) -> `If (bt c, bt t, bt e)
         | `Table t -> `Table t
         | `Singleton v -> `Singleton (bt v)
-        | `Concat vs -> `Concat (List.map bt vs)
+        | `Append vs -> `Append (List.map bt vs)
         | `Record fields -> `Record (StringMap.map bt fields)
 	| `Extend (r, ext_fields) -> `Extend (opt_map bt r, StringMap.map bt ext_fields)
         | `Variant (name, v) -> `Variant (name, bt v)
@@ -120,7 +120,7 @@ let rec tail_of_t : t -> t = fun v ->
   let tt = tail_of_t in
     match v with
       | `For (_gs, _os, `Singleton (`Record fields)) -> `Record fields
-      | `For (_gs, _os, `If (_c, t, `Concat [])) -> tt (`For (_gs, _os, t))
+      | `For (_gs, _os, `If (_c, t, `Append [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
 (** Return the type of rows associated with a top-level non-empty expression *)
@@ -142,7 +142,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | `Concat (xs) when List.for_all
+      | `Append (xs) when List.for_all
           (function `Singleton `Constant `Char _ -> true|_->false) xs ->
           Types.string_type
       | e -> Debug.print(Show.show show_t e); assert false in
@@ -151,12 +151,12 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec tail env : t -> Types.datatype =
     function
       | `Singleton (`Record fields) -> record env fields
-      | `If (_c, t, `Concat []) -> tail env t
+      | `If (_c, t, `Append []) -> tail env t
       | `Table (_, _, row) -> `Record row
       | _ -> assert false
   in
     match v with
-      | `Concat (v :: _) -> type_of_expression v
+      | `Append (v :: _) -> type_of_expression v
       | `For (gens, _os, body) -> tail (generators Env.Int.empty gens) body
       | _ -> tail Env.Int.empty v
 
@@ -174,7 +174,7 @@ let rec value_of_expression : t -> Value.t = fun v ->
       | `Constant (`Float f) -> `Float f
       | `Constant (`String s) -> Value.box_string s
       | `Table t -> `Table t
-      | `Concat vs -> `List (List.map value_of_singleton vs)
+      | `Append vs -> `List (List.map value_of_singleton vs)
       | `Variant (name, v) -> `Variant (name, ve v)
       | `XML xmlitem -> `XML xmlitem
       | `Record fields ->
@@ -187,7 +187,7 @@ module Eval =
 struct
   exception DbEvaluationError of string
 
-  let nil = `Concat []
+  let nil = `Append []
 
   (* takes a normal form expression and returns true iff it has list type *)
   let is_list =
@@ -195,8 +195,8 @@ struct
       | `For _
       | `Table _
       | `Singleton _
-      | `Concat _
-      | `If (_, _, `Concat []) -> true
+      | `Append _
+      | `If (_, _, `Append []) -> true
       | _ -> false    
 
   let eval_error fmt = 
@@ -215,7 +215,7 @@ struct
       | `Float f -> `Constant (`Float f)
       | `Table t -> `Table t 
       | `List vs ->
-          `Concat (List.map (fun v -> `Singleton (expression_of_value v)) vs)
+          `Append (List.map (fun v -> `Singleton (expression_of_value v)) vs)
       | `Record fields ->
           `Record
             (List.fold_left
@@ -256,7 +256,7 @@ struct
 
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
-    | `Concat xs when List.for_all (* HACKISH: handle Links string constants *)
+    | `Append xs when List.for_all (* HACKISH: handle Links string constants *)
         (function `Singleton `Constant `Char _c -> true|_->false) xs ->
         `Constant (`String(mapstrcat ""
                              (function `Singleton `Constant `Char x ->
@@ -311,9 +311,9 @@ struct
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; xs] ->
-	`Concat [`Singleton x; xs]
+	`Append [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
-	`Concat [xs; ys]
+	`Append [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
@@ -418,7 +418,7 @@ struct
   and reduce_for_source env eval_body (x, source, body) =
       match source with
         | `Singleton _ 
-        | `Concat _ 
+        | `Append _ 
         | `If _ 
         | `For _ 
         | `Table _ ->

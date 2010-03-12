@@ -141,8 +141,7 @@ let map_inwards map (q, cs, _, _) =
   in
     (q', cs, dummy, dummy)
 
-(* list values and cons *)
-let rec compile_concat env loop l =
+let rec compile_append env loop l =
   match l with
     | e :: [] ->
 	compile_expression env loop e
@@ -378,7 +377,7 @@ and compile_expression env loop e : tblinfo =
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
     | `Singleton e -> compile_expression env loop e
-    | `Concat l -> compile_concat env loop l
+    | `Append l -> compile_concat env loop l
     | `For ([x, l], [], body) -> compile_for env loop x l body
     | `For _ -> failwith "compile_expression: only simple for implemented"
     | `If _ 
