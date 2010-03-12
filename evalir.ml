@@ -346,6 +346,7 @@ module Eval = struct
         let result =
 	  if Settings.get_value Basicsettings.Ferry.output_algebra then
 	    CompileQuery.compile env e;
+	  Query2.compile env (range, e);
           match Query.compile env (range, e) with
             | None -> computation env cont e
             | Some (db, q, t) ->

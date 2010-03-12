@@ -1,7 +1,8 @@
-var db = database "test" "postgresql" ":5432:test:foobar";
-var t = table "test1" with (foo : Int, bar : Int ) from db;
-
-var x = 56;
+fun f(x) { x + 3 }
 query {
-for (r <-- t) [(bar=r.foo+x)]
+	for (i <- [1,2,3,4,65])
+		if (i > 3)
+			[(foo = 2)]
+		else
+			[(foo = 3)]
 }

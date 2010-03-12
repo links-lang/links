@@ -112,6 +112,7 @@ SOURCES = $(OPC)                		\
           irtojs.mli irtojs.ml                  \
 	  irtodot.ml				\
           query.ml                              \
+	  query2.ml				\
 	  algebra.ml				\
 	  compileQuery.ml			\
           evalir.ml                             \
