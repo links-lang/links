@@ -12,3 +12,6 @@ lexer.ml
 *.swp
 \#*
 *.cma
+*.cache
+*.pdf
+*~

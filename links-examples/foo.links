@@ -1,2 +1,5 @@
-for (i <- [1,2,3,4,65]) orderby ("foo")
-	[(foo = 2)]
+var l1 = [1,2,3,4,5];
+query {
+	[(foo = 1, bar = 2)] ++ [(foo = 2, bar = 3)]
+}
+

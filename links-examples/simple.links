@@ -1,5 +1,4 @@
-var i = 12;
 query {
-	var j = 13;
-	concat([[i,j], [j,i]])
+	for (i <- [1,2,3,4])
+		[(foo = i + 2)]
 }
