@@ -344,10 +344,9 @@ module Eval = struct
             | Some (limit, offset) ->
                 Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
-	  (* if Settings.get_value Basicsettings.Ferry.output_algebra then
-	    CompileQuery.compile env e; *)
-	  Query2.compile env (range, e);
-          match Query.compile env (range, e) with
+	  if Settings.get_value Basicsettings.Ferry.output_algebra then
+	    Query2.compile env (range, e);
+	  match Query.compile env (range, e) with
             | None -> computation env cont e
             | Some (db, q, t) ->
                 let (fieldMap, _), _ = 

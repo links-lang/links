@@ -147,7 +147,7 @@ let rec compile_append env loop l =
 	compile_expression env loop e
     | hd_e :: tl_e ->
 	let hd = compile_expression env loop hd_e in
-	let tl = compile_concat env loop tl_e in
+	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
 	(nil, [], dummy, dummy)
@@ -377,7 +377,7 @@ and compile_expression env loop e : tblinfo =
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
     | `Singleton e -> compile_expression env loop e
-    | `Append l -> compile_concat env loop l
+    | `Append l -> compile_append env loop l
     | `For ([x, l], [], body) -> compile_for env loop x l body
     | `For _ -> failwith "compile_expression: only simple for implemented"
     | `If _ 
