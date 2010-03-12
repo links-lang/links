@@ -432,9 +432,9 @@ let out_unary_op out op id child_id =
   in
     match op with
       | RowNum rownum_info ->
-	  n "row_num" (fun () -> out_rownum_info out rownum_info)
+	  n "rownum" (fun () -> out_rownum_info out rownum_info)
       | RowID rowid_info ->
-	  n "row_id" (fun () -> out_rowid_info out rowid_info)
+	  n "rowid" (fun () -> out_rowid_info out rowid_info)
       | RowRank rank_info ->
 	  n "rowrank" (fun () -> out_rank_info out rank_info)
       | Rank rank_info ->
