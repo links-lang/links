@@ -6,7 +6,7 @@ type t =
     | `If of t * t * t
     | `Table of Value.table
     | `Singleton of t | `Concat of t list
-    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t * t StringMap.t
+    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t StringMap.t
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of string * t list
@@ -80,7 +80,7 @@ struct
     | `If of pt * pt * pt
     | `Table of Value.table
     | `Singleton of pt | `Concat of pt list
-    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt * pt StringMap.t
+    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt option * pt StringMap.t
     | `Variant of string * pt
     | `XML of Value.xmlitem
     | `Apply of string * pt list
@@ -101,7 +101,7 @@ struct
         | `Singleton v -> `Singleton (bt v)
         | `Concat vs -> `Concat (List.map bt vs)
         | `Record fields -> `Record (StringMap.map bt fields)
-	| `Extend (r, ext_fields) -> `Extend (bt r, StringMap.map bt ext_fields)
+	| `Extend (r, ext_fields) -> `Extend (opt_map bt r, StringMap.map bt ext_fields)
         | `Variant (name, v) -> `Variant (name, bt v)
         | `XML xmlitem -> `XML xmlitem
         | `Project (v, name) -> `Project (bt v, name)
@@ -286,7 +286,7 @@ struct
             | _ -> eval_error "Error adding fields: non-record"
         end
 *)
-	let r = opt_app (value env) (`Record StringMap.empty) r in
+	let r = opt_map (value env) r in
 	  `Extend (r, (StringMap.fold 
 		       (fun label v fields -> StringMap.add label (value env v) fields)
 		       ext_fields
@@ -453,4 +453,5 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
-      Debug.print ("query2:\n "^string_of_t v)
+      Debug.print ("query2:\n "^string_of_t v);
+      CompileQuery.compile v

@@ -1,6 +1,7 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
 var t = table "test1" with (foo : Int, bar : Int ) from db;
+fun f(x) { x + 2}
 query {
-for (r <-- t) 
-[(r with bar = intToFloat(r.foo) +. 5.4)]
+for (r <-- t) orderby (r.foo, if (true) r.foo else r.bar)
+	[(field = r.bar, bla=f(r.bar))]
 }

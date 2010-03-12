@@ -128,93 +128,16 @@ let wrap_not res op_attr algexpr =
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.IntType); (A.Pos 0, A.IntType)])
 
-(* record values and extend *)
-let rec singleton_record (env, aenv) loop (name, e) =
-  let (q, cs, _, _) = compile_value_node (env, aenv) loop e in
-    (q, [Cs.Mapping (name, cs)], dummy, dummy)
-
-and extend_record (env, aenv) loop ext_fields r =
-  match ext_fields with
-    | (name, e) :: [] -> 
-	(match r with 
-	   | Some record ->
-	       merge_records (singleton_record (env, aenv) loop (name, e)) record
-	   | None ->
-	       singleton_record (env, aenv) loop (name, e))
-    | (name, e) :: tl ->
-	let new_field = singleton_record (env, aenv) loop (name, e) in
-	let record = extend_record (env, aenv) loop tl r in
-	  merge_records new_field record
-    | [] ->
-	failwith "CompileQuery.extend_record: empty ext_fields"
-
-and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
-  let r2_leafs = Cs.leafs r2_cs in
-  let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
-  let old_names_r2 = items_of_offsets r2_leafs in
-  let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
-  let iter = A.Iter 0 in
-  let iter' = A.Iter 1 in
-  let q =
-    A.Dag.mk_project
-      (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
-      (ref (A.Dag.mk_eqjoin
-	      (iter, iter')
-	      (ref r1_q)
-	      (ref ((A.Dag.mk_project
-		       ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
-		       (ref r2_q))))))
-  in
-  let cs = Cs.append r1_cs r2_cs in
-    (q, cs, dummy, dummy)
-
-and project_record (env, aenv) loop field r =
-  let (q_r, cs_r, _, _) = compile_value_node (env, aenv) loop r in
-  let field_cs' = Cs.record_field cs_r field in
-  let c_old = Cs.leafs field_cs' in
-  let offset = List.hd c_old in
-  let c_new = incr c_old (-offset + 1) in
-  let field_cs = Cs.shift field_cs' (-offset + 1) in
-  let iter = A.Iter 0 in
-  let pos = A.Pos 0 in
-  let q =
-    A.Dag.mk_project
-      ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
-      (ref q_r)
-  in
-    (q, field_cs, dummy, dummy)
-
-and singleton_record_value (env, aenv) loop (name, v) =
-  let (q, cs, _, _) = compile_value (env, aenv) loop v in
-    (q, [Cs.Mapping (name, cs)], dummy, dummy)
-
-and compile_record_value (env, aenv) loop r =
-  let singleton_record_value (name, v) =
-    let (q, cs, _, _) = compile_value (env, aenv) loop v in
-      (q, [Cs.Mapping (name, cs)], dummy, dummy)
-  in
-    match r with
-      | (name, value) :: [] ->
-	  singleton_record_value (name, value)
-      | (name, value) :: tl ->
-	  let f = singleton_record_value (name, value) in
-	    merge_records f (compile_record_value (env, aenv) loop tl)
-      | [] ->
-	  failwith "CompileQuery.compile_record_value: empty record"
-
 (* list values and cons *)
-and compile_cons (env, aenv) loop hd_e tl_e =
-  let hd = compile_value_node (env, aenv) loop hd_e in
-  let tl = compile_value_node (env, aenv) loop tl_e in
-    compile_list hd tl
-
-and compile_list_value (env, aenv) loop list =
-  match list with
-    | hd_value :: tl_value ->
-	let hd = compile_value (env, aenv) loop hd_value in
-	let tl = compile_list_value (env, aenv) loop tl_value in
+let rec compile_concat env loop l =
+  match l with
+    | e :: [] ->
+	compile_expression env loop e
+    | hd_e :: tl_e ->
+	let hd = compile_expression env loop hd_e in
+	let tl = compile_concat env loop tl_e in
 	  compile_list hd tl
-    | [] -> 
+    | [] ->
 	(!nil, [], dummy, dummy)
 
 and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
@@ -238,10 +161,10 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   in
     (q, fused_cs, dummy, dummy)
 
-and compile_binop (env, aenv) loop wrapper operands =
+and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
-  let (op1_q, op1_cs, _, _) = compile_value_node (env, aenv) loop (List.hd operands) in
-  let (op2_q, op2_cs, _, _) = compile_value_node (env, aenv) loop (List.nth operands 1) in
+  let (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
+  let (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
     assert (Cs.is_operand op1_cs);
     assert (Cs.is_operand op2_cs);
     let iter = A.Iter 0 in
@@ -264,9 +187,9 @@ and compile_binop (env, aenv) loop wrapper operands =
     in
       (q, op1_cs, dummy, dummy)
 
-and compile_unop (env, aenv) loop wrapper operands =
+and compile_unop env loop wrapper operands =
   assert ((List.length operands) = 1);
-  let (op_q, op_cs, _, _) = compile_value_node (env, aenv) loop (List.hd operands) in
+  let (op_q, op_cs, _, _) = compile_expression env loop (List.hd operands) in
     assert (Cs.is_operand op_cs);
     let c = A.Item 1 in
     let res = A.Item 2 in
@@ -281,26 +204,23 @@ and compile_unop (env, aenv) loop wrapper operands =
     in
       (q, op_cs, dummy, dummy)
 
-and function_dispatch (env, aenv) loop op args =
-  match op with
-    | `PrimitiveFunction "Cons" ->
-	assert ((List.length args) = 2);
-	compile_cons (env, aenv) loop (List.nth args 0) (List.nth args 1)
-    | `PrimitiveFunction "+" 
-    | `PrimitiveFunction "+." -> compile_binop (env, aenv) loop (wrap_1to1 A.Add) args
-    | `PrimitiveFunction "-" 
-    | `PrimitiveFunction "-." -> compile_binop (env, aenv) loop (wrap_1to1 A.Subtract) args
-    | `PrimitiveFunction "*"
-    | `PrimitiveFunction "*." -> compile_binop (env, aenv) loop (wrap_1to1 A.Multiply) args
-    | `PrimitiveFunction "/" 
-    | `PrimitiveFunction "/." -> compile_binop (env, aenv) loop (wrap_1to1 A.Divide) args
-    | `PrimitiveFunction "==" -> compile_binop (env, aenv) loop wrap_eq args
-    | `PrimitiveFunction ">" -> compile_binop (env, aenv) loop wrap_gt args
-    | `PrimitiveFunction "<" -> compile_binop (env, aenv) loop wrap_gt (List.rev args)
-    | `PrimitiveFunction "<>" -> compile_binop (env, aenv) loop wrap_ne args
-    | `PrimitiveFunction "not" -> compile_unop (env, aenv) loop wrap_not args
-    | `PrimitiveFunction ">="
-    | `PrimitiveFunction "<="
+and compile_apply env loop f args =
+  match f with
+    | "+" 
+    | "+." -> compile_binop env loop (wrap_1to1 A.Add) args
+    | "-" 
+    | "-." -> compile_binop env loop (wrap_1to1 A.Subtract) args
+    | "*"
+    | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
+    | "/" 
+    | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
+    | "==" -> compile_binop env loop wrap_eq args
+    | ">" -> compile_binop env loop wrap_gt args
+    | "<" -> compile_binop env loop wrap_gt (List.rev args)
+    | "<>" -> compile_binop env loop wrap_ne args
+    | "not" -> compile_unop env loop wrap_not args
+    | ">="
+    | "<="
     | _ ->
 	failwith "CompileQuery.op_dispatch: not implemented"
 	  (*
@@ -312,6 +232,7 @@ and function_dispatch (env, aenv) loop op args =
 	    | `PrimitiveFunction "hd" ->
 	    | `PrimitiveFunction "tl" ->
 	  *)
+
 (*
 and compile_concatmap (env, aenv) loop (e1 : Value.t) (e2 : ) (e1 : Value.t) =
   let iter = A.Iter 0 in
@@ -344,6 +265,72 @@ and compile_concatmap (env, aenv) loop (e1 : Value.t) (e2 : ) (e1 : Value.t) =
   let (q2, cs2, _, _) = compile_value_node (env, AEnv.bind v q_v aenv) 
 *)    
 
+and singleton_record env loop (name, e) =
+  let (q, cs, _, _) = compile_expression env loop e in
+    (q, [Cs.Mapping (name, cs)], dummy, dummy)
+
+and extend_record env loop ext_fields r =
+  assert (match ext_fields with [] -> false | _ -> true);
+  match ext_fields with
+    | (name, e) :: [] -> 
+	(match r with 
+	   | Some record ->
+	       merge_records (singleton_record env loop (name, e)) record
+	   | None ->
+	       singleton_record env loop (name, e))
+    | (name, e) :: tl ->
+	let new_field = singleton_record env loop (name, e) in
+	let record = extend_record env loop tl r in
+	  merge_records new_field record
+    | [] ->
+	failwith "CompileQuery.extend_record: empty ext_fields"
+
+and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
+  let r2_leafs = Cs.leafs r2_cs in
+  let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
+  let old_names_r2 = items_of_offsets r2_leafs in
+  let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
+  let iter = A.Iter 0 in
+  let iter' = A.Iter 1 in
+  let q =
+    A.Dag.mk_project
+      (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
+      (ref (A.Dag.mk_eqjoin
+	      (iter, iter')
+	      (ref r1_q)
+	      (ref ((A.Dag.mk_project
+		       ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
+		       (ref r2_q))))))
+  in
+  let cs = Cs.append r1_cs r2_cs in
+    (q, cs, dummy, dummy)
+
+and compile_project env loop field r =
+  let (q_r, cs_r, _, _) = compile_expression env loop r in
+  let field_cs' = Cs.record_field cs_r field in
+  let c_old = Cs.leafs field_cs' in
+  let offset = List.hd c_old in
+  let c_new = incr c_old (-offset + 1) in
+  let field_cs = Cs.shift field_cs' (-offset + 1) in
+  let iter = A.Iter 0 in
+  let pos = A.Pos 0 in
+  let q =
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
+      (ref q_r)
+  in
+    (q, field_cs, dummy, dummy)
+
+and compile_record env loop r =
+  match r with
+    | (name, value) :: [] ->
+	singleton_record env loop (name, value)
+    | (name, value) :: tl ->
+	let f = singleton_record env loop (name, value) in
+	  merge_records f (compile_record env loop tl)
+    | [] ->
+	failwith "CompileQuery.compile_record_value: empty record"
+
 and compile_constant loop (const : Constant.constant) =
   let cs = [Cs.Offset 1] in
   let q =
@@ -355,92 +342,33 @@ and compile_constant loop (const : Constant.constant) =
   in
     (q, cs, dummy, dummy)
 
-(* values from the environment (value.ml) *)
-and compile_value (env, aenv) loop v =
-  match v with
-    | #Value.primitive_value_basis as p ->
-	compile_constant loop (constant_of_primitive_value p)
-    | `List l ->
-	compile_list_value (env, aenv) loop l
-    | `Record r ->
-	compile_record_value (env, aenv) loop r
-    | `ClientFunction _
-    | `Continuation _
-    | `FunctionPtr _
-    | `PrimitiveFunction _
-    | `RecFunction _
-
-    | `Variant _ 
-    | _ ->
-	failwith "CompileQuery.compile_value: not implemented"
-
-(* value nodes from the IR (ir.ml) *)
-and compile_value_node (env, aenv) loop e =
+and compile_expression env loop e =
   match e with
-    | `Constant c->
-	compile_constant loop c
-    | `Extend (ext_fields, record) ->
-	(match record with
-	   | None ->
-	       extend_record (env, aenv) loop (StringMap.to_alist ext_fields) None
-	   | Some value ->
-	       let record_value = compile_value_node (env, aenv) loop value in
-		 extend_record (env, aenv) loop (StringMap.to_alist ext_fields) (Some record_value))
-    | `Project (field_name, r) ->
-	project_record (env, aenv) loop field_name r
-    | `ApplyPure (f, args) ->
-	(match f with
-	   | `TApp (`Variable var, _) ->
-	       let value = 
-		 match lookup_env var env with
-		   | Some v -> v
-		   | None -> failwith "CompileQuery.compile_value_node: var not found"
-	       in
-		 function_dispatch (env, aenv) loop value args
-	   | _ ->
-	       failwith "CompileQuery.compile_value_node: `ApplyPure no `TApp value")
-    | `TApp (v, _) ->
-	compile_value_node (env, aenv) loop v
-    | `Variable var -> 
-	(try
-	  AEnv.lookup aenv var
-	with NotFound _ ->
-	  (match lookup_env var env with
-	    | Some v -> compile_value (env, aenv) loop v
-	    | None -> failwith "CompileQuery.compile_value_node: var not found"))
-    | _ ->
-	failwith "CompileQuery.value_node: not implemented"
+    | `Constant c -> compile_constant loop c
+    | `Apply (f, args) -> compile_apply env loop f args
+    | `Var x -> AEnv.lookup env x
+    | `Project (r, field) -> compile_project env loop field r
+    | `Record r -> compile_record env loop (StringMap.to_alist r)
+    | `Extend (r, ext_fields) ->
+	let ext_fields = StringMap.to_alist ext_fields in
+	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
+    | `Singleton e -> compile_expression env loop e
+    | `Concat l -> compile_concat env loop l
+    | `For _
+    | `If _ 
+    | `Table _
+    | `Erase _
+    | `Closure _
+    | `Variant _
+    | `XML _ -> failwith "compile_expression: not implemented"
+    | `Primitive _ -> failwith "compile_expression: eval error"
 
-and compile_tail_computation (env, aenv) loop tailcomp =
-  match tailcomp with
-    | `Return value ->
-	compile_value_node (env, aenv) loop value
-(*    | `Apply (f, args) -> *)
-	
-    | _ ->
-	failwith "CompileQuery.compile_tail_computation: not implemented"
-
-and compile_computation (env, aenv) loop (bindings, tailcomp) =
-  let aenv = 
-    List.fold_left
-      (fun aenv' binding ->
-	match binding with
-	 | `Let (binder, (_tyvars, tailcomp)) ->
-	     let tin = compile_tail_computation (env, aenv) loop tailcomp in
-	       AEnv.bind aenv' ((Var.var_of_binder binder), tin)
-	 | _ ->
-	     failwith "CompileQuery.compile_computation: not implemented")
-      aenv
-      bindings
-  in
-    compile_tail_computation (env, aenv) loop tailcomp
-
-let compile env e =
+let compile e =
   let loop = 
     (ref (A.Dag.mk_littbl
 	    ([[`Int (Num.Int 1)]], [(A.Iter 0, A.IntType)])))
   in
-  let (q, cs, _, _) = compile_computation (env, AEnv.empty) loop e in
+  let (q, cs, _, _) = compile_expression AEnv.empty loop e in
   let q = ref q in
   let dag = 
     A.Dag.mk_serializerel 
@@ -449,3 +377,4 @@ let compile env e =
       q
   in
     A.Dag.export_plan "plan.xml" (ref dag)
+
