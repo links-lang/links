@@ -438,7 +438,7 @@ struct
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->
-        reduce_if_condition (c, apply env (t, args), apply env (e, args))
+        `If (c, apply env (t, args), apply env (e, args))
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
     | _ -> eval_error "Application of non-function"
@@ -494,20 +494,9 @@ struct
         let c = value env c in
         let t = computation env t in
         let e = computation env e in
-          reduce_if_condition (c, t, e)
+	  `If (c, t, e)
             (*     | `Special (`For (x, source, body)) -> *)
             (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
-  and reduce_concat vs =
-    let vs =
-      (concat_map
-         (function
-            | `Concat vs -> vs
-            | v -> [v])
-         vs)
-    in
-      match vs with
-        | [`Singleton v] -> `Singleton v
-        | vs -> `Concat vs
   and reduce_for_source env eval_body (x, source, body) =
       match source with
         | `Singleton _ 
@@ -520,52 +509,6 @@ struct
             let labels = table_labels table in
 	      `For ([x, source], [], eval_body env (x, `Var (x, labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
-  and reduce_if_condition (c, t, e) =
-    match c with
-      | `Constant (`Bool true) -> t
-      | `Constant (`Bool false) -> e
-      | c when is_list t ->
-          if e = nil then
-            if t = nil then nil
-            else
-              reduce_if_then (c, t, e)
-          else
-            reduce_concat [reduce_if_condition (c, t, nil); reduce_if_condition (`Apply ("not", [c]), e, nil)]
-      | `If (c', t', `Constant (`Bool false)) ->
-          reduce_if_then (`Apply ("&&", [c'; t']), t, e)
-      | _ ->
-          reduce_if_then (c, t, e)
-  and reduce_if_then (c, t, e) =
-    let rt = reduce_if_then in
-      match t with
-        | `Concat vs ->
-            reduce_concat (List.map (fun v -> rt (c, v, e)) vs)
-        | `For (gs, os, body) ->
-            `For (gs, os, rt (c, body, e))
-        | `Record then_fields ->
-            begin match e with
-              | `Record else_fields ->
-                  assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
-                  `Record
-                    (StringMap.fold
-                       (fun name t fields ->
-                          let e = StringMap.find name else_fields in
-                            StringMap.add name (rt (c, t, e)) fields)
-                       then_fields
-                       StringMap.empty)
-              | _ -> eval_error "Mismatched fields"
-            end
-        | _ ->
-            begin
-              match t, e with
-                | `Constant (`Bool true), _ ->
-                    `Apply ("||", [c; e])
-                | _, `Constant (`Bool false) ->
-                    `Apply ("&&", [c; t])
-                | _ ->
-                    `If (c, t, e)
-            end
-
 
   let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e);*)
