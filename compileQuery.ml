@@ -364,7 +364,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
   let items = snd (List.fold_left (fun (i, l) c -> (i + 1, (c, A.Item i) :: l)) (1, []) columns) in
   let cs = List.map (function (tname, A.Item i) -> Cs.Mapping (tname, [Cs.Offset i]) | _ -> assert false) items in
   let pos = A.Pos 0 in
-  let key_infos = [[A.Iter 0]] in
+  let key_infos = [[A.Item 1]] in
   let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
   let q =
     ref (A.Dag.mk_cross
