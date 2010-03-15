@@ -1,5 +1,2 @@
-var l1 = [1,2,3,4,5];
-query {
-	[(foo = 1, bar = 2)] ++ [(foo = 2, bar = 3)]
-}
-
+for (i <- [1,2,3,4,5], j <- ["foo", "bar"]) orderby (i, j)
+	[(x = i, y = j)]

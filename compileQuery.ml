@@ -77,20 +77,6 @@ let proj_list = List.map proj1
 let proj_list_map new_cols old_cols = 
   List.map2 (fun a b -> (a, b)) new_cols old_cols
 
-let lookup_env var env =
-  match Value.lookup var env with
-    | Some v -> Some v
-    | None -> Some (Lib.primitive_stub (Lib.primitive_name var))
-
-let constant_of_primitive_value (value : Value.primitive_value_basis) : Constant.constant =
-  match value with
-    | `NativeString s -> `String s
-    | `XML _ -> failwith "no xml in query allowed"
-    | `Float f -> `Float f
-    | `Int i -> `Int i
-    | `Bool b -> `Bool b
-    | `Char c -> `Char c
-
 let wrap_1to1 f res c c' algexpr =
   A.Dag.mk_fun1to1
     (f, res, [c; c'])
@@ -355,7 +341,7 @@ and compile_record env loop r =
     | [] ->
 	failwith "CompileQuery.compile_record_value: empty record"
 
-(* HACK HACK HACK *)
+(* HACK HACK HACK: rewrite this when Value.table stores key information *)
 and compile_table loop ((_db, _params), tblname, _row) =
   Printf.printf "tblname = %s\n" tblname;
   flush stdout;
