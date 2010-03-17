@@ -374,6 +374,57 @@ and compile_constant loop (c : Constant.constant) =
   in
     (q, cs, dummy, dummy)
 
+and compile_if env loop e1 e2 e3 =
+  let iter = A.Iter 0 in
+  let pos = A.Pos 0 in
+  let iter' = A.Iter 1 in
+  let c = A.Item 1 in
+  let res = A.Item 2 in
+    
+  let select loop (q, cs, _, _) =
+    let cols = items_of_offsets (Cs.leafs cs) in
+      let q' =
+	ref (A.Dag.mk_project
+	   ([proj1 iter; proj1 pos] @ (proj_list cols))
+	   (ref (A.Dag.mk_eqjoin
+		   (iter, iter')
+		   q
+		   (ref (A.Dag.mk_project
+			   [(iter', iter)]
+			   loop)))))
+      in
+	(q', cs, dummy, dummy)
+  in
+  (* condition *)
+  let (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
+    assert (Cs.is_operand cs_e1);
+    let loop_then =
+      ref (A.Dag.mk_project
+	     [proj1 iter]
+	     (ref (A.Dag.mk_select
+		     c
+		     q_e1)))
+    in
+      let loop_else =
+	ref (A.Dag.mk_project
+	       [proj1 iter]
+	       (ref (A.Dag.mk_select
+		       res
+		       (ref (A.Dag.mk_funboolnot
+			       (res, c)
+			       q_e1)))))
+      in
+      let env_then = AEnv.map (select loop_then) env in
+      let env_else = AEnv.map (select loop_else) env in
+      let (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
+      let (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
+      let q =
+	ref (A.Dag.mk_disjunion
+	       q_e2
+	       q_e3)
+      in
+	(q, cs_e2, dummy, dummy)
+
 and compile_expression env loop e : tblinfo =
   match e with
     | `Constant c -> compile_constant loop c
@@ -387,9 +438,10 @@ and compile_expression env loop e : tblinfo =
     | `Singleton e -> compile_expression env loop e
     | `Append l -> compile_append env loop l
     | `Table t -> compile_table loop t
+    | `If (c, t, e) -> compile_if env loop c t e
     | `For ([x, l], [], body) -> compile_for env loop x l body
     | `For _ -> failwith "compile_expression: only simple for implemented"
-    | `If _ 
+
     | `Erase _
     | `Closure _
     | `Variant _
