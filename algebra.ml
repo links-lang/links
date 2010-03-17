@@ -404,12 +404,12 @@ let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
   List.iter
     (fun key ->
        let c () =
-	 List.fold_left
-	   (fun i attr -> 
+	 List.fold_right
+	   (fun attr i -> 
 	      out_col out [("name", (string_of_attr_name attr)); ("position", string_of_int i)];
 	      (i + 1))
-	   0
 	   key
+	   0
        in
 	 out_el_childs out "key" [] c)
     key_infos;

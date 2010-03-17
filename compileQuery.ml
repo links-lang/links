@@ -231,8 +231,25 @@ and compile_apply env loop f args =
 	    | `PrimitiveFunction "hd" ->
 	    | `PrimitiveFunction "tl" ->
 	  *)
-
-
+(*
+let orderby_map env loop os map =
+  let iter = A.Iter 0 in
+  let inner = A.Iter 1 in
+  let outer = A.Iter 2 in
+  let item = A.Item 1 in
+  let sort_cols = mapIndex (fun _ i -> A.Item (i + 2)) os in
+  let f os cols =
+    match os, cols with
+      | [o], [col] ->
+	  ref (A.Dag.mk_project 
+		 [proj1 outer; proj1 inner; proj1 (List.hd sort_cols)]
+		 (ref (A.Dag.mk_eqjoin
+			 map
+			 
+      | 
+  in
+    f (List.map (compile_expression env loop) os) sort_cols
+*)  
 and compile_for env loop v e1 e2 =
   let iter = A.Iter 0 in
   let inner = A.Iter 1 in
@@ -348,7 +365,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
   flush stdout;
   assert (tblname = "test1");
   let columns = ["foo"; "bar"] in
-  let items = snd (List.fold_left (fun (i, l) c -> (i + 1, (c, A.Item i) :: l)) (1, []) columns) in
+  let items = snd (List.fold_right (fun c (i, l) -> (i + 1, (c, A.Item i) :: l)) columns (1, [])) in
   let cs = List.map (function (tname, A.Item i) -> Cs.Mapping (tname, [Cs.Offset i]) | _ -> assert false) items in
   let pos = A.Pos 0 in
   let key_infos = [[A.Item 1]] in
