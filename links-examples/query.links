@@ -3,6 +3,6 @@ var t = table "test1" with (foo : Int, bar : Int ) from db;
 fun f(x) { x + 2}
 query {
 for (r <-- t) 
-	for (i <- [1,2,3,4,5])
-		[(foo = r.foo + i)] ++ [(foo = r.bar - i)]
+	for (i <- [1,2,3,4,5,6])
+		[(1 = r.foo + i, 2=r.foo, 3=i)]
 }

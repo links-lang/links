@@ -116,12 +116,13 @@ let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 let map_inwards map (q, cs, _, _) =
   let iter = A.Iter 0 in
   let inner = A.Iter 1 in
+  let outer = A.Iter 2 in
   let pos = A.Pos 0 in
   let q' =
     (ref (A.Dag.mk_project
 	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
 	    (ref (A.Dag.mk_eqjoin
-		    (iter, inner)
+		    (iter, outer)
 		    q
 		    map))))
   in
