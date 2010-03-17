@@ -1,7 +1,33 @@
 open Utility
 
 (*FIXME: should char constants be allowed *)
-type base_type = IntType | StrType | BoolType | CharType | FloatType
+type base_type = IntType | StrType | BoolType | CharType | FloatType | NatType
+
+type constant = 
+  | Float  of float
+  | Int    of Num.num
+  | String of string
+  | Bool   of bool
+  | Char   of char 
+  | Nat of nativeint 
+
+let escape_string s = (* SQL standard for escaping single quotes in a string *)
+  Str.global_replace (Str.regexp "'") "''" s
+
+let string_of_constant = function
+  | Bool value -> string_of_bool value
+  | Int value -> Num.string_of_num value
+  | Char c -> "'"^ Char.escaped c ^"'" 
+  | String s -> "'" ^ escape_string s ^ "'"
+  | Float value   -> string_of_float value
+  | Nat n -> Nativeint.to_string n
+
+let const = function
+  | `Bool b -> Bool b
+  | `Int i -> Int i
+  | `String s -> String s
+  | `Float f -> Float f
+  | `Char c -> Char c
 
 (* aggregate functions *)
 type aggr = Avg | Max | Min | Sum
@@ -43,8 +69,8 @@ type select_info = selection_attr_name
 type pos_select_info = int * sort_infos * partitioning_attr_name option
 type eqjoin_info = left_attr_name * right_attr_name
 type thetajoin_info = (join_comparison * (left_attr_name * right_attr_name)) list
-type lit_tbl_info = Constant.constant list list * schema_infos
-type attach_info = result_attr_name * Constant.constant
+type lit_tbl_info = constant list list * schema_infos
+type attach_info = result_attr_name * constant
 type cast_info = result_attr_name * attr_name * base_type
 type binop_info = result_attr_name * (left_attr_name * right_attr_name)
 type unop_info = result_attr_name * attr_name
@@ -122,13 +148,15 @@ let string_of_base_type = function
   | BoolType -> "bln"
   | CharType -> "str"
   | FloatType -> "dbl"
+  | NatType -> "nat"
 
 let typestring_of_constant = function
-  | `Float _ -> "dbl"
-  | `Int _ -> "int"
-  | `String _ -> "string"
-  | `Bool _ -> "bool"
-  | `Char _ -> "char"
+  | Float _ -> "dbl"
+  | Int _ -> "int"
+  | String _ -> "string"
+  | Bool _ -> "bool"
+  | Char _ -> "char"
+  | Nat _ -> "nat"
     
 let string_of_func = function
   | Add -> "add"
@@ -284,7 +312,7 @@ let out_lit_tbl_info out ((values_per_col, schema_infos) : lit_tbl_info) =
 		   out 
 		   "value" 
 		   [("type", typestring_of_constant value)]
-		   (fun () -> out (`Data (Constant.string_of_constant value))))
+		   (fun () -> out (`Data (string_of_constant value))))
 	      values
 	  in
 	    out_col_childs out [("name", (string_of_attr_name (fst info))); ("new", "true")] c)
@@ -299,7 +327,7 @@ let out_attach_info out (result_attr, value) =
   let xml_attrs = [("name", (string_of_attr_name result_attr)); ("new", "true")] in
   let f () = 
     out (`El_start (tag_attr "value" [("type", typestring_of_constant value)]));
-    out (`Data (Constant.string_of_constant value));
+    out (`Data (string_of_constant value));
     out `El_end
   in
     out_col_childs out xml_attrs f;

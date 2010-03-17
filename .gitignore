@@ -15,3 +15,6 @@ lexer.ml
 *.cache
 *.pdf
 *~
+*.dot
+*.xml
+*.sql

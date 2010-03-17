@@ -111,7 +111,7 @@ let wrap_not res op_attr algexpr =
     algexpr
 
 (* the empty list *)
-let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.IntType); (A.Pos 0, A.IntType)])
+let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 
 let map_inwards map (q, cs, _, _) =
   let iter = A.Iter 0 in
@@ -151,10 +151,10 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
 		   (pos', [(ord, A.Ascending); (pos, A.Ascending)])
 		   (ref (A.Dag.mk_disjunion
 			   (ref (A.Dag.mk_attach
-				   (ord, `Int (Num.Int 1))
+				   (ord, A.Nat 1n)
 				   hd_q))
 			   (ref (A.Dag.mk_attach
-				   (ord, `Int (Num.Int 2))
+				   (ord, A.Nat 2n)
 				   tl_q)))))))
   in
     (q, fused_cs, dummy, dummy)
@@ -256,7 +256,7 @@ and compile_for env loop v e1 e2 =
   in
   let q_v' =
     ref (A.Dag.mk_attach
-	   (pos, `Int (Num.Int 1))
+	   (pos, A.Nat 1n)
 	   (ref (A.Dag.mk_project
 		   ([(iter, inner)] @ (proj_list (items_of_offsets (Cs.leafs cs1))))
 		   q_v)))
@@ -362,13 +362,13 @@ and compile_table loop ((_db, _params), tblname, _row) =
   in
     (q, cs, dummy, dummy)
 
-and compile_constant loop (const : Constant.constant) =
+and compile_constant loop (c : Constant.constant) =
   let cs = [Cs.Offset 1] in
   let q =
     (ref (A.Dag.mk_attach
-	    (A.Item 1, const)
+	    (A.Item 1, A.const c)
 	    (ref (A.Dag.mk_attach
-		    (A.Pos 0, `Int (Num.Int 1))
+		    (A.Pos 0, A.Nat 1n)
 		    loop))))
   in
     (q, cs, dummy, dummy)
@@ -398,7 +398,7 @@ and compile_expression env loop e : tblinfo =
 let compile e =
   let loop = 
     (ref (A.Dag.mk_littbl
-	    ([[`Int (Num.Int 1)]], [(A.Iter 0, A.IntType)])))
+	    ([[A.Nat 1n]], [(A.Iter 0, A.NatType)])))
   in
   let (q, cs, _, _) = compile_expression AEnv.empty loop e in
   let dag = 
@@ -408,4 +408,3 @@ let compile e =
       q
   in
     A.Dag.export_plan "plan.xml" (ref dag)
-

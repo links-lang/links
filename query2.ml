@@ -436,14 +436,11 @@ struct
 	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
 
-  let eval env e =
-(*    Debug.print ("e: "^Ir.Show_computation.show e);*)
-    computation (env_of_value_env env) e
+  let eval env e = computation (env_of_value_env env) e
 end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
   fun env (_range, e) ->
-(*     Debug.print ("e: "^Ir.Show_computation.show e); *)
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
