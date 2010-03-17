@@ -153,7 +153,7 @@ let string_of_base_type = function
 let typestring_of_constant = function
   | Float _ -> "dbl"
   | Int _ -> "int"
-  | String _ -> "string"
+  | String _ -> "str"
   | Bool _ -> "bool"
   | Char _ -> "char"
   | Nat _ -> "nat"
