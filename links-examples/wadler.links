@@ -1,0 +1,27 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+
+  fun eval(r) {
+    switch (r) {
+
+     case (Equals (t)) ->  fun (u) { u == t }
+     case (And (p, q)) ->   var f = eval(p); var g = eval(q); fun (u) { f(u) && g(u) }
+     case (Or (p, q)) ->    var f = eval(p); var g = eval(q); fun (u) { f(u) || g(u) }
+     case (Not (p)) ->     var f = eval(p); fun (u) {not(f(u)) }
+    }
+  }
+ 
+  fun test(r) {
+    var f = eval(r);
+    query {
+      for (r <-- t)
+      where (f(r.foo))
+      [(foo = r.foo)]
+}
+   }
+
+#var r = Or (( Equals (2)), (Equals(4)));
+var r = Not(Equals(2));
+test(r)
+ 
+
