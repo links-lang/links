@@ -1,0 +1,10 @@
+var s = 4;
+query {
+#       if (true)
+	if (4 == s)
+		[(foo = 1)]
+	else
+		[(foo = 2)]
+}
+
+

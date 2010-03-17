@@ -1,0 +1,11 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) from db;
+fun f(x) { x + 2}
+query {
+for (r <-- t) 
+	for (i <- [1,2,3,4,5,6,7])
+		if (r.foo == i) 
+			[(foo = (r.foo-1), baz = r.bar + 1)]
+		else
+			[(foo = 42, baz = 23)]
+}
