@@ -18,7 +18,7 @@ let string_of_constant = function
   | Bool value -> string_of_bool value
   | Int value -> Num.string_of_num value
   | Char c -> "'"^ Char.escaped c ^"'" 
-  | String s -> "'" ^ escape_string s ^ "'"
+  | String s -> escape_string s
   | Float value   -> string_of_float value
   | Nat n -> Nativeint.to_string n
 
@@ -372,7 +372,7 @@ let out_fun_aggr_info out info =
       
 let out_fun_aggr_count_info out (result_attr, maybe_part_attr) =
   out (`El_start (tag "content"));
-  out_col out [("name", (string_of_attr_name result_attr))];
+  out_col out [("name", (string_of_attr_name result_attr)); ("new", "true")];
   out_maybe_part_name out maybe_part_attr;
   out `El_end
 
