@@ -145,6 +145,15 @@ let rec omap map sort_criteria sort_cols =
 	map
     | _ -> assert false
 
+let abspos q cols =
+  ref (A.Dag.mk_project
+	 ([proj1 iter; proj1 pos] @ (proj_list cols))
+	 (ref (A.Dag.mk_rownum
+		 (pos, [(pos', A.Ascending)], Some iter)
+		 (ref (A.Dag.mk_project
+		    ([proj1 iter; (pos', pos)] @ (proj_list cols))
+		    q)))))
+
 let rec compile_append env loop l =
   match l with
     | e :: [] ->
@@ -181,26 +190,25 @@ and compile_nth env loop operands =
   assert ((List.length operands) = 2);
   let (q1, _, _, _) = compile_expression env loop (List.hd operands) in
   let (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
+  let q2' = abspos q2 (items_of_offsets (Cs.leafs cs2)) in
   let offset = List.length (Cs.leafs cs2) in
   let c' = A.Item (offset + 1) in
   let res = A.Item (offset + 2) in
   let q =
-    ref (A.Dag.mk_attach
-	   (pos, A.Nat 1n)
-	   (ref (A.Dag.mk_project
-		   ([proj1 iter] @ proj_list (items_of_offsets (Cs.leafs cs2)))
-		   (ref (A.Dag.mk_select
-			   res
-			   (ref (A.Dag.mk_funnumeq
-				   (res, (pos', c'))
-				   (ref (A.Dag.mk_eqjoin
-					   (iter, iter')
-					   (ref (A.Dag.mk_cast
-						   (pos', pos, A.IntType)
-						   q2))
-					   (ref (A.Dag.mk_project
-						   [(iter', iter); (c', A.Item 1)]
-						   q1)))))))))))
+    (ref (A.Dag.mk_project
+	    ([proj1 iter; proj1 pos] @ proj_list (items_of_offsets (Cs.leafs cs2)))
+	    (ref (A.Dag.mk_select
+		    res
+		    (ref (A.Dag.mk_funnumeq
+			    (res, (pos', c'))
+			    (ref (A.Dag.mk_eqjoin
+				    (iter, iter')
+				    (ref (A.Dag.mk_cast
+					    (pos', pos, A.IntType)
+					    q2'))
+				    (ref (A.Dag.mk_project
+					    [(iter', iter); (c', A.Item 1)]
+					    q1))))))))))
   in
     (q, cs2, dummy, dummy)
 
