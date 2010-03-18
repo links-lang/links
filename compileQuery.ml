@@ -110,14 +110,18 @@ let wrap_not res op_attr algexpr =
     (res, op_attr)
     algexpr
 
+let iter = A.Iter 0 
+let iter' = A.Iter 1
+let inner = A.Iter 1 
+let outer = A.Iter 2 
+let pos = A.Pos 0 
+let pos' = A.Pos 1
+let ord = A.Pos 2
+
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 
 let map_inwards map (q, cs, _, _) =
-  let iter = A.Iter 0 in
-  let inner = A.Iter 1 in
-  let outer = A.Iter 2 in
-  let pos = A.Pos 0 in
   let q' =
     (ref (A.Dag.mk_project
 	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
@@ -166,9 +170,6 @@ and compile_binop env loop wrapper operands =
   let (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
     assert (Cs.is_operand op1_cs);
     assert (Cs.is_operand op2_cs);
-    let iter = A.Iter 0 in
-    let iter' = A.Iter 1 in
-    let pos = A.Pos 0 in
     let c = A.Item 1 in
     let c' = A.Item 2 in
     let res = A.Item 3 in
@@ -192,8 +193,6 @@ and compile_unop env loop wrapper operands =
     assert (Cs.is_operand op_cs);
     let c = A.Item 1 in
     let res = A.Item 2 in
-    let pos = A.Pos 0 in
-    let iter = A.Iter 0 in
     let q = 
       ref (A.Dag.mk_project
 	     [proj1 iter; proj1 pos; (c, res)]
@@ -233,9 +232,6 @@ and compile_apply env loop f args =
 	  *)
 (*
 let orderby_map env loop os map =
-  let iter = A.Iter 0 in
-  let inner = A.Iter 1 in
-  let outer = A.Iter 2 in
   let item = A.Item 1 in
   let sort_cols = mapIndex (fun _ i -> A.Item (i + 2)) os in
   let f os cols =
@@ -249,13 +245,9 @@ let orderby_map env loop os map =
       | 
   in
     f (List.map (compile_expression env loop) os) sort_cols
-*)  
+*)
+
 and compile_for env loop v e1 e2 =
-  let iter = A.Iter 0 in
-  let inner = A.Iter 1 in
-  let outer = A.Iter 2 in
-  let pos = A.Pos 0 in
-  let pos' = A.Pos 1 in
   let (q1, cs1, _, _) = compile_expression env loop e1 in
   let q_v = 
     ref (A.Dag.mk_rownum
@@ -318,8 +310,6 @@ and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
   let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = items_of_offsets r2_leafs in
   let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
-  let iter = A.Iter 0 in
-  let iter' = A.Iter 1 in
   let q =
     ref (A.Dag.mk_project
 	   (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
@@ -340,8 +330,6 @@ and compile_project env loop field r =
   let offset = List.hd c_old in
   let c_new = incr c_old (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
-  let iter = A.Iter 0 in
-  let pos = A.Pos 0 in
   let q =
     ref (A.Dag.mk_project
 	   ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
@@ -393,9 +381,6 @@ and compile_constant loop (c : Constant.constant) =
     (q, cs, dummy, dummy)
 
 and compile_if env loop e1 e2 e3 =
-  let iter = A.Iter 0 in
-  let pos = A.Pos 0 in
-  let iter' = A.Iter 1 in
   let c = A.Item 1 in
   let res = A.Item 2 in
     
