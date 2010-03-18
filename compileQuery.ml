@@ -186,6 +186,31 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   in
     (q, fused_cs, dummy, dummy)
 
+
+and compile_length env loop args =
+  assert ((List.length args) = 1);
+  let e = List.hd args in
+  let (q_e, _, _, _) = compile_expression env loop e in
+  let q = 
+    ref (A.Dag.mk_funaggrcount
+	   (A.Item 1, Some iter)
+	   q_e)
+  in
+  let q' =
+    ref (A.Dag.mk_attach
+	   (pos, A.Nat 1n)
+	   (ref (A.Dag.mk_disjunion
+		   q
+		   (ref (A.Dag.mk_attach
+			   (A.Item 1, A.Nat 0n)
+			   (ref (A.Dag.mk_difference
+				   loop
+				   (ref (A.Dag.mk_project
+					   [proj1 iter]
+					   q)))))))))
+  in
+    (q', [Cs.Offset 1], dummy, dummy)
+
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
   let (q1, _, _, _) = compile_expression env loop (List.hd operands) in
@@ -266,6 +291,7 @@ and compile_apply env loop f args =
     | "<>" -> compile_binop env loop wrap_ne args
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
+    | "length" -> compile_length env loop args
     | ">="
     | "<="
     | _ ->

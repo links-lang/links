@@ -394,7 +394,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "nth",
   (p2 (fun n list ->
 	 try
-	   (List.nth (unbox_list list) (int_of_num (unbox_int n)))
+	   (List.nth (unbox_list list) ((int_of_num (unbox_int n)) + 1))
 	 with
 	   | Failure "nth" -> failwith "nth(): list too short"
 	   | Invalid_argument "List.nth" -> failwith "nth(): negative argument"
@@ -404,7 +404,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
-   datatype "([a]) ~> Int",
+   datatype "([a]) -> Int",
   PURE);
 
   "take",
