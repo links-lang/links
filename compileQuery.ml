@@ -177,6 +177,33 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
   in
     (q, fused_cs, dummy, dummy)
 
+and compile_nth env loop operands =
+  assert ((List.length operands) = 2);
+  let (q1, _, _, _) = compile_expression env loop (List.hd operands) in
+  let (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
+  let offset = List.length (Cs.leafs cs2) in
+  let c' = A.Item (offset + 1) in
+  let res = A.Item (offset + 2) in
+  let q =
+    ref (A.Dag.mk_attach
+	   (pos, A.Nat 1n)
+	   (ref (A.Dag.mk_project
+		   ([proj1 iter] @ proj_list (items_of_offsets (Cs.leafs cs2)))
+		   (ref (A.Dag.mk_select
+			   res
+			   (ref (A.Dag.mk_funnumeq
+				   (res, (pos', c'))
+				   (ref (A.Dag.mk_eqjoin
+					   (iter, iter')
+					   (ref (A.Dag.mk_cast
+						   (pos', pos, A.IntType)
+						   q2))
+					   (ref (A.Dag.mk_project
+						   [(iter', iter); (c', A.Item 1)]
+						   q1)))))))))))
+  in
+    (q, cs2, dummy, dummy)
+
 and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
   let (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
@@ -230,6 +257,7 @@ and compile_apply env loop f args =
     | "<" -> compile_binop env loop wrap_gt (List.rev args)
     | "<>" -> compile_binop env loop wrap_ne args
     | "not" -> compile_unop env loop wrap_not args
+    | "nth" -> compile_nth env loop args
     | ">="
     | "<="
     | _ ->
@@ -274,6 +302,7 @@ and compile_for env loop v e1 e2 order_criteria =
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
+	  (* compile orderby expressions *)
 	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
 	  let q_os = List.map (fun (q, _, _, _) -> q) q_os in
 	  let offset = (List.length (Cs.leafs cs2)) + 1 in

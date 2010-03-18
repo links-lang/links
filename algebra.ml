@@ -334,7 +334,7 @@ let out_cast_info out (result_attr, name, base_type) =
   out (`El_start (tag "content"));
   out_col out [("name", (string_of_attr_name result_attr)); ("new", "true")];
   out_col out [("name", (string_of_attr_name name)); ("new", "false")];
-  out_col out [("name", string_of_base_type base_type)];
+  out_el out "type" [("name", string_of_base_type base_type)];
   out `El_end
 
 let out_binop_info out (result_attr, arg_pair) =

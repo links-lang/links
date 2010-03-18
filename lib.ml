@@ -390,6 +390,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       ),
    datatype "([a]) ~> [a]",
   IMPURE);
+
+  "nth",
+  (p2 (fun n list ->
+	 try
+	   (List.nth (unbox_list list) (int_of_num (unbox_int n)))
+	 with
+	   | Failure "nth" -> failwith "nth(): list too short"
+	   | Invalid_argument "List.nth" -> failwith "nth(): negative argument"
+      ),
+   datatype "(Int, [a]) -> a",
+   PURE);
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
