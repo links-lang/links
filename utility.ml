@@ -430,6 +430,15 @@ struct
     List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
       wxyzs
       ([],[],[],[]) 
+
+  let iteri f l =
+    let rec loop l i =
+      match l with
+	| hd :: tl -> f i hd; loop tl (i + 1)
+	| [] -> ()
+    in
+      loop l 0
+
 end
 include ListUtils
 

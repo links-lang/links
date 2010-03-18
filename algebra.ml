@@ -213,20 +213,17 @@ let out_binop_info out (result_attr, arg_pair) =
   out `El_end
 
 let out_sort_infos out l =
-  ignore 
-    (List.fold_left
-       (fun i (sort_attr_name, dir) ->
-	  let xml_attributes = [
-	    ("name", (string_of_attr_name sort_attr_name));
-	    ("direction", string_of_sort_direction dir);
-	    ("position", string_of_int i);
-	    ("function", "sort");
-	    ("new", "false")]
-	  in
-	    out_col out xml_attributes;
-	    (i + 1))
-       0
-       l)
+  iteri
+    (fun i (sort_attr_name, dir) ->
+       let xml_attributes = [
+	 ("name", (string_of_attr_name sort_attr_name));
+	 ("direction", string_of_sort_direction dir);
+	 ("position", string_of_int i);
+	 ("function", "sort");
+	 ("new", "false")]
+       in
+	 out_col out xml_attributes)
+    l
 
 let out_maybe_part_name out maybe_part_name =
   match maybe_part_name with
@@ -356,15 +353,12 @@ let out_fun_1to1_info out (f, result_attr, arg_list) =
   out (`El_start (tag "content"));
   out_el out "kind" [("name", string_of_func f)];
   out_col out [("name", (string_of_attr_name result_attr)); ("new", "true")];
-  ignore (
-    List.fold_left
-      (fun i arg_attr ->
-	 out_col out [("name", (string_of_attr_name arg_attr)); 
-		      ("new", "false"); 
-		      ("position", string_of_int i)];
-	 (i + 1))
-      0
-      arg_list);
+  iteri
+    (fun i arg_attr ->
+       out_col out [("name", (string_of_attr_name arg_attr)); 
+		    ("new", "false"); 
+		    ("position", string_of_int i)])
+    arg_list;
   out `El_end
 
 (* TODO: aggr is unused. ferryc code does not conform to the wiki spec. *)
@@ -386,16 +380,13 @@ let out_serialize_rel_info out (iter, pos, items) =
   out (`El_start (tag "content"));
   out_col out [("name", (string_of_attr_name iter)); ("new", "false"); ("function", "iter")];
   out_col out [("name", (string_of_attr_name pos)); ("new", "false"); ("function", "pos")];
-  ignore (
-    List.fold_left
-      (fun i item ->
-	 out_col out [("name", (string_of_attr_name item)); 
-		      ("new", "false"); 
-		      ("function", "item"); 
-		      ("position", string_of_int i)];
-	 (i + 1))
-      0
-      items);
+  iteri
+    (fun i item ->
+       out_col out [("name", (string_of_attr_name item)); 
+		    ("new", "false"); 
+		    ("function", "item"); 
+		    ("position", string_of_int i)])
+    items;
   out `El_end
 
 let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
@@ -404,12 +395,10 @@ let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
   List.iter
     (fun key ->
        let c () =
-	 List.fold_right
-	   (fun attr i -> 
-	      out_col out [("name", (string_of_attr_name attr)); ("position", string_of_int i)];
-	      (i + 1))
+	 iteri
+	   (fun i attr -> 
+	      out_col out [("name", (string_of_attr_name attr)); ("position", string_of_int i)])
 	   key
-	   0
        in
 	 out_el_childs out "key" [] c)
     key_infos;

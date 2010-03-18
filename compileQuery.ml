@@ -365,8 +365,9 @@ and compile_table loop ((_db, _params), tblname, _row) =
   flush stdout;
   assert (tblname = "test1");
   let columns = ["foo"; "bar"] in
-  let items = snd (List.fold_right (fun c (i, l) -> (i + 1, (c, A.Item i) :: l)) columns (1, [])) in
-  let cs = List.map (function (tname, A.Item i) -> Cs.Mapping (tname, [Cs.Offset i]) | _ -> assert false) items in
+  let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
+  let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
+  let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
   let pos = A.Pos 0 in
   let key_infos = [[A.Item 1]] in
   let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
