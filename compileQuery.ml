@@ -112,8 +112,8 @@ let wrap_not res op_attr algexpr =
 
 let iter = A.Iter 0 
 let iter' = A.Iter 1
-let inner = A.Iter 1 
-let outer = A.Iter 2 
+let inner = A.Iter 2
+let outer = A.Iter 3 
 let pos = A.Pos 0 
 let pos' = A.Pos 1
 let ord = A.Pos 2
@@ -121,7 +121,7 @@ let ord = A.Pos 2
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 
-let map_inwards map (q, cs, _, _) =
+let lift map (q, cs, _, _) =
   let q' =
     (ref (A.Dag.mk_project
 	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
@@ -131,6 +131,19 @@ let map_inwards map (q, cs, _, _) =
 		    map))))
   in
     (q', cs, dummy, dummy)
+
+let rec omap map sort_criteria sort_cols =
+  match (sort_criteria, sort_cols) with
+    | (o :: os), (col :: cols) ->
+	ref (A.Dag.mk_project
+	       ([proj1 outer; proj1 inner; (col, A.Item 1)] @ (proj_list cols))
+	       (ref (A.Dag.mk_eqjoin
+		       (inner, iter)
+		    	       (omap map os cols)
+		       o)))
+    | [], [] ->
+	map
+    | _ -> assert false
 
 let rec compile_append env loop l =
   match l with
@@ -230,24 +243,8 @@ and compile_apply env loop f args =
 	    | `PrimitiveFunction "hd" ->
 	    | `PrimitiveFunction "tl" ->
 	  *)
-(*
-let orderby_map env loop os map =
-  let item = A.Item 1 in
-  let sort_cols = mapIndex (fun _ i -> A.Item (i + 2)) os in
-  let f os cols =
-    match os, cols with
-      | [o], [col] ->
-	  ref (A.Dag.mk_project 
-		 [proj1 outer; proj1 inner; proj1 (List.hd sort_cols)]
-		 (ref (A.Dag.mk_eqjoin
-			 map
-			 
-      | 
-  in
-    f (List.map (compile_expression env loop) os) sort_cols
-*)
 
-and compile_for env loop v e1 e2 =
+and compile_for env loop v e1 e2 order_criteria =
   let (q1, cs1, _, _) = compile_expression env loop e1 in
   let q_v = 
     ref (A.Dag.mk_rownum
@@ -271,16 +268,30 @@ and compile_for env loop v e1 e2 =
 		   ([(iter, inner)] @ (proj_list (items_of_offsets (Cs.leafs cs1))))
 		   q_v)))
   in
-  let env = AEnv.map (map_inwards map) env in
-  let (q2, cs2, _, _) = compile_expression (AEnv.bind env (v, (q_v', cs1, dummy, dummy))) loop_v e2 in
+  let env = AEnv.map (lift map) env in
+  let env_v = AEnv.bind env (v, (q_v', cs1, dummy, dummy)) in
+  let (q2, cs2, _, _) = compile_expression env_v loop_v e2 in
+  let (order_cols, map') =
+    match order_criteria with
+      | _ :: _ ->
+	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
+	  let q_os = List.map (fun (q, _, _, _) -> q) q_os in
+	  let offset = (List.length (Cs.leafs cs2)) + 1 in
+	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
+	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
+	    (order_cols, omap map q_os cols)
+	    
+      | [] ->
+	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
+  in
   let q =
     ref (A.Dag.mk_project
 	   ([(iter, outer); (pos, pos')] @ (proj_list (items_of_offsets (Cs.leafs cs2))))
 	   (ref (A.Dag.mk_rank
-		   (pos', [(iter, A.Ascending); (pos, A.Ascending)])
+		   (pos', order_cols)
 		   (ref (A.Dag.mk_eqjoin
 			   (inner, iter)
-			   map
+			   map'
 			   q2)))))
   in
     (q, cs2, dummy, dummy)
@@ -442,9 +453,8 @@ and compile_expression env loop e : tblinfo =
     | `Append l -> compile_append env loop l
     | `Table t -> compile_table loop t
     | `If (c, t, e) -> compile_if env loop c t e
-    | `For ([x, l], [], body) -> compile_for env loop x l body
-    | `For _ -> failwith "compile_expression: only simple for implemented"
-
+    | `For ([x, l], os, body) -> compile_for env loop x l body os
+    | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
     | `Erase _
     | `Closure _
     | `Variant _

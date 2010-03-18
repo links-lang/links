@@ -427,7 +427,7 @@ struct
       match source with
 	  (* merge for-comprehension with its orderby clause *)
 	| `For ([y, source'], ((_ :: _) as os), (`Var y')) when y = y' ->
-	    `For ([x, source'], (List.map (replace_var y x) os), source')
+	    `For ([x, source'], (List.map (replace_var y x) os), eval_body env (x, `Var x, body))
         | `Singleton _ 
         | `Append _ 
         | `If _ 
