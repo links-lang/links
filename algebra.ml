@@ -719,7 +719,8 @@ struct
 	
   let export_plan fname dag =
     let oc = open_out fname in
-    let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
+    (* let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in *)
+    let o = Xmlm.make_output ~nl:true ~indent:None (`Channel oc) in
     let out = Xmlm.output o in
     let dag = ref (prune_empty !dag) in
     let wrap arg =

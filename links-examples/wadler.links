@@ -20,8 +20,7 @@ var t = table "test1" with (foo : Int, bar : Int ) from db;
 }
    }
 
-#var r = Or (( Equals (2)), (Equals(4)));
-var r = Not(Equals(2));
+var r = Or (( Equals (2)), (Equals(4)));
 test(r)
  
 
