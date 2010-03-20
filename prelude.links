@@ -353,7 +353,6 @@ fun isJust(x) {
   }
 }
 
-
 sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
 fun search(p,l) {
   switch (l) {
@@ -388,6 +387,16 @@ fun fromMaybe(x, y) {
   }
 }
 
+
+# FIXME: for some reason placing this further up the file where it should be
+# leads to an error
+sig empty : ([a]) -> Bool
+fun empty(l) {
+  switch (l) {
+    case [] -> true
+    case _ -> false
+  }
+}
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?

@@ -393,7 +393,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
-   datatype "([a]) ~> Int",
+   datatype "([a]) -> Int",
   PURE);
 
   "take",
@@ -1162,15 +1162,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 let patch_prelude_funs tyenv =
   {tyenv with
      var_env =
-      Env.String.bind
-        (Env.String.bind
-           (Env.String.bind
-              (Env.String.bind
-                 tyenv.Types.var_env
-                 ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
-              ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
-           ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
-        ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")}
+      List.fold_right
+        (fun (name, t) env -> Env.String.bind env (name, t))
+        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
+         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
+         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
+         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
+        tyenv.Types.var_env}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None
