@@ -110,6 +110,7 @@ let wrap_not res op_attr algexpr =
     (res, op_attr)
     algexpr
 
+
 let iter = A.Iter 0 
 let iter' = A.Iter 1
 let inner = A.Iter 2
@@ -117,6 +118,19 @@ let outer = A.Iter 3
 let pos = A.Pos 0 
 let pos' = A.Pos 1
 let ord = A.Pos 2
+
+let wrap_agg loop q attachment =
+  ref (A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 (ref (A.Dag.mk_disjunion
+		 q
+		 (ref (A.Dag.mk_attach
+			 (A.Item 1, attachment)
+			 (ref (A.Dag.mk_difference
+				 loop
+				 (ref (A.Dag.mk_project
+					 [proj1 iter]
+					 q)))))))))
 
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
@@ -196,20 +210,23 @@ and compile_length env loop args =
 	   (A.Item 1, Some iter)
 	   q_e)
   in
-  let q' =
-    ref (A.Dag.mk_attach
-	   (pos, A.Nat 1n)
-	   (ref (A.Dag.mk_disjunion
-		   q
-		   (ref (A.Dag.mk_attach
-			   (A.Item 1, A.Nat 0n)
-			   (ref (A.Dag.mk_difference
-				   loop
-				   (ref (A.Dag.mk_project
-					   [proj1 iter]
-					   q)))))))))
-  in
+  let q' = wrap_agg loop q (A.Nat 1n) in
     (q', [Cs.Offset 1], dummy, dummy)
+
+and compile_aggr env loop aggr_fun args =
+  assert ((List.length args) = 1);
+  let c = A.Item 1 in
+  let e = List.hd args in
+  let res = A.Item 2 in
+  let (q_e, cs_e, _, _) = compile_expression env loop e in
+    assert (Cs.is_operand cs_e);
+    let q = 
+      ref (A.Dag.mk_funaggr
+	     (aggr_fun, (c, c), Some iter)
+	     q_e)
+    in
+    let q' = wrap_agg loop q (A.String "error") in
+      (q', [Cs.Offset 1], dummy, dummy)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
@@ -292,6 +309,10 @@ and compile_apply env loop f args =
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
+    | "maxf" -> compile_aggr env loop A.Max args
+(*    | "min" -> compile_aggr env loop A.Min args
+    | "avg" -> compile_aggr env loop A.Avg args
+    | "sum" -> compile_aggr env loop A.Sum args *)
     | ">="
     | "<="
     | _ ->

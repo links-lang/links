@@ -428,6 +428,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
+  "maxf",
+  (p1 (let max2 x y = if less x y then y else x in
+         function
+           | `List [] -> failwith "Internal error: empty list passed to maxf"
+           | `List (x::xs) -> (List.fold_left max2 x xs)
+           | _ -> failwith "Internal error: non-list passed to max"),
+   datatype "([a]) -> a",
+  PURE);
+
   "min",
   (p1 (let min2 x y = if less x y then x else y in
          function
