@@ -360,7 +360,19 @@ struct
 		      | _ -> assert false
 		  end
 	    | _ -> assert false
-	end	    
+	end
+    | `Primitive "<", [e1; e2] ->
+	`Apply (">", [e2; e1])
+    | `Primitive ">=", [e1; e2] ->
+	print_endline "query2: >=";
+	`If (`Apply (">", [e1; e2]),
+	     `Constant (`Bool true),
+	     `Apply ("==", [e1; e2]))
+    | `Primitive "<=", [e1; e2] ->
+	print_endline "query2: <=";
+	`If (`Apply (">", [e2; e1]),
+	     `Constant (`Bool true),
+	     `Apply ("==", [e1; e2]))
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->

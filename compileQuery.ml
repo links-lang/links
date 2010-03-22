@@ -110,7 +110,6 @@ let wrap_not res op_attr algexpr =
     (res, op_attr)
     algexpr
 
-
 let iter = A.Iter 0 
 let iter' = A.Iter 1
 let inner = A.Iter 2
@@ -304,7 +303,6 @@ and compile_apply env loop f args =
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
     | "==" -> compile_binop env loop wrap_eq args
     | ">" -> compile_binop env loop wrap_gt args
-    | "<" -> compile_binop env loop wrap_gt (List.rev args)
     | "<>" -> compile_binop env loop wrap_ne args
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
@@ -313,10 +311,10 @@ and compile_apply env loop f args =
 (*    | "min" -> compile_aggr env loop A.Min args
     | "avg" -> compile_aggr env loop A.Avg args
     | "sum" -> compile_aggr env loop A.Sum args *)
-    | ">="
-    | "<="
-    | _ ->
-	failwith "CompileQuery.op_dispatch: not implemented"
+    | "<" | "<=" | ">=" ->
+	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
+    | s ->
+	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
 	  (*
 	    | `PrimitiveFunction "Concat" ->
 	    | `PrimitiveFunction "take" ->
