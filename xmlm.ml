@@ -947,6 +947,7 @@ struct
 	outs : std_string -> int -> int -> unit;           (* String output. *)
 	outc : char -> unit;                            (* character output. *)
 	mutable last_el_start : bool;   (* True if last signal was `El_start *)
+	mutable last_el_data : bool;    (* True if latst signal was `Data *)
 	mutable scopes : (name * (string list)) list;
                                        (* Qualified el. name and bound uris. *)
 	mutable depth : int; }                               (* Scope depth. *) 
@@ -976,7 +977,8 @@ struct
       h
     in
     { outs = outs; outc = outc; nl = nl; indent = indent; last_el_start = false;
-      prefixes = prefixes; scopes = []; depth = -1; fun_prefix = ns_prefix; }
+      prefixes = prefixes; scopes = []; depth = -1; fun_prefix = ns_prefix;
+      last_el_data = false }
  
   let outs o s = o.outs s 0 (Std_string.length s)
   let str_utf_8 s = String.to_utf_8 (fun _ s -> s) "" s
@@ -1070,7 +1072,9 @@ struct
 	      o.depth <- o.depth - 1;
 	      if o.last_el_start then outs o "/>" else
 	      begin 
-		indent o;
+		if not o.last_el_data then
+		  indent o;
+		o.last_el_data <- false;
 		outs o "</"; out_qname o n; o.outc '>';
 	      end;
 	      o.scopes <- scopes';
@@ -1081,11 +1085,10 @@ struct
 	  | [] -> invalid_arg err_el_end
 	  end
       | `Data d -> 
-	  if o.last_el_start then (outs o ">"; unindent o);
-	  indent o;
+	  if o.last_el_start then outs o ">";
 	  out_data o d;
-	  unindent o;
-	  o.last_el_start <- false
+	  o.last_el_start <- false;
+	  o.last_el_data <- true
       | `Dtd _ -> failwith err_dtd
       end
 
