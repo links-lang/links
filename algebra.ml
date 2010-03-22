@@ -166,6 +166,12 @@ let string_of_func = function
   | Modulo -> "modulo"
   | Contains -> "fn:contains"
 
+let string_of_aggr = function
+  | Max -> "max"
+  | Min -> "min"
+  | Avg -> "avg"
+  | Sum -> "sum"
+
 let tag name = ("", name), []
 
 let attr_list xml_attributes = 
@@ -480,8 +486,9 @@ let out_unary_op out op id child_id =
 	  n "or" (fun () -> out_binop_info out binop_info)
       | FunBoolNot unop_info ->
 	  n "not" (fun () -> out_unop_info out unop_info)
-      | FunAggr fun_aggr_info ->
-	  n "aggr" (fun () -> out_fun_aggr_info out fun_aggr_info)
+      | FunAggr ((f, _op, _part) as fun_aggr_info) ->
+	  let name = string_of_aggr f in
+	    n name (fun () -> out_fun_aggr_info out fun_aggr_info)
       | FunAggrCount fun_aggr_count_info ->
 	  n "count" (fun () -> out_fun_aggr_count_info out fun_aggr_count_info)
 

@@ -1,3 +1,5 @@
 var l = [1, 2, 3, 4, 5];
 fun f(x) { x + 2 }
-map(f, l)
+query {
+for (i <- l) [(foo = f(i))] 
+}

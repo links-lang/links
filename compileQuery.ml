@@ -220,9 +220,9 @@ and compile_aggr env loop aggr_fun args =
   let (q_e, cs_e, _, _) = compile_expression env loop e in
     assert (Cs.is_operand cs_e);
     let q = 
-      ref (A.Dag.mk_funaggr
-	     (aggr_fun, (c, c), Some iter)
-	     q_e)
+      (ref (A.Dag.mk_funaggr
+	      (aggr_fun, (c, c), Some iter)
+	      q_e))
     in
     let q' = wrap_agg loop q (A.String "error") in
       (q', [Cs.Offset 1], dummy, dummy)
