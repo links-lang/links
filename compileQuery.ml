@@ -146,8 +146,7 @@ let item' = A.Pos 4
 let item'' = A.Pos 5
 let c' = A.Pos 6
 
-(*
-let rec suap q_paap (it1 : (int * tblinfo) list) (it2 : (int * tblinfo) list) =
+let rec suap q_paap (it1 : (int * tblinfo) list) (it2 : (int * tblinfo) list) : (int * tblinfo) list =
   match (it1, it2) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
 	let q =
@@ -174,11 +173,29 @@ let rec suap q_paap (it1 : (int * tblinfo) list) (it2 : (int * tblinfo) list) =
 				   [(ord', ord); (item'', item'); (c', A.Item c1)]
 				   q_paap)))))
 	  in
-	    [(c1, (q', (Cs.fuse cs1 cs2), [], dummy))] (* (suap q_paap subs_hat subs_tilde) *)
+	    [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
     | [], [] ->
 	[]
     | _ -> assert false
-*)
+
+let rec suse q_pase subs : ((int * tblinfo) list) =
+  match subs with
+    | (offset, (Ti(q, cs, itbls, _))) :: subs ->
+	let q' = 
+	  ref (A.Dag.mk_project
+		 ([proj1 iter; proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
+		 (ref (A.Dag.mk_eqjoin
+			 (iter, iter')
+			 q
+			 (ref (A.Dag.mk_project
+				 [(iter', A.Item offset)]
+				 q_pase)))))
+	in
+	  [(offset, (Ti(q', cs, (suse q' itbls), dummy)))] @ (suse q_pase subs)
+			 
+    | [] ->
+	[]
+
 
 let wrap_agg loop q attachment =
   ref (A.Dag.mk_attach
