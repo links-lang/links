@@ -13,6 +13,7 @@ module Cs = struct
     | Offset of offset
     | Mapping of string * cs
 
+  (* return all columns *)	
   let rec leafs cs =
     List.rev
       (List.fold_left
@@ -25,6 +26,7 @@ module Cs = struct
 
   let cardinality = List.length
 
+  (* increase all column names by i *)
   let rec shift cs i =
     List.map
       (function
@@ -32,15 +34,18 @@ module Cs = struct
 	 | Mapping (key, cs) -> Mapping (key, (shift cs i)))
       cs
 
+  (* append to cs components *)
   let append cs1 cs2 =
     cs1 @ (shift cs2 (cardinality cs1))
 
+  (* fuse two cs's by choosing the larger one *)
   let fuse cs1 cs2 =
     if (List.length cs1) > (List.length cs2) then
       cs1
     else
       cs2
 
+  (* true iff cs has exactly one flat column *)
   let is_operand cs =
     if List.length cs <> 1 then
       false
@@ -49,6 +54,7 @@ module Cs = struct
 	| Offset _ -> true
 	| _ -> false
 
+  (* look up the column corresponding to a record field *)
   let record_field cs field =
     let rec loop = function
       | (Offset _) :: tl ->
@@ -64,16 +70,15 @@ module Cs = struct
       loop cs
 end
 
-type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * itbls * unit)
-(* TODO: type itbls should be in its own module. can one 
-   have recursive types over module boundaries? *)
-and itbls = (int * tblinfo) list
+type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * (int * tblinfo) list * unit)
 
 module Itbls = struct
   let empty = []
   let keys itbls = List.map fst itbls
   let incr_keys itbls i = List.map (fun (offset, ti) -> (offset + i, ti)) itbls
   let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
+
+  (* remove all mappings whose offsets are not in keys *)
   let retain_by_keys itbls keys = 
     let p i j = i = j in
     let f l (offset, _ti) = List.exists (p offset) l in
@@ -135,6 +140,7 @@ let outer = A.Iter 3
 let pos = A.Pos 0 
 let pos' = A.Pos 1
 let ord = A.Pos 2
+let ord' = A.Pos 3
 
 let wrap_agg loop q attachment =
   ref (A.Dag.mk_attach
@@ -152,6 +158,7 @@ let wrap_agg loop q attachment =
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 
+(* loop-lift q by map *)
 let lift map (Ti (q, cs, _, _)) =
   let q' =
     (ref (A.Dag.mk_project
@@ -163,6 +170,7 @@ let lift map (Ti (q, cs, _, _)) =
   in
     Ti (q', cs, Itbls.empty, dummy)
 
+(* construct the ordering map of a for-loop *)
 let rec omap map sort_criteria sort_cols =
   match (sort_criteria, sort_cols) with
     | (o :: os), (col :: cols) ->
@@ -176,6 +184,7 @@ let rec omap map sort_criteria sort_cols =
 	map
     | _ -> assert false
 
+(* compute absolute positions for q *)
 let abspos q cols =
   ref (A.Dag.mk_project
 	 ([proj1 iter; proj1 pos] @ (proj_list cols))
