@@ -1,5 +1,10 @@
 open Utility
 
+module A = Algebra
+
+(* Table information node (q, cs, itbls, _) *)
+
+
 module Cs = struct
 
   type offset = int
@@ -59,10 +64,23 @@ module Cs = struct
       loop cs
 end
 
-module A = Algebra
-module AEnv = Env.Int
+type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * itbls * unit)
+(* TODO: type itbls should be in its own module. can one 
+   have recursive types over module boundaries? *)
+and itbls = (int * tblinfo) list
 
-type tblinfo = A.Dag.dag ref * Cs.cs * unit * unit
+module Itbls = struct
+  let empty = []
+  let keys itbls = List.map fst itbls
+  let incr_keys itbls i = List.map (fun (offset, ti) -> (offset + i, ti)) itbls
+  let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
+  let retain_by_keys itbls keys = 
+    let p i j = i = j in
+    let f l (offset, _ti) = List.exists (p offset) l in
+      List.filter (f keys) itbls
+end
+
+module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
 
 let dummy = ()
@@ -134,7 +152,7 @@ let wrap_agg loop q attachment =
 (* the empty list *)
 let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
 
-let lift map (q, cs, _, _) =
+let lift map (Ti (q, cs, _, _)) =
   let q' =
     (ref (A.Dag.mk_project
 	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
@@ -143,7 +161,7 @@ let lift map (q, cs, _, _) =
 		    q
 		    map))))
   in
-    (q', cs, dummy, dummy)
+    Ti (q', cs, Itbls.empty, dummy)
 
 let rec omap map sort_criteria sort_cols =
   match (sort_criteria, sort_cols) with
@@ -176,9 +194,9 @@ let rec compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	(nil, [], dummy, dummy)
+	Ti (nil, [], Itbls.empty, dummy)
 
-and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
+and compile_list (Ti (hd_q, hd_cs, _, _)) (Ti (tl_q, tl_cs, _, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
   let ord = A.Pos 2 in
   let pos = A.Pos 0 in
@@ -197,27 +215,26 @@ and compile_list (hd_q, hd_cs, _, _) (tl_q, tl_cs, _, _) =
 				   (ord, A.Nat 2n)
 				   tl_q)))))))
   in
-    (q, fused_cs, dummy, dummy)
+    Ti (q, fused_cs, Itbls.empty, dummy)
 
 
 and compile_length env loop args =
   assert ((List.length args) = 1);
   let e = List.hd args in
-  let (q_e, _, _, _) = compile_expression env loop e in
+  let Ti (q_e, _, _, _) = compile_expression env loop e in
   let q = 
     ref (A.Dag.mk_funaggrcount
 	   (A.Item 1, Some iter)
 	   q_e)
   in
   let q' = wrap_agg loop q (A.Nat 1n) in
-    (q', [Cs.Offset 1], dummy, dummy)
+    Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
 
 and compile_aggr env loop aggr_fun args =
   assert ((List.length args) = 1);
   let c = A.Item 1 in
   let e = List.hd args in
-  let res = A.Item 2 in
-  let (q_e, cs_e, _, _) = compile_expression env loop e in
+  let Ti (q_e, cs_e, _, _) = compile_expression env loop e in
     assert (Cs.is_operand cs_e);
     let q = 
       (ref (A.Dag.mk_funaggr
@@ -225,12 +242,12 @@ and compile_aggr env loop aggr_fun args =
 	      q_e))
     in
     let q' = wrap_agg loop q (A.String "error") in
-      (q', [Cs.Offset 1], dummy, dummy)
+      Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
-  let (q1, _, _, _) = compile_expression env loop (List.hd operands) in
-  let (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
+  let Ti (q1, _, _, _) = compile_expression env loop (List.hd operands) in
+  let Ti (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
   let q2' = abspos q2 (items_of_offsets (Cs.leafs cs2)) in
   let offset = List.length (Cs.leafs cs2) in
   let c' = A.Item (offset + 1) in
@@ -251,12 +268,12 @@ and compile_nth env loop operands =
 					    [(iter', iter); (c', A.Item 1)]
 					    q1))))))))))
   in
-    (q, cs2, dummy, dummy)
+    Ti (q, cs2, Itbls.empty, dummy)
 
 and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
-  let (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
-  let (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
+  let Ti (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
+  let Ti (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
     assert (Cs.is_operand op1_cs);
     assert (Cs.is_operand op2_cs);
     let c = A.Item 1 in
@@ -274,11 +291,11 @@ and compile_binop env loop wrapper operands =
 				     [(iter', iter); (c', c)]
 				     op2_q)))))))
     in
-      (q, op1_cs, dummy, dummy)
+      Ti (q, op1_cs, Itbls.empty, dummy)
 
 and compile_unop env loop wrapper operands =
   assert ((List.length operands) = 1);
-  let (op_q, op_cs, _, _) = compile_expression env loop (List.hd operands) in
+  let Ti (op_q, op_cs, _, _) = compile_expression env loop (List.hd operands) in
     assert (Cs.is_operand op_cs);
     let c = A.Item 1 in
     let res = A.Item 2 in
@@ -289,7 +306,7 @@ and compile_unop env loop wrapper operands =
 		     res c
 		     op_q)))
     in
-      (q, op_cs, dummy, dummy)
+      Ti (q, op_cs, Itbls.empty, dummy)
 
 and compile_apply env loop f args =
   match f with
@@ -326,7 +343,7 @@ and compile_apply env loop f args =
 	  *)
 
 and compile_for env loop v e1 e2 order_criteria =
-  let (q1, cs1, _, _) = compile_expression env loop e1 in
+  let Ti (q1, cs1, _, _) = compile_expression env loop e1 in
   let q_v = 
     ref (A.Dag.mk_rownum
 	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -350,14 +367,14 @@ and compile_for env loop v e1 e2 order_criteria =
 		   q_v)))
   in
   let env = AEnv.map (lift map) env in
-  let env_v = AEnv.bind env (v, (q_v', cs1, dummy, dummy)) in
-  let (q2, cs2, _, _) = compile_expression env_v loop_v e2 in
+  let env_v = AEnv.bind env (v, Ti (q_v', cs1, Itbls.empty, dummy)) in
+  let Ti (q2, cs2, _, _) = compile_expression env_v loop_v e2 in
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
 	  (* compile orderby expressions *)
 	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
-	  let q_os = List.map (fun (q, _, _, _) -> q) q_os in
+	  let q_os = List.map (fun (Ti (q, _, _, _)) -> q) q_os in
 	  let offset = (List.length (Cs.leafs cs2)) + 1 in
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
@@ -376,11 +393,11 @@ and compile_for env loop v e1 e2 order_criteria =
 			   map'
 			   q2)))))
   in
-    (q, cs2, dummy, dummy)
+    Ti (q, cs2, Itbls.empty, dummy)
 
 and singleton_record env loop (name, e) =
-  let (q, cs, _, _) = compile_expression env loop e in
-    (q, [Cs.Mapping (name, cs)], dummy, dummy)
+  let Ti (q, cs, _, _) = compile_expression env loop e in
+    Ti (q, [Cs.Mapping (name, cs)], Itbls.empty, dummy)
 
 and extend_record env loop ext_fields r =
   assert (match ext_fields with [] -> false | _ -> true);
@@ -398,7 +415,7 @@ and extend_record env loop ext_fields r =
     | [] ->
 	failwith "CompileQuery.extend_record: empty ext_fields"
 
-and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
+and merge_records (Ti (r1_q, r1_cs, _, _)) (Ti (r2_q, r2_cs, _, _)) =
   let r2_leafs = Cs.leafs r2_cs in
   let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = items_of_offsets r2_leafs in
@@ -414,10 +431,10 @@ and merge_records (r1_q, r1_cs, _, _) (r2_q, r2_cs, _, _) =
 			    r2_q))))))
   in
   let cs = Cs.append r1_cs r2_cs in
-    (q, cs, dummy, dummy)
+    Ti (q, cs, Itbls.empty, dummy)
 
 and compile_project env loop field r =
-  let (q_r, cs_r, _, _) = compile_expression env loop r in
+  let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
   let field_cs' = Cs.record_field cs_r field in
   let c_old = Cs.leafs field_cs' in
   let offset = List.hd c_old in
@@ -428,7 +445,7 @@ and compile_project env loop field r =
 	   ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
 	   q_r)
   in
-    (q, field_cs, dummy, dummy)
+    Ti (q, field_cs, Itbls.empty, dummy)
 
 and compile_record env loop r =
   match r with
@@ -460,7 +477,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
 		   (ref (A.Dag.mk_tblref
 			   (tblname, attr_infos, key_infos))))))
   in
-    (q, cs, dummy, dummy)
+    Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
   let cs = [Cs.Offset 1] in
@@ -471,13 +488,13 @@ and compile_constant loop (c : Constant.constant) =
 		    (A.Pos 0, A.Nat 1n)
 		    loop))))
   in
-    (q, cs, dummy, dummy)
+    Ti (q, cs, Itbls.empty, dummy)
 
 and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
     
-  let select loop (q, cs, _, _) =
+  let select loop (Ti (q, cs, _, _)) =
     let cols = items_of_offsets (Cs.leafs cs) in
       let q' =
 	ref (A.Dag.mk_project
@@ -489,10 +506,10 @@ and compile_if env loop e1 e2 e3 =
 			   [(iter', iter)]
 			   loop)))))
       in
-	(q', cs, dummy, dummy)
+	Ti (q', cs, Itbls.empty, dummy)
   in
   (* condition *)
-  let (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
+  let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
     assert (Cs.is_operand cs_e1);
     let loop_then =
       ref (A.Dag.mk_project
@@ -512,14 +529,14 @@ and compile_if env loop e1 e2 e3 =
       in
       let env_then = AEnv.map (select loop_then) env in
       let env_else = AEnv.map (select loop_else) env in
-      let (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
-      let (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
+      let Ti (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
+      let Ti (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
       let q =
 	ref (A.Dag.mk_disjunion
 	       q_e2
 	       q_e3)
       in
-	(q, cs_e2, dummy, dummy)
+	Ti (q, cs_e2, Itbls.empty, dummy)
 
 and compile_expression env loop e : tblinfo =
   match e with
@@ -548,7 +565,7 @@ let compile e =
     (ref (A.Dag.mk_littbl
 	    ([[A.Nat 1n]], [(A.Iter 0, A.NatType)])))
   in
-  let (q, cs, _, _) = compile_expression AEnv.empty loop e in
+  let Ti (q, cs, _, _) = compile_expression AEnv.empty loop e in
   let dag = 
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
