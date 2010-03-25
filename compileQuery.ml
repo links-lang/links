@@ -70,7 +70,7 @@ module Cs = struct
       loop cs
 end
 
-type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * (int * tblinfo) list * unit)
+type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ((int * tblinfo) list) * unit)
 
 module Itbls = struct
   let empty = []
@@ -133,6 +133,7 @@ let wrap_not res op_attr algexpr =
     (res, op_attr)
     algexpr
 
+(* Naming conventions for Iter and Pos columns. Use only these names! *)
 let iter = A.Iter 0 
 let iter' = A.Iter 1
 let inner = A.Iter 2
@@ -141,6 +142,43 @@ let pos = A.Pos 0
 let pos' = A.Pos 1
 let ord = A.Pos 2
 let ord' = A.Pos 3
+let item' = A.Pos 4
+let item'' = A.Pos 5
+let c' = A.Pos 6
+
+(*
+let rec suap q_paap (it1 : (int * tblinfo) list) (it2 : (int * tblinfo) list) =
+  match (it1, it2) with
+    | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
+	let q =
+	  ref (A.Dag.mk_rownum 
+		 (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+		 (ref (A.Dag.mk_disjunion
+			 (ref (A.Dag.mk_attach
+				 (ord, A.Nat 1n)
+				 q_1))
+			 (ref (A.Dag.mk_attach
+				 (ord, A.Nat 2n)
+				 q_2)))))
+	    in
+	  let q'_projlist = [(iter, item''); proj1 pos] in
+	  let q'_projlist = q'_projlist @ (proj_list (items_of_offsets (difference (Cs.leafs cs1) (Itbls.keys subs_1)))) in
+	  let q'_projlist = q'_projlist @ [((List.hd (items_of_offsets (Itbls.keys subs_1))), item')] in
+	  let q' =
+	    ref (A.Dag.mk_project
+		   q'_projlist
+		   (ref (A.Dag.mk_thetajoin
+			   [(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
+			   q
+			   (ref (A.Dag.mk_project
+				   [(ord', ord); (item'', item'); (c', A.Item c1)]
+				   q_paap)))))
+	  in
+	    [(c1, (q', (Cs.fuse cs1 cs2), [], dummy))] (* (suap q_paap subs_hat subs_tilde) *)
+    | [], [] ->
+	[]
+    | _ -> assert false
+*)
 
 let wrap_agg loop q attachment =
   ref (A.Dag.mk_attach
@@ -194,7 +232,24 @@ let abspos q cols =
 		    ([proj1 iter; (pos', pos)] @ (proj_list cols))
 		    q)))))
 
-let rec compile_append env loop l =
+let rec compile_box env loop e =
+  let ti_e = compile_expression env loop e in
+  let q_o = 
+    ref (A.Dag.mk_attach
+	   (pos, A.Nat 1n)
+	   (ref (A.Dag.mk_project 
+		   [(proj1 iter); (A.Item 1, iter)]
+		   loop)))
+      in
+    Ti(q_o, [Cs.Offset 1], [(1, ti_e)], dummy)
+
+and compile_unbox env loop e =
+  let Ti(_, cs, itbls, _) = compile_expression env loop e in
+    assert ((Cs.cardinality cs) = 1);
+    assert ((List.length itbls) = 1);
+    snd (List.hd itbls)
+
+and compile_append env loop l =
   match l with
     | e :: [] ->
 	compile_expression env loop e
@@ -563,6 +618,8 @@ and compile_expression env loop e : tblinfo =
     | `If (c, t, e) -> compile_if env loop c t e
     | `For ([x, l], os, body) -> compile_for env loop x l body os
     | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
+    | `Box e -> compile_box env loop e
+    | `Unbox e -> compile_unbox env loop e
     | `Erase _
     | `Closure _
     | `Variant _

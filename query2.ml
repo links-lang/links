@@ -12,7 +12,8 @@ type t =
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant 
+    | `Box of t | `Unbox of t]
 and env = Value.env * t Env.Int.t
     deriving (Show)
 
@@ -86,7 +87,8 @@ struct
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant 
+    | `Box of pt | `Unbox of pt]
       deriving (Show)
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -111,6 +113,8 @@ struct
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
+	| `Box t -> `Box (bt t)
+	| `Unbox t -> `Unbox (bt t)
           
   let t = Show.show show_pt -<- pt_of_t
 end
@@ -192,6 +196,8 @@ struct
 	| `Extend (record, ext_fields) -> `Extend (opt_map rep record, StringMap.map rep ext_fields)
 	| `Variant (s, t) -> `Variant (s, rep t)
 	| `Apply (f, args) -> `Apply (f, List.map rep args)
+	| `Box t -> `Box (rep t)
+	| `Unbox t -> `Unbox (rep t)
 	| `Var v when v = old_var -> `Var new_var
 	| n -> n
 
