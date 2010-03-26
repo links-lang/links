@@ -1,8 +1,13 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
 var t = table "test1" with (foo : Int, bar : Int ) from db;
+var t2 = table "test2" with (id : Int, name : String, value : Int) from db;
 fun f(x) { x + 2}
 query {
-for (r <-- t) 
-	for (i <- [1,2,3,4,5,6])
-		[(1 = r.foo + i, 2=r.foo, 3=i)]
+for (r <-- t2) 
+	for (l <-- t)
+		if (l.foo == r.id)
+			[(name = r.name, value = r.value)]
+		else
+			[]
 }
+

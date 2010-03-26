@@ -146,7 +146,7 @@ let item' = A.Pos 4
 let item'' = A.Pos 5
 let c' = A.Pos 6
 
-let rec suap q_paap (it1 : (int * tblinfo) list) (it2 : (int * tblinfo) list) : (int * tblinfo) list =
+let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
 	let q =
@@ -542,13 +542,18 @@ and compile_record env loop r =
 and compile_table loop ((_db, _params), tblname, _row) =
   Printf.printf "tblname = %s\n" tblname;
   flush stdout;
-  assert (tblname = "test1");
-  let columns = ["foo"; "bar"] in
+  let (key_infos, columns) = 
+    match tblname with
+      | "test1" ->
+	  ([[A.Item 1]], ["foo"; "bar"]) 
+      | "test2" ->
+	  ([[A.Item 1]], ["id"; "name"; "value"])
+      | _ -> failwith "table not known"
+  in
   let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
   let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
   let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
   let pos = A.Pos 0 in
-  let key_infos = [[A.Item 1]] in
   let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
   let q =
     ref (A.Dag.mk_cross
