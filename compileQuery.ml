@@ -145,6 +145,7 @@ let ord' = A.Pos 3
 let item' = A.Pos 4
 let item'' = A.Pos 5
 let c' = A.Pos 6
+let res = A.Pos 7
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -330,9 +331,6 @@ and compile_nth env loop operands =
   let Ti (q1, _, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
   let q2' = abspos q2 (items_of_offsets (Cs.leafs cs2)) in
-  let offset = List.length (Cs.leafs cs2) in
-  let c' = A.Item (offset + 1) in
-  let res = A.Item (offset + 2) in
   let q =
     (ref (A.Dag.mk_project
 	    ([proj1 iter; proj1 pos] @ proj_list (items_of_offsets (Cs.leafs cs2)))
@@ -389,6 +387,61 @@ and compile_unop env loop wrapper operands =
     in
       Ti (q, op_cs, Itbls.empty, dummy)
 
+and compile_take env loop args =
+  assert ((List.length args) = 2);
+  let Ti(q1, _cs1, _subs1, _) = compile_expression env loop (List.hd args) in
+  let Ti(q2, cs2, _subs2, _) = compile_expression env loop (List.nth args 1) in
+  let cols = (items_of_offsets (Cs.leafs cs2)) in
+  let q2' = abspos q2 cols in
+  let c = A.Item 1 in
+  let one = A.Item 2 in
+  let q' = 
+    ref (A.Dag.mk_project
+	   ([proj1 iter; proj1 pos] @ (proj_list cols))
+	   (ref (A.Dag.mk_select
+		   res
+		   (ref (A.Dag.mk_funnumgt
+			   (res, (c', pos'))
+			   (ref (A.Dag.mk_eqjoin
+				   (iter, iter')
+				   (ref (A.Dag.mk_cast
+					   (pos', pos, A.IntType)
+					   q2'))
+				   (ref (A.Dag.mk_project
+					   [(iter', iter); (c', res)]
+					   (ref (A.Dag.mk_fun1to1
+						   (A.Add, res, [c; one])
+						   (ref (A.Dag.mk_attach
+							   (one, A.Int (Num.Int 1))
+							   q1)))))))))))))
+  in
+    Ti(q', cs2, Itbls.empty, dummy)
+
+and compile_drop env loop args =
+  assert ((List.length args) = 2);
+  let Ti(q1, _cs1, _subs1, _) = compile_expression env loop (List.hd args) in
+  let Ti(q2, cs2, _subs2, _) = compile_expression env loop (List.nth args 1) in
+  let cols = (items_of_offsets (Cs.leafs cs2)) in
+  let q2' = abspos q2 cols in
+  let c = A.Item 1 in
+  let q' =
+    ref (A.Dag.mk_project
+	   ([proj1 iter; proj1 pos] @ (proj_list cols))
+	   (ref (A.Dag.mk_select
+		   res
+		   (ref (A.Dag.mk_funnumgt
+			   (res, (pos', c'))
+			   (ref (A.Dag.mk_eqjoin
+				   (iter, iter')
+				   (ref (A.Dag.mk_cast
+					   (pos', pos, A.IntType)
+					   q2'))
+				   (ref (A.Dag.mk_project
+					   [(iter', iter); (c', c)]
+					   q1)))))))))
+  in
+    Ti(q', cs2, Itbls.empty, dummy)
+
 and compile_apply env loop f args =
   match f with
     | "+" 
@@ -409,6 +462,8 @@ and compile_apply env loop f args =
 (*    | "min" -> compile_aggr env loop A.Min args
     | "avg" -> compile_aggr env loop A.Avg args
     | "sum" -> compile_aggr env loop A.Sum args *)
+    | "take" -> compile_take env loop args
+    | "drop" -> compile_drop env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
@@ -548,6 +603,10 @@ and compile_table loop ((_db, _params), tblname, _row) =
 	  ([[A.Item 1]], ["foo"; "bar"]) 
       | "test2" ->
 	  ([[A.Item 1]], ["id"; "name"; "value"])
+      | "players" ->
+	  ([[A.Item 1]], ["name"; "age"; "team"])
+      | "teams" ->
+	  ([[A.Item 1]], ["name"])
       | _ -> failwith "table not known"
   in
   let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in

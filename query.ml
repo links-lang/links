@@ -629,7 +629,12 @@ struct
 
   let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e);*)
-    computation (env_of_value_env env) e
+    let t = computation (env_of_value_env env) e in
+      Debug.print ("query2:\n "^string_of_t t);
+      Debug.print "type";
+      Debug.print (Types.string_of_datatype (type_of_expression t));
+      t
+      
 end
 
 

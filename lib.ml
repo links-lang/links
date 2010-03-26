@@ -410,13 +410,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "take",
   (p2 (fun n l ->
          box_list (Utility.take (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, [a]) -> [a]",
   PURE);
 
   "drop",
   (p2 (fun n l ->
          box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, [a]) -> [a]",
   PURE);
 
   "max",
