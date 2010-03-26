@@ -119,9 +119,9 @@ let wrap_ne res c c' algexpr =
   let res' = incr_col res in
     A.Dag.mk_funboolnot
       (res, res')
-      (ref (A.Dag.mk_funnumeq
-	      (res', (c, c'))
-	      algexpr))
+      (A.Dag.mk_funnumeq
+	 (res', (c, c'))
+	 algexpr)
 
 let wrap_gt res c c' algexpr =
   A.Dag.mk_funnumgt
@@ -151,30 +151,30 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
 	let q =
-	  ref (A.Dag.mk_rownum 
-		 (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-		 (ref (A.Dag.mk_disjunion
-			 (ref (A.Dag.mk_attach
-				 (ord, A.Nat 1n)
-				 q_1))
-			 (ref (A.Dag.mk_attach
-				 (ord, A.Nat 2n)
-				 q_2)))))
-	    in
-	  let q'_projlist = [(iter, item''); proj1 pos] in
-	  let q'_projlist = q'_projlist @ (proj_list (items_of_offsets (difference (Cs.leafs cs1) (Itbls.keys subs_1)))) in
-	  let q'_projlist = q'_projlist @ [((List.hd (items_of_offsets (Itbls.keys subs_1))), item')] in
-	  let q' =
-	    ref (A.Dag.mk_project
-		   q'_projlist
-		   (ref (A.Dag.mk_thetajoin
-			   [(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
-			   q
-			   (ref (A.Dag.mk_project
-				   [(ord', ord); (item'', item'); (c', A.Item c1)]
-				   q_paap)))))
-	  in
-	    [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
+	  (A.Dag.mk_rownum 
+	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+	     (A.Dag.mk_disjunion
+		(A.Dag.mk_attach
+		   (ord, A.Nat 1n)
+		   q_1)
+		(A.Dag.mk_attach
+		   (ord, A.Nat 2n)
+		   q_2)))
+	in
+	let q'_projlist = [(iter, item''); proj1 pos] in
+	let q'_projlist = q'_projlist @ (proj_list (items_of_offsets (difference (Cs.leafs cs1) (Itbls.keys subs_1)))) in
+	let q'_projlist = q'_projlist @ [((List.hd (items_of_offsets (Itbls.keys subs_1))), item')] in
+	let q' =
+	  (A.Dag.mk_project
+	     q'_projlist
+	     (A.Dag.mk_thetajoin
+		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
+		q
+		(A.Dag.mk_project
+		   [(ord', ord); (item'', item'); (c', A.Item c1)]
+		   q_paap)))
+	in
+	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
     | [], [] ->
 	[]
     | _ -> assert false
@@ -183,46 +183,46 @@ let rec suse q_pase subs : ((int * tblinfo) list) =
   match subs with
     | (offset, (Ti(q, cs, itbls, _))) :: subs ->
 	let q' = 
-	  ref (A.Dag.mk_project
-		 ([proj1 iter; proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
-		 (ref (A.Dag.mk_eqjoin
-			 (iter, iter')
-			 q
-			 (ref (A.Dag.mk_project
-				 [(iter', A.Item offset)]
-				 q_pase)))))
+	  A.Dag.mk_project
+	    ([proj1 iter; proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       q
+	       (A.Dag.mk_project
+		  [(iter', A.Item offset)]
+		  q_pase))
 	in
 	  [(offset, (Ti(q', cs, (suse q' itbls), dummy)))] @ (suse q_pase subs)
-			 
+	    
     | [] ->
 	[]
 
 
 let wrap_agg loop q attachment =
-  ref (A.Dag.mk_attach
-	 (pos, A.Nat 1n)
-	 (ref (A.Dag.mk_disjunion
-		 q
-		 (ref (A.Dag.mk_attach
-			 (A.Item 1, attachment)
-			 (ref (A.Dag.mk_difference
-				 loop
-				 (ref (A.Dag.mk_project
-					 [proj1 iter]
-					 q)))))))))
+  A.Dag.mk_attach
+    (pos, A.Nat 1n)
+    (A.Dag.mk_disjunion
+       q
+       (A.Dag.mk_attach
+	  (A.Item 1, attachment)
+	  (A.Dag.mk_difference
+	     loop
+	     (A.Dag.mk_project
+		[proj1 iter]
+		q))))
 
 (* the empty list *)
-let nil = ref (A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)])
+let nil = A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)]
 
 (* loop-lift q by map *)
 let lift map (Ti (q, cs, _, _)) =
   let q' =
-    (ref (A.Dag.mk_project
-	    ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
-	    (ref (A.Dag.mk_eqjoin
-		    (iter, outer)
-		    q
-		    map))))
+    (A.Dag.mk_project
+       ([(iter, inner); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs))))
+       (A.Dag.mk_eqjoin
+	  (iter, outer)
+	  q
+	  map))
   in
     Ti (q', cs, Itbls.empty, dummy)
 
@@ -230,35 +230,35 @@ let lift map (Ti (q, cs, _, _)) =
 let rec omap map sort_criteria sort_cols =
   match (sort_criteria, sort_cols) with
     | (o :: os), (col :: cols) ->
-	ref (A.Dag.mk_project
-	       ([proj1 outer; proj1 inner; (col, A.Item 1)] @ (proj_list cols))
-	       (ref (A.Dag.mk_eqjoin
-		       (inner, iter)
-		    	       (omap map os cols)
-		       o)))
+	A.Dag.mk_project
+	  ([proj1 outer; proj1 inner; (col, A.Item 1)] @ (proj_list cols))
+	  (A.Dag.mk_eqjoin
+	     (inner, iter)
+	     (omap map os cols)
+	     o)
     | [], [] ->
 	map
     | _ -> assert false
 
 (* compute absolute positions for q *)
 let abspos q cols =
-  ref (A.Dag.mk_project
-	 ([proj1 iter; proj1 pos] @ (proj_list cols))
-	 (ref (A.Dag.mk_rownum
-		 (pos, [(pos', A.Ascending)], Some iter)
-		 (ref (A.Dag.mk_project
-		    ([proj1 iter; (pos', pos)] @ (proj_list cols))
-		    q)))))
+  A.Dag.mk_project
+    ([proj1 iter; proj1 pos] @ (proj_list cols))
+    (A.Dag.mk_rownum
+       (pos, [(pos', A.Ascending)], Some iter)
+       (A.Dag.mk_project
+	  ([proj1 iter; (pos', pos)] @ (proj_list cols))
+	  q))
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
   let q_o = 
-    ref (A.Dag.mk_attach
-	   (pos, A.Nat 1n)
-	   (ref (A.Dag.mk_project 
-		   [(proj1 iter); (A.Item 1, iter)]
-		   loop)))
-      in
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_project 
+	 [(proj1 iter); (A.Item 1, iter)]
+	 loop)
+  in
     Ti(q_o, [Cs.Offset 1], [(1, ti_e)], dummy)
 
 and compile_unbox env loop e =
@@ -285,17 +285,17 @@ and compile_list (Ti (hd_q, hd_cs, _, _)) (Ti (tl_q, tl_cs, _, _)) =
   let pos' = A.Pos 1 in
   let iter = A.Iter 0 in
   let q =
-    ref (A.Dag.mk_project
-	   ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
-	   (ref (A.Dag.mk_rank
-		   (pos', [(ord, A.Ascending); (pos, A.Ascending)])
-		   (ref (A.Dag.mk_disjunion
-			   (ref (A.Dag.mk_attach
-				   (ord, A.Nat 1n)
-				   hd_q))
-			   (ref (A.Dag.mk_attach
-				   (ord, A.Nat 2n)
-				   tl_q)))))))
+    A.Dag.mk_project
+      ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
+      (A.Dag.mk_rank
+	 (pos', [(ord, A.Ascending); (pos, A.Ascending)])
+	 (A.Dag.mk_disjunion
+	    (A.Dag.mk_attach
+	       (ord, A.Nat 1n)
+	       hd_q)
+	    (A.Dag.mk_attach
+	       (ord, A.Nat 2n)
+	       tl_q)))
   in
     Ti (q, fused_cs, Itbls.empty, dummy)
 
@@ -305,9 +305,9 @@ and compile_length env loop args =
   let e = List.hd args in
   let Ti (q_e, _, _, _) = compile_expression env loop e in
   let q = 
-    ref (A.Dag.mk_funaggrcount
-	   (A.Item 1, Some iter)
-	   q_e)
+    A.Dag.mk_funaggrcount
+      (A.Item 1, Some iter)
+      q_e
   in
   let q' = wrap_agg loop q (A.Nat 1n) in
     Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
@@ -319,9 +319,9 @@ and compile_aggr env loop aggr_fun args =
   let Ti (q_e, cs_e, _, _) = compile_expression env loop e in
     assert (Cs.is_operand cs_e);
     let q = 
-      (ref (A.Dag.mk_funaggr
-	      (aggr_fun, (c, c), Some iter)
-	      q_e))
+      (A.Dag.mk_funaggr
+	 (aggr_fun, (c, c), Some iter)
+	 q_e)
     in
     let q' = wrap_agg loop q (A.String "error") in
       Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
@@ -332,20 +332,20 @@ and compile_nth env loop operands =
   let Ti (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
   let q2' = abspos q2 (items_of_offsets (Cs.leafs cs2)) in
   let q =
-    (ref (A.Dag.mk_project
-	    ([proj1 iter; proj1 pos] @ proj_list (items_of_offsets (Cs.leafs cs2)))
-	    (ref (A.Dag.mk_select
-		    res
-		    (ref (A.Dag.mk_funnumeq
-			    (res, (pos', c'))
-			    (ref (A.Dag.mk_eqjoin
-				    (iter, iter')
-				    (ref (A.Dag.mk_cast
-					    (pos', pos, A.IntType)
-					    q2'))
-				    (ref (A.Dag.mk_project
-					    [(iter', iter); (c', A.Item 1)]
-					    q1))))))))))
+    (A.Dag.mk_project
+       ([proj1 iter; proj1 pos] @ proj_list (items_of_offsets (Cs.leafs cs2)))
+       (A.Dag.mk_select
+	  res
+	  (A.Dag.mk_funnumeq
+	     (res, (pos', c'))
+	     (A.Dag.mk_eqjoin
+		(iter, iter')
+		(A.Dag.mk_cast
+		   (pos', pos, A.IntType)
+		   q2')
+		(A.Dag.mk_project
+		   [(iter', iter); (c', A.Item 1)]
+		   q1)))))
   in
     Ti (q, cs2, Itbls.empty, dummy)
 
@@ -359,16 +359,16 @@ and compile_binop env loop wrapper operands =
     let c' = A.Item 2 in
     let res = A.Item 3 in
     let q = 
-      ref (A.Dag.mk_project
-	     [(proj1 iter); (proj1 pos); (c, res)]
-	     (ref (wrapper 
-		     res c c'
-		     (ref (A.Dag.mk_eqjoin
-			     (iter, iter')
-			     op1_q
-			     (ref (A.Dag.mk_project
-				     [(iter', iter); (c', c)]
-				     op2_q)))))))
+      A.Dag.mk_project
+	[(proj1 iter); (proj1 pos); (c, res)]
+	(wrapper 
+	   res c c'
+	   (A.Dag.mk_eqjoin
+	      (iter, iter')
+	      op1_q
+	      (A.Dag.mk_project
+		 [(iter', iter); (c', c)]
+		 op2_q)))
     in
       Ti (q, op1_cs, Itbls.empty, dummy)
 
@@ -379,11 +379,11 @@ and compile_unop env loop wrapper operands =
     let c = A.Item 1 in
     let res = A.Item 2 in
     let q = 
-      ref (A.Dag.mk_project
-	     [proj1 iter; proj1 pos; (c, res)]
-	     (ref (wrapper
-		     res c
-		     op_q)))
+      A.Dag.mk_project
+	[proj1 iter; proj1 pos; (c, res)]
+	(wrapper
+	   res c
+	   op_q)
     in
       Ti (q, op_cs, Itbls.empty, dummy)
 
@@ -396,26 +396,26 @@ and compile_take env loop args =
   let c = A.Item 1 in
   let one = A.Item 2 in
   let q' = 
-    ref (A.Dag.mk_project
-	   ([proj1 iter; proj1 pos] @ (proj_list cols))
-	   (ref (A.Dag.mk_select
-		   res
-		   (ref (A.Dag.mk_funnumgt
-			   (res, (c', pos'))
-			   (ref (A.Dag.mk_eqjoin
-				   (iter, iter')
-				   (ref (A.Dag.mk_cast
-					   (pos', pos, A.IntType)
-					   q2'))
-				   (ref (A.Dag.mk_project
-					   [(iter', iter); (c', res)]
-					   (ref (A.Dag.mk_fun1to1
-						   (A.Add, res, [c; one])
-						   (ref (A.Dag.mk_attach
-							   (one, A.Int (Num.Int 1))
-							   q1)))))))))))))
-  in
-    Ti(q', cs2, Itbls.empty, dummy)
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list cols))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumgt
+	    (res, (c', pos'))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       (A.Dag.mk_cast
+		  (pos', pos, A.IntType)
+		  q2')
+	       (A.Dag.mk_project
+		  [(iter', iter); (c', res)]
+		  (A.Dag.mk_fun1to1
+		     (A.Add, res, [c; one])
+		     (A.Dag.mk_attach
+			(one, A.Int (Num.Int 1))
+			q1))))))
+       in
+	Ti(q', cs2, Itbls.empty, dummy)
 
 and compile_drop env loop args =
   assert ((List.length args) = 2);
@@ -425,20 +425,20 @@ and compile_drop env loop args =
   let q2' = abspos q2 cols in
   let c = A.Item 1 in
   let q' =
-    ref (A.Dag.mk_project
-	   ([proj1 iter; proj1 pos] @ (proj_list cols))
-	   (ref (A.Dag.mk_select
-		   res
-		   (ref (A.Dag.mk_funnumgt
-			   (res, (pos', c'))
-			   (ref (A.Dag.mk_eqjoin
-				   (iter, iter')
-				   (ref (A.Dag.mk_cast
-					   (pos', pos, A.IntType)
-					   q2'))
-				   (ref (A.Dag.mk_project
-					   [(iter', iter); (c', c)]
-					   q1)))))))))
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list cols))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumgt
+	    (res, (pos', c'))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       (A.Dag.mk_cast
+		  (pos', pos, A.IntType)
+		  q2')
+	       (A.Dag.mk_project
+		  [(iter', iter); (c', c)]
+		  q1))))
   in
     Ti(q', cs2, Itbls.empty, dummy)
 
@@ -459,9 +459,9 @@ and compile_apply env loop f args =
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
     | "maxf" -> compile_aggr env loop A.Max args
-(*    | "min" -> compile_aggr env loop A.Min args
-    | "avg" -> compile_aggr env loop A.Avg args
-    | "sum" -> compile_aggr env loop A.Sum args *)
+	(*    | "min" -> compile_aggr env loop A.Min args
+	      | "avg" -> compile_aggr env loop A.Avg args
+	      | "sum" -> compile_aggr env loop A.Sum args *)
     | "take" -> compile_take env loop args
     | "drop" -> compile_drop env loop args
     | "<" | "<=" | ">=" ->
@@ -481,26 +481,26 @@ and compile_apply env loop f args =
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, _, _) = compile_expression env loop e1 in
   let q_v = 
-    ref (A.Dag.mk_rownum
-	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	   q1)
+    A.Dag.mk_rownum
+      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+      q1
   in
   let map =
-    ref (A.Dag.mk_project
-	   [(outer, iter); proj1 inner]
-	   q_v)
+    A.Dag.mk_project
+      [(outer, iter); proj1 inner]
+      q_v
   in
   let loop_v =
-    ref (A.Dag.mk_project
-	   [(iter, inner)]
-	   q_v)
+    A.Dag.mk_project
+      [(iter, inner)]
+      q_v
   in
   let q_v' =
-    ref (A.Dag.mk_attach
-	   (pos, A.Nat 1n)
-	   (ref (A.Dag.mk_project
-		   ([(iter, inner)] @ (proj_list (items_of_offsets (Cs.leafs cs1))))
-		   q_v)))
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_project
+	 ([(iter, inner)] @ (proj_list (items_of_offsets (Cs.leafs cs1))))
+	 q_v)
   in
   let env = AEnv.map (lift map) env in
   let env_v = AEnv.bind env (v, Ti (q_v', cs1, Itbls.empty, dummy)) in
@@ -515,19 +515,19 @@ and compile_for env loop v e1 e2 order_criteria =
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
 	    (order_cols, omap map q_os cols)
-	    
+	      
       | [] ->
 	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
   in
   let q =
-    ref (A.Dag.mk_project
-	   ([(iter, outer); (pos, pos')] @ (proj_list (items_of_offsets (Cs.leafs cs2))))
-	   (ref (A.Dag.mk_rank
-		   (pos', order_cols)
-		   (ref (A.Dag.mk_eqjoin
-			   (inner, iter)
-			   map'
-			   q2)))))
+    A.Dag.mk_project
+      ([(iter, outer); (pos, pos')] @ (proj_list (items_of_offsets (Cs.leafs cs2))))
+      (A.Dag.mk_rank
+	 (pos', order_cols)
+	 (A.Dag.mk_eqjoin
+	    (inner, iter)
+	    map'
+	    q2))
   in
     Ti (q, cs2, Itbls.empty, dummy)
 
@@ -557,14 +557,14 @@ and merge_records (Ti (r1_q, r1_cs, _, _)) (Ti (r2_q, r2_cs, _, _)) =
   let old_names_r2 = items_of_offsets r2_leafs in
   let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
   let q =
-    ref (A.Dag.mk_project
-	   (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
-	   (ref (A.Dag.mk_eqjoin
-		   (iter, iter')
-		   r1_q
-		   (ref ((A.Dag.mk_project
-			    ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
-			    r2_q))))))
+    A.Dag.mk_project
+      (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
+      (A.Dag.mk_eqjoin
+	 (iter, iter')
+	 r1_q
+	 ((A.Dag.mk_project
+	     ((iter', iter) :: (proj_list_map new_names_r2 old_names_r2))
+	     r2_q)))
   in
   let cs = Cs.append r1_cs r2_cs in
     Ti (q, cs, Itbls.empty, dummy)
@@ -577,9 +577,9 @@ and compile_project env loop field r =
   let c_new = incr c_old (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
   let q =
-    ref (A.Dag.mk_project
-	   ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
-	   q_r)
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
+      q_r
   in
     Ti (q, field_cs, Itbls.empty, dummy)
 
@@ -615,23 +615,23 @@ and compile_table loop ((_db, _params), tblname, _row) =
   let pos = A.Pos 0 in
   let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
   let q =
-    ref (A.Dag.mk_cross
-	   loop
-	   (ref (A.Dag.mk_rank
-		   (pos, (List.map (fun (_, name) -> (name, A.Ascending)) items))
-		   (ref (A.Dag.mk_tblref
-			   (tblname, attr_infos, key_infos))))))
+    A.Dag.mk_cross
+      loop
+      (A.Dag.mk_rank
+	 (pos, (List.map (fun (_, name) -> (name, A.Ascending)) items))
+	 (A.Dag.mk_tblref
+	    (tblname, attr_infos, key_infos)))
   in
     Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
   let cs = [Cs.Offset 1] in
   let q =
-    (ref (A.Dag.mk_attach
-	    (A.Item 1, A.const c)
-	    (ref (A.Dag.mk_attach
-		    (A.Pos 0, A.Nat 1n)
-		    loop))))
+    (A.Dag.mk_attach
+       (A.Item 1, A.const c)
+       (A.Dag.mk_attach
+	  (A.Pos 0, A.Nat 1n)
+	  loop))
   in
     Ti (q, cs, Itbls.empty, dummy)
 
@@ -641,47 +641,47 @@ and compile_if env loop e1 e2 e3 =
     
   let select loop (Ti (q, cs, _, _)) =
     let cols = items_of_offsets (Cs.leafs cs) in
-      let q' =
-	ref (A.Dag.mk_project
-	   ([proj1 iter; proj1 pos] @ (proj_list cols))
-	   (ref (A.Dag.mk_eqjoin
-		   (iter, iter')
-		   q
-		   (ref (A.Dag.mk_project
-			   [(iter', iter)]
-			   loop)))))
-      in
-	Ti (q', cs, Itbls.empty, dummy)
+    let q' =
+      A.Dag.mk_project
+	([proj1 iter; proj1 pos] @ (proj_list cols))
+	(A.Dag.mk_eqjoin
+	   (iter, iter')
+	   q
+	   (A.Dag.mk_project
+	      [(iter', iter)]
+	      loop))
+    in
+      Ti (q', cs, Itbls.empty, dummy)
   in
-  (* condition *)
+    (* condition *)
   let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
     assert (Cs.is_operand cs_e1);
     let loop_then =
-      ref (A.Dag.mk_project
-	     [proj1 iter]
-	     (ref (A.Dag.mk_select
-		     c
-		     q_e1)))
+      A.Dag.mk_project
+	[proj1 iter]
+	(A.Dag.mk_select
+	   c
+	   q_e1)
     in
-      let loop_else =
-	ref (A.Dag.mk_project
-	       [proj1 iter]
-	       (ref (A.Dag.mk_select
-		       res
-		       (ref (A.Dag.mk_funboolnot
-			       (res, c)
-			       q_e1)))))
-      in
-      let env_then = AEnv.map (select loop_then) env in
-      let env_else = AEnv.map (select loop_else) env in
-      let Ti (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
-      let Ti (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
-      let q =
-	ref (A.Dag.mk_disjunion
-	       q_e2
-	       q_e3)
-      in
-	Ti (q, cs_e2, Itbls.empty, dummy)
+    let loop_else =
+      A.Dag.mk_project
+	[proj1 iter]
+	(A.Dag.mk_select
+	   res
+	   (A.Dag.mk_funboolnot
+	      (res, c)
+	      q_e1))
+    in
+    let env_then = AEnv.map (select loop_then) env in
+    let env_else = AEnv.map (select loop_else) env in
+    let Ti (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
+    let Ti (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
+    let q =
+      A.Dag.mk_disjunion
+	q_e2
+	q_e3
+    in
+      Ti (q, cs_e2, Itbls.empty, dummy)
 
 and compile_expression env loop e : tblinfo =
   match e with
@@ -709,14 +709,14 @@ and compile_expression env loop e : tblinfo =
 
 let compile e =
   let loop = 
-    (ref (A.Dag.mk_littbl
-	    ([[A.Nat 1n]], [(A.Iter 0, A.NatType)])))
+    (A.Dag.mk_littbl
+       ([[A.Nat 1n]], [(A.Iter 0, A.NatType)]))
   in
   let Ti (q, cs, _, _) = compile_expression AEnv.empty loop e in
   let dag = 
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
-      (ref (A.Dag.mk_nil))
+      (A.Dag.mk_nil)
       q
   in
-    A.Dag.export_plan "plan.xml" (ref dag)
+    A.Dag.export_plan "plan.xml" dag

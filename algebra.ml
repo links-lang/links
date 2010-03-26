@@ -525,39 +525,39 @@ sig
   type dag
 
   (* binary node constructors *)
-  val mk_eqjoin : eqjoin_info -> dag ref -> dag ref -> dag
-  val mk_semijoin : eqjoin_info -> dag ref -> dag ref -> dag
-  val mk_thetajoin : thetajoin_info -> dag ref -> dag ref -> dag
-  val mk_disjunion : dag ref -> dag ref -> dag
-  val mk_difference : dag ref -> dag ref -> dag
-  val mk_serializerel : serialize_rel_info -> dag ref -> dag ref -> dag
-  val mk_cross : dag ref -> dag ref -> dag
+  val mk_eqjoin : eqjoin_info -> dag ref -> dag ref -> dag ref
+  val mk_semijoin : eqjoin_info -> dag ref -> dag ref -> dag ref
+  val mk_thetajoin : thetajoin_info -> dag ref -> dag ref -> dag ref
+  val mk_disjunion : dag ref -> dag ref -> dag ref
+  val mk_difference : dag ref -> dag ref -> dag ref
+  val mk_serializerel : serialize_rel_info -> dag ref -> dag ref -> dag ref
+  val mk_cross : dag ref -> dag ref -> dag ref
 
   (* unary node constructors *)
-  val mk_rownum : rownum_info -> dag ref -> dag
-  val mk_rowid : rowid_info -> dag ref -> dag
-  val mk_rowrank : rank_info -> dag ref -> dag
-  val mk_rank : rank_info -> dag ref -> dag
-  val mk_project : project_info -> dag ref -> dag
-  val mk_select : select_info -> dag ref -> dag
-  val mk_posselect : pos_select_info -> dag ref -> dag
-  val mk_distinct : dag ref -> dag
-  val mk_attach : attach_info -> dag ref -> dag
-  val mk_cast : cast_info -> dag ref -> dag
-  val mk_funnumeq : binop_info -> dag ref -> dag
-  val mk_funnumgt : binop_info -> dag ref -> dag
-  val mk_fun1to1 : fun_1to1_info -> dag ref -> dag
-  val mk_funbooland : binop_info -> dag ref -> dag
-  val mk_funboolor : binop_info -> dag ref -> dag
-  val mk_funboolnot : unop_info -> dag ref -> dag
-  val mk_funaggr : fun_aggr_info -> dag ref -> dag
-  val mk_funaggrcount : fun_aggr_count_info -> dag ref -> dag
+  val mk_rownum : rownum_info -> dag ref -> dag ref
+  val mk_rowid : rowid_info -> dag ref -> dag ref
+  val mk_rowrank : rank_info -> dag ref -> dag ref
+  val mk_rank : rank_info -> dag ref -> dag ref
+  val mk_project : project_info -> dag ref -> dag ref
+  val mk_select : select_info -> dag ref -> dag ref
+  val mk_posselect : pos_select_info -> dag ref -> dag ref
+  val mk_distinct : dag ref -> dag ref
+  val mk_attach : attach_info -> dag ref -> dag ref
+  val mk_cast : cast_info -> dag ref -> dag ref
+  val mk_funnumeq : binop_info -> dag ref -> dag ref
+  val mk_funnumgt : binop_info -> dag ref -> dag ref
+  val mk_fun1to1 : fun_1to1_info -> dag ref -> dag ref
+  val mk_funbooland : binop_info -> dag ref -> dag ref
+  val mk_funboolor : binop_info -> dag ref -> dag ref
+  val mk_funboolnot : unop_info -> dag ref -> dag ref
+  val mk_funaggr : fun_aggr_info -> dag ref -> dag ref
+  val mk_funaggrcount : fun_aggr_count_info -> dag ref -> dag ref
 
   (* nullary node constructors *)
-  val mk_littbl : lit_tbl_info -> dag
-  val mk_emptytbl : schema_infos -> dag
-  val mk_tblref : tbl_ref_info -> dag
-  val mk_nil : dag
+  val mk_littbl : lit_tbl_info -> dag ref
+  val mk_emptytbl : schema_infos -> dag ref
+  val mk_tblref : tbl_ref_info -> dag ref
+  val mk_nil : dag ref
 
   val prune_empty : dag -> dag
   val export_plan : string -> dag ref -> unit
@@ -578,13 +578,13 @@ struct
       s
 
   let mkbinnode op left_child right_child =
-    BinaryNode (op, (id ()), left_child, right_child)
+    ref (BinaryNode (op, (id ()), left_child, right_child))
 
   let mkunnode op child =
-    UnaryNode (op, (id ()), child)
+    ref (UnaryNode (op, (id ()), child))
 
   let mknullnode op =
-    NullaryNode (op, (id ()))
+    ref (NullaryNode (op, (id ())))
 
   let mk_eqjoin info = mkbinnode (EqJoin info)
   let mk_semijoin info = mkbinnode (SemiJoin info)
@@ -740,14 +740,14 @@ end
 
 let test () =
 
-    let et = ref (Dag.mk_emptytbl [((Iter 0), IntType); ((Pos 0), IntType); ((Item 0), IntType)]) in
-    let r = ref (Dag.mk_tblref ("t1", [((Item 0), "foo", IntType)], [[Item 0]])) in
-      let t =
-	ref (Dag.mk_serializerel
-	       (Iter 0, Pos 0, [Item 0])
-	       (ref (Dag.mk_disjunion r et))
-	       (ref (Dag.mk_distinct et)))
-      in
-      (*let t = ref (Dag.prune_empty !t) in *)
-	Dag.export_plan "plan.xml" t;
+  let et = Dag.mk_emptytbl [((Iter 0), IntType); ((Pos 0), IntType); ((Item 0), IntType)] in
+  let r = Dag.mk_tblref ("t1", [((Item 0), "foo", IntType)], [[Item 0]]) in
+  let t =
+    Dag.mk_serializerel
+      (Iter 0, Pos 0, [Item 0])
+      (Dag.mk_disjunion r et)
+      (Dag.mk_distinct et)
+  in
+    (*let t = ref (Dag.prune_empty !t) in *)
+    Dag.export_plan "plan.xml" t;
       
