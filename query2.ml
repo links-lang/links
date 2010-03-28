@@ -488,6 +488,8 @@ module Annotate = struct
 	    (`Project (e', field)), `Row
       | `Record fieldmap ->
 	  `Record (StringMap.map (aot `Row env) fieldmap), `Row
+      | `Erase (r, erase_fields) ->
+	  `Erase ((aot `Row env r), erase_fields), `Row
       | `Extend (r, ext_fields) ->
 	  let ext_fields' = StringMap.map (aot `Row env) ext_fields in
 	  let r' = opt_map (fun r -> fst (transform env r)) r in

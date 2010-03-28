@@ -55,7 +55,7 @@ module Cs = struct
 	| _ -> false
 
   (* look up the column corresponding to a record field *)
-  let record_field cs field =
+  let lookup_record_field cs field =
     let rec loop = function
       | (Offset _) :: tl ->
 	  loop tl
@@ -68,6 +68,24 @@ module Cs = struct
 	  failwith "Cs.get_mapping: unknown field name"
     in
       loop cs
+
+  (* remove all mappings with keys in fields *)
+  let filter_record_fields cs fields =
+    List.filter
+      (function 
+	 | Mapping (key, _) when StringSet.mem key fields -> false 
+	 | _ -> true)
+      cs
+
+  (* return all top-level record fields *)
+  let record_fields cs =
+    List.fold_left
+      (fun l c ->
+	 match c with
+	   | Mapping (key, _) -> key :: l
+	   | Offset _ -> l)
+      []
+      cs
 end
 
 type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ((int * tblinfo) list) * unit)
@@ -568,7 +586,7 @@ and merge_records (Ti (r1_q, r1_cs, _, _)) (Ti (r2_q, r2_cs, _, _)) =
 
 and compile_project env loop field r =
   let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
-  let field_cs' = Cs.record_field cs_r field in
+  let field_cs' = Cs.lookup_record_field cs_r field in
   let c_old = Cs.leafs field_cs' in
   let offset = List.hd c_old in
   let c_new = incr c_old (-offset + 1) in
@@ -579,6 +597,17 @@ and compile_project env loop field r =
       q_r
   in
     Ti (q, field_cs, Itbls.empty, dummy)
+
+and compile_erase env loop erase_fields r =
+  let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
+  let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
+  let remaining_cols = items_of_offsets (Cs.leafs remaining_cs) in
+  let q =
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list remaining_cols))
+      q_r
+  in
+    Ti(q, remaining_cs, Itbls.empty, dummy)
 
 and compile_record env loop r =
   match r with
@@ -690,6 +719,7 @@ and compile_expression env loop e : tblinfo =
     | `Extend (r, ext_fields) ->
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
+    | `Erase (r, erase_fields) -> compile_erase env loop erase_fields r
     | `Singleton e -> compile_expression env loop e
     | `Append l -> compile_append env loop l
     | `Table t -> compile_table loop t
@@ -698,7 +728,6 @@ and compile_expression env loop e : tblinfo =
     | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
     | `Box e -> compile_box env loop e
     | `Unbox e -> compile_unbox env loop e
-    | `Erase _
     | `Closure _
     | `Variant _
     | `XML _ -> failwith "compile_expression: not implemented"
