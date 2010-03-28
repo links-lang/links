@@ -1,0 +1,19 @@
+* Incomplete list of current TODO items:
+
+** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
+
+** TODO Query2: sanity checks for record fields
+*** TODO check that extended fields are not already present for `Extend nodes.
+*** TODO Also, implement a similar sanity check for `Erase and `Project.
+
+** TODO Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
+
+** TODO Relax the type system so that query blocks may return any value.
+
+** TODO Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
+*** TODO `Base -> `Any in Typesugar
+*** TODO modify lalgebra compilation rules to handle itbls
+
+** TODO Implement missing Ferry/Links primitive functions
+*** TODO zip/unzip
+
