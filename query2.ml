@@ -457,10 +457,100 @@ struct
   let eval env e = computation (env_of_value_env env) e
 end
 
+
+module Annotate = struct
+  type implementation_type = [`Row | `Table]
+
+  let annotate want (expression, get) =
+    match (want, get) with
+      | `Row, `Row | `Table, `Table -> expression
+      | `Row, `Table -> `Box expression
+      | `Table, `Row -> `Unbox expression
+
+  let rec transform env (expression : t) : (t * implementation_type) =
+    let aot t env = (fun e -> (annotate t (transform env e))) in
+    match expression with
+      | `Constant _ -> (expression, `Row)
+      | `Table _ -> (expression, `Table)
+      | `If (c, t, e) -> 
+	  let (c', _) = transform env c in
+	  let (t', itype) = transform env t in
+	  let (e', _) = transform env e in
+	    (`If (c', t', e'), itype)
+      | `Singleton e ->
+	  (* row or table? *)
+	  `Singleton (annotate `Row (transform env e)), `Table
+      | `Append xs ->
+	  let xs' = List.map (aot `Table env) xs in
+	    (`Append xs'), `Table
+      | `Project (e, field) ->
+	  let (e', _) = transform env e in
+	    (`Project (e', field)), `Row
+      | `Record fieldmap ->
+	  `Record (StringMap.map (aot `Row env) fieldmap), `Row
+      | `Extend (r, ext_fields) ->
+	  let ext_fields' = StringMap.map (aot `Row env) ext_fields in
+	  let r' = opt_map (fun r -> fst (transform env r)) r in
+	    `Extend (r' ,ext_fields'), `Row
+      | `For (gs, os, body) ->
+	  let env' = List.fold_left (fun m (x, _) -> Env.Int.bind m (x, `Row)) env gs in
+	  let gs' = List.map (fun (x, source) -> (x, aot `Table env source)) gs in
+	  let os' = List.map (fun o -> fst (transform env' o)) os in
+	  let body' = aot `Table env' body in
+	    (`For (gs', os', body')), `Table
+      | `Var x -> 
+	  `Var x, Env.Int.lookup env x
+      | `Apply (f, args) ->
+	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
+	  (match f with
+	    | "+" | "+." | "-" | "-." | "*" | "*." 
+	    | "/" | "/." | "not"
+	    | "<>" | "==" | ">" ->
+		(* `Row -> `Row -> `Row *)
+		`Apply (f, List.map (fun arg -> fst (transform env arg)) args), `Row
+	    | "nth" | "take" | "drop" ->
+		(* `Row -> `Table -> `Row *)
+		let (n, l) = 
+		  (match args with 
+		    | [a1; a2] -> (a1, a2)
+		    | _ -> fail_arg "nth")
+		in
+		let n' = fst (transform env n) in
+		let l' = aot `Table env l in
+		  `Apply (f, [n'; l']), `Row
+	    | "take" | "drop" ->
+		(* `Row -> `Table -> `Table *)
+		let (n, l) = 
+		  (match args with 
+		     | [a1; a2] -> (a1, a2)
+		     | _ -> fail_arg "take/drop")
+		in
+		let n' = fst (transform env n) in
+		let l' = aot `Table env l in
+		  `Apply (f, [n'; l']), `Table
+	    | "length" ->
+		(* `Table -> `Row *)
+		let l = 
+		  (match args with 
+		     | [a1] -> a1
+		     | _ -> fail_arg "length")
+		in
+		let l' = aot `Table env l in
+		  `Apply (f, [l']), `Row
+	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
+      | `Box _ | `Unbox _ ->
+	  failwith "expression already annotated"
+      | _ -> failwith "not implemented"
+    
+end
+
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
   fun env (_range, e) ->
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
       Debug.print ("query2:\n "^string_of_t v);
-      CompileQuery.compile v
+      let v = fst (Annotate.transform Env.Int.empty v) in
+	Debug.print ("query2 annotated:\n "^string_of_t v);
+	CompileQuery.compile v
+

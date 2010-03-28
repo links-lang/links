@@ -469,9 +469,6 @@ and compile_apply env loop f args =
     | s ->
 	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
 	  (*
-	    | `PrimitiveFunction "Concat" ->
-	    | `PrimitiveFunction "take" ->
-	    | `PrimitiveFunction "drop" ->
 	    | `PrimitiveFunction "max" ->
 	    | `PrimitiveFunction "min" ->
 	    | `PrimitiveFunction "hd" ->
