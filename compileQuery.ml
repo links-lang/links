@@ -769,16 +769,25 @@ and compile_expression env loop e : tblinfo =
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
+let wrap_serialize (Ti (q,cs,_,_)) =
+  A.Dag.mk_serializerel 
+    (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
+    (A.Dag.mk_nil)
+    q
+
+let rec all_plans l ti =
+  match ti with
+    | Ti(_,_,[],_) ->
+	(wrap_serialize ti) :: l
+    | Ti(_,_,itbls, _) ->
+	let itis = List.map snd itbls in
+	  (wrap_serialize ti) :: List.fold_left all_plans l itis
+      
 let compile e =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, A.NatType)]))
   in
-  let Ti (q, cs, _, _) = compile_expression AEnv.empty loop e in
-  let dag = 
-    A.Dag.mk_serializerel 
-      (A.Iter 0, A.Pos 0, items_of_offsets (Cs.leafs cs))
-      (A.Dag.mk_nil)
-      q
-  in
-    A.Dag.export_plan "plan.xml" dag
+  let ti = compile_expression AEnv.empty loop e in
+  let plan_bundle = all_plans [] ti in
+    A.Dag.export_plan_bundle "plan.xml" plan_bundle

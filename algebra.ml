@@ -560,7 +560,7 @@ sig
   val mk_nil : dag ref
 
   val prune_empty : dag -> dag
-  val export_plan : string -> dag ref -> unit
+  val export_plan_bundle : string -> dag ref list -> unit
 end =
 struct
   type node_id = int
@@ -724,18 +724,33 @@ struct
     | NullaryNode (_nullop, _id) as n ->
 	n
 	
-  let export_plan fname dag =
+  let export_plan out dag =
+    let dag = ref (prune_empty !dag) in
+      out (`Dtd None);
+      out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
+      ignore (out_dag (out, dag, IntSet.empty));
+      out `El_end
+
+  let export_plan_bundle fname dags =
     let oc = open_out fname in
     let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
     let out = Xmlm.output o in
-    let dag = ref (prune_empty !dag) in
-    let wrap arg =
-      out (`Dtd None);
-      out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
-      ignore (out_dag arg);
-      out `El_end;
-    in
-      apply wrap (out, dag, IntSet.empty) ~finally:close_out oc
+      let wrap () =
+	out (`Dtd None);
+	out (`El_start (tag "query_plan_bundle"));
+	let iter = fromTo 0 ((List.length dags) - 1) in
+	  List.iter2
+	    (fun i dag ->
+	       out (`El_start (tag_attr "query_plan" [("id", (string_of_int i))]));
+	       out (`El_start (tag "properties"));
+	       out `El_end;
+	       export_plan out dag;
+	       out `El_end)
+	    iter
+	    dags;
+	  out `El_end
+      in
+	apply wrap () ~finally:close_out oc
 end
 
 let test () =
@@ -749,5 +764,5 @@ let test () =
       (Dag.mk_distinct et)
   in
     (*let t = ref (Dag.prune_empty !t) in *)
-    Dag.export_plan "plan.xml" t;
+    Dag.export_plan_bundle "plan.xml" [t];
       
