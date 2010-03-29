@@ -385,7 +385,10 @@ struct
         `If (c, apply env (t, args), apply env (e, args))
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
-    | _ -> eval_error "Application of non-function"
+(*    | `Closure (bound_vars, computation),  *)
+    | (f, args) -> 
+	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
+	eval_error "Application of non-function"
   and computation env (binders, tailcomp) : t =
     match binders with
       | [] -> tail_computation env tailcomp
@@ -459,19 +462,19 @@ end
 
 
 module Annotate = struct
-  type implementation_type = [`Row | `Table]
+  type implementation_type = [`Atom | `List]
 
   let annotate want (expression, get) =
     match (want, get) with
-      | `Row, `Row | `Table, `Table -> expression
-      | `Row, `Table -> `Box expression
-      | `Table, `Row -> `Unbox expression
+      | `Atom, `Atom | `List, `List -> expression
+      | `Atom, `List -> `Box expression
+      | `List, `Atom -> `Unbox expression
 
   let rec transform env (expression : t) : (t * implementation_type) =
     let aot t env = (fun e -> (annotate t (transform env e))) in
     match expression with
-      | `Constant _ -> (expression, `Row)
-      | `Table _ -> (expression, `Table)
+      | `Constant _ -> (expression, `Atom)
+      | `Table _ -> (expression, `List)
       | `If (c, t, e) -> 
 	  let (c', _) = transform env c in
 	  let (t', itype) = transform env t in
@@ -479,27 +482,27 @@ module Annotate = struct
 	    (`If (c', t', e'), itype)
       | `Singleton e ->
 	  (* row or table? *)
-	  `Singleton (annotate `Row (transform env e)), `Table
+	  `Singleton (annotate `Atom (transform env e)), `List
       | `Append xs ->
-	  let xs' = List.map (aot `Table env) xs in
-	    (`Append xs'), `Table
+	  let xs' = List.map (aot `List env) xs in
+	    (`Append xs'), `List
       | `Project (e, field) ->
 	  let (e', _) = transform env e in
-	    (`Project (e', field)), `Row
+	    (`Project (e', field)), `Atom
       | `Record fieldmap ->
-	  `Record (StringMap.map (aot `Row env) fieldmap), `Row
+	  `Record (StringMap.map (aot `Atom env) fieldmap), `Atom
       | `Erase (r, erase_fields) ->
-	  `Erase ((aot `Row env r), erase_fields), `Row
+	  `Erase ((aot `Atom env r), erase_fields), `Atom
       | `Extend (r, ext_fields) ->
-	  let ext_fields' = StringMap.map (aot `Row env) ext_fields in
+	  let ext_fields' = StringMap.map (aot `Atom env) ext_fields in
 	  let r' = opt_map (fun r -> fst (transform env r)) r in
-	    `Extend (r' ,ext_fields'), `Row
+	    `Extend (r' ,ext_fields'), `Atom
       | `For (gs, os, body) ->
-	  let env' = List.fold_left (fun m (x, _) -> Env.Int.bind m (x, `Row)) env gs in
-	  let gs' = List.map (fun (x, source) -> (x, aot `Table env source)) gs in
+	  let env' = List.fold_left (fun m (x, _) -> Env.Int.bind m (x, `Atom)) env gs in
+	  let gs' = List.map (fun (x, source) -> (x, aot `List env source)) gs in
 	  let os' = List.map (fun o -> fst (transform env' o)) os in
-	  let body' = aot `Table env' body in
-	    (`For (gs', os', body')), `Table
+	  let body' = aot `List env' body in
+	    (`For (gs', os', body')), `List
       | `Var x -> 
 	  `Var x, Env.Int.lookup env x
       | `Apply (f, args) ->
@@ -508,37 +511,37 @@ module Annotate = struct
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
 	    | "/" | "/." | "not"
 	    | "<>" | "==" | ">" ->
-		(* `Row -> `Row -> `Row *)
-		`Apply (f, List.map (fun arg -> fst (transform env arg)) args), `Row
+		(* `Atom -> `Atom -> `Atom *)
+		`Apply (f, List.map (fun arg -> fst (transform env arg)) args), `Atom
 	    | "nth" | "take" | "drop" ->
-		(* `Row -> `Table -> `Row *)
+		(* `Atom -> `List -> `Atom *)
 		let (n, l) = 
 		  (match args with 
 		    | [a1; a2] -> (a1, a2)
 		    | _ -> fail_arg "nth")
 		in
 		let n' = fst (transform env n) in
-		let l' = aot `Table env l in
-		  `Apply (f, [n'; l']), `Row
+		let l' = aot `List env l in
+		  `Apply (f, [n'; l']), `Atom
 	    | "take" | "drop" ->
-		(* `Row -> `Table -> `Table *)
+		(* `Atom -> `List -> `List *)
 		let (n, l) = 
 		  (match args with 
 		     | [a1; a2] -> (a1, a2)
 		     | _ -> fail_arg "take/drop")
 		in
 		let n' = fst (transform env n) in
-		let l' = aot `Table env l in
-		  `Apply (f, [n'; l']), `Table
+		let l' = aot `List env l in
+		  `Apply (f, [n'; l']), `List
 	    | "length" ->
-		(* `Table -> `Row *)
+		(* `List -> `Atom *)
 		let l = 
 		  (match args with 
 		     | [a1] -> a1
 		     | _ -> fail_arg "length")
 		in
-		let l' = aot `Table env l in
-		  `Apply (f, [l']), `Row
+		let l' = aot `List env l in
+		  `Apply (f, [l']), `Atom
 	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
       | `Box _ | `Unbox _ ->
 	  failwith "expression already annotated"
