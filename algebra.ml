@@ -560,7 +560,7 @@ sig
   val mk_nil : dag ref
 
   val prune_empty : dag -> dag
-  val export_plan_bundle : string -> dag ref list -> unit
+  val export_plan_bundle : string -> (dag ref * (((int * int * int) * dag ref) list)) -> unit
 end =
 struct
   type node_id = int
@@ -726,43 +726,36 @@ struct
 	
   let export_plan out dag =
     let dag = ref (prune_empty !dag) in
-      out (`Dtd None);
       out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
       ignore (out_dag (out, dag, IntSet.empty));
       out `El_end
 
-  let export_plan_bundle fname dags =
+  let export_plan_bundle fname (root_dag, sub_dags) =
     let oc = open_out fname in
     let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
     let out = Xmlm.output o in
-      let wrap () =
-	out (`Dtd None);
-	out (`El_start (tag "query_plan_bundle"));
-	let iter = fromTo 0 ((List.length dags) - 1) in
-	  List.iter2
-	    (fun i dag ->
-	       out (`El_start (tag_attr "query_plan" [("id", (string_of_int i))]));
-	       out (`El_start (tag "properties"));
-	       out `El_end;
-	       export_plan out dag;
-	       out `El_end)
-	    iter
-	    dags;
-	  out `El_end
-      in
-	apply wrap () ~finally:close_out oc
+    let wrap () =
+      out (`Dtd None);
+      out (`El_start (tag "query_plan_bundle"));
+      out (`El_start (tag_attr "query_plan" [("id", "0")]));
+      out (`El_start (tag "properties"));
+      out `El_end;
+      export_plan out root_dag;
+      out `El_end;
+      List.iter
+	(fun ((plan_id, ref_id, col_id), dag) ->
+	   let attrs = [("id", (string_of_int plan_id)); 
+			("idref", (string_of_int ref_id)); 
+			("colref", (string_of_int col_id))]
+	   in
+	   out (`El_start (tag_attr "query_plan" attrs));
+	   out (`El_start (tag "properties"));
+	   out `El_end;
+	   export_plan out dag;
+	   out `El_end)
+	sub_dags;
+      out `El_end
+    in
+      apply wrap () ~finally:close_out oc
 end
-
-let test () =
-
-  let et = Dag.mk_emptytbl [((Iter 0), IntType); ((Pos 0), IntType); ((Item 0), IntType)] in
-  let r = Dag.mk_tblref ("t1", [((Item 0), "foo", IntType)], [[Item 0]]) in
-  let t =
-    Dag.mk_serializerel
-      (Iter 0, Pos 0, [Item 0])
-      (Dag.mk_disjunion r et)
-      (Dag.mk_distinct et)
-  in
-    (*let t = ref (Dag.prune_empty !t) in *)
-    Dag.export_plan_bundle "plan.xml" [t];
       

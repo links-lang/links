@@ -197,9 +197,9 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 		   q_paap)))
 	in
 	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
-    | [], [] ->
-	[]
-    | _ -> assert false
+    | [], [] -> []
+    | [], subs -> subs
+    | subs, [] -> subs
 
 let rec suse q_pase subs : ((int * tblinfo) list) =
   match subs with
@@ -303,8 +303,6 @@ and compile_append env loop l =
 and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
   let q =
-    (*    A.Dag.mk_project
-	  ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs))))) *)
     A.Dag.mk_rownum
       (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
       (A.Dag.mk_rank
@@ -327,7 +325,6 @@ and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _))
   in
   let itbls' = suap q hd_itbls tl_itbls in
     Ti (q', fused_cs, itbls', dummy)
-
 
 and compile_length env loop args =
   assert ((List.length args) = 1);
@@ -775,19 +772,24 @@ let wrap_serialize (Ti (q,cs,_,_)) =
     (A.Dag.mk_nil)
     q
 
-let rec all_plans l ti =
-  match ti with
-    | Ti(_,_,[],_) ->
-	(wrap_serialize ti) :: l
-    | Ti(_,_,itbls, _) ->
-	let itis = List.map snd itbls in
-	  (wrap_serialize ti) :: List.fold_left all_plans l itis
+let rec collect_itbls (plan_id, ref_id) itbls collected =
+  Debug.print (Printf.sprintf "itbls %d %d %d\n" (List.length itbls) plan_id ref_id);
+  match itbls with
+    | (offset, (Ti(_, _, [], _) as ti)) :: remaining_itbls ->
+	let l = ((plan_id, ref_id, offset), (wrap_serialize ti)) :: collected in
+	  collect_itbls (plan_id + 1, ref_id) remaining_itbls l
+    | (offset, (Ti(_, _, itbls, _) as ti)) :: remaining_itbls ->
+	let (next_id, l) = collect_itbls (plan_id + 1, plan_id) itbls [] in
+	let l = ((plan_id, ref_id, offset), (wrap_serialize ti)) :: (l @ collected) in
+	  collect_itbls (next_id, plan_id) remaining_itbls l
+    | [] ->
+	(plan_id, collected)
       
 let compile e =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, A.NatType)]))
   in
-  let ti = compile_expression AEnv.empty loop e in
-  let plan_bundle = all_plans [] ti in
+  let Ti (_, _, itbls, _) as ti = compile_expression AEnv.empty loop e in
+  let plan_bundle = (wrap_serialize ti), snd (collect_itbls (1, 0) itbls []) in
     A.Dag.export_plan_bundle "plan.xml" plan_bundle
