@@ -95,6 +95,7 @@ module Itbls = struct
   let keys itbls = List.map fst itbls
   let incr_keys itbls i = List.map (fun (offset, ti) -> (offset + i, ti)) itbls
   let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
+  let append = List.append
 
   (* remove all mappings whose offsets are not in keys *)
   let retain_by_keys itbls keys = 
@@ -117,6 +118,9 @@ let proj_list = List.map proj1
 
 let proj_list_map new_cols old_cols = 
   List.map2 (fun a b -> (a, b)) new_cols old_cols
+
+let proj_list_single new_cols old_col =
+  List.map (fun a -> (a, old_col)) new_cols
 
 let wrap_1to1 f res c c' algexpr =
   A.Dag.mk_fun1to1
@@ -181,7 +185,7 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 	in
 	let q'_projlist = [(iter, item''); proj1 pos] in
 	let q'_projlist = q'_projlist @ (proj_list (items_of_offsets (difference (Cs.leafs cs1) (Itbls.keys subs_1)))) in
-	let q'_projlist = q'_projlist @ [((List.hd (items_of_offsets (Itbls.keys subs_1))), item')] in
+	let q'_projlist = q'_projlist @ (proj_list_single (items_of_offsets (Itbls.keys subs_1)) item') in
 	let q' =
 	  (A.Dag.mk_project
 	     q'_projlist
@@ -296,15 +300,13 @@ and compile_append env loop l =
     | [] ->
 	Ti (nil, [], Itbls.empty, dummy)
 
-and compile_list (Ti (hd_q, hd_cs, _, _)) (Ti (tl_q, tl_cs, _, _)) =
+and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
-  let ord = A.Pos 2 in
-  let pos = A.Pos 0 in
-  let pos' = A.Pos 1 in
-  let iter = A.Iter 0 in
   let q =
-    A.Dag.mk_project
-      ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs)))))
+    (*    A.Dag.mk_project
+	  ((proj1 iter) :: ((pos, pos') :: proj_list (items_of_offsets (Cs.leafs (fused_cs))))) *)
+    A.Dag.mk_rownum
+      (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
       (A.Dag.mk_rank
 	 (pos', [(ord, A.Ascending); (pos, A.Ascending)])
 	 (A.Dag.mk_disjunion
@@ -315,7 +317,16 @@ and compile_list (Ti (hd_q, hd_cs, _, _)) (Ti (tl_q, tl_cs, _, _)) =
 	       (ord, A.Nat 2n)
 	       tl_q)))
   in
-    Ti (q, fused_cs, Itbls.empty, dummy)
+  let q'_projlist = [proj1 iter; (pos, pos')] in
+  let q'_projlist = q'_projlist @ (proj_list (items_of_offsets (difference (Cs.leafs hd_cs) (Itbls.keys hd_itbls)))) in
+  let q'_projlist = q'_projlist @ (proj_list_single (items_of_offsets (Itbls.keys hd_itbls)) item') in
+  let q' = 
+    A.Dag.mk_project
+      q'_projlist
+      q
+  in
+  let itbls' = suap q hd_itbls tl_itbls in
+    Ti (q', fused_cs, itbls', dummy)
 
 
 and compile_length env loop args =
@@ -347,7 +358,7 @@ and compile_aggr env loop aggr_fun args =
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
   let Ti (q1, _, _, _) = compile_expression env loop (List.hd operands) in
-  let Ti (q2, cs2, _, _) = compile_expression env loop (List.nth operands 1) in
+  let Ti (q2, cs2, itbls_2, _) = compile_expression env loop (List.nth operands 1) in
   let q2' = abspos q2 (items_of_offsets (Cs.leafs cs2)) in
   let q =
     (A.Dag.mk_project
@@ -365,7 +376,8 @@ and compile_nth env loop operands =
 		   [(iter', iter); (c', A.Item 1)]
 		   q1)))))
   in
-    Ti (q, cs2, Itbls.empty, dummy)
+  let itbls' = suse q itbls_2 in
+    Ti (q, cs2, itbls', dummy)
 
 and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
@@ -407,8 +419,8 @@ and compile_unop env loop wrapper operands =
 
 and compile_take env loop args =
   assert ((List.length args) = 2);
-  let Ti(q1, _cs1, _subs1, _) = compile_expression env loop (List.hd args) in
-  let Ti(q2, cs2, _subs2, _) = compile_expression env loop (List.nth args 1) in
+  let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
+  let Ti(q2, cs2, itbls2, _) = compile_expression env loop (List.nth args 1) in
   let cols = (items_of_offsets (Cs.leafs cs2)) in
   let q2' = abspos q2 cols in
   let c = A.Item 1 in
@@ -433,12 +445,13 @@ and compile_take env loop args =
 			(one, A.Int (Num.Int 1))
 			q1))))))
        in
-	Ti(q', cs2, Itbls.empty, dummy)
+    let itbls' = suse q' itbls2 in
+	Ti(q', cs2, itbls', dummy)
 
 and compile_drop env loop args =
   assert ((List.length args) = 2);
-  let Ti(q1, _cs1, _subs1, _) = compile_expression env loop (List.hd args) in
-  let Ti(q2, cs2, _subs2, _) = compile_expression env loop (List.nth args 1) in
+  let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
+  let Ti(q2, cs2, itbls2, _) = compile_expression env loop (List.nth args 1) in
   let cols = (items_of_offsets (Cs.leafs cs2)) in
   let q2' = abspos q2 cols in
   let c = A.Item 1 in
@@ -458,7 +471,8 @@ and compile_drop env loop args =
 		  [(iter', iter); (c', c)]
 		  q1))))
   in
-    Ti(q', cs2, Itbls.empty, dummy)
+  let itbls' = suse q' itbls2 in
+    Ti(q', cs2, itbls', dummy)
 
 and compile_apply env loop f args =
   match f with
@@ -566,11 +580,12 @@ and extend_record env loop ext_fields r =
     | [] ->
 	failwith "CompileQuery.extend_record: empty ext_fields"
 
-and merge_records (Ti (r1_q, r1_cs, _, _)) (Ti (r2_q, r2_cs, _, _)) =
+and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)) =
   let r2_leafs = Cs.leafs r2_cs in
   let new_names_r2 = items_of_offsets (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = items_of_offsets r2_leafs in
   let names_r1 = items_of_offsets (Cs.leafs r1_cs) in
+  let r2_itbls' = Itbls.incr_keys r2_itbls (Cs.cardinality r1_cs) in
   let q =
     A.Dag.mk_project
       (proj_list ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
@@ -582,21 +597,23 @@ and merge_records (Ti (r1_q, r1_cs, _, _)) (Ti (r2_q, r2_cs, _, _)) =
 	     r2_q)))
   in
   let cs = Cs.append r1_cs r2_cs in
-    Ti (q, cs, Itbls.empty, dummy)
+  let itbls = Itbls.append r1_itbls r2_itbls' in
+    Ti (q, cs, itbls, dummy)
 
 and compile_project env loop field r =
-  let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
+  let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
   let field_cs' = Cs.lookup_record_field cs_r field in
   let c_old = Cs.leafs field_cs' in
   let offset = List.hd c_old in
   let c_new = incr c_old (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
+  let field_itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_r c_old) (offset - 1) in 
   let q =
     A.Dag.mk_project
       ([proj1 iter; proj1 pos] @ proj_list_map (items_of_offsets c_new) (items_of_offsets c_old))
       q_r
   in
-    Ti (q, field_cs, Itbls.empty, dummy)
+    Ti (q, field_cs, field_itbls, dummy)
 
 and compile_erase env loop erase_fields r =
   let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
@@ -665,7 +682,7 @@ and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
     
-  let select loop (Ti (q, cs, _, _)) =
+  let select loop (Ti (q, cs, itbls, _)) =
     let cols = items_of_offsets (Cs.leafs cs) in
     let q' =
       A.Dag.mk_project
@@ -677,7 +694,8 @@ and compile_if env loop e1 e2 e3 =
 	      [(iter', iter)]
 	      loop))
     in
-      Ti (q', cs, Itbls.empty, dummy)
+    let itbls' = suse q itbls in
+      Ti (q', cs, itbls', dummy)
   in
     (* condition *)
   let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
@@ -700,14 +718,31 @@ and compile_if env loop e1 e2 e3 =
     in
     let env_then = AEnv.map (select loop_then) env in
     let env_else = AEnv.map (select loop_else) env in
-    let Ti (q_e2, cs_e2, _, _) = compile_expression env_then loop_then e2 in
-    let Ti (q_e3, _cs_e3, _, _) = compile_expression env_else loop_else e3 in
+    let Ti (q_e2, cs_e2, itbls_e2, _) = compile_expression env_then loop_then e2 in
+    let Ti (q_e3, _cs_e3, itbls_e3, _) = compile_expression env_else loop_else e3 in
     let q =
-      A.Dag.mk_disjunion
-	q_e2
-	q_e3
+      A.Dag.mk_rownum
+	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+	(A.Dag.mk_disjunion
+	   (A.Dag.mk_attach
+	      (ord, A.Nat 1n)
+	      q_e2)
+	   (A.Dag.mk_attach
+	      (ord, A.Nat 2n)
+	      q_e3))
     in
-      Ti (q, cs_e2, Itbls.empty, dummy)
+    let cols = Cs.leafs cs_e2 in
+    let keys = Itbls.keys itbls_e2 in
+    let proj = [proj1 iter; proj1 pos] in
+    let proj = proj @ (proj_list (items_of_offsets (difference cols keys))) in
+    let proj = proj @ (proj_list_single (items_of_offsets keys) item') in
+    let q' = 
+      A.Dag.mk_project
+	proj
+	q
+    in
+    let itbls' = suap q itbls_e2 itbls_e3 in
+      Ti (q', cs_e2, itbls', dummy)
 
 and compile_expression env loop e : tblinfo =
   match e with
