@@ -533,7 +533,7 @@ and compile_for env loop v e1 e2 order_criteria =
   in
   let env = AEnv.map (lift map) env in
   let env_v = AEnv.bind env (v, Ti (q_v', cs1, Itbls.empty, dummy)) in
-  let Ti (q2, cs2, _, _) = compile_expression env_v loop_v e2 in
+  let Ti (q2, cs2, itbls2, _) = compile_expression env_v loop_v e2 in
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
@@ -558,11 +558,11 @@ and compile_for env loop v e1 e2 order_criteria =
 	    map'
 	    q2))
   in
-    Ti (q, cs2, Itbls.empty, dummy)
+    Ti (q, cs2, itbls2, dummy)
 
 and singleton_record env loop (name, e) =
-  let Ti (q, cs, _, _) = compile_expression env loop e in
-    Ti (q, [Cs.Mapping (name, cs)], Itbls.empty, dummy)
+  let Ti (q, cs, itbls, _) = compile_expression env loop e in
+    Ti (q, [Cs.Mapping (name, cs)], itbls, dummy)
 
 and extend_record env loop ext_fields r =
   assert (match ext_fields with [] -> false | _ -> true);
@@ -616,15 +616,16 @@ and compile_project env loop field r =
     Ti (q, field_cs, field_itbls, dummy)
 
 and compile_erase env loop erase_fields r =
-  let Ti (q_r, cs_r, _, _) = compile_expression env loop r in
+  let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
   let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
   let remaining_cols = items_of_offsets (Cs.leafs remaining_cs) in
+  let remaining_itbls = Itbls.retain_by_keys itbls_r (Cs.leafs remaining_cs) in
   let q =
     A.Dag.mk_project
       ([proj1 iter; proj1 pos] @ (proj_list remaining_cols))
       q_r
   in
-    Ti(q, remaining_cs, Itbls.empty, dummy)
+    Ti(q, remaining_cs, remaining_itbls, dummy)
 
 and compile_record env loop r =
   match r with
