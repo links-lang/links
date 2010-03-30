@@ -1662,7 +1662,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base)) in
+	    let shape = 
+	      if Settings.get_value Basicsettings.Ferry.relax_query_type_constraint then
+		Types.fresh_type_variable `Any
+	      else
+		Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base))
+	    in
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->

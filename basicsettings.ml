@@ -52,6 +52,7 @@ end
 module Ferry = struct
   let output_ir_dot = Settings.add_bool("output_ir_dot", false, `User)
   let output_algebra = Settings.add_bool("output_algebra", false, `User)
+  let relax_query_type_constraint = Settings.add_bool("relax_query_type_constraint", false, `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module
