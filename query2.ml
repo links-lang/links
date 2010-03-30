@@ -324,6 +324,8 @@ struct
           computation env body
     | `Primitive "AsList", [xs] ->
         xs
+    | `Primitive "Cons", [x; `Append []] ->
+	`Singleton x
     | `Primitive "Cons", [x; xs] ->
 	`Append [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
