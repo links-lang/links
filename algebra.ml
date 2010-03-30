@@ -135,12 +135,12 @@ let string_of_sort_direction = function
   | Descending -> "descending"
 
 let string_of_join_comparison = function
-  | Eq -> "="
-  | Gt -> ">"
-  | Ge -> ">="
-  | Lt -> "<"
-  | Le -> "<="
-  | Ne -> "<>"
+  | Eq -> "eq"
+  | Gt -> "gt"
+  | Ge -> "ge"
+  | Lt -> "lt"
+  | Le -> "le"
+  | Ne -> "ne"
 
 let string_of_base_type = function
   | IntType -> "int"
