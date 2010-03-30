@@ -773,7 +773,6 @@ let wrap_serialize (Ti (q,cs,_,_)) =
     q
 
 let rec collect_itbls (plan_id, ref_id) itbls collected =
-  Debug.print (Printf.sprintf "itbls %d %d %d\n" (List.length itbls) plan_id ref_id);
   match itbls with
     | (offset, (Ti(_, _, [], _) as ti)) :: remaining_itbls ->
 	let l = ((plan_id, ref_id, offset), (wrap_serialize ti)) :: collected in
