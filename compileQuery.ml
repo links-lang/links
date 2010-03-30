@@ -795,11 +795,11 @@ let rec collect_itbls (plan_id, ref_id) itbls collected =
     | [] ->
 	(plan_id, collected)
       
-let compile e =
+let compile (e, imptype) =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, A.NatType)]))
   in
   let Ti (_, _, itbls, _) as ti = compile_expression AEnv.empty loop e in
   let plan_bundle = (wrap_serialize ti), snd (collect_itbls (1, 0) itbls []) in
-    A.Dag.export_plan_bundle "plan.xml" plan_bundle
+    A.Dag.export_plan_bundle "plan.xml" imptype plan_bundle

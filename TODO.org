@@ -8,11 +8,12 @@
 
 ** TODO Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
 
-** TODO Relax the type system so that query blocks may return any value.
+** DONE Relax the type system so that query blocks may return any value.
 
-** TODO Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
-*** TODO `Base -> `Any in Typesugar
-*** TODO modify lalgebra compilation rules to handle itbls
+** TODO Implement new (less strict) constraints for the return value of query blocks.
+** DONE Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
+*** DONE `Base -> `Any in Typesugar
+*** DONE modify lalgebra compilation rules to handle itbls
 
 ** TODO Implement missing Ferry/Links primitive functions
 *** TODO zip/unzip

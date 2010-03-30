@@ -560,7 +560,7 @@ sig
   val mk_nil : dag ref
 
   val prune_empty : dag -> dag
-  val export_plan_bundle : string -> (dag ref * (((int * int * int) * dag ref) list)) -> unit
+  val export_plan_bundle : string -> [< `Atom | `List] -> (dag ref * (((int * int * int) * dag ref) list)) -> unit
 end =
 struct
   type node_id = int
@@ -730,7 +730,7 @@ struct
       ignore (out_dag (out, dag, IntSet.empty));
       out `El_end
 
-  let export_plan_bundle fname (root_dag, sub_dags) =
+  let export_plan_bundle fname implementation_type (root_dag, sub_dags) =
     let oc = open_out fname in
     let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
     let out = Xmlm.output o in
@@ -739,22 +739,28 @@ struct
       out (`El_start (tag "query_plan_bundle"));
       out (`El_start (tag_attr "query_plan" [("id", "0")]));
       out (`El_start (tag "properties"));
-      out `El_end;
-      export_plan out root_dag;
-      out `El_end;
-      List.iter
-	(fun ((plan_id, ref_id, col_id), dag) ->
-	   let attrs = [("id", (string_of_int plan_id)); 
-			("idref", (string_of_int ref_id)); 
-			("colref", (string_of_int col_id))]
-	   in
-	   out (`El_start (tag_attr "query_plan" attrs));
-	   out (`El_start (tag "properties"));
-	   out `El_end;
-	   export_plan out dag;
-	   out `El_end)
-	sub_dags;
-      out `El_end
+      let resulttype = 
+	match implementation_type with
+	  | `Atom -> "TUPLE"
+	  | `List -> "LIST"
+      in
+	out_el out "property" [("name", "overallResultType"); ("value", resulttype)];
+	out `El_end;
+	export_plan out root_dag;
+	out `El_end;
+	List.iter
+	  (fun ((plan_id, ref_id, col_id), dag) ->
+	     let attrs = [("id", (string_of_int plan_id)); 
+			  ("idref", (string_of_int ref_id)); 
+			  ("colref", (string_of_int col_id))]
+	     in
+	       out (`El_start (tag_attr "query_plan" attrs));
+	       out (`El_start (tag "properties"));
+	       out `El_end;
+	       export_plan out dag;
+	       out `El_end)
+	  sub_dags;
+	out `El_end
     in
       apply wrap () ~finally:close_out oc
 end

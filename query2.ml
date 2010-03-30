@@ -557,7 +557,7 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> unit=
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
       Debug.print ("query2:\n "^string_of_t v);
-      let v = fst (Annotate.transform Env.Int.empty v) in
-	Debug.print ("query2 annotated:\n "^string_of_t v);
+      let v = Annotate.transform Env.Int.empty v in
+	Debug.print ("query2 annotated:\n "^string_of_t (fst v));
 	CompileQuery.compile v
 
