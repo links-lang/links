@@ -284,10 +284,21 @@ let rec compile_box env loop e =
     Ti(q_o, [Cs.Offset 1], [(1, ti_e)], dummy)
 
 and compile_unbox env loop e =
-  let Ti(_, cs, itbls, _) = compile_expression env loop e in
-    assert ((Cs.cardinality cs) = 1);
-    assert ((List.length itbls) = 1);
-    snd (List.hd itbls)
+  let Ti(q_e, cs_e, itbls_e, _) = compile_expression env loop e in
+    assert ((Cs.cardinality cs_e) = 1);
+    assert ((List.length itbls_e) = 1);
+    let (offset, Ti(q_sub, cs_sub, itbls_sub, _)) = List.hd itbls_e in
+    let q_unbox =
+      A.Dag.mk_project
+	([(iter, iter'); proj1 pos] @ (proj_list (items_of_offsets (Cs.leafs cs_sub))))
+	(A.Dag.mk_eqjoin
+	   (c', iter)
+	   (A.Dag.mk_project
+	      [(iter', iter); (c', A.Item offset)]
+	      q_e)
+	   q_sub)
+    in
+      Ti(q_unbox, cs_sub, itbls_sub, dummy)
 
 and compile_append env loop l =
   match l with
@@ -335,7 +346,7 @@ and compile_length env loop args =
       (A.Item 1, Some iter)
       q_e
   in
-  let q' = wrap_agg loop q (A.Nat 1n) in
+  let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
     Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
 
 and compile_aggr env loop aggr_fun args =
