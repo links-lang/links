@@ -381,8 +381,14 @@ struct
 	`If (`Apply (">", [e2; e1]),
 	     `Constant (`Bool true),
 	     `Apply ("==", [e1; e2]))
+    | `Primitive "tl", args ->
+	`Apply ("drop", (`Constant (`Int (Num.Int 1))) :: args)
+    | `Primitive "hd", args ->
+	(* need to apply nth to take in order to have the correct implementation type `Atom *)
+	`Apply ("nth", [`Constant (`Int (Num.Int 1)); `Apply ("take", (`Constant (`Int (Num.Int 1))) :: args)])
     | `Primitive f, args ->
         `Apply (f, args)
+
     | `If (c, t, e), args ->
         `If (c, apply env (t, args), apply env (e, args))
     | `Apply (f, args), args' ->

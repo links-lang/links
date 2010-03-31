@@ -11,18 +11,38 @@
 ** DONE Relax the type system so that query blocks may return any value.
 
 ** TODO Implement new (less strict) constraints for the return value of query blocks.
+
 ** DONE Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
 *** DONE `Base -> `Any in Typesugar
 *** DONE modify lalgebra compilation rules to handle itbls
 
 ** TODO Implement missing Ferry/Links primitive functions
 *** DONE zip/unzip
+*** DONE nth
+*** DONE take/drop
+*** DONE length
+*** DONE map/concatMap/asList (implicitly)
+*** DONE hd/tl
+*** DONE filter
 *** TODO groupBy
+*** TODO max/min/sum (almost done)
+*** TODO pattern matching: tilde/ntilde/ltilde/lntilde/stilde/sntilde
+*** TODO trigonometric functions: floor, ceiling, cos, sin, tan, log, sqrt
+*** TODO the (prelude)
+*** TODO concat (prelude)
 
 ** TODO nth should not fail if the list is too short. Return an 'a option instead.
 
 ** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
 
 ** TODO All changes to primitive functions (new functions etc) in lib.ml must be implemented in Javascript as well (lib/js/jslib.js).
+*** TODO zip
+*** TODO unzip
+*** TODO nth
+*** TODO groupBy
 
-** TODO Find out how to handle XML and variant tags.
+** TODO Find out how to handle some features of Links.
+*** TODO XML 
+*** TODO Variant tags
+
+** TODO Try to use the ferrydb backend with PostgreSQL 8.4
