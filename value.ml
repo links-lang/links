@@ -577,6 +577,9 @@ let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
 
+let box_pair (a, b) = 
+  `Record [("1", a); ("2", b)]
+
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(

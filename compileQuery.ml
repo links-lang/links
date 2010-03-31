@@ -337,6 +337,54 @@ and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _))
   let itbls' = suap q hd_itbls tl_itbls in
     Ti (q', fused_cs, itbls', dummy)
 
+and compile_zip env loop args =
+  assert ((List.length args) = 2);
+  let Ti (q_e1, cs_e1, itbls_e1, _) = compile_expression env loop (List.hd args) in
+  let Ti (q_e2, cs_e2, itbls_e2, _) = compile_expression env loop (List.nth args 1) in
+  let q_e1' = abspos q_e1 (items_of_offsets (Cs.leafs cs_e1)) in
+  let q_e2' = abspos q_e2 (items_of_offsets (Cs.leafs cs_e2)) in
+  let card_e1 = List.length (Cs.leafs cs_e1) in
+  let cs_e2' = Cs.shift cs_e2 card_e1 in
+  let itbls_e2' = Itbls.incr_keys itbls_e2 card_e1 in
+  let items = items_of_offsets ((Cs.leafs cs_e1) @ (Cs.leafs cs_e2')) in
+  let q =
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list items))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumeq
+	    (res, (pos, pos'))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       q_e1'
+	       (A.Dag.mk_project
+		  ([(iter', iter); (pos', pos)] @ (proj_list_map (items_of_offsets (Cs.leafs cs_e2')) (items_of_offsets (Cs.leafs cs_e2))))
+		  q_e2'))))
+  in
+    let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
+    Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
+
+and compile_unzip env loop args =
+  assert((List.length args) = 1);
+  let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop (List.hd args) in
+  let q = 
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list_single (items_of_offsets (Cs.leafs cs_e)) iter))
+      (A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 loop)
+  in
+  let itbls = 
+    List.map
+      (fun c ->
+	 let q = A.Dag.mk_project [proj1 iter; proj1 pos; (A.Item 1, A.Item c)] q_e in
+	 let itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_e [c]) (c - 1) in
+	 let ti = Ti(q, [Cs.Offset 1], itbls, dummy) in
+	   (c, ti))
+      (Cs.leafs cs_e)
+  in
+    Ti (q, cs_e, itbls, dummy)
+
 and compile_length env loop args =
   assert ((List.length args) = 1);
   let e = List.hd args in
@@ -504,6 +552,8 @@ and compile_apply env loop f args =
 	      | "sum" -> compile_aggr env loop A.Sum args *)
     | "take" -> compile_take env loop args
     | "drop" -> compile_drop env loop args
+    | "zip" -> compile_zip env loop args
+    | "unzip" -> compile_unzip env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->

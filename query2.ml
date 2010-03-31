@@ -455,7 +455,8 @@ struct
         | `Append _ 
         | `If _ 
         | `For _ 
-        | `Table _ ->
+        | `Table _ 
+	| `Apply _ ->
 	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
 
@@ -535,7 +536,7 @@ module Annotate = struct
 		let n' = fst (transform env n) in
 		let l' = aot `List env l in
 		  `Apply (f, [n'; l']), `List
-	    | "length" ->
+	    | "length" | "unzip" ->
 		(* `List -> `Atom *)
 		let l = 
 		  (match args with 
@@ -544,6 +545,16 @@ module Annotate = struct
 		in
 		let l' = aot `List env l in
 		  `Apply (f, [l']), `Atom
+	    | "zip" ->
+		(* `List -> `List -> `List *)
+		let (l, r) =
+		  (match args with 
+		     | [a1; a2] -> (a1, a2)
+		     | _ -> fail_arg "zip")
+		in
+		let l' = aot `List env l in
+		let r' = aot `List env r in
+		  `Apply (f, [l'; r']), `List
 	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
       | `Box _ | `Unbox _ ->
 	  failwith "expression already annotated"

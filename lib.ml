@@ -419,6 +419,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Int, [a]) -> [a]",
   PURE);
 
+  "zip",
+  (p2 (fun l r ->
+	 box_list (List.map box_pair (List.combine (unbox_list l) (unbox_list r)))),
+   datatype "([a], [b]) -> [(a, b)]",
+   PURE);
+
+  "unzip",
+  (p1 (fun l ->
+	 let (first_l, second_l) = List.split (List.map unbox_pair (unbox_list l)) in
+	   box_pair ((box_list first_l), (box_list second_l))),
+   datatype "([(a, b)]) -> ([a], [b])",
+   PURE);
+
   "max",
   (p1 (let max2 x y = if less x y then y else x in
          function

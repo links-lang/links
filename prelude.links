@@ -132,25 +132,25 @@ fun fold_right1(f, l) {
   fold_right(f, hd(l), tl(l))
 }
 
-fun unzip(l) {
-  switch (l) {
-    case [] -> ([], [])
-    case (a,b)::xs -> { 
-     var (c,d) = unzip(xs);
-     (a :: c, b :: d)
-    }
-  }
-}
+#fun unzip(l) {
+#  switch (l) {
+#    case [] -> ([], [])
+#    case (a,b)::xs -> { 
+#     var (c,d) = unzip(xs);
+#     (a :: c, b :: d)
+#    }
+#  }
+#}
 
-sig zip : ([a], [b]) ~> [(a, b)]
-fun zip(l, r) {
-  switch ((l, r)) {
-    case ([], []) -> []
-    case (lh::lt, rh::rt) -> 
-        (lh, rh) :: zip (lt, rt)
-    case (_, _) -> []
-  }
-}
+#sig zip : ([a], [b]) ~> [(a, b)]
+#fun zip(l, r) {
+#  switch ((l, r)) {
+#    case ([], []) -> []
+#    case (lh::lt, rh::rt) -> 
+#        (lh, rh) :: zip (lt, rt)
+#    case (_, _) -> []
+#  }
+#}
 
 fun replicate(n, item) {
   if (n == 0) []
