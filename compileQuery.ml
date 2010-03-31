@@ -110,6 +110,7 @@ type aenv = tblinfo AEnv.t
 let dummy = ()
 
 let incr l i = List.map (fun j -> j + i) l
+let decr l i = List.map (fun j -> j - i) l
 let items_of_offsets = List.map (fun i -> A.Item i)
 
 let proj1 col = (col, col)
@@ -369,21 +370,34 @@ and compile_unzip env loop args =
   let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop (List.hd args) in
   let q = 
     A.Dag.mk_project
-      ([proj1 iter; proj1 pos] @ (proj_list_single (items_of_offsets (Cs.leafs cs_e)) iter))
+      ([proj1 iter; proj1 pos] @ (proj_list_single [A.Item 1; A.Item 2] iter))
       (A.Dag.mk_attach
 	 (pos, A.Nat 1n)
 	 loop)
   in
-  let itbls = 
-    List.map
-      (fun c ->
-	 let q = A.Dag.mk_project [proj1 iter; proj1 pos; (A.Item 1, A.Item c)] q_e in
-	 let itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_e [c]) (c - 1) in
-	 let ti = Ti(q, [Cs.Offset 1], itbls, dummy) in
-	   (c, ti))
-      (Cs.leafs cs_e)
+  let cs_1 = Cs.lookup_record_field cs_e "1" in
+  let cs_2 = Cs.lookup_record_field cs_e "2" in
+  let cols_1 = Cs.leafs cs_1 in
+  let card = List.length (Cs.leafs cs_1) in
+  let cols_2 = Cs.leafs cs_2 in
+  let cs_2' = Cs.shift cs_2 (-card) in
+  let card = List.length cols_1 in
+  let q_1 = 
+    A.Dag.mk_project
+      ([proj1 iter; proj1 pos] @ (proj_list (items_of_offsets cols_1)))
+      q_e
   in
-    Ti (q, cs_e, itbls, dummy)
+  let q_2 =
+    A.Dag.mk_project
+      (let proj = proj_list_map (items_of_offsets (decr cols_2 card)) (items_of_offsets cols_2) in
+	 ([proj1 iter; proj1 pos] @ proj))
+      q_e
+  in
+  let itbls_1 = Itbls.retain_by_keys itbls_e cols_1 in
+  let itbls_2 = Itbls.decr_keys (Itbls.retain_by_keys itbls_e cols_2) card in
+  let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
+  let cs = [Cs.Offset 1; Cs.Offset 2] in
+    Ti (q, cs, itbls, dummy)
 
 and compile_length env loop args =
   assert ((List.length args) = 1);
