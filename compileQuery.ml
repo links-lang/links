@@ -396,7 +396,7 @@ and compile_unzip env loop args =
   let itbls_1 = Itbls.retain_by_keys itbls_e cols_1 in
   let itbls_2 = Itbls.decr_keys (Itbls.retain_by_keys itbls_e cols_2) card in
   let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
-  let cs = [Cs.Offset 1; Cs.Offset 2] in
+  let cs = [Cs.Mapping ("1", [Cs.Offset 1]); Cs.Mapping ("2", [Cs.Offset 2])] in
     Ti (q, cs, itbls, dummy)
 
 and compile_length env loop args =

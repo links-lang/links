@@ -16,10 +16,13 @@
 *** DONE modify lalgebra compilation rules to handle itbls
 
 ** TODO Implement missing Ferry/Links primitive functions
-*** TODO zip/unzip
+*** DONE zip/unzip
+*** TODO groupBy
 
 ** TODO nth should not fail if the list is too short. Return an 'a option instead.
 
-** TODO Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
+** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
 
 ** TODO All changes to primitive functions (new functions etc) in lib.ml must be implemented in Javascript as well (lib/js/jslib.js).
+
+** TODO Find out how to handle XML and variant tags.
