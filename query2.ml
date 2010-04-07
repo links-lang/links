@@ -3,6 +3,7 @@ open Utility
 
 type t =
     [ `For of (Var.var * t) list * t list * t
+    | `GroupWith of (Var.var * t) * t
     | `If of t * t * t
     | `Table of Value.table
     | `Singleton of t | `Append of t list
@@ -78,6 +79,7 @@ struct
   (** [pt]: A printable version of [t] *)
   type pt =
     [ `For of (Var.var * pt) list * pt list * pt
+    | `GroupWith of (Var.var * pt) * pt
     | `If of pt * pt * pt
     | `Table of Value.table
     | `Singleton of pt | `Append of pt list
@@ -98,6 +100,8 @@ struct
             `For (List.map (fun (x, source) -> (x, bt source)) gs, 
                   List.map bt os, 
                   bt b)
+	| `GroupWith ((x, group_exp), source) ->
+	    `GroupWith ((x, bt group_exp), bt source)
         | `If (c, t, e) -> `If (bt c, bt t, bt e)
         | `Table t -> `Table t
         | `Singleton v -> `Singleton (bt v)
@@ -369,6 +373,15 @@ struct
 		  end
 	    | _ -> assert false
 	end
+    | `Primitive "groupWith", [f; source] ->
+	begin
+	  match f with
+	    | `Closure (([x], body), closure_env) ->
+		let env = env ++ closure_env in
+		let group_exp = computation (bind env (x, `Var x)) body in
+		  `GroupWith ((x, group_exp), source)
+	    | _ -> assert false
+	end
     | `Primitive "<", [e1; e2] ->
 	`Apply (">", [e2; e1])
     | `Primitive ">=", [e1; e2] ->
@@ -512,6 +525,11 @@ module Annotate = struct
 	  let os' = List.map (fun o -> fst (transform env' o)) os in
 	  let body' = aot `List env' body in
 	    (`For (gs', os', body')), `List
+      | `GroupWith ((x, group_exp), source) ->
+	  let env' = Env.Int.bind env (x, `Atom) in
+	  let group_exp' = aot `Atom env' group_exp in
+	  let source' = aot `List env source in
+	    (`GroupWith ((x, group_exp'), source')), `List
       | `Var x -> 
 	  `Var x, Env.Int.lookup env x
       | `Apply (f, args) ->

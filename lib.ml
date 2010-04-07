@@ -184,6 +184,16 @@ and less_lists = function
 
 let less_or_equal l r = less l r || equal l r
 
+(*
+let compare a b =
+  if equal a b then
+    0
+  else if less a b then
+    -1
+  else
+    1 
+*)
+
 let add_attribute : Value.t * Value.t -> Value.t -> Value.t = 
   fun (name,value) -> function
     | `XML (Node (tag, children)) ->
@@ -458,6 +468,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | _ -> failwith "Internal error: non-list passed to min"),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
+
+  "groupWith",
+  (p2 (fun f l -> failwith "groupWith can only be used in query blocks"),
+   datatype "(((a) -> b), [a]) -> [(b, [a])]",
+   PURE);
 
   (** XML **)
   "childNodes",
