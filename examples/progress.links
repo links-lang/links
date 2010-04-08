@@ -1,45 +1,35 @@
-fun compute(id, count, total) server {
+fun compute(count, total) server {
  if (count < total) {
-  showProgress(id, count, total);
-  compute(id, count+1, total)
+  showProgress(count, total);
+  compute(count+1, total)
  } else "done counting to " ++ intToString(total)
 }
 
-fun showProgress(id, count, total) client {
+fun showProgress(count, total) client {
  var percent = 100.0 *. intToFloat(count) /. intToFloat(total);
  replaceNode(
-        <div id="{id}"
+        <div id="bar"
              style="width:{floatToString(percent)}%;
                     background-color: black">|</div>,
-        getNodeById(id)
+        getNodeById("bar")
  )
 }
 
-fun showAnswer(id, answer) client {
+fun showAnswer(answer) client {
  replaceNode(
-	<div id="{id}">{stringToXml(answer)}</div>,
-        getNodeById(id)       
+	<div id="bar">{stringToXml(answer)}</div>,
+        getNodeById("bar")       
 	)
-}
-
-fun makeBar(k) {
- var barId = "bar"++intToString(k);
- <#>
- <form l:onsubmit="{appendChildren(makeBar(k+1), getDocumentNode());
-                    ignore(spawn {
-                      showAnswer(barId, compute(barId, 0, stringToInt(n)))
-                    }) }">
-  <input type="text" l:name="n"/>
-  <input type="submit"/>
- </form>
- <div id="{barId}"/>
- </#>
 }
 
 page
  <html>
   <body>
-   {makeBar(0)}
+   <form l:onsubmit="{showAnswer(compute(0, stringToInt(n)))}">
+    <input type="text" l:name="n"/>
+    <input type="submit"/>
+   </form>
+   <div id="bar"/>
   </body>
  </html>
 
