@@ -639,7 +639,6 @@ and compile_for env loop v e1 e2 order_criteria =
 	    map'
 	    q2))
   in
-    Cs.print cs2;
     Ti (q, cs2, itbls2, dummy)
 
 and singleton_record env loop (name, e) =
@@ -723,23 +722,23 @@ and compile_record env loop r =
 and compile_table loop ((_db, _params), tblname, _row) =
   Printf.printf "tblname = %s\n" tblname;
   flush stdout;
-  let (key_infos, columns) = 
+  let (key_infos, columns, types) = 
     match tblname with
       | "test1" ->
-	  ([[A.Item 1]], ["foo"; "bar"]) 
-      | "test2" ->
-	  ([[A.Item 1]], ["id"; "name"; "value"])
+	  ([[A.Item 1]], 
+	   ["foo"; "bar"], 
+	   [A.IntType; A.IntType])
       | "players" ->
-	  ([[A.Item 2]], ["team"; "name"; "pos"; "eff"])
-      | "teams" ->
-	  ([[A.Item 1]], ["name"])
+	  ([[A.Item 2]], 
+	   ["team"; "name"; "pos"; "eff"], 
+	   [A.StrType; A.StrType; A.StrType; A.IntType])
       | _ -> failwith "table not known"
   in
   let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
   let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
   let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
   let pos = A.Pos 0 in
-  let attr_infos = List.map (fun (tname, name) -> (name, tname, A.IntType)) items in
+  let attr_infos = List.map2 (fun (tname, name) typ -> (name, tname, typ)) items types in
   let q =
     A.Dag.mk_cross
       loop

@@ -49,3 +49,4 @@
 *** TODO XML 
 *** TODO Variant tags
 
+** TODO make suse (inner table slicing) configurable
