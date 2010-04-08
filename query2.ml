@@ -475,7 +475,8 @@ struct
         | `If _ 
         | `For _ 
         | `Table _ 
-	| `Apply _ ->
+	| `Apply _
+	| `GroupWith _ ->
 	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
 

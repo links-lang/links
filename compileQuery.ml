@@ -590,7 +590,7 @@ and compile_apply env loop f args =
 	  *)
 
 and compile_for env loop v e1 e2 order_criteria =
-  let Ti (q1, cs1, _, _) = compile_expression env loop e1 in
+  let Ti (q1, cs1, itbls1, _) = compile_expression env loop e1 in
   let q_v = 
     A.Dag.mk_rownum
       (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -614,7 +614,7 @@ and compile_for env loop v e1 e2 order_criteria =
 	 q_v)
   in
   let env = AEnv.map (lift map) env in
-  let env_v = AEnv.bind env (v, Ti (q_v', cs1, Itbls.empty, dummy)) in
+  let env_v = AEnv.bind env (v, Ti (q_v', cs1, itbls1, dummy)) in
   let Ti (q2, cs2, itbls2, _) = compile_expression env_v loop_v e2 in
   let (order_cols, map') =
     match order_criteria with
@@ -626,7 +626,6 @@ and compile_for env loop v e1 e2 order_criteria =
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
 	    (order_cols, omap map q_os cols)
-	      
       | [] ->
 	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
   in
@@ -640,6 +639,7 @@ and compile_for env loop v e1 e2 order_criteria =
 	    map'
 	    q2))
   in
+    Cs.print cs2;
     Ti (q, cs2, itbls2, dummy)
 
 and singleton_record env loop (name, e) =
@@ -730,7 +730,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
       | "test2" ->
 	  ([[A.Item 1]], ["id"; "name"; "value"])
       | "players" ->
-	  ([[A.Item 1]], ["name"; "age"; "team"])
+	  ([[A.Item 2]], ["team"; "name"; "pos"; "eff"])
       | "teams" ->
 	  ([[A.Item 1]], ["name"])
       | _ -> failwith "table not known"
