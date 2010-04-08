@@ -1,20 +1,24 @@
 * Incomplete list of current TODO items:
 
+** DONE Relax the type system so that query blocks may return any value.
+** DONE Try to use the ferrydb backend with PostgreSQL 8.4
+** DONE Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
+*** DONE `Base -> `Any in Typesugar
+*** DONE modify lalgebra compilation rules to handle itbls
+** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
+
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
+*** TODO compile comparisons on records by comparing field by field
+*** TODO restrict type of comparison operators so that comparisons on lists are not allowed in query blocks
 
 ** TODO Query2: sanity checks for record fields
 *** TODO check that extended fields are not already present for `Extend nodes.
 *** TODO Also, implement a similar sanity check for `Erase and `Project.
 
 ** TODO Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
-
-** DONE Relax the type system so that query blocks may return any value.
+** TODO Extend the Links syntax for comprehensions with a groupby statement in line with ferry/haskell.
 
 ** TODO Implement new (less strict) constraints for the return value of query blocks.
-
-** DONE Implement compilation of expressions with a nested type (e.g. lists of lists or records of lists)
-*** DONE `Base -> `Any in Typesugar
-*** DONE modify lalgebra compilation rules to handle itbls
 
 ** TODO Implement missing Ferry/Links primitive functions
 *** DONE zip/unzip
@@ -24,7 +28,7 @@
 *** DONE map/concatMap/asList (implicitly)
 *** DONE hd/tl
 *** DONE filter
-*** TODO groupBy
+*** DONE groupBy
 *** TODO max/min/sum (almost done)
 *** TODO pattern matching: tilde/ntilde/ltilde/lntilde/stilde/sntilde
 *** TODO trigonometric functions: floor, ceiling, cos, sin, tan, log, sqrt
@@ -33,16 +37,15 @@
 
 ** TODO nth should not fail if the list is too short. Return an 'a option instead.
 
-** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
-
 ** TODO All changes to primitive functions (new functions etc) in lib.ml must be implemented in Javascript as well (lib/js/jslib.js).
 *** TODO zip
 *** TODO unzip
 *** TODO nth
-*** TODO groupBy
+
+** TODO implement groupWith in the prelude
+** TODO find out difference between concatMap/map and simple recursive functions regarding effects
 
 ** TODO Find out how to handle some features of Links.
 *** TODO XML 
 *** TODO Variant tags
 
-** TODO Try to use the ferrydb backend with PostgreSQL 8.4
