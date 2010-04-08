@@ -12,6 +12,16 @@ module Cs = struct
     | Offset of offset
     | Mapping of string * cs
 
+  (* TODO: use deriving Show *)
+  let rec print cs =
+    mapstrcat " "
+      (function
+	 | Offset i ->
+	     "Off " ^ (string_of_int i)
+	 | Mapping (name, cs) ->
+	     "M " ^ name ^ " -> {" ^ (print cs) ^ "}")
+      cs
+    
   (* return all columns *)	
   let rec leafs cs =
     List.rev
@@ -860,7 +870,7 @@ and compile_groupwith env loop v g_e e =
   let q_2 =
     A.Dag.mk_distinct
       (A.Dag.mk_project
-	 ([(iter, inner); (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.leafs cs_eg)) (io (Cs.leafs cs_eg'))))
+	 ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.leafs cs_eg)) (io (Cs.leafs cs_eg'))))
 	 q_1)
   in
   let q_3 =
@@ -868,9 +878,11 @@ and compile_groupwith env loop v g_e e =
       ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.leafs cs_e))))
       q_1
   in
-  (* let cs = Cs.append cs_eg [Cs.Offset grpkey_col] in *)
   let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset grpkey_col])] in
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
+    print_endline ("cs_e " ^ (Cs.print cs_e));
+    print_endline ("cs_eg " ^ (Cs.print cs_eg));
+    print_endline ("cs " ^ (Cs.print cs));
     Ti(q_2, cs, itbls, dummy)
 
 and compile_expression env loop e : tblinfo =
