@@ -2,8 +2,6 @@ open Utility
 
 module A = Algebra
 
-(* Table information node (q, cs, itbls, _) *)
-
 module Cs = struct
 
   type offset = int
@@ -213,22 +211,24 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
     | subs, [] -> subs
 
 let rec suse q_pase subs : ((int * tblinfo) list) =
-  match subs with
-    | (offset, (Ti(q, cs, itbls, _))) :: subs ->
-	let q' = 
-	  A.Dag.mk_project
-	    ([prj iter; prj pos] @ (prjlist (io (Cs.leafs cs))))
-	    (A.Dag.mk_eqjoin
-	       (iter, iter')
-	       q
-	       (A.Dag.mk_project
-		  [(iter', A.Item offset)]
-		  q_pase))
-	in
-	  [(offset, (Ti(q', cs, (suse q' itbls), dummy)))] @ (suse q_pase subs)
-	    
-    | [] ->
-	[]
+  if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
+    match subs with
+      | (offset, (Ti(q, cs, itbls, _))) :: subs ->
+	  let q' = 
+	    A.Dag.mk_project
+	      ([prj iter; prj pos] @ (prjlist (io (Cs.leafs cs))))
+	      (A.Dag.mk_eqjoin
+		 (iter, iter')
+		 q
+		 (A.Dag.mk_project
+		    [(iter', A.Item offset)]
+		    q_pase))
+	  in
+	    [(offset, (Ti(q', cs, (suse q' itbls), dummy)))] @ (suse q_pase subs)
+      | [] ->
+	  []
+  else
+    subs
 
 
 let wrap_agg loop q attachment =
