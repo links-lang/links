@@ -1,0 +1,13 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var teams = table "players" with (team : String, name : String, pos : String, eff : Int) from db;
+
+query {
+	for (t <- groupWith((fun (p) { p.team }), asList(teams))) {
+		var posn = groupWith((fun (p) { p.pos }), t.2);
+		[(team = t.1,
+		centers = for (p <- posn) where (p.1 == "C") p.2,
+		forwards = for (p <- posn) where (p.1 == "F") p.2,
+		guards = for (p <- posn) where (p.1 == "G") p.2)]
+	}
+}
+
