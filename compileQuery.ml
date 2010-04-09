@@ -175,8 +175,8 @@ let ord' = A.Pos 3
 let item' = A.Pos 4
 let item'' = A.Pos 5
 let grp_key = A.Pos 6
-let c' = A.Pos 6
-let res = A.Pos 7
+let c' = A.Pos 7
+let res = A.Pos 8
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -207,8 +207,53 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 	in
 	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
     | [], [] -> []
-    | [], subs -> subs
-    | subs, [] -> subs
+	(* If one of the inner lists to be appended is empty, 
+	   we still need to generate new surrogate keys so 
+	   that they match with the ones computed in the outer table *)
+    | [], (c, Ti(q_i, cs, subs, _)) :: _ -> 
+	let q =
+	  (A.Dag.mk_rownum 
+	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+		(A.Dag.mk_attach
+		   (ord, A.Nat 1n)
+		   q_i))
+	in
+	let q'_projlist = [(iter, item''); prj pos] in
+	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs cs) (Itbls.keys subs)))) in
+	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
+	let q' =
+	  (A.Dag.mk_project
+	     q'_projlist
+	     (A.Dag.mk_thetajoin
+		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
+		q
+		(A.Dag.mk_project
+		   [(ord', ord); (item'', item'); (c', A.Item c)]
+		   q_paap)))
+	in
+	  [c, (Ti (q', cs, (suap q subs[]), dummy))] 
+    | (c, Ti(q_i, cs, subs, _)) :: _, [] -> 
+	let q =
+	  (A.Dag.mk_rownum 
+	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+		(A.Dag.mk_attach
+		   (ord, A.Nat 1n)
+		   q_i))
+	in
+	let q'_projlist = [(iter, item''); prj pos] in
+	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs cs) (Itbls.keys subs)))) in
+	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
+	let q' =
+	  (A.Dag.mk_project
+	     q'_projlist
+	     (A.Dag.mk_thetajoin
+		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
+		q
+		(A.Dag.mk_project
+		   [(ord', ord); (item'', item'); (c', A.Item c)]
+		   q_paap)))
+	in
+	  [c, (Ti (q', cs, (suap q subs []), dummy))] 
 
 let rec suse q_pase subs : ((int * tblinfo) list) =
   if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
@@ -589,33 +634,33 @@ and compile_apply env loop f args =
 	    | `PrimitiveFunction "tl" ->
 	  *)
 
-and compile_for env loop v e1 e2 order_criteria =
+and compile_for env loop v e1 e2 _order_criteria =
   let Ti (q1, cs1, itbls1, _) = compile_expression env loop e1 in
   let q_v = 
-    A.Dag.mk_rownum
-      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-      q1
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_project
+	 ((iter, inner) :: (prjlist (io (Cs.leafs cs1))))
+	 (A.Dag.mk_rownum
+	    (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	    q1))
   in
   let map =
     A.Dag.mk_project
       [(outer, iter); prj inner]
-      q_v
+      (A.Dag.mk_rownum
+	 (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	 q1)
   in
   let loop_v =
     A.Dag.mk_project
-      [(iter, inner)]
+      [(iter, iter)]
       q_v
   in
-  let q_v' =
-    A.Dag.mk_attach
-      (pos, A.Nat 1n)
-      (A.Dag.mk_project
-	 ([(iter, inner)] @ (prjlist (io (Cs.leafs cs1))))
-	 q_v)
-  in
   let env = AEnv.map (lift map) env in
-  let env_v = AEnv.bind env (v, Ti (q_v', cs1, itbls1, dummy)) in
+  let env_v = AEnv.bind env (v, Ti (q_v, cs1, itbls1, dummy)) in
   let Ti (q2, cs2, itbls2, _) = compile_expression env_v loop_v e2 in
+(*
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
@@ -640,6 +685,17 @@ and compile_for env loop v e1 e2 order_criteria =
 	    q2))
   in
     Ti (q, cs2, itbls2, dummy)
+*)
+  let q = A.Dag.mk_project
+    ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.leafs cs2))))
+    (A.Dag.mk_rank
+       (pos', [(iter, A.Ascending); (pos, A.Ascending)])
+       (A.Dag.mk_eqjoin
+	  (iter, inner)
+	  q2
+	  map))
+  in
+    Ti(q, cs2, itbls2, dummy)
 
 and singleton_record env loop (name, e) =
   let Ti (q, cs, itbls, _) = compile_expression env loop e in
@@ -734,20 +790,23 @@ and compile_table loop ((_db, _params), tblname, _row) =
 	   [A.IntType; A.StrType; A.StrType; A.StrType; A.IntType])
       | _ -> failwith "table not known"
   in
-  let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
-  let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
-  let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
-  let pos = A.Pos 0 in
-  let attr_infos = List.map2 (fun (tname, name) typ -> (name, tname, typ)) items types in
-  let q =
-    A.Dag.mk_cross
-      loop
-      (A.Dag.mk_rank
-	 (pos, (List.map (fun column -> (column, A.Ascending)) (List.hd key_infos)))
-	 (A.Dag.mk_tblref
-	    (tblname, attr_infos, key_infos)))
-  in
-    Ti (q, cs, Itbls.empty, dummy)
+    assert ((List.length key_infos) > 0);
+    assert ((List.length columns) > 0);
+    assert ((List.length types) = (List.length columns));
+    let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
+    let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
+    let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
+    let pos = A.Pos 0 in
+    let attr_infos = List.map2 (fun (tname, name) typ -> (name, tname, typ)) items types in
+    let q =
+      A.Dag.mk_cross
+	loop
+	(A.Dag.mk_rank
+	   (pos, (List.map (fun column -> (column, A.Ascending)) (List.hd key_infos)))
+	   (A.Dag.mk_tblref
+	      (tblname, attr_infos, key_infos)))
+    in
+      Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
   let cs = [Cs.Offset 1] in

@@ -7,6 +7,8 @@
 *** DONE modify lalgebra compilation rules to handle itbls
 ** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
 
+** DONE make for-comprehensions with orderbys work again
+
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
 *** TODO compile comparisons on records by comparing field by field
 *** TODO restrict type of comparison operators so that comparisons on lists are not allowed in query blocks
