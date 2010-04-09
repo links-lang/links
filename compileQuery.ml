@@ -729,9 +729,9 @@ and compile_table loop ((_db, _params), tblname, _row) =
 	   ["foo"; "bar"], 
 	   [A.IntType; A.IntType])
       | "players" ->
-	  ([[A.Item 2]], 
-	   ["team"; "name"; "pos"; "eff"], 
-	   [A.StrType; A.StrType; A.StrType; A.IntType])
+	  ([[A.Item 1]], 
+	   ["id"; "team"; "name"; "pos"; "eff"], 
+	   [A.IntType; A.StrType; A.StrType; A.StrType; A.IntType])
       | _ -> failwith "table not known"
   in
   let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
@@ -743,7 +743,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
     A.Dag.mk_cross
       loop
       (A.Dag.mk_rank
-	 (pos, (List.map (fun (_, name) -> (name, A.Ascending)) items))
+	 (pos, (List.map (fun column -> (column, A.Ascending)) (List.hd key_infos)))
 	 (A.Dag.mk_tblref
 	    (tblname, attr_infos, key_infos)))
   in
@@ -763,7 +763,6 @@ and compile_constant loop (c : Constant.constant) =
 and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
-    
   let select loop (Ti (q, cs, itbls, _)) =
     let cols = io (Cs.leafs cs) in
     let q' =
