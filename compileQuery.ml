@@ -837,7 +837,7 @@ and compile_if env loop e1 e2 e3 =
     let itbls' = suse q itbls in
       Ti (q', cs, itbls', dummy)
   in
-    (* condition *)
+  (* condition *)
   let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
     assert (Cs.is_operand cs_e1);
     let loop_then =
@@ -937,9 +937,7 @@ and compile_groupwith env loop v g_e e =
   in
   let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset grpkey_col])] in
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
-    print_endline ("cs_e " ^ (Cs.print cs_e));
-    print_endline ("cs_eg " ^ (Cs.print cs_eg));
-    print_endline ("cs " ^ (Cs.print cs));
+    Debug.print ("cs " ^ (Cs.print cs));
     Ti(q_2, cs, itbls, dummy)
 
 and compile_expression env loop e : tblinfo =

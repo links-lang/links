@@ -18,3 +18,8 @@ lexer.ml
 *.dot
 *.xml
 *.sql
+._d
+._bcdi
+.DS_Store
+foo.links
+/deriving-310/syntax/deriving

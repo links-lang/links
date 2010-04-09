@@ -1,0 +1,8 @@
+query {
+	for (f <- for (i <- [1,2,3]) 
+			if (i < 2)
+		         	[fun (x) { x + i }]
+		        else
+		        	[fun (x) { x + 42 }])
+		[(foo = f(23))]
+}
