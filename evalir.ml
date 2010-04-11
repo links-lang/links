@@ -337,7 +337,7 @@ module Eval = struct
            | `Database (db, params), name, `Record row ->
                apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
            | _ -> eval_error "Error evaluating table handle")
-    | `Query (range, e, _t) ->
+    | `Query (range, e, t) ->
         let range =
           match range with
             | None -> None
@@ -346,6 +346,7 @@ module Eval = struct
         let result =
 	  if Settings.get_value Basicsettings.Ferry.output_algebra then
 	    begin
+	      Debug.print (Types.string_of_datatype t);
 	      Query2.compile env (range, e);
 	      exit 0
 	    end;

@@ -201,9 +201,19 @@ and tree_of_tailcomp id tailcomp env recnodes =
 	let label = "special" in
 	let (next_id, subtree) = tree_of_special (id + 1) t env recnodes in
 	  (next_id, Node (id, label, TailComp, [subtree]))
-    | `Case _ -> 
-	let label = "case" in
-	  ((id + 1), Leaf (id, label, TailComp))
+    | `Case (v, cases, _default) -> 
+	let label = "case\\n" in
+	let (next_id, v_subtree) = tree_of_value (id + 1) v env recnodes in
+	  let case_labels =
+	    StringMap.fold
+	      (fun name (binder, _comp) label ->
+		 label ^ name ^ " -> " ^ (string_of_binder binder) ^ "\\n")
+	      cases
+	      ""
+	  in
+	  let comps = StringMap.to_list (fun _ (_, comp) -> comp) cases in
+	  let (next_id, case_subtrees) = nodes_of_computations next_id comps env recnodes in
+	    (next_id, Node (id, (label ^ case_labels), TailComp, v_subtree :: case_subtrees))
     | `If (c, t, e) ->
 	let label = "if" in
 	let (next_id, c_tree) = tree_of_value (id + 1) c env recnodes in

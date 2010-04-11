@@ -1,0 +1,8 @@
+fun f(x) {
+        switch (x) {
+                case Foo(i) -> i + 1
+                case Bar(j) -> j + 2
+        }
+}
+
+f(Foo(12))

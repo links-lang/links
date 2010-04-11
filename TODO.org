@@ -8,6 +8,7 @@
 ** DONE Investigate the status of dense_rank and Common Table Expressions (CTE) in PostgreSQL.
 
 ** DONE make for-comprehensions with orderbys work again
+** DONE make suse (inner table slicing) configurable
 
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
 *** TODO compile comparisons on records by comparing field by field
@@ -51,4 +52,11 @@
 *** TODO XML 
 *** TODO Variant tags
 
-** TODO make suse (inner table slicing) configurable
+
+** TODO enable compilation of for-comprehensions with orderby-clauses again.
+
+** TODO implement a database backend in line with ferrydb
+*** TODO take a sql plan bundle from pfsql and execute it via the ocaml postgresql bindings
+*** TODO collect the results of the individual sql queries
+*** TODO reconstruct the links heap result as a Value.t according to the type of the query block
+
