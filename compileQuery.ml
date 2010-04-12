@@ -806,6 +806,39 @@ and compile_constant loop (c : Constant.constant) =
   in
     Ti (q, cs, Itbls.empty, dummy)
 
+(* if e1 then e2 else []:
+   don't consider the else branch if it represents the empty list. *)
+and compile_if2 env loop e1 e2 =
+  let c = A.Item 1 in
+  let select loop (Ti (q, cs, itbls, _)) =
+    let cols = io (Cs.leafs cs) in
+    let q' =
+      A.Dag.mk_project
+	([prj iter; prj pos] @ (prjlist cols))
+	(A.Dag.mk_eqjoin
+	   (iter, iter')
+	   q
+	   (A.Dag.mk_project
+	      [(iter', iter)]
+	      loop))
+    in
+    let itbls' = suse q itbls in
+      Ti (q', cs, itbls', dummy)
+  in
+  (* condition *)
+  let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
+    assert (Cs.is_operand cs_e1);
+    let loop_then =
+      A.Dag.mk_project
+	[prj iter]
+	(A.Dag.mk_select
+	   c
+	   q_e1)
+    in
+    let env_then = AEnv.map (select loop_then) env in
+    let Ti (q_e2, cs_e2, itbls_e2, _) = compile_expression env_then loop_then e2 in
+      Ti (q_e2, cs_e2, itbls_e2, dummy)
+
 and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
@@ -941,7 +974,8 @@ and compile_expression env loop e : tblinfo =
     | `Singleton e -> compile_expression env loop e
     | `Append l -> compile_append env loop l
     | `Table t -> compile_table loop t
-    | `If (c, t, e) -> compile_if env loop c t e
+    | `If (c, t, Some e) -> compile_if env loop c t e
+    | `If (c, t, None) -> compile_if2 env loop c t
     | `For ([x, l], os, body) -> compile_for env loop x l body os
     | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
     | `Box e -> compile_box env loop e

@@ -4,7 +4,7 @@ open Utility
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `GroupWith of (Var.var * t) * t
-    | `If of t * t * t
+    | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
     | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t StringMap.t
@@ -80,7 +80,7 @@ struct
   type pt =
     [ `For of (Var.var * pt) list * pt list * pt
     | `GroupWith of (Var.var * pt) * pt
-    | `If of pt * pt * pt
+    | `If of pt * pt * pt option
     | `Table of Value.table
     | `Singleton of pt | `Append of pt list
     | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt option * pt StringMap.t
@@ -102,7 +102,8 @@ struct
                   bt b)
 	| `GroupWith ((x, group_exp), source) ->
 	    `GroupWith ((x, bt group_exp), bt source)
-        | `If (c, t, e) -> `If (bt c, bt t, bt e)
+        | `If (c, t, Some e) -> `If (bt c, bt t, Some (bt e))
+        | `If (c, t, None) -> `If (bt c, bt t, None)
         | `Table t -> `Table t
         | `Singleton v -> `Singleton (bt v)
         | `Append vs -> `Append (List.map bt vs)
@@ -125,6 +126,7 @@ end
 let string_of_t = S.t
 
 (** Return the type of rows associated with a top-level non-empty expression *)
+(*
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec generators env : _ -> Types.datatype Env.Int.t =
     function
@@ -160,7 +162,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Append (v :: _) -> type_of_expression v
       | `For (gens, _os, body) -> tail (generators Env.Int.empty gens) body
       | _ -> tail Env.Int.empty v
-
+*)
 let rec value_of_expression : t -> Value.t = fun v ->
   let ve = value_of_expression in
   let value_of_singleton = fun s ->
@@ -191,7 +193,8 @@ struct
   let rec replace_var old_var new_var e =
     let rep = replace_var old_var new_var in
       match e with
-	| `If (c, t, e) -> `If (rep c, rep t, rep e)
+	| `If (c, t, Some e) -> `If (rep c, rep t, Some (rep e))
+	| `If (c, t, None) -> `If (rep c, rep t, None)
 	| `Singleton e -> `Singleton (rep e)
 	| `Append l -> `Append (List.map rep l)
 	| `Record fields -> `Record (StringMap.map rep fields)
@@ -390,12 +393,12 @@ struct
 	print_endline "query2: >=";
 	`If (`Apply (">", [e1; e2]),
 	     `Constant (`Bool true),
-	     `Apply ("==", [e1; e2]))
+	     Some (`Apply ("==", [e1; e2])))
     | `Primitive "<=", [e1; e2] ->
 	print_endline "query2: <=";
 	`If (`Apply (">", [e2; e1]),
 	     `Constant (`Bool true),
-	     `Apply ("==", [e1; e2]))
+	     Some (`Apply ("==", [e1; e2])))
     | `Primitive "tl", args ->
 	`Apply ("drop", (`Constant (`Int (Num.Int 1))) :: args)
     | `Primitive "hd", args ->
@@ -404,8 +407,10 @@ struct
     | `Primitive f, args ->
         `Apply (f, args)
 
-    | `If (c, t, e), args ->
-        `If (c, apply env (t, args), apply env (e, args))
+    | `If (c, t, Some e), args ->
+        `If (c, apply env (t, args), Some (apply env (e, args)))
+    | `If (c, t, None), args ->
+	`If (c, apply env (t, args), None)
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
 (*    | `Closure (bound_vars, computation),  *)
@@ -452,11 +457,16 @@ struct
                         computation (bind env (z, w)) c
                     | None, None -> eval_error "Pattern matching failed"
                 end
-            | `If (c, t, e) ->
+            | `If (c, t, Some e) ->
                 `If
                   (c,
                    reduce_case (t, cases, default),
-                   reduce_case (e, cases, default))
+                   Some (reduce_case (e, cases, default)))
+	    | `If (c, t, None) ->
+		`If
+		  (c,
+		   reduce_case (t, cases, default),
+		   None)
             |  _ -> assert false
         in
           reduce_case (value env v, cases, default)
@@ -464,10 +474,13 @@ struct
         let c = value env c in
         let t = computation env t in
         let e = computation env e in
-	  `If (c, t, e)
+	  match e with
+	    | `Append [] -> `If (c, t, None)
+	    | e -> `If (c, t, Some e)
             (*     | `Special (`For (x, source, body)) -> *)
             (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
   and reduce_for_source env eval_body (x, source, body) =
+    let for_expr = 
       match source with
 	  (* merge for-comprehension with its orderby clause *)
 	| `For ([y, source'], ((_ :: _) as os), (`Var y')) when y = y' ->
@@ -482,6 +495,14 @@ struct
 	| `Project _ ->
 	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
+    in
+      match for_expr with
+	(* use an optimization if the else branch is the empty list. 
+	   this occurs for where-clauses in for-comprehensions *)
+	| `For (gs, os, `If (c, t, (Some (`Append [])))) ->
+	    `For (gs, os, `If (c, t, None))
+	| e -> 
+	    e
 
   let eval env e = computation (env_of_value_env env) e
 end
@@ -501,11 +522,15 @@ module Annotate = struct
     match expression with
       | `Constant _ -> (expression, `Atom)
       | `Table _ -> (expression, `List)
-      | `If (c, t, e) -> 
+      | `If (c, t, Some e) -> 
 	  let (c', _) = transform env c in
 	  let (t', itype) = transform env t in
 	  let (e', _) = transform env e in
-	    (`If (c', t', e'), itype)
+	    (`If (c', t', Some e'), itype)
+      | `If (c, t, None) ->
+	  let (c', _) = transform env c in
+	  let (t', itype) = transform env t in
+	    (`If (c', t', None), itype)
       | `Singleton e ->
 	  (* row or table? *)
 	  `Singleton (annotate `Atom (transform env e)), `List
@@ -586,7 +611,7 @@ module Annotate = struct
 	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
       | `Box _ | `Unbox _ ->
 	  failwith "expression already annotated"
-      | _ -> failwith "not implemented"
+      | _ -> failwith "Query2.Annotate.transform: not implemented"
     
 end
 
