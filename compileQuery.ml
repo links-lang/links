@@ -2,99 +2,6 @@ open Utility
 
 module A = Algebra
 
-module Cs = struct
-
-  type offset = int
-  type cs = csentry list
-  and csentry =
-    | Offset of offset
-    | Mapping of string * cs
-
-  (* TODO: use deriving Show *)
-  let rec print cs =
-    mapstrcat " "
-      (function
-	 | Offset i ->
-	     "Off " ^ (string_of_int i)
-	 | Mapping (name, cs) ->
-	     "M " ^ name ^ " -> {" ^ (print cs) ^ "}")
-      cs
-    
-  (* return all columns *)	
-  let rec leafs cs =
-    List.rev
-      (List.fold_left
-	 (fun leaf_list cs_entry ->
-	    match cs_entry with
-	      | Offset o -> o :: leaf_list
-	      | Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list)
-	 []
-	 cs)
-
-  let cardinality = List.length
-
-  (* increase all column names by i *)
-  let rec shift cs i =
-    List.map
-      (function
-	 | Offset o -> Offset (o + i)
-	 | Mapping (key, cs) -> Mapping (key, (shift cs i)))
-      cs
-
-  (* append to cs components *)
-  let append cs1 cs2 =
-    cs1 @ (shift cs2 (cardinality cs1))
-
-  (* fuse two cs's by choosing the larger one *)
-  let fuse cs1 cs2 =
-    if (List.length cs1) > (List.length cs2) then
-      cs1
-    else
-      cs2
-
-  (* true iff cs has exactly one flat column *)
-  let is_operand cs =
-    if List.length cs <> 1 then
-      false
-    else
-      match (List.hd cs) with
-	| Offset _ -> true
-	| _ -> false
-
-  (* look up the column corresponding to a record field *)
-  let lookup_record_field cs field =
-    let rec loop = function
-      | (Offset _) :: tl ->
-	  loop tl
-      | (Mapping (key, cs)) :: tl ->
-	  if key = field then
-	    cs
-	  else
-	    loop tl
-      | [] ->
-	  failwith "Cs.get_mapping: unknown field name"
-    in
-      loop cs
-
-  (* remove all mappings with keys in fields *)
-  let filter_record_fields cs fields =
-    List.filter
-      (function 
-	 | Mapping (key, _) when StringSet.mem key fields -> false 
-	 | _ -> true)
-      cs
-
-  (* return all top-level record fields *)
-  let record_fields cs =
-    List.fold_left
-      (fun l c ->
-	 match c with
-	   | Mapping (key, _) -> key :: l
-	   | Offset _ -> l)
-      []
-      cs
-end
-
 type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ((int * tblinfo) list) * unit)
 
 module Itbls = struct
@@ -289,7 +196,7 @@ let wrap_agg loop q attachment =
 		q))))
 
 (* the empty list *)
-let nil = A.Dag.mk_emptytbl [(A.Iter 0, A.NatType); (A.Pos 0, A.NatType)]
+let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType)]
 
 (* loop-lift q by map *)
 let lift map (Ti (q, cs, _, _)) =
@@ -336,7 +243,7 @@ let rec compile_box env loop e =
 	 [(prj iter); (A.Item 1, iter)]
 	 loop)
   in
-    Ti(q_o, [Cs.Offset 1], [(1, ti_e)], dummy)
+    Ti(q_o, [Cs.Offset (1, `Surrogate)], [(1, ti_e)], dummy)
 
 and compile_unbox env loop e =
   let Ti(q_e, cs_e, itbls_e, _) = compile_expression env loop e in
@@ -450,7 +357,7 @@ and compile_unzip env loop args =
   let itbls_1 = Itbls.retain_by_keys itbls_e cols_1 in
   let itbls_2 = Itbls.decr_keys (Itbls.retain_by_keys itbls_e cols_2) card in
   let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
-  let cs = [Cs.Mapping ("1", [Cs.Offset 1]); Cs.Mapping ("2", [Cs.Offset 2])] in
+  let cs = [Cs.Mapping ("1", [Cs.Offset (1, `Surrogate)]); Cs.Mapping ("2", [Cs.Offset (2, `Surrogate)])] in
     Ti (q, cs, itbls, dummy)
 
 and compile_length env loop args =
@@ -463,7 +370,7 @@ and compile_length env loop args =
       q_e
   in
   let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-    Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
+    Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
 
 and compile_aggr env loop aggr_fun args =
   assert ((List.length args) = 1);
@@ -477,7 +384,8 @@ and compile_aggr env loop aggr_fun args =
 	 q_e)
     in
     let q' = wrap_agg loop q (A.String "error") in
-      Ti (q', [Cs.Offset 1], Itbls.empty, dummy)
+      (* FIXME: extract the correct column type from cs_e *)
+      Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
@@ -494,7 +402,7 @@ and compile_nth env loop operands =
 	     (A.Dag.mk_eqjoin
 		(iter, iter')
 		(A.Dag.mk_cast
-		   (pos', pos, A.IntType)
+		   (pos', pos, `IntType)
 		   q2')
 		(A.Dag.mk_project
 		   [(iter', iter); (c', A.Item 1)]
@@ -559,7 +467,7 @@ and compile_take env loop args =
 	    (A.Dag.mk_eqjoin
 	       (iter, iter')
 	       (A.Dag.mk_cast
-		  (pos', pos, A.IntType)
+		  (pos', pos, `IntType)
 		  q2')
 	       (A.Dag.mk_project
 		  [(iter', iter); (c', res)]
@@ -589,7 +497,7 @@ and compile_drop env loop args =
 	    (A.Dag.mk_eqjoin
 	       (iter, iter')
 	       (A.Dag.mk_cast
-		  (pos', pos, A.IntType)
+		  (pos', pos, `IntType)
 		  q2')
 	       (A.Dag.mk_project
 		  [(iter', iter); (c', c)]
@@ -614,7 +522,8 @@ and compile_apply env loop f args =
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
-    | "maxf" -> compile_aggr env loop A.Max args
+    | "maxf" -> (* compile_aggr env loop A.Max args *)
+	failwith "defect"
 	(*    | "min" -> compile_aggr env loop A.Min args
 	      | "avg" -> compile_aggr env loop A.Avg args
 	      | "sum" -> compile_aggr env loop A.Sum args *)
@@ -770,11 +679,11 @@ and compile_table loop ((_db, _params), tblname, _row) =
       | "test1" ->
 	  ([[A.Item 1]], 
 	   ["foo"; "bar"], 
-	   [A.IntType; A.IntType])
+	   [`IntType; `IntType])
       | "players" ->
 	  ([[A.Item 1]], 
 	   ["id"; "team"; "name"; "pos"; "eff"], 
-	   [A.IntType; A.StrType; A.StrType; A.StrType; A.IntType])
+	   [`IntType; `StrType; `StrType; `StrType; `IntType])
       | _ -> failwith "table not known"
   in
     assert ((List.length key_infos) > 0);
@@ -782,7 +691,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
     assert ((List.length types) = (List.length columns));
     let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
     let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
-    let cs = List.map (fun (c, i) -> Cs.Mapping (c, [Cs.Offset i])) col_pos in
+    let cs = List.map2 (fun (c, i) typ -> Cs.Mapping (c, [Cs.Offset (i, typ)])) col_pos types in
     let pos = A.Pos 0 in
     let attr_infos = List.map2 (fun (tname, name) typ -> (name, tname, typ)) items types in
     let q =
@@ -796,7 +705,7 @@ and compile_table loop ((_db, _params), tblname, _row) =
       Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
-  let cs = [Cs.Offset 1] in
+  let cs = [Cs.Offset (1, A.column_type_of_constant c)] in
   let q =
     (A.Dag.mk_attach
        (A.Item 1, A.const c)
@@ -955,7 +864,7 @@ and compile_groupwith env loop v g_e e =
       ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.leafs cs_e))))
       q_1
   in
-  let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset grpkey_col])] in
+  let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset (grpkey_col, `Surrogate)])] in
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
     Debug.print ("cs " ^ (Cs.print cs));
     Ti(q_2, cs, itbls, dummy)
@@ -994,12 +903,12 @@ let wrap_serialize (Ti (q,cs,_,_)) =
 
 let rec collect_itbls (plan_id, ref_id) itbls collected =
   match itbls with
-    | (offset, (Ti(_, _, [], _) as ti)) :: remaining_itbls ->
-	let l = ((plan_id, ref_id, offset), (wrap_serialize ti)) :: collected in
+    | (offset, (Ti(_, cs, [], _) as ti)) :: remaining_itbls ->
+	let l = ((plan_id, ref_id, offset), (wrap_serialize ti), cs) :: collected in
 	  collect_itbls (plan_id + 1, ref_id) remaining_itbls l
-    | (offset, (Ti(_, _, itbls, _) as ti)) :: remaining_itbls ->
+    | (offset, (Ti(_, cs, itbls, _) as ti)) :: remaining_itbls ->
 	let (next_id, l) = collect_itbls (plan_id + 1, plan_id) itbls [] in
-	let l = ((plan_id, ref_id, offset), (wrap_serialize ti)) :: (l @ collected) in
+	let l = ((plan_id, ref_id, offset), (wrap_serialize ti), cs) :: (l @ collected) in
 	  collect_itbls (next_id, plan_id) remaining_itbls l
     | [] ->
 	(plan_id, collected)
@@ -1007,8 +916,8 @@ let rec collect_itbls (plan_id, ref_id) itbls collected =
 let compile (e, imptype) =
   let loop = 
     (A.Dag.mk_littbl
-       ([[A.Nat 1n]], [(A.Iter 0, A.NatType)]))
+       ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-  let Ti (_, _, itbls, _) as ti = compile_expression AEnv.empty loop e in
-  let plan_bundle = (wrap_serialize ti), snd (collect_itbls (1, 0) itbls []) in
-    A.Dag.export_plan_bundle "plan.xml" imptype plan_bundle
+  let Ti (_, cs, itbls, _) as ti = compile_expression AEnv.empty loop e in
+  let plan_bundle = (wrap_serialize ti), cs, snd (collect_itbls (1, 0) itbls []) in
+    Algebra_export.export_plan_bundle "plan.xml" imptype plan_bundle

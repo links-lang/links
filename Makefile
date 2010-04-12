@@ -113,6 +113,8 @@ SOURCES = $(OPC)                		\
 	  irtodot.ml				\
           query.ml                              \
 	  algebra.ml				\
+	  cs.ml					\
+	  algebra_export.ml			\
 	  compileQuery.ml			\
 	  query2.ml				\
           evalir.ml                             \

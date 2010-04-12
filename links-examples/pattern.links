@@ -1,0 +1,10 @@
+fun f(l) {
+	switch (l) {
+		case [] -> 1
+		case x :: xs -> 2
+	}
+}
+
+query {
+	f([1,2,3])
+}
