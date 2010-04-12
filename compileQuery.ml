@@ -633,7 +633,7 @@ and compile_apply env loop f args =
 	    | `PrimitiveFunction "tl" ->
 	  *)
 
-and compile_for env loop v e1 e2 _order_criteria =
+and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, itbls1, _) = compile_expression env loop e1 in
   let q_v = 
     A.Dag.mk_attach
@@ -659,7 +659,6 @@ and compile_for env loop v e1 e2 _order_criteria =
   let env = AEnv.map (lift map) env in
   let env_v = AEnv.bind env (v, Ti (q_v, cs1, itbls1, dummy)) in
   let Ti (q2, cs2, itbls2, _) = compile_expression env_v loop_v e2 in
-(*
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
@@ -673,26 +672,15 @@ and compile_for env loop v e1 e2 _order_criteria =
       | [] ->
 	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
   in
-  let q =
-    A.Dag.mk_project
-      ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.leafs cs2))))
-      (A.Dag.mk_rank
-	 (pos', order_cols)
-	 (A.Dag.mk_eqjoin
-	    (inner, iter)
-	    map'
-	    q2))
-  in
-    Ti (q, cs2, itbls2, dummy)
-*)
   let q = A.Dag.mk_project
     ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.leafs cs2))))
     (A.Dag.mk_rank
-       (pos', [(iter, A.Ascending); (pos, A.Ascending)])
+       (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
+       (pos', order_cols)
        (A.Dag.mk_eqjoin
 	  (iter, inner)
 	  q2
-	  map))
+	  map'))
   in
     Ti(q, cs2, itbls2, dummy)
 
