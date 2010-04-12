@@ -4,10 +4,13 @@ var teams = table "players" with (team : String, name : String, pos : String, ef
 query {
 	for (t <- groupWith((fun (p) { p.team }), asList(teams))) {
 		var posn = groupWith((fun (p) { p.pos }), t.2);
+		fun sort(l) {
+			for (r <- l) orderby (r.name) [r]
+		}
 		[(team = t.1,
-		centers = for (p <- posn) where (p.1 == "C") p.2,
-		forwards = for (p <- posn) where (p.1 == "F") p.2,
-		guards = for (p <- posn) where (p.1 == "G") p.2)]
+		centers = sort(for (p <- posn) where (p.1 == "C") p.2),
+		forwards = sort(for (p <- posn) where (p.1 == "F") p.2),
+		guards = sort(for (p <- posn) where (p.1 == "G") p.2))]
 	}
 }
 
