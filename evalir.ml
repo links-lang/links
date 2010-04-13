@@ -346,9 +346,11 @@ module Eval = struct
         let result =
 	  if Settings.get_value Basicsettings.Ferry.output_algebra then
 	    begin
-	      Debug.print (Types.string_of_datatype t);
-	      Query2.compile env (range, e);
-	      exit 0
+	      Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
+	      let (exptree, imptype) = Query2.compile env (range, e) in
+	      let algebra_bundle = CompileQuery.compile exptree in
+		Algebra_export.export_plan_bundle "plan.xml" imptype algebra_bundle;
+		exit 0
 	    end;
 	  match Query.compile env (range, e) with
             | None -> computation env cont e
