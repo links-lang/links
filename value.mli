@@ -12,7 +12,9 @@ class virtual dbvalue :
     method virtual fname : int -> string
     method virtual get_all_lst : string list list
     method virtual nfields : int
+    method virtual ntuples : int
     method virtual status : db_status
+    method virtual getvalue : int -> int -> string
   end
 
 class virtual database :

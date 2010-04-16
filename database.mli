@@ -5,6 +5,8 @@ class virtual db_args : string -> object
   method virtual from_string : string -> unit
 end
 
+val value_of_db_string : string -> Types.datatype -> Value.t
+
 val execute_command : (string -> Value.database -> Value.t)
 
 (** [execute_select \[row1; row2; ...\] sql db] runs the query [sql]

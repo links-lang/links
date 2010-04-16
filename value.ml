@@ -19,8 +19,10 @@ type db_status = [ `QueryOk | `QueryError of string ]
 class virtual dbvalue = object
   method virtual status : db_status
   method virtual nfields : int
+  method virtual ntuples : int
   method virtual fname : int -> string
   method virtual get_all_lst : string list list
+  method virtual getvalue : int -> int -> string
   method virtual error : string
 end
 

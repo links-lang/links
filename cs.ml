@@ -83,7 +83,7 @@ let is_operand cs =
       | Offset _ -> true
       | _ -> false
 
-(* look up the column corresponding to a record field *)
+(* look up the sub-cs corresponding to a record field *)
 let lookup_record_field cs field =
   let rec loop = function
     | (Offset _) :: tl ->

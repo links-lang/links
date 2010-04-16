@@ -904,11 +904,11 @@ let wrap_serialize (Ti (q,cs,_,_)) =
 let rec collect_itbls (plan_id, ref_id) itbls collected =
   match itbls with
     | (offset, (Ti(_, cs, [], _) as ti)) :: remaining_itbls ->
-	let l = ((plan_id, ref_id, offset), (wrap_serialize ti), cs) :: collected in
+	let l = (plan_id, ((ref_id, offset), (wrap_serialize ti), cs)) :: collected in
 	  collect_itbls (plan_id + 1, ref_id) remaining_itbls l
     | (offset, (Ti(_, cs, itbls, _) as ti)) :: remaining_itbls ->
 	let (next_id, l) = collect_itbls (plan_id + 1, plan_id) itbls [] in
-	let l = ((plan_id, ref_id, offset), (wrap_serialize ti), cs) :: (l @ collected) in
+	let l = (plan_id, ((ref_id, offset), (wrap_serialize ti), cs)) :: (l @ collected) in
 	  collect_itbls (next_id, plan_id) remaining_itbls l
     | [] ->
 	(plan_id, collected)
@@ -919,4 +919,5 @@ let compile e =
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
   let Ti (_, cs, itbls, _) as ti = compile_expression AEnv.empty loop e in
+    Debug.print (Cs.print cs);
     (wrap_serialize ti), cs, snd (collect_itbls (1, 0) itbls [])

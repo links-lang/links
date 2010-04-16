@@ -1,6 +1,8 @@
 (*pp deriving *)
 open Utility
 
+let used_database = ref None
+
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `GroupWith of (Var.var * t) * t
@@ -45,6 +47,7 @@ let unbox_string =
 
    Currently this assumes that at most one database is used.
 *)
+(*
 let used_database v : Value.database option =
   let rec generators =
     function
@@ -73,6 +76,7 @@ let used_database v : Value.database option =
     match v with
       | `Append vs -> comprehensions vs
       | v -> used v
+*)
 
 module S =
 struct
@@ -234,7 +238,9 @@ struct
       | `Int i -> `Constant (`Int i)
       | `Char c -> `Constant (`Char c)
       | `Float f -> `Constant (`Float f)
-      | `Table t -> `Table t 
+      | `Table (((db, _), _, _) as t) -> 
+	  used_database := Some db;
+	  `Table t 
       | `List vs ->
           `Append (List.map (fun v -> `Singleton (expression_of_value v)) vs)
       | `Record fields ->

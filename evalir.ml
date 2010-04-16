@@ -138,7 +138,7 @@ module Eval = struct
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
             | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
         end
-    | `Inject (label, v, t) -> `Variant (label, value env v)
+    | `Inject (label, v, _t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
     | `XmlNode (tag, attrs, children) ->
@@ -164,7 +164,7 @@ module Eval = struct
           ) with
             | TopLevel (_, v) -> atomic := false; v
         end
-    | `Coerce (v, t) -> value env v
+    | `Coerce (v, _t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
@@ -198,7 +198,7 @@ module Eval = struct
                Proc.send_message msg pid;
                Proc.awaken pid
              with
-                 Proc.UnknownProcessID pid -> 
+                 Proc.UnknownProcessID _ -> 
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
@@ -255,7 +255,7 @@ module Eval = struct
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
                 tail_computation env cont' tc
-          | `Fun ((f, _) as fb, (_, args, body), `Client) ->
+          | `Fun ((f, _) as fb, (_, _args, _body), `Client) ->
               let env' = Value.bind f (`ClientFunction
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
@@ -349,36 +349,36 @@ module Eval = struct
 	      Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
 	      let (exptree, imptype) = Query2.compile env (range, e) in
 	      let algebra_bundle = CompileQuery.compile exptree in
-		(*
-		let oc = open_out "plan.xml" in
-		let o () = Algebra_export.export_plan_bundle (`Channel oc) imptype algebra_bundle in
-		  Utility.apply o () ~finally:close_out oc;
-		*)
-		let xmlbuf = Buffer.create 1024 in
-		  Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
-		   let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
-		   let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
-		     ignore sql_bundle;
-		     Debug.print ("pfopt:\n" ^ xml_opt);
-		     Debug.print ("pfsql:\n" ^ sql_bundle);
-		     exit 0
-	    end;
-	  match Query.compile env (range, e) with
-            | None -> computation env cont e
-            | Some (db, q, t) ->
-                let (fieldMap, _), _ = 
-                  Types.unwrap_row(TypeUtils.extract_row t) in
-                let fields =
+	      let xmlbuf = Buffer.create 1024 in
+		Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
+		let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
+		let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
+		let o = open_out "plan.xml" in
+		  output_string o sql_bundle;
+		  close_out o;
+		  match !Query2.used_database with
+		    | Some db -> 
+			let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
+			  Heapresult.handle_table t table
+		    | None -> exit 0
+	    end
+	  else
+	    match Query.compile env (range, e) with
+              | None -> computation env cont e
+              | Some (db, q, t) ->
+                  let (fieldMap, _), _ = 
+                    Types.unwrap_row(TypeUtils.extract_row t) in
+                  let fields =
                     StringMap.fold
                       (fun name t fields ->
                          match t with
                            | `Present, t -> (name, t)::fields
                            | `Absent, _ -> assert false
-                           | `Var _, t -> assert false)
+                           | `Var _, _t -> assert false)
                       fieldMap
                       []
-                in
-                  Database.execute_select fields q db
+                  in
+                    Database.execute_select fields q db
         in
           apply_cont cont env result
     | `Update ((xb, source), where, body) ->

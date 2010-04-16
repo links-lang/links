@@ -87,9 +87,11 @@ class pg_dbresult (pgresult:Postgresql.result) = object
     | Fatal_error     -> `QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
         
   method nfields : int = original#nfields
+  method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
   method error : string = original#error
+  method getvalue : int -> int -> string = original#getvalue
 end
 
 class pg_database host port dbname user password = object(self)

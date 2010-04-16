@@ -410,7 +410,7 @@ let export_plan_bundle out_dest implementation_type (root_dag, root_cs, sub_dags
       export_plan out root_dag;
       out `El_end;
       List.iter
-	(fun ((plan_id, ref_id, col_id), dag, cs) ->
+	(fun (plan_id, ((ref_id, col_id), dag, cs)) ->
 	   let attrs = [("id", (string_of_int plan_id)); 
 			("idref", (string_of_int ref_id)); 
 			("colref", (string_of_int col_id))]
