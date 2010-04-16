@@ -10,13 +10,14 @@
 ** DONE make for-comprehensions with orderbys work again
 ** DONE make suse (inner table slicing) configurable
 
+** DONE implement a database backend in line with ferrydb
+*** DONE take a sql plan bundle from pfsql and execute it via the ocaml postgresql bindings
+*** DONE collect the results of the individual sql queries
+*** DONE reconstruct the links heap result as a Value.t according to the type of the query block
+
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
 *** TODO compile comparisons on records by comparing field by field
 *** TODO restrict type of comparison operators so that comparisons on lists are not allowed in query blocks
-
-** TODO Query2: sanity checks for record fields
-*** TODO check that extended fields are not already present for `Extend nodes.
-*** TODO Also, implement a similar sanity check for `Erase and `Project.
 
 ** TODO Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
 ** TODO Extend the Links syntax for comprehensions with a groupby statement in line with ferry/haskell.
@@ -52,11 +53,11 @@
 *** TODO XML 
 *** TODO Variant tags
 
-
 ** TODO enable compilation of for-comprehensions with orderby-clauses again.
 
-** TODO implement a database backend in line with ferrydb
-*** TODO take a sql plan bundle from pfsql and execute it via the ocaml postgresql bindings
-*** TODO collect the results of the individual sql queries
-*** TODO reconstruct the links heap result as a Value.t according to the type of the query block
+** TODO clean up, restructure and document the code (especially Heapresult)
+** TODO write systematic test cases for the algebra compilation and the value reconstruction
+
+** TODO known defects
+*** TODO links-examples/empty.links as of 93bfc4554d
 
