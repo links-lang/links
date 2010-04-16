@@ -25,7 +25,7 @@ let rec out_cs out cs =
       xml_attributes
   in
   let tag_attr name attributes = ("", name), (attr_list attributes) in
-  let prop1 n = tag_attr "property" [("name", n)] in
+  let prop1 n = tag_attr "property" [("name", n); ("value", "")] in
   let prop2 n v = tag_attr "property" [("name", n); ("value", v)] in
   let csentry = function
     | Offset (i, typ) ->
