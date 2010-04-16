@@ -46,6 +46,11 @@ module Eval = struct
 
   let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
+  let output_plan plan fname =
+    let o = open_out fname in
+      output_string o plan;
+      close_out o
+
   (** {0 Scheduling} *)
 
   (** {1 Scheduler parameters} *)
@@ -351,9 +356,9 @@ module Eval = struct
 	    Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
 	    let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
 	    let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
-	    let o = open_out "plan.xml" in
-	      output_string o sql_bundle;
-	      close_out o;
+	      output_plan (Buffer.contents xmlbuf) "plan.xml";
+	      output_plan xml_opt "plan_opt.xml";
+	      output_plan sql_bundle "plan_opt_sql.xml";
 	      match !Query2.used_database with
 		| Some db -> 
 		    let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in

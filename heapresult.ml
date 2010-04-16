@@ -296,13 +296,6 @@ and handle_inner_table t surrogate_key offset (Table ((item, iter, nr_tuples), c
   Debug.print "handle_inner_table";
   Debug.print (Cs.print cs);
   Debug.print (Types.string_of_datatype t);
-  (*
-  let rec skip_forward offset = 
-    if ((iter offset) = surrogate_key) || (offset = nr_tuples) then
-      (offset - 1)
-    else
-      skip_forward (offset + 1)
-*)
   match TypeUtils.concrete_type t with
     | t when (Types.is_base_type t || is_record_type t) ->
 	failwith ("Heapresult.handle_inner_table: inner table must have list type, not " ^

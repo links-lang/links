@@ -1,16 +1,15 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var teams = table "players" with (team : String, name : String, pos : String, eff : Int) from db;
+var players_table = table "players" with (team : String, name : String, pos : String, eff : Int) from db;
 
 query {
-	for (t <- groupWith((fun (p) { p.team }), asList(teams))) {
+	for (t <- groupWith((fun (p) { p.team }), asList(players_table))) {
 		var posn = groupWith((fun (p) { p.pos }), t.2);
 		fun sort(l) {
 			for (r <- l) orderby (r.name) [r]
 		}
 		[(team = t.1,
-		centers = sort(for (p <- posn) where (p.1 == "C") p.2),
-		forwards = sort(for (p <- posn) where (p.1 == "F") p.2),
-		guards = sort(for (p <- posn) where (p.1 == "G") p.2))]
+				centers = sort(for (p <- posn) where (p.1 == "C") p.2),
+				forwards = sort(for (p <- posn) where (p.1 == "F") p.2),
+				guards = sort(for (p <- posn) where (p.1 == "G") p.2))]
 	}
 }
-
