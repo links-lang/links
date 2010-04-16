@@ -14,18 +14,7 @@ module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : Types.tycon_environment =
-  List.fold_left 
-    AliasEnv.bind
-    AliasEnv.empty
-    [
-      "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)]));
-      "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
-      "Event"   , `Abstract Types.event;
-      "List"    , `Abstract Types.list;
-      "Process" , `Abstract Types.process;
-      "DomNode" , `Abstract Types.dom_node;
-    ]
+let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
   AliasEnv.bind alias_env
@@ -612,6 +601,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "domGetTagNameFromRef",
   (`Client, datatype "(DomNode) ~> String",
+  IMPURE);
+
+  "domHasAttribute",
+  (`Client, datatype "(DomNode, String) ~> Bool",
   IMPURE);
 
   "domGetAttributeFromRef",
