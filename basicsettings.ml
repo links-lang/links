@@ -54,6 +54,7 @@ module Ferry = struct
   let output_algebra = Settings.add_bool("output_algebra", false, `User)
   let relax_query_type_constraint = Settings.add_bool("relax_query_type_constraint", false, `User)
   let slice_inner_tables = Settings.add_bool("slice_inner_tables", false, `User)
+  let pf_path = Settings.add_string("pf_path", "/Users/ulricha/dev/pathfinder/bin/", `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module

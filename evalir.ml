@@ -349,8 +349,18 @@ module Eval = struct
 	      Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
 	      let (exptree, imptype) = Query2.compile env (range, e) in
 	      let algebra_bundle = CompileQuery.compile exptree in
-		Algebra_export.export_plan_bundle "plan.xml" imptype algebra_bundle;
-		exit 0
+		(*
+		let oc = open_out "plan.xml" in
+		let o () = Algebra_export.export_plan_bundle (`Channel oc) imptype algebra_bundle in
+		  Utility.apply o () ~finally:close_out oc;
+		*)
+		let xmlbuf = Buffer.create 1024 in
+		  Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
+		   let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
+		   let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
+		     Debug.print ("pfopt:\n" ^ xml_opt);
+		     Debug.print ("pfsql:\n" ^ sql_bundle);
+		     exit 0
 	    end;
 	  match Query.compile env (range, e) with
             | None -> computation env cont e

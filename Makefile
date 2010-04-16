@@ -111,6 +111,7 @@ SOURCES = $(OPC)                		\
           $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
 	  irtodot.ml				\
+	  pf_toolchain.ml			\
           query.ml                              \
 	  algebra.ml				\
 	  cs.ml					\

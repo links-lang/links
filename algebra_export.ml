@@ -350,80 +350,76 @@ let out_binary_op out op id left_child_id right_child_id =
       | A.Cross ->
 	  n "cross" (fun () -> ())
 
-  let rec out_dag (out, node, visited) =
-    match !node with
-      | A.Dag.NullaryNode (op, id) ->
-	  let visited = IntSet.add id visited in
-	    out_nullary_op out op id;
+let rec out_dag (out, node, visited) =
+  match !node with
+    | A.Dag.NullaryNode (op, id) ->
+	let visited = IntSet.add id visited in
+	  out_nullary_op out op id;
+	  visited
+    | A.Dag.UnaryNode (op, id, child) ->
+	let child_id = A.Dag.id_of_node !child in
+	let visited = IntSet.add id visited in
+	let visited = 
+	  if not (IntSet.mem child_id visited) then
+	    out_dag (out, child, visited)
+	  else
 	    visited
-      | A.Dag.UnaryNode (op, id, child) ->
-	  let child_id = A.Dag.id_of_node !child in
-	  let visited = IntSet.add id visited in
-	  let visited = 
-	    if not (IntSet.mem child_id visited) then
-	      out_dag (out, child, visited)
-	    else
-	      visited
-	  in
-	    out_unary_op out op id child_id;
+	in
+	  out_unary_op out op id child_id;
+	  visited
+    | A.Dag.BinaryNode (op, id, lchild, rchild) ->
+	let lchild_id = A.Dag.id_of_node !lchild in
+	let rchild_id = A.Dag.id_of_node !rchild in
+	let visited = IntSet.add id visited in
+	let visited =
+	  if not (IntSet.mem lchild_id visited) then
+	    out_dag (out, lchild, visited)
+	  else
 	    visited
-      | A.Dag.BinaryNode (op, id, lchild, rchild) ->
-	  let lchild_id = A.Dag.id_of_node !lchild in
-	  let rchild_id = A.Dag.id_of_node !rchild in
-	  let visited = IntSet.add id visited in
-	  let visited =
-	    if not (IntSet.mem lchild_id visited) then
-	      out_dag (out, lchild, visited)
-	    else
-	      visited
-	  in
-	  let visited =
-	    if not (IntSet.mem rchild_id visited) then
-	      out_dag (out, rchild, visited)
-	    else 
-	      visited
-	  in
-	    out_binary_op out op id lchild_id rchild_id;
+	in
+	let visited =
+	  if not (IntSet.mem rchild_id visited) then
+	    out_dag (out, rchild, visited)
+	  else 
 	    visited
+	in
+	  out_binary_op out op id lchild_id rchild_id;
+	  visited
 
-  let export_plan out dag =
-    let dag = ref (A.Dag.prune_empty !dag) in
-      out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
-      ignore (out_dag (out, dag, IntSet.empty));
-      out `El_end
+let export_plan out dag =
+  let dag = ref (A.Dag.prune_empty !dag) in
+    out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
+    ignore (out_dag (out, dag, IntSet.empty));
+    out `El_end
 
-  let export_plan_bundle fname implementation_type (root_dag, root_cs, sub_dags) =
-    let oc = open_out fname in
-    let o = Xmlm.make_output ~nl:true ~indent:(Some 2) (`Channel oc) in
-    let out = Xmlm.output o in
-    let wrap () =
-      out (`Dtd None);
-      out (`El_start (tag "query_plan_bundle"));
-      out (`El_start (tag_attr "query_plan" [("id", "0")]));
-      out (`El_start (tag "properties"));
-      let resulttype = 
-	match implementation_type with
-	  | `Atom -> "TUPLE"
-	  | `List -> "LIST"
-      in
-	out_el out "property" [("name", "overallResultType"); ("value", resulttype)];
-	Cs.out_cs out root_cs;
-	out `El_end;
-	export_plan out root_dag;
-	out `El_end;
-	List.iter
-	  (fun ((plan_id, ref_id, col_id), dag, cs) ->
-	     let attrs = [("id", (string_of_int plan_id)); 
-			  ("idref", (string_of_int ref_id)); 
-			  ("colref", (string_of_int col_id))]
-	     in
-	       out (`El_start (tag_attr "query_plan" attrs));
-	       out (`El_start (tag "properties"));
-	       Cs.out_cs out cs;
-	       out `El_end;
-	       export_plan out dag;
-	       out `El_end)
-	  sub_dags;
-	out `El_end
+let export_plan_bundle out_dest implementation_type (root_dag, root_cs, sub_dags) =
+  let o = Xmlm.make_output ~nl:true ~indent:(Some 2) out_dest in
+  let out = Xmlm.output o in
+    out (`Dtd None);
+    out (`El_start (tag "query_plan_bundle"));
+    out (`El_start (tag_attr "query_plan" [("id", "0")]));
+    out (`El_start (tag "properties"));
+    let resulttype = 
+      match implementation_type with
+	| `Atom -> "TUPLE"
+	| `List -> "LIST"
     in
-      apply wrap () ~finally:close_out oc
+      out_el out "property" [("name", "overallResultType"); ("value", resulttype)];
+      Cs.out_cs out root_cs;
+      out `El_end;
+      export_plan out root_dag;
+      out `El_end;
+      List.iter
+	(fun ((plan_id, ref_id, col_id), dag, cs) ->
+	   let attrs = [("id", (string_of_int plan_id)); 
+			("idref", (string_of_int ref_id)); 
+			("colref", (string_of_int col_id))]
+	   in
+	     out (`El_start (tag_attr "query_plan" attrs));
+	     out (`El_start (tag "properties"));
+	     Cs.out_cs out cs;
+	     out `El_end;
+	     export_plan out dag;
+	     out `El_end)
+	sub_dags;
+      out `El_end
