@@ -362,7 +362,7 @@ module Eval = struct
 	      match !Query2.used_database with
 		| Some db -> 
 		    let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
-		      Heapresult.handle_table t table
+		      Heapresult.handle_table table
 		| None -> computation env cont e
         in
           apply_cont cont env result

@@ -27,6 +27,23 @@ let lookup_attr attributes name =
   let p ((_, n), _) = n = name in
     snd (List.find p attributes)
 
+let find_property_value elements name =
+  let p = function
+    | E (((_, "property"), attrs), _) ->
+	List.exists 
+	  (fun ((_, attr_name), propname) -> 
+	     propname = name
+	      && attr_name = "name") 
+	  attrs
+    | _ -> false
+  in
+    try 
+      match List.find p elements with
+	| E (((_, "property"), attrs), _) ->
+	    snd (List.find (fun ((_, attr_name), _) -> attr_name = "value") attrs)
+	|_ -> assert false
+    with NotFound _ -> assert false
+
 let collect_column = function
   | E (((_, "column"), attrs), []) ->
       let name = lookup_attr attrs "name" in
@@ -62,13 +79,28 @@ let collect_query = function
   | E (((_, "query"), _), [D query]) -> query
   | _ -> assert false
 
+let collect_properties = function
+  | E (((_, "properties"), _), childs) ->
+      find_property_value childs "overallResultType"
+  | _ -> assert false
+
+let implementation_type_of_string = function
+  | "LIST" -> `List
+  | "TUPLE" -> `Atom
+  | _ -> assert false
+
 let collect_plan = function
   | E (((_, "query_plan"), attrs), childs) ->
       (try 
 	let id = int_of_string (lookup_attr attrs "id") in
 	let schema = collect_schema (find_el childs "schema") in
 	let query = collect_query (find_el childs "query") in
-	  (id, (schema, query))
+	  if id = 0 then
+	    let result_type = collect_properties (find_el childs "properties") in
+	    let itype = implementation_type_of_string result_type in
+	      (id, (schema, query, Some itype))
+	  else
+	    (id, (schema, query, None))
       with NotFound _ -> 
 	Debug.print "List.assoc";
 	assert false)
@@ -89,7 +121,14 @@ let rec is_record_type t =
     | _ -> false
 
 type accessor_functions = (int -> int -> string) * (int -> string) * int
-type table_struct = Table of (accessor_functions * Cs.cs * ((int * table_struct) list))
+type implementation_type = Query2.Annotate.implementation_type
+type itbls = (int * table_struct) list
+and table_struct = Table of (accessor_functions * Cs.cs * itbls * implementation_type option)
+
+type field_name = string
+type atom_type =
+  [ `Primitive of Algebra.column_type
+  | `Record of field_name list ]
 
 (* This function creates functions which encapsulate the access to one table's 
    item and iter fields. 
@@ -152,22 +191,22 @@ let execute_query database query =
                                 ": " ^ msg))
       | _ -> dbresult
 
-let reconstruct_itbls root_acc root_cs result_bundle : table_struct =
+let reconstruct_itbls root_acc root_cs root_result_type result_bundle : table_struct =
   let table_map = 
     List.fold_left
-      (fun m (id, _, acc, _, cs) ->
-	 IntMap.add id (Table (acc, cs, [])) m)
+      (fun m (id, _, acc, _, cs, result_type) ->
+	 IntMap.add id (Table (acc, cs, [], result_type)) m)
       IntMap.empty
       result_bundle
   in
-  let table_map = IntMap.add 0 (Table (root_acc, root_cs, [])) table_map in
+  let table_map = IntMap.add 0 (Table (root_acc, root_cs, [], root_result_type)) table_map in
   let table_map_itbls =
     List.fold_left
-      (fun m (id, (refid, refcol), _, _, _) ->
-	 let Table (acc, cs, itbls) = IntMap.find refid m in
+      (fun m (id, (refid, refcol), _, _, _, _) ->
+	 let Table (acc, cs, itbls, result_type) = IntMap.find refid m in
 	 let inner = IntMap.find id m in
 	   Debug.f "itbl %d.%d -> %d\n" refid refcol id;
-	   let m = IntMap.add refid (Table (acc, cs, ((refcol, inner) :: itbls))) m in
+	   let m = IntMap.add refid (Table (acc, cs, ((refcol, inner) :: itbls), result_type)) m in
 	     IntMap.remove id m)
       table_map
       result_bundle
@@ -182,14 +221,14 @@ let transform_and_execute database xml_sql_bundle algebra_bundle =
   let rec merge sql_bundle =
     match sql_bundle with
       | (0, _) :: sql_bundle -> merge sql_bundle
-      | (id, (schema, query)) :: sql_bundle ->
+      | (id, (schema, query, result_type)) :: sql_bundle ->
 	  (try
 	    let (refs, _, cs) = List.assoc id sub_algebra_plans in
-	      (id, refs, query, schema, cs) :: (merge sql_bundle)
+	      (id, refs, query, schema, cs, result_type) :: (merge sql_bundle)
 	  with NotFound _ -> assert false)
       | [] -> []
   in
-  let (root_schema, root_query) =
+  let (root_schema, root_query, root_result_type) =
     try
       List.assoc 0 sql_plans
     with Not_found -> assert false
@@ -197,50 +236,41 @@ let transform_and_execute database xml_sql_bundle algebra_bundle =
   let plan_bundle = merge sql_plans in
   let result_bundle = 
     List.map
-      (fun (id, refs, query, schema, cs) ->
+      (fun (id, refs, query, schema, cs, result_type) ->
 	 let dbresult = execute_query database query in
-	   (id, refs, (table_access_functions id schema dbresult), schema, cs))
+	   (id, refs, (table_access_functions id schema dbresult), schema, cs, result_type))
       plan_bundle
   in
   let root_result = execute_query database root_query in
   let root_access = table_access_functions 0 root_schema root_result in
-    reconstruct_itbls root_access root_cs result_bundle
+    reconstruct_itbls root_access root_cs root_result_type result_bundle
 
-let mk_primitive : string -> Types.datatype -> Value.t = Database.value_of_db_string 
+let mk_primitive raw_value t = 
+  match t with
+    | `IntType -> Value.box_int (Num.num_of_string raw_value)
+    | `StrType -> Value.string_as_charlist raw_value
+    | `BoolType -> Value.box_bool (raw_value = "true")
+    | `CharType -> Value.box_char (String.get raw_value 0)
+    | `FloatType -> (if raw_value = "" then Value.box_float 0.00      (* HACK HACK *)
+                     else Value.box_float (float_of_string raw_value))
+    | `NatType -> failwith "Heapresult.mk_primitive: nat is not a Links type"
+    | `Surrogate -> assert false 
 
-let rec mk_record itbl_offsets record_type cs (item : int -> string) itbls =
-  let fieldspecs = 
-    match TypeUtils.concrete_type record_type with
-      | `Record row ->
-	  let ((field_env, _), _) = Types.unwrap_row row in
-	    field_env
-      | _ -> failwith "mk_record called for non-record type"
-  in
-   let mk_field field_name (_, field_type) (next_offsets, record) =
+let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
+   let mk_field (next_offsets, record) field_name =
      let field_cs = Cs.lookup_record_field cs field_name in
        Debug.print ("mk_record " ^ field_name);
-     let (new_offsets, value) = handle_row next_offsets field_type item field_cs itbls in
+     let (new_offsets, value) = handle_row next_offsets item field_cs itbls in
        (new_offsets, ((field_name, value) :: record))
    in
-   let (new_offsets, values) = FieldEnv.fold mk_field fieldspecs (itbl_offsets, []) in
+   let (new_offsets, values) = List.fold_left mk_field (itbl_offsets, []) field_names in
      (new_offsets, `Record values)
 
-and handle_row itbl_offsets typ item cs itbls = 
+and handle_row itbl_offsets item cs itbls = 
   Debug.print "handle_row";
-  Debug.print (Types.string_of_datatype typ);
-  match TypeUtils.concrete_type typ with
-    | t when Types.is_base_type t -> 
-	let col =
-	  (match cs with
-	    | [Cs.Offset (i, _)] -> i
-	    | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
-	in
-	let raw_value = item col in
-	  (itbl_offsets, mk_primitive raw_value typ)
-    | `Record _ as record_type -> 
-	mk_record itbl_offsets record_type cs item itbls
-    | `Application (l, [`Type _]) as t
-	when Eq.eq Types.Abstype.eq_t l Types.list ->
+  let typ = Cs.atom_type cs in
+  match typ with
+    | `Primitive `Surrogate ->
 	let col = 
 	  (match cs with
 	     | [Cs.Offset (i, `Surrogate)] -> i
@@ -260,7 +290,7 @@ and handle_row itbl_offsets typ item cs itbls =
 	    List.assoc col itbls
 	  with NotFound _ -> assert false
 	in
-	let (next_offset, value) = handle_inner_table t (item col) offset itbl in
+	let (next_offset, value) = handle_inner_table (item col) offset itbl in
 	let new_offsets =
 	  match itbl_offsets with
 	    | Some offsets ->
@@ -269,54 +299,53 @@ and handle_row itbl_offsets typ item cs itbls =
 		Some [col, next_offset]
 	in
 	  (new_offsets, value)
-    | t -> failwith ("Heapresult.handle_row: type not supported: " ^
-		       Show.show Types.show_datatype t)
+    | `Primitive t -> 
+	let col =
+	  (match cs with
+	    | [Cs.Offset (i, _)] -> i
+	    | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
+	in
+	let raw_value = item col in
+	  (itbl_offsets, mk_primitive raw_value t)
+    | `Record field_names -> 
+	mk_record itbl_offsets field_names cs item itbls
 
-and handle_table t (Table ((item, _, nr_tuples), cs, itbls)) = 
+and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) = 
   Debug.print "handle_table";
   Debug.print (Cs.print cs);
-  match TypeUtils.concrete_type t with
-    | t when (Types.is_base_type t || is_record_type t) ->
+  let restype = match result_type with
+    | Some t -> t 
+    | None -> assert false
+  in
+  match restype with
+    | `Atom ->
 	assert (nr_tuples = 1);
-	snd (handle_row None t (item 0) cs itbls)
-    | `Application (l, [`Type element_type])
-	when Eq.eq Types.Abstype.eq_t l Types.list ->
+	snd (handle_row None (item 0) cs itbls)
+    | `List ->
 	let rec loop_tuples i row_values offsets =
 	  if i = nr_tuples then
 	    (offsets, List.rev row_values)
 	  else
-	    let (next_offsets, row_value) = handle_row offsets element_type (item i) cs itbls in
+	    let (next_offsets, row_value) = handle_row offsets (item i) cs itbls in
 	      loop_tuples (i + 1) (row_value :: row_values) next_offsets
 	in
 	  `List (snd (loop_tuples 0 [] None))
-    | t -> failwith ("Heapresult.handle_table: type not supported: " ^
-		       Show.show Types.show_datatype t)
 	
-and handle_inner_table t surrogate_key offset (Table ((item, iter, nr_tuples), cs, itbls)) =
+and handle_inner_table surrogate_key offset (Table ((item, iter, nr_tuples), cs, itbls, _)) =
   Debug.print "handle_inner_table";
   Debug.print (Cs.print cs);
-  Debug.print (Types.string_of_datatype t);
-  match TypeUtils.concrete_type t with
-    | t when (Types.is_base_type t || is_record_type t) ->
-	failwith ("Heapresult.handle_inner_table: inner table must have list type, not " ^
-		    Show.show Types.show_datatype t)	    
-    | `Application (l, [`Type element_type])
-	when Eq.eq Types.Abstype.eq_t l Types.list ->
-	let rec loop_tuples i row_values inner_offsets =
-	  if i = nr_tuples then
-	    (i - 1), (List.rev row_values)
-	  else
-	    let iter_val = iter i in
-	      if (i = nr_tuples) || (surrogate_key < iter_val) then
-		(i - 1), (List.rev row_values)
-	      else if surrogate_key = iter_val then
-		let (new_inner_offsets, row_value) = handle_row inner_offsets element_type (item i) cs itbls in
-		  loop_tuples (i + 1) (row_value :: row_values) new_inner_offsets
-	      else
-		loop_tuples (i + 1) row_values inner_offsets
-	in
-	let (next_offset, values) = loop_tuples offset [] None in
-	  (next_offset, `List values)
-    | t -> failwith ("Heapresult.handle_table: type not supported: " ^
-		       Show.show Types.show_datatype t)
-
+  let rec loop_tuples i row_values inner_offsets =
+    if i = nr_tuples then
+      (i - 1), (List.rev row_values)
+    else
+      let iter_val = iter i in
+	if (i = nr_tuples) || (surrogate_key < iter_val) then
+	  (i - 1), (List.rev row_values)
+	else if surrogate_key = iter_val then
+	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs itbls in
+	    loop_tuples (i + 1) (row_value :: row_values) new_inner_offsets
+	else
+	  loop_tuples (i + 1) row_values inner_offsets
+  in
+  let (next_offset, values) = loop_tuples offset [] None in
+    (next_offset, `List values)

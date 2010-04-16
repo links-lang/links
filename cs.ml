@@ -115,3 +115,16 @@ let record_fields cs =
 	 | Offset _ -> l)
     []
     cs
+
+let atom_type = function
+  | [(Offset (_, t))]-> `Primitive t
+  | [] -> failwith "Cs.atom_type: empty cs" 
+  | cs_entries ->
+      `Record (
+	List.map
+	  (function 
+	     | Mapping (fieldname, _) -> fieldname
+	     | Offset _ -> failwith "Cs.atom_type: toplevel offset in record cs")
+	  cs_entries)
+	     
+      
