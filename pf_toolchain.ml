@@ -21,11 +21,11 @@ let pipe_through cmd input =
       let inbuf = Buffer.create 10240 in
       let s = String.create 1024 in
 	let rec loop () =
-	  let read = Pervasives.input ic s 0 1023 in
+	  let read = Pervasives.input ic s 0 1024 in
 	    if read <> 0 then
 	      begin
-		Printf.printf "\nread %d\n%s\n" read (String.sub s 0 (read - 1));
-		Buffer.add_substring inbuf s 0 (read - 1);
+		(* Printf.printf "\nread %d\n%s\n" read (String.sub s 0 read); *)
+		Buffer.add_substring inbuf s 0 read;
 		loop ()
 	      end
 	    else

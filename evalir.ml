@@ -358,6 +358,7 @@ module Eval = struct
 		  Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
 		   let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
 		   let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
+		     ignore sql_bundle;
 		     Debug.print ("pfopt:\n" ^ xml_opt);
 		     Debug.print ("pfsql:\n" ^ sql_bundle);
 		     exit 0
