@@ -26,6 +26,7 @@ ifdef POSTGRESQL_LIBDIR
    DB_CODE    += pg_database.ml
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
+   THREADS = yes
 endif
 
 DERIVING_DIR=deriving-310
@@ -81,6 +82,7 @@ SOURCES = $(OPC)                		\
           parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
+          defaultAliases.ml                     \
           value.mli value.ml                    \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
@@ -94,11 +96,11 @@ SOURCES = $(OPC)                		\
           desugarFuns.mli desugarFuns.ml                \
           desugarProcesses.mli desugarProcesses.ml      \
           desugarInners.mli desugarInners.ml            \
-          typeSugar.mli typeSugar.ml		\
+          typeSugar.mli typeSugar.ml			\
           frontend.ml                           \
 	  dumpTypes.ml                          \
           compilePatterns.ml                    \
-          jsonparse.mly               	        \
+          jsonparse.mly                         \
           jsonlex.mll           		\
           js.ml                                 \
           json.ml                               \
@@ -121,7 +123,7 @@ SOURCES = $(OPC)                		\
 #          tests.ml                              \
 
 
-LIBS    = unix nums str $(DB_LIBS) deriving
+LIBS    = nums str $(DB_LIBS) deriving
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 

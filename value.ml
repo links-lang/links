@@ -303,7 +303,7 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
     | #primitive_value_basis as v -> v
     | `Table (db_name, table_name, t) ->
         let row =
-          match DesugarDatatypes.read ~aliases:Env.String.empty t with
+          match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
             | `Record row -> row
             | _ -> assert false in
         let driver, params = parse_db_string db_name in

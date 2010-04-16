@@ -110,7 +110,7 @@ class pg_database host port dbname user password = object(self)
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
-  method escape_string s = Postgresql.escape_string s
+  method escape_string s = connection#escape_string s
   method make_insert_query (table_name, field_names, vss) =
     "insert into " ^ table_name ^
       "("^String.concat "," field_names ^") "^

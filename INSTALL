@@ -146,7 +146,7 @@ To build Links with database support, follow these steps:
   2. If you need to link against the database libraries themselves,
      you can add these to the EXTRA_LIBDIRS line in Makefile.
      
-     For example, on MacOS X, I use this setting to include the 
+     For example, on MacOS X, this setting can be used to include the
      PostgreSQL libraries:
      
        EXTRA_LIBDIRS=/usr/local/pgsql/lib

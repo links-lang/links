@@ -686,6 +686,20 @@ database_expression:
   RETURNING VARIABLE                                           { `DBInsert ($2, [], $6, Some (`Constant (`String $8), pos())), pos() }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { `DBInsert ($2, $5, $7, Some (`Constant (`String $9), pos())), pos() }
+| INSERT exp VALUES
+  LBRACKET LPAREN RPAREN RBRACKET
+  RETURNING VARIABLE                                           { `DBInsert ($2,
+                                                                            [],
+                                                                            (`ListLit ([`RecordLit ([], None), pos()], None), pos()),
+                                                                            Some (`Constant (`String $9), pos())),
+                                                                 pos() }
+| INSERT exp VALUES
+  LBRACKET LPAREN labeled_exps RPAREN RBRACKET
+  RETURNING VARIABLE                                           { `DBInsert ($2,
+                                                                            labels $6,
+                                                                            (`ListLit ([`RecordLit ($6, None), pos()], None), pos()),
+                                                                            Some (`Constant (`String $10), pos())),
+                                                                 pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
 record_labels:

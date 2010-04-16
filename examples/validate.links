@@ -11,7 +11,7 @@ var date =
     </#>
   yields Date(day, mo);
 
-fun dateToXml((Date(d,m))) { <em>{intToXml(d)}/{intToXml(m)}</em> }
+fun dateToXml(Date(d, m)) { <em>{intToXml(d)}/{intToXml(m)}</em> }
 
 sig travelForm : Formlet(BookingInfo)
 var travelForm =
@@ -36,7 +36,7 @@ var travelForm =
 
 
 sig isBefore : (Date,Date) -> Bool
-fun isBefore(Date (day1,month1),Date (day2,month2)) {
+fun isBefore(Date (day1, month1), Date (day2, month2)) {
   month1 < month2 || (month1 == month2 && day1 < day2)
 }
 

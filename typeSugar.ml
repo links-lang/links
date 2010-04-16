@@ -1548,10 +1548,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               (no_pos needed, no_pos (`Record (needed_env, Unionfind.fresh `Closed))) in
 
             (* insert returning ... *)
-            let () =
-              opt_iter
-                (fun id ->
-                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
+            let return_type =
+              match id with
+                | None -> Types.unit_type
+                | Some id ->
+                    unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type);
+                    Types.int_type in
 
             (* insert is wild *)
             let () =
@@ -1561,7 +1563,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 unify ~handle:Gripers.insert_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
-              `DBInsert (erase into, labels, erase values, opt_map erase id), Types.unit_type
+              `DBInsert (erase into, labels, erase values, opt_map erase id), return_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat in
             let from = tc from in
