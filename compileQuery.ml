@@ -866,7 +866,6 @@ and compile_groupwith env loop v g_e e =
   in
   let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset (grpkey_col, `Surrogate)])] in
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
-    Debug.print ("cs " ^ (Cs.print cs));
     Ti(q_2, cs, itbls, dummy)
 
 and compile_expression env loop e : tblinfo =
@@ -919,5 +918,5 @@ let compile e =
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
   let Ti (_, cs, itbls, _) as ti = compile_expression AEnv.empty loop e in
-    Debug.print (Cs.print cs);
+    (* Debug.print (Cs.print cs); *)
     (wrap_serialize ti), cs, snd (collect_itbls (1, 0) itbls [])

@@ -344,41 +344,21 @@ module Eval = struct
             | Some (limit, offset) ->
                 Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
-	  if Settings.get_value Basicsettings.Ferry.output_algebra then
-	    begin
-	      Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
-	      let (exptree, imptype) = Query2.compile env (range, e) in
-	      let algebra_bundle = CompileQuery.compile exptree in
-	      let xmlbuf = Buffer.create 1024 in
-		Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
-		let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
-		let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
-		let o = open_out "plan.xml" in
-		  output_string o sql_bundle;
-		  close_out o;
-		  match !Query2.used_database with
-		    | Some db -> 
-			let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
-			  Heapresult.handle_table t table
-		    | None -> exit 0
-	    end
-	  else
-	    match Query.compile env (range, e) with
-              | None -> computation env cont e
-              | Some (db, q, t) ->
-                  let (fieldMap, _), _ = 
-                    Types.unwrap_row(TypeUtils.extract_row t) in
-                  let fields =
-                    StringMap.fold
-                      (fun name t fields ->
-                         match t with
-                           | `Present, t -> (name, t)::fields
-                           | `Absent, _ -> assert false
-                           | `Var _, _t -> assert false)
-                      fieldMap
-                      []
-                  in
-                    Database.execute_select fields q db
+	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
+	  let (exptree, imptype) = Query2.compile env (range, e) in
+	  let algebra_bundle = CompileQuery.compile exptree in
+	  let xmlbuf = Buffer.create 1024 in
+	    Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
+	    let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
+	    let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
+	    let o = open_out "plan.xml" in
+	      output_string o sql_bundle;
+	      close_out o;
+	      match !Query2.used_database with
+		| Some db -> 
+		    let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
+		      Heapresult.handle_table t table
+		| None -> computation env cont e
         in
           apply_cont cont env result
     | `Update ((xb, source), where, body) ->
