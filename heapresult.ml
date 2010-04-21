@@ -102,7 +102,6 @@ let collect_plan = function
 	  else
 	    (id, (schema, query, None))
       with NotFound _ -> 
-	Debug.print "List.assoc";
 	assert false)
   | _ -> assert false
 
@@ -135,7 +134,7 @@ type atom_type =
    offsets_and_schema_names: maps Cs offsets to schema names from the XML plan bundle
    iter_schema_name: schema name for the iter column from the XML plan bundle.
    dbresult: representation of the table to be encapsulated *)
-let table_access_functions id (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
+let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
 (*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
@@ -164,21 +163,14 @@ let table_access_functions id (iter_schema_name, offsets_and_schema_names) dbval
     try 
       assert (row < dbvalue#ntuples);
       let field = List.assoc offset offsets_to_fields in
-	(* Debug.f "access table %d.%d (offset %d)" id field offset; *)
 	if field >= dbvalue#nfields then
-	  begin
-	    Debug.print (sprintf "want %d have %d\n" offset dbvalue#nfields);
-	    assert (false)
-	  end;
+	  assert (false);
 	dbvalue#getvalue row field
     with Not_found -> raise (ItemAccessError offset)
   in
   let iter row =
     if (row >= dbvalue#ntuples) then
-      begin
-	Debug.f "access row %d.%d (have %d)" id row dbvalue#ntuples;
-	assert (false)
-      end;
+	assert (false);
     dbvalue#getvalue row iter_field
   in
     (item, iter, dbvalue#ntuples)
@@ -205,7 +197,6 @@ let reconstruct_itbls root_acc root_cs root_result_type result_bundle : table_st
       (fun m (id, (refid, refcol), _, _, _, _) ->
 	 let Table (acc, cs, itbls, result_type) = IntMap.find refid m in
 	 let inner = IntMap.find id m in
-	   Debug.f "itbl %d.%d -> %d\n" refid refcol id;
 	   let m = IntMap.add refid (Table (acc, cs, ((refcol, inner) :: itbls), result_type)) m in
 	     IntMap.remove id m)
       table_map
@@ -237,12 +228,13 @@ let transform_and_execute database xml_sql_bundle algebra_bundle =
   let result_bundle = 
     List.map
       (fun (id, refs, query, schema, cs, result_type) ->
+	 Debug.print (">>>> Executing query\n" ^ query);
 	 let dbresult = execute_query database query in
-	   (id, refs, (table_access_functions id schema dbresult), schema, cs, result_type))
+	   (id, refs, (table_access_functions schema dbresult), schema, cs, result_type))
       plan_bundle
   in
   let root_result = execute_query database root_query in
-  let root_access = table_access_functions 0 root_schema root_result in
+  let root_access = table_access_functions root_schema root_result in
     reconstruct_itbls root_access root_cs root_result_type result_bundle
 
 let mk_primitive raw_value t = 
@@ -312,7 +304,7 @@ and handle_row itbl_offsets item cs itbls =
 	mk_record itbl_offsets field_names cs item itbls
 
 and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) = 
-  Debug.print "handle_table";
+  (* Debug.print "handle_table"; *)
   (* Debug.print (Cs.print cs); *)
   let restype = match result_type with
     | Some t -> t 
@@ -333,7 +325,7 @@ and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) =
 	  `List (snd (loop_tuples 0 [] None))
 	
 and handle_inner_table surrogate_key offset (Table ((item, iter, nr_tuples), cs, itbls, _)) =
-  Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples;
+  (* Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples; *)
   (* Debug.print (Cs.print cs); *)
   let rec loop_tuples i row_values inner_offsets =
     if i = nr_tuples then
