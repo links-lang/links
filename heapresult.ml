@@ -121,7 +121,7 @@ let rec is_record_type t =
     | _ -> false
 
 type accessor_functions = (int -> int -> string) * (int -> string) * int
-type implementation_type = Query2.Annotate.implementation_type
+type implementation_type = [`Atom | `List] 
 type itbls = (int * table_struct) list
 and table_struct = Table of (accessor_functions * Cs.cs * itbls * implementation_type option)
 
@@ -138,8 +138,8 @@ type atom_type =
 let table_access_functions id (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-    Debug.print "";
+(*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+    Debug.print ""; *)
   let find_field col_name = 
     try
       let startswith s1 s2 = 
@@ -158,13 +158,13 @@ let table_access_functions id (iter_schema_name, offsets_and_schema_names) dbval
 	 (offset, find_field schema_name))
       offsets_and_schema_names
   in
-  let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in
-  Debug.print (mapstrcat " " (fun x -> x) foo);   
+(*  let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+  Debug.print (mapstrcat " " (fun x -> x) foo);  *)
   let item row offset = 
     try 
       assert (row < dbvalue#ntuples);
       let field = List.assoc offset offsets_to_fields in
-	Debug.f "access table %d.%d (offset %d)" id field offset;
+	(* Debug.f "access table %d.%d (offset %d)" id field offset; *)
 	if field >= dbvalue#nfields then
 	  begin
 	    Debug.print (sprintf "want %d have %d\n" offset dbvalue#nfields);
@@ -259,7 +259,7 @@ let mk_primitive raw_value t =
 let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
    let mk_field (next_offsets, record) field_name =
      let field_cs = Cs.lookup_record_field cs field_name in
-       Debug.print ("mk_record " ^ field_name);
+       (* Debug.print ("mk_record " ^ field_name); *)
      let (new_offsets, value) = handle_row next_offsets item field_cs itbls in
        (new_offsets, ((field_name, value) :: record))
    in
@@ -267,7 +267,7 @@ let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
      (new_offsets, `Record values)
 
 and handle_row itbl_offsets item cs itbls = 
-  Debug.print "handle_row";
+  (* Debug.print "handle_row"; *)
   let typ = Cs.atom_type cs in
   match typ with
     | `Primitive `Surrogate ->
@@ -290,7 +290,8 @@ and handle_row itbl_offsets item cs itbls =
 	    List.assoc col itbls
 	  with NotFound _ -> assert false
 	in
-	let (next_offset, value) = handle_inner_table (item col) offset itbl in
+	let surrogate_key = int_of_string (item col) in
+	let (next_offset, value) = handle_inner_table surrogate_key offset itbl in
 	let new_offsets =
 	  match itbl_offsets with
 	    | Some offsets ->
@@ -312,7 +313,7 @@ and handle_row itbl_offsets item cs itbls =
 
 and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) = 
   Debug.print "handle_table";
-  Debug.print (Cs.print cs);
+  (* Debug.print (Cs.print cs); *)
   let restype = match result_type with
     | Some t -> t 
     | None -> assert false
@@ -332,14 +333,14 @@ and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) =
 	  `List (snd (loop_tuples 0 [] None))
 	
 and handle_inner_table surrogate_key offset (Table ((item, iter, nr_tuples), cs, itbls, _)) =
-  Debug.print "handle_inner_table";
-  Debug.print (Cs.print cs);
+  Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples;
+  (* Debug.print (Cs.print cs); *)
   let rec loop_tuples i row_values inner_offsets =
     if i = nr_tuples then
       (i - 1), (List.rev row_values)
     else
-      let iter_val = iter i in
-	if (i = nr_tuples) || (surrogate_key < iter_val) then
+      let iter_val = int_of_string (iter i) in
+	if surrogate_key < iter_val then
 	  (i - 1), (List.rev row_values)
 	else if surrogate_key = iter_val then
 	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs itbls in

@@ -1,0 +1,30 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) from db;
+
+fun rosters(players) {
+	query {
+		for (t <- groupWith((fun (p) { p.team }), asList(players))) {
+			var posn = groupWith((fun (p) { p.pos }), t.2);
+			[(team = t.1,
+					centers = for (p <- posn) where (p.1 == "C") p.2,
+					forwards = for (p <- posn) where (p.1 == "F") p.2,
+					guards = for (p <- posn) where (p.1 == "G") p.2)]
+		}
+	}
+}
+
+fun print_list(l) {
+	fold_left(fun (u, x) { print(x) }, (), l)
+}
+
+fun print_team(r) {
+	print("\nteam " ++ r.team);
+	print("\n>>> centers:\n");
+	print_list(map(fun (l) { intToString(l.id) }, r.centers)); 
+	print("\n>>> forwards:\n");
+	print_list(map(fun (l) { intToString(l.id) }, r.forwards)); 
+	print("\n>>> guards:\n");
+	print_list(map(fun (l) { intToString(l.id) }, r.guards)); 
+}
+
+map(fun (r) { print_team(r) }, rosters(players_table))
