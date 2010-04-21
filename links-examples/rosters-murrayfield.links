@@ -1,0 +1,52 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (team : String, name : String, pos : String, eff : Int) from db;
+
+fun member(e, l) {
+	switch (l) {
+		case x :: xs ->
+			if (x == e) 
+				true
+			else
+				member(e, xs)
+		case [] ->
+			false
+	}
+}
+
+fun distinct(l) {
+	fun distinct_1(d, x) {
+		if (member(x, d))
+			d
+		else	
+			x :: d
+	}
+	reverse(fold_left(distinct_1, [], l))
+}
+
+fun groupBy(project, t) {
+	var keys = distinct(for (p <-- t) [(1 = project(p))]);
+	for (key <- keys)
+		[(key.1, 
+		for (p <-- t) where (project(p) == key.1) [p]
+		)]
+}
+
+fun groupBy_list(project, t) {
+	var keys = distinct(for (p <- t) [(1 = project(p))]);
+	for (key <- keys)
+		[(key.1, 
+		for (p <- t) where (project(p) == key.1) [p]
+		)]
+}
+
+fun rosters(players) {
+	for (t <- groupBy(fun (p) { p.team }, players)) {
+		var posn = groupBy_list(fun (p) { p.pos }, t.2);
+		[(team = t.1,
+		  centers = for (p <- posn) where (p.1 == "C") p.2,
+		  forwards = for (p <- posn) where (p.1 == "F") p.2,
+		  guards = for (p <- posn) where (p.1 == "G") p.2)]
+	}
+}
+
+rosters(players_table)
