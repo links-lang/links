@@ -20,7 +20,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\| |   /  \\  \\
  | |___| | |\\ \\ | |\\ \\ _\\  \\
  |_____|_|_| \\__|_| \\_|____/
-Welcome to Links version 0.5 (Murrayfield)", `System)
+Welcome to Links version 0.X (Murrayfield/Ferry experimental)", `System)
 
 (* (* Alternative banner designs *)
 "  _     _ __    _ _  __  ___
