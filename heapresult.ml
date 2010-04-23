@@ -228,7 +228,8 @@ let transform_and_execute database xml_sql_bundle algebra_bundle =
   let result_bundle = 
     List.map
       (fun (id, refs, query, schema, cs, result_type) ->
-	 Debug.print (">>>> Executing query\n" ^ query);
+	 if Settings.get_value Basicsettings.Ferry.print_sql_queries then
+	   Debug.print (">>>> Executing query\n" ^ query);
 	 let dbresult = execute_query database query in
 	   (id, refs, (table_access_functions schema dbresult), schema, cs, result_type))
       plan_bundle

@@ -53,6 +53,8 @@ module Ferry = struct
   let output_ir_dot = Settings.add_bool("output_ir_dot", false, `User)
   let relax_query_type_constraint = Settings.add_bool("relax_query_type_constraint", false, `User)
   let slice_inner_tables = Settings.add_bool("slice_inner_tables", false, `User)
+  let print_backend_expression = Settings.add_bool("print_backend_expression", false, `User)
+  let print_sql_queries = Settings.add_bool("print_sql_queries", false, `User)
   let pf_path = Settings.add_string("pf_path", "/Users/ulricha/dev/pathfinder/bin/", `User)
 end
 
