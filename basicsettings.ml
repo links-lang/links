@@ -55,7 +55,7 @@ module Ferry = struct
   let slice_inner_tables = Settings.add_bool("slice_inner_tables", false, `User)
   let print_backend_expression = Settings.add_bool("print_backend_expression", false, `User)
   let print_sql_queries = Settings.add_bool("print_sql_queries", false, `User)
-  let pf_path = Settings.add_string("pf_path", "/Users/ulricha/dev/pathfinder/bin/", `User)
+  let pf_path = Settings.add_string("pf_path", "/Users/ulricha/dev/pathfinder/pfcvs/bin/", `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module

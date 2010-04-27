@@ -6,121 +6,127 @@ module FieldEnv = Utility.StringMap
 
 exception Runtime_error = Errors.Runtime_error
 
-type tree = E of Xmlm.tag * tree list | D of string
+type implementation_type = [ `List | `Atom ]
 
-let in_tree i = 
-  let el tag childs = E (tag, childs)  in
-  let data d = D d in
-    Xmlm.input_doc_tree ~el ~data i
+module XmlSqlPlan : sig
+  val extract_queries : string -> (int * ((string * (int * string) list) * string * implementation_type option))
+      list
+end =
+struct
+  type tree = E of Xmlm.tag * tree list | D of string
 
-let filter_whitespace_els l =
-  List.filter (function E _ -> true | D _ -> false) l
+  let in_tree i = 
+    let el tag childs = E (tag, childs)  in
+    let data d = D d in
+      Xmlm.input_doc_tree ~el ~data i
 
-let find_el elements name =
-  let p = function
-    | E (((_, elname), _), _) -> name = elname
-    | _ -> false
-  in
-    List.find p elements
+  let filter_whitespace_els l =
+    List.filter (function E _ -> true | D _ -> false) l
 
-let lookup_attr attributes name =
-  let p ((_, n), _) = n = name in
-    snd (List.find p attributes)
+  let find_el elements name =
+    let p = function
+      | E (((_, elname), _), _) -> name = elname
+      | _ -> false
+    in
+      List.find p elements
 
-let find_property_value elements name =
-  let p = function
-    | E (((_, "property"), attrs), _) ->
-	List.exists 
-	  (fun ((_, attr_name), propname) -> 
-	     propname = name
-	      && attr_name = "name") 
-	  attrs
-    | _ -> false
-  in
-    try 
-      match List.find p elements with
-	| E (((_, "property"), attrs), _) ->
-	    snd (List.find (fun ((_, attr_name), _) -> attr_name = "value") attrs)
-	|_ -> assert false
-    with NotFound _ -> assert false
+  let lookup_attr attributes name =
+    let p ((_, n), _) = n = name in
+      snd (List.find p attributes)
 
-let collect_column = function
-  | E (((_, "column"), attrs), []) ->
-      let name = lookup_attr attrs "name" in
-      let funct = lookup_attr attrs "function" in
-	if funct = "item" then
-	  let pos = 1 + (int_of_string (lookup_attr attrs "position")) in
-	    `Item (pos, name)
-	else if funct = "iter" then
-	  `Iter (name)
-	else
-	  assert false
-  | _ -> assert false
+  let find_property_value elements name =
+    let p = function
+      | E (((_, "property"), attrs), _) ->
+	  List.exists 
+	    (fun ((_, attr_name), propname) -> 
+	       propname = name
+		&& attr_name = "name") 
+	    attrs
+      | _ -> false
+    in
+      try 
+	match List.find p elements with
+	  | E (((_, "property"), attrs), _) ->
+	      snd (List.find (fun ((_, attr_name), _) -> attr_name = "value") attrs)
+	  |_ -> assert false
+      with NotFound _ -> assert false
 
-let collect_schema = function
-  | E (((_, "schema"), _), childs) ->
-      let cols = List.map collect_column (filter_whitespace_els childs) in
-      let rec iter l = 
-	(match l with
-	   | (`Iter name) :: _ -> name
-	   | (`Item _) :: xs -> iter xs
-	   | [] -> assert false)
-      in
-      let rec item l =
-	(match l with
-	   | (`Iter _) :: xs -> item xs
-	   | (`Item (pos, name)) :: xs -> (pos, name) :: (item xs)
-	   | [] -> [])
-      in
-	(iter cols, item cols)
-  | _ -> assert false
-
-let collect_query = function
-  | E (((_, "query"), _), [D query]) -> query
-  | _ -> assert false
-
-let collect_properties = function
-  | E (((_, "properties"), _), childs) ->
-      find_property_value childs "overallResultType"
-  | _ -> assert false
-
-let implementation_type_of_string = function
-  | "LIST" -> `List
-  | "TUPLE" -> `Atom
-  | _ -> assert false
-
-let collect_plan = function
-  | E (((_, "query_plan"), attrs), childs) ->
-      (try 
-	let id = int_of_string (lookup_attr attrs "id") in
-	let schema = collect_schema (find_el childs "schema") in
-	let query = collect_query (find_el childs "query") in
-	  if id = 0 then
-	    let result_type = collect_properties (find_el childs "properties") in
-	    let itype = implementation_type_of_string result_type in
-	      (id, (schema, query, Some itype))
+  let collect_column = function
+    | E (((_, "column"), attrs), []) ->
+	let name = lookup_attr attrs "name" in
+	let funct = lookup_attr attrs "function" in
+	  if funct = "item" then
+	    let pos = 1 + (int_of_string (lookup_attr attrs "position")) in
+	      `Item (pos, name)
+	  else if funct = "iter" then
+	    `Iter (name)
 	  else
-	    (id, (schema, query, None))
-      with NotFound _ -> 
-	assert false)
-  | _ -> assert false
+	    assert false
+    | _ -> assert false
+
+  let collect_schema = function
+    | E (((_, "schema"), _), childs) ->
+	let cols = List.map collect_column (filter_whitespace_els childs) in
+	let rec iter l = 
+	  (match l with
+	     | (`Iter name) :: _ -> name
+	     | (`Item _) :: xs -> iter xs
+	     | [] -> assert false)
+	in
+	let rec item l =
+	  (match l with
+	     | (`Iter _) :: xs -> item xs
+	     | (`Item (pos, name)) :: xs -> (pos, name) :: (item xs)
+	     | [] -> [])
+	in
+	  (iter cols, item cols)
+    | _ -> assert false
+
+  let collect_query = function
+    | E (((_, "query"), _), [D query]) -> query
+    | _ -> assert false
+
+  let collect_properties = function
+    | E (((_, "properties"), _), childs) ->
+	find_property_value childs "overallResultType"
+    | _ -> assert false
+
+  let implementation_type_of_string = function
+    | "LIST" -> `List
+    | "TUPLE" -> `Atom
+    | _ -> assert false
+
+  let collect_plan = function
+    | E (((_, "query_plan"), attrs), childs) ->
+	(try 
+	   let id = int_of_string (lookup_attr attrs "id") in
+	   let schema = collect_schema (find_el childs "schema") in
+	   let query = collect_query (find_el childs "query") in
+	     if id = 0 then
+	       let result_type = collect_properties (find_el childs "properties") in
+	       let itype = implementation_type_of_string result_type in
+		 (id, (schema, query, Some itype))
+	     else
+	       (id, (schema, query, None))
+	 with NotFound _ -> 
+	   assert false)
+    | _ -> assert false
 
 
-let collect_plans = function
-  | E (((_, "query_plan_bundle"), []), childs) ->
-      List.map collect_plan (filter_whitespace_els childs)
-  | _ -> assert false
+  let collect_plans = function
+    | E (((_, "query_plan_bundle"), []), childs) ->
+	List.map collect_plan (filter_whitespace_els childs)
+    | _ -> assert false
+
+  let extract_queries xmlstring =
+    let xml_input = Xmlm.make_input (`String (0, xmlstring)) in
+      collect_plans (snd (in_tree xml_input))
+end
 
 exception ColumnMappingError of string
 exception ItemAccessError of int
 
-let rec is_record_type t = 
-  match TypeUtils.concrete_type t with
-    | `Record _ -> true
-    | _ -> false
-
 type accessor_functions = (int -> int -> string) * (int -> string) * int
-type implementation_type = [`Atom | `List] 
 type itbls = (int * table_struct) list
 and table_struct = Table of (accessor_functions * Cs.cs * itbls * implementation_type option)
 
@@ -129,16 +135,15 @@ type atom_type =
   [ `Primitive of Algebra.column_type
   | `Record of field_name list ]
 
-(* This function creates functions which encapsulate the access to one table's 
-   item and iter fields. 
-   offsets_and_schema_names: maps Cs offsets to schema names from the XML plan bundle
-   iter_schema_name: schema name for the iter column from the XML plan bundle.
-   dbresult: representation of the table to be encapsulated *)
+(* Create functions which encapsulate the access to one table's 
+   item and iter fields. *)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-(*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-    Debug.print ""; *)
+    (*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+	  Debug.print ""; *)
+  let nr_tuples = dbvalue#ntuples in
+  let nr_fields = dbvalue#nfields in
   let find_field col_name = 
     try
       let startswith s1 s2 = 
@@ -151,31 +156,32 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
       raise (ColumnMappingError col_name)
   in
   let iter_field = find_field iter_schema_name in
-  let offsets_to_fields = 
-    List.map 
-      (fun (offset, schema_name) ->
-	 (offset, find_field schema_name))
-      offsets_and_schema_names
-  in
-(*  let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-  Debug.print (mapstrcat " " (fun x -> x) foo);  *)
-  let item row offset = 
-    try 
-      assert (row < dbvalue#ntuples);
-      let field = List.assoc offset offsets_to_fields in
-	if field >= dbvalue#nfields then
-	  assert (false);
-	dbvalue#getvalue row field
-    with Not_found -> raise (ItemAccessError offset)
-  in
-  let iter row =
-    if (row >= dbvalue#ntuples) then
-	assert (false);
-    dbvalue#getvalue row iter_field
-  in
-    (item, iter, dbvalue#ntuples)
+    assert (iter_field < nr_fields);
+    let offsets_to_fields = 
+      List.map 
+	(fun (offset, schema_name) ->
+	   (offset, find_field schema_name))
+	offsets_and_schema_names
+    in
+      (*  let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+	  Debug.print (mapstrcat " " (fun x -> x) foo);  *)
+    let item row offset = 
+      try 
+	assert (row < nr_tuples);
+	let field = List.assoc offset offsets_to_fields in
+	  assert (field < nr_fields);
+	  dbvalue#getvalue row field
+      with Not_found -> raise (ItemAccessError offset)
+    in
+    let iter row =
+      assert (row < nr_tuples);
+      dbvalue#getvalue row iter_field
+    in
+      (item, iter, dbvalue#ntuples)
 
 let execute_query database query =
+  if Settings.get_value Basicsettings.Ferry.print_sql_queries then
+    Debug.print (">>>> Executing query\n" ^ query);
   let dbresult = (database#exec query) in
     match dbresult#status with
       | `QueryError msg -> 
@@ -183,6 +189,7 @@ let execute_query database query =
                                 ": " ^ msg))
       | _ -> dbresult
 
+(* reconstruct the itbls tree structure from colref/idref *)
 let reconstruct_itbls root_acc root_cs root_result_type result_bundle : table_struct =
   let table_map = 
     List.fold_left
@@ -207,8 +214,8 @@ let reconstruct_itbls root_acc root_cs root_result_type result_bundle : table_st
 
 let transform_and_execute database xml_sql_bundle algebra_bundle = 
   let (_, root_cs, sub_algebra_plans) = algebra_bundle in
-  let xml_input = Xmlm.make_input (`String (0, xml_sql_bundle)) in
-  let sql_plans = collect_plans (snd (in_tree xml_input)) in
+  let sql_plans = XmlSqlPlan.extract_queries xml_sql_bundle in
+  (* combine the sql queries with the corresponding cs component and idref/colref *)
   let rec merge sql_bundle =
     match sql_bundle with
       | (0, _) :: sql_bundle -> merge sql_bundle
@@ -228,8 +235,6 @@ let transform_and_execute database xml_sql_bundle algebra_bundle =
   let result_bundle = 
     List.map
       (fun (id, refs, query, schema, cs, result_type) ->
-	 if Settings.get_value Basicsettings.Ferry.print_sql_queries then
-	   Debug.print (">>>> Executing query\n" ^ query);
 	 let dbresult = execute_query database query in
 	   (id, refs, (table_access_functions schema dbresult), schema, cs, result_type))
       plan_bundle
@@ -320,7 +325,8 @@ and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) =
 	  if i = nr_tuples then
 	    (offsets, List.rev row_values)
 	  else
-	    let (next_offsets, row_value) = handle_row offsets (item i) cs itbls in
+	    let col_value = item i in
+	    let (next_offsets, row_value) = handle_row offsets col_value cs itbls in
 	      loop_tuples (i + 1) (row_value :: row_values) next_offsets
 	in
 	  `List (snd (loop_tuples 0 [] None))
@@ -334,7 +340,10 @@ and handle_inner_table surrogate_key offset (Table ((item, iter, nr_tuples), cs,
     else
       let iter_val = int_of_string (iter i) in
 	if surrogate_key < iter_val then
-	  (i - 1), (List.rev row_values)
+	  if i = 0 then
+	    (0, (List.rev row_values))
+	  else
+	    (i - 1), (List.rev row_values)
 	else if surrogate_key = iter_val then
 	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs itbls in
 	    loop_tuples (i + 1) (row_value :: row_values) new_inner_offsets

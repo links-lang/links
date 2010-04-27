@@ -35,9 +35,9 @@ let pipe_through cmd input =
 	  Buffer.contents inbuf
   with _ -> raise (PF_error cmd)
 
-let pipe_pfopt = pipe_through pfopt
+let pipe_pfopt = Debug.print ">>> pfopt"; pipe_through pfopt
 
-let pipe_pfsql = pipe_through pfsql
+let pipe_pfsql = Debug.print ">>> pfsql"; pipe_through pfsql
 
 
 	

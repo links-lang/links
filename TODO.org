@@ -9,12 +9,12 @@
 
 ** DONE make for-comprehensions with orderbys work again
 ** DONE make suse (inner table slicing) configurable
-
 ** DONE implement a database backend in line with ferrydb
 *** DONE take a sql plan bundle from pfsql and execute it via the ocaml postgresql bindings
 *** DONE collect the results of the individual sql queries
 *** DONE reconstruct the links heap result as a Value.t according to the type of the query block
 
+** DONE enable compilation of for-comprehensions with orderby-clauses again.
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
 *** TODO compile comparisons on records by comparing field by field
 *** TODO restrict type of comparison operators so that comparisons on lists are not allowed in query blocks
@@ -53,11 +53,12 @@
 *** TODO XML 
 *** TODO Variant tags
 
-** TODO enable compilation of for-comprehensions with orderby-clauses again.
-
 ** TODO clean up, restructure and document the code (especially Heapresult)
 ** TODO write systematic test cases for the algebra compilation and the value reconstruction
+** TODO use a consistent way to handle the application of max/min/avg to empty lists.
+*** use the second subtree of serialize_rel to handle the error
+*** implement variant tags and use the semantics of the links functions
 
 ** TODO known defects
-*** TODO links-examples/empty.links as of 93bfc4554d
-
+*** DONE links-examples/empty.links as of 93bfc4554d
+    

@@ -544,21 +544,22 @@ and compile_apply env loop f args =
 
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, itbls1, _) = compile_expression env loop e1 in
+  let q1' = 
+    A.Dag.mk_rownum
+      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+      q1
+  in
   let q_v = 
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_project
 	 ((iter, inner) :: (prjlist (io (Cs.leafs cs1))))
-	 (A.Dag.mk_rownum
-	    (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	    q1))
+	 q1')
   in
   let map =
     A.Dag.mk_project
       [(outer, iter); prj inner]
-      (A.Dag.mk_rownum
-	 (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	 q1)
+      q1'
   in
   let loop_v =
     A.Dag.mk_project
