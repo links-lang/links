@@ -451,15 +451,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
-  "maxf",
-  (p1 (let max2 x y = if less x y then y else x in
-         function
-           | `List [] -> failwith "Internal error: empty list passed to maxf"
-           | `List (x::xs) -> (List.fold_left max2 x xs)
-           | _ -> failwith "Internal error: non-list passed to max"),
-   datatype "([a]) -> a",
-  PURE);
-
   "min",
   (p1 (let min2 x y = if less x y then x else y in
          function
@@ -468,6 +459,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | _ -> failwith "Internal error: non-list passed to min"),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
+
+  "sum",
+  (p1 (fun l ->
+	 let add s x =
+	   s + (Num.int_of_num ((unbox_int x)))
+	 in
+	   box_int (Num.Int ((List.fold_left add 0 (unbox_list l))))),
+   datatype "([Int]) -> Int",
+   PURE);
 
   "groupWith",
   (p2 (fun f l -> failwith "groupWith can only be used in query blocks"),

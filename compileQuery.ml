@@ -372,6 +372,10 @@ and compile_length env loop args =
   let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
     Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
 
+(* FIXME: only sum works at the moment. max/min/avg can't be used.
+   Issues:
+   * infer the correct column type for the result (or give it as a parameter)
+   * how to handle empty lists? *)
 and compile_aggr env loop aggr_fun args =
   assert ((List.length args) = 1);
   let c = A.Item 1 in
@@ -383,7 +387,8 @@ and compile_aggr env loop aggr_fun args =
 	 (aggr_fun, (c, c), Some iter)
 	 q_e)
     in
-    let q' = wrap_agg loop q (A.String "error") in
+    (* HACK: special case for sum *)
+    let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
       (* FIXME: extract the correct column type from cs_e *)
       Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
 
@@ -522,11 +527,7 @@ and compile_apply env loop f args =
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
-    | "maxf" -> (* compile_aggr env loop A.Max args *)
-	failwith "defect"
-	(*    | "min" -> compile_aggr env loop A.Min args
-	      | "avg" -> compile_aggr env loop A.Avg args
-	      | "sum" -> compile_aggr env loop A.Sum args *)
+    | "sum" -> compile_aggr env loop A.Sum args
     | "take" -> compile_take env loop args
     | "drop" -> compile_drop env loop args
     | "zip" -> compile_zip env loop args
@@ -535,12 +536,6 @@ and compile_apply env loop f args =
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
 	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
-	  (*
-	    | `PrimitiveFunction "max" ->
-	    | `PrimitiveFunction "min" ->
-	    | `PrimitiveFunction "hd" ->
-	    | `PrimitiveFunction "tl" ->
-	  *)
 
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, itbls1, _) = compile_expression env loop e1 in

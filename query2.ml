@@ -595,7 +595,7 @@ module Annotate = struct
 		let n' = fst (transform env n) in
 		let l' = aot `List env l in
 		  `Apply (f, [n'; l']), `List
-	    | "length" | "unzip" ->
+	    | "length" | "unzip" | "sum" ->
 		(* `List -> `Atom *)
 		let l = 
 		  (match args with 
