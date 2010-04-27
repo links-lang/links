@@ -1108,6 +1108,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (`Server (p1 (fun v -> v)),
     datatype "(a) ~> b",
     PURE));
+
+  (** xml parser *)
+  "parseXml",
+  (`Server (p1 (fun v ->
+                  `List [`XML(ParseXml.parse_xml (unbox_string v))])),
+   datatype "(String) -> Xml",
+   IMPURE);
   
   (** non-deterministic random number generator *)
   "random",

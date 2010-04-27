@@ -84,6 +84,8 @@ SOURCES = $(OPC)                		\
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \
+          xmlParser.mly xmlLexer.mll            \
+          parseXml.mli parseXml.ml              \
 	  resolvePositions.mli resolvePositions.ml	\
           refineBindings.mli refineBindings.ml		\
           desugarLAttributes.mli desugarLAttributes.ml	\
