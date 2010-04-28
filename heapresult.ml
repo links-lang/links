@@ -140,8 +140,8 @@ type atom_type =
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-    (*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-	  Debug.print ""; *)
+(*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+    Debug.print ""; *)
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
   let find_field col_name = 
@@ -150,7 +150,7 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	let len = String.length s2 in
 	  (String.sub s1 0 len) = s2
       in
-      let pred (name, _) = startswith name col_name in
+      let pred (name, _) = startswith name (col_name ^ "_") in
 	snd (List.find pred result_names)
     with NotFound _ -> 
       raise (ColumnMappingError col_name)
@@ -163,9 +163,10 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	   (offset, find_field schema_name))
 	offsets_and_schema_names
     in
-      (*  let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-	  Debug.print (mapstrcat " " (fun x -> x) foo);  *)
+(*    let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+      Debug.print (mapstrcat " " (fun x -> x) foo); *)
     let item row offset = 
+      (* Debug.f "item access %d\n" offset; *)
       try 
 	assert (row < nr_tuples);
 	let field = List.assoc offset offsets_to_fields in
@@ -257,7 +258,8 @@ let mk_primitive raw_value t =
 let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
    let mk_field (next_offsets, record) field_name =
      let field_cs = Cs.lookup_record_field cs field_name in
-       (* Debug.print ("mk_record " ^ field_name); *)
+(*       Debug.print (Cs.print cs);
+       Debug.print ("mk_record " ^ field_name); *)
      let (new_offsets, value) = handle_row next_offsets item field_cs itbls in
        (new_offsets, ((field_name, value) :: record))
    in
