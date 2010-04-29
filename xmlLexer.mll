@@ -39,7 +39,7 @@ let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)
-let def_blank = [' ' '\t' '\n']
+let def_blank = [' ' '\t' '\n' '\r']
 let char_contents = ([^ '\"' '\\']|"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))
 let string_contents = char_contents*
 
@@ -56,6 +56,11 @@ let xml_closing_tag = ('<' '/' def_id '>')
 
 rule lex ctxt nl = parse
   | eof                                 { END }
+  | "<!"                                { (* come back here after ignoring <!...> *)
+                                          ctxt#push_lexer (ignore ctxt nl); IGNORE }
+  | "<?"                                { (* come back here after ignoring <?...> *)
+                                          ctxt#push_lexer (ignore ctxt nl); IGNORE }
+  | def_blank                           { IGNORE }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
@@ -63,7 +68,7 @@ and starttag ctxt nl = parse
   | def_qname as var                    { VARIABLE var }
   | '='                                 { EQ }
   | '>'                                 { (* Switch to `xmllex' *)
-                                          ctxt#pop_lexer;  ctxt#push_lexer (xmllex ctxt nl); RXML }
+                                          ctxt#pop_lexer; ctxt#push_lexer (xmllex ctxt nl); RXML }
   | '"'                                 { (* Come back here after scanning the attr value *)
                                           ctxt#push_lexer (attrlex ctxt nl); LQUOTE }
   | "/>"                                { ctxt#pop_lexer (* fall back *); SLASHRXML }
@@ -75,6 +80,12 @@ and xmllex ctxt nl = parse
   | [^ '<' ]* as cdata                  { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
   | "</" (def_qname as var) '>'         { (* fall back *)
                                           ctxt#pop_lexer; ENDTAG var }
+  | "<![CDATA["                         { (* switch to cdata, then back here *)
+                                          ctxt#push_lexer (cdata ctxt nl); LCDATA }
+  | "<!"                                { (* come back here after ignoring <!...> *)
+                                          ctxt#push_lexer (ignore ctxt nl); IGNORE }
+  | "<?"                                { (* come back here after ignoring <?...> *)
+                                          ctxt#push_lexer (ignore ctxt nl); IGNORE }
   | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML var }
   | eof                                 { END }
@@ -84,6 +95,15 @@ and attrlex ctxt nl = parse
                                           ctxt#pop_lexer; RQUOTE }
   | [^ '"']* as string                  { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and ignore ctxt nl = parse
+  | '>'                                 { (* fall back *)
+                                          ctxt#pop_lexer; IGNORE }
+  | [^ '>']+                            { IGNORE }
+  | eof                                 { END }
+and cdata ctxt nl = parse
+  | "]]>"                               { (* fall back *)
+                                          ctxt#pop_lexer; RCDATA }
+  | _ as c                              { CHAR c }
 
 {
  let lexer ctxt ~newline_hook = 

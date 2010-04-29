@@ -569,8 +569,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   (* Section: Accessors for XML *)
+  "xmlToVariant",
+  (`Server (p1 (fun v ->
+                  match v with
+                    | `List xs ->
+                        `List (List.map (function
+                                           | (`XML x) -> Value.value_of_xmlitem x
+                                           | _ -> failwith "non-XML passed to xmlToVariant") xs)
+                    | _ -> failwith "non-XML passed to xmlToVariant")),
+   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]",
+   IMPURE);
+
   "getTagName",
-  (`Client, datatype "(Xml) ~> String",
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(name, _))] ->
+               box_string name
+           | _ -> failwith "non-element passed to getTagName"),
+  datatype "(Xml) ~> String",
   IMPURE);
 
   "getTextContent",
@@ -578,8 +594,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "getAttributes",
-  (`Client, datatype "(Xml) ~> [(String,String)]",
-  IMPURE);
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(_, children))] ->
+               `List (map
+                        (fun (Attr (name, value)) ->
+                                `Record [("1", box_string name); ("2", box_string value)])
+                        (filter (function (Attr _) -> true | _ -> false) children))
+           | _ -> failwith "non-element given to getAttributes"),
+   datatype "(Xml) ~> [(String,String)]",
+   IMPURE);
 
   "hasAttribute",
   (`Client, datatype "(Xml, String) ~> Bool",
@@ -591,8 +615,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "(Xml) ~> Xml",
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(_, children))] ->
+               `List (map (fun x -> `XML(x)) (filter (function (Attr _) -> false | _ -> true) children))
+           | _ -> failwith "non-element given to getChildNodes"),
+   datatype "(Xml) ~> Xml",
+  IMPURE);
+
+  "not", 
+  (p1 (unbox_bool ->- not ->- box_bool),
+   datatype "(Bool) -> Bool",
   PURE);
+
 
   (* Section: Accessors for DomNodes *)
   "domGetNodeValueFromRef",

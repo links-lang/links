@@ -1,4 +1,5 @@
 %{
+open Utility
 open Value
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
@@ -10,13 +11,15 @@ let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_e
 
 %}
 
-%token END
+%token IGNORE END
 %token EQ
 %token LQUOTE RQUOTE
 %token <string> STRING CDATA
 %token <string> VARIABLE
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
+%token LCDATA RCDATA
+%token <char> CHAR
 
 %start xml
 
@@ -26,6 +29,7 @@ let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_e
 
 /* XML */
 xml:
+| IGNORE xml                                                   { $2 }
 | xml_tree                                                     { $1 }
 
 xmlid: 
@@ -54,9 +58,19 @@ xml_tree:
 | LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (Node ($1, $2 @ $4)) } 
 
 xml_contents_list:
+| IGNORE                                                       { [] }
+| IGNORE xml_contents_list                                     { $2 }
 | xml_contents                                                 { [$1] }
 | xml_contents xml_contents_list                               { $1 :: $2 }
 
 xml_contents:
 | xml_tree                                                     { $1 }
-| CDATA                                                        { Text $1 }
+| cdata                                                        { Text $1 }
+
+cdata:
+| CDATA                                                        { $1 }
+| LCDATA chars RCDATA                                          { implode $2 }
+
+chars:
+|                                                              { [] }
+| CHAR chars                                                   { $1 :: $2 }

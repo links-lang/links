@@ -656,3 +656,10 @@ let expr_to_contframe env expr =
    (Var.dummy_var : Ir.var),
    (env           : env),
    (([], expr)    : Ir.computation))
+
+let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
+and value_of_xmlitem =
+  function
+    | Text s -> `Variant ("Text", box_string s)
+    | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
+    | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])
