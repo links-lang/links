@@ -227,7 +227,7 @@ let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
   let cont = fun env -> [(`Local, x, env, ([], tail))] in
     (bs @ [`Let (xb, ([], body))], tail), cont
 
-let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
+let perform_request cgi_args (valenv, nenv, tyenv) (globals, (locals, main)) cont =
   function
     | ContApply(cont, params) ->
         Debug.print("Doing ContApply");
@@ -265,6 +265,7 @@ let perform_request (valenv, nenv, tyenv) (globals, (locals, main)) cont =
              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
              let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
                Irtojs.generate_program_page
+                 ~cgi_env:cgi_args
                  (closures, Lib.nenv, Lib.typing_env)
                  program
          else
@@ -329,7 +330,7 @@ let serve_request (valenv, nenv, (tyenv : Types.typing_environment))
           EvalMain
       in
       let (content_type, content) =
-        perform_request (valenv, nenv, tyenv) (globals, (locals, main)) 
+        perform_request cgi_args (valenv, nenv, tyenv) (globals, (locals, main)) 
           render_cont request
       in
         Lib.print_http_response [("Content-type", content_type)] content

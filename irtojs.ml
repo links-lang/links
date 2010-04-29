@@ -879,7 +879,7 @@ and generate_program env : Ir.program -> (venv * code) = fun comp ->
 let script_tag body = 
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
-let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
+let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
@@ -892,14 +892,18 @@ let make_boiler_page ?(onload="") ?(body="") ?(head="") defs =
       return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
       "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
     }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig, 0);\n")
-  in
+    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n") in
+  let env =
+    script_tag("  var cgiEnv = {" ^
+               mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
+              "};\n  _makeCgiEnvironment();\n") in
   let version_comment = "<!-- $Id: js.ml 1367 2007-12-10 16:24:38Z sam $ -->" in
     in_tag "html" (in_tag "head"
                      (  extLibs
                       ^ debug_flag (Settings.get_value Debug.debugging_enabled)
                       ^ ext_script_tag "jslib.js" ^ "\n"
                       ^ db_config_script
+                      ^ env
                       ^ head
                       ^ script_tag (String.concat "\n" defs)
                       ^ version_comment
@@ -980,12 +984,13 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(onload = "") (closures, nenv, tyenv) program =
+let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let program = FixPickles.program (closures, nenv, venv, tenv) program in
   let _, code = generate_program venv program in
   let code = wrap_with_server_stubs code in
     (make_boiler_page
+       ~cgi_env:cgi_env
        ~body:(show code)
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
        [])
