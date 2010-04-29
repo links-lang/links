@@ -68,3 +68,8 @@ let cache_directory =
   Settings.add_string ("cache_directory", "", `User)
 let use_cache = Settings.add_bool("use_cache", true, `System)
 let make_cache = Settings.add_bool("make_cache", true, `System)
+
+(* if set to true, then Links will not check that the
+   cache is newer than the Links binary
+*)
+let allow_stale_cache = Settings.add_bool("allow_stale_cache", false, `System)
