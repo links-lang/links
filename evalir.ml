@@ -419,14 +419,13 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (
+      if Settings.get_value Basicsettings.Ferry.output_ir_dot then
+	Irtodot.output_dot program env "ir_complete.dot";
       ignore 
         (Eval.eval env program);
       failwith "boom"
     ) with
-      | Eval.TopLevel (env, v) ->
-	  if Settings.get_value Basicsettings.Ferry.output_ir_dot then
-	    Irtodot.output_dot program env "ir_complete.dot";
-	  (env, v)
+      | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
                                   " while interpreting.")
       | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
