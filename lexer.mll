@@ -171,6 +171,7 @@ let keywords = [
  "false"    , FALSE; 
  "for"      , FOR;
  "from"     , FROM; 
+ "tablekeys"     , TABLEKEYS;
  "fun"      , FUN; 
  "formlet"  , FORMLET;
  "if"       , IF; 

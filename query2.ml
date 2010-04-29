@@ -238,7 +238,7 @@ struct
       | `Int i -> `Constant (`Int i)
       | `Char c -> `Constant (`Char c)
       | `Float f -> `Constant (`Float f)
-      | `Table (((db, _), _, _) as t) -> 
+      | `Table (((db, _), _, _, _) as t) -> 
 	  used_database := Some db;
 	  `Table t 
       | `List vs ->

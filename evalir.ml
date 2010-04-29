@@ -337,10 +337,16 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Table (db, name, (readtype, _, _)) -> 
-        (match value env db, value env name, readtype with
-           | `Database (db, params), name, `Record row ->
-               apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+    | `Table (db, name, keys, (readtype, _, _)) -> 
+        (match value env db, value env name, value env keys, readtype with
+           | `Database (db, params), name, keys, `Record row ->
+	       let unboxed_keys = 
+		 List.map 
+		   (fun key -> 
+		      List.map Value.unbox_string (Value.unbox_list key))
+		   (Value.unbox_list keys)
+	       in
+		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
         let range =
@@ -369,7 +375,7 @@ module Eval = struct
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with
-            | `Table ((db, _), table, (fields, _)) ->
+            | `Table ((db, _), table, _keys, (fields, _)) ->
                 let read_labels =
                   StringMap.fold
                     (fun label _ labels -> StringSet.add label labels)
@@ -385,7 +391,7 @@ module Eval = struct
     | `Delete ((xb, source), where) ->
         let db, table, read_labels =
           match value env source with
-            | `Table ((db, _), table, (fields, _)) ->
+            | `Table ((db, _), table, _keys, (fields, _)) ->
                 let read_labels =
                   StringMap.fold
                     (fun label _ labels -> StringSet.add label labels)

@@ -913,7 +913,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (p2 (fun table rows -> 
             match table, rows with
               | `Table _, `List [] -> `Record []
-              | `Table ((db, params), table_name, _), _ ->
+              | `Table ((db, params), table_name, _, _), _ ->
                   let field_names = row_columns rows
                   and vss = row_values db rows
                   in
@@ -928,7 +928,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (p3 (fun table rows returning -> 
             match table, rows, returning with
               | `Table _, `List [], _ -> `Record []
-              | `Table ((db, params), table_name, _), _, _ ->
+              | `Table ((db, params), table_name, _, _), _, _ ->
                   let field_names = row_columns rows
                   and vss = row_values db rows
                   and returning = unbox_string returning

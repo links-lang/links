@@ -18,6 +18,18 @@ module Itbls = struct
       List.filter (f keys) itbls
 end
 
+let base_type_of_typ t = 
+  let concrete_t = Types.concrete_type t in
+  match concrete_t with
+  | `Primitive `Bool -> `BoolType
+  | `Primitive `Int -> `IntType
+  | `Primitive `Char -> `CharType
+  | `Primitive `Float -> `FloatType
+  | `Primitive `NativeString -> `StrType
+  | `Alias (("String", []), _) -> `StrType
+  | `Application (l, [`Type (`Primitive `Char)]) when Types.Abstype.eq_t.Eq.eq l Types.list -> `StrType
+  | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
+
 module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
 
@@ -666,39 +678,46 @@ and compile_record env loop r =
     | [] ->
 	failwith "CompileQuery.compile_record_value: empty record"
 
-(* HACK HACK HACK: rewrite this when Value.table stores key information *)
-and compile_table loop ((_db, _params), tblname, _row) =
-  Printf.printf "tblname = %s\n" tblname;
-  flush stdout;
-  let (key_infos, columns, types) = 
-    match tblname with
-      | "test1" ->
-	  ([[A.Item 1]], 
-	   ["foo"; "bar"], 
-	   [`IntType; `IntType])
-      | "players" ->
-	  ([[A.Item 1]], 
-	   ["id"; "team"; "name"; "pos"; "eff"], 
-	   [`IntType; `StrType; `StrType; `StrType; `IntType])
-      | _ -> failwith "table not known"
+and compile_table loop ((_db, _params), tblname, keys, row) =
+  List.iter (fun k -> Debug.print ("key " ^ (mapstrcat " " (fun x -> x) k))) keys;
+  let (column_names, types) = 
+    StringMap.fold
+      (fun colname (_, typ) (cs, ts) -> (colname :: cs, (base_type_of_typ typ) :: ts))
+      (fst (fst (Types.unwrap_row row)))
+      ([], [])
   in
-    assert ((List.length key_infos) > 0);
-    assert ((List.length columns) > 0);
-    assert ((List.length types) = (List.length columns));
-    let col_pos = mapIndex (fun c i -> (c, (i + 1))) columns in
-    let items = List.map (fun (c, i) -> (c, A.Item i)) col_pos in
-    let cs = List.map2 (fun (c, i) typ -> Cs.Mapping (c, [Cs.Offset (i, typ)])) col_pos types in
-    let pos = A.Pos 0 in
-    let attr_infos = List.map2 (fun (tname, name) typ -> (name, tname, typ)) items types in
-    let q =
-      A.Dag.mk_cross
-	loop
-	(A.Dag.mk_rank
-	   (pos, (List.map (fun column -> (column, A.Ascending)) (List.hd key_infos)))
-	   (A.Dag.mk_tblref
-	      (tblname, attr_infos, key_infos)))
-    in
-      Ti (q, cs, Itbls.empty, dummy)
+  let column_items = mapIndex (fun c i -> (c, A.Item (i + 1))) column_names in
+  let key_items =
+    List.map
+      (fun key ->
+	 List.map
+	   (fun part_key ->
+	      try 
+		List.assoc part_key column_items 
+	      with
+		  NotFound _ -> failwith ("CompileQuery.compile_table: no column for key " ^ part_key))
+	   key)
+      keys
+  in
+  let attr_infos = List.map2 (fun (c, i) typ -> (i, c, typ)) column_items types in
+  let offset = function
+    | A.Item i -> i
+    | _ -> assert false
+  in
+  let cs = 
+    List.map 
+      (fun (i, c, typ) -> Cs.Mapping (c, [Cs.Offset (offset i, typ)])) 
+      attr_infos 
+  in
+  let q =
+    A.Dag.mk_cross
+      loop
+      (A.Dag.mk_rank
+	 (pos, (List.map (fun column -> (column, A.Ascending)) (List.hd key_items)))
+	 (A.Dag.mk_tblref
+	    (tblname, attr_infos, key_items)))
+  in
+    Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
   let cs = [Cs.Offset (1, A.column_type_of_constant c)] in

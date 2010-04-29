@@ -661,6 +661,7 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)])))
+let keys_type = `Application (list, [`Type (`Application (list, [`Type (string_type)]))])
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int

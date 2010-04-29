@@ -19,7 +19,8 @@ let json_of_db (db, params) =
 [WARNING]
   May need to be careful about free type variables / aliases in row
 *)
-let json_of_table ((db, params), name, row) =
+(* FIXME: create json from table keys *)
+let json_of_table ((db, params), name, _keys, row) =
   "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
   "\",row:\"" ^ Types.string_of_datatype (`Record row) ^ "\"}}"
 

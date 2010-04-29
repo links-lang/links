@@ -15,11 +15,11 @@
 *** DONE reconstruct the links heap result as a Value.t according to the type of the query block
 
 ** DONE enable compilation of for-comprehensions with orderby-clauses again.
+** DONE Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
 ** TODO How to compile comparison operators (==, >, <>) when they are applied to non-primitive values (e.g. lists, records)?
 *** TODO compile comparisons on records by comparing field by field
 *** TODO restrict type of comparison operators so that comparisons on lists are not allowed in query blocks
 
-** TODO Extend the Links syntax for table handles with a notation for key informations and guide these through the frontend.
 ** TODO Extend the Links syntax for comprehensions with a groupby statement in line with ferry/haskell.
 
 ** TODO Implement new (less strict) constraints for the return value of query blocks.
@@ -54,7 +54,7 @@
 *** TODO Variant tags
 
 ** TODO clean up, restructure and document the code (especially Heapresult)
-** TODO write systematic test cases for the algebra compilation and the value reconstruction
+** TODO convert table keys to and from json
 ** TODO use a consistent way to handle the application of max/min/avg to empty lists.
 *** use the second subtree of serialize_rel to handle the error
 *** implement variant tags and use the semantics of the links functions

@@ -747,7 +747,8 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `Table (db, table_name, (readtype, _writetype, _needtype)) ->
+      | `Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
+	  (* FIXME: handle table keys somehow *)
           callk_yielding kappa
             (Dict [("_table",
                     Dict [("db", gv db);

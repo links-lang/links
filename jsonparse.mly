@@ -58,7 +58,8 @@ object_:
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end
                                         in
-                                          `Table (db, name, row)
+					  (* FIXME: restore keys *)
+                                          `Table (db, name, [[]], row)
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | ["_xml", t] ->

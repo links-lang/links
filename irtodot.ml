@@ -231,9 +231,10 @@ and tree_of_special id special env recnodes =
 	let label = "database" in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Special, [subtree]))
-    | `Table (db, name, _) ->
+    | `Table (db, name, keys, _) ->
 	(* TODO: add types to label *)
-	let label = "table" in
+	(* FIXME: print keys *)
+	let label = "table with keys" in
 	let (next_id, db_tree) = tree_of_value (id + 1) db env recnodes in
 	let (next_id, name_tree) = tree_of_value next_id name env recnodes in
 	  (next_id, Node (id, label, Special, [db_tree; name_tree]))

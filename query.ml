@@ -78,12 +78,12 @@ let unbox_string =
 let labels_of_fields fields = 
   StringMap.fold (fun name _ labels -> StringSet.add name labels)
     fields StringSet.empty
-let table_labels (_, _, (fields, _)) = labels_of_fields fields
+let table_labels (_, _, _, (fields, _)) = labels_of_fields fields
 let rec labels_of_list =
   function
     | `Concat (v::vs) -> labels_of_list v
     | `Singleton (`Record fields) -> labels_of_fields fields
-    | `Table (_, _, (fields, _)) -> labels_of_fields fields
+    | `Table (_, _, _, (fields, _)) -> labels_of_fields fields
     | _ -> assert false
 
 (** Returns which database was used if any.
@@ -103,7 +103,7 @@ let used_database v : Value.database option =
   and used =
     function
       | `For (gs, os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
+      | `Table ((db, _), _, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -174,7 +174,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   let rec generators env : _ -> Types.datatype Env.Int.t =
     function
       | [] -> env
-      | (x, `Table (_, _, row))::gs ->
+      | (x, `Table (_, _, _, row))::gs ->
           generators (Env.Int.bind env (x, `Record row)) gs
       | _ -> assert false in
   let rec base env : t -> Types.datatype =
@@ -198,7 +198,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
     function
       | `Singleton (`Record fields) -> record env fields
       | `If (_c, t, `Concat []) -> tail env t
-      | `Table (_, _, row) -> `Record row
+      | `Table (_, _, _, row) -> `Record row
       | _ -> assert false
   in
     match v with
@@ -807,7 +807,7 @@ struct
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           query body
-      | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
+      | `For ((x, `Table (_db, table, _keys, _row))::gs, os, body) ->
           let body = query (`For (gs, [], body)) in
           let os = List.map base os in
             begin
@@ -833,7 +833,7 @@ struct
                       `Select (fields, tables, c, os)
                 | _ -> assert false
             end
-      | `Table (_db, table, (fields, _)) ->
+      | `Table (_db, table, _keys, (fields, _)) ->
           let var = fresh_table_var () in
           let fields =
             List.rev

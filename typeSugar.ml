@@ -153,6 +153,7 @@ sig
 
   val table_name : griper
   val table_db : griper
+  val table_keys : griper
 
   val delete_table : griper
   val delete_pattern : griper
@@ -378,6 +379,9 @@ tab() ^ code (show_type lt) ^ nl() ^
 
     let table_db ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Databases" t l
+
+    let table_keys ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      fixed_type pos "Database keys" t l
 
     let delete_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Tables" t l
@@ -1468,12 +1472,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and name   = tc name in
               `DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive `DB
 
-        | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
+        | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
             let tname = tc tname 
-            and db = tc db in
+            and db = tc db 
+	    and keys = tc keys in
             let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
             and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
-              `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase db), 
+	    and () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
+              `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db), 
             `Table (read_row, write_row, needed_row)
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
