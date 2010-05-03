@@ -569,7 +569,9 @@ struct
             end
         | `Table table ->
             let labels = table_labels table in
-              rb (x, source, eval_body env (x, `Var (x, labels), body))
+              (* we need to freshen x in order to correctly handle self joins *)
+            let x' = Var.fresh_raw_var () in
+              rb (x', source, eval_body env (x, `Var (x', labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
   and reduce_for_body (x, source, body) =
     match body with
