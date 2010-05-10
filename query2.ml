@@ -575,7 +575,7 @@ module Annotate = struct
 	    | "<>" | "==" | ">" ->
 		(* `Atom -> `Atom -> `Atom *)
 		`Apply (f, List.map (fun arg -> fst (transform env arg)) args), `Atom
-	    | "nth" | "take" | "drop" ->
+	    | "nth" ->
 		(* `Atom -> `List -> `Atom *)
 		let (n, l) = 
 		  (match args with 
