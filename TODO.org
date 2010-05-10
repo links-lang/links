@@ -52,13 +52,14 @@
 ** TODO Find out how to handle some features of Links.
 *** TODO XML 
 *** TODO Variant tags
-
+*** TODO First class functions (lists of functions etc)
 ** TODO clean up, restructure and document the code (especially Heapresult)
-** TODO convert table keys to and from json
+** DONE convert table keys to and from json
 ** TODO use a consistent way to handle the application of max/min/avg to empty lists.
 *** use the second subtree of serialize_rel to handle the error
-*** implement variant tags and use the semantics of the links functions
+*** implement variant tags and use the semantics of the links function
+** TODO check if 0988b240938239e76df93e8cec7392c12ca7711f is relevant in query2 too
 
 ** TODO known defects
 *** DONE links-examples/empty.links as of 93bfc4554d
-    
+** TODO test the (de)-serialization of table keys to and from JSON

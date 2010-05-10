@@ -19,10 +19,12 @@ let json_of_db (db, params) =
 [WARNING]
   May need to be careful about free type variables / aliases in row
 *)
-(* FIXME: create json from table keys *)
-let json_of_table ((db, params), name, _keys, row) =
-  "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
-  "\",row:\"" ^ Types.string_of_datatype (`Record row) ^ "\"}}"
+let json_of_table ((db, params), name, keys, row) =
+  let json_of_key k = "[" ^ (mapstrcat ", " (fun x -> x) k) ^ "]" in
+  let json_of_keylist ks = "[" ^ (mapstrcat ", " json_of_key ks) ^ "]" in
+    "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
+      "\",row:\"" ^ Types.string_of_datatype (`Record row) ^
+      "\",keys:\"" ^ json_of_keylist keys ^ "\"}}"
 
 let js_dq_escape_string str = 
   (* escape for placement in double-quoted string *)

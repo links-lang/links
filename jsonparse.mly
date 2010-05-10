@@ -57,9 +57,20 @@ object_:
                                                 | `Record row -> row
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end
+					and keys =
+					  begin
+					    match List.assoc "keys" bs with
+					      | `List keys ->
+						  List.map
+						    (function
+						       | `List part_keys ->
+							   List.map Value.unbox_string part_keys
+						       | _ -> failwith "jsonparse: keys must be lists of strings")
+						    keys
+					      | _ -> failwith ("jsonparse: table keys must have list type")
+					  end
                                         in
-					  (* FIXME: restore keys *)
-                                          `Table (db, name, [[]], row)
+                                          `Table (db, name, keys, row)
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | ["_xml", t] ->
