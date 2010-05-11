@@ -284,6 +284,8 @@ struct
 	  `Primitive "groupBy"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
 	  `Primitive "sum"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
+	  `Primitive "concat"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -614,6 +616,15 @@ module Annotate = struct
 		in
 		let l' = aot `List env l in
 		  `Apply (f, [l']), `Atom
+	    | "concat" ->
+		(* `List -> `List *)
+		let l =
+		  (match args with
+		     | [a] -> a
+		     | _ -> fail_arg "concat")
+		in
+		let l' = aot `List env l in
+		  `Apply (f, [l']), `List
 	    | "zip" ->
 		(* `List -> `List -> `List *)
 		let (l, r) =

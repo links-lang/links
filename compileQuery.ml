@@ -10,6 +10,7 @@ module Itbls = struct
   let incr_keys itbls i = List.map (fun (offset, ti) -> (offset + i, ti)) itbls
   let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
   let append = List.append
+  let lookup = List.assoc
 
   (* remove all mappings whose offsets are not in keys *)
   let retain_by_keys itbls keys = 
@@ -96,6 +97,7 @@ let item'' = A.Pos 5
 let grp_key = A.Pos 6
 let c' = A.Pos 7
 let res = A.Pos 8
+let pos'' = A.Pos 9
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -466,6 +468,26 @@ and compile_unop env loop wrapper operands =
     in
       Ti (q, op_cs, Itbls.empty, dummy)
 
+and compile_concat env loop args =
+  assert ((List.length args) = 1);
+  let Ti (q_e, _, itbls_e, _) = compile_expression env loop (List.hd args) in
+    assert((List.length itbls_e) = 1);
+    let Ti(q_sub, cs_sub, itbls_sub, _) = Itbls.lookup 1 itbls_e in
+    let c = A.Item 1 in
+    let q =
+      A.Dag.mk_project
+	([(iter, iter'); (pos, pos'')] @ (prjlist (io (Cs.leafs cs_sub))))
+	(A.Dag.mk_rank
+	   (pos'', [(pos', A.Ascending); (pos, A.Ascending)])
+	   (A.Dag.mk_eqjoin
+	      (c', iter)
+	      (A.Dag.mk_project
+		 [(iter', iter); (pos', pos); (c', c)]
+		 q_e)
+	      q_sub))
+    in
+      Ti(q, cs_sub, itbls_sub, dummy)
+
 and compile_take env loop args =
   assert ((List.length args) = 2);
   let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
@@ -544,6 +566,7 @@ and compile_apply env loop f args =
     | "drop" -> compile_drop env loop args
     | "zip" -> compile_zip env loop args
     | "unzip" -> compile_unzip env loop args
+    | "concat" -> compile_concat env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
