@@ -2,8 +2,8 @@ var db = database "test" "postgresql" ":5432:test:foobar";
 var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
 
 query {
-	for (t <- groupWith((fun (p) { p.team }), asList(players_table))) {
-		var posn = groupWith((fun (p) { p.pos }), t.2);
+	for (t <- groupBy((fun (p) { p.team }), asList(players_table))) {
+		var posn = groupBy((fun (p) { p.pos }), t.2);
 		[(team = t.1,
 				centers = for (p <- posn) where (p.1 == "C") p.2,
 				forwards = for (p <- posn) where (p.1 == "F") p.2,

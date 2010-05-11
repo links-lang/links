@@ -400,17 +400,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       ),
    datatype "([a]) ~> [a]",
   IMPURE);
-
-  "nth",
-  (p2 (fun n list ->
-	 try
-	   (List.nth (unbox_list list) ((int_of_num (unbox_int n)) + 1))
-	 with
-	   | Failure "nth" -> failwith "nth(): list too short"
-	   | Invalid_argument "List.nth" -> failwith "nth(): negative argument"
-      ),
-   datatype "(Int, [a]) -> a",
-   PURE);
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
@@ -428,19 +417,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
    datatype "(Int, [a]) -> [a]",
   PURE);
-
-  "zip",
-  (p2 (fun l r ->
-	 box_list (List.map box_pair (List.combine (unbox_list l) (unbox_list r)))),
-   datatype "([a], [b]) -> [(a, b)]",
-   PURE);
-
-  "unzip",
-  (p1 (fun l ->
-	 let (first_l, second_l) = List.split (List.map unbox_pair (unbox_list l)) in
-	   box_pair ((box_list first_l), (box_list second_l))),
-   datatype "([(a, b)]) -> ([a], [b])",
-   PURE);
 
   "max",
   (p1 (let max2 x y = if less x y then y else x in
@@ -467,11 +443,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	 in
 	   box_int (Num.Int ((List.fold_left add 0 (unbox_list l))))),
    datatype "([Int]) -> Int",
-   PURE);
-
-  "groupWith",
-  (p2 (fun f l -> failwith "groupWith can only be used in query blocks"),
-   datatype "(((a) -> b), [a]) -> [(b, [a])]",
    PURE);
 
   (** XML **)
@@ -1211,14 +1182,22 @@ let patch_prelude_funs tyenv =
   {tyenv with
      var_env =
       Env.String.bind
-        (Env.String.bind
-           (Env.String.bind
-              (Env.String.bind
-                 tyenv.Types.var_env
-                 ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
-              ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
-           ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
-        ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")}
+	(Env.String.bind
+	   (Env.String.bind
+	      (Env.String.bind
+		 (Env.String.bind
+		    (Env.String.bind
+		       (Env.String.bind
+			  (Env.String.bind
+			     tyenv.Types.var_env
+			     ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
+			  ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
+		       ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
+		    ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
+		 ("nth", datatype "(Int, [a]) -> a"))
+	      ("unzip", datatype "([(a, b)]) -> ([a], [b])"))
+	   ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
+	("zip", datatype "([a], [b]) -> [(a, b)]")}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None

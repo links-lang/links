@@ -5,7 +5,7 @@ let used_database = ref None
 
 type t =
     [ `For of (Var.var * t) list * t list * t
-    | `GroupWith of (Var.var * t) * t
+    | `GroupBy of (Var.var * t) * t
     | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
@@ -83,7 +83,7 @@ struct
   (** [pt]: A printable version of [t] *)
   type pt =
     [ `For of (Var.var * pt) list * pt list * pt
-    | `GroupWith of (Var.var * pt) * pt
+    | `GroupBy of (Var.var * pt) * pt
     | `If of pt * pt * pt option
     | `Table of Value.table
     | `Singleton of pt | `Append of pt list
@@ -104,8 +104,8 @@ struct
             `For (List.map (fun (x, source) -> (x, bt source)) gs, 
                   List.map bt os, 
                   bt b)
-	| `GroupWith ((x, group_exp), source) ->
-	    `GroupWith ((x, bt group_exp), bt source)
+	| `GroupBy ((x, group_exp), source) ->
+	    `GroupBy ((x, bt group_exp), bt source)
         | `If (c, t, Some e) -> `If (bt c, bt t, Some (bt e))
         | `If (c, t, None) -> `If (bt c, bt t, None)
         | `Table t -> `Table t
@@ -274,6 +274,14 @@ struct
           `Primitive "SortBy"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
 	  `Primitive "AsList"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
+	  `Primitive "zip"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
+	  `Primitive "unzip"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nth" = f ->
+	  `Primitive "nth"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupBy" = f ->
+	  `Primitive "groupBy"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -384,13 +392,13 @@ struct
 		  end
 	    | _ -> assert false
 	end
-    | `Primitive "groupWith", [f; source] ->
+    | `Primitive "groupBy", [f; source] ->
 	begin
 	  match f with
 	    | `Closure (([x], body), closure_env) ->
 		let env = env ++ closure_env in
 		let group_exp = computation (bind env (x, `Var x)) body in
-		  `GroupWith ((x, group_exp), source)
+		  `GroupBy ((x, group_exp), source)
 	    | _ -> assert false
 	end
     | `Primitive "<", [e1; e2] ->
@@ -497,7 +505,7 @@ struct
         | `For _ 
         | `Table _ 
 	| `Apply _
-	| `GroupWith _ 
+	| `GroupBy _ 
 	| `Project _ ->
 	    `For ([x, source], [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
@@ -560,11 +568,11 @@ module Annotate = struct
 	  let os' = List.map (fun o -> fst (transform env' o)) os in
 	  let body' = aot `List env' body in
 	    (`For (gs', os', body')), `List
-      | `GroupWith ((x, group_exp), source) ->
+      | `GroupBy ((x, group_exp), source) ->
 	  let env' = Env.Int.bind env (x, `Atom) in
 	  let group_exp' = aot `Atom env' group_exp in
 	  let source' = aot `List env source in
-	    (`GroupWith ((x, group_exp'), source')), `List
+	    (`GroupBy ((x, group_exp'), source')), `List
       | `Var x -> 
 	  `Var x, Env.Int.lookup env x
       | `Apply (f, args) ->

@@ -132,25 +132,69 @@ fun fold_right1(f, l) {
   fold_right(f, hd(l), tl(l))
 }
 
-#fun unzip(l) {
-#  switch (l) {
-#    case [] -> ([], [])
-#    case (a,b)::xs -> { 
-#     var (c,d) = unzip(xs);
-#     (a :: c, b :: d)
-#    }
-#  }
-#}
+fun nth(i, l) {
+  if (i >= length(l)) {
+    error("nth: list too short")
+  } else {
+    fun nth1(j, l) {
+      if (i == j) 
+        hd(l)
+      else
+        nth1((j + 1), tl(l)) 
+    }
+    nth1(0, l)
+  }
+}
 
-#sig zip : ([a], [b]) ~> [(a, b)]
-#fun zip(l, r) {
-#  switch ((l, r)) {
-#    case ([], []) -> []
-#    case (lh::lt, rh::rt) -> 
-#        (lh, rh) :: zip (lt, rt)
-#    case (_, _) -> []
-#  }
-#}
+fun member(e, l) {
+	switch (l) {
+		case x :: xs ->
+			if (x == e) 
+				true
+			else
+				member(e, xs)
+		case [] ->
+			false
+	}
+}
+
+fun distinct(l) {
+	fun distinct_1(d, x) {
+		if (member(x, d))
+			d
+		else	
+			x :: d
+	}
+	reverse(fold_left(distinct_1, [], l))
+}
+
+fun groupBy(project, t) {
+	var keys = distinct(for (p <- t) [(1 = project(p))]);
+	for (key <- keys)
+		[(key.1, 
+		for (p <- t) where (project(p) == key.1) [p]
+		)]
+}
+
+fun unzip(l) {
+  switch (l) {
+    case [] -> ([], [])
+    case (a,b)::xs -> { 
+     var (c,d) = unzip(xs);
+     (a :: c, b :: d)
+    }
+  }
+}
+
+sig zip : ([a], [b]) ~> [(a, b)]
+fun zip(l, r) {
+  switch ((l, r)) {
+    case ([], []) -> []
+    case (lh::lt, rh::rt) -> 
+        (lh, rh) :: zip (lt, rt)
+    case (_, _) -> []
+  }
+}
 
 fun replicate(n, item) {
   if (n == 0) []

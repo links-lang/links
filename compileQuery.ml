@@ -828,7 +828,7 @@ and compile_if env loop e1 e2 e3 =
     let itbls' = suap q itbls_e2 itbls_e3 in
       Ti (q', cs_e2, itbls', dummy)
 
-and compile_groupwith env loop v g_e e =
+and compile_groupby env loop v g_e e =
   let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop e in
   let q_v =
     A.Dag.mk_rownum
@@ -903,7 +903,7 @@ and compile_expression env loop e : tblinfo =
     | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
     | `Box e -> compile_box env loop e
     | `Unbox e -> compile_unbox env loop e
-    | `GroupWith ((x, group_exp), source) -> compile_groupwith env loop x group_exp source 
+    | `GroupBy ((x, group_exp), source) -> compile_groupby env loop x group_exp source 
     | `Closure _
     | `Variant _
     | `XML _ -> failwith "compile_expression: not implemented"
