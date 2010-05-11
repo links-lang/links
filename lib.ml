@@ -436,15 +436,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
-  "sum",
-  (p1 (fun l ->
-	 let add s x =
-	   s + (Num.int_of_num ((unbox_int x)))
-	 in
-	   box_int (Num.Int ((List.fold_left add 0 (unbox_list l))))),
-   datatype "([Int]) -> Int",
-   PURE);
-
   (** XML **)
   "childNodes",
   (p1 (function
@@ -1189,14 +1180,16 @@ let patch_prelude_funs tyenv =
 		    (Env.String.bind
 		       (Env.String.bind
 			  (Env.String.bind
-			     tyenv.Types.var_env
-			     ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
-			  ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
-		       ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
-		    ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
-		 ("nth", datatype "(Int, [a]) -> a"))
-	      ("unzip", datatype "([(a, b)]) -> ([a], [b])"))
-	   ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
+			     (Env.String.bind
+				tyenv.Types.var_env
+				("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
+			     ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
+			  ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
+		       ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
+		    ("nth", datatype "(Int, [a]) -> a"))
+		 ("unzip", datatype "([(a, b)]) -> ([a], [b])"))
+	      ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
+	   ("sum", datatype "([Int]) -> Int"))
 	("zip", datatype "([a], [b]) -> [(a, b)]")}
 
 let impl : located_primitive -> primitive option = function

@@ -230,10 +230,6 @@ fun eighth(p)  { p.8 }
 fun ninth(p)   { p.9 }
 fun tenth(p)   { p.10 }
 
-#fun sum(ns) {
-#  fold_left((+), 0, ns)
-#}
-
 fun product(ns) {
   fold_left((*), 1, ns)
 }
@@ -1066,3 +1062,8 @@ fun sendSuspend(pagef) {
     exit(renderPage(pagef(returnf)))
   }
 }
+
+fun sum(ns) {
+  fold_left((+), 0, ns)
+}
+

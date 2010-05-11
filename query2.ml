@@ -282,6 +282,8 @@ struct
 	  `Primitive "nth"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupBy" = f ->
 	  `Primitive "groupBy"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
+	  `Primitive "sum"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
