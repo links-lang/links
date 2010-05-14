@@ -382,6 +382,8 @@ and regex ctxt nl = parse
   | '{'                                 { (* scan the expression, then back here *)
                                           ctxt#push_lexer (lex ctxt nl); LBRACE }
   | '\\' (_ as c)                       { QUOTEDMETA (String.make 1 c)}
+  | '\n'                                { nl (); bump_lines lexbuf 1; regex ctxt nl lexbuf }
+  | def_blank                           { regex ctxt nl lexbuf }
   | (_ as c)                            { STRING (String.make 1 c) }
 and regexrepl ctxt nl = parse
   | regexrepl_fsa as var                { REGEXREPL(var) }
