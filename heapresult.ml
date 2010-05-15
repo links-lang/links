@@ -248,7 +248,7 @@ let mk_primitive raw_value t =
   match t with
     | `IntType -> Value.box_int (Num.num_of_string raw_value)
     | `StrType -> Value.string_as_charlist raw_value
-    | `BoolType -> Value.box_bool (raw_value = "true")
+    | `BoolType -> Value.box_bool ((int_of_string raw_value) = 1)
     | `CharType -> Value.box_char (String.get raw_value 0)
     | `FloatType -> (if raw_value = "" then Value.box_float 0.00      (* HACK HACK *)
                      else Value.box_float (float_of_string raw_value))
@@ -275,7 +275,7 @@ and handle_row itbl_offsets item cs itbls =
 	  (match cs with
 	     | [Cs.Offset (i, `Surrogate)] -> i
 	     | cs -> failwith ("Heapresult.handle_row: cs in no inner list surrogate column " ^
-				 (Cs.print cs)))
+				 (Cs.to_string cs)))
 	in
 	let offset = 
 	  match itbl_offsets with

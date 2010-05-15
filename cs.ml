@@ -9,13 +9,13 @@ and csentry =
   | Mapping of string * cs
 
 (* TODO: use deriving Show *)
-let rec print cs =
+let rec to_string cs =
   mapstrcat " "
     (function
        | Offset (i, typ) ->
 	   "Off " ^ (string_of_int i) ^ "[" ^ (A.string_of_column_type typ) ^ "]"
        | Mapping (name, cs) ->
-	   "M " ^ name ^ " -> {" ^ (print cs) ^ "}")
+	   "M " ^ name ^ " -> {" ^ (to_string cs) ^ "}")
     cs
 
 let rec out_cs out cs =
@@ -42,16 +42,19 @@ let rec out_cs out cs =
     List.iter csentry cs;
     out `El_end
       
-(* return all columns *)	
+(* return all columns together with their column type *)
 let rec leafs cs =
   List.rev
     (List.fold_left
        (fun leaf_list cs_entry ->
 	  match cs_entry with
-	    | Offset (o, _) -> o :: leaf_list
+	    | Offset (o, t) -> (o, t) :: leaf_list
 	    | Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list)
        []
        cs)
+  
+(* return all columns *)	
+let rec columns cs = List.map fst (leafs cs)
 
 let cardinality = List.length
 
@@ -63,7 +66,7 @@ let rec shift cs i =
        | Mapping (key, cs) -> Mapping (key, (shift cs i)))
     cs
 
-(* append to cs components *)
+(* append two cs components *)
 let append cs1 cs2 =
   cs1 @ (shift cs2 (cardinality cs1))
 
@@ -127,4 +130,20 @@ let atom_type = function
 	     | Offset _ -> failwith "Cs.atom_type: toplevel offset in record cs")
 	  cs_entries)
 	     
-      
+let rec sort_record_columns = function
+  | [(Offset _) as offset] -> [offset]
+  | [] -> failwith "Cs.sort_record_columns: empty cs"
+  | cs_entries ->
+      let cmp m1 m2 = 
+	match (m1, m2) with
+	  | Mapping (field1, _), Mapping (field2, _) ->
+	      compare field1 field2
+	  | _ -> 
+	      failwith "Cs.sort_record_columns: multiple flat offsets"
+      in
+      let cs_entries = List.sort cmp cs_entries in
+	List.map 
+	  (function 
+	     | Mapping (field, cs) -> Mapping (field, (sort_record_columns cs))
+	     | _ -> failwith "Cs.sort_record_columns: multiple flat offsets")
+	  cs_entries

@@ -31,6 +31,10 @@ let base_type_of_typ t =
   | `Application (l, [`Type (`Primitive `Char)]) when Types.Abstype.eq_t.Eq.eq l Types.list -> `StrType
   | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
 
+let is_primitive_col = function
+  | `Surrogate -> false
+  | _ -> true
+
 module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
 
@@ -114,7 +118,7 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 		   q_2)))
 	in
 	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs cs1) (Itbls.keys subs_1)))) in
+	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs1) (Itbls.keys subs_1)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs_1)) item') in
 	let q' =
 	  (A.Dag.mk_project
@@ -140,7 +144,7 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 		   q_i))
 	in
 	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs cs) (Itbls.keys subs)))) in
+	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
 	let q' =
 	  (A.Dag.mk_project
@@ -162,7 +166,7 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 		   q_i))
 	in
 	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs cs) (Itbls.keys subs)))) in
+	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
 	let q' =
 	  (A.Dag.mk_project
@@ -182,7 +186,7 @@ let rec suse q_pase subs : ((int * tblinfo) list) =
       | (offset, (Ti(q, cs, itbls, _))) :: subs ->
 	  let q' = 
 	    A.Dag.mk_project
-	      ([prj iter; prj pos] @ (prjlist (io (Cs.leafs cs))))
+	      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs))))
 	      (A.Dag.mk_eqjoin
 		 (iter, iter')
 		 q
@@ -216,7 +220,7 @@ let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType)]
 let lift map (Ti (q, cs, _, _)) =
   let q' =
     (A.Dag.mk_project
-       ([(iter, inner); prj pos] @ (prjlist (io (Cs.leafs cs))))
+       ([(iter, inner); prj pos] @ (prjlist (io (Cs.columns cs))))
        (A.Dag.mk_eqjoin
 	  (iter, outer)
 	  q
@@ -266,7 +270,7 @@ and compile_unbox env loop e =
     let (offset, Ti(q_sub, cs_sub, itbls_sub, _)) = List.hd itbls_e in
     let q_unbox =
       A.Dag.mk_project
-	([(iter, iter'); prj pos] @ (prjlist (io (Cs.leafs cs_sub))))
+	([(iter, iter'); prj pos] @ (prjlist (io (Cs.columns cs_sub))))
 	(A.Dag.mk_eqjoin
 	   (c', iter)
 	   (A.Dag.mk_project
@@ -303,7 +307,7 @@ and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _))
 	       tl_q)))
   in
   let q'_projlist = [prj iter; (pos, pos')] in
-  let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.leafs hd_cs) (Itbls.keys hd_itbls)))) in
+  let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns hd_cs) (Itbls.keys hd_itbls)))) in
   let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys hd_itbls)) item') in
   let q' = 
     A.Dag.mk_project
@@ -317,12 +321,12 @@ and compile_zip env loop args =
   assert ((List.length args) = 2);
   let Ti (q_e1, cs_e1, itbls_e1, _) = compile_expression env loop (List.hd args) in
   let Ti (q_e2, cs_e2, itbls_e2, _) = compile_expression env loop (List.nth args 1) in
-  let q_e1' = abspos q_e1 (io (Cs.leafs cs_e1)) in
-  let q_e2' = abspos q_e2 (io (Cs.leafs cs_e2)) in
-  let card_e1 = List.length (Cs.leafs cs_e1) in
+  let q_e1' = abspos q_e1 (io (Cs.columns cs_e1)) in
+  let q_e2' = abspos q_e2 (io (Cs.columns cs_e2)) in
+  let card_e1 = List.length (Cs.columns cs_e1) in
   let cs_e2' = Cs.shift cs_e2 card_e1 in
   let itbls_e2' = Itbls.incr_keys itbls_e2 card_e1 in
-  let items = io ((Cs.leafs cs_e1) @ (Cs.leafs cs_e2')) in
+  let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist items))
@@ -334,7 +338,7 @@ and compile_zip env loop args =
 	       (iter, iter')
 	       q_e1'
 	       (A.Dag.mk_project
-		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.leafs cs_e2')) (io (Cs.leafs cs_e2))))
+		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.columns cs_e2')) (io (Cs.columns cs_e2))))
 		  q_e2'))))
   in
     let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
@@ -352,9 +356,9 @@ and compile_unzip env loop args =
   in
   let cs_1 = Cs.lookup_record_field cs_e "1" in
   let cs_2 = Cs.lookup_record_field cs_e "2" in
-  let cols_1 = Cs.leafs cs_1 in
-  let card = List.length (Cs.leafs cs_1) in
-  let cols_2 = Cs.leafs cs_2 in
+  let cols_1 = Cs.columns cs_1 in
+  let card = List.length (Cs.columns cs_1) in
+  let cols_2 = Cs.columns cs_2 in
   let cs_2' = Cs.shift cs_2 (-card) in
   let card = List.length cols_1 in
   let q_1 = 
@@ -410,10 +414,10 @@ and compile_nth env loop operands =
   assert ((List.length operands) = 2);
   let Ti (q1, _, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (q2, cs2, itbls_2, _) = compile_expression env loop (List.nth operands 1) in
-  let q2' = abspos q2 (io (Cs.leafs cs2)) in
+  let q2' = abspos q2 (io (Cs.columns cs2)) in
   let q =
     (A.Dag.mk_project
-       ([prj iter; prj pos] @ prjlist (io (Cs.leafs cs2)))
+       ([prj iter; prj pos] @ prjlist (io (Cs.columns cs2)))
        (A.Dag.mk_select
 	  res
 	  (A.Dag.mk_funnumeq
@@ -430,27 +434,97 @@ and compile_nth env loop operands =
   let itbls' = suse q itbls_2 in
     Ti (q, cs2, itbls', dummy)
 
+and compile_table_comparison env loop wrapper operands =
+  failwith "comparison of lists not implemented"
+
+and compile_row_comparison env loop wrapper operands =
+  assert ((List.length operands) = 2);
+  let Ti (r1_q, r1_cs, _, _) = compile_expression env loop (List.hd operands) in
+  let Ti (r2_q, r2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
+    (* 
+    Debug.print (Cs.to_string r1_cs);
+    Debug.print (Cs.to_string (Cs.sort_record_columns r1_cs));
+    Debug.print (Cs.to_string r2_cs);
+    Debug.print (Cs.to_string (Cs.sort_record_columns r2_cs));
+    let items1 = io (Cs.leafs (Cs.sort_record_columns r1_cs)) in
+    let items2 = io (Cs.leafs (Cs.sort_record_columns r2_cs)) in
+    let items = List.combine items1 items2 in
+    *)
+  let items = Cs.leafs r1_cs in
+  let c = A.Item 1 in
+  let c' = A.Item 2 in
+  let res = A.Item 3 in
+  let rec assemble_comparisons = function
+    | [] -> 
+	failwith "compile_record_comparison: empty records"
+    | [(col, coltype)] ->
+	if is_primitive_col coltype then
+	  let r1_q', r2_q' =
+	    (* no need to project if the row has only one item column *)
+	    if (Cs.cardinality r1_cs) = 1 then
+	      (r1_q, r2_q)
+	    else
+	      ((A.Dag.mk_project
+		  [prj iter; prj pos; (c, A.Item col)]
+		  r1_q),
+	       (A.Dag.mk_project
+		  [prj iter; prj pos; (c, A.Item col)]
+		  r2_q))
+	  in
+	    primitive_binop wrapper r1_q' r2_q'
+	else
+	  failwith "comparison of (inner) lists not implemented"
+    | (col, coltype) :: items ->
+	let col_comparison_result =
+	  if is_primitive_col coltype then
+	    (primitive_binop
+	       wrapper
+	       (A.Dag.mk_project
+		  [prj iter; prj pos; (c, A.Item col)]
+		  r1_q)
+	       (A.Dag.mk_project
+		  [prj iter; prj pos; (c, A.Item col)]
+		  r2_q))
+	  else
+	    failwith "comparison of (inner) lists not implemented"
+	in
+	  A.Dag.mk_project
+	    [prj iter; prj pos; (c, res)]
+	    (A.Dag.mk_funbooland
+	       (res, (c, c'))
+	       (A.Dag.mk_eqjoin
+		  (iter', iter)
+		  (A.Dag.mk_project
+		     (* [(iter', iter); prj pos; (c', A.Item col)] *)
+		     [(iter', iter); (c', A.Item col)]
+		     col_comparison_result)
+		  (assemble_comparisons items)))
+  in
+  let q = assemble_comparisons items in
+    Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+
+and primitive_binop wrapper op1 op2 =
+  let c = A.Item 1 in
+  let c' = A.Item 2 in
+  let res = A.Item 3 in
+    A.Dag.mk_project
+      [(prj iter); (prj pos); (c, res)]
+      (wrapper 
+	 res c c'
+	 (A.Dag.mk_eqjoin
+	    (iter, iter')
+	    op1
+	    (A.Dag.mk_project
+	       [(iter', iter); (c', c)]
+	       op2)))
+
 and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
   let Ti (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
     assert (Cs.is_operand op1_cs);
     assert (Cs.is_operand op2_cs);
-    let c = A.Item 1 in
-    let c' = A.Item 2 in
-    let res = A.Item 3 in
-    let q = 
-      A.Dag.mk_project
-	[(prj iter); (prj pos); (c, res)]
-	(wrapper 
-	   res c c'
-	   (A.Dag.mk_eqjoin
-	      (iter, iter')
-	      op1_q
-	      (A.Dag.mk_project
-		 [(iter', iter); (c', c)]
-		 op2_q)))
-    in
+    let q = primitive_binop wrapper op1_q op2_q in
       Ti (q, op1_cs, Itbls.empty, dummy)
 
 and compile_unop env loop wrapper operands =
@@ -476,7 +550,7 @@ and compile_concat env loop args =
     let c = A.Item 1 in
     let q =
       A.Dag.mk_project
-	([(iter, iter'); (pos, pos'')] @ (prjlist (io (Cs.leafs cs_sub))))
+	([(iter, iter'); (pos, pos'')] @ (prjlist (io (Cs.columns cs_sub))))
 	(A.Dag.mk_rank
 	   (pos'', [(pos', A.Ascending); (pos, A.Ascending)])
 	   (A.Dag.mk_eqjoin
@@ -492,7 +566,7 @@ and compile_take env loop args =
   assert ((List.length args) = 2);
   let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
   let Ti(q2, cs2, itbls2, _) = compile_expression env loop (List.nth args 1) in
-  let cols = (io (Cs.leafs cs2)) in
+  let cols = (io (Cs.columns cs2)) in
   let q2' = abspos q2 cols in
   let c = A.Item 1 in
   let one = A.Item 2 in
@@ -523,7 +597,7 @@ and compile_drop env loop args =
   assert ((List.length args) = 2);
   let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
   let Ti(q2, cs2, itbls2, _) = compile_expression env loop (List.nth args 1) in
-  let cols = (io (Cs.leafs cs2)) in
+  let cols = (io (Cs.columns cs2)) in
   let q2' = abspos q2 cols in
   let c = A.Item 1 in
   let q' =
@@ -545,7 +619,7 @@ and compile_drop env loop args =
   let itbls' = suse q' itbls2 in
     Ti(q', cs2, itbls', dummy)
 
-and compile_apply env loop f args =
+and compile_apply env loop f args itype =
   match f with
     | "+" 
     | "+." -> compile_binop env loop (wrap_1to1 A.Add) args
@@ -555,9 +629,30 @@ and compile_apply env loop f args =
     | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
     | "/" 
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
-    | "==" -> compile_binop env loop wrap_eq args
-    | ">" -> compile_binop env loop wrap_gt args
-    | "<>" -> compile_binop env loop wrap_ne args
+    | "==" -> 
+	begin
+	  match itype with
+	    | `Atom ->
+		compile_row_comparison env loop wrap_eq args
+	    | `List ->
+		compile_table_comparison env loop wrap_eq args
+	end
+    | ">" -> 
+	begin
+	  match itype with
+	    | `Atom ->
+		compile_row_comparison env loop wrap_gt args
+	    | `List ->
+		compile_table_comparison env loop wrap_gt args
+	end
+    | "<>" -> 
+	begin
+	  match itype with
+	    | `Atom ->
+		compile_row_comparison env loop wrap_ne args
+	    | `List ->
+		compile_table_comparison env loop wrap_ne args
+	end
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
@@ -583,7 +678,7 @@ and compile_for env loop v e1 e2 order_criteria =
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_project
-	 ((iter, inner) :: (prjlist (io (Cs.leafs cs1))))
+	 ((iter, inner) :: (prjlist (io (Cs.columns cs1))))
 	 q1')
   in
   let map =
@@ -605,7 +700,7 @@ and compile_for env loop v e1 e2 order_criteria =
 	  (* compile orderby expressions *)
 	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
 	  let q_os = List.map (fun (Ti (q, _, _, _)) -> q) q_os in
-	  let offset = (List.length (Cs.leafs cs2)) + 1 in
+	  let offset = (List.length (Cs.columns cs2)) + 1 in
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
 	    (order_cols, omap map q_os cols)
@@ -613,7 +708,7 @@ and compile_for env loop v e1 e2 order_criteria =
 	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
   in
   let q = A.Dag.mk_project
-    ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.leafs cs2))))
+    ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.columns cs2))))
     (A.Dag.mk_rank
        (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
        (pos', order_cols)
@@ -645,10 +740,10 @@ and extend_record env loop ext_fields r =
 	failwith "CompileQuery.extend_record: empty ext_fields"
 
 and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)) =
-  let r2_leafs = Cs.leafs r2_cs in
+  let r2_leafs = Cs.columns r2_cs in
   let new_names_r2 = io (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = io r2_leafs in
-  let names_r1 = io (Cs.leafs r1_cs) in
+  let names_r1 = io (Cs.columns r1_cs) in
   let r2_itbls' = Itbls.incr_keys r2_itbls (Cs.cardinality r1_cs) in
   let q =
     A.Dag.mk_project
@@ -667,7 +762,7 @@ and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)
 and compile_project env loop field r =
   let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
   let field_cs' = Cs.lookup_record_field cs_r field in
-  let c_old = Cs.leafs field_cs' in
+  let c_old = Cs.columns field_cs' in
   let offset = List.hd c_old in
   let c_new = incr c_old (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
@@ -682,8 +777,8 @@ and compile_project env loop field r =
 and compile_erase env loop erase_fields r =
   let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
   let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
-  let remaining_cols = io (Cs.leafs remaining_cs) in
-  let remaining_itbls = Itbls.retain_by_keys itbls_r (Cs.leafs remaining_cs) in
+  let remaining_cols = io (Cs.columns remaining_cs) in
+  let remaining_itbls = Itbls.retain_by_keys itbls_r (Cs.columns remaining_cs) in
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist remaining_cols))
@@ -758,7 +853,7 @@ and compile_constant loop (c : Constant.constant) =
 and compile_if2 env loop e1 e2 =
   let c = A.Item 1 in
   let select loop (Ti (q, cs, itbls, _)) =
-    let cols = io (Cs.leafs cs) in
+    let cols = io (Cs.columns cs) in
     let q' =
       A.Dag.mk_project
 	([prj iter; prj pos] @ (prjlist cols))
@@ -790,7 +885,7 @@ and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
   let select loop (Ti (q, cs, itbls, _)) =
-    let cols = io (Cs.leafs cs) in
+    let cols = io (Cs.columns cs) in
     let q' =
       A.Dag.mk_project
 	([prj iter; prj pos] @ (prjlist cols))
@@ -838,7 +933,7 @@ and compile_if env loop e1 e2 e3 =
 	      (ord, A.Nat 2n)
 	      q_e3))
     in
-    let cols = Cs.leafs cs_e2 in
+    let cols = Cs.columns cs_e2 in
     let keys = Itbls.keys itbls_e2 in
     let proj = [prj iter; prj pos] in
     let proj = proj @ (prjlist (io (difference cols keys))) in
@@ -872,14 +967,14 @@ and compile_groupby env loop v g_e e =
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_project
-	 ([(iter, inner)] @ (prjlist (io (Cs.leafs cs_e))))
+	 ([(iter, inner)] @ (prjlist (io (Cs.columns cs_e))))
 	 q_v)
   in
   let env_v = AEnv.map (lift map_v) env in
   let env_v = AEnv.bind env_v (v, Ti(q_v', cs_e, itbls_e, dummy)) in
   let Ti(q_eg, cs_eg, _, _) = compile_expression env_v loop_v g_e in
   let cs_eg' = Cs.shift cs_eg (Cs.cardinality cs_e) in
-  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.leafs cs_eg') in
+  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.columns cs_eg') in
   let q_1 =
     A.Dag.mk_rowrank
       (grp_key, (iter, A.Ascending) :: sortlist)
@@ -887,19 +982,19 @@ and compile_groupby env loop v g_e e =
 	 (inner, iter')
 	 q_v
 	 (A.Dag.mk_project
-	    ((iter', iter) :: (prjlist_map (io (Cs.leafs cs_eg')) (io (Cs.leafs cs_eg))))
+	    ((iter', iter) :: (prjlist_map (io (Cs.columns cs_eg')) (io (Cs.columns cs_eg))))
 	    q_eg))
   in
   let grpkey_col = (Cs.cardinality cs_eg) + 1 in
   let q_2 =
     A.Dag.mk_distinct
       (A.Dag.mk_project
-	 ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.leafs cs_eg)) (io (Cs.leafs cs_eg'))))
+	 ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.columns cs_eg)) (io (Cs.columns cs_eg'))))
 	 q_1)
   in
   let q_3 =
     A.Dag.mk_project
-      ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.leafs cs_e))))
+      ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.columns cs_e))))
       q_1
   in
   let cs = [Cs.Mapping ("1", cs_eg); Cs.Mapping ("2", [Cs.Offset (grpkey_col, `Surrogate)])] in
@@ -908,25 +1003,25 @@ and compile_groupby env loop v g_e e =
 
 and compile_expression env loop e : tblinfo =
   match e with
-    | `Constant c -> compile_constant loop c
-    | `Apply (f, args) -> compile_apply env loop f args
-    | `Var x -> AEnv.lookup env x
-    | `Project (r, field) -> compile_project env loop field r
-    | `Record r -> compile_record env loop (StringMap.to_alist r)
-    | `Extend (r, ext_fields) ->
+    | `Constant (c, _) -> compile_constant loop c
+    | `Apply ((f, args), imptype) -> compile_apply env loop f args imptype
+    | `Var (x, _) -> AEnv.lookup env x
+    | `Project ((r, field), _) -> compile_project env loop field r
+    | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
+    | `Extend ((r, ext_fields), _) ->
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
-    | `Erase (r, erase_fields) -> compile_erase env loop erase_fields r
-    | `Singleton e -> compile_expression env loop e
-    | `Append l -> compile_append env loop l
-    | `Table t -> compile_table loop t
-    | `If (c, t, Some e) -> compile_if env loop c t e
-    | `If (c, t, None) -> compile_if2 env loop c t
-    | `For ([x, l], os, body) -> compile_for env loop x l body os
+    | `Erase ((r, erase_fields), _) -> compile_erase env loop erase_fields r
+    | `Singleton (e, _) -> compile_expression env loop e
+    | `Append (l, _) -> compile_append env loop l
+    | `Table (t, _) -> compile_table loop t
+    | `If ((c, t, Some e), _) -> compile_if env loop c t e
+    | `If ((c, t, None), _) -> compile_if2 env loop c t
+    | `For (([x, l], os, body), _) -> compile_for env loop x l body os
     | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
-    | `Box e -> compile_box env loop e
-    | `Unbox e -> compile_unbox env loop e
-    | `GroupBy ((x, group_exp), source) -> compile_groupby env loop x group_exp source 
+    | `Box (e, _) -> compile_box env loop e
+    | `Unbox (e, _) -> compile_unbox env loop e
+    | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
     | `Closure _
     | `Variant _
     | `XML _ -> failwith "compile_expression: not implemented"
@@ -934,7 +1029,7 @@ and compile_expression env loop e : tblinfo =
 
 let wrap_serialize (Ti (q,cs,_,_)) =
   A.Dag.mk_serializerel 
-    (A.Iter 0, A.Pos 0, io (Cs.leafs cs))
+    (A.Iter 0, A.Pos 0, io (Cs.columns cs))
     (A.Dag.mk_nil)
     q
 

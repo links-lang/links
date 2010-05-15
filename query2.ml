@@ -15,8 +15,7 @@ type t =
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant 
-    | `Box of t | `Unbox of t]
+    | `Var of Var.var | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
     deriving (Show)
 
@@ -93,8 +92,7 @@ struct
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant 
-    | `Box of pt | `Unbox of pt]
+    | `Var of Var.var | `Constant of Constant.constant ]
       deriving (Show)
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -122,8 +120,6 @@ struct
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
-	| `Box t -> `Box (bt t)
-	| `Unbox t -> `Unbox (bt t)
           
   let t = Show.show show_pt -<- pt_of_t
 end
@@ -207,8 +203,6 @@ struct
 	| `Extend (record, ext_fields) -> `Extend (opt_map rep record, StringMap.map rep ext_fields)
 	| `Variant (s, t) -> `Variant (s, rep t)
 	| `Apply (f, args) -> `Apply (f, List.map rep args)
-	| `Box t -> `Box (rep t)
-	| `Unbox t -> `Unbox (rep t)
 	| `Var v when v = old_var -> `Var new_var
 	| n -> n
 
@@ -408,12 +402,10 @@ struct
     | `Primitive "<", [e1; e2] ->
 	`Apply (">", [e2; e1])
     | `Primitive ">=", [e1; e2] ->
-	print_endline "query2: >=";
 	`If (`Apply (">", [e1; e2]),
 	     `Constant (`Bool true),
 	     Some (`Apply ("==", [e1; e2])))
     | `Primitive "<=", [e1; e2] ->
-	print_endline "query2: <=";
 	`If (`Apply (">", [e2; e1]),
 	     `Constant (`Bool true),
 	     Some (`Apply ("==", [e1; e2])))
@@ -529,56 +521,96 @@ end
 module Annotate = struct
   type implementation_type = [`Atom | `List]
 
-  let annotate want (expression, get) =
-    match (want, get) with
-      | `Atom, `Atom | `List, `List -> expression
-      | `Atom, `List -> `Box expression
-      | `List, `Atom -> `Unbox expression
+  type typed_t =
+      [ `For of ((Var.var * typed_t) list * typed_t list * typed_t) * implementation_type
+      | `GroupBy of ((Var.var * typed_t) * typed_t) * implementation_type
+      | `If of (typed_t * typed_t * typed_t option) * implementation_type
+      | `Table of Value.table * implementation_type
+      | `Singleton of typed_t * implementation_type 
+      | `Append of typed_t list * implementation_type
+      | `Record of typed_t StringMap.t * implementation_type
+      | `Project of (typed_t * string) * implementation_type
+      | `Erase of (typed_t * StringSet.t) * implementation_type
+      | `Extend of (typed_t option * typed_t StringMap.t) * implementation_type
+      | `Variant of (string * typed_t) * implementation_type
+      | `XML of Value.xmlitem * implementation_type
+      | `Apply of (string * typed_t list) * implementation_type
+      | `Primitive of string * implementation_type
+      | `Var of Var.var * implementation_type
+      | `Constant of Constant.constant * implementation_type
+      | `Box of typed_t * implementation_type
+      | `Unbox of typed_t * implementation_type ]
 
-  let rec transform env (expression : t) : (t * implementation_type) =
-    let aot t env = (fun e -> (annotate t (transform env e))) in
+  let typeof_typed_t = function
+    | `For (_, t) -> t
+    | `GroupBy (_, t) -> t
+    | `If (_, t) -> t 
+    | `Table (_, t) -> t 
+    | `Singleton (_, t) -> t
+    | `Append (_, t) -> t 
+    | `Record (_, t) -> t 
+    | `Project (_, t) -> t 
+    | `Erase (_, t) -> t 
+    | `Extend (_, t) -> t
+    | `Variant (_, t) -> t 
+    | `XML (_, t) -> t 
+    | `Apply (_, t) -> t 
+    | `Primitive (_, t) -> t
+    | `Var (_, t) -> t 
+    | `Constant (_, t) -> t 
+    | `Box (_, t) -> t 
+    | `Unbox (_, t) -> t
+
+  let annotate want (expression : typed_t) : typed_t =
+    match (want, typeof_typed_t expression) with
+      | `Atom, `Atom | `List, `List -> expression
+      | `Atom, `List -> `Box (expression, want)
+      | `List, `Atom -> `Unbox (expression, want)
+
+  let rec transform env (expression : t) : typed_t =
+    let aot want env = (fun e -> (annotate want (transform env e))) in
     match expression with
-      | `Constant _ -> (expression, `Atom)
-      | `Table _ -> (expression, `List)
+      | `Constant c -> `Constant (c, `Atom)
+      | `Table t -> `Table (t, `List) 
       | `If (c, t, Some e) -> 
-	  let (c', _) = transform env c in
-	  let (t', itype) = transform env t in
-	  let (e', _) = transform env e in
-	    (`If (c', t', Some e'), itype)
+	  let c' = transform env c in
+	  let t' = transform env t in
+	  let e' = transform env e in
+	    `If ((c', t', Some e'), (typeof_typed_t t'))
       | `If (c, t, None) ->
-	  let (c', _) = transform env c in
-	  let (t', itype) = transform env t in
-	    (`If (c', t', None), itype)
+	  let c' = transform env c in
+	  let t' = transform env t in
+	    `If ((c', t', None), (typeof_typed_t t'))
       | `Singleton e ->
 	  (* row or table? *)
-	  `Singleton (annotate `Atom (transform env e)), `List
+	  `Singleton ((aot `Atom env e), `List)
       | `Append xs ->
 	  let xs' = List.map (aot `List env) xs in
-	    (`Append xs'), `List
+	    `Append (xs', `List)
       | `Project (e, field) ->
-	  let (e', _) = transform env e in
-	    (`Project (e', field)), `Atom
+	  let e' = transform env e in
+	    `Project ((e', field), `Atom)
       | `Record fieldmap ->
-	  `Record (StringMap.map (aot `Atom env) fieldmap), `Atom
+	  `Record ((StringMap.map (aot `Atom env) fieldmap), `Atom)
       | `Erase (r, erase_fields) ->
-	  `Erase ((aot `Atom env r), erase_fields), `Atom
+	  `Erase (((aot `Atom env r), erase_fields), `Atom)
       | `Extend (r, ext_fields) ->
 	  let ext_fields' = StringMap.map (aot `Atom env) ext_fields in
-	  let r' = opt_map (fun r -> fst (transform env r)) r in
-	    `Extend (r' ,ext_fields'), `Atom
+	  let r' = opt_map (fun r -> transform env r) r in
+	    `Extend ((r' ,ext_fields'), `Atom)
       | `For (gs, os, body) ->
 	  let env' = List.fold_left (fun m (x, _) -> Env.Int.bind m (x, `Atom)) env gs in
 	  let gs' = List.map (fun (x, source) -> (x, aot `List env source)) gs in
-	  let os' = List.map (fun o -> fst (transform env' o)) os in
+	  let os' = List.map (fun o -> transform env' o) os in
 	  let body' = aot `List env' body in
-	    (`For (gs', os', body')), `List
+	    `For ((gs', os', body'), `List)
       | `GroupBy ((x, group_exp), source) ->
 	  let env' = Env.Int.bind env (x, `Atom) in
 	  let group_exp' = aot `Atom env' group_exp in
 	  let source' = aot `List env source in
-	    (`GroupBy ((x, group_exp'), source')), `List
+	    `GroupBy (((x, group_exp'), source'), `List)
       | `Var x -> 
-	  `Var x, Env.Int.lookup env x
+	  `Var (x, Env.Int.lookup env x) 
       | `Apply (f, args) ->
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
@@ -586,7 +618,7 @@ module Annotate = struct
 	    | "/" | "/." | "not"
 	    | "<>" | "==" | ">" ->
 		(* `Atom -> `Atom -> `Atom *)
-		`Apply (f, List.map (fun arg -> fst (transform env arg)) args), `Atom
+		`Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
 	    | "nth" ->
 		(* `Atom -> `List -> `Atom *)
 		let (n, l) = 
@@ -594,9 +626,9 @@ module Annotate = struct
 		    | [a1; a2] -> (a1, a2)
 		    | _ -> fail_arg "nth")
 		in
-		let n' = fst (transform env n) in
+		let n' = transform env n in
 		let l' = aot `List env l in
-		  `Apply (f, [n'; l']), `Atom
+		  `Apply ((f, [n'; l']), `Atom)
 	    | "take" | "drop" ->
 		(* `Atom -> `List -> `List *)
 		let (n, l) = 
@@ -604,9 +636,9 @@ module Annotate = struct
 		     | [a1; a2] -> (a1, a2)
 		     | _ -> fail_arg "take/drop")
 		in
-		let n' = fst (transform env n) in
+		let n' = transform env n in
 		let l' = aot `List env l in
-		  `Apply (f, [n'; l']), `List
+		  `Apply ((f, [n'; l']), `List)
 	    | "length" | "unzip" | "sum" ->
 		(* `List -> `Atom *)
 		let l = 
@@ -615,7 +647,7 @@ module Annotate = struct
 		     | _ -> fail_arg "length")
 		in
 		let l' = aot `List env l in
-		  `Apply (f, [l']), `Atom
+		  `Apply ((f, [l']), `Atom)
 	    | "concat" ->
 		(* `List -> `List *)
 		let l =
@@ -624,7 +656,7 @@ module Annotate = struct
 		     | _ -> fail_arg "concat")
 		in
 		let l' = aot `List env l in
-		  `Apply (f, [l']), `List
+		  `Apply ((f, [l']), `List)
 	    | "zip" ->
 		(* `List -> `List -> `List *)
 		let (l, r) =
@@ -634,15 +666,13 @@ module Annotate = struct
 		in
 		let l' = aot `List env l in
 		let r' = aot `List env r in
-		  `Apply (f, [l'; r']), `List
+		  `Apply ((f, [l'; r']), `List)
 	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
-      | `Box _ | `Unbox _ ->
-	  failwith "expression already annotated"
       | _ -> failwith "Query2.Annotate.transform: not implemented"
     
 end
 
-let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (t * Annotate.implementation_type) =
+let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
   fun env (_range, e) ->
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
@@ -651,6 +681,6 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (t * A
 	if Settings.get_value Basicsettings.Ferry.print_backend_expression then
 	  begin
 	    print_endline ("query2:\n "^string_of_t v);
-	    print_endline ("query2 annotated:\n "^string_of_t (fst v_annot));
+	    (* print_endline ("query2 annotated:\n "^string_of_t (fst v_annot)); *)
 	  end;
-	v_annot
+	(v_annot, (Annotate.typeof_typed_t v_annot))

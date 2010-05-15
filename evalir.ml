@@ -360,16 +360,18 @@ module Eval = struct
 	  let algebra_bundle = CompileQuery.compile exptree in
 	  let xmlbuf = Buffer.create 1024 in
 	    Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
+	    Debug.print ">>>> pfopt";
 	    let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
-	    let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
-	      output_plan (Buffer.contents xmlbuf) "plan.xml";
-	      output_plan xml_opt "plan_opt.xml";
-	      output_plan sql_bundle "plan_opt_sql.xml";
-	      match !Query2.used_database with
-		| Some db -> 
-		    let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
-		      Heapresult.handle_table table
-		| None -> computation env cont e
+	      Debug.print ">>>> pfsql";
+	      let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
+		output_plan (Buffer.contents xmlbuf) "plan.xml";
+		output_plan xml_opt "plan_opt.xml";
+		output_plan sql_bundle "plan_opt_sql.xml";
+		match !Query2.used_database with
+		  | Some db -> 
+		      let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
+			Heapresult.handle_table table
+		  | None -> computation env cont e
         in
           apply_cont cont env result
     | `Update ((xb, source), where, body) ->
