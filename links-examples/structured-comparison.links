@@ -1,0 +1,9 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+query {
+#	var ignore = players_table;
+#	(foo = 1, bar = 3) == (foo = 1, bar = 3)
+	var some_player = (id = 4, team = "T00000001", name = "N00000035", pos = "F", eff = 18);
+	for (p <-- players_table) where (p == some_player) [p]
+}

@@ -434,30 +434,28 @@ and compile_nth env loop operands =
   let itbls' = suse q itbls_2 in
     Ti (q, cs2, itbls', dummy)
 
-and compile_table_comparison env loop wrapper operands =
+and compile_table_comparison _env _loop _wrapper _operands =
   failwith "comparison of lists not implemented"
 
 and compile_row_comparison env loop wrapper operands =
   assert ((List.length operands) = 2);
   let Ti (r1_q, r1_cs, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (r2_q, r2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
-    (* 
-    Debug.print (Cs.to_string r1_cs);
-    Debug.print (Cs.to_string (Cs.sort_record_columns r1_cs));
-    Debug.print (Cs.to_string r2_cs);
-    Debug.print (Cs.to_string (Cs.sort_record_columns r2_cs));
-    let items1 = io (Cs.leafs (Cs.sort_record_columns r1_cs)) in
-    let items2 = io (Cs.leafs (Cs.sort_record_columns r2_cs)) in
-    let items = List.combine items1 items2 in
-    *)
-  let items = Cs.leafs r1_cs in
+
+  (* pair the item columns which belong to the respective record fields *)
+  let items1 = Cs.leafs (Cs.sort_record_columns r1_cs) in
+  let items2 = Cs.leafs (Cs.sort_record_columns r2_cs) in
+  let items = List.combine items1 items2 in
+
   let c = A.Item 1 in
   let c' = A.Item 2 in
   let res = A.Item 3 in
+  (* compare the columns for the first field. the result is then the conjuntion of
+     this result and the result of the (recursive) comparison of the remaining fields *)
   let rec assemble_comparisons = function
     | [] -> 
 	failwith "compile_record_comparison: empty records"
-    | [(col, coltype)] ->
+    | [((col1, coltype), (col2, _))] ->
 	if is_primitive_col coltype then
 	  let r1_q', r2_q' =
 	    (* no need to project if the row has only one item column *)
@@ -465,25 +463,25 @@ and compile_row_comparison env loop wrapper operands =
 	      (r1_q, r2_q)
 	    else
 	      ((A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col)]
+		  [prj iter; prj pos; (c, A.Item col1)]
 		  r1_q),
 	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col)]
+		  [prj iter; prj pos; (c, A.Item col2)]
 		  r2_q))
 	  in
 	    primitive_binop wrapper r1_q' r2_q'
 	else
 	  failwith "comparison of (inner) lists not implemented"
-    | (col, coltype) :: items ->
+    | ((col1, coltype), (col2, _)) :: items ->
 	let col_comparison_result =
 	  if is_primitive_col coltype then
 	    (primitive_binop
 	       wrapper
 	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col)]
+		  [prj iter; prj pos; (c, A.Item col1)]
 		  r1_q)
 	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col)]
+		  [prj iter; prj pos; (c, A.Item col2)]
 		  r2_q))
 	  else
 	    failwith "comparison of (inner) lists not implemented"
@@ -495,14 +493,15 @@ and compile_row_comparison env loop wrapper operands =
 	       (A.Dag.mk_eqjoin
 		  (iter', iter)
 		  (A.Dag.mk_project
-		     (* [(iter', iter); prj pos; (c', A.Item col)] *)
-		     [(iter', iter); (c', A.Item col)]
+		     [(iter', iter); (c', c)]
 		     col_comparison_result)
 		  (assemble_comparisons items)))
   in
   let q = assemble_comparisons items in
     Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
+(* generate the algebra code for the application of a binary operator to two
+   columns *)
 and primitive_binop wrapper op1 op2 =
   let c = A.Item 1 in
   let c' = A.Item 2 in
