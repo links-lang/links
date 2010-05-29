@@ -511,6 +511,8 @@ and compile_comparison env loop wrapper operands =
 	do_unbox q offset inner_ti
   in
     match (Query2.Annotate.typeof_typed_t e1, Query2.Annotate.typeof_typed_t e2) with
+	(* if arguments are boxed (i.e. they have list type), we need
+	   to unbox them first *)
       | `Atom, `Atom when (is_boxed e1_ti) && (is_boxed e2_ti) ->
 	  do_table_comparison loop wrapper (unbox e1_ti) (unbox e2_ti)
       | `Atom, `List when is_boxed e1_ti ->
@@ -525,6 +527,7 @@ and compile_comparison env loop wrapper operands =
 
 and do_table_comparison loop wrapper l1 l2 =
   Debug.print "do_table_comparison";
+
   (* apply the all aggregate operator to the first column grouped by iter *)
   let all (Ti (q, _, _, _)) =
     let q = 
@@ -566,7 +569,6 @@ and do_table_comparison loop wrapper l1 l2 =
     let Ti (q_e2, _, _, _) = e2 in
     let q = primitive_binop wrap_eq q_e1 q_e2 in
       Ti (q, cs_e1, Itbls.empty, dummy)
-
   in
     
   let map_comparison source =
@@ -601,11 +603,12 @@ and do_table_comparison loop wrapper l1 l2 =
 	 [(iter, outer); (pos, pos'); prj (A.Item 1)]
 	 (A.Dag.mk_eqjoin
 	    (iter, inner)
-	    map
-	    q_comparison)
+	    q_comparison
+	    map)
      in
        Ti (result_backmapped, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
+
   let absolute_positions (Ti (q, cs, itbls, _)) =
     Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
   in
