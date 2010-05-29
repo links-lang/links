@@ -687,7 +687,7 @@ and compile_for env loop v e1 e2 order_criteria =
   in
   let loop_v =
     A.Dag.mk_project
-      [(iter, iter)]
+      [prj iter]
       q_v
   in
   let env = AEnv.map (lift map) env in

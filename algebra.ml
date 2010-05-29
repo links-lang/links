@@ -38,7 +38,7 @@ let const = function
   | `Char c -> Char c
 
 (* aggregate functions *)
-type aggr = Avg | Max | Min | Sum
+type aggr = Avg | Max | Min | Sum | All
 
 type func = Add | Subtract | Multiply | Divide | Modulo | Contains
 
@@ -180,6 +180,7 @@ let string_of_aggr = function
   | Min -> "min"
   | Avg -> "avg"
   | Sum -> "sum"
+  | All -> "all"
 
 module Dag = struct
   type node_id = int
