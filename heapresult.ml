@@ -192,26 +192,33 @@ let execute_query database query =
 
 (* reconstruct the itbls tree structure from colref/idref *)
 let reconstruct_itbls root_acc root_cs root_result_type result_bundle : table_struct =
-  let table_map = 
-    List.fold_left
-      (fun m (id, _, acc, _, cs, result_type) ->
-	 IntMap.add id (Table (acc, cs, [], result_type)) m)
-      IntMap.empty
+  (* construct Table values *)
+  let refs = 
+    List.map
+      (fun (id, (refid, refcol), acc, _, cs, result_type) ->
+	 let table = Table (acc, cs, [], result_type) in
+	   (refid, (id, refcol, table)))
       result_bundle
   in
-  let table_map = IntMap.add 0 (Table (root_acc, root_cs, [], root_result_type)) table_map in
-  let table_map_itbls =
-    List.fold_left
-      (fun m (id, (refid, refcol), _, _, _, _) ->
-	 let Table (acc, cs, itbls, result_type) = IntMap.find refid m in
-	 let inner = IntMap.find id m in
-	   let m = IntMap.add refid (Table (acc, cs, ((refcol, inner) :: itbls), result_type)) m in
-	     IntMap.remove id m)
-      table_map
-      result_bundle
+  (* predicate for List.filter *)
+  let p wanted_key entry = 
+    match entry with
+      | (key, _value) when wanted_key = key -> true
+      | _ -> false
   in
-    assert ((IntMap.size table_map_itbls) = 1);
-    IntMap.find 0 table_map_itbls
+  (* reconstruct itbl tree from flat (refid, refcol) information *)
+  let rec assemble_tree parent_id parent_table =
+    let childs = List.filter (p parent_id) refs in
+    let itbls = 
+      List.map 
+	(fun (_, (id, refcol, table)) -> 
+	   (refcol, (assemble_tree id table))) 
+	childs 
+    in
+    let Table (acc, cs, _, t) = parent_table in
+      Table (acc, cs, itbls, t)
+  in
+    assemble_tree 0 (Table (root_acc, root_cs, [], root_result_type))
 
 let transform_and_execute database xml_sql_bundle algebra_bundle = 
   let (_, root_cs, sub_algebra_plans) = algebra_bundle in
