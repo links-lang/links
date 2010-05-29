@@ -1,4 +1,11 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
 query {
-	unzip(zip([4,42,57],[["a","b"],["c","d"],["e","f","g"]]))
+	var ignore = players_table;
+	#unzip(zip([4,42,57],[["a","b"],["c","d"],["e","f","g"]]))
+	#zip([4,42,57], ["a", "b", "c"])
+	#unzip([(4, "a"), (42, "b"), (57, "c")])
+	unzip(zip([4,42,57], [["a", "b"], ["c", "d"], ["e"]]))
 	
 }

@@ -54,39 +54,6 @@ let prjlist_map new_cols old_cols =
 let prjlist_single new_cols old_col =
   List.map (fun a -> (a, old_col)) new_cols
 
-let wrap_1to1 f res c c' algexpr =
-  A.Dag.mk_fun1to1
-    (f, res, [c; c'])
-    algexpr
-
-let wrap_eq res c c' algexpr =
-  A.Dag.mk_funnumeq
-    (res, (c, c'))
-    algexpr
-
-let incr_col = function
-  | A.Iter i -> A.Iter (i + 1)
-  | A.Pos i -> A.Pos (i + 1)
-  | A.Item i -> A.Item (i + 1)
-
-let wrap_ne res c c' algexpr =
-  let res' = incr_col res in
-    A.Dag.mk_funboolnot
-      (res, res')
-      (A.Dag.mk_funnumeq
-	 (res', (c, c'))
-	 algexpr)
-
-let wrap_gt res c c' algexpr =
-  A.Dag.mk_funnumgt
-    (res, (c, c'))
-    algexpr
-
-let wrap_not res op_attr algexpr =
-  A.Dag.mk_funboolnot
-    (res, op_attr)
-    algexpr
-
 (* Naming conventions for Iter and Pos columns. Use only these names! *)
 let iter = A.Iter 0 
 let iter' = A.Iter 1
@@ -102,6 +69,121 @@ let grp_key = A.Pos 6
 let c' = A.Pos 7
 let res = A.Pos 8
 let pos'' = A.Pos 9
+
+let incr_col = function
+  | A.Iter i -> A.Iter (i + 1)
+  | A.Pos i -> A.Pos (i + 1)
+  | A.Item i -> A.Item (i + 1)
+
+(* wrapper for binary functions/operators *)
+let wrap_1to1 f res c c' algexpr =
+  A.Dag.mk_fun1to1
+    (f, res, [c; c'])
+    algexpr
+
+(* wrapper for equal *)
+let wrap_eq res c c' algexpr =
+  A.Dag.mk_funnumeq
+    (res, (c, c'))
+    algexpr
+
+(* wrapper for not equal *)
+let wrap_ne res c c' algexpr =
+  let res' = incr_col res in
+    A.Dag.mk_funboolnot
+      (res, res')
+      (A.Dag.mk_funnumeq
+	 (res', (c, c'))
+	 algexpr)
+
+(* wrapper for greater than *)
+let wrap_gt res c c' algexpr =
+  A.Dag.mk_funnumgt
+    (res, (c, c'))
+    algexpr
+
+(* wrapper for not *)
+let wrap_not res op_attr algexpr =
+  A.Dag.mk_funboolnot
+    (res, op_attr)
+    algexpr
+
+(* wrapper for aggregate operators *)
+let wrap_agg loop q attachment =
+  A.Dag.mk_attach
+    (pos, A.Nat 1n)
+    (A.Dag.mk_disjunion
+       q
+       (A.Dag.mk_attach
+	  (A.Item 1, attachment)
+	  (A.Dag.mk_difference
+	     loop
+	     (A.Dag.mk_project
+		[prj iter]
+		q))))
+
+let do_unbox q_e surr_col inner_ti =
+  let Ti(q_sub, cs_sub, itbls_sub, _) = inner_ti in
+  let q_unbox =
+    A.Dag.mk_project
+      ([(iter, iter'); prj pos] @ (prjlist (io (Cs.columns cs_sub))))
+      (A.Dag.mk_eqjoin
+	 (c', iter)
+	 (A.Dag.mk_project
+	    [(iter', iter); (c', A.Item surr_col)]
+	    q_e)
+	 q_sub)
+  in
+    Ti(q_unbox, cs_sub, itbls_sub, dummy)
+
+let do_project field record =
+  let Ti (q_r, cs_r, itbls_r, _) = record in
+  let field_cs' = Cs.lookup_record_field cs_r field in
+  let old_cols = Cs.columns field_cs' in
+  let offset = List.hd old_cols in
+  let new_cols = incr old_cols (-offset + 1) in
+  let field_cs = Cs.shift field_cs' (-offset + 1) in
+  let field_itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_r old_cols) (offset - 1) in 
+  let q =
+    A.Dag.mk_project
+      ([prj iter; prj pos] @ prjlist_map (io new_cols) (io old_cols))
+      q_r
+  in
+    Ti (q, field_cs, field_itbls, dummy)
+
+let do_length loop (Ti (q_e, _, _, _)) =
+  let q = 
+    A.Dag.mk_funaggrcount
+      (A.Item 1, Some iter)
+      q_e
+  in
+  let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
+    Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
+
+(* q_e1 and q_e2 must have absolute positions *)
+let do_zip e1 e2 =
+  let Ti (q_e1, cs_e1, itbls_e1, _) = e1 in
+  let Ti (q_e2, cs_e2, itbls_e2, _) = e2 in
+  let card_e1 = List.length (Cs.columns cs_e1) in
+  let cs_e2' = Cs.shift cs_e2 card_e1 in
+  let itbls_e2' = Itbls.incr_keys itbls_e2 card_e1 in
+  let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
+  let q =
+    A.Dag.mk_project
+      ([prj iter; prj pos] @ (prjlist items))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumeq
+	    (res, (pos, pos'))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       q_e1
+	       (A.Dag.mk_project
+		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.columns cs_e2')) (io (Cs.columns cs_e2))))
+		  q_e2))))
+  in
+  let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
+    Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -200,19 +282,6 @@ let rec suse q_pase subs : ((int * tblinfo) list) =
   else
     subs
 
-let wrap_agg loop q attachment =
-  A.Dag.mk_attach
-    (pos, A.Nat 1n)
-    (A.Dag.mk_disjunion
-       q
-       (A.Dag.mk_attach
-	  (A.Item 1, attachment)
-	  (A.Dag.mk_difference
-	     loop
-	     (A.Dag.mk_project
-		[prj iter]
-		q))))
-
 (* the empty list *)
 let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType)]
 
@@ -264,21 +333,11 @@ let rec compile_box env loop e =
     Ti(q_o, [Cs.Offset (1, `Surrogate)], [(1, ti_e)], dummy)
 
 and compile_unbox env loop e =
-  let Ti(q_e, cs_e, itbls_e, _) = compile_expression env loop e in
+  let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop e in
     assert ((Cs.cardinality cs_e) = 1);
     assert ((List.length itbls_e) = 1);
-    let (offset, Ti(q_sub, cs_sub, itbls_sub, _)) = List.hd itbls_e in
-    let q_unbox =
-      A.Dag.mk_project
-	([(iter, iter'); prj pos] @ (prjlist (io (Cs.columns cs_sub))))
-	(A.Dag.mk_eqjoin
-	   (c', iter)
-	   (A.Dag.mk_project
-	      [(iter', iter); (c', A.Item offset)]
-	      q_e)
-	   q_sub)
-    in
-      Ti(q_unbox, cs_sub, itbls_sub, dummy)
+    let (offset, inner_ti) = List.hd itbls_e in
+      do_unbox q_e offset inner_ti
 
 and compile_append env loop l =
   match l with
@@ -323,30 +382,12 @@ and compile_zip env loop args =
   let Ti (q_e2, cs_e2, itbls_e2, _) = compile_expression env loop (List.nth args 1) in
   let q_e1' = abspos q_e1 (io (Cs.columns cs_e1)) in
   let q_e2' = abspos q_e2 (io (Cs.columns cs_e2)) in
-  let card_e1 = List.length (Cs.columns cs_e1) in
-  let cs_e2' = Cs.shift cs_e2 card_e1 in
-  let itbls_e2' = Itbls.incr_keys itbls_e2 card_e1 in
-  let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
-  let q =
-    A.Dag.mk_project
-      ([prj iter; prj pos] @ (prjlist items))
-      (A.Dag.mk_select
-	 res
-	 (A.Dag.mk_funnumeq
-	    (res, (pos, pos'))
-	    (A.Dag.mk_eqjoin
-	       (iter, iter')
-	       q_e1'
-	       (A.Dag.mk_project
-		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.columns cs_e2')) (io (Cs.columns cs_e2))))
-		  q_e2'))))
-  in
-    let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
-    Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
+    do_zip (Ti (q_e1', cs_e1, itbls_e1, dummy)) (Ti (q_e2', cs_e2, itbls_e2, dummy))
 
 and compile_unzip env loop args =
   assert((List.length args) = 1);
   let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop (List.hd args) in
+    Debug.print (Cs.to_string cs_e);
   let q = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist_single [A.Item 1; A.Item 2] iter))
@@ -434,17 +475,108 @@ and compile_nth env loop operands =
   let itbls' = suse q itbls_2 in
     Ti (q, cs2, itbls', dummy)
 
-and compile_table_comparison _env _loop _wrapper _operands =
-  failwith "comparison of lists not implemented"
+and do_table_comparison loop wrapper l1 l2 =
+  (* abspos e1, abspos e2 *)
+  (* apply the all aggregate operator to the first column grouped by iter *)
+  let all (Ti (q, _, _, _)) =
+    let q = 
+      A.Dag.mk_project
+      [prj iter; prj pos; (A.Item 1, res)]
+      (A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 (A.Dag.mk_funaggr
+	    (A.All, (res, A.Item 1), Some iter)
+	    (A.Dag.mk_project
+	       [prj iter; prj (A.Item 1)]
+	       q)))
+    in
+      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
 
-and compile_row_comparison env loop wrapper operands =
+  let and_op e1 e2 =
+    let Ti (q_1, cs_1, _, _) = e1 in
+    let Ti (q_2, cs_2, _, _) = e2 in
+      assert (Cs.is_operand cs_1);
+      assert (Cs.is_operand cs_2);
+      let q =
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res)]
+	  (A.Dag.mk_funbooland
+	     (res, (A.Item 1, A.Item 2))
+	     (A.Dag.mk_eqjoin
+		(iter, iter')
+		q_1
+		(A.Dag.mk_project
+		   [(iter', iter); (A.Item 2, A.Item 1)]
+		   q_2)))
+      in
+	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  let equals e1 e2 = 
+    let Ti (q_e1, cs_e1, _, _) = e1 in
+    let Ti (q_e2, _, _, _) = e2 in
+    let q = primitive_binop wrap_eq q_e1 q_e2 in
+      Ti (q, cs_e1, Itbls.empty, dummy)
+
+  in
+    
+  let map_comparison source =
+    let Ti (q_s, cs_s, itbls_s, _) = source in
+     let q_s' = 
+       A.Dag.mk_rownum
+	 (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	 q_s
+     in
+     let q_s_mapped = 
+       A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 (A.Dag.mk_project
+	    ((iter, inner) :: (prjlist (io (Cs.columns cs_s))))
+	    q_s')
+     in
+     let map =
+       A.Dag.mk_project
+	 [(outer, iter); prj inner; (pos', pos)]
+	 q_s'
+     in
+     let loop =
+       A.Dag.mk_project
+	 [prj iter]
+	 q_s_mapped
+     in
+     let ti_s = Ti (q_s_mapped, cs_s, itbls_s, dummy) in
+     let Ti (q_comparison, _, _, _) = (do_row_comparison loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
+     (* map the comparison result back into the outer iteration context *)
+     let result_backmapped =
+       A.Dag.mk_project
+	 [(iter, outer); (pos, pos'); prj (A.Item 1)]
+	 (A.Dag.mk_eqjoin
+	    (iter, inner)
+	    map
+	    q_comparison)
+     in
+       Ti (result_backmapped, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+    and_op 
+      (equals (do_length loop l1) (do_length loop l2))
+      (all (map_comparison (do_zip l1 l2)))
+
+and compile_comparison env loop wrapper implementation_type operands =
   assert ((List.length operands) = 2);
-  let Ti (r1_q, r1_cs, _, _) = compile_expression env loop (List.hd operands) in
-  let Ti (r2_q, r2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
+  let e1 = compile_expression env loop (List.hd operands) in
+  let e2 = compile_expression env loop (List.nth operands 1) in
+    match implementation_type with
+      | `Atom -> do_row_comparison loop wrapper e1 e2
+      | `List -> do_table_comparison loop wrapper e1 e2
+
+and do_row_comparison loop wrapper r1 r2 =
+  let Ti (q_r1, cs_r1, itbls_r1, _) = r1 in
+  let Ti (q_r2, cs_r2, itbls_r2, _) = r2 in
 
   (* pair the item columns which belong to the respective record fields *)
-  let items1 = Cs.leafs (Cs.sort_record_columns r1_cs) in
-  let items2 = Cs.leafs (Cs.sort_record_columns r2_cs) in
+  let items1 = Cs.leafs (Cs.sort_record_columns cs_r1) in
+  let items2 = Cs.leafs (Cs.sort_record_columns cs_r2) in
   let items = List.combine items1 items2 in
 
   let c = A.Item 1 in
@@ -454,24 +586,39 @@ and compile_row_comparison env loop wrapper operands =
      this result and the result of the (recursive) comparison of the remaining fields *)
   let rec assemble_comparisons = function
     | [] -> 
-	failwith "compile_record_comparison: empty records"
+	failwith "do_row_comparison: empty records"
     | [((col1, coltype), (col2, _))] ->
-	if is_primitive_col coltype then
-	  let r1_q', r2_q' =
-	    (* no need to project if the row has only one item column *)
-	    if (Cs.cardinality r1_cs) = 1 then
-	      (r1_q, r2_q)
-	    else
-	      ((A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col1)]
-		  r1_q),
-	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col2)]
-		  r2_q))
-	  in
-	    primitive_binop wrapper r1_q' r2_q'
-	else
-	  failwith "comparison of (inner) lists not implemented"
+	let q_r1', q_r2' =
+	  (* no need to project if the row has only one item column *)
+	  if (Cs.cardinality cs_r1) = 1 then
+	    (q_r1, q_r2)
+	  else
+	    ((A.Dag.mk_project
+		[prj iter; prj pos; (c, A.Item col1)]
+		q_r1),
+	     (A.Dag.mk_project
+		[prj iter; prj pos; (c, A.Item col2)]
+		q_r2))
+	in
+	  if is_primitive_col coltype then
+	    (* normal comparison of atomic values *)
+	    primitive_binop wrapper q_r1' q_r2'
+	  else
+	    (* we compare nested lists represented by a inner table *)
+
+	    (* lookup the inner tables referred to by col1, col2 *)
+	    let inner_table_r1, inner_table_r2 = 
+	      try
+		Itbls.lookup col1 itbls_r1, Itbls.lookup col2 itbls_r2 
+	      with _ -> assert false
+	    in
+	    (* unbox the inner tables *)
+	    let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
+	    let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
+	      (* compare the inner tables *)
+	    let result_ti = do_table_comparison loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
+	    let Ti (q_result, _, _, _) = result_ti in
+	      q_result
     | ((col1, coltype), (col2, _)) :: items ->
 	let col_comparison_result =
 	  if is_primitive_col coltype then
@@ -479,10 +626,10 @@ and compile_row_comparison env loop wrapper operands =
 	       wrapper
 	       (A.Dag.mk_project
 		  [prj iter; prj pos; (c, A.Item col1)]
-		  r1_q)
+		  q_r1)
 	       (A.Dag.mk_project
 		  [prj iter; prj pos; (c, A.Item col2)]
-		  r2_q))
+		  q_r2))
 	  else
 	    failwith "comparison of (inner) lists not implemented"
 	in
@@ -628,30 +775,9 @@ and compile_apply env loop f args itype =
     | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
     | "/" 
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
-    | "==" -> 
-	begin
-	  match itype with
-	    | `Atom ->
-		compile_row_comparison env loop wrap_eq args
-	    | `List ->
-		compile_table_comparison env loop wrap_eq args
-	end
-    | ">" -> 
-	begin
-	  match itype with
-	    | `Atom ->
-		compile_row_comparison env loop wrap_gt args
-	    | `List ->
-		compile_table_comparison env loop wrap_gt args
-	end
-    | "<>" -> 
-	begin
-	  match itype with
-	    | `Atom ->
-		compile_row_comparison env loop wrap_ne args
-	    | `List ->
-		compile_table_comparison env loop wrap_ne args
-	end
+    | "==" -> compile_comparison env loop wrap_eq itype args
+    | ">" -> compile_comparison env loop wrap_gt itype args
+    | "<>" -> compile_comparison env loop wrap_ne itype args
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
@@ -758,20 +884,9 @@ and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)
   let itbls = Itbls.append r1_itbls r2_itbls' in
     Ti (q, cs, itbls, dummy)
 
-and compile_project env loop field r =
-  let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
-  let field_cs' = Cs.lookup_record_field cs_r field in
-  let c_old = Cs.columns field_cs' in
-  let offset = List.hd c_old in
-  let c_new = incr c_old (-offset + 1) in
-  let field_cs = Cs.shift field_cs' (-offset + 1) in
-  let field_itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_r c_old) (offset - 1) in 
-  let q =
-    A.Dag.mk_project
-      ([prj iter; prj pos] @ prjlist_map (io c_new) (io c_old))
-      q_r
-  in
-    Ti (q, field_cs, field_itbls, dummy)
+and compile_project env loop field record =
+  let record_ti = compile_expression env loop record in
+    do_project field record_ti
 
 and compile_erase env loop erase_fields r =
   let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in

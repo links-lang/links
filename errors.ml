@@ -163,12 +163,16 @@ let rec format_exception_html = function
       (*raise exn (* use for backtraces *) *)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) = 
+ (* 
   try 
+  *)
     Lazy.force e
-  with exc ->
+  (*
+   with exc ->
     output_string stream (format_exception exc ^ "\n");
     flush stream;
-    default exc
+    default exc 
+  *)
 
 let display_fatal ?(stream=stderr) f a = 
   display ~default:(fun _ -> exit 1) ~stream:stream (lazy (f a))
