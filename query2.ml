@@ -615,9 +615,17 @@ module Annotate = struct
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "not"
-	    | "<>" | "==" | ">" ->
+	    | "/" | "/." | "not" -> 
+		(* these operators are only ever applied to atomic
+		   values, so no need to annotate the arguments *)
 		(* `Atom -> `Atom -> `Atom *)
+		`Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
+	    | "<>" | "==" | ">" ->
+		(* arguments can have any type because we can compare
+		   atomic values, records and lists. boxed lists are
+		   unboxed in compileQuery so we need no annotation
+		   here *)
+		(* a -> b -> `Atom *)
 		`Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
 	    | "nth" ->
 		(* `Atom -> `List -> `Atom *)

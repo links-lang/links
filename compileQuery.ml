@@ -11,6 +11,7 @@ module Itbls = struct
   let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
   let append = List.append
   let lookup = List.assoc
+  let length = List.length
 
   (* remove all mappings whose offsets are not in keys *)
   let retain_by_keys itbls keys = 
@@ -184,6 +185,23 @@ let do_zip e1 e2 =
   in
   let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
     Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
+
+(* generate the algebra code for the application of a binary operator to two
+   columns *)
+let primitive_binop wrapper op1 op2 =
+  let c = A.Item 1 in
+  let c' = A.Item 2 in
+  let res = A.Item 3 in
+    A.Dag.mk_project
+      [(prj iter); (prj pos); (c, res)]
+      (wrapper 
+	 res c c'
+	 (A.Dag.mk_eqjoin
+	    (iter, iter')
+	    op1
+	    (A.Dag.mk_project
+	       [(iter', iter); (c', c)]
+	       op2)))
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -475,8 +493,38 @@ and compile_nth env loop operands =
   let itbls' = suse q itbls_2 in
     Ti (q, cs2, itbls', dummy)
 
+and compile_comparison env loop wrapper operands =
+  assert ((List.length operands) = 2);
+  let e1 = List.hd operands in
+  let e2 = List.nth operands 1 in
+  let e1_ti = compile_expression env loop e1 in
+  let e2_ti = compile_expression env loop e2 in
+  let is_boxed (Ti (_, cs, _, _)) =
+    match cs with
+      | [Cs.Offset (1, `Surrogate)] -> true
+      | _ -> false
+  in
+  let unbox (Ti (q, cs, itbls, _)) =
+      assert (Cs.is_operand cs);
+      assert ((Itbls.length itbls) = 1);
+      let (offset, inner_ti) = List.hd itbls in
+	do_unbox q offset inner_ti
+  in
+    match (Query2.Annotate.typeof_typed_t e1, Query2.Annotate.typeof_typed_t e2) with
+      | `Atom, `Atom when (is_boxed e1_ti) && (is_boxed e2_ti) ->
+	  do_table_comparison loop wrapper (unbox e1_ti) (unbox e2_ti)
+      | `Atom, `List when is_boxed e1_ti ->
+	  do_table_comparison loop wrapper (unbox e1_ti) e2_ti
+      | `List, `Atom when is_boxed e2_ti ->
+	  do_table_comparison loop wrapper e1_ti (unbox e2_ti)
+      | `Atom, `Atom -> 
+	  do_row_comparison loop wrapper e1_ti e2_ti
+      | `List, `List -> 
+	  do_table_comparison loop wrapper e1_ti e2_ti
+      | _ -> assert false
+
 and do_table_comparison loop wrapper l1 l2 =
-  (* abspos e1, abspos e2 *)
+  Debug.print "do_table_comparison";
   (* apply the all aggregate operator to the first column grouped by iter *)
   let all (Ti (q, _, _, _)) =
     let q = 
@@ -558,19 +606,17 @@ and do_table_comparison loop wrapper l1 l2 =
      in
        Ti (result_backmapped, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
+  let absolute_positions (Ti (q, cs, itbls, _)) =
+    Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
+  in
+  let l1_abs = absolute_positions l1 in
+  let l2_abs = absolute_positions l2 in
     and_op 
-      (equals (do_length loop l1) (do_length loop l2))
-      (all (map_comparison (do_zip l1 l2)))
-
-and compile_comparison env loop wrapper implementation_type operands =
-  assert ((List.length operands) = 2);
-  let e1 = compile_expression env loop (List.hd operands) in
-  let e2 = compile_expression env loop (List.nth operands 1) in
-    match implementation_type with
-      | `Atom -> do_row_comparison loop wrapper e1 e2
-      | `List -> do_table_comparison loop wrapper e1 e2
+      (equals (do_length loop l1_abs) (do_length loop l2_abs))
+      (all (map_comparison (do_zip l1_abs l2_abs)))
 
 and do_row_comparison loop wrapper r1 r2 =
+  Debug.print "do_row_comparison";
   let Ti (q_r1, cs_r1, itbls_r1, _) = r1 in
   let Ti (q_r2, cs_r2, itbls_r2, _) = r2 in
 
@@ -647,22 +693,6 @@ and do_row_comparison loop wrapper r1 r2 =
   let q = assemble_comparisons items in
     Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
-(* generate the algebra code for the application of a binary operator to two
-   columns *)
-and primitive_binop wrapper op1 op2 =
-  let c = A.Item 1 in
-  let c' = A.Item 2 in
-  let res = A.Item 3 in
-    A.Dag.mk_project
-      [(prj iter); (prj pos); (c, res)]
-      (wrapper 
-	 res c c'
-	 (A.Dag.mk_eqjoin
-	    (iter, iter')
-	    op1
-	    (A.Dag.mk_project
-	       [(iter', iter); (c', c)]
-	       op2)))
 
 and compile_binop env loop wrapper operands =
   assert ((List.length operands) = 2);
@@ -765,7 +795,7 @@ and compile_drop env loop args =
   let itbls' = suse q' itbls2 in
     Ti(q', cs2, itbls', dummy)
 
-and compile_apply env loop f args itype =
+and compile_apply env loop f args =
   match f with
     | "+" 
     | "+." -> compile_binop env loop (wrap_1to1 A.Add) args
@@ -775,9 +805,9 @@ and compile_apply env loop f args itype =
     | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
     | "/" 
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
-    | "==" -> compile_comparison env loop wrap_eq itype args
-    | ">" -> compile_comparison env loop wrap_gt itype args
-    | "<>" -> compile_comparison env loop wrap_ne itype args
+    | "==" -> compile_comparison env loop wrap_eq args
+    | ">" -> compile_comparison env loop wrap_gt args
+    | "<>" -> compile_comparison env loop wrap_ne args
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
@@ -1118,7 +1148,7 @@ and compile_groupby env loop v g_e e =
 and compile_expression env loop e : tblinfo =
   match e with
     | `Constant (c, _) -> compile_constant loop c
-    | `Apply ((f, args), imptype) -> compile_apply env loop f args imptype
+    | `Apply ((f, args), _) -> compile_apply env loop f args 
     | `Var (x, _) -> AEnv.lookup env x
     | `Project ((r, field), _) -> compile_project env loop field r
     | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)

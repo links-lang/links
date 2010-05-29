@@ -117,8 +117,8 @@ SOURCES = $(OPC)                		\
 	  cs.ml					\
 	  heapresult.ml				\
 	  algebra_export.ml			\
-	  compileQuery.ml			\
 	  query2.ml				\
+	  compileQuery.ml			\
           evalir.ml                             \
           webif.mli webif.ml                    \
           links.ml              		\
