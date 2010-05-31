@@ -78,9 +78,9 @@ let rec jsonize_value : Value.t -> string = function
       as r ->
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
   | `FunctionPtr _ -> assert false (* should've been resolved when 1st parsed. *)
-  | `ClientFunction name -> "{\"function\":\"" ^ name ^ "\"}"
+  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | `RecFunction(defs, env, f, _scope) ->
-      "{\"function\":\"" ^ Js.var_name_var f ^ "\"," ^
+      "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
       " \"location\":\"server\"," ^
       " \"environment\": {" ^ 
         String.concat "," (IntMap.to_list(fun k (v,_) -> 
