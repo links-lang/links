@@ -632,9 +632,22 @@ and do_row_comparison loop wrapper r1 r2 =
   let Ti (q_r1, cs_r1, itbls_r1, _) = r1 in
   let Ti (q_r2, cs_r2, itbls_r2, _) = r2 in
 
+
+  (* special case: if we are comparing lists of records and one of the lists is the empty 
+     list, the length of its cs component not match the other cs's length.  in this case, 
+     we need to "fake" a compatible cs for the empty list *)
+  let longer_cs cs1 cs2 = 
+    match Cs.cardinality cs1, Cs.cardinality cs2 with
+      | a, b when a > b -> (cs1, cs1)
+      | a, b when a < b -> (cs2, cs2)
+      | _, _ -> (cs1, cs2)
+  in
+  let cs_r1, cs_r2 = longer_cs cs_r1 cs_r2 in
+
   (* pair the item columns which belong to the respective record fields *)
   let items1 = Cs.leafs (Cs.sort_record_columns cs_r1) in
   let items2 = Cs.leafs (Cs.sort_record_columns cs_r2) in
+
   let items = List.combine items1 items2 in
 
   let c = A.Item 1 in
