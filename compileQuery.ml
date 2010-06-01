@@ -368,7 +368,7 @@ and compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	Ti (nil, [Cs.Offset (A.Item 1, `NatType)], Itbls.empty, dummy)
+	Ti (nil, [Cs.Offset (1, `NatType)], Itbls.empty, dummy)
 
 and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
@@ -466,7 +466,7 @@ and compile_aggr env loop aggr_fun args =
 	 (aggr_fun, (c, c), Some iter)
 	 q_e)
     in
-    (* HACK: special case for sum *)
+      (* HACK: special case for sum *)
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
       (* FIXME: extract the correct column type from cs_e *)
       Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
@@ -527,23 +527,20 @@ and compile_comparison env loop wrapper operands =
 	  do_table_comparison loop wrapper e1_ti e2_ti
       | _ -> assert false
 
+
 and do_table_comparison loop wrapper l1 l2 =
   Debug.print "do_table_comparison";
 
   (* apply the all aggregate operator to the first column grouped by iter *)
-  let all (Ti (q, _, _, _)) =
-    let q = 
-      A.Dag.mk_project
-      [prj iter; prj pos; (A.Item 1, res)]
-      (A.Dag.mk_attach
-	 (pos, A.Nat 1n)
-	 (A.Dag.mk_funaggr
-	    (A.All, (res, A.Item 1), Some iter)
-	    (A.Dag.mk_project
-	       [prj iter; prj pos; prj (A.Item 1)]
-	       q)))
+  let all (Ti (q, cs, _, _)) =
+    assert (Cs.is_operand cs);
+    let q' = 
+      (A.Dag.mk_funaggr
+	 (A.All, (A.Item 1, A.Item 1), Some iter)
+	 q)
     in
-      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+    let q'' = wrap_agg loop q' (A.Bool false) in
+      Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
 
   let and_op e1 e2 =
@@ -614,11 +611,78 @@ and do_table_comparison loop wrapper l1 l2 =
   let absolute_positions (Ti (q, cs, itbls, _)) =
     Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
   in
+
+  (* project all iterations whose item is 0 *)
+  let is_zero q =
+    A.Dag.mk_project
+      [prj iter]
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumeq
+	    (res, (A.Item 1, A.Item 2))
+	    (A.Dag.mk_attach
+	       (A.Item 2, A.Int (Num.Int 0))
+	       q)))
+  in
+
+  (* deliver a true for all iterations which are empty for both arguments *)
+  let both_empty l1_len l2_len =
+    let Ti (q_l1, cs_l1, _, _) = l1_len in
+    let Ti (q_l2, cs_l2, _, _) = l2_len in
+      assert (Cs.is_operand cs_l1);
+      assert (Cs.is_operand cs_l2);
+      let q = 
+	A.Dag.mk_attach
+	  (A.Item 1, A.Bool true)
+	  (A.Dag.mk_attach
+	     (pos, A.Nat 1n)
+	     (A.Dag.mk_eqjoin
+		(iter, iter')
+		(is_zero q_l1)
+		(A.Dag.mk_project
+		   [(iter', iter)]
+		   (is_zero q_l2))))
+      in
+	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  (* for all iterations in which _both_ lists are empty, the result is true *)
+  let two_empty_lists and_res both_empty =
+    let Ti (q_and, cs_and, _, _) = and_res in
+    let Ti (q_empty, _, _, _) = both_empty in
+    let q =
+      A.Dag.mk_disjunion
+	(A.Dag.mk_eqjoin
+	   (iter, iter')
+	   q_and
+	   (A.Dag.mk_project
+	      [(iter', iter)]
+	      (A.Dag.mk_difference
+		 (A.Dag.mk_project
+		    [prj iter]
+		    q_and)
+		 (A.Dag.mk_project
+		    [prj iter]
+		    q_empty))))
+	q_empty
+    in
+      Ti (q, cs_and, Itbls.empty, dummy)
+  in
+	
   let l1_abs = absolute_positions l1 in
   let l2_abs = absolute_positions l2 in
+  let l1_len = do_length loop l1_abs in
+  let l2_len = do_length loop l2_abs in
+    two_empty_lists
+      (and_op
+	 (equals l1_len l2_len)
+	 (all (map_comparison (do_zip l1_abs l2_abs))))
+      (both_empty l1_len l2_len)
+(*
     and_op 
-      (equals (do_length loop l1_abs) (do_length loop l2_abs))
+      (equals l1_len l2_len)
       (all (map_comparison (do_zip l1_abs l2_abs)))
+*)
 
 and do_row_comparison loop wrapper r1 r2 =
   Debug.print "do_row_comparison";
