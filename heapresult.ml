@@ -112,7 +112,6 @@ struct
 	   assert false)
     | _ -> assert false
 
-
   let collect_plans = function
     | E (((_, "query_plan_bundle"), []), childs) ->
 	List.map collect_plan (filter_whitespace_els childs)

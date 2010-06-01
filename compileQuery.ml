@@ -141,6 +141,7 @@ let do_project field record =
   let Ti (q_r, cs_r, itbls_r, _) = record in
   let field_cs' = Cs.lookup_record_field cs_r field in
   let old_cols = Cs.columns field_cs' in
+  Debug.print (Cs.to_string cs_r);
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
@@ -163,6 +164,7 @@ let do_length loop (Ti (q_e, _, _, _)) =
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
+  Debug.print "do_zip";
   let Ti (q_e1, cs_e1, itbls_e1, _) = e1 in
   let Ti (q_e2, cs_e2, itbls_e2, _) = e2 in
   let card_e1 = List.length (Cs.columns cs_e1) in
@@ -301,7 +303,7 @@ let rec suse q_pase subs : ((int * tblinfo) list) =
     subs
 
 (* the empty list *)
-let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType)]
+let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType); (A.Item 1, `IntType)]
 
 (* loop-lift q by map *)
 let lift map (Ti (q, cs, _, _)) =
@@ -366,7 +368,7 @@ and compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	Ti (nil, [], Itbls.empty, dummy)
+	Ti (nil, [Cs.Offset (A.Item 1, `NatType)], Itbls.empty, dummy)
 
 and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
@@ -538,7 +540,7 @@ and do_table_comparison loop wrapper l1 l2 =
 	 (A.Dag.mk_funaggr
 	    (A.All, (res, A.Item 1), Some iter)
 	    (A.Dag.mk_project
-	       [prj iter; prj (A.Item 1)]
+	       [prj iter; prj pos; prj (A.Item 1)]
 	       q)))
     in
       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
