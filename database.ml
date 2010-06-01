@@ -13,7 +13,16 @@ end
 
 let value_of_db_string (value:string) t =
   match TypeUtils.concrete_type t with
-    | `Primitive `Bool -> Value.box_bool (value = "true")
+    | `Primitive `Bool ->
+        (* HACK:
+           
+           This should probably be part of the database driver as
+           different databases have different representations of
+           booleans.
+
+           mysql appears to use 0/1 and postgres f/t
+        *)
+        Value.box_bool (value = "1" || value = "t" || value = "true")
     | `Primitive `Char -> Value.box_char (String.get value 0)
     | `Alias (("String", _), _) -> Value.string_as_charlist value
         (* BUG: we should be more principled about detecting strings *)
