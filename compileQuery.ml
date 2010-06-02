@@ -69,7 +69,8 @@ let item'' = A.Pos 5
 let grp_key = A.Pos 6
 let c' = A.Pos 7
 let res = A.Pos 8
-let pos'' = A.Pos 9
+let res' = A.Pos 9
+let pos'' = A.Pos 10
 
 let incr_col = function
   | A.Iter i -> A.Iter (i + 1)
@@ -524,7 +525,7 @@ and compile_nth env loop operands =
   let itbls' = suse q itbls_2 in
     Ti (q, cs2, itbls', dummy)
 
-and compile_comparison env loop wrapper operands =
+and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
   assert ((List.length operands) = 2);
   let e1 = List.hd operands in
   let e2 = List.nth operands 1 in
@@ -545,20 +546,131 @@ and compile_comparison env loop wrapper operands =
 	(* if arguments are boxed (i.e. they have list type), we need
 	   to unbox them first *)
       | `Atom, `Atom when (is_boxed e1_ti) && (is_boxed e2_ti) ->
-	  do_table_comparison loop wrapper (unbox e1_ti) (unbox e2_ti)
+	  tablefun loop comparison_wrapper (unbox e1_ti) (unbox e2_ti)
       | `Atom, `List when is_boxed e1_ti ->
-	  do_table_comparison loop wrapper (unbox e1_ti) e2_ti
+	  tablefun loop comparison_wrapper (unbox e1_ti) e2_ti
       | `List, `Atom when is_boxed e2_ti ->
-	  do_table_comparison loop wrapper e1_ti (unbox e2_ti)
+	  tablefun loop comparison_wrapper e1_ti (unbox e2_ti)
       | `Atom, `Atom -> 
-	  do_row_comparison loop wrapper e1_ti e2_ti
+	  rowfun loop comparison_wrapper e1_ti e2_ti
       | `List, `List -> 
-	  do_table_comparison loop wrapper e1_ti e2_ti
+	  tablefun loop comparison_wrapper e1_ti e2_ti
       | _ -> assert false
 
+and do_table_greater loop wrapper l1 l2 =
+  let inner_loop e =
+    let Ti (q, _, _, _) = e in
+      A.Dag.mk_project
+	[(iter, inner)]
+	(A.Dag.mk_rownum
+	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	   q)
+  in
 
-and do_table_comparison loop wrapper l1 l2 =
-  Debug.print "do_table_comparison";
+  let position_greater e1 e2 = 
+    let zipped = do_zip e1 e2 in
+    (* compute new loop? *)
+    let compared = do_row_greater_real (inner_loop zipped) wrapper zipped in
+    let selected = A.Dag.mk_select (A.Item 1) compared in
+
+    let q = 
+      A.Dag.mk_disjunion
+	(A.Dag.mk_attach
+	   (pos, A.Nat 1n)
+	   (A.Dag.mk_project
+	      [prj iter; (A.Item 1, res)]
+		 (A.Dag.mk_funaggr
+		    (A.Min, (res, pos), Some iter)
+		    selected)))
+	(A.Dag.mk_attach
+	   (pos, A.Nat 1n)
+	   (A.Dag.mk_attach
+	      (A.Item 1, A.Nat (-1n))
+	      (A.Dag.mk_difference
+		 loop
+		 (A.Dag.mk_project
+		    [prj iter]
+		    selected))))
+    in
+      Ti (q, [Cs.Offset (1, `NatType)], Itbls.empty, dummy)
+
+  in
+  let smaller e1 e2 = 
+    let Ti (q_e1, cs_e1, _, _) = e1 in
+    let Ti (q_e2, cs_e2, _, _) = e2 in
+      assert (Cs.is_operand cs_e1);
+      assert (Cs.is_operand cs_e2);
+      let q = 
+	A.Dag.mk_project
+	  [prj iter; prj pos; prj (A.Item 1)]
+	  (A.Dag.mk_funbooland
+	     (A.Item 1, (res, res'))
+	     (A.Dag.mk_funboolnot
+		(res', res')
+		(A.Dag.mk_funnumeq
+		   (res', (A.Item 1, A.Item 2))
+		   (A.Dag.mk_funboolnot
+		      (res, res)
+		      (A.Dag.mk_funnumgt
+			 (res, (A.Item 1, A.Item 2))
+			 (* we need to join only on iter because pos is always 1
+		            (position_greater aggregates) *)
+			 (A.Dag.mk_eqjoin
+			    (iter, iter')
+			    q_e1
+			    (A.Dag.mk_project
+			       [(iter', iter); (A.Item 2, A.Item 1)]
+			       q_e2)))))))
+      in
+	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  let greater e1 e2 = 
+    let Ti (q_e1, _, _, _) = e1 in
+    let Ti (q_e2, _, _, _) = e2 in
+    let q = primitive_binop wrap_gt q_e1 q_e2 in
+      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+    
+  let or_op e1 e2 =
+    let Ti (q_1, cs_1, _, _) = e1 in
+    let Ti (q_2, cs_2, _, _) = e2 in
+      assert (Cs.is_operand cs_1);
+      assert (Cs.is_operand cs_2);
+      let q =
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res)]
+	  (A.Dag.mk_funboolor
+	     (res, (A.Item 1, A.Item 2))
+	     (A.Dag.mk_eqjoin
+		(iter, iter')
+		q_1
+		(A.Dag.mk_project
+		   [(iter', iter); (A.Item 2, A.Item 1)]
+		   q_2)))
+      in
+	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+    
+  let absolute_positions (Ti (q, cs, itbls, _)) =
+    Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
+  in
+  let l1_abs = absolute_positions l1 in
+  let l2_abs = absolute_positions l2 in
+    
+    or_op 
+      (greater (do_length loop l1_abs) (do_length loop l2_abs))
+      (smaller (position_greater l1_abs l2_abs) (position_greater l1_abs l2_abs))
+    
+and do_row_greater loop wrapper e1 e2 = 
+  let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
+    Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+
+and do_row_greater_real _loop _wrapper _zipped =
+  failwith "not implemented"
+    
+and do_table_equal loop wrapper l1 l2 =
+  Debug.print "do_table_equal";
 
   let all = do_and loop in
 
@@ -589,7 +701,7 @@ and do_table_comparison loop wrapper l1 l2 =
       Ti (q, cs_e1, Itbls.empty, dummy)
   in
     
-  let map_comparison source =
+  let map_equal source =
     let Ti (q_s, cs_s, itbls_s, _) = source in
      let q_s' = 
        A.Dag.mk_rownum
@@ -614,14 +726,14 @@ and do_table_comparison loop wrapper l1 l2 =
 	 q_s_mapped
      in
      let ti_s = Ti (q_s_mapped, cs_s, itbls_s, dummy) in
-     let Ti (q_comparison, _, _, _) = (do_row_comparison loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
+     let Ti (q_equal, _, _, _) = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
      (* map the comparison result back into the outer iteration context *)
      let result_backmapped =
        A.Dag.mk_project
 	 [(iter, outer); (pos, pos'); prj (A.Item 1)]
 	 (A.Dag.mk_eqjoin
 	    (iter, inner)
-	    q_comparison
+	    q_equal
 	    map)
      in
        Ti (result_backmapped, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
@@ -635,25 +747,17 @@ and do_table_comparison loop wrapper l1 l2 =
   let l2_abs = absolute_positions l2 in
   let l1_len = do_length loop l1_abs in
   let l2_len = do_length loop l2_abs in
-(*
-    two_empty_lists
-      (and_op
-	 (equals l1_len l2_len)
-	 (do_and (map_comparison (do_zip l1_abs l2_abs))))
-      (both_empty l1_len l2_len)
-*)
     and_op 
       (equals l1_len l2_len)
-      (all (map_comparison (do_zip l1_abs l2_abs)))
+      (all (map_equal (do_zip l1_abs l2_abs)))
 
-and do_row_comparison loop wrapper r1 r2 =
-  Debug.print "do_row_comparison";
+and do_row_equal loop wrapper r1 r2 =
+  Debug.print "do_row_equal";
   let Ti (q_r1, cs_r1, itbls_r1, _) = r1 in
   let Ti (q_r2, cs_r2, itbls_r2, _) = r2 in
 
-
   (* special case: if we are comparing lists of records and one of the lists is the empty 
-     list, the length of its cs component not match the other cs's length.  in this case, 
+     list, the length of its cs component does not match the other cs's length.  in this case, 
      we need to "fake" a compatible cs for the empty list *)
   let longer_cs cs1 cs2 = 
     match Cs.cardinality cs1, Cs.cardinality cs2 with
@@ -674,9 +778,9 @@ and do_row_comparison loop wrapper r1 r2 =
   let res = A.Item 3 in
   (* compare the columns for the first field. the result is then the conjuntion of
      this result and the result of the (recursive) comparison of the remaining fields *)
-  let rec assemble_comparisons = function
+  let rec assemble_equals = function
     | [] -> 
-	failwith "do_row_comparison: empty records"
+	failwith "do_row_equal: empty records"
     | [((col1, coltype), (col2, _))] ->
 	let q_r1', q_r2' =
 	  (* no need to project if the row has only one item column *)
@@ -706,22 +810,37 @@ and do_row_comparison loop wrapper r1 r2 =
 	    let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
 	    let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
 	      (* compare the inner tables *)
-	    let result_ti = do_table_comparison loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
+	    let result_ti = do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
 	    let Ti (q_result, _, _, _) = result_ti in
 	      q_result
     | ((col1, coltype), (col2, _)) :: items ->
-	let col_comparison_result =
-	  if is_primitive_col coltype then
-	    (primitive_binop
-	       wrapper
+	let col_equal_result = 
+	  let q_r1', q_r2' =
 	       (A.Dag.mk_project
 		  [prj iter; prj pos; (c, A.Item col1)]
-		  q_r1)
+		  q_r1),
 	       (A.Dag.mk_project
 		  [prj iter; prj pos; (c, A.Item col2)]
-		  q_r2))
-	  else
-	    failwith "comparison of (inner) lists not implemented"
+		  q_r2)
+	  in
+	    if is_primitive_col coltype then
+	      primitive_binop wrapper q_r1' q_r2'
+	    else
+	      (* we compare nested lists represented by a inner table *)
+
+	      (* lookup the inner tables referred to by col1, col2 *)
+	      let inner_table_r1, inner_table_r2 = 
+		try
+		  Itbls.lookup col1 itbls_r1, Itbls.lookup col2 itbls_r2 
+		with _ -> assert false
+	      in
+		(* unbox the inner tables *)
+	      let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
+	      let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
+		(* compare the inner tables *)
+	      let result_ti = do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
+	      let Ti (q_result, _, _, _) = result_ti in
+		q_result
 	in
 	  A.Dag.mk_project
 	    [prj iter; prj pos; (c, res)]
@@ -731,10 +850,10 @@ and do_row_comparison loop wrapper r1 r2 =
 		  (iter', iter)
 		  (A.Dag.mk_project
 		     [(iter', iter); (c', c)]
-		     col_comparison_result)
-		  (assemble_comparisons items)))
+		     col_equal_result)
+		  (assemble_equals items)))
   in
-  let q = assemble_comparisons items in
+  let q = assemble_equals items in
     Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
 
@@ -849,10 +968,10 @@ and compile_apply env loop f args =
     | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
     | "/" 
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
-    | "==" -> compile_comparison env loop wrap_eq args
-    | "<>" -> compile_comparison env loop wrap_ne args
-    | ">" -> compile_comparison env loop wrap_gt args
-    | "not" -> compile_unop env loop wrap_not args
+    | "==" -> compile_comparison env loop wrap_eq do_table_equal do_row_equal args
+    | "<>" -> compile_comparison env loop wrap_ne do_table_equal do_row_equal args
+    | ">" -> compile_comparison env loop wrap_gt do_table_greater do_row_greater args
+    | "not" ->  compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
     | "sum" -> compile_aggr env loop A.Sum args
