@@ -286,6 +286,10 @@ struct
 	  `Primitive "and"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "or" = f ->
 	  `Primitive "or"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "all" = f ->
+	  `Primitive "all"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "any" = f ->
+	  `Primitive "any"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -405,6 +409,12 @@ struct
 		  `GroupBy ((x, group_exp), source)
 	    | _ -> assert false
 	end
+    | `Primitive "all", [p; l] ->
+	(* all(p, l) = and(map p l) *)
+	`Apply ("and", [(apply env (`Primitive "Map", [p; l]))])
+    | `Primitive "any", [p; l] -> 
+	(* any(p, l) = or(map p l) *)
+	`Apply ("or", [(apply env (`Primitive "Map", [p; l]))])
     | `Primitive "<", [e1; e2] ->
 	`Apply (">", [e2; e1])
     | `Primitive ">=", [e1; e2] ->
@@ -422,7 +432,6 @@ struct
 	`Apply ("nth", [`Constant (`Int (Num.Int 1)); `Apply ("take", (`Constant (`Int (Num.Int 1))) :: args)])
     | `Primitive f, args ->
         `Apply (f, args)
-
     | `If (c, t, Some e), args ->
         `If (c, apply env (t, args), Some (apply env (e, args)))
     | `If (c, t, None), args ->
