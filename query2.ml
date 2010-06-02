@@ -1,6 +1,8 @@
 (*pp deriving *)
 open Utility
 
+(* HACK: global variable which stores the database on which to execute
+   the query (or none) *)
 let used_database = ref None
 
 type t =
@@ -280,6 +282,8 @@ struct
 	  `Primitive "sum"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
 	  `Primitive "concat"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "and" = f ->
+	  `Primitive "and"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -647,7 +651,7 @@ module Annotate = struct
 		let n' = transform env n in
 		let l' = aot `List env l in
 		  `Apply ((f, [n'; l']), `List)
-	    | "length" | "unzip" | "sum" ->
+	    | "length" | "unzip" | "sum" | "and" ->
 		(* `List -> `Atom *)
 		let l = 
 		  (match args with 

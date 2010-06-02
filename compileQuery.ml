@@ -205,6 +205,18 @@ let primitive_binop wrapper op1 op2 =
 	       [(iter', iter); (c', c)]
 	       op2)))
 
+(* apply the all aggregate operator to the first column grouped by iter 
+   (corresponds to the function "and" from the links prelude *)
+let do_and loop (Ti (q, cs, _, _)) =
+  assert (Cs.is_operand cs);
+  let q' = 
+    (A.Dag.mk_funaggr
+       (A.All, (A.Item 1, A.Item 1), Some iter)
+       q)
+  in
+  let q'' = wrap_agg loop q' (A.Bool true) in
+    Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
@@ -439,17 +451,17 @@ and compile_unzip env loop args =
   let cs = [Cs.Mapping ("1", [Cs.Offset (1, `Surrogate)]); Cs.Mapping ("2", [Cs.Offset (2, `Surrogate)])] in
     Ti (q, cs, itbls, dummy)
 
+and compile_and env loop args =
+  assert ((List.length args) = 1);
+  let e = List.hd args in
+  let ti_e = compile_expression env loop e in
+    do_and loop ti_e
+
 and compile_length env loop args =
   assert ((List.length args) = 1);
   let e = List.hd args in
-  let Ti (q_e, _, _, _) = compile_expression env loop e in
-  let q = 
-    A.Dag.mk_funaggrcount
-      (A.Item 1, Some iter)
-      q_e
-  in
-  let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-    Ti (q', [Cs.Offset (1, `IntType)], Itbls.empty, dummy)
+  let ti_e = compile_expression env loop e in
+    do_length loop ti_e
 
 (* FIXME: only sum works at the moment. max/min/avg can't be used.
    Issues:
@@ -531,17 +543,7 @@ and compile_comparison env loop wrapper operands =
 and do_table_comparison loop wrapper l1 l2 =
   Debug.print "do_table_comparison";
 
-  (* apply the all aggregate operator to the first column grouped by iter *)
-  let all (Ti (q, cs, _, _)) =
-    assert (Cs.is_operand cs);
-    let q' = 
-      (A.Dag.mk_funaggr
-	 (A.All, (A.Item 1, A.Item 1), Some iter)
-	 q)
-    in
-    let q'' = wrap_agg loop q' (A.Bool true) in
-      Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
+  let all = do_and loop in
 
   let and_op e1 e2 =
     let Ti (q_1, cs_1, _, _) = e1 in
@@ -620,7 +622,7 @@ and do_table_comparison loop wrapper l1 l2 =
     two_empty_lists
       (and_op
 	 (equals l1_len l2_len)
-	 (all (map_comparison (do_zip l1_abs l2_abs))))
+	 (do_and (map_comparison (do_zip l1_abs l2_abs))))
       (both_empty l1_len l2_len)
 *)
     and_op 
@@ -831,8 +833,8 @@ and compile_apply env loop f args =
     | "/" 
     | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
     | "==" -> compile_comparison env loop wrap_eq args
-    | ">" -> compile_comparison env loop wrap_gt args
     | "<>" -> compile_comparison env loop wrap_ne args
+    | ">" -> compile_comparison env loop wrap_gt args
     | "not" -> compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
@@ -842,6 +844,7 @@ and compile_apply env loop f args =
     | "zip" -> compile_zip env loop args
     | "unzip" -> compile_unzip env loop args
     | "concat" -> compile_concat env loop args
+    | "and" -> compile_and env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
