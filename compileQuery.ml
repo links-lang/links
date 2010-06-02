@@ -217,6 +217,16 @@ let do_and loop (Ti (q, cs, _, _)) =
   let q'' = wrap_agg loop q' (A.Bool true) in
     Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
+let do_or loop (Ti (q, cs, _, _)) =
+  assert (Cs.is_operand cs);
+  let q' =
+    A.Dag.mk_funaggr
+      (A.Max, (A.Item 1, A.Item 1), Some iter)
+      q
+  in
+  let q'' = wrap_agg loop q' (A.Bool false) in
+    Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
@@ -450,6 +460,13 @@ and compile_unzip env loop args =
   let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
   let cs = [Cs.Mapping ("1", [Cs.Offset (1, `Surrogate)]); Cs.Mapping ("2", [Cs.Offset (2, `Surrogate)])] in
     Ti (q, cs, itbls, dummy)
+
+(* FIXME: unite at least compile_or/and/length *)
+and compile_or env loop args =
+  assert ((List.length args) = 1);
+  let e = List.hd args in
+  let ti_e = compile_expression env loop e in
+    do_or loop ti_e
 
 and compile_and env loop args =
   assert ((List.length args) = 1);
@@ -845,6 +862,7 @@ and compile_apply env loop f args =
     | "unzip" -> compile_unzip env loop args
     | "concat" -> compile_concat env loop args
     | "and" -> compile_and env loop args
+    | "or" -> compile_or env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->

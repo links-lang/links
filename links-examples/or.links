@@ -1,0 +1,8 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+query {
+	var ignore = players_table;
+        # true
+	not(or([false, false, false])) && or([true, false, false])
+}

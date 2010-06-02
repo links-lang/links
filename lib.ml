@@ -1183,17 +1183,19 @@ let patch_prelude_funs tyenv =
 			     (Env.String.bind
 				(Env.String.bind
 				   (Env.String.bind
-				      tyenv.Types.var_env
-				      ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
-				   ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
-				("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
-			     ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
-			  ("nth", datatype "(Int, [a]) -> a"))
-		       ("unzip", datatype "([(a, b)]) -> ([a], [b])"))
-		    ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
-		 ("sum", datatype "([Int]) -> Int"))
-	      ("concat", datatype "([[a]]) -> [a]"))
-	   ("and", datatype "([Bool]) -> Bool"))
+				      (Env.String.bind
+					 tyenv.Types.var_env
+					 ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
+				      ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
+				   ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
+				("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
+			     ("nth", datatype "(Int, [a]) -> a"))
+			  ("unzip", datatype "([(a, b)]) -> ([a], [b])"))
+		       ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
+		    ("sum", datatype "([Int]) -> Int"))
+		 ("concat", datatype "([[a]]) -> [a]"))
+	      ("and", datatype "([Bool]) -> Bool"))
+	   ("or", datatype "([Bool]) -> Bool"))
 	("zip", datatype "([a], [b]) -> [(a, b)]")}
 
 let impl : located_primitive -> primitive option = function
