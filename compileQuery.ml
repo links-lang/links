@@ -604,7 +604,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
 	  tablefun loop comparison_wrapper e1_ti e2_ti
       | _ -> assert false
 
-and do_table_greater loop wrapper _l1 _l2 =
+and do_table_greater loop wrapper l1 l2 =
 
 (* FIXME: This does not work: [1,1,1] not larger than [2,2] 
    length(l1) > length(l2) is wrong *)
@@ -621,8 +621,7 @@ and do_table_greater loop wrapper _l1 _l2 =
 *)
 
   (* returns the minimal pos so that l1[pos] > l2[pos] *)
-  let _minpos e1 e2 = 
-    let zipped = do_zip e1 e2 in
+  let minpos zipped = 
     (* compute new loop? *)
     let compared = do_row_greater_real loop wrapper zipped in
     let selected = A.Dag.mk_select (A.Item 1) compared in
@@ -640,6 +639,7 @@ and do_table_greater loop wrapper _l1 _l2 =
 	   (pos, A.Nat 1n)
 	   (A.Dag.mk_attach
 	      (A.Item 1, A.Nat Nativeint.max_int)
+	      (* (A.Item 1, A.Nat (-1n)) *)
 	      (A.Dag.mk_difference
 		 loop
 		 (A.Dag.mk_project
@@ -648,19 +648,52 @@ and do_table_greater loop wrapper _l1 _l2 =
     in
       Ti (q, [Cs.Offset (1, `NatType)], Itbls.empty, dummy)
   in
-(*
 
+  let switch_zipped ti =
+    let Ti (q, cs, itbls, _) = ti in
+    let cs1 = Cs.lookup_record_field cs "1" in
+    let cs2 = Cs.lookup_record_field cs "2" in
+    let cs' = [Cs.Mapping ("1", cs2); Cs.Mapping ("2", cs1)] in
+(*
+      let card = Cs.cardinality cs1 in
+      assert (card = Cs.cardinality cs2);
+      let proj_list1 = prjlist_map (io (Cs.columns cs1)) (io (Cs.columns cs2)) in
+      let proj_list2 = prjlist_map (io (Cs.columns cs2)) (io (Cs.columns cs1)) in
+      let proj_list = proj_list1 @ proj_list2 in
+      let cs1' = Cs.shift cs2 (-card+1) in
+      let cs2' = Cs.shift cs1 (card-1) in
+      let cs' = [Cs.Mapping ("1", cs1'); Cs.Mapping ("2", cs2')] in
+      let itbls1 = Itbls.retain_by_keys itbls (Cs.columns cs1) in
+      let itbls2 = Itbls.retain_by_keys itbls (Cs.columns cs2) in
+      let itbls1' = Itbls.decr_keys itbls2 (-card+1) in
+      let itbls2' = Itbls.incr_keys itbls1 (card-1) in
+      let itbls' = Itbls.append itbls1' itbls2' in
+      let q' = A.Dag.mk_project proj_list q in
+	Ti (q', cs', itbls', dummy)
+*)
+      Ti (q, cs', itbls, dummy)
+
+  in
+	  
   let absolute_positions (Ti (q, cs, itbls, _)) =
     Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
   in
+
   let l1_abs = absolute_positions l1 in
   let l2_abs = absolute_positions l2 in
+  let zipped = do_zip l1 l2 in
+  let zipped_reverse = switch_zipped zipped in
+  (*let zipped_reverse = do_zip l2 l1 in *)
+  let l1_len = do_length loop l1_abs in
+  let l2_len = do_length loop l2_abs in
+  let minp_l1_l2 = minpos zipped in
+  let minp_l2_l1 = minpos zipped_reverse in
     
-    or_op 
-      (greater (do_length loop l1_abs) (do_length loop l2_abs))
-      (smaller (position_greater l1_abs l2_abs) (position_greater l1_abs l2_abs))
-*)
-    failwith "not implemented"
+    or_op
+      (and_op 
+	 (smaller l1_len l2_len) 
+	 (or_op (smaller minp_l1_l2 minp_l2_l1) (equal minp_l1_l2 minp_l2_l1)))
+      (and_op (equal l1_len l2_len) (smaller minp_l1_l2 minp_l2_l1))
     
 and do_row_greater loop wrapper e1 e2 = 
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
