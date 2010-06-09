@@ -70,7 +70,8 @@ let grp_key = A.Pos 6
 let c' = A.Pos 7
 let res = A.Pos 8
 let res' = A.Pos 9
-let pos'' = A.Pos 10
+let res'' = A.Pos 10
+let pos'' = A.Pos 11
 
 let incr_col = function
   | A.Iter i -> A.Iter (i + 1)
@@ -81,6 +82,18 @@ let incr_col = function
 let wrap_1to1 f res c c' algexpr =
   A.Dag.mk_fun1to1
     (f, res, [c; c'])
+    algexpr
+
+(* wrapper for logical and *)
+let wrap_and res c c' algexpr =
+  A.Dag.mk_funbooland
+    (res, (c, c'))
+    algexpr
+
+(* wrapper for logical or *)
+let wrap_or res c c' algexpr =
+  A.Dag.mk_funboolor
+    (res, (c, c'))
     algexpr
 
 (* wrapper for equal *)
@@ -104,6 +117,24 @@ let wrap_gt res c c' algexpr =
     (res, (c, c'))
     algexpr
 
+(* wrapper for less than *)
+let wrap_lt rescol c c' algexpr =
+  A.Dag.mk_funbooland
+    (rescol, (res, res'))
+    (A.Dag.mk_project
+       [prj iter; prj pos; prj res; (res', res'')]
+       (A.Dag.mk_funboolnot
+	  (res'', res')
+	  (A.Dag.mk_funnumeq
+	     (res', (A.Item 1, A.Item 2))
+	     (A.Dag.mk_project
+		[prj iter; prj pos; (res, res'); prj c; prj c']
+		(A.Dag.mk_funboolnot
+		   (res', res)
+		   (A.Dag.mk_funnumgt
+		      (res, (A.Item 1, A.Item 2))
+		      algexpr))))))
+
 (* wrapper for not *)
 let wrap_not res op_attr algexpr =
   A.Dag.mk_funboolnot
@@ -123,6 +154,37 @@ let wrap_agg loop q attachment =
 	     (A.Dag.mk_project
 		[prj iter]
 		q))))
+
+(* generate the algebra code for the application of a binary operator to two
+   columns. the table must not represent lists, i.e. pos must be 1 for all iters *)
+let do_primitive_binop wrapper op1 op2 =
+  let c = A.Item 1 in
+  let c' = A.Item 2 in
+  let res = A.Item 3 in
+    A.Dag.mk_project
+      [(prj iter); (prj pos); (c, res)]
+      (wrapper 
+	 res c c'
+	 (A.Dag.mk_eqjoin
+	    (iter, iter')
+	    op1
+	    (A.Dag.mk_project
+	       [(iter', iter); (c', c)]
+	       op2)))
+
+let do_primitive_binop_ti wrapper restype e1 e2 =
+  let Ti (q_e1, cs_e1, _, _) = e1 in
+  let Ti (q_e2, cs_e2, _, _) = e2 in
+    assert (Cs.is_operand cs_e1);
+    assert (Cs.is_operand cs_e2);
+    let q = do_primitive_binop wrapper q_e1 q_e2 in
+      Ti (q, [Cs.Offset (1, restype)], Itbls.empty, dummy)
+
+let smaller = do_primitive_binop_ti wrap_lt `BoolType
+let greater = do_primitive_binop_ti wrap_gt `BoolType
+let equal = do_primitive_binop_ti wrap_eq `BoolType
+let or_op = do_primitive_binop_ti wrap_or `BoolType
+let and_op = do_primitive_binop_ti wrap_and `BoolType
 
 let do_unbox q_e surr_col inner_ti =
   let Ti(q_sub, cs_sub, itbls_sub, _) = inner_ti in
@@ -189,26 +251,9 @@ let do_zip e1 e2 =
   let cs = [Cs.Mapping ("1", cs_e1); Cs.Mapping ("2", cs_e2')] in
     Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
 
-(* generate the algebra code for the application of a binary operator to two
-   columns *)
-let primitive_binop wrapper op1 op2 =
-  let c = A.Item 1 in
-  let c' = A.Item 2 in
-  let res = A.Item 3 in
-    A.Dag.mk_project
-      [(prj iter); (prj pos); (c, res)]
-      (wrapper 
-	 res c c'
-	 (A.Dag.mk_eqjoin
-	    (iter, iter')
-	    op1
-	    (A.Dag.mk_project
-	       [(iter', iter); (c', c)]
-	       op2)))
-
 (* apply the all aggregate operator to the first column grouped by iter 
    (corresponds to the function "and" from the links prelude *)
-let do_and loop (Ti (q, cs, _, _)) =
+let do_list_and loop (Ti (q, cs, _, _)) =
   assert (Cs.is_operand cs);
   let q' = 
     (A.Dag.mk_funaggr
@@ -218,7 +263,9 @@ let do_and loop (Ti (q, cs, _, _)) =
   let q'' = wrap_agg loop q' (A.Bool true) in
     Ti (q'', [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
-let do_or loop (Ti (q, cs, _, _)) =
+(* apply the min aggregate operator to the first column grouped by iter 
+   (corresponds to the function "or" from the links prelude *)
+let do_list_or loop (Ti (q, cs, _, _)) =
   assert (Cs.is_operand cs);
   let q' =
     A.Dag.mk_funaggr
@@ -467,13 +514,13 @@ and compile_or env loop args =
   assert ((List.length args) = 1);
   let e = List.hd args in
   let ti_e = compile_expression env loop e in
-    do_or loop ti_e
+    do_list_or loop ti_e
 
 and compile_and env loop args =
   assert ((List.length args) = 1);
   let e = List.hd args in
   let ti_e = compile_expression env loop e in
-    do_and loop ti_e
+    do_list_and loop ti_e
 
 and compile_length env loop args =
   assert ((List.length args) = 1);
@@ -557,11 +604,12 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
 	  tablefun loop comparison_wrapper e1_ti e2_ti
       | _ -> assert false
 
-and do_table_greater loop wrapper l1 l2 =
+and do_table_greater loop wrapper _l1 _l2 =
 
 (* FIXME: This does not work: [1,1,1] not larger than [2,2] 
    length(l1) > length(l2) is wrong *)
 
+(*
   let inner_loop e =
     let Ti (q, _, _, _) = e in
       A.Dag.mk_project
@@ -570,11 +618,13 @@ and do_table_greater loop wrapper l1 l2 =
 	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
 	   q)
   in
+*)
 
-  let position_greater e1 e2 = 
+  (* returns the minimal pos so that l1[pos] > l2[pos] *)
+  let _minpos e1 e2 = 
     let zipped = do_zip e1 e2 in
     (* compute new loop? *)
-    let compared = do_row_greater_real (inner_loop zipped) wrapper zipped in
+    let compared = do_row_greater_real loop wrapper zipped in
     let selected = A.Dag.mk_select (A.Item 1) compared in
 
     let q = 
@@ -589,7 +639,7 @@ and do_table_greater loop wrapper l1 l2 =
 	(A.Dag.mk_attach
 	   (pos, A.Nat 1n)
 	   (A.Dag.mk_attach
-	      (A.Item 1, A.Nat (-1n))
+	      (A.Item 1, A.Nat Nativeint.max_int)
 	      (A.Dag.mk_difference
 		 loop
 		 (A.Dag.mk_project
@@ -597,65 +647,9 @@ and do_table_greater loop wrapper l1 l2 =
 		    selected))))
     in
       Ti (q, [Cs.Offset (1, `NatType)], Itbls.empty, dummy)
+  in
+(*
 
-  in
-  let smaller e1 e2 = 
-    let Ti (q_e1, cs_e1, _, _) = e1 in
-    let Ti (q_e2, cs_e2, _, _) = e2 in
-      assert (Cs.is_operand cs_e1);
-      assert (Cs.is_operand cs_e2);
-      let q = 
-	A.Dag.mk_project
-	  [prj iter; prj pos; prj (A.Item 1)]
-	  (A.Dag.mk_funbooland
-	     (A.Item 1, (res, res'))
-	     (A.Dag.mk_funboolnot
-		(res', res')
-		(A.Dag.mk_funnumeq
-		   (res', (A.Item 1, A.Item 2))
-		   (A.Dag.mk_funboolnot
-		      (res, res)
-		      (A.Dag.mk_funnumgt
-			 (res, (A.Item 1, A.Item 2))
-			 (* we need to join only on iter because pos is always 1
-		            (position_greater aggregates) *)
-			 (A.Dag.mk_eqjoin
-			    (iter, iter')
-			    q_e1
-			    (A.Dag.mk_project
-			       [(iter', iter); (A.Item 2, A.Item 1)]
-			       q_e2)))))))
-      in
-	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
-
-  let greater e1 e2 = 
-    let Ti (q_e1, _, _, _) = e1 in
-    let Ti (q_e2, _, _, _) = e2 in
-    let q = primitive_binop wrap_gt q_e1 q_e2 in
-      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
-    
-  let or_op e1 e2 =
-    let Ti (q_1, cs_1, _, _) = e1 in
-    let Ti (q_2, cs_2, _, _) = e2 in
-      assert (Cs.is_operand cs_1);
-      assert (Cs.is_operand cs_2);
-      let q =
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res)]
-	  (A.Dag.mk_funboolor
-	     (res, (A.Item 1, A.Item 2))
-	     (A.Dag.mk_eqjoin
-		(iter, iter')
-		q_1
-		(A.Dag.mk_project
-		   [(iter', iter); (A.Item 2, A.Item 1)]
-		   q_2)))
-      in
-	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
-    
   let absolute_positions (Ti (q, cs, itbls, _)) =
     Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
   in
@@ -665,6 +659,8 @@ and do_table_greater loop wrapper l1 l2 =
     or_op 
       (greater (do_length loop l1_abs) (do_length loop l2_abs))
       (smaller (position_greater l1_abs l2_abs) (position_greater l1_abs l2_abs))
+*)
+    failwith "not implemented"
     
 and do_row_greater loop wrapper e1 e2 = 
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
@@ -789,7 +785,7 @@ and do_row_greater_real _loop _wrapper zipped =
 and do_table_equal loop wrapper l1 l2 =
   Debug.print "do_table_equal";
 
-  let all = do_and loop in
+  let all = do_list_and loop in
 
   let and_op e1 e2 =
     let Ti (q_1, cs_1, _, _) = e1 in
@@ -811,13 +807,6 @@ and do_table_equal loop wrapper l1 l2 =
 	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
 
-  let equals e1 e2 = 
-    let Ti (q_e1, cs_e1, _, _) = e1 in
-    let Ti (q_e2, _, _, _) = e2 in
-    let q = primitive_binop wrap_eq q_e1 q_e2 in
-      Ti (q, cs_e1, Itbls.empty, dummy)
-  in
-    
   let map_equal source =
     let Ti (q_s, cs_s, itbls_s, _) = source in
      let q_s' = 
@@ -865,7 +854,7 @@ and do_table_equal loop wrapper l1 l2 =
   let l1_len = do_length loop l1_abs in
   let l2_len = do_length loop l2_abs in
     and_op 
-      (equals l1_len l2_len)
+      (equal l1_len l2_len)
       (all (map_equal (do_zip l1_abs l2_abs)))
 
 and do_row_equal loop wrapper r1 r2 =
@@ -913,7 +902,7 @@ and do_row_equal loop wrapper r1 r2 =
 	in
 	  if is_primitive_col coltype then
 	    (* normal comparison of atomic values *)
-	    primitive_binop wrapper q_r1' q_r2'
+	    do_primitive_binop wrapper q_r1' q_r2'
 	  else
 	    (* we compare nested lists represented by a inner table *)
 
@@ -941,7 +930,7 @@ and do_row_equal loop wrapper r1 r2 =
 		  q_r2)
 	  in
 	    if is_primitive_col coltype then
-	      primitive_binop wrapper q_r1' q_r2'
+	      do_primitive_binop wrapper q_r1' q_r2'
 	    else
 	      (* we compare nested lists represented by a inner table *)
 
@@ -963,7 +952,6 @@ and do_row_equal loop wrapper r1 r2 =
 	    [prj iter; prj pos; (c, res)]
 	    (A.Dag.mk_funbooland
 	       (res, (c, c'))
-               (* FIXME: this should be a join on iter _and_ pos *)
 	       (A.Dag.mk_eqjoin
 		  (iter', iter)
 		  (A.Dag.mk_project
@@ -975,14 +963,11 @@ and do_row_equal loop wrapper r1 r2 =
     Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
 
-and compile_binop env loop wrapper operands =
+and compile_binop env loop wrapper restype operands =
   assert ((List.length operands) = 2);
-  let Ti (op1_q, op1_cs, _, _) = compile_expression env loop (List.hd operands) in
-  let Ti (op2_q, op2_cs, _, _) = compile_expression env loop (List.nth operands 1) in
-    assert (Cs.is_operand op1_cs);
-    assert (Cs.is_operand op2_cs);
-    let q = primitive_binop wrapper op1_q op2_q in
-      Ti (q, op1_cs, Itbls.empty, dummy)
+  let ti_1 = compile_expression env loop (List.hd operands) in
+  let ti_2 = compile_expression env loop (List.nth operands 1) in
+    do_primitive_binop_ti wrapper restype ti_1 ti_2
 
 and compile_unop env loop wrapper operands =
   assert ((List.length operands) = 1);
@@ -1078,14 +1063,14 @@ and compile_drop env loop args =
 
 and compile_apply env loop f args =
   match f with
-    | "+" 
-    | "+." -> compile_binop env loop (wrap_1to1 A.Add) args
-    | "-" 
-    | "-." -> compile_binop env loop (wrap_1to1 A.Subtract) args
-    | "*"
-    | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) args
-    | "/" 
-    | "/." -> compile_binop env loop (wrap_1to1 A.Divide) args
+    | "+" -> compile_binop env loop (wrap_1to1 A.Add) `IntType args
+    | "+." -> compile_binop env loop (wrap_1to1 A.Add) `FloatType args
+    | "-" -> compile_binop env loop (wrap_1to1 A.Subtract) `IntType args
+    | "-." -> compile_binop env loop (wrap_1to1 A.Subtract) `FloatType args
+    | "*" -> compile_binop env loop (wrap_1to1 A.Multiply) `IntType args
+    | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) `FloatType args
+    | "/" -> compile_binop env loop (wrap_1to1 A.Divide) `IntType args
+    | "/." -> compile_binop env loop (wrap_1to1 A.Divide) `FloatType args
     | "==" -> compile_comparison env loop wrap_eq do_table_equal do_row_equal args
     | "<>" -> compile_comparison env loop wrap_ne do_table_equal do_row_equal args
     | ">" -> compile_comparison env loop wrap_gt do_table_greater do_row_greater args
