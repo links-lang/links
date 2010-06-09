@@ -1,0 +1,24 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+query {
+	var ignore = players_table;
+	#[[1,2]] == [[3], [42]]
+	[[1,2,3], [2,3]] == [[1,2,3], [2]]
+	#[1,2] == [1,2]
+	#[[(foo = 2, bar = 3], [(foo = 2, bar = 4), (foo = 2, bar = 3)]] == [[(foo = 2, bar = 3)]]
+	#[(foo = 2, bar = 3), (foo = 4, bar = 7)] == [(foo = 3, bar = 1)]
+	#[1,2,3] == []
+	#[] == [1,2,3]
+	#[] == []
+	#[1,2,3] == [1,2]
+	#[1,2] == []
+	#[] == [1,2]
+	#[] == []
+	#for (i <- zip([1,2,3], [])) [i.2]
+	#zip(asList(players_table), asList(players_table))
+	#[] == asList(players_table)
+	#[1,2] <> [1,2,3]
+
+	#(foo = 1, bar = 2) == (foo = 1, bar = 2)
+}

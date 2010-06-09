@@ -558,6 +558,10 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
       | _ -> assert false
 
 and do_table_greater loop wrapper l1 l2 =
+
+(* FIXME: This does not work: [1,1,1] not larger than [2,2] 
+   length(l1) > length(l2) is wrong *)
+
   let inner_loop e =
     let Ti (q, _, _, _) = e in
       A.Dag.mk_project
@@ -666,8 +670,121 @@ and do_row_greater loop wrapper e1 e2 =
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
     Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
-and do_row_greater_real _loop _wrapper _zipped =
-  failwith "not implemented"
+and do_row_greater_real _loop _wrapper zipped =
+
+  (* need to join on iter _and_ pos because we are (potentially) handling lists *)
+  let and_op e1 e2 =
+    let Ti (q_1, cs_1, _, _) = e1 in
+    let Ti (q_2, cs_2, _, _) = e2 in
+      assert (Cs.is_operand cs_1);
+      assert (Cs.is_operand cs_2);
+      let q =
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res')]
+	  (A.Dag.mk_funbooland
+	     (res', (A.Item 1, A.Item 2))
+	     (A.Dag.mk_select
+		res
+		(A.Dag.mk_funnumeq
+		   (res, (pos, pos'))
+		   (A.Dag.mk_eqjoin
+		      (iter, iter')
+		      q_1
+		      (A.Dag.mk_project
+			 [(iter', iter); (pos', pos); (A.Item 2, A.Item 1)]
+			 q_2)))))
+      in
+	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  (* need to join on iter _and_ pos *)
+  let or_op e1 e2 =
+    let Ti (q_1, cs_1, _, _) = e1 in
+    let Ti (q_2, cs_2, _, _) = e2 in
+      assert (Cs.is_operand cs_1);
+      assert (Cs.is_operand cs_2);
+      let q =
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res')]
+	  (A.Dag.mk_funboolor
+	     (res', (A.Item 1, A.Item 2))
+	     (A.Dag.mk_select
+		res
+		(A.Dag.mk_funnumeq
+		   (res, (pos, pos'))
+		   (A.Dag.mk_eqjoin
+		      (iter, iter')
+		      q_1
+		      (A.Dag.mk_project
+			 [(iter', iter); (pos', pos); (A.Item 2, A.Item 1)]
+			 q_2)))))
+	      in
+	       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+	   in
+
+  let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
+    let Ti (q_zipped, _cs_zipped, _itbls_zipped, _) = ti_zipped in
+    let q = 
+      if is_primitive_col type_l then
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res)]
+	  (* no need to join since the two arguments are already zipped *)
+	  (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
+      else
+	failwith "inner lists not implemented"
+    in
+      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
+    let Ti (q_zipped, _cs_zipped, _itbls_zipped, _) = ti_zipped in
+    let q = 
+      if is_primitive_col type_l then
+	A.Dag.mk_project
+	  [prj iter; prj pos; (A.Item 1, res)]
+	  (* no need to join since the two arguments are already zipped *)
+	  (wrap_eq res (A.Item col_l) (A.Item col_r) q_zipped)
+      else
+	failwith "inner lists not implemented"
+    in
+      Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
+  in
+
+  let Ti (_q_zipped, cs_zipped, _itbls_zipped, _) = zipped in
+  let cs_l = Cs.lookup_record_field cs_zipped "1" in
+  let cs_r = Cs.lookup_record_field cs_zipped "2" in
+  
+  (* sort record fields by field name so that the correct columns are
+     compared *)
+  let cols_l = Cs.leafs (Cs.sort_record_columns cs_l) in
+  let cols_r = Cs.leafs (Cs.sort_record_columns cs_r) in
+
+  let n = List.length cols_l in
+    assert (n = List.length cols_r);
+    
+    let corresponding_columns = List.combine cols_l cols_r in
+
+    (* l_1 = r_1 ... l_n = r_n *)
+    let greater_terms = List.map (column_greater zipped) corresponding_columns in
+
+    (* l_1 > r_1, ..., l_n-1 > r_n-1 *)
+    let equal_terms = List.map (column_equal zipped) (take (n - 1) corresponding_columns) in
+
+    (* l_1 = r_1, ..., l_1 = r_1 && ... && l_n-1 = r_n-1 *)
+    let combined =
+      List.fold_left
+	(fun combined eq_k -> (and_op (List.hd combined) eq_k) :: combined)
+	(take 1 equal_terms)
+	(drop 1 equal_terms)
+    in
+    let combined = List.rev combined in
+
+    (* l_1 = r_1 && l_2 > r_2, ..., l_1 = r_1 && l_2 = r_2 && l_2 > r_3, l_1 = r_1 && ... && l_n-1 = r_n-1 && l_n > r_n *)
+    let and_terms = List.map2 and_op (drop 1 greater_terms) combined in
+
+    (* l_1 > r_1 || (l_1 = r_1 && l_2 > r_2) || ... *)
+    let Ti (q, _, _, _) = List.fold_left or_op (List.hd greater_terms) and_terms in
+      q
     
 and do_table_equal loop wrapper l1 l2 =
   Debug.print "do_table_equal";
@@ -846,6 +963,7 @@ and do_row_equal loop wrapper r1 r2 =
 	    [prj iter; prj pos; (c, res)]
 	    (A.Dag.mk_funbooland
 	       (res, (c, c'))
+               (* FIXME: this should be a join on iter _and_ pos *)
 	       (A.Dag.mk_eqjoin
 		  (iter', iter)
 		  (A.Dag.mk_project
