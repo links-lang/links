@@ -535,6 +535,7 @@ end
 
 module Annotate = struct
   type implementation_type = [`Atom | `List]
+  deriving (Show)
 
   type typed_t =
       [ `For of ((Var.var * typed_t) list * typed_t list * typed_t) * implementation_type
@@ -575,6 +576,59 @@ module Annotate = struct
     | `Constant (_, t) -> t 
     | `Box (_, t) -> t 
     | `Unbox (_, t) -> t
+
+  type typed_pt = 
+      [ `For of ((Var.var * typed_pt) list * typed_pt list * typed_pt) * implementation_type
+      | `GroupBy of ((Var.var * typed_pt) * typed_pt) * implementation_type
+      | `If of (typed_pt * typed_pt * typed_pt option) * implementation_type
+      | `Table of Value.table * implementation_type
+      | `Singleton of typed_pt * implementation_type 
+      | `Append of typed_pt list * implementation_type
+      | `Record of typed_pt StringMap.t * implementation_type
+      | `Project of (typed_pt * string) * implementation_type
+      | `Erase of (typed_pt * StringSet.t) * implementation_type
+      | `Extend of (typed_pt option * typed_pt StringMap.t) * implementation_type
+      | `Variant of (string * typed_pt) * implementation_type
+      | `XML of Value.xmlitem * implementation_type
+      | `Apply of (string * typed_pt list) * implementation_type
+      | `Lam of (Ir.var list * Ir.computation) * implementation_type
+      | `Primitive of string * implementation_type
+      | `Var of Var.var * implementation_type 
+      | `Constant of Constant.constant * implementation_type
+      | `Box of typed_pt * implementation_type 
+      | `Unbox of typed_pt * implementation_type ] 
+	deriving (Show)
+
+  let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
+    let bt = typed_pt_of_typed_t in
+      match v with
+        | `For ((gs, os, b), typ) -> 
+            `For ((List.map (fun (x, source) -> (x, bt source)) gs, 
+                   List.map bt os, 
+                   bt b),
+		  typ)
+	| `GroupBy (((x, group_exp), source), typ) ->
+	    `GroupBy (((x, bt group_exp), bt source), typ)
+        | `If ((c, t, Some e), typ) -> `If ((bt c, bt t, Some (bt e)), typ)
+        | `If ((c, t, None), typ) -> `If ((bt c, bt t, None), typ)
+        | `Table (t, typ) -> `Table (t, typ)
+        | `Singleton (v, typ) -> `Singleton ((bt v), typ)
+        | `Append (vs, typ) -> `Append ((List.map bt vs), typ)
+        | `Record (fields, typ) -> `Record ((StringMap.map bt fields), typ)
+	| `Extend ((r, ext_fields), typ) -> `Extend ((opt_map bt r, StringMap.map bt ext_fields), typ)
+        | `Variant ((name, v), typ) -> `Variant ((name, bt v), typ)
+        | `XML (xmlitem, typ) -> `XML (xmlitem, typ)
+        | `Project ((v, name), typ) -> `Project ((bt v, name), typ)
+        | `Erase ((v, names), typ) -> `Erase ((bt v, names), typ)
+        | `Apply ((f, vs), typ) -> `Apply ((f, List.map bt vs), typ)
+        | `Closure (((xs, e), _), typ) -> `Lam ((xs, e), typ)
+        | `Primitive (f, typ) -> `Primitive (f, typ)
+        | `Var (v, typ) -> `Var (v, typ)
+        | `Constant (c, typ) -> `Constant (c, typ)
+	| `Box (e, typ) -> `Box (bt e, typ)
+	| `Unbox (e, typ) -> `Box (bt e, typ)
+
+  let string_of_typed_t = Show.show show_typed_pt -<- typed_pt_of_typed_t
 
   let annotate want (expression : typed_t) : typed_t =
     match (want, typeof_typed_t expression) with
@@ -704,6 +758,6 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Annot
 	if Settings.get_value Basicsettings.Ferry.print_backend_expression then
 	  begin
 	    print_endline ("query2:\n "^string_of_t v);
-	    (* print_endline ("query2 annotated:\n "^string_of_t (fst v_annot)); *)
+	    print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot)
 	  end;
 	(v_annot, (Annotate.typeof_typed_t v_annot))
