@@ -3,6 +3,7 @@ open Utility
 module A = Algebra
 
 type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ((int * tblinfo) list) * unit)
+let q_of_tblinfo = function Ti (q, _, _, _) -> q
 
 module Itbls = struct
   let empty = []
@@ -172,6 +173,7 @@ let or_op = do_primitive_binop_ti wrap_or `BoolType
 let and_op = do_primitive_binop_ti wrap_and `BoolType
 
 let do_unbox q_e surr_col inner_ti =
+  Debug.print "do_unbox";
   let Ti(q_sub, cs_sub, itbls_sub, _) = inner_ti in
   let q_unbox =
     A.Dag.mk_project
@@ -590,9 +592,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
       | _ -> assert false
 
 and do_table_greater loop wrapper l1 l2 =
-
-(* FIXME: This does not work: [1,1,1] not larger than [2,2] 
-   length(l1) > length(l2) is wrong *)
+  Debug.print "do_table_greater";
 
 (*
   let inner_loop e =
@@ -610,31 +610,70 @@ and do_table_greater loop wrapper l1 l2 =
     let cs1 = Cs.lookup_record_field cs "1" in
     let cs2 = Cs.lookup_record_field cs "2" in
     let cs' = [Cs.Mapping ("1", cs2); Cs.Mapping ("2", cs1)] in
-(*
-      let card = Cs.cardinality cs1 in
-      assert (card = Cs.cardinality cs2);
-      let proj_list1 = prjlist_map (io (Cs.columns cs1)) (io (Cs.columns cs2)) in
-      let proj_list2 = prjlist_map (io (Cs.columns cs2)) (io (Cs.columns cs1)) in
-      let proj_list = proj_list1 @ proj_list2 in
-      let cs1' = Cs.shift cs2 (-card+1) in
-      let cs2' = Cs.shift cs1 (card-1) in
-      let cs' = [Cs.Mapping ("1", cs1'); Cs.Mapping ("2", cs2')] in
-      let itbls1 = Itbls.retain_by_keys itbls (Cs.columns cs1) in
-      let itbls2 = Itbls.retain_by_keys itbls (Cs.columns cs2) in
-      let itbls1' = Itbls.decr_keys itbls2 (-card+1) in
-      let itbls2' = Itbls.incr_keys itbls1 (card-1) in
-      let itbls' = Itbls.append itbls1' itbls2' in
-      let q' = A.Dag.mk_project proj_list q in
+      (*
+	let card = Cs.cardinality cs1 in
+	assert (card = Cs.cardinality cs2);
+	let proj_list1 = prjlist_map (io (Cs.columns cs1)) (io (Cs.columns cs2)) in
+	let proj_list2 = prjlist_map (io (Cs.columns cs2)) (io (Cs.columns cs1)) in
+	let proj_list = proj_list1 @ proj_list2 in
+	let cs1' = Cs.shift cs2 (-card+1) in
+	let cs2' = Cs.shift cs1 (card-1) in
+	let cs' = [Cs.Mapping ("1", cs1'); Cs.Mapping ("2", cs2')] in
+	let itbls1 = Itbls.retain_by_keys itbls (Cs.columns cs1) in
+	let itbls2 = Itbls.retain_by_keys itbls (Cs.columns cs2) in
+	let itbls1' = Itbls.decr_keys itbls2 (-card+1) in
+	let itbls2' = Itbls.incr_keys itbls1 (card-1) in
+	let itbls' = Itbls.append itbls1' itbls2' in
+	let q' = A.Dag.mk_project proj_list q in
 	Ti (q', cs', itbls', dummy)
-*)
+      *)
       Ti (q, cs', itbls, dummy)
   in
 
-  (* returns the minimal pos so that l1[pos] > l2[pos] *)
+  (* returns the minimal pos so that l1[pos] < l2[pos] *)
   let minpos zipped = 
-    (* compute new loop? *)
-    let compared = do_row_greater_real loop wrapper (switch_zipped zipped) in
-    let selected = A.Dag.mk_select (A.Item 1) compared in
+    (* the comparison must be done loop-lifted so that inner tables can be unboxed and compared correctly *)
+
+    (* lift zipped *)
+    let Ti (q_s, cs_s, itbls_s, _) = zipped in
+    let q_s' = 
+      A.Dag.mk_rownum
+	(inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+	q_s
+    in
+    let q_s_mapped = 
+      A.Dag.mk_attach
+	(pos, A.Nat 1n)
+	(A.Dag.mk_project
+	   ((iter, inner) :: (prjlist (io (Cs.columns cs_s))))
+	   q_s')
+    in
+    let map =
+      A.Dag.mk_project
+	[(outer, iter); prj inner; (pos', pos)]
+	q_s'
+    in
+    let loop' =
+      A.Dag.mk_project
+	[prj iter]
+	q_s_mapped
+    in
+    
+    let zipped_mapped = Ti (q_s_mapped, cs_s, itbls_s, dummy) in
+
+    let compared = do_row_greater_real loop' wrapper (switch_zipped zipped_mapped) in
+
+    (* unlift *)
+    let compared_backmapped =
+      A.Dag.mk_project
+	[(iter, outer); (pos, pos'); prj (A.Item 1)]
+	(A.Dag.mk_eqjoin
+	   (iter, inner)
+	   compared
+	   map)
+    in
+
+    let selected = A.Dag.mk_select (A.Item 1) compared_backmapped in
 
     let q = 
       A.Dag.mk_disjunion
@@ -642,14 +681,13 @@ and do_table_greater loop wrapper l1 l2 =
 	   (pos, A.Nat 1n)
 	   (A.Dag.mk_project
 	      [prj iter; (A.Item 1, res)]
-		 (A.Dag.mk_funaggr
-		    (A.Min, (res, pos), Some iter)
-		    selected)))
+	      (A.Dag.mk_funaggr
+		 (A.Min, (res, pos), Some iter)
+		 selected)))
 	(A.Dag.mk_attach
 	   (pos, A.Nat 1n)
 	   (A.Dag.mk_attach
 	      (A.Item 1, A.Nat Nativeint.max_int)
-	      (* (A.Item 1, A.Nat (-1n)) *)
 	      (A.Dag.mk_difference
 		 loop
 		 (A.Dag.mk_project
@@ -687,7 +725,8 @@ and do_row_greater loop wrapper e1 e2 =
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
     Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
-and do_row_greater_real _loop _wrapper zipped =
+and do_row_greater_real loop wrapper zipped =
+  Debug.print "do_row_greater_real";
 
   (* need to join on iter _and_ pos because we are (potentially) handling lists *)
   let and_op e1 e2 =
@@ -740,7 +779,7 @@ and do_row_greater_real _loop _wrapper zipped =
 	   in
 
   let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
-    let Ti (q_zipped, _cs_zipped, _itbls_zipped, _) = ti_zipped in
+    let Ti (q_zipped, _cs_zipped, itbls_zipped, _) = ti_zipped in
     let q = 
       if is_primitive_col type_l then
 	A.Dag.mk_project
@@ -748,7 +787,15 @@ and do_row_greater_real _loop _wrapper zipped =
 	  (* no need to join since the two arguments are already zipped *)
 	  (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
       else
-	failwith "inner lists not implemented"
+	let inner_table_l, inner_table_r =
+	  try
+	    Itbls.lookup col_l itbls_zipped, Itbls.lookup col_r itbls_zipped
+	  with _ -> assert false
+	in
+	  let ti_unboxed_l = do_unbox q_zipped col_l inner_table_l in
+	  let ti_unboxed_r = do_unbox q_zipped col_r inner_table_r in
+	    q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
+	    
     in
       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
@@ -770,6 +817,11 @@ and do_row_greater_real _loop _wrapper zipped =
   let Ti (_q_zipped, cs_zipped, _itbls_zipped, _) = zipped in
   let cs_l = Cs.lookup_record_field cs_zipped "1" in
   let cs_r = Cs.lookup_record_field cs_zipped "2" in
+
+  (* special case: if we are comparing lists of records and one of the lists is the empty 
+     list, the length of its cs component does not match the other cs's length.  in this case, 
+     we need to "fake" a compatible cs for the empty list *)
+  let cs_l, cs_r = Cs.longer_cs cs_l cs_r in
   
   (* sort record fields by field name so that the correct columns are
      compared *)
@@ -886,13 +938,7 @@ and do_row_equal loop wrapper r1 r2 =
   (* special case: if we are comparing lists of records and one of the lists is the empty 
      list, the length of its cs component does not match the other cs's length.  in this case, 
      we need to "fake" a compatible cs for the empty list *)
-  let longer_cs cs1 cs2 = 
-    match Cs.cardinality cs1, Cs.cardinality cs2 with
-      | a, b when a > b -> (cs1, cs1)
-      | a, b when a < b -> (cs2, cs2)
-      | _, _ -> (cs1, cs2)
-  in
-  let cs_r1, cs_r2 = longer_cs cs_r1 cs_r2 in
+  let cs_r1, cs_r2 = Cs.longer_cs cs_r1 cs_r2 in
 
   (* pair the item columns which belong to the respective record fields *)
   let items1 = Cs.leafs (Cs.sort_record_columns cs_r1) in
@@ -1053,8 +1099,8 @@ and compile_take env loop args =
 			(one, A.Int (Num.Int 1))
 			q1))))))
        in
-    let itbls' = suse q' itbls2 in
-	Ti(q', cs2, itbls', dummy)
+  let itbls' = suse q' itbls2 in
+    Ti(q', cs2, itbls', dummy)
 
 and compile_drop env loop args =
   assert ((List.length args) = 2);

@@ -147,3 +147,9 @@ let rec sort_record_columns = function
 	     | Mapping (field, cs) -> Mapping (field, (sort_record_columns cs))
 	     | _ -> failwith "Cs.sort_record_columns: multiple flat offsets")
 	  cs_entries
+
+let longer_cs cs1 cs2 = 
+  match cardinality cs1, cardinality cs2 with
+    | a, b when a > b -> (cs1, cs1)
+    | a, b when a < b -> (cs2, cs2)
+    | _, _ -> (cs1, cs2)

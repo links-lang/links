@@ -142,7 +142,7 @@ fun nth(i, l) {
       else
         nth1((j + 1), tl(l)) 
     }
-    nth1(0, l)
+    nth1(1, l)
   }
 }
 
