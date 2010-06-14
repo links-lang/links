@@ -600,28 +600,12 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
    implement ">" so we need to switch the operands *)
 and do_table_greater loop wrapper l1 l2 =
   
+  (* switch the components of the zipped pairs, i.e. zip(a, b) -> zip(b, a) *)
   let switch_zipped ti =
     let Ti (q, cs, itbls, _) = ti in
     let cs1 = Cs.lookup_record_field cs "1" in
     let cs2 = Cs.lookup_record_field cs "2" in
     let cs' = [`Mapping ("1", cs2); `Mapping ("2", cs1)] in
-      (*
-	let card = Cs.cardinality cs1 in
-	assert (card = Cs.cardinality cs2);
-	let proj_list1 = prjlist_map (io (Cs.columns cs1)) (io (Cs.columns cs2)) in
-	let proj_list2 = prjlist_map (io (Cs.columns cs2)) (io (Cs.columns cs1)) in
-	let proj_list = proj_list1 @ proj_list2 in
-	let cs1' = Cs.shift cs2 (-card+1) in
-	let cs2' = Cs.shift cs1 (card-1) in
-	let cs' = [Cs.Mapping ("1", cs1'); Cs.Mapping ("2", cs2')] in
-	let itbls1 = Itbls.retain_by_keys itbls (Cs.columns cs1) in
-	let itbls2 = Itbls.retain_by_keys itbls (Cs.columns cs2) in
-	let itbls1' = Itbls.decr_keys itbls2 (-card+1) in
-	let itbls2' = Itbls.incr_keys itbls1 (card-1) in
-	let itbls' = Itbls.append itbls1' itbls2' in
-	let q' = A.Dag.mk_project proj_list q in
-	Ti (q', cs', itbls', dummy)
-      *)
       Ti (q, cs', itbls, dummy)
   in
 
@@ -702,8 +686,7 @@ and do_table_greater loop wrapper l1 l2 =
   let l1_abs = abspos_ti l1 in
   let l2_abs = abspos_ti l2 in
   let zipped = do_zip l1_abs l2_abs in
-  (* let zipped_reverse = switch_zipped zipped in *)
-  let zipped_reverse = do_zip l2_abs l1_abs in 
+  let zipped_reverse = switch_zipped zipped in 
   let l1_len = do_length loop l1_abs in
   let l2_len = do_length loop l2_abs in
   let minp_l1_l2 = minpos zipped in
@@ -771,7 +754,6 @@ and do_row_greater_real loop wrapper zipped =
   in
 
   let Ti (_q_zipped, cs_zipped, _itbls_zipped, _) = zipped in
-    Debug.print (Cs.show cs_zipped);
   let cs_l = Cs.lookup_record_field cs_zipped "1" in
   let cs_r = Cs.lookup_record_field cs_zipped "2" in
 
