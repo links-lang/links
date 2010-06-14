@@ -279,9 +279,9 @@ and handle_row itbl_offsets item cs itbls =
     | `Primitive `Surrogate ->
 	let col = 
 	  (match cs with
-	     | [Cs.Offset (i, `Surrogate)] -> i
+	     | [`Offset (i, `Surrogate)] -> i
 	     | cs -> failwith ("Heapresult.handle_row: cs in no inner list surrogate column " ^
-				 (Cs.to_string cs)))
+				 (Cs.show cs)))
 	in
 	let offset = 
 	  match itbl_offsets with
@@ -309,7 +309,7 @@ and handle_row itbl_offsets item cs itbls =
     | `Primitive t -> 
 	let col =
 	  (match cs with
-	    | [Cs.Offset (i, _)] -> i
+	    | [`Offset (i, _)] -> i
 	    | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
 	in
 	let raw_value = item col in

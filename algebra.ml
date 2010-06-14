@@ -1,8 +1,9 @@
+(*pp deriving *)
 open Utility
 
 (*FIXME: should char constants be allowed *)
-type base_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType]
-type column_type = [ base_type | `Surrogate ]
+type base_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType] deriving (Show)
+type column_type = [ base_type | `Surrogate ] deriving (Show)
 
 let column_type_of_constant = function
   | `Bool _ -> `BoolType

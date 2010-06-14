@@ -1,14 +1,16 @@
+(*pp deriving *)
 open Utility
 
 module A = Algebra
 
-type offset = int
+type offset = int deriving (Show)
 type cs = csentry list
-and csentry =
-  | Offset of offset * A.column_type
-  | Mapping of string * cs
+and csentry = 
+    [ `Offset of offset * A.column_type 
+    | `Mapping of string * cs ] 
+      deriving (Show)
 
-(* TODO: use deriving Show *)
+(*
 let rec to_string cs =
   mapstrcat " "
     (function
@@ -17,6 +19,9 @@ let rec to_string cs =
        | Mapping (name, cs) ->
 	   "M " ^ name ^ " -> {" ^ (to_string cs) ^ "}")
     cs
+*)
+
+let show = Show.show show_cs
 
 let rec out_cs out cs =
   let attr_list xml_attributes = 
@@ -28,12 +33,12 @@ let rec out_cs out cs =
   let prop1 n = tag_attr "property" [("name", n); ("value", "")] in
   let prop2 n v = tag_attr "property" [("name", n); ("value", v)] in
   let csentry = function
-    | Offset (i, typ) ->
+    | `Offset (i, typ) ->
 	out (`El_start (prop2 "offset" (string_of_int i)));
 	out (`El_start (prop2 "type" (A.string_of_column_type typ)));
 	out `El_end;
 	out `El_end
-    | Mapping (name, cs) ->
+    | `Mapping (name, cs) ->
 	out (`El_start (prop2 "mapping" name));
 	out_cs out cs;
 	out `El_end;
@@ -48,8 +53,8 @@ let rec leafs cs =
     (List.fold_left
        (fun leaf_list cs_entry ->
 	  match cs_entry with
-	    | Offset (o, t) -> (o, t) :: leaf_list
-	    | Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list)
+	    | `Offset (o, t) -> (o, t) :: leaf_list
+	    | `Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list)
        []
        cs)
   
@@ -62,8 +67,8 @@ let cardinality = List.length
 let rec shift cs i =
   List.map
     (function
-       | Offset (o, typ) -> Offset ((o + i), typ)
-       | Mapping (key, cs) -> Mapping (key, (shift cs i)))
+       | `Offset (o, typ) -> `Offset ((o + i), typ)
+       | `Mapping (key, cs) -> `Mapping (key, (shift cs i)))
     cs
 
 (* append two cs components *)
@@ -83,15 +88,15 @@ let is_operand cs =
     false
   else
     match (List.hd cs) with
-      | Offset _ -> true
+      | `Offset _ -> true
       | _ -> false
 
 (* look up the sub-cs corresponding to a record field *)
 let lookup_record_field cs field =
   let rec loop = function
-    | (Offset _) :: tl ->
+    | (`Offset _) :: tl ->
 	loop tl
-    | (Mapping (key, cs)) :: tl ->
+    | (`Mapping (key, cs)) :: tl ->
 	if key = field then
 	  cs
 	else
@@ -105,7 +110,7 @@ let lookup_record_field cs field =
 let filter_record_fields cs fields =
   List.filter
     (function 
-       | Mapping (key, _) when StringSet.mem key fields -> false 
+       | `Mapping (key, _) when StringSet.mem key fields -> false 
        | _ -> true)
     cs
 
@@ -114,29 +119,29 @@ let record_fields cs =
   List.fold_left
     (fun l c ->
        match c with
-	 | Mapping (key, _) -> key :: l
-	 | Offset _ -> l)
+	 | `Mapping (key, _) -> key :: l
+	 | `Offset _ -> l)
     []
     cs
 
 let atom_type = function
-  | [(Offset (_, t))]-> `Primitive t
+  | [(`Offset (_, t))]-> `Primitive t
   | [] -> failwith "Cs.atom_type: empty cs" 
   | cs_entries ->
       `Record (
 	List.map
 	  (function 
-	     | Mapping (fieldname, _) -> fieldname
-	     | Offset _ -> failwith "Cs.atom_type: toplevel offset in record cs")
+	     | `Mapping (fieldname, _) -> fieldname
+	     | `Offset _ -> failwith "Cs.atom_type: toplevel offset in record cs")
 	  cs_entries)
 	     
 let rec sort_record_columns = function
-  | [(Offset _) as offset] -> [offset]
+  | [(`Offset _) as offset] -> [offset]
   | [] -> failwith "Cs.sort_record_columns: empty cs"
   | cs_entries ->
       let cmp m1 m2 = 
 	match (m1, m2) with
-	  | Mapping (field1, _), Mapping (field2, _) ->
+	  | `Mapping (field1, _), `Mapping (field2, _) ->
 	      compare field1 field2
 	  | _ -> 
 	      failwith "Cs.sort_record_columns: multiple flat offsets"
@@ -144,7 +149,7 @@ let rec sort_record_columns = function
       let cs_entries = List.sort cmp cs_entries in
 	List.map 
 	  (function 
-	     | Mapping (field, cs) -> Mapping (field, (sort_record_columns cs))
+	     | `Mapping (field, cs) -> `Mapping (field, (sort_record_columns cs))
 	     | _ -> failwith "Cs.sort_record_columns: multiple flat offsets")
 	  cs_entries
 
