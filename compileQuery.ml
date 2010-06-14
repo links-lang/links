@@ -74,6 +74,7 @@ let res' = A.Pos 9
 let res'' = A.Pos 10
 let pos'' = A.Pos 11
 
+
 let incr_col = function
   | A.Iter i -> A.Iter (i + 1)
   | A.Pos i -> A.Pos (i + 1)
@@ -398,6 +399,10 @@ let abspos q cols =
 	  ([prj iter; (pos', pos)] @ (prjlist cols))
 	  q))
 
+(* compute absolute positions for a tblinfo *)
+let abspos_ti (Ti (q, cs, itbls, _)) =
+  Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
+
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
   let q_o = 
@@ -591,20 +596,10 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
 	  tablefun loop comparison_wrapper e1_ti e2_ti
       | _ -> assert false
 
+(* ">"-operator on lists. we are using the definition of "<" (lexicographic ordering) to
+   implement ">" so we need to switch the operands *)
 and do_table_greater loop wrapper l1 l2 =
-  Debug.print "do_table_greater";
-
-(*
-  let inner_loop e =
-    let Ti (q, _, _, _) = e in
-      A.Dag.mk_project
-	[(iter, inner)]
-	(A.Dag.mk_rownum
-	   (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	   q)
-  in
-*)
-
+  
   let switch_zipped ti =
     let Ti (q, cs, itbls, _) = ti in
     let cs1 = Cs.lookup_record_field cs "1" in
@@ -661,6 +656,7 @@ and do_table_greater loop wrapper l1 l2 =
     
     let zipped_mapped = Ti (q_s_mapped, cs_s, itbls_s, dummy) in
 
+    (* we need "<" on rows but have only ">" -> switch arguments *)
     let compared = do_row_greater_real loop' wrapper (switch_zipped zipped_mapped) in
 
     (* unlift *)
@@ -697,16 +693,14 @@ and do_table_greater loop wrapper l1 l2 =
       Ti (q, [Cs.Offset (1, `NatType)], Itbls.empty, dummy)
   in
 
-  let absolute_positions (Ti (q, cs, itbls, _)) =
+  let abspos_ti (Ti (q, cs, itbls, _)) =
     Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
   in
 
-  let l1_abs = absolute_positions l1 in
-  let l2_abs = absolute_positions l2 in
   (* l1 > l2 iff l2 < l1 -> swap arguments *)
-  let l1_abs' = l1_abs in
-  let l1_abs = l2_abs in
-  let l2_abs = l1_abs' in
+  let (l1, l2) = (l2, l1) in
+  let l1_abs = abspos_ti l1 in
+  let l2_abs = abspos_ti l2 in
   let zipped = do_zip l1_abs l2_abs in
   (* let zipped_reverse = switch_zipped zipped in *)
   let zipped_reverse = do_zip l2_abs l1_abs in 
@@ -726,57 +720,6 @@ and do_row_greater loop wrapper e1 e2 =
     Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
 
 and do_row_greater_real loop wrapper zipped =
-  Debug.print "do_row_greater_real";
-
-  (* need to join on iter _and_ pos because we are (potentially) handling lists *)
-  let and_op e1 e2 =
-    let Ti (q_1, cs_1, _, _) = e1 in
-    let Ti (q_2, cs_2, _, _) = e2 in
-      assert (Cs.is_operand cs_1);
-      assert (Cs.is_operand cs_2);
-      let q =
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res')]
-	  (A.Dag.mk_funbooland
-	     (res', (A.Item 1, A.Item 2))
-	     (A.Dag.mk_select
-		res
-		(A.Dag.mk_funnumeq
-		   (res, (pos, pos'))
-		   (A.Dag.mk_eqjoin
-		      (iter, iter')
-		      q_1
-		      (A.Dag.mk_project
-			 [(iter', iter); (pos', pos); (A.Item 2, A.Item 1)]
-			 q_2)))))
-      in
-	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
-
-  (* need to join on iter _and_ pos *)
-  let or_op e1 e2 =
-    let Ti (q_1, cs_1, _, _) = e1 in
-    let Ti (q_2, cs_2, _, _) = e2 in
-      assert (Cs.is_operand cs_1);
-      assert (Cs.is_operand cs_2);
-      let q =
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res')]
-	  (A.Dag.mk_funboolor
-	     (res', (A.Item 1, A.Item 2))
-	     (A.Dag.mk_select
-		res
-		(A.Dag.mk_funnumeq
-		   (res, (pos, pos'))
-		   (A.Dag.mk_eqjoin
-		      (iter, iter')
-		      q_1
-		      (A.Dag.mk_project
-			 [(iter', iter); (pos', pos); (A.Item 2, A.Item 1)]
-			 q_2)))))
-	      in
-	       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-	   in
 
   let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
     let Ti (q_zipped, _cs_zipped, itbls_zipped, _) = ti_zipped in
@@ -787,21 +730,22 @@ and do_row_greater_real loop wrapper zipped =
 	  (* no need to join since the two arguments are already zipped *)
 	  (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
       else
+	(* inner tables need to be unboxed first *)
 	let inner_table_l, inner_table_r =
 	  try
 	    Itbls.lookup col_l itbls_zipped, Itbls.lookup col_r itbls_zipped
 	  with _ -> assert false
 	in
-	  let ti_unboxed_l = do_unbox q_zipped col_l inner_table_l in
-	  let ti_unboxed_r = do_unbox q_zipped col_r inner_table_r in
-	    q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
+	let ti_unboxed_l = do_unbox q_zipped col_l inner_table_l in
+	let ti_unboxed_r = do_unbox q_zipped col_r inner_table_r in
+	  q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
 	    
     in
       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
 
   let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
-    let Ti (q_zipped, _cs_zipped, _itbls_zipped, _) = ti_zipped in
+    let Ti (q_zipped, _cs_zipped, itbls_zipped, _) = ti_zipped in
     let q = 
       if is_primitive_col type_l then
 	A.Dag.mk_project
@@ -809,7 +753,19 @@ and do_row_greater_real loop wrapper zipped =
 	  (* no need to join since the two arguments are already zipped *)
 	  (wrap_eq res (A.Item col_l) (A.Item col_r) q_zipped)
       else
-	failwith "inner lists not implemented"
+	(* we compare nested lists represented by a inner table *)
+
+	(* lookup the inner tables referred to by col1, col2 *)
+	let inner_table_l, inner_table_r = 
+	  try
+	    Itbls.lookup col_l itbls_zipped, Itbls.lookup col_r itbls_zipped 
+	  with _ -> assert false
+	in
+	  (* unbox the inner tables *)
+	let ti_unboxed_l = do_unbox q_zipped col_l inner_table_l in
+	let ti_unboxed_r = do_unbox q_zipped col_r inner_table_r in
+	  (* compare the inner tables *)
+	  q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r) 
     in
       Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
@@ -856,29 +812,7 @@ and do_row_greater_real loop wrapper zipped =
       q
     
 and do_table_equal loop wrapper l1 l2 =
-  Debug.print "do_table_equal";
-
   let all = do_list_and loop in
-
-  let and_op e1 e2 =
-    let Ti (q_1, cs_1, _, _) = e1 in
-    let Ti (q_2, cs_2, _, _) = e2 in
-      assert (Cs.is_operand cs_1);
-      assert (Cs.is_operand cs_2);
-      let q =
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res)]
-	  (A.Dag.mk_funbooland
-	     (res, (A.Item 1, A.Item 2))
-	     (A.Dag.mk_eqjoin
-		(iter, iter')
-		q_1
-		(A.Dag.mk_project
-		   [(iter', iter); (A.Item 2, A.Item 1)]
-		   q_2)))
-      in
-	Ti (q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-  in
 
   let map_equal source =
     let Ti (q_s, cs_s, itbls_s, _) = source in
@@ -918,12 +852,9 @@ and do_table_equal loop wrapper l1 l2 =
        Ti (result_backmapped, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
   in
 
-  let absolute_positions (Ti (q, cs, itbls, _)) =
-    Ti ((abspos q (io (Cs.columns cs))), cs, itbls, dummy)
-  in
 	
-  let l1_abs = absolute_positions l1 in
-  let l2_abs = absolute_positions l2 in
+  let l1_abs = abspos_ti l1 in
+  let l2_abs = abspos_ti l2 in
   let l1_len = do_length loop l1_abs in
   let l2_len = do_length loop l2_abs in
     and_op 
@@ -983,9 +914,7 @@ and do_row_equal loop wrapper r1 r2 =
 	    let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
 	    let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
 	      (* compare the inner tables *)
-	    let result_ti = do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
-	    let Ti (q_result, _, _, _) = result_ti in
-	      q_result
+	      q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2) 
     | ((col1, coltype), (col2, _)) :: items ->
 	let col_equal_result = 
 	  let q_r1', q_r2' =
@@ -1028,7 +957,6 @@ and do_row_equal loop wrapper r1 r2 =
   in
   let q = assemble_equals items in
     Ti(q, [Cs.Offset (1, `BoolType)], Itbls.empty, dummy)
-
 
 and compile_binop env loop wrapper restype operands =
   assert ((List.length operands) = 2);
