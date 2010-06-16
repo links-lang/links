@@ -520,6 +520,23 @@ and compile_length env loop args =
   let ti_e = compile_expression env loop e in
     do_length loop ti_e
 
+and compile_empty env loop args = 
+  assert ((List.length args) = 1);
+  let e = List.hd args in
+  let ti_e = compile_expression env loop e in
+  let Ti (q_length, cs_length, _, _) = do_length loop ti_e in
+    assert (Cs.is_operand cs_length);
+    let q =
+      A.Dag.mk_project
+	[prj iter; prj pos; (A.Item 1, res)]
+	(A.Dag.mk_funnumeq
+	   (res, (A.Item 1, A.Item 2))
+	   (A.Dag.mk_attach
+	      (A.Item 2, A.Int (Num.Int 0))
+	      q_length))
+    in
+      Ti (q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+
 (* FIXME: only sum works at the moment. max/min/avg can't be used.
    Issues:
    * infer the correct column type for the result (or give it as a parameter)
@@ -1063,6 +1080,7 @@ and compile_apply env loop f args =
     | "concat" -> compile_concat env loop args
     | "and" -> compile_and env loop args
     | "or" -> compile_or env loop args
+    | "empty" -> compile_empty env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->

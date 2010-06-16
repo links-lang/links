@@ -290,6 +290,8 @@ struct
 	  `Primitive "all"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "any" = f ->
 	  `Primitive "any"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "empty" = f ->
+	  `Primitive "empty"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -716,7 +718,7 @@ module Annotate = struct
 		let n' = transform env n in
 		let l' = aot `List env l in
 		  `Apply ((f, [n'; l']), `List)
-	    | "length" | "unzip" | "sum" | "and" | "or" ->
+	    | "length" | "unzip" | "sum" | "and" | "or" | "empty" ->
 		(* `List -> `Atom *)
 		let l = 
 		  (match args with 
