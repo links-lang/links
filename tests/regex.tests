@@ -23,7 +23,7 @@ Range [6]
 stdout : false : Bool
 
 Escaping metacharacter
-"some .*string$\" ++?" =~ /some \.\*string\$\" \+\+\?/
+"some .*string$\" ++?" =~ /some\ \.\*string\$\"\ \+\+\?/
 stdout : true : Bool
 
 Star [1]

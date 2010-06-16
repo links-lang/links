@@ -14,18 +14,7 @@ module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : Types.tycon_environment =
-  List.fold_left 
-    AliasEnv.bind
-    AliasEnv.empty
-    [
-      "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)]));
-      "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
-      "Event"   , `Abstract Types.event;
-      "List"    , `Abstract Types.list;
-      "Process" , `Abstract Types.process;
-      "DomNode" , `Abstract Types.dom_node;
-    ]
+let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
   AliasEnv.bind alias_env
@@ -590,8 +579,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   (* Section: Accessors for XML *)
+  "xmlToVariant",
+  (`Server (p1 (fun v ->
+                  match v with
+                    | `List xs ->
+                        `List (List.map (function
+                                           | (`XML x) -> Value.value_of_xmlitem x
+                                           | _ -> failwith "non-XML passed to xmlToVariant") xs)
+                    | _ -> failwith "non-XML passed to xmlToVariant")),
+   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]",
+   IMPURE);
+
   "getTagName",
-  (`Client, datatype "(Xml) ~> String",
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(name, _))] ->
+               box_string name
+           | _ -> failwith "non-element passed to getTagName"),
+  datatype "(Xml) ~> String",
   IMPURE);
 
   "getTextContent",
@@ -599,8 +604,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "getAttributes",
-  (`Client, datatype "(Xml) ~> [(String,String)]",
-  IMPURE);
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(_, children))] ->
+               `List (map
+                        (fun (Attr (name, value)) ->
+                                `Record [("1", box_string name); ("2", box_string value)])
+                        (filter (function (Attr _) -> true | _ -> false) children))
+           | _ -> failwith "non-element given to getAttributes"),
+   datatype "(Xml) ~> [(String,String)]",
+   IMPURE);
 
   "hasAttribute",
   (`Client, datatype "(Xml, String) ~> Bool",
@@ -612,8 +625,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* Section: Navigation for XML *)
   "getChildNodes",
-  (`Client, datatype "(Xml) ~> Xml",
+  (p1 (fun v ->
+         match v with
+           | `List [`XML(Node(_, children))] ->
+               `List (map (fun x -> `XML(x)) (filter (function (Attr _) -> false | _ -> true) children))
+           | _ -> failwith "non-element given to getChildNodes"),
+   datatype "(Xml) ~> Xml",
+  IMPURE);
+
+  "not", 
+  (p1 (unbox_bool ->- not ->- box_bool),
+   datatype "(Bool) -> Bool",
   PURE);
+
 
   (* Section: Accessors for DomNodes *)
   "domGetNodeValueFromRef",
@@ -622,6 +646,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "domGetTagNameFromRef",
   (`Client, datatype "(DomNode) ~> String",
+  IMPURE);
+
+  "domHasAttribute",
+  (`Client, datatype "(DomNode, String) ~> Bool",
   IMPURE);
 
   "domGetAttributeFromRef",
@@ -1125,6 +1153,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (`Server (p1 (fun v -> v)),
     datatype "(a) ~> b",
     PURE));
+
+  (** xml parser *)
+  "parseXml",
+  (`Server (p1 (fun v ->
+                  `List [`XML(ParseXml.parse_xml (unbox_string v))])),
+   datatype "(String) -> Xml",
+   IMPURE);
   
   (** non-deterministic random number generator *)
   "random",
@@ -1172,35 +1207,23 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 let patch_prelude_funs tyenv =
   {tyenv with
      var_env =
-      Env.String.bind
-	(Env.String.bind
-	   (Env.String.bind
-	      (Env.String.bind
-		 (Env.String.bind
-		    (Env.String.bind
-		       (Env.String.bind
-			  (Env.String.bind
-			     (Env.String.bind
-				(Env.String.bind
-				   (Env.String.bind
-				      (Env.String.bind
-					 (Env.String.bind
-					    (Env.String.bind
-					       tyenv.Types.var_env
-					       ("map", datatype "((a) -b-> c, [a]) -b-> [c]"))
-					    ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]"))
-					 ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]"))
-				      ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]"))
-				   ("nth", datatype "(Int, [a]) -> a"))
-				("unzip", datatype "([(a, b)]) -> ([a], [b])"))
-			     ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]"))
-			  ("sum", datatype "([Int]) -> Int"))
-		       ("concat", datatype "([[a]]) -> [a]"))
-		    ("and", datatype "([Bool]) -> Bool"))
-		 ("or", datatype "([Bool]) -> Bool"))
-	      ("all", datatype "((a) -> Bool, [a]) -> Bool"))
-	   ("any", datatype "((a) -> Bool, [a]) -> Bool"))
-	("zip", datatype "([a], [b]) -> [(a, b)]")}
+      List.fold_right
+        (fun (name, t) env -> Env.String.bind env (name, t))
+        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
+         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
+         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
+         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]");
+	 ("nth", datatype "(Int, [a]) -> a");
+	 ("unzip", datatype "([(a, b)]) -> ([a], [b])");
+	 ("zip", datatype "([a], [b]) -> [(a, b)]");
+	 ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]");
+	 ("sum", datatype "([Int]) -> Int");
+	 ("concat", datatype "([[a]]) -> [a]");
+	 ("and", datatype "([Bool]) -> Bool");
+	 ("or", datatype "([Bool]) -> Bool");
+	 ("all", datatype "((a) -> Bool, [a]) -> Bool");
+	 ("any", datatype "((a) -> Bool, [a]) -> Bool")]
+        tyenv.Types.var_env}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None

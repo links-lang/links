@@ -5,6 +5,9 @@ open Sugartypes
 let constrain_absence_types = Settings.add_bool ("constrain_absence_types", 
                                                  false, `User)
 
+let check_top_level_purity =
+  Settings.add_bool ("check_top_level_purity", false, `User)
+
 type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t 
@@ -1551,10 +1554,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               (no_pos needed, no_pos (`Record (needed_env, Unionfind.fresh `Closed))) in
 
             (* insert returning ... *)
-            let () =
-              opt_iter
-                (fun id ->
-                   unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type)) id in
+            let return_type =
+              match id with
+                | None -> Types.unit_type
+                | Some id ->
+                    unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type);
+                    Types.int_type in
 
             (* insert is wild *)
             let () =
@@ -1564,7 +1569,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 unify ~handle:Gripers.insert_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
-              `DBInsert (erase into, labels, erase values, opt_map erase id), Types.unit_type
+              `DBInsert (erase into, labels, erase values, opt_map erase id), return_type
         | `DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -1797,7 +1802,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let is_query =
               List.exists (function
                              | `List _ -> false
-                             | `Table _ -> false) generators in
+                             | `Table _ -> true) generators in
             let context =              
               if is_query then
                 {context with effect_row = Types.make_empty_closed_row ()}
@@ -2207,8 +2212,9 @@ let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",
                                               false, `User)
 
 let binding_purity_check bindings =
-  List.map (fun ((_, pos) as b) -> if Utils.is_pure_binding b then ()
-                else Gripers.toplevel_purity_restriction pos b)
+  List.iter (fun ((_, pos) as b) ->
+               if not (Utils.is_pure_binding b) then
+                 Gripers.toplevel_purity_restriction pos b)
     bindings
 
 module Check =
@@ -2218,8 +2224,9 @@ struct
       Debug.if_set show_pre_sugar_typing
         (fun () ->
            "before type checking: "^Show.show show_program (bindings, body));
-      let tyenv', bindings = type_bindings tyenv bindings in 
-        binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      let tyenv', bindings = type_bindings tyenv bindings in
+        if Settings.get_value check_top_level_purity then
+          binding_purity_check bindings; (* TBD: do this only in web mode? *)
         match body with
           | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->

@@ -145,3 +145,6 @@ val unmarshal_value : unmarshal_envs -> string -> t
 
 val expr_to_contframe : env -> Ir.tail_computation -> 
   (Ir.scope * Ir.var * env * Ir.computation)
+
+val value_of_xml : xml -> t
+val value_of_xmlitem : xmlitem -> t

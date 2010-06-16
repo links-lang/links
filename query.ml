@@ -187,6 +187,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Project (`Var (x, _), name) ->
           TypeUtils.project_type name (Env.Int.lookup env x)
       | `If (_, t, _) -> base env t
+      | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | `Concat (xs) when List.for_all
           (function `Singleton `Constant `Char x -> true|_->false) xs ->
@@ -289,6 +290,8 @@ struct
           `Primitive "ConcatMap"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
           `Primitive "Map"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "empty" = f ->
+          `Primitive "Empty"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
           `Primitive "SortBy"
       | Some v, None -> expression_of_value v
@@ -566,7 +569,9 @@ struct
             end
         | `Table table ->
             let labels = table_labels table in
-              rb (x, source, eval_body env (x, `Var (x, labels), body))
+              (* we need to freshen x in order to correctly handle self joins *)
+            let x' = Var.fresh_raw_var () in
+              rb (x', source, eval_body env (x, `Var (x', labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
   and reduce_for_body (x, source, body) =
     match body with
@@ -647,7 +652,9 @@ struct
       [ `Case of (base * base * base)
       | `Constant of Constant.constant
       | `Project of Var.var * string
-      | `Apply of string * base list ]          
+      | `Apply of string * base list
+      | `Empty of query
+      | `Length of query ]
   deriving (Show)
 
   (* Table variables that are actually used are always bound in a for
@@ -673,7 +680,6 @@ struct
                                  works in MySQL and PostgreSQL *)
     else
       label
-
 
   module Arithmetic :
   sig
@@ -787,6 +793,8 @@ struct
         | `Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
         | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
         | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
+        | `Empty q -> "not exists (" ^ string_of_query q ^ ")"
+        | `Length q -> "select count(*) from (" ^ string_of_query q ^ ") as " ^ fresh_dummy_var ()
 
   let string_of_query range q =
     let range =
@@ -874,6 +882,10 @@ struct
                   in
                     `Apply ("RLIKE", [base s; r])
           end
+      | `Apply ("Empty", [v]) ->
+          `Empty (query v)
+      | `Apply ("length", [v]) ->
+          `Length (query v)
       | `Apply (f, vs) ->
           `Apply (f, List.map base vs)
       | `Project (`Var (x, _labels), name) ->
@@ -990,8 +1002,9 @@ end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
-(*     Debug.print ("e: "^Ir.Show_computation.show e); *)
+(*     Debug.print ("e: "^Show.show Ir.show_computation e); *)
     let v = Eval.eval env e in
+(*       Debug.print ("v: "^string_of_t v); *)
       match used_database v with
         | None -> None
         | Some db -> 

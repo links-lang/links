@@ -305,7 +305,7 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
     | #primitive_value_basis as v -> v
     | `Table (db_name, table_name, keys, t) ->
         let row =
-          match DesugarDatatypes.read ~aliases:Env.String.empty t with
+          match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
             | `Record row -> row
             | _ -> assert false in
         let driver, params = parse_db_string db_name in
@@ -661,3 +661,10 @@ let expr_to_contframe env expr =
    (Var.dummy_var : Ir.var),
    (env           : env),
    (([], expr)    : Ir.computation))
+
+let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
+and value_of_xmlitem =
+  function
+    | Text s -> `Variant ("Text", box_string s)
+    | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
+    | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])

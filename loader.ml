@@ -57,7 +57,8 @@ let load_file : envs -> string -> (envs * program) =
     let result = 
       try
         if not (Settings.get_value Basicsettings.use_cache) then None else
-          if newer cachename infile then
+          if newer cachename infile &&
+            (Settings.get_value Basicsettings.allow_stale_cache || newer cachename (Sys.argv.(0))) then
             Some (read_program cachename)
           else
             raise No_cache
