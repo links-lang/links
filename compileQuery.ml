@@ -1425,8 +1425,7 @@ and compile_expression env loop e : tblinfo =
     | `Table (t, _) -> compile_table loop t
     | `If ((c, t, Some e), _) -> compile_if env loop c t e
     | `If ((c, t, None), _) -> compile_if2 env loop c t
-    | `For (([x, l], os, body), _) -> compile_for env loop x l body os
-    | `For _ -> failwith "compile_expression: multi-generator for-expression not implemented"
+    | `For (((x, l), os, body), _) -> compile_for env loop x l body os
     | `Box (e, _) -> compile_box env loop e
     | `Unbox (e, _) -> compile_unbox env loop e
     | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 

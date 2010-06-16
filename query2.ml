@@ -6,7 +6,7 @@ open Utility
 let used_database = ref None
 
 type t =
-    [ `For of (Var.var * t) list * t list * t
+    [ `For of (Var.var * t) * t list * t
     | `GroupBy of (Var.var * t) * t
     | `If of t * t * t option
     | `Table of Value.table
@@ -83,7 +83,7 @@ module S =
 struct
   (** [pt]: A printable version of [t] *)
   type pt =
-    [ `For of (Var.var * pt) list * pt list * pt
+    [ `For of (Var.var * pt) * pt list * pt
     | `GroupBy of (Var.var * pt) * pt
     | `If of pt * pt * pt option
     | `Table of Value.table
@@ -100,10 +100,8 @@ struct
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
       match v with
-        | `For (gs, os, b) -> 
-            `For (List.map (fun (x, source) -> (x, bt source)) gs, 
-                  List.map bt os, 
-                  bt b)
+        | `For ((x, source), os, b) -> 
+            `For ((x, bt source) , List.map bt os, bt b)
 	| `GroupBy ((x, group_exp), source) ->
 	    `GroupBy ((x, bt group_exp), bt source)
         | `If (c, t, Some e) -> `If (bt c, bt t, Some (bt e))
@@ -397,7 +395,7 @@ struct
 			  let l = StringMap.fold (fun k v l -> (int_of_string k, v) :: l) ext_fields [] in
 			  let l = List.sort compare l in
 			  let os = List.map snd l in
-			    `For ([x, xs], os, `Var x)
+			    `For ((x, xs), os, `Var x)
 		      | _ -> assert false
 		  end
 	    | _ -> assert false
@@ -510,8 +508,8 @@ struct
     let for_expr = 
       match source with
 	  (* merge for-comprehension with its orderby clause *)
-	| `For ([y, source'], ((_ :: _) as os), (`Var y')) when y = y' ->
-	    `For ([x, source'], (List.map (replace_var y x) os), eval_body env (x, `Var x, body))
+	| `For ((y, source'), ((_ :: _) as os), (`Var y')) when y = y' ->
+	    `For ((x, source'), (List.map (replace_var y x) os), eval_body env (x, `Var x, body))
         | `Singleton _ 
         | `Append _ 
         | `If _ 
@@ -520,7 +518,7 @@ struct
 	| `Apply _
 	| `GroupBy _ 
 	| `Project _ ->
-	    `For ([x, source], [], eval_body env (x, `Var x, body))
+	    `For ((x, source), [], eval_body env (x, `Var x, body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
     in
       match for_expr with
@@ -540,7 +538,7 @@ module Annotate = struct
   deriving (Show)
 
   type typed_t =
-      [ `For of ((Var.var * typed_t) list * typed_t list * typed_t) * implementation_type
+      [ `For of ((Var.var * typed_t) * typed_t list * typed_t) * implementation_type
       | `GroupBy of ((Var.var * typed_t) * typed_t) * implementation_type
       | `If of (typed_t * typed_t * typed_t option) * implementation_type
       | `Table of Value.table * implementation_type
@@ -580,7 +578,7 @@ module Annotate = struct
     | `Unbox (_, t) -> t
 
   type typed_pt = 
-      [ `For of ((Var.var * typed_pt) list * typed_pt list * typed_pt) * implementation_type
+      [ `For of ((Var.var * typed_pt) * typed_pt list * typed_pt) * implementation_type
       | `GroupBy of ((Var.var * typed_pt) * typed_pt) * implementation_type
       | `If of (typed_pt * typed_pt * typed_pt option) * implementation_type
       | `Table of Value.table * implementation_type
@@ -604,11 +602,8 @@ module Annotate = struct
   let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
     let bt = typed_pt_of_typed_t in
       match v with
-        | `For ((gs, os, b), typ) -> 
-            `For ((List.map (fun (x, source) -> (x, bt source)) gs, 
-                   List.map bt os, 
-                   bt b),
-		  typ)
+        | `For (((x, source), os, b), typ) -> 
+            `For (((x, bt source), List.map bt os, bt b), typ)
 	| `GroupBy (((x, group_exp), source), typ) ->
 	    `GroupBy (((x, bt group_exp), bt source), typ)
         | `If ((c, t, Some e), typ) -> `If ((bt c, bt t, Some (bt e)), typ)
@@ -670,8 +665,9 @@ module Annotate = struct
 	  let r' = opt_map (fun r -> transform env r) r in
 	    `Extend ((r' ,ext_fields'), `Atom)
       | `For (gs, os, body) ->
-	  let env' = List.fold_left (fun m (x, _) -> Env.Int.bind m (x, `Atom)) env gs in
-	  let gs' = List.map (fun (x, source) -> (x, aot `List env source)) gs in
+	  let (x, source) = gs in
+	  let env' = Env.Int.bind env (x, `Atom) in
+	  let gs' = (x, aot `List env source) in
 	  let os' = List.map (fun o -> transform env' o) os in
 	  let body' = aot `List env' body in
 	    `For ((gs', os', body'), `List)
