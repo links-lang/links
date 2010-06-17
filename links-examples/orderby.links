@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var t = table "test1" with (foo : Int, bar : Int ) from db;
+var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
 query {
 for (r <-- t) orderby (r.bar, r.foo)
 	[(foo = r.foo, bar = r.bar)]

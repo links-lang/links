@@ -1,9 +1,0 @@
-var db = database "test" "postgresql" ":5432:test:foobar";
-var t = table "test1" with (foo : Int, bar : Int ) from db;
-
-fun add(z) { z + 5 }
-
-var x = add(50);
-query {
-for (r <-- t) [(bar=r.foo+x)]
-}

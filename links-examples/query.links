@@ -1,9 +1,0 @@
-var db = database "test" "postgresql" ":5432:test:foobar";
-var t = table "test1" with (foo : Int, bar : Int ) from db;
-fun f(x) { x + 2}
-query {
-	for (r <-- t) where (r.foo > 3)
-		[(foo = r.foo, xx = (bar = r.bar, baz = 42))]
-		
-}
-

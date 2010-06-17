@@ -1,4 +1,0 @@
-query {
-var l = [(foo = 2)];
-l
-}

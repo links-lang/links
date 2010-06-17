@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var players_table = table "players" with (team : String, name : String, pos : String, eff : Int) from db;
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
 
 query {
 	sum(map(fun (r) { r.eff }, asList(players_table)))
