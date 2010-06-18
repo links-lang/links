@@ -139,7 +139,7 @@ type atom_type =
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-(*    List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+   (* List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
     Debug.print ""; *)
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
@@ -162,8 +162,8 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	   (offset, find_field schema_name))
 	offsets_and_schema_names
     in
-(*    let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-      Debug.print (mapstrcat " " (fun x -> x) foo); *)
+    (* let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+      Debug.print (mapstrcat " " (fun x -> x) foo);  *)
     let item row offset = 
       (* Debug.f "item access %d\n" offset; *)
       try 
@@ -273,7 +273,6 @@ let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
      (new_offsets, `Record values)
 
 and handle_row itbl_offsets item cs itbls = 
-  (* Debug.print "handle_row"; *)
   let typ = Cs.atom_type cs in
   match typ with
     | `Primitive `Surrogate ->

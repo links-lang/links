@@ -53,6 +53,7 @@ let prjlist = List.map prj
 let prjlist_map new_cols old_cols = 
   List.map2 (fun a b -> (a, b)) new_cols old_cols
 
+(* project one single column old_col to all columns in new_col *)
 let prjlist_single new_cols old_col =
   List.map (fun a -> (a, old_col)) new_cols
 
@@ -73,7 +74,6 @@ let res = A.Pos 8
 let res' = A.Pos 9
 let res'' = A.Pos 10
 let pos'' = A.Pos 11
-
 
 let incr_col = function
   | A.Iter i -> A.Iter (i + 1)
@@ -192,7 +192,6 @@ let do_project field record =
   let Ti (q_r, cs_r, itbls_r, _) = record in
   let field_cs' = Cs.lookup_record_field cs_r field in
   let old_cols = Cs.columns field_cs' in
-  Debug.print (Cs.show cs_r);
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
@@ -215,7 +214,6 @@ let do_length loop (Ti (q_e, _, _, _)) =
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
-  Debug.print "do_zip";
   let Ti (q_e1, cs_e1, itbls_e1, _) = e1 in
   let Ti (q_e2, cs_e2, itbls_e2, _) = e2 in
   let card_e1 = List.length (Cs.columns cs_e1) in
@@ -469,7 +467,6 @@ and compile_zip env loop args =
 and compile_unzip env loop args =
   assert((List.length args) = 1);
   let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop (List.hd args) in
-    Debug.print (Cs.show cs_e);
   let q = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist_single [A.Item 1; A.Item 2] iter))
@@ -1140,23 +1137,56 @@ and compile_for env loop v e1 e2 order_criteria =
 
 and singleton_record env loop (name, e) =
   let Ti (q, cs, itbls, _) = compile_expression env loop e in
-    Ti (q, [`Mapping (name, cs)], itbls, dummy)
+  let cs' = [`Mapping (name, cs)] in
+    Ti (q, cs', itbls, dummy)
 
 and extend_record env loop ext_fields r =
   assert (match ext_fields with [] -> false | _ -> true);
-  match ext_fields with
-    | (name, e) :: [] -> 
-	(match r with 
-	   | Some record ->
-	       merge_records (singleton_record env loop (name, e)) record
-	   | None ->
-	       singleton_record env loop (name, e))
-    | (name, e) :: tl ->
-	let new_field = singleton_record env loop (name, e) in
-	let record = extend_record env loop tl r in
-	  merge_records new_field record
-    | [] ->
-	failwith "CompileQuery.extend_record: empty ext_fields"
+  let Ti (q, cs, itbls, _) as ti = 
+    match ext_fields with
+      | (name, e) :: [] -> 
+	  (match r with 
+	     | Some record ->
+		 merge_records (singleton_record env loop (name, e)) record
+	     | None ->
+		 singleton_record env loop (name, e))
+      | (name, e) :: tl ->
+	  let new_field = singleton_record env loop (name, e) in
+	  let record = extend_record env loop tl r in
+	    merge_records new_field record
+      | [] ->
+	  failwith "CompileQuery.extend_record: empty ext_fields"
+  in
+    (* guarantee invariant: cs fields are sorted in increasing order *)
+    let cols_old = Cs.columns cs in
+    let cs_sorted = Cs.sort_record_columns cs in
+    let cols_sorted = Cs.columns cs_sorted in
+      if cols_old = cols_sorted then
+	(* columns were already in order *)
+	ti
+      else
+	let cols_new = fromTo 1 (1 + (Cs.cardinality cs)) in
+	let cs_mapped = Cs.map_cols cols_new cs_sorted in
+	(* change column order by projecting *)
+	let q' =
+	  A.Dag.mk_project
+	    ([prj iter; prj pos] @ (prjlist_map (io cols_new) (io cols_sorted)))
+	    q
+	in
+	(* change the offsets in the itbls mappings accordingly *)
+	  let col_mapping = List.combine cols_old cols_new in
+	  let itbls' =
+	    List.map
+	      (fun (col, itbl) -> 
+		 let new_col = 
+		   try 
+		     List.assoc col col_mapping 
+		   with _ -> assert false
+		 in
+		   (new_col, itbl))
+	      itbls
+	  in
+	    Ti (q', cs_mapped, itbls', dummy)
 
 and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)) =
   let r2_leafs = Cs.columns r2_cs in
@@ -1200,19 +1230,27 @@ and compile_record env loop r =
 	singleton_record env loop (name, value)
     | (name, value) :: tl ->
 	let f = singleton_record env loop (name, value) in
-	  merge_records f (compile_record env loop tl)
+	let Ti (_, cs, _, _) as ti = merge_records f (compile_record env loop tl) in
+	  ti
     | [] ->
 	failwith "CompileQuery.compile_record_value: empty record"
 
 and compile_table loop ((_db, _params), tblname, keys, row) =
   List.iter (fun k -> Debug.print ("key " ^ (mapstrcat " " (fun x -> x) k))) keys;
-  let (column_names, types) = 
+  (* collect the column names of the table and their types from the row type *)
+  let cs_ts = 
     StringMap.fold
-      (fun colname (_, typ) (cs, ts) -> (colname :: cs, (base_type_of_typ typ) :: ts))
+      (fun colname (_, typ) cs_ts -> (colname, (base_type_of_typ typ)) :: cs_ts)
       (fst (fst (Types.unwrap_row row)))
-      ([], [])
+      []
   in
+  (* sort them by column name to get the canonical record layout 
+     (invariant: cs is always sorted by field name) *)
+  let cs_ts_sorted = List.sort (fun a b -> compare (fst a) (fst b)) cs_ts in
+  let column_names, types = List.split cs_ts_sorted in
+  (* column names to column numbers *)
   let column_items = mapIndex (fun c i -> (c, A.Item (i + 1))) column_names in
+  (* lookup the column numbers corresponding to the key columns *)
   let key_items =
     List.map
       (fun key ->
@@ -1457,5 +1495,4 @@ let compile e =
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
   let Ti (_, cs, itbls, _) as ti = compile_expression AEnv.empty loop e in
-    (* Debug.print (Cs.print cs); *)
     (wrap_serialize ti), cs, snd (collect_itbls (1, 0) itbls [])

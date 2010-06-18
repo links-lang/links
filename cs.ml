@@ -158,3 +158,22 @@ let longer_cs cs1 cs2 =
     | a, b when a > b -> (cs1, cs1)
     | a, b when a < b -> (cs2, cs2)
     | _, _ -> (cs1, cs2)
+
+let map_cols new_cols cs =
+  let rec map_cols_1 new_cols cs = 
+    match cs with
+      | `Offset (_, t) :: cs ->
+	  (match new_cols with
+	     | c' :: cols -> 
+		 let cols_rest, cs' = map_cols_1 cols cs in
+		   cols_rest, (`Offset (c', t) :: cs')
+	     | _ -> assert false)
+      | `Mapping (field, nested_cs) :: cs ->
+	  let cols_rest, nested_cs' = map_cols_1 new_cols nested_cs in
+	  let cols_rest, cs' = map_cols_1 cols_rest cs in
+	    cols_rest, (`Mapping (field, nested_cs') :: cs')
+      | [] ->
+	  (new_cols, cs)
+  in
+    Debug.f "%d %d" (List.length new_cols) (cardinality cs);
+    snd (map_cols_1 new_cols cs)
