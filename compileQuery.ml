@@ -174,7 +174,6 @@ let or_op = do_primitive_binop_ti wrap_or `BoolType
 let and_op = do_primitive_binop_ti wrap_and `BoolType
 
 let do_unbox q_e surr_col inner_ti =
-  Debug.print "do_unbox";
   let Ti(q_sub, cs_sub, itbls_sub, _) = inner_ti in
   let q_unbox =
     A.Dag.mk_project
@@ -432,7 +431,9 @@ and compile_append env loop l =
 
 and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
+  (* combine the two lists and compute new surrogate values *)
   let q =
+    (* FIXME: can we leave the rownum out if there are no inner tables? *)
     A.Dag.mk_rownum
       (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
       (A.Dag.mk_rank
@@ -446,7 +447,9 @@ and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _))
 	       tl_q)))
   in
   let q'_projlist = [prj iter; (pos, pos')] in
+  (* project all columns which do _not_ reference an inner table *)
   let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns hd_cs) (Itbls.keys hd_itbls)))) in
+  (* use the new surrogate values in all columns which _do_ reference inner tables *)
   let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys hd_itbls)) item') in
   let q' = 
     A.Dag.mk_project
@@ -859,7 +862,6 @@ and do_table_equal loop wrapper l1 l2 =
       (all (map_equal (do_zip l1_abs l2_abs)))
 
 and do_row_equal loop wrapper r1 r2 =
-  Debug.print "do_row_equal";
   let Ti (q_r1, cs_r1, itbls_r1, _) = r1 in
   let Ti (q_r2, cs_r2, itbls_r2, _) = r2 in
 

@@ -175,5 +175,4 @@ let map_cols new_cols cs =
       | [] ->
 	  (new_cols, cs)
   in
-    Debug.f "%d %d" (List.length new_cols) (cardinality cs);
     snd (map_cols_1 new_cols cs)
