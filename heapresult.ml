@@ -258,6 +258,7 @@ let mk_primitive raw_value t =
     | `CharType -> Value.box_char (String.get raw_value 0)
     | `FloatType -> (if raw_value = "" then Value.box_float 0.00      (* HACK HACK *)
                      else Value.box_float (float_of_string raw_value))
+    | `Unit -> `Record []
     | `NatType -> failwith "Heapresult.mk_primitive: nat is not a Links type"
     | `Surrogate -> assert false 
 

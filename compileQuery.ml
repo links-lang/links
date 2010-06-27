@@ -1288,11 +1288,11 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
 and compile_constant loop (c : Constant.constant) =
   let cs = [`Offset (1, A.column_type_of_constant c)] in
   let q =
-    (A.Dag.mk_attach
+    A.Dag.mk_attach
        (A.Item 1, A.const c)
        (A.Dag.mk_attach
 	  (A.Pos 0, A.Nat 1n)
-	  loop))
+	  loop)
   in
     Ti (q, cs, Itbls.empty, dummy)
 
@@ -1449,6 +1449,17 @@ and compile_groupby env loop v g_e e =
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
     Ti(q_2, cs, itbls, dummy)
 
+and compile_unit (loop : A.Dag.dag ref) : tblinfo =
+  let cs = [`Offset (1, `Unit)] in
+  let q =
+    A.Dag.mk_attach
+      (A.Item 1, A.Nat 1n)
+      (A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 loop)
+  in
+    Ti (q, cs, Itbls.empty, dummy)
+
 and compile_expression env loop e : tblinfo =
   match e with
     | `Constant (c, _) -> compile_constant loop c
@@ -1456,6 +1467,7 @@ and compile_expression env loop e : tblinfo =
     | `Var (x, _) -> AEnv.lookup env x
     | `Project ((r, field), _) -> compile_project env loop field r
     | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
+    | `Extend ((None, empty), _) when (StringMap.size empty) = 0-> compile_unit loop 
     | `Extend ((r, ext_fields), _) ->
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)

@@ -3,7 +3,7 @@ open Utility
 
 (*FIXME: should char constants be allowed *)
 type base_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType] deriving (Show)
-type column_type = [ base_type | `Surrogate ] deriving (Show)
+type column_type = [ base_type | `Surrogate | `Unit ] deriving (Show)
 
 let column_type_of_constant = function
   | `Bool _ -> `BoolType
@@ -160,6 +160,7 @@ let string_of_column_type = function
   | `FloatType -> "dbl"
   | `NatType -> "nat"
   | `Surrogate -> "surr"
+  | `Unit -> "nat"
 
 let typestring_of_constant = function
   | Float _ -> "dbl"
