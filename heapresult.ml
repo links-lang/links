@@ -312,7 +312,13 @@ and handle_row itbl_offsets item cs itbls =
 	    (itbl_offsets, mk_primitive raw_value t)
       | `Record field_names -> 
 	  mk_record itbl_offsets field_names cs item itbls
-      | `Tag -> failwith "Heapresult.handle_row: reconstruction of tags not implemented"
+      | `Tag -> 
+	  (* 1. get the value of the tag (string)
+	     2. look up the corresponding table in as
+	     3. derive the atom_type/implementation_type of the tagged value from the inner tables cs 
+	     3. reconstruct the tagged value like an inner list (beware: values must not be lists *)
+	     
+	  failwith "Heapresult.handle_row: reconstruction of tags not implemented"
 
 and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) = 
   (* Debug.print "handle_table"; *)

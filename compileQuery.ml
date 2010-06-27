@@ -2,7 +2,16 @@ open Utility
 
 module A = Algebra
 
-type tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ((int * tblinfo) list) * unit)
+(* type for the assoc list mapping surrogate columns to the corresponding 
+   tables for inner lists *)
+type ts = (int * tblinfo) list
+
+(* type for the assoc list mapping tags (variant types) and a surrogate 
+   column (composite key) to the corresponding tables for tagged values *)
+and vs = ((int * string) * tblinfo) list
+
+and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
+
 let q_of_tblinfo = function Ti (q, _, _, _) -> q
 
 module Itbls = struct
@@ -40,7 +49,7 @@ let is_primitive_col = function
 module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
 
-let dummy = ()
+let dummy = [] 
 
 let incr l i = List.map (fun j -> j + i) l
 let decr l i = List.map (fun j -> j - i) l
