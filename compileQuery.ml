@@ -1467,6 +1467,21 @@ and compile_unit (loop : A.Dag.dag ref) : tblinfo =
   in
     Ti (q, cs, Itbls.empty, dummy)
 
+and compile_variant env loop tag value =
+  let ti_value = compile_expression env loop value in
+  let cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+  let vs = [(2, tag), ti_value] in
+  let q = 
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_attach
+	 (A.Item 1, A.String tag)
+	 (A.Dag.mk_attach
+	    (A.Item 2, A.Nat 1n)
+	    loop))
+  in
+    Ti (q, cs, Itbls.empty, vs)
+
 and compile_expression env loop e : tblinfo =
   match e with
     | `Constant (c, _) -> compile_constant loop c
@@ -1488,7 +1503,7 @@ and compile_expression env loop e : tblinfo =
     | `Box (e, _) -> compile_box env loop e
     | `Unbox (e, _) -> compile_unbox env loop e
     | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
-    | `Variant _
+    | `Variant ((tag, value), _) -> compile_variant env loop tag value
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
