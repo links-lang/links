@@ -21,7 +21,7 @@ module Itbls = struct
       List.filter (f keys) itbls
 end
 
-let base_type_of_typ t = 
+let pf_type_of_typ t = 
   let concrete_t = Types.concrete_type t in
   match concrete_t with
   | `Primitive `Bool -> `BoolType
@@ -165,7 +165,7 @@ let do_primitive_binop_ti wrapper restype e1 e2 =
     assert (Cs.is_operand cs_e1);
     assert (Cs.is_operand cs_e2);
     let q = do_primitive_binop wrapper q_e1 q_e2 in
-      Ti (q, [`Offset (1, restype)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, restype)], Itbls.empty, dummy)
 
 let smaller = do_primitive_binop_ti wrap_lt `BoolType
 let greater = do_primitive_binop_ti wrap_gt `BoolType
@@ -209,7 +209,7 @@ let do_length loop (Ti (q_e, _, _, _)) =
       q_e
   in
   let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-    Ti (q', [`Offset (1, `IntType)], Itbls.empty, dummy)
+    Ti (q', [`Column (1, `IntType)], Itbls.empty, dummy)
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
@@ -246,7 +246,7 @@ let do_list_and loop (Ti (q, cs, _, _)) =
        q)
   in
   let q'' = wrap_agg loop q' (A.Bool true) in
-    Ti (q'', [`Offset (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q'', [`Column (1, `BoolType)], Itbls.empty, dummy)
 
 (* apply the min aggregate operator to the first column grouped by iter 
    (corresponds to the function "or" from the links prelude *)
@@ -258,7 +258,7 @@ let do_list_or loop (Ti (q, cs, _, _)) =
       q
   in
   let q'' = wrap_agg loop q' (A.Bool false) in
-    Ti (q'', [`Offset (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q'', [`Column (1, `BoolType)], Itbls.empty, dummy)
 
 let rec suap q_paap it1 it2 : (int * tblinfo) list =
   match (it1, it2) with
@@ -357,9 +357,6 @@ let rec suse q_pase subs : ((int * tblinfo) list) =
   else
     subs
 
-(* the empty list *)
-let nil = A.Dag.mk_emptytbl [(A.Iter 0, `NatType); (A.Pos 0, `NatType); (A.Item 1, `IntType)]
-
 (* loop-lift q by map *)
 let lift map (Ti (q, cs, _, _)) =
   let q' =
@@ -409,7 +406,7 @@ let rec compile_box env loop e =
 	 [(prj iter); (A.Item 1, iter)]
 	 loop)
   in
-    Ti(q_o, [`Offset (1, `Surrogate)], [(1, ti_e)], dummy)
+    Ti(q_o, [`Column (1, `Surrogate)], [(1, ti_e)], dummy)
 
 and compile_unbox env loop e =
   let Ti (q_e, cs_e, itbls_e, _) = compile_expression env loop e in
@@ -427,7 +424,7 @@ and compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	Ti (nil, [`Offset (1, `NatType)], Itbls.empty, dummy)
+	Ti (A.Dag.mk_emptytbl, [`Column (1, `IntType)], Itbls.empty, dummy)
 
 and compile_list (Ti (hd_q, hd_cs, hd_itbls, _)) (Ti (tl_q, tl_cs, tl_itbls, _)) =
   let fused_cs = Cs.fuse hd_cs tl_cs in
@@ -498,7 +495,7 @@ and compile_unzip env loop args =
   let itbls_1 = Itbls.retain_by_keys itbls_e cols_1 in
   let itbls_2 = Itbls.decr_keys (Itbls.retain_by_keys itbls_e cols_2) card in
   let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
-  let cs = [`Mapping ("1", [`Offset (1, `Surrogate)]); `Mapping ("2", [`Offset (2, `Surrogate)])] in
+  let cs = [`Mapping ("1", [`Column (1, `Surrogate)]); `Mapping ("2", [`Column (2, `Surrogate)])] in
     Ti (q, cs, itbls, dummy)
 
 (* FIXME: unite at least compile_or/and/length *)
@@ -535,7 +532,7 @@ and compile_empty env loop args =
 	      (A.Item 2, A.Int (Num.Int 0))
 	      q_length))
     in
-      Ti (q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
 
 (* FIXME: only sum works at the moment. max/min/avg can't be used.
    Issues:
@@ -555,7 +552,7 @@ and compile_aggr env loop aggr_fun args =
       (* HACK: special case for sum *)
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
       (* FIXME: extract the correct column type from cs_e *)
-      Ti (q', [`Offset (1, `IntType)], Itbls.empty, dummy)
+      Ti (q', [`Column (1, `IntType)], Itbls.empty, dummy)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
@@ -589,7 +586,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
   let e2_ti = compile_expression env loop e2 in
   let is_boxed (Ti (_, cs, _, _)) =
     match cs with
-      | [`Offset (1, `Surrogate)] -> true
+      | [`Column (1, `Surrogate)] -> true
       | _ -> false
   in
   let unbox (Ti (q, cs, itbls, _)) =
@@ -691,7 +688,7 @@ and do_table_greater loop wrapper l1 l2 =
 		    [prj iter]
 		    selected))))
     in
-      Ti (q, [`Offset (1, `NatType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `NatType)], Itbls.empty, dummy)
   in
 
   let abspos_ti (Ti (q, cs, itbls, _)) =
@@ -717,7 +714,7 @@ and do_table_greater loop wrapper l1 l2 =
     
 and do_row_greater loop wrapper e1 e2 = 
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
-    Ti (q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
 
 and do_row_greater_real loop wrapper zipped =
 
@@ -741,7 +738,7 @@ and do_row_greater_real loop wrapper zipped =
 	  q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
 	    
     in
-      Ti (q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
   in
 
   let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
@@ -767,7 +764,7 @@ and do_row_greater_real loop wrapper zipped =
 	  (* compare the inner tables *)
 	  q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r) 
     in
-      Ti (q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
   in
 
   let Ti (_q_zipped, cs_zipped, _itbls_zipped, _) = zipped in
@@ -781,6 +778,7 @@ and do_row_greater_real loop wrapper zipped =
   
   (* sort record fields by field name so that the correct columns are
      compared *)
+  (* FIXME sorting is unecessary because all records/tables are sorted by field names (invariant *)
   let cols_l = Cs.leafs (Cs.sort_record_columns cs_l) in
   let cols_r = Cs.leafs (Cs.sort_record_columns cs_r) in
 
@@ -849,7 +847,7 @@ and do_table_equal loop wrapper l1 l2 =
 	    q_equal
 	    map)
      in
-       Ti (result_backmapped, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+       Ti (result_backmapped, [`Column (1, `BoolType)], Itbls.empty, dummy)
   in
 
 	
@@ -871,6 +869,7 @@ and do_row_equal loop wrapper r1 r2 =
   let cs_r1, cs_r2 = Cs.longer_cs cs_r1 cs_r2 in
 
   (* pair the item columns which belong to the respective record fields *)
+  (* FIXME sorting is unecessary because all records/tables are sorted by field names (invariant *)
   let items1 = Cs.leafs (Cs.sort_record_columns cs_r1) in
   let items2 = Cs.leafs (Cs.sort_record_columns cs_r2) in
 
@@ -955,7 +954,7 @@ and do_row_equal loop wrapper r1 r2 =
 		  (assemble_equals items)))
   in
   let q = assemble_equals items in
-    Ti(q, [`Offset (1, `BoolType)], Itbls.empty, dummy)
+    Ti(q, [`Column (1, `BoolType)], Itbls.empty, dummy)
 
 and compile_binop env loop wrapper restype operands =
   assert ((List.length operands) = 2);
@@ -1232,8 +1231,7 @@ and compile_record env loop r =
 	singleton_record env loop (name, value)
     | (name, value) :: tl ->
 	let f = singleton_record env loop (name, value) in
-	let Ti (_, cs, _, _) as ti = merge_records f (compile_record env loop tl) in
-	  ti
+	  merge_records f (compile_record env loop tl)
     | [] ->
 	failwith "CompileQuery.compile_record_value: empty record"
 
@@ -1242,7 +1240,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
   (* collect the column names of the table and their types from the row type *)
   let cs_ts = 
     StringMap.fold
-      (fun colname (_, typ) cs_ts -> (colname, (base_type_of_typ typ)) :: cs_ts)
+      (fun colname (_, typ) cs_ts -> (colname, (pf_type_of_typ typ)) :: cs_ts)
       (fst (fst (Types.unwrap_row row)))
       []
   in
@@ -1272,7 +1270,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
   in
   let cs = 
     List.map 
-      (fun (i, c, typ) -> `Mapping (c, [`Offset (offset i, typ)])) 
+      (fun (i, c, typ) -> `Mapping (c, [`Column (offset i, typ)])) 
       attr_infos 
   in
   let q =
@@ -1286,7 +1284,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
     Ti (q, cs, Itbls.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
-  let cs = [`Offset (1, A.column_type_of_constant c)] in
+  let cs = [`Column (1, A.column_type_of_constant c)] in
   let q =
     A.Dag.mk_attach
        (A.Item 1, A.const c)
@@ -1445,12 +1443,12 @@ and compile_groupby env loop v g_e e =
       ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.columns cs_e))))
       q_1
   in
-  let cs = [`Mapping ("1", cs_eg); `Mapping ("2", [`Offset (grpkey_col, `Surrogate)])] in
+  let cs = [`Mapping ("1", cs_eg); `Mapping ("2", [`Column (grpkey_col, `Surrogate)])] in
   let itbls = [(grpkey_col, Ti(q_3, cs_e, itbls_e, dummy))] in
     Ti(q_2, cs, itbls, dummy)
 
 and compile_unit (loop : A.Dag.dag ref) : tblinfo =
-  let cs = [`Offset (1, `Unit)] in
+  let cs = [`Column (1, `Unit)] in
   let q =
     A.Dag.mk_attach
       (A.Item 1, A.Nat 1n)

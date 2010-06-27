@@ -38,7 +38,7 @@ let out_empty_tbl_info out schema =
   out (`El_start (tag "content"));
   List.iter
     (fun (name, typ) ->
-       out_col out [("name", (A.string_of_attr_name name)); ("type", A.string_of_column_type typ); ("new", "true")])
+       out_col out [("name", (A.string_of_attr_name name)); ("type", A.string_of_pf_type typ); ("new", "true")])
     schema;
   out `El_end
 
@@ -170,7 +170,7 @@ let out_cast_info out (result_attr, name, base_type) =
   out (`El_start (tag "content"));
   out_col out [("name", (A.string_of_attr_name result_attr)); ("new", "true")];
   out_col out [("name", (A.string_of_attr_name name)); ("new", "false")];
-  out_el out "type" [("name", A.string_of_column_type base_type)];
+  out_el out "type" [("name", A.string_of_pf_type base_type)];
   out `El_end
 
 let out_binop_info out (result_attr, arg_pair) =
@@ -246,7 +246,7 @@ let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
       (fun (external_name, internal_name, typ) ->
 	 out_col out [("name", (A.string_of_attr_name external_name)); 
 		      ("tname", internal_name); 
-		      ("type", A.string_of_column_type typ)])
+		      ("type", A.string_of_pf_type typ)])
       attr_infos
   in
     out_el_childs out "table" [("name", tbl_name)] c;
@@ -405,7 +405,7 @@ let export_plan_bundle out_dest implementation_type (root_dag, root_cs, sub_dags
 	| `List -> "LIST"
     in
       out_el out "property" [("name", "overallResultType"); ("value", resulttype)];
-      Cs.out_cs out root_cs;
+      (* Cs.out_cs out root_cs; *)
       out `El_end;
       export_plan out root_dag;
       out `El_end;
@@ -417,7 +417,9 @@ let export_plan_bundle out_dest implementation_type (root_dag, root_cs, sub_dags
 	   in
 	     out (`El_start (tag_attr "query_plan" attrs));
 	     out (`El_start (tag "properties"));
+(*
 	     Cs.out_cs out cs;
+*)
 	     out `El_end;
 	     export_plan out dag;
 	     out `El_end)

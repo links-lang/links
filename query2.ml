@@ -638,6 +638,9 @@ module Annotate = struct
     match expression with
       | `Constant c -> `Constant (c, `Atom)
       | `Table t -> `Table (t, `List) 
+      | `Variant (tag, t) ->
+	  let t' = transform env t in
+	    `Variant ((tag, t'), `Atom)
       | `If (c, t, Some e) -> 
 	  let c' = transform env c in
 	  let t' = transform env t in

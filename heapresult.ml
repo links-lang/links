@@ -129,11 +129,6 @@ type accessor_functions = (int -> int -> string) * (int -> string) * int
 type itbls = (int * table_struct) list
 and table_struct = Table of (accessor_functions * Cs.cs * itbls * implementation_type option)
 
-type field_name = string
-type atom_type =
-  [ `Primitive of Algebra.column_type
-  | `Record of field_name list ]
-
 (* Create functions which encapsulate the access to one table's 
    item and iter fields. *)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
@@ -260,6 +255,7 @@ let mk_primitive raw_value t =
                      else Value.box_float (float_of_string raw_value))
     | `Unit -> `Record []
     | `NatType -> failwith "Heapresult.mk_primitive: nat is not a Links type"
+    | `Tag 
     | `Surrogate -> assert false 
 
 let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
@@ -275,47 +271,48 @@ let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
 
 and handle_row itbl_offsets item cs itbls = 
   let typ = Cs.atom_type cs in
-  match typ with
-    | `Primitive `Surrogate ->
-	let col = 
-	  (match cs with
-	     | [`Offset (i, `Surrogate)] -> i
-	     | cs -> failwith ("Heapresult.handle_row: cs in no inner list surrogate column " ^
-				 (Cs.show cs)))
-	in
-	let offset = 
-	  match itbl_offsets with
-	    | Some offsets ->
-		(try
-		  List.assoc col offsets
-		with NotFound _ -> 0)
-	    | None -> 0
-	in
-	let itbl = 
-	  try
-	    List.assoc col itbls
-	  with NotFound _ -> assert false
-	in
-	let surrogate_key = int_of_string (item col) in
-	let (next_offset, value) = handle_inner_table surrogate_key offset itbl in
-	let new_offsets =
-	  match itbl_offsets with
-	    | Some offsets ->
-		Some ((col, next_offset) :: (remove_keys offsets [col]))
-	    | None ->
-		Some [col, next_offset]
-	in
-	  (new_offsets, value)
-    | `Primitive t -> 
-	let col =
-	  (match cs with
-	    | [`Offset (i, _)] -> i
-	    | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
-	in
-	let raw_value = item col in
-	  (itbl_offsets, mk_primitive raw_value t)
-    | `Record field_names -> 
-	mk_record itbl_offsets field_names cs item itbls
+    match typ with
+      | `Primitive `Surrogate ->
+	  let col = 
+	    (match cs with
+	       | [`Column (i, `Surrogate)] -> i
+	       | cs -> failwith ("Heapresult.handle_row: cs in no inner list surrogate column " ^
+				   (Cs.show cs)))
+	  in
+	  let offset = 
+	    match itbl_offsets with
+	      | Some offsets ->
+		  (try
+		     List.assoc col offsets
+		   with NotFound _ -> 0)
+	      | None -> 0
+	  in
+	  let itbl = 
+	    try
+	      List.assoc col itbls
+	    with NotFound _ -> assert false
+	  in
+	  let surrogate_key = int_of_string (item col) in
+	  let (next_offset, value) = handle_inner_table surrogate_key offset itbl in
+	  let new_offsets =
+	    match itbl_offsets with
+	      | Some offsets ->
+		  Some ((col, next_offset) :: (remove_keys offsets [col]))
+	      | None ->
+		  Some [col, next_offset]
+	  in
+	    (new_offsets, value)
+      | `Primitive t -> 
+	  let col =
+	    (match cs with
+	       | [`Column (i, _)] -> i
+	       | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
+	  in
+	  let raw_value = item col in
+	    (itbl_offsets, mk_primitive raw_value t)
+      | `Record field_names -> 
+	  mk_record itbl_offsets field_names cs item itbls
+      | `Tag -> failwith "Heapresult.handle_row: reconstruction of tags not implemented"
 
 and handle_table (Table ((item, _, nr_tuples), cs, itbls, result_type)) = 
   (* Debug.print "handle_table"; *)

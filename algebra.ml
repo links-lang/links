@@ -2,8 +2,8 @@
 open Utility
 
 (*FIXME: should char constants be allowed *)
-type base_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType] deriving (Show)
-type column_type = [ base_type | `Surrogate | `Unit ] deriving (Show)
+(* types supported by pathfinder *)
+type pf_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType] deriving (Show)
 
 let column_type_of_constant = function
   | `Bool _ -> `BoolType
@@ -65,9 +65,9 @@ type right_attr_name = attr_name
 
 type sort_direction = Ascending | Descending
 type sort_infos = (sort_attr_name * sort_direction) list
-type schema_infos = (attr_name * base_type) list
+type schema_infos = (attr_name * pf_type) list
 type key_infos = attr_name list list
-type tbl_attribute_infos = (attr_name * string * base_type) list
+type tbl_attribute_infos = (attr_name * string * pf_type) list
 
 (* semantic informations on operator nodes *)
 type rownum_info = result_attr_name * sort_infos * partitioning_attr_name option
@@ -80,7 +80,7 @@ type eqjoin_info = left_attr_name * right_attr_name
 type thetajoin_info = (join_comparison * (left_attr_name * right_attr_name)) list
 type lit_tbl_info = constant list list * schema_infos
 type attach_info = result_attr_name * constant
-type cast_info = result_attr_name * attr_name * base_type
+type cast_info = result_attr_name * attr_name * pf_type
 type binop_info = result_attr_name * (left_attr_name * right_attr_name)
 type unop_info = result_attr_name * attr_name
 type fun_1to1_info = func * result_attr_name * (attr_name list)
@@ -152,15 +152,13 @@ let string_of_join_comparison = function
   | Le -> "le"
   | Ne -> "ne"
 
-let string_of_column_type = function
+let string_of_pf_type = function
   | `IntType -> "int"
   | `StrType -> "str"
   | `BoolType -> "bln"
   | `CharType -> "str"
   | `FloatType -> "dbl"
   | `NatType -> "nat"
-  | `Surrogate -> "surr"
-  | `Unit -> "nat"
 
 let typestring_of_constant = function
   | Float _ -> "dbl"
@@ -237,7 +235,7 @@ module Dag = struct
   let mk_funaggrcount info = mkunnode (FunAggrCount info)
 
   let mk_littbl info = mknullnode (LitTbl info)
-  let mk_emptytbl info = mknullnode (EmptyTbl info)
+  let mk_emptytbl = mknullnode (EmptyTbl [(Iter 0, `NatType); (Pos 0, `NatType); (Item 1, `IntType)])
   let mk_tblref info = mknullnode (TblRef info)
   let mk_nil = mknullnode Nil
 
