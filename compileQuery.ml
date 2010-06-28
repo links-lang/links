@@ -269,43 +269,64 @@ let do_list_or loop (Ti (q, cs, _, _)) =
   let q'' = wrap_agg loop q' (A.Bool false) in
     Ti (q'', [`Column (1, `BoolType)], Itbls.empty, dummy)
 
-let rec suap q_paap it1 it2 : (int * tblinfo) list =
-  match (it1, it2) with
+let combine_inner_tables q_l q_r =
+  A.Dag.mk_rownum 
+    (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+    (A.Dag.mk_disjunion
+       (A.Dag.mk_attach
+	  (ord, A.Nat 1n)
+	  q_l)
+       (A.Dag.mk_attach
+	  (ord, A.Nat 2n)
+	  q_r))
+
+let renumber_inner_table q_outer q_inner surr_col = 
+  A.Dag.mk_thetajoin
+    [(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
+    q_inner
+    (A.Dag.mk_project
+       [(ord', ord); (item'', item'); (c', A.Item surr_col)]
+       q_outer)
+
+(*
+let rec append_variant_tables (q_outer : A.Dag.dag ref) (vs_l : vs) (vs_r : vs) : vs =
+  match (vs_l, vs_r) with
+    | ((refcol_l, label_l), ti_l) :: vs_hat, ((refcol_r, label_r), ti_r) :: vs_tilde ->
+	assert (refcol_l = refcol_r);
+	assert (label_l = label_r);
+	
+    | [], [] ->
+	[]
+    | ((refcol_l, label_l), ti_l) :: _ , [] ->
+	assert false
+    | [], ((refcol_r, label_r), ti_r) :: _ ->
+	assert false
+*)
+
+(* FIXME awful code *)
+let rec suap (q_outer : A.Dag.dag ref) (ts_l : ts) (ts_r : ts) : ts =
+  match (ts_l, ts_r) with
     | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
-	let q =
-	  (A.Dag.mk_rownum 
-	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-	     (A.Dag.mk_disjunion
-		(A.Dag.mk_attach
-		   (ord, A.Nat 1n)
-		   q_1)
-		(A.Dag.mk_attach
-		   (ord, A.Nat 2n)
-		   q_2)))
-	in
+	let q_combined = combine_inner_tables q_1 q_2 in
 	let q'_projlist = [(iter, item''); prj pos] in
 	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs1) (Itbls.keys subs_1)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs_1)) item') in
 	let q' =
-	  (A.Dag.mk_project
-	     q'_projlist
-	     (A.Dag.mk_thetajoin
-		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
-		q
-		(A.Dag.mk_project
-		   [(ord', ord); (item'', item'); (c', A.Item c1)]
-		   q_paap)))
+	  A.Dag.mk_project
+	    q'_projlist
+	    (renumber_inner_table q_outer q_combined c1)
 	in
-	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q subs_1 subs_2), dummy)))] @ (suap q_paap subs_hat subs_tilde)
+	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q_combined subs_1 subs_2), dummy)))] @ (suap q_outer subs_hat subs_tilde)
     | [], [] -> []
 	(* If one of the inner lists to be appended is empty, 
 	   we still need to generate new surrogate keys so 
 	   that they match with the ones computed in the outer table *)
     | [], (c, Ti(q_i, cs, subs, _)) :: _ -> 
-	let q =
+	let q_combined =
 	  (A.Dag.mk_rownum 
 	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
 		(A.Dag.mk_attach
+		   (* FIXME ord = 2 for right side? *)
 		   (ord, A.Nat 1n)
 		   q_i))
 	in
@@ -313,18 +334,13 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
 	let q' =
-	  (A.Dag.mk_project
-	     q'_projlist
-	     (A.Dag.mk_thetajoin
-		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
-		q
-		(A.Dag.mk_project
-		   [(ord', ord); (item'', item'); (c', A.Item c)]
-		   q_paap)))
+	  A.Dag.mk_project
+	    q'_projlist
+	    (renumber_inner_table q_outer q_combined c)
 	in
-	  [c, (Ti (q', cs, (suap q subs[]), dummy))] 
+	  [c, (Ti (q', cs, (suap q_combined subs[]), dummy))] 
     | (c, Ti(q_i, cs, subs, _)) :: _, [] -> 
-	let q =
+	let q_combined =
 	  (A.Dag.mk_rownum 
 	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
 		(A.Dag.mk_attach
@@ -335,16 +351,11 @@ let rec suap q_paap it1 it2 : (int * tblinfo) list =
 	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
 	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
 	let q' =
-	  (A.Dag.mk_project
-	     q'_projlist
-	     (A.Dag.mk_thetajoin
-		[(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
-		q
-		(A.Dag.mk_project
-		   [(ord', ord); (item'', item'); (c', A.Item c)]
-		   q_paap)))
+	  A.Dag.mk_project
+	    q'_projlist
+	    (renumber_inner_table q_outer q_combined c)
 	in
-	  [c, (Ti (q', cs, (suap q subs []), dummy))] 
+	  [c, (Ti (q', cs, (suap q_combined subs []), dummy))] 
 
 let rec suse q_pase subs : ((int * tblinfo) list) =
   if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
