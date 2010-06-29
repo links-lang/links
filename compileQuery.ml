@@ -1647,4 +1647,4 @@ let compile e =
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-    compile_expression AEnv.empty loop e 
+    wrap_serialize (compile_expression AEnv.empty loop e)

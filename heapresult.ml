@@ -181,18 +181,18 @@ let mk_primitive raw_value t =
     | `Tag 
     | `Surrogate -> assert false 
 
-let rec mk_record itbl_offsets field_names cs (item : int -> string) itbls =
+let rec mk_record itbl_offsets field_names cs (item : int -> string) tsr vsr =
    let mk_field (next_offsets, record) field_name =
      let field_cs = Cs.lookup_record_field cs field_name in
 (*       Debug.print (Cs.print cs);
        Debug.print ("mk_record " ^ field_name); *)
-     let (new_offsets, value) = handle_row next_offsets item field_cs itbls in
+     let (new_offsets, value) = handle_row next_offsets item field_cs tsr vsr in
        (new_offsets, ((field_name, value) :: record))
    in
    let (new_offsets, values) = List.fold_left mk_field (itbl_offsets, []) field_names in
      (new_offsets, `Record values)
 
-and handle_row itbl_offsets item cs itbls = 
+and handle_row itbl_offsets item cs tsr vsr = 
   let typ = Cs.atom_type cs in
     match typ with
       | `Primitive `Surrogate ->
@@ -212,11 +212,11 @@ and handle_row itbl_offsets item cs itbls =
 	  in
 	  let itbl = 
 	    try
-	      List.assoc col itbls
+	      List.assoc col tsr
 	    with NotFound _ -> assert false
 	  in
 	  let surrogate_key = int_of_string (item col) in
-	  let (next_offset, value) = handle_inner_table surrogate_key offset itbl in
+	  let (next_offset, value) = handle_inner_table `List surrogate_key offset itbl in
 	  let new_offsets =
 	    match itbl_offsets with
 	      | Some offsets ->
@@ -234,34 +234,59 @@ and handle_row itbl_offsets item cs itbls =
 	  let raw_value = item col in
 	    (itbl_offsets, mk_primitive raw_value t)
       | `Record field_names -> 
-	  mk_record itbl_offsets field_names cs item itbls
+	  mk_record itbl_offsets field_names cs item tsr vsr
       | `Tag -> 
-	  (* 1. get the value of the tag (string)
-	     2. look up the corresponding table in as
-	     3. derive the atom_type/implementation_type of the tagged value from the inner tables cs 
-	     3. reconstruct the tagged value like an inner list (beware: values must not be lists *)
-	     
-	  failwith "Heapresult.handle_row: reconstruction of tags not implemented"
+	  (match cs with
+	    | [`Tag ((tagcol, `Tag), (refcol, `Surrogate), itype)] ->
+		Debug.print (Cs.show cs);
+		let tagval = item tagcol in
+		Debug.f "tagval %s" tagval;
+		let refval_raw = item refcol in
+		Debug.f "refval_raw %s" refval_raw;
+		let refval = int_of_string refval_raw in
+		let itbl = 
+		  try
+		    List.assoc (refcol, tagval) vsr
+		  with NotFound _ -> assert false
+		in
+		let offset = 
+		  match itbl_offsets with
+		    | Some offsets ->
+			(try
+			   List.assoc refcol offsets
+			 with NotFound _ -> 0)
+		    | None -> 0
+		in
+		let (next_offset, tagged_value) = handle_inner_table itype refval offset itbl in
+		let new_offsets =
+		  match itbl_offsets with
+		    | Some offsets ->
+			Some ((refcol, next_offset) :: (remove_keys offsets [refcol]))
+		    | None ->
+			Some [refcol, next_offset]
+		in
+		  (new_offsets, tagged_value)
+	    | _ -> assert false)
 
-and handle_table (Tr ((item, _, nr_tuples), cs, tsr, _vsr)) result_type = 
+and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type = 
   (* Debug.print "handle_table"; *)
   (* Debug.print (Cs.print cs); *)
   match result_type with
     | `Atom ->
 	assert (nr_tuples = 1);
-	snd (handle_row None (item 0) cs tsr)
+	snd (handle_row None (item 0) cs tsr vsr)
     | `List ->
 	let rec loop_tuples i row_values offsets =
 	  if i = nr_tuples then
 	    (offsets, List.rev row_values)
 	  else
 	    let col_value = item i in
-	    let (next_offsets, row_value) = handle_row offsets col_value cs tsr in
+	    let (next_offsets, row_value) = handle_row offsets col_value cs tsr vsr in
 	      loop_tuples (i + 1) (row_value :: row_values) next_offsets
 	in
 	  `List (snd (loop_tuples 0 [] None))
 	
-and handle_inner_table surrogate_key offset (Tr ((item, iter, nr_tuples), cs, itbls, _)) =
+and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), cs, tsr, vsr)) =
   (* Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples; *)
   (* Debug.print (Cs.print cs); *)
   let rec loop_tuples i row_values inner_offsets =
@@ -275,10 +300,15 @@ and handle_inner_table surrogate_key offset (Tr ((item, iter, nr_tuples), cs, it
 	  else
 	    (i - 1), (List.rev row_values)
 	else if surrogate_key = iter_val then
-	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs itbls in
+	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs tsr vsr in
 	    loop_tuples (i + 1) (row_value :: row_values) new_inner_offsets
 	else
 	  loop_tuples (i + 1) row_values inner_offsets
   in
   let (next_offset, values) = loop_tuples offset [] None in
-    (next_offset, `List values)
+    match itype with
+      | `Atom -> 
+	  assert ((List.length values) = 1);
+	  (next_offset, List.hd values)
+      | `List ->
+	  (next_offset, `List values)
