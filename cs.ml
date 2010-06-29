@@ -5,14 +5,9 @@ module A = Algebra
 
 type column_type = [ A.pf_type | `Surrogate | `Unit | `Tag ] deriving (Show)
 
-(*
-let string_of_column_type (typ : column_type) =
-  match typ with
-    | #A.pf_type -> A.string_of_pf_type typ
-    | `Surrogate -> "surr"
-    | `Unit -> "unit"
-    | `Tag -> "tag"
-*)
+(* FIXME: there should be only one definition of implementation_type. at the moment 
+   there are three (Query2.Annotate, Cs, Heapresult) *)
+type implementation_type = [`Atom | `List] deriving (Show)
 
 (* the number of a column starting with 1 *)
 type offset = int deriving (Show)
@@ -25,7 +20,7 @@ type column = offset * column_type deriving (Show)
 type cs = csentry list
 and csentry = 
     [ `Column of column 
-    | `Tag of column * column
+    | `Tag of column * column * implementation_type
     | `Mapping of string * cs ] 
       deriving (Show)
 
@@ -65,7 +60,7 @@ let rec leafs cs =
 	  match cs_entry with
 	    | `Column col -> col :: leaf_list
 	    | `Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list
-	    | `Tag (tagcol, refcol) -> tagcol :: refcol :: leaf_list)
+	    | `Tag (tagcol, refcol, _) -> tagcol :: refcol :: leaf_list)
        []
        cs)
   
@@ -79,7 +74,7 @@ let rec shift cs i =
   List.map
     (function
        | `Column (o, typ) -> `Column ((o + i), typ)
-       | `Tag ((tago, tagt), (refo, reft)) -> `Tag ((tago + i, tagt), (refo + i, reft))
+       | `Tag ((tago, tagt), (refo, reft), itype) -> `Tag ((tago + i, tagt), (refo + i, reft), itype)
        | `Mapping (key, cs) -> `Mapping (key, (shift cs i)))
     cs
 
@@ -190,11 +185,11 @@ let map_cols new_cols cs =
 		 let cols_rest, cs' = map_cols_1 cols cs in
 		   cols_rest, (`Column (c', t) :: cs')
 	     | _ -> assert false)
-      | `Tag _ :: cs ->
+      | `Tag (_, _, itype) :: cs ->
 	  (match new_cols with
 	     | tagcol' :: refcol' :: cols ->
 		 let cols_rest, cs' = map_cols_1 cols cs in
-		   cols_rest, ((`Tag ((tagcol', `Tag), (refcol', `Surrogate))) :: cs')
+		   cols_rest, ((`Tag ((tagcol', `Tag), (refcol', `Surrogate), itype)) :: cs')
 	     | _ -> assert false)
       | `Mapping (field, nested_cs) :: cs ->
 	  let cols_rest, nested_cs' = map_cols_1 new_cols nested_cs in

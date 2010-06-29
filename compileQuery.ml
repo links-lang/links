@@ -1590,7 +1590,8 @@ and compile_unit (loop : A.Dag.dag ref) : tblinfo =
 
 and compile_variant env loop tag value =
   let ti_value = compile_expression env loop value in
-  let cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+  let itype = Query2.Annotate.typeof_typed_t value in
+  let cs = [`Tag ((1, `Tag), (2, `Surrogate), itype)] in
   let vs = [(2, tag), ti_value] in
   let q = 
     A.Dag.mk_attach
