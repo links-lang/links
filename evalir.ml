@@ -46,10 +46,6 @@ module Eval = struct
 
   let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
-  let output_plan plan fname =
-    let o = open_out fname in
-      output_string o plan;
-      close_out o
 
   (** {0 Scheduling} *)
 
@@ -357,21 +353,12 @@ module Eval = struct
         let result =
 	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
 	  let (exptree, imptype) = Query2.compile env (range, e) in
-	  let algebra_bundle = CompileQuery.compile exptree in
-	  let xmlbuf = Buffer.create 1024 in
-	    Algebra_export.export_plan_bundle (`Buffer xmlbuf) imptype algebra_bundle;
-	    Debug.print ">>>> pfopt";
-	    let xml_opt = Pf_toolchain.pipe_pfopt (Buffer.contents xmlbuf) in
-	      Debug.print ">>>> pfsql";
-	      let sql_bundle = Pf_toolchain.pipe_pfsql xml_opt in 
-		output_plan (Buffer.contents xmlbuf) "plan.xml";
-		output_plan xml_opt "plan_opt.xml";
-		output_plan sql_bundle "plan_opt_sql.xml";
-		match !Query2.used_database with
-		  | Some db -> 
-		      let table = Heapresult.transform_and_execute db sql_bundle algebra_bundle in
-			Heapresult.handle_table table
-		  | None -> computation env cont e
+	    match !Query2.used_database with
+	      | Some db -> 
+		  let algebra_bundle = CompileQuery.compile exptree in
+		  let result_bundle = Heapresult.execute_queries db algebra_bundle in
+		    Heapresult.handle_table result_bundle imptype
+	      | None -> computation env cont e
         in
           apply_cont cont env result
     | `Update ((xb, source), where, body) ->

@@ -1628,28 +1628,22 @@ and compile_expression env loop e : tblinfo =
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
-let wrap_serialize (Ti (q,cs,_,_)) =
-  A.Dag.mk_serializerel 
-    (A.Iter 0, A.Pos 0, io (Cs.columns cs))
-    (A.Dag.mk_nil)
-    q
-
-let rec collect_itbls (plan_id, ref_id) itbls collected =
-  match itbls with
-    | (offset, (Ti(_, cs, [], _) as ti)) :: remaining_itbls ->
-	let l = (plan_id, ((ref_id, offset), (wrap_serialize ti), cs)) :: collected in
-	  collect_itbls (plan_id + 1, ref_id) remaining_itbls l
-    | (offset, (Ti(_, cs, itbls, _) as ti)) :: remaining_itbls ->
-	let (next_id, l) = collect_itbls (plan_id + 1, plan_id) itbls [] in
-	let l = (plan_id, ((ref_id, offset), (wrap_serialize ti), cs)) :: (l @ collected) in
-	  collect_itbls (next_id, plan_id) remaining_itbls l
-    | [] ->
-	(plan_id, collected)
+(* TODO use the left subtree of serialize_rel for error handling *)
+let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
+  let serialize q cs =
+    A.Dag.mk_serializerel 
+      (A.Iter 0, A.Pos 0, io (Cs.columns cs))
+      (A.Dag.mk_nil)
+      q
+  in
+  let q' = serialize q cs in
+  let ts' = alistmap wrap_serialize ts in
+  let vs' = alistmap wrap_serialize vs in
+    Ti (q', cs, ts', vs')
       
 let compile e =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-  let Ti (_, cs, itbls, _) as ti = compile_expression AEnv.empty loop e in
-    (wrap_serialize ti), cs, snd (collect_itbls (1, 0) itbls [])
+    compile_expression AEnv.empty loop e 

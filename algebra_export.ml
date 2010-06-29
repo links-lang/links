@@ -386,42 +386,15 @@ let rec out_dag (out, node, visited) =
 	  out_binary_op out op id lchild_id rchild_id;
 	  visited
 
-let export_plan out dag =
-  let dag = ref (A.Dag.prune_empty !dag) in
-    out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
-    ignore (out_dag (out, dag, IntSet.empty));
-    out `El_end
-
-let export_plan_bundle out_dest implementation_type (root_dag, root_cs, sub_dags) =
+let export_plan_bundle out_dest dag =
   let o = Xmlm.make_output ~nl:true ~indent:(Some 2) out_dest in
   let out = Xmlm.output o in
+  let dag_pruned = ref (A.Dag.prune_empty !dag) in
     out (`Dtd None);
     out (`El_start (tag "query_plan_bundle"));
     out (`El_start (tag_attr "query_plan" [("id", "0")]));
-    out (`El_start (tag "properties"));
-    let resulttype = 
-      match implementation_type with
-	| `Atom -> "TUPLE"
-	| `List -> "LIST"
-    in
-      out_el out "property" [("name", "overallResultType"); ("value", resulttype)];
-      (* Cs.out_cs out root_cs; *)
-      out `El_end;
-      export_plan out root_dag;
-      out `El_end;
-      List.iter
-	(fun (plan_id, ((ref_id, col_id), dag, cs)) ->
-	   let attrs = [("id", (string_of_int plan_id)); 
-			("idref", (string_of_int ref_id)); 
-			("colref", (string_of_int col_id))]
-	   in
-	     out (`El_start (tag_attr "query_plan" attrs));
-	     out (`El_start (tag "properties"));
-(*
-	     Cs.out_cs out cs;
-*)
-	     out `El_end;
-	     export_plan out dag;
-	     out `El_end)
-	sub_dags;
-      out `El_end
+    out (`El_start (tag_attr "logical_query_plan" [("unique_names", "true")]));
+    ignore (out_dag (out, dag_pruned, IntSet.empty));
+    out `El_end;
+    out `El_end;
+    out `El_end
