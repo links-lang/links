@@ -412,61 +412,6 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
   let vs = append_vs q_combined vs_l [] in
     refcol, Ti (q_refreshed, cs_l, ts, vs)
 
-(* FIXME awful code *)
-(* FIXME corresponding ts entries must be aligned! *)
-let rec suap (q_outer : A.Dag.dag ref) (ts_l : ts) (ts_r : ts) : ts =
-  match (ts_l, ts_r) with
-    | (c1, Ti (q_1, cs1, subs_1, _)) :: subs_hat, ((_, Ti (q_2, cs2, subs_2, _)) :: subs_tilde) ->
-	let q_combined = combine_inner_tables q_1 q_2 in
-	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs1) (Itbls.keys subs_1)))) in
-	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs_1)) item') in
-	let q' =
-	  A.Dag.mk_project
-	    q'_projlist
-	    (renumber_inner_table q_outer q_combined c1)
-	in
-	  [(c1, (Ti (q', (Cs.fuse cs1 cs2), (suap q_combined subs_1 subs_2), dummy)))] @ (suap q_outer subs_hat subs_tilde)
-    | [], [] -> []
-	(* If one of the inner lists to be appended is empty, 
-	   we still need to generate new surrogate keys so 
-	   that they match with the ones computed in the outer table *)
-    | [], (c, Ti(q_i, cs, subs, _)) :: _ -> 
-	let q_combined =
-	  (A.Dag.mk_rownum 
-	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-		(A.Dag.mk_attach
-		   (* FIXME ord = 2 for right side? *)
-		   (ord, A.Nat 1n)
-		   q_i))
-	in
-	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
-	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
-	let q' =
-	  A.Dag.mk_project
-	    q'_projlist
-	    (renumber_inner_table q_outer q_combined c)
-	in
-	  [c, (Ti (q', cs, (suap q_combined subs[]), dummy))] 
-    | (c, Ti(q_i, cs, subs, _)) :: _, [] -> 
-	let q_combined =
-	  (A.Dag.mk_rownum 
-	     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-		(A.Dag.mk_attach
-		   (ord, A.Nat 1n)
-		   q_i))
-	in
-	let q'_projlist = [(iter, item''); prj pos] in
-	let q'_projlist = q'_projlist @ (prjlist (io (difference (Cs.columns cs) (Itbls.keys subs)))) in
-	let q'_projlist = q'_projlist @ (prjlist_single (io (Itbls.keys subs)) item') in
-	let q' =
-	  A.Dag.mk_project
-	    q'_projlist
-	    (renumber_inner_table q_outer q_combined c)
-	in
-	  [c, (Ti (q', cs, (suap q_combined subs []), dummy))] 
-
 let rec suse q_pase subs : ((int * tblinfo) list) =
   if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
     match subs with
