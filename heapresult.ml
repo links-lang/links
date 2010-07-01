@@ -108,8 +108,8 @@ and tblresult = Tr of (accessor_functions * Cs.cs * tsr * vsr)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-   List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-    Debug.print ""; 
+   (* List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+    Debug.print ""; *)
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
   let find_field col_name = 
@@ -131,8 +131,8 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	   (offset, find_field schema_name))
 	offsets_and_schema_names
     in
-     let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-      Debug.print (mapstrcat " " (fun x -> x) foo); 
+      (*let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+      Debug.print (mapstrcat " " (fun x -> x) foo);  *)
     let item row offset = 
       (* Debug.f "item access %d\n" offset; *)
       try 
@@ -238,11 +238,11 @@ and handle_row itbl_offsets item cs tsr vsr =
       | `Tag -> 
 	  (match cs with
 	    | [`Tag ((tagcol, `Tag), (refcol, `Surrogate), itype)] ->
-		Debug.print (Cs.show cs);
+		(* Debug.print (Cs.show cs); *)
 		let tagval = item tagcol in
-		Debug.f "tagval %s" tagval;
+		(* Debug.f "tagval %s" tagval; *)
 		let refval_raw = item refcol in
-		Debug.f "refval_raw %s" refval_raw;
+		(* Debug.f "refval_raw %s" refval_raw; *)
 		let refval = int_of_string refval_raw in
 		let itbl = 
 		  try
@@ -258,6 +258,7 @@ and handle_row itbl_offsets item cs tsr vsr =
 		    | None -> 0
 		in
 		let (next_offset, tagged_value) = handle_inner_table itype refval offset itbl in
+		let variant = `Variant (tagval, tagged_value) in
 		let new_offsets =
 		  match itbl_offsets with
 		    | Some offsets ->
@@ -265,7 +266,7 @@ and handle_row itbl_offsets item cs tsr vsr =
 		    | None ->
 			Some [refcol, next_offset]
 		in
-		  (new_offsets, tagged_value)
+		  (new_offsets, variant)
 	    | _ -> assert false)
 
 and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type = 
