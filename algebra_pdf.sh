@@ -5,10 +5,19 @@ LINKSARGS="-d --config=algebra.config"
 
 $LINKS $LINKSARGS $@
 BASE=`basename -s .links $@`
-#echo ">>> pfdot"
-#pfdot plan.xml | dot -Tpdf -o ${BASE}_plan.pdf
-#echo ">>> pfdot optimized"
-#pfdot plan_opt.xml | dot -Tpdf -o ${BASE}_plan_opt.pdf
+for file in `ls plan_unopt_*.xml`;
+do
+    echo $file
+    NUM=`echo $file | sed -e 's/plan_unopt_\(.*\).xml/\1/'`
+    pfdot $file | dot -Tpdf -o ${BASE}_plan_unopt_${NUM}.pdf
+done;
+
+for file in `ls plan_opt_*.xml`;
+do
+    echo $file
+    NUM=`echo $file | sed -e 's/plan_opt_\(.*\).xml/\1/'`
+    pfdot $file | dot -Tpdf -o ${BASE}_plan_unopt_${NUM}.pdf
+done;
 echo ">>> IR complete"
 dot -Tpdf -o ${BASE}_ir_complete.pdf ir_complete.dot
 echo ">>> IR query"
