@@ -16,7 +16,7 @@ for file in `ls plan_opt_*.xml`;
 do
     echo $file
     NUM=`echo $file | sed -e 's/plan_opt_\(.*\).xml/\1/'`
-    pfdot $file | dot -Tpdf -o ${BASE}_plan_unopt_${NUM}.pdf
+    pfdot $file | dot -Tpdf -o ${BASE}_plan_opt_${NUM}.pdf
 done;
 echo ">>> IR complete"
 dot -Tpdf -o ${BASE}_ir_complete.pdf ir_complete.dot
