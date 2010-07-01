@@ -108,8 +108,8 @@ and tblresult = Tr of (accessor_functions * Cs.cs * tsr * vsr)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-   (* List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-    Debug.print ""; *)
+   List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
+    Debug.print ""; 
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
   let find_field col_name = 
@@ -131,8 +131,8 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	   (offset, find_field schema_name))
 	offsets_and_schema_names
     in
-    (* let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-      Debug.print (mapstrcat " " (fun x -> x) foo);  *)
+     let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
+      Debug.print (mapstrcat " " (fun x -> x) foo); 
     let item row offset = 
       (* Debug.f "item access %d\n" offset; *)
       try 

@@ -60,7 +60,7 @@ let rec leafs cs =
 	  match cs_entry with
 	    | `Column col -> col :: leaf_list
 	    | `Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list
-	    | `Tag (tagcol, refcol, _) -> tagcol :: refcol :: leaf_list)
+	    | `Tag (tagcol, refcol, _) -> refcol :: tagcol :: leaf_list)
        []
        cs)
   

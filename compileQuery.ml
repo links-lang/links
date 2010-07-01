@@ -1632,6 +1632,8 @@ and compile_expression env loop e : tblinfo =
 (* TODO use the left subtree of serialize_rel for error handling *)
 let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
   let serialize q cs =
+    Debug.print (Cs.show cs);
+    Debug.print (mapstrcat " " string_of_int (Cs.columns cs));
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, io (Cs.columns cs))
       (A.Dag.mk_nil)
