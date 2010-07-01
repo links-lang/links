@@ -293,13 +293,15 @@ let renumber_inner_table q_outer q_inner surr_col =
        q_outer)
 
 let pair_corresponding left right =
-    List.fold_right
-      (fun (k, v) matching ->
-	  try
-	    (k, (v, (List.assoc k right))) :: matching
-	  with Not_found -> matching)
-      left
-      []
+  List.fold_right
+    (fun (k, v) matching ->
+       try
+	 (k, (v, (List.assoc k right))) :: matching
+       with NotFound _ -> matching)
+    left
+    []
+
+let keys format l = Debug.print (mapstrcat " " (fun (k, v) -> format k) l)
 
 let missing left right =
   List.fold_right
@@ -331,7 +333,6 @@ let rec append_vs q_outer vs_l vs_r =
     List.sort compare (m @ l @ r)
 
 and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
-  Debug.f "append_matching_vs %d/%s" refcol tag;
   let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
   let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
@@ -351,7 +352,6 @@ and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
     (refcol, tag), Ti (q, cs, ts, vs)
 
 and append_missing_vs q_outer ord_val ((refcol, tag), ti) =
-  Debug.f "append_missing_vs %d/%s" refcol tag;
   let Ti (q_l, cs_l, ts_l, vs_l) = ti in
   let q_combined = 
     A.Dag.mk_rownum
@@ -376,7 +376,6 @@ and append_ts q_outer ts_l ts_r =
     List.sort compare (m @ l @ r)
 
 and append_matching_ts (q_outer : A.Dag.dag ref) (refcol, (ti_l, ti_r)) =
-  Debug.f "append_matching_ts %d" refcol;
   let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
   let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
@@ -396,7 +395,6 @@ and append_matching_ts (q_outer : A.Dag.dag ref) (refcol, (ti_l, ti_r)) =
     refcol, Ti (q, cs, ts, vs)
 
 and append_missing_ts q_outer ord_val (refcol, ti) =
-  Debug.f "append_missing_ts %d" refcol;
   let Ti (q_l, cs_l, ts_l, vs_l) = ti in
   let q_combined = 
     A.Dag.mk_rownum
@@ -1589,6 +1587,7 @@ and compile_unit (loop : A.Dag.dag ref) : tblinfo =
     Ti (q, cs, Itbls.empty, dummy)
 
 and compile_variant env loop tag value =
+  Debug.f "compile_variant %s" tag;
   let ti_value = compile_expression env loop value in
   let itype = Query2.Annotate.typeof_typed_t value in
   let cs = [`Tag ((1, `Tag), (2, `Surrogate), itype)] in
@@ -1632,8 +1631,6 @@ and compile_expression env loop e : tblinfo =
 (* TODO use the left subtree of serialize_rel for error handling *)
 let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
   let serialize q cs =
-    Debug.print (Cs.show cs);
-    Debug.print (mapstrcat " " string_of_int (Cs.columns cs));
     A.Dag.mk_serializerel 
       (A.Iter 0, A.Pos 0, io (Cs.columns cs))
       (A.Dag.mk_nil)
