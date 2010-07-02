@@ -1189,13 +1189,13 @@ and compile_for env loop v e1 e2 order_criteria =
     Ti(q, cs2, ts2, vs2)
 
 and singleton_record env loop (name, e) =
-  let Ti (q, cs, ts, _) = compile_expression env loop e in
+  let Ti (q, cs, ts, vs) = compile_expression env loop e in
   let cs' = [`Mapping (name, cs)] in
-    Ti (q, cs', ts, dummy)
+    Ti (q, cs', ts, vs)
 
 and extend_record env loop ext_fields r =
   assert (match ext_fields with [] -> false | _ -> true);
-  let Ti (q, cs, ts, _) as ti = 
+  let Ti (q, cs, ts, vs) as ti = 
     match ext_fields with
       | (name, e) :: [] -> 
 	  (match r with 
@@ -1239,14 +1239,27 @@ and extend_record env loop ext_fields r =
 		   (new_col, itbl))
 	      ts
 	  in
-	    Ti (q', cs_mapped, ts', dummy)
+	  let vs' =
+	    List.map
+	      (fun ((col, tag), itbl) ->
+		 let new_col =
+		   try
+		     List.assoc col col_mapping
+		   with _ -> assert false
+		 in
+		   ((new_col, tag), itbl))
+	      vs
+	  in
+	    Ti (q', cs_mapped, ts', vs')
 
-and merge_records (Ti (r1_q, r1_cs, r1_ts, _)) (Ti (r2_q, r2_cs, r2_ts, _)) =
+and merge_records (Ti (r1_q, r1_cs, r1_ts, r1_vs)) (Ti (r2_q, r2_cs, r2_ts, r2_vs)) =
   let r2_leafs = Cs.columns r2_cs in
   let new_names_r2 = io (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = io r2_leafs in
   let names_r1 = io (Cs.columns r1_cs) in
-  let r2_ts' = Ts.incr_cols r2_ts (Cs.cardinality r1_cs) in
+  let card_r1 = Cs.cardinality r1_cs in
+  let r2_ts' = Ts.incr_cols r2_ts card_r1 in
+  let r2_vs' = Vs.incr_cols r2_vs card_r1 in
   let q =
     A.Dag.mk_project
       (prjlist ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
@@ -1259,23 +1272,25 @@ and merge_records (Ti (r1_q, r1_cs, r1_ts, _)) (Ti (r2_q, r2_cs, r2_ts, _)) =
   in
   let cs = Cs.append r1_cs r2_cs in
   let ts = Ts.append r1_ts r2_ts' in
-    Ti (q, cs, ts, dummy)
+  let vs = Vs.append r1_vs r2_vs' in
+    Ti (q, cs, ts, vs)
 
 and compile_project env loop field record =
   let record_ti = compile_expression env loop record in
     do_project field record_ti
 
 and compile_erase env loop erase_fields r =
-  let Ti (q_r, cs_r, ts_r, _) = compile_expression env loop r in
+  let Ti (q_r, cs_r, ts_r, vs_r) = compile_expression env loop r in
   let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
-  let remaining_cols = io (Cs.columns remaining_cs) in
-  let remaining_ts = Ts.keep_cols ts_r (Cs.columns remaining_cs) in
+  let remaining_cols = Cs.columns remaining_cs in
+  let remaining_ts = Ts.keep_cols ts_r remaining_cols in
+  let remaining_vs = Vs.keep_vols vs_r remaining_cols in
   let q =
     A.Dag.mk_project
-      ([prj iter; prj pos] @ (prjlist remaining_cols))
+      ([prj iter; prj pos] @ (prjlist (io remaining_cols)))
       q_r
   in
-    Ti(q, remaining_cs, remaining_ts, dummy)
+    Ti(q, remaining_cs, remaining_ts, remaining_vs)
 
 and compile_record env loop r =
   match r with
