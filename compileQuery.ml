@@ -165,7 +165,7 @@ let or_op = do_primitive_binop_ti wrap_or `BoolType
 let and_op = do_primitive_binop_ti wrap_and `BoolType
 
 let do_unbox q_e surr_col inner_ti =
-  let Ti(q_sub, cs_sub, ts_sub, _) = inner_ti in
+  let Ti(q_sub, cs_sub, ts_sub, vs_sub) = inner_ti in
   let q_unbox =
     A.Dag.mk_project
       ([(iter, iter'); prj pos] @ (prjlist (io (Cs.columns cs_sub))))
@@ -176,7 +176,7 @@ let do_unbox q_e surr_col inner_ti =
 	    q_e)
 	 q_sub)
   in
-    Ti(q_unbox, cs_sub, ts_sub, dummy)
+    Ti(q_unbox, cs_sub, ts_sub, vs_sub)
 
 let do_project field record =
   let Ti (q_r, cs_r, ts_r, vs_r) = record in
@@ -451,8 +451,8 @@ let abspos q cols =
 	  q))
 
 (* compute absolute positions for a tblinfo *)
-let abspos_ti (Ti (q, cs, ts, _)) =
-  Ti ((abspos q (io (Cs.columns cs))), cs, ts, dummy)
+let abspos_ti (Ti (q, cs, ts, vs)) =
+  Ti ((abspos q (io (Cs.columns cs))), cs, ts, vs)
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
