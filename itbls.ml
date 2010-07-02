@@ -20,6 +20,8 @@ module Ts = struct
 end
 
 module Vs = struct
+  let empty = []
+
   let key_columns vs : int list = List.map (fst -<- fst) vs
 
   let incr_cols vs i = List.map (fun ((col, tag), ti) -> ((col + i, tag), ti)) vs
