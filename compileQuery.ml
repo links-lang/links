@@ -179,19 +179,20 @@ let do_unbox q_e surr_col inner_ti =
     Ti(q_unbox, cs_sub, ts_sub, dummy)
 
 let do_project field record =
-  let Ti (q_r, cs_r, ts_r, _) = record in
+  let Ti (q_r, cs_r, ts_r, vs_r) = record in
   let field_cs' = Cs.lookup_record_field cs_r field in
   let old_cols = Cs.columns field_cs' in
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
   let field_ts = Ts.decr_cols (Ts.keep_cols ts_r old_cols) (offset - 1) in 
+  let field_vs = Vs.decr_cols (Vs.keep_cols vs_r old_cols) (offset - 1) in
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ prjlist_map (io new_cols) (io old_cols))
       q_r
   in
-    Ti (q, field_cs, field_ts, dummy)
+    Ti (q, field_cs, field_ts, field_vs)
 
 let do_length loop (Ti (q_e, _, _, _)) =
   let q = 
@@ -204,11 +205,14 @@ let do_length loop (Ti (q_e, _, _, _)) =
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
-  let Ti (q_e1, cs_e1, ts_e1, _) = e1 in
-  let Ti (q_e2, cs_e2, ts_e2, _) = e2 in
+  let Ti (q_e1, cs_e1, ts_e1, vs_e1) = e1 in
+  let Ti (q_e2, cs_e2, ts_e2, vs_e2) = e2 in
   let card_e1 = List.length (Cs.columns cs_e1) in
   let cs_e2' = Cs.shift cs_e2 card_e1 in
   let ts_e2' = Ts.incr_cols ts_e2 card_e1 in
+  let ts = Ts.append ts_e1 ts_e2' in
+  let vs_e2' = Vs.incr_cols vs_e2 card_e1 in
+  let vs = Vs.append vs_e1 vs_e2' in
   let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
   let q =
     A.Dag.mk_project
@@ -225,7 +229,7 @@ let do_zip e1 e2 =
 		  q_e2))))
   in
   let cs = [`Mapping ("1", cs_e1); `Mapping ("2", cs_e2')] in
-    Ti (q, cs, (Ts.append ts_e1 ts_e2'), dummy)
+    Ti (q, cs, ts, vs)
 
 (* apply the all aggregate operator to the first column grouped by iter 
    (corresponds to the function "and" from the links prelude *)
