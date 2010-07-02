@@ -612,12 +612,12 @@ and compile_aggr env loop aggr_fun args =
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
-  let Ti (q1, _, _, _) = compile_expression env loop (List.hd operands) in
-  let Ti (q2, cs2, ts_2, _) = compile_expression env loop (List.nth operands 1) in
-  let q2' = abspos q2 (io (Cs.columns cs2)) in
+  let Ti (q_i, _, _, _) = compile_expression env loop (List.hd operands) in
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth operands 1) in
+  let q_l' = abspos q_l (io (Cs.columns cs_l)) in
   let q =
     (A.Dag.mk_project
-       ([prj iter; prj pos] @ prjlist (io (Cs.columns cs2)))
+       ([prj iter; prj pos] @ prjlist (io (Cs.columns cs_l)))
        (A.Dag.mk_select
 	  res
 	  (A.Dag.mk_funnumeq
@@ -626,13 +626,13 @@ and compile_nth env loop operands =
 		(iter, iter')
 		(A.Dag.mk_cast
 		   (pos', pos, `IntType)
-		   q2')
+		   q_l')
 		(A.Dag.mk_project
 		   [(iter', iter); (c', A.Item 1)]
-		   q1)))))
+		   q_i)))))
   in
-  let ts' = suse q ts_2 in
-    Ti (q, cs2, ts', dummy)
+  let ts_l' = suse q ts_l in
+    Ti (q, cs_l, ts_l', vs_l)
 
 and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
   assert ((List.length operands) = 2);
@@ -672,11 +672,11 @@ and do_table_greater loop wrapper l1 l2 =
   
   (* switch the components of the zipped pairs, i.e. zip(a, b) -> zip(b, a) *)
   let switch_zipped ti =
-    let Ti (q, cs, ts, _) = ti in
+    let Ti (q, cs, ts, vs) = ti in
     let cs1 = Cs.lookup_record_field cs "1" in
     let cs2 = Cs.lookup_record_field cs "2" in
     let cs' = [`Mapping ("1", cs2); `Mapping ("2", cs1)] in
-      Ti (q, cs', ts, dummy)
+      Ti (q, cs', ts, vs)
   in
 
   (* returns the minimal pos so that l1[pos] < l2[pos] *)
@@ -684,7 +684,7 @@ and do_table_greater loop wrapper l1 l2 =
     (* the comparison must be done loop-lifted so that inner tables can be unboxed and compared correctly *)
 
     (* lift zipped *)
-    let Ti (q_s, cs_s, ts_s, _) = zipped in
+    let Ti (q_s, cs_s, ts_s, vs_s) = zipped in
     let q_s' = 
       A.Dag.mk_rownum
 	(inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -708,7 +708,7 @@ and do_table_greater loop wrapper l1 l2 =
 	q_s_mapped
     in
     
-    let zipped_mapped = Ti (q_s_mapped, cs_s, ts_s, dummy) in
+    let zipped_mapped = Ti (q_s_mapped, cs_s, ts_s, vs_s) in
 
     (* we need "<" on rows but have only ">" -> switch arguments *)
     let compared = do_row_greater_real loop' wrapper (switch_zipped zipped_mapped) in
@@ -747,10 +747,6 @@ and do_table_greater loop wrapper l1 l2 =
       Ti (q, [`Column (1, `NatType)], Ts.empty, dummy)
   in
 
-  let abspos_ti (Ti (q, cs, ts, _)) =
-    Ti ((abspos q (io (Cs.columns cs))), cs, ts, dummy)
-  in
-
   (* l1 > l2 iff l2 < l1 -> swap arguments *)
   let (l1, l2) = (l2, l1) in
   let l1_abs = abspos_ti l1 in
@@ -775,7 +771,7 @@ and do_row_greater loop wrapper e1 e2 =
 and do_row_greater_real loop wrapper zipped =
 
   let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
-    let Ti (q_zipped, _cs_zipped, ts_zipped, _) = ti_zipped in
+    let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
       if Cs.is_primitive_col type_l then
 	A.Dag.mk_project
@@ -798,7 +794,7 @@ and do_row_greater_real loop wrapper zipped =
   in
 
   let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
-    let Ti (q_zipped, _cs_zipped, ts_zipped, _) = ti_zipped in
+    let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
       if Cs.is_primitive_col type_l then
 	A.Dag.mk_project
@@ -823,7 +819,7 @@ and do_row_greater_real loop wrapper zipped =
       Ti (q, [`Column (1, `BoolType)], Ts.empty, dummy)
   in
 
-  let Ti (_q_zipped, cs_zipped, _ts_zipped, _) = zipped in
+  let Ti (_q_zipped, cs_zipped, _, _) = zipped in
   let cs_l = Cs.lookup_record_field cs_zipped "1" in
   let cs_r = Cs.lookup_record_field cs_zipped "2" in
 
@@ -869,7 +865,7 @@ and do_table_equal loop wrapper l1 l2 =
   let all = do_list_and loop in
 
   let map_equal source =
-    let Ti (q_s, cs_s, ts_s, _) = source in
+    let Ti (q_s, cs_s, ts_s, vs_s) = source in
      let q_s' = 
        A.Dag.mk_rownum
 	 (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -892,7 +888,7 @@ and do_table_equal loop wrapper l1 l2 =
 	 [prj iter]
 	 q_s_mapped
      in
-     let ti_s = Ti (q_s_mapped, cs_s, ts_s, dummy) in
+     let ti_s = Ti (q_s_mapped, cs_s, ts_s, vs_s) in
      let Ti (q_equal, _, _, _) = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
      (* map the comparison result back into the outer iteration context *)
      let result_backmapped =
