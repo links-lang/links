@@ -5,19 +5,24 @@ open Utility
    the query (or none) *)
 let used_database = ref None
 
+type 'a name_map = 'a Utility.stringmap
+    deriving (Show)
+
 type t =
     [ `For of (Var.var * t) * t list * t
     | `GroupBy of (Var.var * t) * t
     | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
-    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t StringMap.t
+    | `Record of t name_map | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t name_map 
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant 
+    | `Case of t * (Var.var * t) name_map * (Var.var * t) option]
+
 and env = Value.env * t Env.Int.t
     deriving (Show)
 
@@ -94,7 +99,8 @@ struct
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant ]
+    | `Var of Var.var | `Constant of Constant.constant 
+    | `Case of pt * (Var.var * pt) name_map * (Var.var * pt) option]
       deriving (Show)
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -120,6 +126,12 @@ struct
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
+	| `Case (value, case_map, default) ->
+	    let value' = bt value in
+	    let case = (fun (v, c) -> (v, bt c)) in
+	    let case_map' = StringMap.map case case_map in
+	    let default' = opt_map case default in
+	    `Case (value', case_map', default')
           
   let t = Show.show show_pt -<- pt_of_t
 end
@@ -471,31 +483,13 @@ struct
     | `Special (`Query (None, e, _)) -> computation env e
     | `Special _s -> failwith "special not allowed in query block"
     | `Case (v, cases, default) ->
-        let rec reduce_case (v, cases, default) =
-          match v with
-            | `Variant (label, v) as w ->
-                begin
-                  match StringMap.lookup label cases, default with
-                    | Some ((x, _), c), _ ->
-                        computation (bind env (x, v)) c
-                    | None, Some ((z, _), c) ->
-                        computation (bind env (z, w)) c
-                    | None, None -> eval_error "Pattern matching failed"
-                end
-            | `If (c, t, Some e) ->
-                `If
-                  (c,
-                   reduce_case (t, cases, default),
-                   Some (reduce_case (e, cases, default)))
-	    | `If (c, t, None) ->
-		`If
-		  (c,
-		   reduce_case (t, cases, default),
-		   None)
-            |  _ -> assert false
-        in
-          reduce_case (value env v, cases, default)
-    | `If (c, t, e) ->
+	let v' = value env v in
+	let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) c) in
+	let cases' = StringMap.map case cases in
+	let default' = opt_map case default in
+	  `Case (v', cases', default')
+
+   | `If (c, t, e) ->
         let c = value env c in
         let t = computation env t in
         let e = computation env e in
@@ -532,7 +526,6 @@ struct
   let eval env e = computation (env_of_value_env env) e
 end
 
-
 module Annotate = struct
   type implementation_type = [`Atom | `List]
   deriving (Show)
@@ -555,7 +548,8 @@ module Annotate = struct
       | `Var of Var.var * implementation_type
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_t * implementation_type
-      | `Unbox of typed_t * implementation_type ]
+      | `Unbox of typed_t * implementation_type
+      | `Case of (typed_t * (Var.var * typed_t) name_map * (Var.var * typed_t) option) * implementation_type ]
 
   let typeof_typed_t = function
     | `For (_, t) -> t
@@ -576,6 +570,7 @@ module Annotate = struct
     | `Constant (_, t) -> t 
     | `Box (_, t) -> t 
     | `Unbox (_, t) -> t
+    | `Case (_, t) -> t
 
   type typed_pt = 
       [ `For of ((Var.var * typed_pt) * typed_pt list * typed_pt) * implementation_type
@@ -596,7 +591,8 @@ module Annotate = struct
       | `Var of Var.var * implementation_type 
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_pt * implementation_type 
-      | `Unbox of typed_pt * implementation_type ] 
+      | `Unbox of typed_pt * implementation_type 
+      | `Case of (typed_pt * (Var.var * typed_pt) name_map * (Var.var * typed_pt) option) * implementation_type ] 
 	deriving (Show)
 
   let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
@@ -624,6 +620,9 @@ module Annotate = struct
         | `Constant (c, typ) -> `Constant (c, typ)
 	| `Box (e, typ) -> `Box (bt e, typ)
 	| `Unbox (e, typ) -> `Box (bt e, typ)
+	| `Case ((v, cases, default), typ) ->
+	    let case = fun (v, c) -> (v, bt c) in
+	      `Case ((bt v, StringMap.map case cases, opt_map case default), typ)
 
   let string_of_typed_t = Show.show show_typed_pt -<- typed_pt_of_typed_t
 
@@ -681,6 +680,27 @@ module Annotate = struct
 	    `GroupBy (((x, group_exp'), source'), `List)
       | `Var x -> 
 	  `Var (x, Env.Int.lookup env x) 
+      | `Case (v, cases, default) ->
+	  let v' = transform env v in
+	  let typ = typeof_typed_t v' in
+	  let case (x, c) =
+	    let env' = Env.Int.bind env (x, typ) in
+	    let c' = transform env' c in
+	      (x, c')
+	  in
+	  let cases' = StringMap.map case cases in
+	  let default' = opt_map case default in
+	  let case_typ = 
+	    (* there must be at least one case or a default case *)
+	    match default' with
+	      | Some (_, c) -> typeof_typed_t c
+	      | None ->
+		  (match StringMap.to_list (fun _ c -> c) cases' with
+		     | (_, c) :: _ -> typeof_typed_t c
+		     | [] -> assert false)
+	  in
+	    `Case ((v', cases', default'), case_typ)
+
       | `Apply (f, args) ->
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with

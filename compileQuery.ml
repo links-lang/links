@@ -1565,6 +1565,7 @@ and compile_expression env loop e : tblinfo =
     | `Unbox (e, _) -> compile_unbox env loop e
     | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
     | `Variant ((tag, value), _) -> compile_variant env loop tag value
+    | `Case _ 
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
