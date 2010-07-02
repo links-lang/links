@@ -1033,7 +1033,7 @@ and compile_concat env loop args =
   assert ((List.length args) = 1);
   let Ti (q_e, _, ts_e, _) = compile_expression env loop (List.hd args) in
     assert((List.length ts_e) = 1);
-    let Ti(q_sub, cs_sub, ts_sub, _) = Ts.lookup 1 ts_e in
+    let Ti(q_sub, cs_sub, ts_sub, vs_sub) = Ts.lookup 1 ts_e in
     let c = A.Item 1 in
     let q =
       A.Dag.mk_project
@@ -1047,16 +1047,16 @@ and compile_concat env loop args =
 		 q_e)
 	      q_sub))
     in
-      Ti(q, cs_sub, ts_sub, dummy)
+      Ti(q, cs_sub, ts_sub, vs_sub)
 
 and compile_take env loop args =
   assert ((List.length args) = 2);
-  let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
-  let Ti(q2, cs2, ts2, _) = compile_expression env loop (List.nth args 1) in
-  let cols = (io (Cs.columns cs2)) in
-  let q2' = abspos q2 cols in
+  let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
+  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
+  let cols = (io (Cs.columns cs_l)) in
+  let q_l' = abspos q_l cols in
   let c = A.Item 1 in
-  let one = A.Item 2 in
+  let one = A.Item _l in
   let q' = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist cols))
@@ -1068,24 +1068,24 @@ and compile_take env loop args =
 	       (iter, iter')
 	       (A.Dag.mk_cast
 		  (pos', pos, `IntType)
-		  q2')
+		  q_l')
 	       (A.Dag.mk_project
 		  [(iter', iter); (c', res)]
 		  (A.Dag.mk_fun1to1
 		     (A.Add, res, [c; one])
 		     (A.Dag.mk_attach
 			(one, A.Int (Num.Int 1))
-			q1))))))
+			q_n))))))
        in
-  let ts' = suse q' ts2 in
-    Ti(q', cs2, ts', dummy)
+  let ts' = suse q' ts_l in
+    Ti(q', cs_l, ts', vs_l)
 
 and compile_drop env loop args =
   assert ((List.length args) = 2);
-  let Ti(q1, _cs1, _, _) = compile_expression env loop (List.hd args) in
-  let Ti(q2, cs2, ts2, _) = compile_expression env loop (List.nth args 1) in
-  let cols = (io (Cs.columns cs2)) in
-  let q2' = abspos q2 cols in
+  let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
+  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
+  let cols = (io (Cs.columns cs_l)) in
+  let q_l' = abspos q_l cols in
   let c = A.Item 1 in
   let q' =
     A.Dag.mk_project
@@ -1098,13 +1098,13 @@ and compile_drop env loop args =
 	       (iter, iter')
 	       (A.Dag.mk_cast
 		  (pos', pos, `IntType)
-		  q2')
+		  q_l')
 	       (A.Dag.mk_project
 		  [(iter', iter); (c', c)]
-		  q1))))
+		  q_n))))
   in
-  let ts' = suse q' ts2 in
-    Ti(q', cs2, ts', dummy)
+  let ts' = suse q' ts_l in
+    Ti(q', cs_l, ts', vs_l)
 
 and compile_apply env loop f args =
   match f with
