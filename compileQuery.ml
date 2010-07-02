@@ -1137,7 +1137,7 @@ and compile_apply env loop f args =
 	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
 
 and compile_for env loop v e1 e2 order_criteria =
-  let Ti (q1, cs1, ts1, _) = compile_expression env loop e1 in
+  let Ti (q1, cs1, ts1, vs1) = compile_expression env loop e1 in
   let q1' = 
     A.Dag.mk_rownum
       (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -1161,8 +1161,8 @@ and compile_for env loop v e1 e2 order_criteria =
       q_v
   in
   let env = AEnv.map (lift map) env in
-  let env_v = AEnv.bind env (v, Ti (q_v, cs1, ts1, dummy)) in
-  let Ti (q2, cs2, ts2, _) = compile_expression env_v loop_v e2 in
+  let env_v = AEnv.bind env (v, Ti (q_v, cs1, ts1, vs1)) in
+  let Ti (q2, cs2, ts2, vs2) = compile_expression env_v loop_v e2 in
   let (order_cols, map') =
     match order_criteria with
       | _ :: _ ->
@@ -1186,7 +1186,7 @@ and compile_for env loop v e1 e2 order_criteria =
 	  q2
 	  map'))
   in
-    Ti(q, cs2, ts2, dummy)
+    Ti(q, cs2, ts2, vs2)
 
 and singleton_record env loop (name, e) =
   let Ti (q, cs, ts, _) = compile_expression env loop e in
