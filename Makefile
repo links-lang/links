@@ -120,9 +120,10 @@ SOURCES = $(OPC)                		\
 	  pf_toolchain.mli pf_toolchain.ml	\
           query.ml                              \
 	  cs.ml					\
-	  heapresult.ml				\
+	  itbls.ml				\
 	  query2.ml				\
 	  compileQuery.ml			\
+	  heapresult.ml				\
           evalir.ml                             \
           webif.mli webif.ml                    \
           links.ml              		\

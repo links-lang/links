@@ -5,6 +5,11 @@ module A = Algebra
 
 type column_type = [ A.pf_type | `Surrogate | `Unit | `Tag ] deriving (Show)
 
+let is_primitive_col = function
+  | `Surrogate -> false
+  | `Tag -> false
+  | _ -> true
+
 (* FIXME: there should be only one definition of implementation_type. at the moment 
    there are three (Query2.Annotate, Cs, Heapresult) *)
 type implementation_type = [`Atom | `List] deriving (Show)
@@ -63,7 +68,7 @@ let rec leafs cs =
 	    | `Tag (tagcol, refcol, _) -> refcol :: tagcol :: leaf_list)
        []
        cs)
-  
+    
 (* return all columns *)	
 let rec columns cs = List.map fst (leafs cs)
 
@@ -130,10 +135,10 @@ let record_fields cs =
 
 type field_name = string
 type atom_type =
-  [ `Primitive of column_type
-  (* FIXME is additional information needed from type `Tag? *)
-  | `Tag 
-  | `Record of field_name list ]
+    [ `Primitive of column_type
+	(* FIXME is additional information needed from type `Tag? *)
+    | `Tag 
+    | `Record of field_name list ]
 
 let atom_type = function
   | [(`Column (_, t))] -> `Primitive t
@@ -148,7 +153,7 @@ let atom_type = function
 	     | `Tag _ -> failwith "Cs.atom_type: toplevel tag in record cs")
 	  cs_entries)
   | _ -> assert false
-	     
+      
 let rec sort_record_columns = function
   | [(`Column _) as col] -> [col]
   | [(`Tag _) as tag] -> [tag]

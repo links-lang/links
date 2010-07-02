@@ -1,5 +1,7 @@
 open Utility
 
+open Itbls
+
 module A = Algebra
 
 (* type for the assoc list mapping surrogate columns to the corresponding 
@@ -14,26 +16,6 @@ and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
 
 let q_of_tblinfo = function Ti (q, _, _, _) -> q
 
-module Itbls = struct
-  let empty = []
-  let keys itbls = List.map fst itbls
-  let incr_keys itbls i = List.map (fun (offset, ti) -> (offset + i, ti)) itbls
-  let decr_keys itbls i =  List.map (fun (offset, ti) -> (offset - i, ti)) itbls
-  let append = List.append
-  let lookup = List.assoc
-  let length = List.length
-
-  (* remove all mappings whose offsets are not in keys *)
-  let retain_by_keys itbls keys = 
-    let p i j = i = j in
-    let f l (offset, _ti) = List.exists (p offset) l in
-      List.filter (f keys) itbls
-end
-
-module Vs = struct
-  let key_columns = List.map (fst -<- fst)
-end
-
 let pf_type_of_typ t = 
   let concrete_t = Types.concrete_type t in
   match concrete_t with
@@ -45,10 +27,6 @@ let pf_type_of_typ t =
   | `Alias (("String", []), _) -> `StrType
   | `Application (l, [`Type (`Primitive `Char)]) when Types.Abstype.eq_t.Eq.eq l Types.list -> `StrType
   | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
-
-let is_primitive_col = function
-  | `Surrogate -> false
-  | _ -> true
 
 module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
@@ -178,7 +156,7 @@ let do_primitive_binop_ti wrapper restype e1 e2 =
     assert (Cs.is_operand cs_e1);
     assert (Cs.is_operand cs_e2);
     let q = do_primitive_binop wrapper q_e1 q_e2 in
-      Ti (q, [`Column (1, restype)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, restype)], Ts.empty, dummy)
 
 let smaller = do_primitive_binop_ti wrap_lt `BoolType
 let greater = do_primitive_binop_ti wrap_gt `BoolType
@@ -207,7 +185,7 @@ let do_project field record =
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
-  let field_itbls = Itbls.decr_keys (Itbls.retain_by_keys itbls_r old_cols) (offset - 1) in 
+  let field_itbls = Ts.decr_cols (Ts.keep_cols itbls_r old_cols) (offset - 1) in 
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ prjlist_map (io new_cols) (io old_cols))
@@ -222,7 +200,7 @@ let do_length loop (Ti (q_e, _, _, _)) =
       q_e
   in
   let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-    Ti (q', [`Column (1, `IntType)], Itbls.empty, dummy)
+    Ti (q', [`Column (1, `IntType)], Ts.empty, dummy)
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
@@ -230,7 +208,7 @@ let do_zip e1 e2 =
   let Ti (q_e2, cs_e2, itbls_e2, _) = e2 in
   let card_e1 = List.length (Cs.columns cs_e1) in
   let cs_e2' = Cs.shift cs_e2 card_e1 in
-  let itbls_e2' = Itbls.incr_keys itbls_e2 card_e1 in
+  let itbls_e2' = Ts.incr_cols itbls_e2 card_e1 in
   let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
   let q =
     A.Dag.mk_project
@@ -247,7 +225,7 @@ let do_zip e1 e2 =
 		  q_e2))))
   in
   let cs = [`Mapping ("1", cs_e1); `Mapping ("2", cs_e2')] in
-    Ti (q, cs, (Itbls.append itbls_e1 itbls_e2'), dummy)
+    Ti (q, cs, (Ts.append itbls_e1 itbls_e2'), dummy)
 
 (* apply the all aggregate operator to the first column grouped by iter 
    (corresponds to the function "and" from the links prelude *)
@@ -259,7 +237,7 @@ let do_list_and loop (Ti (q, cs, _, _)) =
        q)
   in
   let q'' = wrap_agg loop q' (A.Bool true) in
-    Ti (q'', [`Column (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q'', [`Column (1, `BoolType)], Ts.empty, dummy)
 
 (* apply the min aggregate operator to the first column grouped by iter 
    (corresponds to the function "or" from the links prelude *)
@@ -271,7 +249,7 @@ let do_list_or loop (Ti (q, cs, _, _)) =
       q
   in
   let q'' = wrap_agg loop q' (A.Bool false) in
-    Ti (q'', [`Column (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q'', [`Column (1, `BoolType)], Ts.empty, dummy)
 
 let combine_inner_tables q_l q_r =
   A.Dag.mk_rownum 
@@ -301,7 +279,7 @@ let pair_corresponding left right =
     left
     []
 
-let keys format l = Debug.print (mapstrcat " " (fun (k, v) -> format k) l)
+(* let keys format l = Debug.print (mapstrcat " " (fun (k, v) -> format k) l) *)
 
 let missing left right =
   List.fold_right
@@ -318,13 +296,13 @@ let missing left right =
 let refresh_surr_cols cs ts vs new_surr =
 
   (* all columns which are neither vs nor ts surrogate columns *)
-  prjlist (io (difference (Cs.columns cs) ((Vs.key_columns vs) @ (Itbls.keys ts))))
+  prjlist (io (difference (Cs.columns cs) ((Vs.key_columns vs) @ (Ts.keys ts))))
 
   (* use new keys in vs surrogate columns *)
   @ (prjlist_single (io (Vs.key_columns vs)) item') 
 
   (* use new keys in ts surrogate columns *)
-  @ (prjlist_single (io (Itbls.keys ts)) new_surr)
+  @ (prjlist_single (io (Ts.keys ts)) new_surr)
 
 let rec append_vs q_outer vs_l vs_r =
   let m = List.map (append_matching_vs q_outer) (pair_corresponding vs_l vs_r) in
@@ -442,7 +420,7 @@ let lift map (Ti (q, cs, _, _)) =
 	  q
 	  map))
   in
-    Ti (q', cs, Itbls.empty, dummy)
+    Ti (q', cs, Ts.empty, dummy)
 
 (* construct the ordering map of a for-loop *)
 let rec omap map sort_criteria sort_cols =
@@ -499,7 +477,7 @@ and compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	Ti (A.Dag.mk_emptytbl, [`Column (1, `IntType)], Itbls.empty, dummy)
+	Ti (A.Dag.mk_emptytbl, [`Column (1, `IntType)], Ts.empty, dummy)
 
 and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl)) =
   let fused_cs = Cs.fuse cs_hd cs_tl in
@@ -565,8 +543,8 @@ and compile_unzip env loop args =
 	 ([prj iter; prj pos] @ proj))
       q_e
   in
-  let itbls_1 = Itbls.retain_by_keys itbls_e cols_1 in
-  let itbls_2 = Itbls.decr_keys (Itbls.retain_by_keys itbls_e cols_2) card in
+  let itbls_1 = Ts.keep_cols itbls_e cols_1 in
+  let itbls_2 = Ts.decr_cols (Ts.keep_cols itbls_e cols_2) card in
   let itbls = [(1, Ti(q_1, cs_1, itbls_1, dummy)); (2, Ti(q_2, cs_2', itbls_2, dummy))] in
   let cs = [`Mapping ("1", [`Column (1, `Surrogate)]); `Mapping ("2", [`Column (2, `Surrogate)])] in
     Ti (q, cs, itbls, dummy)
@@ -605,7 +583,7 @@ and compile_empty env loop args =
 	      (A.Item 2, A.Int (Num.Int 0))
 	      q_length))
     in
-      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Ts.empty, dummy)
 
 (* FIXME: only sum works at the moment. max/min/avg can't be used.
    Issues:
@@ -625,7 +603,7 @@ and compile_aggr env loop aggr_fun args =
       (* HACK: special case for sum *)
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
       (* FIXME: extract the correct column type from cs_e *)
-      Ti (q', [`Column (1, `IntType)], Itbls.empty, dummy)
+      Ti (q', [`Column (1, `IntType)], Ts.empty, dummy)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
@@ -664,7 +642,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
   in
   let unbox (Ti (q, cs, itbls, _)) =
       assert (Cs.is_operand cs);
-      assert ((Itbls.length itbls) = 1);
+      assert ((Ts.length itbls) = 1);
       let (offset, inner_ti) = List.hd itbls in
 	do_unbox q offset inner_ti
   in
@@ -761,7 +739,7 @@ and do_table_greater loop wrapper l1 l2 =
 		    [prj iter]
 		    selected))))
     in
-      Ti (q, [`Column (1, `NatType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `NatType)], Ts.empty, dummy)
   in
 
   let abspos_ti (Ti (q, cs, itbls, _)) =
@@ -787,14 +765,14 @@ and do_table_greater loop wrapper l1 l2 =
     
 and do_row_greater loop wrapper e1 e2 = 
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
-    Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
+    Ti (q, [`Column (1, `BoolType)], Ts.empty, dummy)
 
 and do_row_greater_real loop wrapper zipped =
 
   let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
     let Ti (q_zipped, _cs_zipped, itbls_zipped, _) = ti_zipped in
     let q = 
-      if is_primitive_col type_l then
+      if Cs.is_primitive_col type_l then
 	A.Dag.mk_project
 	  [prj iter; prj pos; (A.Item 1, res)]
 	  (* no need to join since the two arguments are already zipped *)
@@ -803,7 +781,7 @@ and do_row_greater_real loop wrapper zipped =
 	(* inner tables need to be unboxed first *)
 	let inner_table_l, inner_table_r =
 	  try
-	    Itbls.lookup col_l itbls_zipped, Itbls.lookup col_r itbls_zipped
+	    Ts.lookup col_l itbls_zipped, Ts.lookup col_r itbls_zipped
 	  with _ -> assert false
 	in
 	let ti_unboxed_l = do_unbox q_zipped col_l inner_table_l in
@@ -811,13 +789,13 @@ and do_row_greater_real loop wrapper zipped =
 	  q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
 	    
     in
-      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Ts.empty, dummy)
   in
 
   let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
     let Ti (q_zipped, _cs_zipped, itbls_zipped, _) = ti_zipped in
     let q = 
-      if is_primitive_col type_l then
+      if Cs.is_primitive_col type_l then
 	A.Dag.mk_project
 	  [prj iter; prj pos; (A.Item 1, res)]
 	  (* no need to join since the two arguments are already zipped *)
@@ -828,7 +806,7 @@ and do_row_greater_real loop wrapper zipped =
 	(* lookup the inner tables referred to by col1, col2 *)
 	let inner_table_l, inner_table_r = 
 	  try
-	    Itbls.lookup col_l itbls_zipped, Itbls.lookup col_r itbls_zipped 
+	    Ts.lookup col_l itbls_zipped, Ts.lookup col_r itbls_zipped 
 	  with _ -> assert false
 	in
 	  (* unbox the inner tables *)
@@ -837,7 +815,7 @@ and do_row_greater_real loop wrapper zipped =
 	  (* compare the inner tables *)
 	  q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r) 
     in
-      Ti (q, [`Column (1, `BoolType)], Itbls.empty, dummy)
+      Ti (q, [`Column (1, `BoolType)], Ts.empty, dummy)
   in
 
   let Ti (_q_zipped, cs_zipped, _itbls_zipped, _) = zipped in
@@ -920,7 +898,7 @@ and do_table_equal loop wrapper l1 l2 =
 	    q_equal
 	    map)
      in
-       Ti (result_backmapped, [`Column (1, `BoolType)], Itbls.empty, dummy)
+       Ti (result_backmapped, [`Column (1, `BoolType)], Ts.empty, dummy)
   in
 
 	
@@ -969,7 +947,7 @@ and do_row_equal loop wrapper r1 r2 =
 		[prj iter; prj pos; (c, A.Item col2)]
 		q_r2))
 	in
-	  if is_primitive_col coltype then
+	  if Cs.is_primitive_col coltype then
 	    (* normal comparison of atomic values *)
 	    do_primitive_binop wrapper q_r1' q_r2'
 	  else
@@ -978,7 +956,7 @@ and do_row_equal loop wrapper r1 r2 =
 	    (* lookup the inner tables referred to by col1, col2 *)
 	    let inner_table_r1, inner_table_r2 = 
 	      try
-		Itbls.lookup col1 itbls_r1, Itbls.lookup col2 itbls_r2 
+		Ts.lookup col1 itbls_r1, Ts.lookup col2 itbls_r2 
 	      with _ -> assert false
 	    in
 	    (* unbox the inner tables *)
@@ -996,7 +974,7 @@ and do_row_equal loop wrapper r1 r2 =
 		  [prj iter; prj pos; (c, A.Item col2)]
 		  q_r2)
 	  in
-	    if is_primitive_col coltype then
+	    if Cs.is_primitive_col coltype then
 	      do_primitive_binop wrapper q_r1' q_r2'
 	    else
 	      (* we compare nested lists represented by a inner table *)
@@ -1004,7 +982,7 @@ and do_row_equal loop wrapper r1 r2 =
 	      (* lookup the inner tables referred to by col1, col2 *)
 	      let inner_table_r1, inner_table_r2 = 
 		try
-		  Itbls.lookup col1 itbls_r1, Itbls.lookup col2 itbls_r2 
+		  Ts.lookup col1 itbls_r1, Ts.lookup col2 itbls_r2 
 		with _ -> assert false
 	      in
 		(* unbox the inner tables *)
@@ -1027,7 +1005,7 @@ and do_row_equal loop wrapper r1 r2 =
 		  (assemble_equals items)))
   in
   let q = assemble_equals items in
-    Ti(q, [`Column (1, `BoolType)], Itbls.empty, dummy)
+    Ti(q, [`Column (1, `BoolType)], Ts.empty, dummy)
 
 and compile_binop env loop wrapper restype operands =
   assert ((List.length operands) = 2);
@@ -1048,13 +1026,13 @@ and compile_unop env loop wrapper operands =
 	   res c
 	   op_q)
     in
-      Ti (q, op_cs, Itbls.empty, dummy)
+      Ti (q, op_cs, Ts.empty, dummy)
 
 and compile_concat env loop args =
   assert ((List.length args) = 1);
   let Ti (q_e, _, itbls_e, _) = compile_expression env loop (List.hd args) in
     assert((List.length itbls_e) = 1);
-    let Ti(q_sub, cs_sub, itbls_sub, _) = Itbls.lookup 1 itbls_e in
+    let Ti(q_sub, cs_sub, itbls_sub, _) = Ts.lookup 1 itbls_e in
     let c = A.Item 1 in
     let q =
       A.Dag.mk_project
@@ -1267,7 +1245,7 @@ and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)
   let new_names_r2 = io (incr r2_leafs (Cs.cardinality r1_cs)) in
   let old_names_r2 = io r2_leafs in
   let names_r1 = io (Cs.columns r1_cs) in
-  let r2_itbls' = Itbls.incr_keys r2_itbls (Cs.cardinality r1_cs) in
+  let r2_itbls' = Ts.incr_cols r2_itbls (Cs.cardinality r1_cs) in
   let q =
     A.Dag.mk_project
       (prjlist ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
@@ -1279,7 +1257,7 @@ and merge_records (Ti (r1_q, r1_cs, r1_itbls, _)) (Ti (r2_q, r2_cs, r2_itbls, _)
 	     r2_q)))
   in
   let cs = Cs.append r1_cs r2_cs in
-  let itbls = Itbls.append r1_itbls r2_itbls' in
+  let itbls = Ts.append r1_itbls r2_itbls' in
     Ti (q, cs, itbls, dummy)
 
 and compile_project env loop field record =
@@ -1290,7 +1268,7 @@ and compile_erase env loop erase_fields r =
   let Ti (q_r, cs_r, itbls_r, _) = compile_expression env loop r in
   let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
   let remaining_cols = io (Cs.columns remaining_cs) in
-  let remaining_itbls = Itbls.retain_by_keys itbls_r (Cs.columns remaining_cs) in
+  let remaining_itbls = Ts.keep_cols itbls_r (Cs.columns remaining_cs) in
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist remaining_cols))
@@ -1354,7 +1332,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
 	 (A.Dag.mk_tblref
 	    (tblname, attr_infos, key_items)))
   in
-    Ti (q, cs, Itbls.empty, dummy)
+    Ti (q, cs, Ts.empty, dummy)
 
 and compile_constant loop (c : Constant.constant) =
   let cs = [`Column (1, A.column_type_of_constant c)] in
@@ -1365,7 +1343,7 @@ and compile_constant loop (c : Constant.constant) =
 	  (A.Pos 0, A.Nat 1n)
 	  loop)
   in
-    Ti (q, cs, Itbls.empty, dummy)
+    Ti (q, cs, Ts.empty, dummy)
 
 (* if e1 then e2 else []:
    don't consider the else branch if it represents the empty list. *)
@@ -1453,7 +1431,7 @@ and compile_if env loop e1 e2 e3 =
 	      q_e3))
     in
     let cols = Cs.columns cs_e2 in
-    let keys = Itbls.keys itbls_e2 in
+    let keys = Ts.keys itbls_e2 in
     let proj = [prj iter; prj pos] in
     let proj = proj @ (prjlist (io (difference cols keys))) in
     let proj = proj @ (prjlist_single (io keys) item') in
@@ -1462,7 +1440,7 @@ and compile_if env loop e1 e2 e3 =
 	proj
 	q
     in
-    let itbls' = suap q itbls_e2 itbls_e3 in
+    let itbls' = append_ts q itbls_e2 itbls_e3 in
       Ti (q', cs_e2, itbls', dummy)
 
 and compile_groupby env loop v g_e e =
@@ -1529,7 +1507,7 @@ and compile_unit (loop : A.Dag.dag ref) : tblinfo =
 	 (pos, A.Nat 1n)
 	 loop)
   in
-    Ti (q, cs, Itbls.empty, dummy)
+    Ti (q, cs, Ts.empty, dummy)
 
 and compile_variant env loop tag value =
   Debug.f "compile_variant %s" tag;
@@ -1537,6 +1515,8 @@ and compile_variant env loop tag value =
   let itype = Query2.Annotate.typeof_typed_t value in
   let cs = [`Tag ((1, `Tag), (2, `Surrogate), itype)] in
   let vs = [(2, tag), ti_value] in
+    (* FIXME remove *)
+    ignore (Vs.key_columns vs);
   let q = 
     A.Dag.mk_attach
       (pos, A.Nat 1n)
@@ -1546,7 +1526,7 @@ and compile_variant env loop tag value =
 	    (A.Item 2, A.Nat 1n)
 	    loop))
   in
-    Ti (q, cs, Itbls.empty, vs)
+    Ti (q, cs, Ts.empty, vs)
 
 and compile_expression env loop e : tblinfo =
   match e with

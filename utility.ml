@@ -461,6 +461,9 @@ struct
 
   let remove_keys alist keys =
     List.filter (fun (x,_) -> not (List.mem x keys)) alist
+
+  let keep_keys alist keys =
+    List.filter (fun (x,_) -> List.mem x keys) alist
     
   (** alistmap maps f on the contents-parts of the entries, producing a
       new alist *)
