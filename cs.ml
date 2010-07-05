@@ -72,7 +72,7 @@ let rec leafs cs =
 (* return all columns *)	
 let rec columns cs = List.map fst (leafs cs)
 
-let cardinality = List.length
+let cardinality (cs : cs) = List.length (columns cs)
 
 (* increase all column names by i *)
 let rec shift cs i =

@@ -1251,9 +1251,9 @@ and extend_record env loop ext_fields r =
 	    Ti (q', cs_mapped, ts', vs')
 
 and merge_records (Ti (r1_q, r1_cs, r1_ts, r1_vs)) (Ti (r2_q, r2_cs, r2_ts, r2_vs)) =
-  let r2_leafs = Cs.columns r2_cs in
-  let new_names_r2 = io (incr r2_leafs (Cs.cardinality r1_cs)) in
-  let old_names_r2 = io r2_leafs in
+  let r2_cols = Cs.columns r2_cs in
+  let new_names_r2 = io (incr r2_cols (Cs.cardinality r1_cs)) in
+  let old_names_r2 = io r2_cols in
   let names_r1 = io (Cs.columns r1_cs) in
   let card_r1 = Cs.cardinality r1_cs in
   let r2_ts' = Ts.incr_cols r2_ts card_r1 in
@@ -1542,6 +1542,11 @@ and compile_variant env loop tag value =
 	    loop))
   in
     Ti (q, cs, Ts.empty, vs)
+
+(*
+and compile_case env loop value cases default =
+*)
+  
 
 and compile_expression env loop e : tblinfo =
   match e with
