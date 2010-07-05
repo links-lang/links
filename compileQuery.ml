@@ -1530,15 +1530,13 @@ and compile_variant env loop tag value =
   let itype = Query2.Annotate.typeof_typed_t value in
   let cs = [`Tag ((1, `Tag), (2, `Surrogate), itype)] in
   let vs = [(2, tag), ti_value] in
-    (* FIXME remove *)
-    ignore (Vs.key_columns vs);
   let q = 
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_attach
 	 (A.Item 1, A.String tag)
-	 (A.Dag.mk_attach
-	    (A.Item 2, A.Nat 1n)
+	 (A.Dag.mk_project
+	    [prj iter; (A.Item 2, iter)]
 	    loop))
   in
     Ti (q, cs, Ts.empty, vs)
