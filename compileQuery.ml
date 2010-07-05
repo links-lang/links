@@ -15,6 +15,7 @@ and vs = ((int * string) * tblinfo) list
 and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
 
 let q_of_tblinfo = function Ti (q, _, _, _) -> q
+let cs_of_tblinfo = function Ti (_, cs, _, _) -> cs
 
 let pf_type_of_typ t = 
   let concrete_t = Types.concrete_type t in
@@ -281,8 +282,6 @@ let pair_corresponding left right =
     left
     []
 
-(* let keys format l = Debug.print (mapstrcat " " (fun (k, v) -> format k) l) *)
-
 let missing left right =
   List.fold_right
     (fun (k, v) missing ->
@@ -451,6 +450,33 @@ let abspos q cols =
 (* compute absolute positions for a tblinfo *)
 let abspos_ti (Ti (q, cs, ts, vs)) =
   Ti ((abspos q (io (Cs.columns cs))), cs, ts, vs)
+
+(* derive an iteration context from the list represented by q *)
+let iterations q cs =
+  let q_renumbered = 
+    A.Dag.mk_rownum
+      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+      q
+  in
+
+  let q_v = 
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_project
+	 ((iter, inner) :: (prjlist (io (Cs.columns cs))))
+	 q_renumbered)
+  in
+  let map =
+    A.Dag.mk_project
+      [(outer, iter); prj inner]
+      q_renumbered
+  in
+  let loop =
+    A.Dag.mk_project
+      [prj iter]
+      q_v
+  in
+    (q_v, map, loop)
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
@@ -1134,30 +1160,10 @@ and compile_apply env loop f args =
     | s ->
 	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
 
+
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, ts1, vs1) = compile_expression env loop e1 in
-  let q1' = 
-    A.Dag.mk_rownum
-      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-      q1
-  in
-  let q_v = 
-    A.Dag.mk_attach
-      (pos, A.Nat 1n)
-      (A.Dag.mk_project
-	 ((iter, inner) :: (prjlist (io (Cs.columns cs1))))
-	 q1')
-  in
-  let map =
-    A.Dag.mk_project
-      [(outer, iter); prj inner]
-      q1'
-  in
-  let loop_v =
-    A.Dag.mk_project
-      [prj iter]
-      q_v
-  in
+  let (q_v, map, loop_v) = iterations q1 cs1 in
   let env = AEnv.map (lift map) env in
   let env_v = AEnv.bind env (v, Ti (q_v, cs1, ts1, vs1)) in
   let Ti (q2, cs2, ts2, vs2) = compile_expression env_v loop_v e2 in
@@ -1541,10 +1547,72 @@ and compile_variant env loop tag value =
   in
     Ti (q, cs, Ts.empty, vs)
 
-(*
 and compile_case env loop value cases default =
-*)
-  
+
+  let select_tag q tag =
+    let q_compared = 
+      A.Dag.mk_funnumeq
+	(res, (A.Item 2, item'))
+	(A.Dag.mk_attach
+	   (item', A.String tag)
+	   q)
+    in
+    (* all iterations which have the tag *)
+    let q_matching = 	
+      A.Dag.mk_project
+	[prj iter; prj pos; prj (A.Item 2)]
+	(A.Dag.mk_select
+	   res
+	   q_compared)
+    in
+
+    (* all iterations which do not have this tag *)
+    let q_other =
+      A.Dag.mk_project
+	[prj iter; prj pos; prj (A.Item 1); prj (A.Item 2)]
+	(A.Dag.mk_select
+	   res'
+	   (A.Dag.mk_funboolnot
+	      (res', res)
+	      q_compared))
+    in
+      q_matching, q_other
+
+  in
+    
+  (* compile value to be matched *)
+  let Ti (q_v, cs_v, _ts_v, vs_v) = compile_expression env loop value in
+
+  let (q_v', map, _loop_v) = iterations q_v cs_v in
+
+  let env' = AEnv.map (lift map) env in
+
+  let case env vs_v tag (var, case_exp) (results, q_other) =
+    let q_matching, q_other' = select_tag q_other tag in
+    let itbl = Vs.lookup (2, tag) vs_v in
+    let ti_unboxed = do_unbox q_matching 2 itbl in
+    let env' = AEnv.bind env (var, ti_unboxed) in
+    let loop' = A.Dag.mk_project [prj iter] q_matching in
+    let case_result = compile_expression env' loop' case_exp in
+      (case_result :: results), q_other'
+  in
+
+  let default_case env q_other (default_var, default_exp) =
+    let loop = A.Dag.mk_project [prj iter] q_other in
+    let env' = AEnv.bind env (default_var, (compile_unit loop)) in
+      compile_expression env' loop default_exp
+  in
+
+  let explicit_case_results, q_other = StringMap.fold (case env' vs_v) cases ([], q_v') in
+  let default_case_result = default_case env' q_other default in
+
+  let all_results = default_case_result :: explicit_case_results in
+    
+  let qs = List.map q_of_tblinfo all_results in
+  let q_union = List.fold_left A.Dag.mk_disjunion (List.hd qs) (drop 1 qs) in
+  let cs = cs_of_tblinfo (List.hd all_results) in
+  (* FIXME: append vs and ts entries *)
+    Ti (q_union, cs, Ts.empty, Vs.empty)
 
 and compile_expression env loop e : tblinfo =
   match e with
