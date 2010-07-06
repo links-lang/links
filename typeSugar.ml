@@ -1849,10 +1849,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun order ->
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row `Base)))) orderby in
+(*
             let () =
               if is_query then
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row `Base)))) in
+*)
             let e = `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
               if is_query then
                 `Query (None, (e, pos), Some (typ body)), typ body
