@@ -1,0 +1,18 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+query {
+	var ignore = players_table;
+	var tagged = for (p <-- players_table)
+	    	     	 if (p.pos == "C") [Center(p.eff)] 
+			 else if (p.pos == "F") [Forward(p.eff, p.eff * 2)]
+         		  else [Guard(p.eff)] ;
+	for (tp <- tagged)
+	    switch (tp) {
+	    	   case Center(e) -> [e]
+		   case Forward(x, y) -> [x + y]
+		   case Guard(e) -> [e + 45]
+	    }	
+}
+
+
