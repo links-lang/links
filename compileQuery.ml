@@ -1552,7 +1552,7 @@ and compile_case env loop value cases default =
   let select_tag q tag =
     let q_compared = 
       A.Dag.mk_funnumeq
-	(res, (A.Item 2, item'))
+	(res, (A.Item 1, item'))
 	(A.Dag.mk_attach
 	   (item', A.String tag)
 	   q)
@@ -1589,12 +1589,15 @@ and compile_case env loop value cases default =
 
   let case env vs_v tag (var, case_exp) (results, q_other) =
     let q_matching, q_other' = select_tag q_other tag in
-    let itbl = Vs.lookup (2, tag) vs_v in
-    let ti_unboxed = do_unbox q_matching 2 itbl in
-    let env' = AEnv.bind env (var, ti_unboxed) in
-    let loop' = A.Dag.mk_project [prj iter] q_matching in
-    let case_result = compile_expression env' loop' case_exp in
-      (case_result :: results), q_other'
+      try 
+	let itbl = Vs.lookup (2, tag) vs_v in
+	let ti_unboxed = do_unbox q_matching 2 itbl in
+	let env' = AEnv.bind env (var, ti_unboxed) in
+	let loop' = A.Dag.mk_project [prj iter] q_matching in
+	let case_result = compile_expression env' loop' case_exp in
+	  (case_result :: results), q_other'
+      with NotFound _ -> 
+	(results, q_other')
   in
 
   let default_case env q_other (default_var, default_exp) =
@@ -1604,9 +1607,12 @@ and compile_case env loop value cases default =
   in
 
   let explicit_case_results, q_other = StringMap.fold (case env' vs_v) cases ([], q_v') in
-  let default_case_result = default_case env' q_other default in
 
-  let all_results = default_case_result :: explicit_case_results in
+  let all_results = 
+    match default with
+      | Some c -> (default_case env' q_other c) :: explicit_case_results
+      | None -> explicit_case_results
+  in
     
   let qs = List.map q_of_tblinfo all_results in
   let q_union = List.fold_left A.Dag.mk_disjunion (List.hd qs) (drop 1 qs) in
@@ -1636,7 +1642,7 @@ and compile_expression env loop e : tblinfo =
     | `Unbox (e, _) -> compile_unbox env loop e
     | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
     | `Variant ((tag, value), _) -> compile_variant env loop tag value
-    | `Case _ 
+    | `Case ((v, cases, default), _) -> compile_case env loop v cases default
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
