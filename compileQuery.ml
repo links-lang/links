@@ -294,16 +294,20 @@ let missing left right =
 
 (* project all columns which do _not_ contain reference values onto itself and use the fresh
    surrogate values in new_surr in all columns which _do_ contain reference values *)
-let refresh_surr_cols cs ts vs new_surr =
+let refresh_surr_cols cs ts_l ts_r  vs_l vs_r new_surr =
+
+  let int_union l r = IntSet.elements (IntSet.union (IntSet.from_list l) (IntSet.from_list r)) in
+  let ts_cols = int_union (Ts.keys ts_l) (Ts.keys ts_r) in
+  let vs_cols = int_union (Vs.key_columns vs_l) (Vs.key_columns vs_r) in
 
   (* all columns which are neither vs nor ts surrogate columns *)
-  prjlist (io (difference (Cs.columns cs) ((Vs.key_columns vs) @ (Ts.keys ts))))
+  prjlist (io (difference (Cs.columns cs) (vs_cols @ ts_cols)))
 
   (* use new keys in vs surrogate columns *)
-  @ (prjlist_single (io (Vs.key_columns vs)) item') 
+  @ (prjlist_single (io vs_cols) new_surr) 
 
   (* use new keys in ts surrogate columns *)
-  @ (prjlist_single (io (Ts.keys ts)) new_surr)
+  @ (prjlist_single (io ts_cols) new_surr)
 
 let rec append_vs q_outer vs_l vs_r =
   let m = List.map (append_matching_vs q_outer) (pair_corresponding vs_l vs_r) in
@@ -317,7 +321,7 @@ and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
 
   let q_combined = combine_inner_tables q_l q_r in
 
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l vs_l item') in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l ts_r vs_l vs_r item') in
 
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -339,7 +343,7 @@ and append_missing_vs q_outer ord_val ((refcol, tag), ti) =
 	 (ord, ord_val)
 	 q_l)
   in
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l vs_l item') in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l Ts.empty vs_l Vs.empty item') in
     
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -360,7 +364,7 @@ and append_matching_ts (q_outer : A.Dag.dag ref) (refcol, (ti_l, ti_r)) =
 
   let q_combined = combine_inner_tables q_l q_r in
 
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l vs_l item') in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l ts_r vs_l vs_r item') in
 
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -382,7 +386,7 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
 	 (ord, ord_val)
 	 q_l)
   in
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l vs_l item') in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs_l ts_l Ts.empty vs_l Vs.empty item') in
     
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -511,7 +515,6 @@ and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl
   let fused_cs = Cs.fuse cs_hd cs_tl in
   (* combine the two lists and compute new surrogate values *)
   let q =
-    (* FIXME: can we leave the rownum out if there are no inner tables? *)
     A.Dag.mk_rownum
       (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
       (A.Dag.mk_rank
@@ -524,7 +527,7 @@ and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl
 	       (ord, A.Nat 2n)
 	       q_tl)))
   in
-  let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols fused_cs ts_hd vs_hd) item' in
+  let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols fused_cs ts_hd ts_tl vs_hd vs_tl item') in
   let q' = 
     A.Dag.mk_project
       q'_projlist
@@ -1614,11 +1617,31 @@ and compile_case env loop value cases default =
       | None -> explicit_case_results
   in
     
-  let qs = List.map q_of_tblinfo all_results in
-  let q_union = List.fold_left A.Dag.mk_disjunion (List.hd qs) (drop 1 qs) in
-  let cs = cs_of_tblinfo (List.hd all_results) in
-  (* FIXME: append vs and ts entries *)
-    Ti (q_union, cs, Ts.empty, Vs.empty)
+  let union ti_l ti_r =
+    let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
+    let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
+    let q_union = 
+      A.Dag.mk_rownum
+	(item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
+	(A.Dag.mk_disjunion 
+	   (A.Dag.mk_attach
+	      (ord, A.Nat 1n)
+	      q_l) 
+	   (A.Dag.mk_attach
+	      (ord, A.Nat 2n)
+	      q_r))
+    in
+    let cs = Cs.fuse cs_l cs_r in
+    let q_union' = 
+      A.Dag.mk_project
+	([prj iter; prj pos] @ (refresh_surr_cols cs ts_l ts_r vs_l vs_r item'))
+	q_union
+    in
+    let ts = append_ts q_union ts_l ts_r in
+    let vs = append_vs q_union vs_l vs_r in
+      Ti (q_union', cs, ts, vs)
+  in
+    List.fold_left union (List.hd all_results) (drop 1 all_results) 
 
 and compile_expression env loop e : tblinfo =
   match e with
