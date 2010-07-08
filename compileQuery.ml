@@ -617,11 +617,8 @@ and compile_empty env loop args =
     in
       Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
 
-(* FIXME: only sum works at the moment. max/min/avg can't be used.
-   Issues:
-   * infer the correct column type for the result (or give it as a parameter)
-   * how to handle empty lists? *)
-and compile_aggr env loop aggr_fun args =
+(* application of sum to [] is defined as 0 *)
+and compile_sum env loop args =
   assert ((List.length args) = 1);
   let c = A.Item 1 in
   let e = List.hd args in
@@ -629,13 +626,59 @@ and compile_aggr env loop aggr_fun args =
     assert (Cs.is_operand cs_e);
     let q = 
       (A.Dag.mk_funaggr
-	 (aggr_fun, (c, c), Some iter)
+	 (A.Sum, (c, c), Some iter)
 	 q_e)
     in
-      (* HACK: special case for sum *)
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-      (* FIXME: extract the correct column type from cs_e *)
       Ti (q', [`Column (1, `IntType)], Ts.empty, Vs.empty)
+
+(* aggregate functions which are not defined on empty lists. the result
+   is returned as a Maybe a, where sum(l) = Nothing iff l = [] *)
+and compile_aggr_error env loop aggr_fun args restype =
+  assert ((List.length args) = 1);
+  let c = A.Item 1 in
+  let e  = List.hd args in
+  let  Ti (q_e, cs_e, _, _) = compile_expression env loop e in
+    assert (Cs.is_operand cs_e);
+    let q_inner_just = 
+      A.Dag.mk_attach
+	(pos, A.Nat 1n)
+	(A.Dag.mk_funaggr
+	   (aggr_fun, (c, c), Some iter)
+	   q_e)
+    in
+    let empty_iterations =
+      A.Dag.mk_difference
+	loop
+	(A.Dag.mk_project
+	   [prj iter]
+	   q_e)
+    in
+    let ti_inner_nothing = compile_unit empty_iterations in
+    let q_outer_just =
+      A.Dag.mk_attach
+	(pos, A.Nat 1n)
+	(A.Dag.mk_attach
+	   (A.Item 1, A.String "Just")
+	   (A.Dag.mk_project
+	      [prj iter; (A.Item 2, iter)]
+	      q_inner_just))
+    in
+    let q_outer_nothing =
+      A.Dag.mk_attach
+	(pos, A.Nat 1n)
+	(A.Dag.mk_attach
+	   (A.Item 1, A.String "Nothing")
+	   (A.Dag.mk_project
+	      [prj iter; (A.Item 2, iter)]
+	      empty_iterations))
+    in
+    let inner_cs_just = [`Column (1, restype)] in
+    let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate), `Atom)] in
+    let vs = [((2, "Just"), Ti (q_inner_just, inner_cs_just, Ts.empty, Vs.empty)); 
+	      ((2, "Nothing"), ti_inner_nothing)] in
+    let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
+      Ti (q_outer, outer_cs, Ts.empty, vs)
 
 and compile_nth env loop operands =
   assert ((List.length operands) = 2);
@@ -1149,7 +1192,10 @@ and compile_apply env loop f args =
     | "not" ->  compile_unop env loop wrap_not args
     | "nth" -> compile_nth env loop args
     | "length" -> compile_length env loop args
-    | "sum" -> compile_aggr env loop A.Sum args
+    | "sum" -> compile_sum env loop args
+    | "max" -> compile_aggr_error env loop A.Max args `IntType
+    | "min" -> compile_aggr_error env loop A.Min args `IntType
+    | "avg" -> compile_aggr_error env loop A.Avg args `FloatType
     | "take" -> compile_take env loop args
     | "drop" -> compile_drop env loop args
     | "zip" -> compile_zip env loop args

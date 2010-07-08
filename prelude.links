@@ -134,11 +134,11 @@ fun fold_right1(f, l) {
 
 fun nth(i, l) {
   if (i >= length(l)) {
-    error("nth: list too short")
+     Nothing
   } else {
     fun nth1(j, l) {
       if (i == j) 
-        hd(l)
+        Just(hd(l))
       else
         nth1((j + 1), tl(l)) 
     }
@@ -1076,3 +1076,34 @@ fun sum(ns) {
   fold_left((+), 0, ns)
 }
 
+fun avg(ns) {
+    switch (ns) {
+    	   case [] -> 
+	   	Nothing
+	   case _ :: _ -> 
+	   	var len = length(ns);
+		var s = fold_left((+), 0, ns);
+		Just(intToFloat(s) /. intToFloat(len))
+    }
+}
+
+fun extremum(c, ns) {
+    fun choose(m, x) {
+    	if (c(x, m))
+	   x
+	else
+	   m
+    }   
+    switch (ns) {
+    	   case x :: xs -> Just(fold_left(choose, x, xs))
+    	   case [] -> Nothing
+    }
+}
+
+fun max(ns) { 
+    extremum((>), ns) 
+}
+
+fun min(ns) { 
+    extremum((<), ns) 
+}

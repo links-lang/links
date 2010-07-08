@@ -1213,7 +1213,10 @@ let patch_prelude_funs tyenv =
          ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
          ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
          ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]");
-	 ("nth", datatype "(Int, [a]) -> a");
+	 ("nth", datatype "(Int, [a]) -> [|Just:a|Nothing|]");
+	 ("max", datatype "([Int]) -> [|Just:Int|Nothing|]");
+	 ("min", datatype "([Int]) -> [|Just:Int|Nothing|]");
+	 ("avg", datatype "([Int]) -> [|Just:Float|Nothing|]");
 	 ("unzip", datatype "([(a, b)]) -> ([a], [b])");
 	 ("zip", datatype "([a], [b]) -> [(a, b)]");
 	 ("groupBy", datatype "(((a) -> b), [a]) -> [(b, [a])]");
