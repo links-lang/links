@@ -685,7 +685,7 @@ and compile_nth env loop operands =
   let Ti (q_i, _, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth operands 1) in
   let q_l' = abspos q_l (io (Cs.columns cs_l)) in
-  let q =
+  let q_inner_just =
     (A.Dag.mk_project
        ([prj iter; prj pos] @ prjlist (io (Cs.columns cs_l)))
        (A.Dag.mk_select
@@ -701,9 +701,39 @@ and compile_nth env loop operands =
 		   [(iter', iter); (c', A.Item 1)]
 		   q_i)))))
   in
-  let ts_l' = suse q ts_l in
-    Ti (q, cs_l, ts_l', vs_l)
-
+  let empty_iterations =
+    A.Dag.mk_difference
+      loop
+      (A.Dag.mk_project
+	 [prj iter]
+	 q_inner_just)
+  in
+  let ti_inner_nothing = compile_unit empty_iterations in
+  let q_outer_just =
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_attach
+	 (A.Item 1, A.String "Just")
+	 (A.Dag.mk_project
+	    [prj iter; (A.Item 2, iter)]
+	    q_inner_just))
+  in
+  let q_outer_nothing = 
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_attach
+	 (A.Item 1, A.String "Nothing")
+	 (A.Dag.mk_project
+	    [prj iter; (A.Item 2, iter)]
+	    empty_iterations))
+  in
+  let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate), `Atom)] in
+  let ts_l' = suse q_inner_just ts_l in
+  let vs = [((2, "Just"), Ti (q_inner_just, cs_l, ts_l', vs_l));
+	    ((2, "Nothing"), ti_inner_nothing)] in
+  let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
+    Ti (q_outer, outer_cs, Ts.empty, vs)
+    
 and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
   assert ((List.length operands) = 2);
   let e1 = List.hd operands in
