@@ -21,7 +21,8 @@ type t =
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
-    | `Case of t * (Var.var * t) name_map * (Var.var * t) option]
+    | `Case of t * (Var.var * t) name_map * (Var.var * t) option
+    | `Wrong ]
 
 and env = Value.env * t Env.Int.t
     deriving (Show)
@@ -100,7 +101,8 @@ struct
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
-    | `Case of pt * (Var.var * pt) name_map * (Var.var * pt) option]
+    | `Case of pt * (Var.var * pt) name_map * (Var.var * pt) option
+    | `Wrong ]
       deriving (Show)
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -132,6 +134,7 @@ struct
 	    let case_map' = StringMap.map case case_map in
 	    let default' = opt_map case default in
 	    `Case (value', case_map', default')
+	| `Wrong -> `Wrong
           
   let t = Show.show show_pt -<- pt_of_t
 end
@@ -485,6 +488,7 @@ struct
     | `Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
     | `Special (`Query (None, e, _)) -> computation env e
+    | `Special `Wrong _ -> `Wrong
     | `Special _s -> failwith "special not allowed in query block"
     | `Case (v, cases, default) ->
 	let v' = value env v in
@@ -553,7 +557,8 @@ module Annotate = struct
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_t * implementation_type
       | `Unbox of typed_t * implementation_type
-      | `Case of (typed_t * (Var.var * typed_t) name_map * (Var.var * typed_t) option) * implementation_type ]
+      | `Case of (typed_t * (Var.var * typed_t) name_map * (Var.var * typed_t) option) * implementation_type
+      | `Wrong of implementation_type ]
 
   let typeof_typed_t = function
     | `For (_, t) -> t
@@ -575,6 +580,7 @@ module Annotate = struct
     | `Box (_, t) -> t 
     | `Unbox (_, t) -> t
     | `Case (_, t) -> t
+    | `Wrong t -> t
 
   type typed_pt = 
       [ `For of ((Var.var * typed_pt) * typed_pt list * typed_pt) * implementation_type
@@ -596,7 +602,8 @@ module Annotate = struct
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_pt * implementation_type 
       | `Unbox of typed_pt * implementation_type 
-      | `Case of (typed_pt * (Var.var * typed_pt) name_map * (Var.var * typed_pt) option) * implementation_type ] 
+      | `Case of (typed_pt * (Var.var * typed_pt) name_map * (Var.var * typed_pt) option) * implementation_type
+      | `Wrong of implementation_type] 
 	deriving (Show)
 
   let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
@@ -627,6 +634,7 @@ module Annotate = struct
 	| `Case ((v, cases, default), typ) ->
 	    let case = fun (v, c) -> (v, bt c) in
 	      `Case ((bt v, StringMap.map case cases, opt_map case default), typ)
+	| `Wrong t -> `Wrong t
 
   let string_of_typed_t = Show.show show_typed_pt -<- typed_pt_of_typed_t
 
@@ -704,6 +712,8 @@ module Annotate = struct
 		     | [] -> assert false)
 	  in
 	    `Case ((v', cases', default'), case_typ)
+
+      | `Wrong -> `Wrong `Atom
 
       | `Apply (f, args) ->
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in

@@ -355,9 +355,16 @@ module Eval = struct
 	  let (exptree, imptype) = Query2.compile env (range, e) in
 	    match !Query2.used_database with
 	      | Some db -> 
-		  let algebra_bundle = CompileQuery.compile exptree in
-		  let result_bundle = Heapresult.execute_queries db algebra_bundle in
-		    Heapresult.handle_table result_bundle imptype
+		  let (result_algebra_bundle, error_bundle) = CompileQuery.compile exptree in
+		    Debug.print ">>>> execute error plans";
+		    if opt_app (Heapresult.execute_errors db) true error_bundle then
+		      begin
+			Debug.print ">>>> execute result plans";
+			let result_bundle = Heapresult.execute_queries db result_algebra_bundle in
+			  Heapresult.handle_table result_bundle imptype
+		      end
+		    else
+		      raise Wrong
 	      | None -> computation env cont e
         in
           apply_cont cont env result

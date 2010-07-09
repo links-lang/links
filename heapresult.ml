@@ -170,6 +170,12 @@ let rec execute_queries database ti =
   let vs' = alistmap (execute_queries database) vs in
     Tr (acc, cs, ts', vs')
     
+let rec execute_errors database q_error =
+  let xml_sql = Pf_toolchain.optimize_sql q_error in
+  let _, query = XmlSqlPlan.extract_queries xml_sql in
+  let result = execute_query database query in
+    if result#ntuples > 0 then false else true
+
 let mk_primitive raw_value t = 
   match t with
     | `IntType -> Value.box_int (Num.num_of_string raw_value)
@@ -322,3 +328,4 @@ and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), 
 	  (next_offset, List.hd values)
       | `List ->
 	  (next_offset, `List values)
+

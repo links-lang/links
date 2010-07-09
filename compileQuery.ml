@@ -17,6 +17,18 @@ and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
 let q_of_tblinfo = function Ti (q, _, _, _) -> q
 let cs_of_tblinfo = function Ti (_, cs, _, _) -> cs
 
+let errors = ref None
+
+let fuse_errors q_error =
+  Debug.print "wrong wrong wrong";
+  match !errors with
+    | Some q_old ->
+	Debug.print "wrong wrong wrong 1";
+ 	errors := Some (A.Dag.mk_disjunion q_old q_error)
+    | None ->
+	Debug.print "wrong wrong wrong 2";
+	errors := Some q_error
+
 let pf_type_of_typ t = 
   let concrete_t = Types.concrete_type t in
   match concrete_t with
@@ -1719,6 +1731,17 @@ and compile_case env loop value cases default =
   in
     List.fold_left union (List.hd all_results) (drop 1 all_results) 
 
+and compile_wrong loop =
+  let q_e = 
+    A.Dag.mk_project
+      [prj (A.Item 1)]
+      (A.Dag.mk_attach
+ 	 (A.Item 1, A.String "something is wrong")
+ 	 loop)
+  in
+    fuse_errors q_e;
+    Ti (A.Dag.mk_emptytbl, [`Column (1, `IntType)], Ts.empty, Vs.empty)
+
 and compile_expression env loop e : tblinfo =
   match e with
     | `Constant (c, _) -> compile_constant loop c
@@ -1742,6 +1765,7 @@ and compile_expression env loop e : tblinfo =
     | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
     | `Variant ((tag, value), _) -> compile_variant env loop tag value
     | `Case ((v, cases, default), _) -> compile_case env loop v cases default
+    | `Wrong _  -> compile_wrong loop 
     | `XML _ -> failwith "compile_expression: not implemented"
     | `Primitive _ -> failwith "compile_expression: eval error"
 
@@ -1749,7 +1773,7 @@ and compile_expression env loop e : tblinfo =
 let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
   let serialize q cs =
     A.Dag.mk_serializerel 
-      (A.Iter 0, A.Pos 0, io (Cs.columns cs))
+      (A.Result (A.Iter 0, A.Pos 0, io (Cs.columns cs)))
       (A.Dag.mk_nil)
       q
   in
@@ -1757,10 +1781,19 @@ let rec wrap_serialize (Ti (q, cs, ts, vs)) =
   let ts' = alistmap wrap_serialize ts in
   let vs' = alistmap wrap_serialize vs in
     Ti (q', cs, ts', vs')
-      
+
+let wrap_serialize_errors q_error =
+  opt_map (A.Dag.mk_serializerel A.Error A.Dag.mk_nil) q_error
+
 let compile e =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-    wrap_serialize (compile_expression AEnv.empty loop e)
+    begin
+    match !errors with
+      | Some _ -> Debug.print "some some some"
+      | None -> Debug.print "none none none"
+    end;
+    let ti = compile_expression AEnv.empty loop e in
+      wrap_serialize ti, wrap_serialize_errors !errors
