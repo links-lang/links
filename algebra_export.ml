@@ -212,29 +212,18 @@ let out_fun_aggr_count_info out (result_attr, maybe_part_attr) =
   out_maybe_part_name out maybe_part_attr;
   out `El_end
 
-let out_serialize_rel_info out info =
+let out_serialize_rel_info out (iter, pos, items) =
   out (`El_start (tag "content"));
-  begin
-    match info with
-      | A.Error ->
-	    out_col out [("name", "item1"); 
-			 ("new", "false"); 
-			 ("function", "item"); 
-			 ("position", "1")]
-      | A.Result (iter, pos, items) ->
-	  begin
-	    out_col out [("name", (A.string_of_attr_name iter)); ("new", "false"); ("function", "iter")];
-	    out_col out [("name", (A.string_of_attr_name pos)); ("new", "false"); ("function", "pos")];
-	    iteri
-	      (fun i item ->
-		 out_col out [("name", (A.string_of_attr_name item)); 
-			      ("new", "false"); 
-			      ("function", "item"); 
-			      ("position", string_of_int i)])
-	      items
-	  end;
-  end;
-  out `El_end
+  out_col out [("name", (A.string_of_attr_name iter)); ("new", "false"); ("function", "iter")];
+  out_col out [("name", (A.string_of_attr_name pos)); ("new", "false"); ("function", "pos")];
+  iteri
+    (fun i item ->
+       out_col out [("name", (A.string_of_attr_name item)); 
+		    ("new", "false"); 
+		    ("function", "item"); 
+		    ("position", string_of_int i)])
+    items;
+    out `El_end
 
 let out_tbl_ref_info out (tbl_name, attr_infos, key_infos) =
   out (`El_start (tag "properties"));

@@ -86,8 +86,7 @@ type unop_info = result_attr_name * attr_name
 type fun_1to1_info = func * result_attr_name * (attr_name list)
 type fun_aggr_info = aggr * unop_info * partitioning_attr_name option
 type fun_aggr_count_info = result_attr_name * partitioning_attr_name option
-type serialize_rel_info = Error 
-			  | Result of attr_name * attr_name * (attr_name list)
+type serialize_rel_info = attr_name * attr_name * (attr_name list)
 type tbl_ref_info = tbl_name * tbl_attribute_infos * key_infos
 type empty_tbl_info = schema_infos
 type error_info = attr_name

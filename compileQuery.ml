@@ -20,13 +20,10 @@ let cs_of_tblinfo = function Ti (_, cs, _, _) -> cs
 let errors = ref None
 
 let fuse_errors q_error =
-  Debug.print "wrong wrong wrong";
   match !errors with
     | Some q_old ->
-	Debug.print "wrong wrong wrong 1";
  	errors := Some (A.Dag.mk_disjunion q_old q_error)
     | None ->
-	Debug.print "wrong wrong wrong 2";
 	errors := Some q_error
 
 let pf_type_of_typ t = 
@@ -1773,7 +1770,7 @@ and compile_expression env loop e : tblinfo =
 let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
   let serialize q cs =
     A.Dag.mk_serializerel 
-      (A.Result (A.Iter 0, A.Pos 0, io (Cs.columns cs)))
+      (iter, pos, io (Cs.columns cs))
       (A.Dag.mk_nil)
       q
   in
@@ -1783,17 +1780,22 @@ let rec wrap_serialize (Ti (q, cs, ts, vs)) =
     Ti (q', cs, ts', vs')
 
 let wrap_serialize_errors q_error =
-  opt_map (A.Dag.mk_serializerel A.Error A.Dag.mk_nil) q_error
+  let wrap q = 
+    A.Dag.mk_serializerel 
+      (iter, pos, [A.Item 1])
+      A.Dag.mk_nil
+      (A.Dag.mk_attach
+	 (pos, A.Nat 1n)
+	 (A.Dag.mk_rank
+	    (iter, [(A.Item 1, A.Ascending)])
+	    q))
+  in
+    opt_map wrap q_error
 
 let compile e =
   let loop = 
     (A.Dag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-    begin
-    match !errors with
-      | Some _ -> Debug.print "some some some"
-      | None -> Debug.print "none none none"
-    end;
-    let ti = compile_expression AEnv.empty loop e in
-      wrap_serialize ti, wrap_serialize_errors !errors
+  let ti = compile_expression AEnv.empty loop e in
+    wrap_serialize ti, wrap_serialize_errors !errors
