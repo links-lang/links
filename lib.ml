@@ -377,7 +377,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          with
              Failure "hd" -> failwith "hd() of empty list"
       ),
-   datatype "([a]) ~> a",
+   datatype "([a]) -> a",
   IMPURE);
 
   "tl", 

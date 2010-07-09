@@ -1215,6 +1215,34 @@ and compile_drop env loop args =
   let ts' = suse q' ts_l in
     Ti(q', cs_l, ts', vs_l)
 
+and compile_hd env loop args = 
+  assert ((List.length args) = 1);
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
+  let q = 
+    A.Dag.mk_project
+      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_l))))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumeq
+	    (res, (pos, pos'))
+	    (A.Dag.mk_attach
+	       (pos', A.Nat 1n)
+	       q_l)))
+  in
+  let q_error =
+    A.Dag.mk_project
+      [prj (A.Item 1)]
+      (A.Dag.mk_attach
+	 (A.Item 1, A.String "hd() of empty list")
+	 (A.Dag.mk_difference
+	    loop
+	    (A.Dag.mk_project
+	       [prj iter]
+	       q_l)))
+  in
+    fuse_errors q_error;
+    Ti (q, cs_l, ts_l, vs_l)
+
 and compile_apply env loop f args =
   match f with
     | "+" -> compile_binop env loop (wrap_1to1 A.Add) `IntType args
@@ -1243,6 +1271,7 @@ and compile_apply env loop f args =
     | "and" -> compile_and env loop args
     | "or" -> compile_or env loop args
     | "empty" -> compile_empty env loop args
+    | "hd" -> compile_hd env loop args
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
@@ -1538,6 +1567,7 @@ and compile_if env loop e1 e2 e3 =
 	      (ord, A.Nat 2n)
 	      q_e3))
     in
+      Debug.print ("foo " ^ (Cs.show cs_e2));
     let cols = Cs.columns cs_e2 in
     let keys = (Ts.keys ts_e2) @ (Vs.key_columns vs_e2) in
     let proj = [prj iter; prj pos] in

@@ -446,9 +446,11 @@ struct
 	     Some (`Apply ("==", [e1; e2])))
     | `Primitive "tl", args ->
 	`Apply ("drop", (`Constant (`Int (Num.Int 1))) :: args)
+    (*
     | `Primitive "hd", args ->
 	(* need to apply nth to take in order to have the correct implementation type `Atom *)
 	`Apply ("nth", [`Constant (`Int (Num.Int 1)); `Apply ("take", (`Constant (`Int (Num.Int 1))) :: args)])
+    *)
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, Some e), args ->
@@ -751,7 +753,7 @@ module Annotate = struct
 		let n' = transform env n in
 		let l' = aot `List env l in
 		  `Apply ((f, [n'; l']), `List)
-	    | "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" ->
+	    | "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
 		(* `List -> `Atom *)
 		let l = 
 		  (match args with 

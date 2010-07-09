@@ -55,7 +55,6 @@ let optimize_sql q =
     let sql = pipe_pfsql optimized in
 
     let i = string_of_int !c in
-      Debug.print "output";
       output_plan (Buffer.contents !buf) ("plan_unopt_" ^ i ^ ".xml");
       output_plan optimized ("plan_opt_" ^ i ^ ".xml");
       output_plan sql ("plan_sql_" ^ i ^ ".xml");
