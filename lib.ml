@@ -387,8 +387,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          with
              Failure "tl" -> failwith "tl() of empty list"
       ),
-   datatype "([a]) ~> [a]",
-  IMPURE);
+   datatype "([a]) -> [a]",
+  PURE);
   
   "length", 
   (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),

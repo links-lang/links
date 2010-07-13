@@ -1187,7 +1187,7 @@ and compile_drop env loop args =
   let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
   let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
   let cols = (io (Cs.columns cs_l)) in
-  let q_l' = abspos q_l cs_l in
+  let q_l_abs = abspos q_l cs_l in
   let c = A.Item 1 in
   let q' =
     A.Dag.mk_project
@@ -1200,7 +1200,7 @@ and compile_drop env loop args =
 	       (iter, iter')
 	       (A.Dag.mk_cast
 		  (pos', pos, `IntType)
-		  q_l')
+		  q_l_abs)
 	       (A.Dag.mk_project
 		  [(iter', iter); (c', c)]
 		  q_n))))
@@ -1237,12 +1237,34 @@ and compile_hd env loop args =
     merge_error_plans q_error;
     Ti (q, cs_l, ts_l, vs_l)
 
-(*
 and compile_tl env loop args = 
-  assert ((List.length args) = 2);
+  assert ((List.length args) = 1);
   let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
-    let q_l_abs
-*)
+  let q_l_abs = abspos q_l cs_l in
+  let q =
+    A.Dag.mk_project
+      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_l))))
+      (A.Dag.mk_select
+	 res
+	 (A.Dag.mk_funnumgt
+	    (res, (pos, item'))
+	    (A.Dag.mk_attach
+	       (item', A.Nat 1n)
+	       q_l_abs)))
+  in
+  let q_error =
+    A.Dag.mk_project
+      [prj (A.Item 1)]
+      (A.Dag.mk_attach
+	 (A.Item 1, A.String "tl() of empty list")
+	 (A.Dag.mk_difference
+	    loop
+	    (A.Dag.mk_project
+	       [prj iter]
+	       q_l_abs)))
+  in
+    merge_error_plans q_error;
+    Ti (q, cs_l, ts_l, vs_l)
 
 and compile_apply env loop f args =
   match f with
@@ -1273,6 +1295,7 @@ and compile_apply env loop f args =
     | "or" -> compile_or env loop args
     | "empty" -> compile_empty env loop args
     | "hd" -> compile_hd env loop args
+    | "tl" -> compile_tl env loop args
 (*    | "takeWhile" -> compile_takeWhile env loop args
     | "dropWhile" -> compile_dropWhile env loop args *)
     | "<" | "<=" | ">=" ->
