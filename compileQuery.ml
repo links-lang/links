@@ -540,17 +540,15 @@ and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl
   let vs' = append_vs q vs_hd vs_tl in
     Ti (q', fused_cs, ts', vs')
 
-and compile_zip env loop args =
-  assert ((List.length args) = 2);
-  let Ti (q_e1, cs_e1, ts_e1, vs_e1) = compile_expression env loop (List.hd args) in
-  let Ti (q_e2, cs_e2, ts_e2, vs_e2) = compile_expression env loop (List.nth args 1) in
-  let q_e1' = abspos q_e1 cs_e1 in
-  let q_e2' = abspos q_e2 cs_e2 in
-    do_zip (Ti (q_e1', cs_e1, ts_e1, vs_e1)) (Ti (q_e2', cs_e2, ts_e2, vs_e2))
+and compile_zip env loop l1 l2 =
+  let Ti (q_l1, cs_l1, ts_l1, vs_l1) = compile_expression env loop l1 in
+  let Ti (q_l2, cs_l2, ts_l2, vs_l2) = compile_expression env loop l2 in
+  let q_l1' = abspos q_l1 cs_l1 in
+  let q_l2' = abspos q_l2 cs_l2 in
+    do_zip (Ti (q_l1', cs_l1, ts_l1, vs_l1)) (Ti (q_l2', cs_l2, ts_l2, vs_l2))
 
-and compile_unzip env loop args =
-  assert((List.length args) = 1);
-  let Ti (q_e, cs_e, ts_e, vs_e) = compile_expression env loop (List.hd args) in
+and compile_unzip env loop p =
+  let Ti (q_p, cs_p, ts_p, vs_p) = compile_expression env loop p in
   let q = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist_single [A.Item 1; A.Item 2] iter))
@@ -558,8 +556,8 @@ and compile_unzip env loop args =
 	 (pos, A.Nat 1n)
 	 loop)
   in
-  let cs_1 = Cs.lookup_record_field cs_e "1" in
-  let cs_2 = Cs.lookup_record_field cs_e "2" in
+  let cs_1 = Cs.lookup_record_field cs_p "1" in
+  let cs_2 = Cs.lookup_record_field cs_p "2" in
   let cols_1 = Cs.columns cs_1 in
   let card = List.length (Cs.columns cs_1) in
   let cols_2 = Cs.columns cs_2 in
@@ -568,46 +566,38 @@ and compile_unzip env loop args =
   let q_1 = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist (io cols_1)))
-      q_e
+      q_p
   in
   let q_2 =
     A.Dag.mk_project
       (let proj = prjlist_map (io (decr cols_2 card)) (io cols_2) in
 	 ([prj iter; prj pos] @ proj))
-      q_e
+      q_p
   in
-  let ts_1 = Ts.keep_cols ts_e cols_1 in
-  let ts_2 = Ts.decr_cols (Ts.keep_cols ts_e cols_2) card in
-  let vs_1 = Vs.keep_cols vs_e cols_1 in
-  let vs_2 = Vs.decr_cols (Vs.keep_cols vs_e cols_2) card in
+  let ts_1 = Ts.keep_cols ts_p cols_1 in
+  let ts_2 = Ts.decr_cols (Ts.keep_cols ts_p cols_2) card in
+  let vs_1 = Vs.keep_cols vs_p cols_1 in
+  let vs_2 = Vs.decr_cols (Vs.keep_cols vs_p cols_2) card in
   let ts = [(1, Ti(q_1, cs_1, ts_1, vs_1)); (2, Ti(q_2, cs_2', ts_2, vs_2))] in
   let cs = [`Mapping ("1", [`Column (1, `Surrogate)]); `Mapping ("2", [`Column (2, `Surrogate)])] in
     Ti (q, cs, ts, Vs.empty)
 
 (* FIXME: unite at least compile_or/and/length *)
-and compile_or env loop args =
-  assert ((List.length args) = 1);
-  let e = List.hd args in
-  let ti_e = compile_expression env loop e in
-    do_list_or loop ti_e
+and compile_or env loop l =
+  let ti_l = compile_expression env loop l in
+    do_list_or loop ti_l
 
-and compile_and env loop args =
-  assert ((List.length args) = 1);
-  let e = List.hd args in
-  let ti_e = compile_expression env loop e in
-    do_list_and loop ti_e
+and compile_and env loop l =
+  let ti_l = compile_expression env loop l in
+    do_list_and loop ti_l
 
-and compile_length env loop args =
-  assert ((List.length args) = 1);
-  let e = List.hd args in
-  let ti_e = compile_expression env loop e in
-    do_length loop ti_e
+and compile_length env loop l =
+  let ti_l = compile_expression env loop l in
+    do_length loop ti_l
 
-and compile_empty env loop args = 
-  assert ((List.length args) = 1);
-  let e = List.hd args in
-  let ti_e = compile_expression env loop e in
-  let Ti (q_length, cs_length, _, _) = do_length loop ti_e in
+and compile_empty env loop l = 
+  let ti_l = compile_expression env loop l in
+  let Ti (q_length, cs_length, _, _) = do_length loop ti_l in
     assert (Cs.is_operand cs_length);
     let q =
       A.Dag.mk_project
@@ -621,41 +611,37 @@ and compile_empty env loop args =
       Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
 
 (* application of sum to [] is defined as 0 *)
-and compile_sum env loop args =
-  assert ((List.length args) = 1);
+and compile_sum env loop l =
   let c = A.Item 1 in
-  let e = List.hd args in
-  let Ti (q_e, cs_e, _, _) = compile_expression env loop e in
-    assert (Cs.is_operand cs_e);
+  let Ti (q_l, cs_l, _, _) = compile_expression env loop l in
+    assert (Cs.is_operand cs_l);
     let q = 
       (A.Dag.mk_funaggr
 	 (A.Sum, (c, c), Some iter)
-	 q_e)
+	 q_l)
     in
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
       Ti (q', [`Column (1, `IntType)], Ts.empty, Vs.empty)
 
 (* aggregate functions which are not defined on empty lists. the result
    is returned as a Maybe a, where sum(l) = Nothing iff l = [] *)
-and compile_aggr_error env loop aggr_fun args restype =
-  assert ((List.length args) = 1);
+and compile_aggr_error env loop aggr_fun restype l =
   let c = A.Item 1 in
-  let e  = List.hd args in
-  let  Ti (q_e, cs_e, _, _) = compile_expression env loop e in
-    assert (Cs.is_operand cs_e);
+  let  Ti (q_l, cs_l, _, _) = compile_expression env loop l in
+    assert (Cs.is_operand cs_l);
     let q_inner_just = 
       A.Dag.mk_attach
 	(pos, A.Nat 1n)
 	(A.Dag.mk_funaggr
 	   (aggr_fun, (c, c), Some iter)
-	   q_e)
+	   q_l)
     in
     let empty_iterations =
       A.Dag.mk_difference
 	loop
 	(A.Dag.mk_project
 	   [prj iter]
-	   q_e)
+	   q_l)
     in
     let ti_inner_nothing = compile_unit empty_iterations in
     let q_outer_just =
@@ -683,10 +669,9 @@ and compile_aggr_error env loop aggr_fun args restype =
     let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
       Ti (q_outer, outer_cs, Ts.empty, vs)
 
-and compile_nth env loop operands =
-  assert ((List.length operands) = 2);
-  let Ti (q_i, _, _, _) = compile_expression env loop (List.hd operands) in
-  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth operands 1) in
+and compile_nth env loop i l =
+  let Ti (q_i, _, _, _) = compile_expression env loop i in
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
   let q_l' = abspos q_l cs_l in
   let q_inner_just =
     (A.Dag.mk_project
@@ -737,12 +722,9 @@ and compile_nth env loop operands =
   let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
     Ti (q_outer, outer_cs, Ts.empty, vs)
     
-and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
-  assert ((List.length operands) = 2);
-  let e1 = List.hd operands in
-  let e2 = List.nth operands 1 in
-  let e1_ti = compile_expression env loop e1 in
-  let e2_ti = compile_expression env loop e2 in
+and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 operand_2 =
+  let e1_ti = compile_expression env loop operand_1 in
+  let e2_ti = compile_expression env loop operand_2 in
   let is_boxed (Ti (_, cs, _, _)) =
     match cs with
       | [`Column (1, `Surrogate)] -> true
@@ -754,7 +736,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operands =
       let (offset, inner_ti) = List.hd ts in
 	do_unbox q offset inner_ti
   in
-    match (Query2.Annotate.typeof_typed_t e1, Query2.Annotate.typeof_typed_t e2) with
+    match (Query2.Annotate.typeof_typed_t operand_1, Query2.Annotate.typeof_typed_t operand_2) with
 	(* if arguments are boxed (i.e. they have list type), we need
 	   to unbox them first *)
       | `Atom, `Atom when (is_boxed e1_ti) && (is_boxed e2_ti) ->
@@ -1110,15 +1092,13 @@ and do_row_equal loop wrapper r1 r2 =
   let q = assemble_equals items in
     Ti(q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
 
-and compile_binop env loop wrapper restype operands =
-  assert ((List.length operands) = 2);
-  let ti_1 = compile_expression env loop (List.hd operands) in
-  let ti_2 = compile_expression env loop (List.nth operands 1) in
+and compile_binop env loop wrapper restype operand_1 operand_2 =
+  let ti_1 = compile_expression env loop operand_1 in
+  let ti_2 = compile_expression env loop operand_2 in
     do_primitive_binop_ti wrapper restype ti_1 ti_2
 
-and compile_unop env loop wrapper operands =
-  assert ((List.length operands) = 1);
-  let Ti (op_q, op_cs, _, _) = compile_expression env loop (List.hd operands) in
+and compile_unop env loop wrapper operand =
+  let Ti (op_q, op_cs, _, _) = compile_expression env loop operand in
     assert (Cs.is_operand op_cs);
     let c = A.Item 1 in
     let res = A.Item 2 in
@@ -1131,11 +1111,10 @@ and compile_unop env loop wrapper operands =
     in
       Ti (q, op_cs, Ts.empty, Vs.empty)
 
-and compile_concat env loop args =
-  assert ((List.length args) = 1);
-  let Ti (q_e, _, ts_e, _) = compile_expression env loop (List.hd args) in
-    assert((List.length ts_e) = 1);
-    let Ti(q_sub, cs_sub, ts_sub, vs_sub) = Ts.lookup 1 ts_e in
+and compile_concat env loop l =
+  let Ti (q_l, _, ts_l, _) = compile_expression env loop l in
+    assert((List.length ts_l) = 1);
+    let Ti(q_sub, cs_sub, ts_sub, vs_sub) = Ts.lookup 1 ts_l in
     let c = A.Item 1 in
     let q =
       A.Dag.mk_project
@@ -1146,15 +1125,14 @@ and compile_concat env loop args =
 	      (c', iter)
 	      (A.Dag.mk_project
 		 [(iter', iter); (pos', pos); (c', c)]
-		 q_e)
+		 q_l)
 	      q_sub))
     in
       Ti(q, cs_sub, ts_sub, vs_sub)
 
-and compile_take env loop args =
-  assert ((List.length args) = 2);
-  let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
-  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
+and compile_take env loop n l =
+  let Ti(q_n, _, _, _) = compile_expression env loop n in
+  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
   let cols = (io (Cs.columns cs_l)) in
   let q_l' = abspos q_l cs_l in
   let c = A.Item 1 in
@@ -1182,10 +1160,9 @@ and compile_take env loop args =
   let ts' = slice_inner_tables q' ts_l in
     Ti(q', cs_l, ts', vs_l)
 
-and compile_drop env loop args =
-  assert ((List.length args) = 2);
-  let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
-  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
+and compile_drop env loop n l =
+  let Ti(q_n, _, _, _) = compile_expression env loop n in
+  let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
   let cols = (io (Cs.columns cs_l)) in
   let q_l_abs = abspos q_l cs_l in
   let c = A.Item 1 in
@@ -1208,9 +1185,8 @@ and compile_drop env loop args =
   let ts' = slice_inner_tables q' ts_l in
     Ti(q', cs_l, ts', vs_l)
 
-and compile_hd env loop args = 
-  assert ((List.length args) = 1);
-  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
+and compile_hd env loop l = 
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
   let q_l_abs = abspos q_l cs_l  in
   let q = 
     A.Dag.mk_project
@@ -1237,9 +1213,8 @@ and compile_hd env loop args =
     merge_error_plans q_error;
     Ti (q, cs_l, ts_l, vs_l)
 
-and compile_tl env loop args = 
-  assert ((List.length args) = 1);
-  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
+and compile_tl env loop l = 
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
   let q_l_abs = abspos q_l cs_l in
   let q =
     A.Dag.mk_project
@@ -1267,41 +1242,41 @@ and compile_tl env loop args =
     Ti (q, cs_l, ts_l, vs_l)
 
 and compile_apply env loop f args =
-  match f with
-    | "+" -> compile_binop env loop (wrap_1to1 A.Add) `IntType args
-    | "+." -> compile_binop env loop (wrap_1to1 A.Add) `FloatType args
-    | "-" -> compile_binop env loop (wrap_1to1 A.Subtract) `IntType args
-    | "-." -> compile_binop env loop (wrap_1to1 A.Subtract) `FloatType args
-    | "*" -> compile_binop env loop (wrap_1to1 A.Multiply) `IntType args
-    | "*." -> compile_binop env loop (wrap_1to1 A.Multiply) `FloatType args
-    | "/" -> compile_binop env loop (wrap_1to1 A.Divide) `IntType args
-    | "/." -> compile_binop env loop (wrap_1to1 A.Divide) `FloatType args
-    | "==" -> compile_comparison env loop wrap_eq do_table_equal do_row_equal args
-    | "<>" -> compile_comparison env loop wrap_ne do_table_equal do_row_equal args
-    | ">" -> compile_comparison env loop wrap_gt do_table_greater do_row_greater args
-    | "not" ->  compile_unop env loop wrap_not args
-    | "nth" -> compile_nth env loop args
-    | "length" -> compile_length env loop args
-    | "sum" -> compile_sum env loop args
-    | "max" -> compile_aggr_error env loop A.Max args `IntType
-    | "min" -> compile_aggr_error env loop A.Min args `IntType
-    | "avg" -> compile_aggr_error env loop A.Avg args `FloatType
-    | "take" -> compile_take env loop args
-    | "drop" -> compile_drop env loop args
-    | "zip" -> compile_zip env loop args
-    | "unzip" -> compile_unzip env loop args
-    | "concat" -> compile_concat env loop args
-    | "and" -> compile_and env loop args
-    | "or" -> compile_or env loop args
-    | "empty" -> compile_empty env loop args
-    | "hd" -> compile_hd env loop args
-    | "tl" -> compile_tl env loop args
+  match f, args with
+    | "+", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `IntType op1 op2
+    | "+.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `FloatType op1 op2
+    | "-", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `IntType op1 op2
+    | "-.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `FloatType op1 op2
+    | "*", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `IntType op1 op2
+    | "*.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `FloatType op1 op2
+    | "/", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `IntType op1 op2
+    | "/.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `FloatType op1 op2
+    | "==", [op1; op2] -> compile_comparison env loop wrap_eq do_table_equal do_row_equal op1 op2
+    | "<>", [op1; op2] -> compile_comparison env loop wrap_ne do_table_equal do_row_equal op1 op2
+    | ">", [op1; op2] -> compile_comparison env loop wrap_gt do_table_greater do_row_greater op1 op2
+    | "not", [op]->  compile_unop env loop wrap_not op
+    | "nth", [i; l] -> compile_nth env loop i l
+    | "length", [l] -> compile_length env loop l
+    | "sum", [l] -> compile_sum env loop l
+    | "max", [l] -> compile_aggr_error env loop A.Max `IntType l
+    | "min", [l] -> compile_aggr_error env loop A.Min `IntType l
+    | "avg", [l] -> compile_aggr_error env loop A.Avg `FloatType l
+    | "take", [n; l] -> compile_take env loop n l
+    | "drop", [n; l] -> compile_drop env loop n l
+    | "zip", [l1; l2] -> compile_zip env loop l1 l2
+    | "unzip", [p] -> compile_unzip env loop p
+    | "concat", [l] -> compile_concat env loop l
+    | "and", [l] -> compile_and env loop l
+    | "or", [l] -> compile_or env loop l
+    | "empty", [l] -> compile_empty env loop l
+    | "hd", [l] -> compile_hd env loop l
+    | "tl", [l] -> compile_tl env loop l
 (*    | "takeWhile" -> compile_takeWhile env loop args
     | "dropWhile" -> compile_dropWhile env loop args *)
-    | "<" | "<=" | ">=" ->
+    | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
-    | s ->
-	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
+    | s, _->
+	failwith ("CompileQuery.compile_apply: " ^ s ^ " not implemented")
 
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, ts1, vs1) = compile_expression env loop e1 in
