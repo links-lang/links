@@ -494,6 +494,28 @@ struct
       exceptions to signal absence *)
   let lookup k alist = try Some (List.assoc k alist) with NotFound _ -> None
 
+  (** return a new alist which for all entries (k, u) in left and (k', v) with k = k'
+      contains a entry (k, (u, v)) *)
+  let same_keys left right =
+    List.fold_right
+      (fun (k, v) matching ->
+	 try
+	   (k, (v, (List.assoc k right))) :: matching
+	 with NotFound _ -> matching)
+      left
+      []
+
+  (** list all key-value-pairs whose keys are in left but not in right *)
+  let missing_keys left right =
+    List.fold_right
+      (fun (k, v) missing ->
+	 if List.mem_assoc k right then
+	   missing
+	 else
+	   (k, v) :: missing)
+      left
+      []
+
 end
 include AList
 

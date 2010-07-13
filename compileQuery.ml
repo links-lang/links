@@ -19,7 +19,8 @@ let cs_of_tblinfo = function Ti (_, cs, _, _) -> cs
 
 let errors = ref None
 
-let fuse_errors q_error =
+(* merge a new error plan with the previous ones with a disjoint union *)
+let merge_error_plans q_error =
   match !errors with
     | Some q_old ->
  	errors := Some (A.Dag.mk_disjunion q_old q_error)
@@ -43,14 +44,18 @@ type aenv = tblinfo AEnv.t
 
 let incr l i = List.map (fun j -> j + i) l
 let decr l i = List.map (fun j -> j - i) l
+
 let io = List.map (fun i -> A.Item i)
 
+(* project a column onto itself (i.e. keep it) *)
 let prj col = (col, col)
 
+(* project every column in the list onto itself *)
 let prjlist = List.map prj
 
-let prjlist_map new_cols old_cols = 
-  List.map2 (fun a b -> (a, b)) new_cols old_cols
+(* project all columns in old_cols onto the corresponding columns in
+   new_cols *)
+let prjlist_map new_cols old_cols = List.combine new_cols old_cols
 
 (* project one single column old_col to all columns in new_col *)
 let prjlist_single new_cols old_col =
@@ -73,11 +78,6 @@ let res = A.Pos 8
 let res' = A.Pos 9
 let res'' = A.Pos 10
 let pos'' = A.Pos 11
-
-let incr_col = function
-  | A.Iter i -> A.Iter (i + 1)
-  | A.Pos i -> A.Pos (i + 1)
-  | A.Item i -> A.Item (i + 1)
 
 (* wrapper for binary functions/operators *)
 let wrap_1to1 f res c c' algexpr =
@@ -105,12 +105,11 @@ let wrap_eq res c c' algexpr =
 
 (* wrapper for not equal *)
 let wrap_ne res c c' algexpr =
-  let res' = incr_col res in
-    A.Dag.mk_funboolnot
-      (res, res')
-      (A.Dag.mk_funnumeq
-	 (res', (c, c'))
-	 algexpr)
+  A.Dag.mk_funboolnot
+    (res, res')
+    (A.Dag.mk_funnumeq
+       (res', (c, c'))
+       algexpr)
 
 (* wrapper for greater than *)
 let wrap_gt res c c' algexpr =
@@ -119,7 +118,8 @@ let wrap_gt res c c' algexpr =
     algexpr
 
 (* wrapper for less than *)
-let wrap_lt rescol c c' algexpr = wrap_gt rescol c' c algexpr
+let wrap_lt rescol c c' algexpr = 
+  wrap_gt rescol c' c algexpr
 
 (* wrapper for not *)
 let wrap_not res op_attr algexpr =
@@ -142,7 +142,7 @@ let wrap_agg loop q attachment =
 		q))))
 
 (* generate the algebra code for the application of a binary operator to two
-   columns. the table must not represent lists, i.e. pos must be 1 for all iters *)
+   columns. the columns represent primitive values *)
 let do_primitive_binop wrapper op1 op2 =
   let c = A.Item 1 in
   let c' = A.Item 2 in
@@ -172,6 +172,9 @@ let equal = do_primitive_binop_ti wrap_eq `BoolType
 let or_op = do_primitive_binop_ti wrap_or `BoolType
 let and_op = do_primitive_binop_ti wrap_and `BoolType
 
+(* unbox the inner tables represented by inner_ti, where
+   q_e is the outer table and surr_col is the surrogate column
+   in q_e which references entries in inner_ti *)
 let do_unbox q_e surr_col inner_ti =
   let Ti(q_sub, cs_sub, ts_sub, vs_sub) = inner_ti in
   let q_unbox =
@@ -186,6 +189,7 @@ let do_unbox q_e surr_col inner_ti =
   in
     Ti(q_unbox, cs_sub, ts_sub, vs_sub)
 
+(* *)
 let do_project field record =
   let Ti (q_r, cs_r, ts_r, vs_r) = record in
   let field_cs' = Cs.lookup_record_field cs_r field in
@@ -263,6 +267,7 @@ let do_list_or loop (Ti (q, cs, _, _)) =
   let q'' = wrap_agg loop q' (A.Bool false) in
     Ti (q'', [`Column (1, `BoolType)], Ts.empty, Vs.empty)
 
+(* join two inner tables together and compute new surrogate keys *)
 let combine_inner_tables q_l q_r =
   A.Dag.mk_rownum 
     (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
@@ -274,6 +279,8 @@ let combine_inner_tables q_l q_r =
 	  (ord, A.Nat 2n)
 	  q_r))
 
+(* use the new surrogate keys from q_outer in column surr_col in the 
+   nested plan q_inner *)
 let renumber_inner_table q_outer q_inner surr_col = 
   A.Dag.mk_thetajoin
     [(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
@@ -281,25 +288,6 @@ let renumber_inner_table q_outer q_inner surr_col =
     (A.Dag.mk_project
        [(ord', ord); (item'', item'); (c', A.Item surr_col)]
        q_outer)
-
-let pair_corresponding left right =
-  List.fold_right
-    (fun (k, v) matching ->
-       try
-	 (k, (v, (List.assoc k right))) :: matching
-       with NotFound _ -> matching)
-    left
-    []
-
-let missing left right =
-  List.fold_right
-    (fun (k, v) missing ->
-       if List.mem_assoc k right then
-	 missing
-       else
-	 (k, v) :: missing)
-    left
-    []
 
 (* project all columns which do _not_ contain reference values onto itself and use the fresh
    surrogate values in new_surr in all columns which _do_ contain reference values *)
@@ -318,10 +306,11 @@ let refresh_surr_cols cs ts_l ts_r  vs_l vs_r new_surr =
   (* use new keys in ts surrogate columns *)
   @ (prjlist_single (io ts_cols) new_surr)
 
+(* append the corresponding vs entries from vs_l and vs_r *)
 let rec append_vs q_outer vs_l vs_r =
-  let m = List.map (append_matching_vs q_outer) (pair_corresponding vs_l vs_r) in
-  let l = List.map (append_missing_vs q_outer (A.Nat 1n)) (missing vs_l vs_r) in
-  let r = List.map (append_missing_vs q_outer (A.Nat 2n)) (missing vs_r vs_l) in
+  let m = List.map (append_matching_vs q_outer) (same_keys vs_l vs_r) in
+  let l = List.map (append_missing_vs q_outer (A.Nat 1n)) (missing_keys vs_l vs_r) in
+  let r = List.map (append_missing_vs q_outer (A.Nat 2n)) (missing_keys vs_r vs_l) in
     List.sort compare (m @ l @ r)
 
 and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
@@ -362,9 +351,9 @@ and append_missing_vs q_outer ord_val ((refcol, tag), ti) =
     (refcol, tag), Ti (q_refreshed, cs_l, ts, vs)
 
 and append_ts q_outer ts_l ts_r =
-  let m = List.map (append_matching_ts q_outer) (pair_corresponding ts_l ts_r) in
-  let l = List.map (append_missing_ts q_outer (A.Nat 1n)) (missing ts_l ts_r) in
-  let r = List.map (append_missing_ts q_outer (A.Nat 2n)) (missing ts_r ts_l) in
+  let m = List.map (append_matching_ts q_outer) (same_keys ts_l ts_r) in
+  let l = List.map (append_missing_ts q_outer (A.Nat 1n)) (missing_keys ts_l ts_r) in
+  let r = List.map (append_missing_ts q_outer (A.Nat 2n)) (missing_keys ts_r ts_l) in
     List.sort compare (m @ l @ r)
 
 and append_matching_ts (q_outer : A.Dag.dag ref) (refcol, (ti_l, ti_r)) =
@@ -404,27 +393,58 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
   let vs = append_vs q_combined vs_l [] in
     refcol, Ti (q_refreshed, cs_l, ts, vs)
 
-let rec suse q_pase subs : ((int * tblinfo) list) =
-  if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
-    match subs with
-      | (offset, (Ti(q, cs, ts, vs))) :: subs ->
-	  let q' = 
-	    A.Dag.mk_project
-	      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs))))
-	      (A.Dag.mk_eqjoin
-		 (iter, iter')
-		 q
-		 (A.Dag.mk_project
-		    [(iter', A.Item offset)]
-		    q_pase))
-	  in
-	    [(offset, (Ti(q', cs, (suse q' ts), vs)))] @ (suse q_pase subs)
-      | [] ->
-	  []
-  else
-    subs
+(* only keep those tuples in an nested table which are actually referenced from the
+   outer table *)
+let rec slice_inner_tables (q_outer : A.Dag.dag ref) (ts : ts) : ts =
 
-(* loop-lift q by map *)
+  let slice (surr_col, Ti (q_inner, cs_inner, ts_inner, vs_inner)) =
+    let q_inner' = 
+      A.Dag.mk_project
+	([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_inner))))
+	(A.Dag.mk_eqjoin
+	   (iter, iter')
+	   q_inner
+	   (A.Dag.mk_project
+	      [(iter', A.Item surr_col)]
+	      q_outer))
+    in
+      (surr_col, Ti (q_inner', cs_inner, (slice_inner_tables q_inner' ts_inner), vs_inner))
+  in
+
+    if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
+      List.map slice ts
+    else
+      ts
+
+(* derive an iteration context from the list represented by q and map
+   q into this new iteration context *)
+let map_forward q cs =
+  let q_renumbered = 
+    A.Dag.mk_rownum
+      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
+      q
+  in
+
+  let q_v = 
+    A.Dag.mk_attach
+      (pos, A.Nat 1n)
+      (A.Dag.mk_project
+	 ((iter, inner) :: (prjlist (io (Cs.columns cs))))
+	 q_renumbered)
+  in
+  let map =
+    A.Dag.mk_project
+      [(outer, iter); prj inner]
+      q_renumbered
+  in
+  let loop =
+    A.Dag.mk_project
+      [prj iter]
+      q_v
+  in
+    (q_v, map, loop)
+
+(* lift q into the new iteration context represented by map *)
 let lift map (Ti (q, cs, ts, vs)) =
   let q' =
     (A.Dag.mk_project
@@ -463,33 +483,6 @@ let abspos q cols =
 (* compute absolute positions for a tblinfo *)
 let abspos_ti (Ti (q, cs, ts, vs)) =
   Ti ((abspos q (io (Cs.columns cs))), cs, ts, vs)
-
-(* derive an iteration context from the list represented by q *)
-let iterations q cs =
-  let q_renumbered = 
-    A.Dag.mk_rownum
-      (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-      q
-  in
-
-  let q_v = 
-    A.Dag.mk_attach
-      (pos, A.Nat 1n)
-      (A.Dag.mk_project
-	 ((iter, inner) :: (prjlist (io (Cs.columns cs))))
-	 q_renumbered)
-  in
-  let map =
-    A.Dag.mk_project
-      [(outer, iter); prj inner]
-      q_renumbered
-  in
-  let loop =
-    A.Dag.mk_project
-      [prj iter]
-      q_v
-  in
-    (q_v, map, loop)
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
@@ -737,7 +730,7 @@ and compile_nth env loop operands =
 	    empty_iterations))
   in
   let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate), `Atom)] in
-  let ts_l' = suse q_inner_just ts_l in
+  let ts_l' = slice_inner_tables q_inner_just ts_l in
   let vs = [((2, "Just"), Ti (q_inner_just, cs_l, ts_l', vs_l));
 	    ((2, "Nothing"), ti_inner_nothing)] in
   let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
@@ -1011,7 +1004,6 @@ and do_table_equal loop wrapper l1 l2 =
        Ti (result_backmapped, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
   in
 
-	
   let l1_abs = abspos_ti l1 in
   let l2_abs = abspos_ti l2 in
   let l1_len = do_length loop l1_abs in
@@ -1186,7 +1178,7 @@ and compile_take env loop args =
 			(one, A.Int (Num.Int 1))
 			q_n))))))
        in
-  let ts' = suse q' ts_l in
+  let ts' = slice_inner_tables q' ts_l in
     Ti(q', cs_l, ts', vs_l)
 
 and compile_drop env loop args =
@@ -1212,7 +1204,7 @@ and compile_drop env loop args =
 		  [(iter', iter); (c', c)]
 		  q_n))))
   in
-  let ts' = suse q' ts_l in
+  let ts' = slice_inner_tables q' ts_l in
     Ti(q', cs_l, ts', vs_l)
 
 and compile_hd env loop args = 
@@ -1240,7 +1232,7 @@ and compile_hd env loop args =
 	       [prj iter]
 	       q_l)))
   in
-    fuse_errors q_error;
+    merge_error_plans q_error;
     Ti (q, cs_l, ts_l, vs_l)
 
 and compile_apply env loop f args =
@@ -1272,15 +1264,16 @@ and compile_apply env loop f args =
     | "or" -> compile_or env loop args
     | "empty" -> compile_empty env loop args
     | "hd" -> compile_hd env loop args
+(*    | "takeWhile" -> compile_takeWhile env loop args
+    | "dropWhile" -> compile_dropWhile env loop args *)
     | "<" | "<=" | ">=" ->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s ->
 	failwith ("CompileQuery.op_dispatch: " ^ s ^ " not implemented")
 
-
 and compile_for env loop v e1 e2 order_criteria =
   let Ti (q1, cs1, ts1, vs1) = compile_expression env loop e1 in
-  let (q_v, map, loop_v) = iterations q1 cs1 in
+  let (q_v, map, loop_v) = map_forward q1 cs1 in
   let env = AEnv.map (lift map) env in
   let env_v = AEnv.bind env (v, Ti (q_v, cs1, ts1, vs1)) in
   let Ti (q2, cs2, ts2, vs2) = compile_expression env_v loop_v e2 in
@@ -1498,7 +1491,7 @@ and compile_if2 env loop e1 e2 =
 	      [(iter', iter)]
 	      loop))
     in
-    let ts' = suse q ts in
+    let ts' = slice_inner_tables q ts in
       Ti (q', cs, ts', vs)
   in
   (* condition *)
@@ -1530,7 +1523,7 @@ and compile_if env loop e1 e2 e3 =
 	      [(iter', iter)]
 	      loop))
     in
-    let ts' = suse q ts in
+    let ts' = slice_inner_tables q ts in
       Ti (q', cs, ts', vs)
   in
   (* condition *)
@@ -1701,7 +1694,7 @@ and compile_case env loop value cases default =
   (* compile value to be matched *)
   let Ti (q_v, cs_v, _ts_v, vs_v) = compile_expression env loop value in
 
-  let (q_v', map, _loop_v) = iterations q_v cs_v in
+  let (q_v', map, _loop_v) = map_forward q_v cs_v in
 
   let env' = AEnv.map (lift map) env in
 
@@ -1759,14 +1752,14 @@ and compile_case env loop value cases default =
     List.fold_left union (List.hd all_results) (drop 1 all_results) 
 
 and compile_wrong loop =
-  let q_e = 
+  let q_error = 
     A.Dag.mk_project
       [prj (A.Item 1)]
       (A.Dag.mk_attach
  	 (A.Item 1, A.String "something is wrong")
  	 loop)
   in
-    fuse_errors q_e;
+    merge_error_plans q_error;
     Ti (A.Dag.mk_emptytbl, [`Column (1, `IntType)], Ts.empty, Vs.empty)
 
 and compile_expression env loop e : tblinfo =

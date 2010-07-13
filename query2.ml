@@ -309,6 +309,10 @@ struct
 	  `Primitive "min"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "avg" = f ->
 	  `Primitive "avg"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "takeWhile" = f ->
+	  `Primitive "takeWhile"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "dropWhile" = f ->
+	  `Primitive "dropWhile"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -743,7 +747,7 @@ module Annotate = struct
 		let n' = transform env n in
 		let l' = aot `List env l in
 		  `Apply ((f, [n'; l']), `Atom)
-	    | "take" | "drop" ->
+	    | "take" | "drop" | "dropWhile" | "takeWhile" ->
 		(* `Atom -> `List -> `List *)
 		let (n, l) = 
 		  (match args with 
@@ -791,10 +795,9 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Annot
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
+      if Settings.get_value Basicsettings.Ferry.print_backend_expression then
+	print_endline ("query2:\n "^string_of_t v);
       let v_annot = Annotate.transform Env.Int.empty v in
 	if Settings.get_value Basicsettings.Ferry.print_backend_expression then
-	  begin
-	    print_endline ("query2:\n "^string_of_t v);
-	    print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot)
-	  end;
+	  print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
 	(v_annot, (Annotate.typeof_typed_t v_annot))
