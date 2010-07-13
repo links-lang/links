@@ -471,7 +471,8 @@ let rec omap map sort_criteria sort_cols =
     | _ -> assert false
 
 (* compute absolute positions for q *)
-let abspos q cols =
+let abspos q cs =
+  let cols = io (Cs.columns cs) in
   A.Dag.mk_project
     ([prj iter; prj pos] @ (prjlist cols))
     (A.Dag.mk_rownum
@@ -482,7 +483,7 @@ let abspos q cols =
 
 (* compute absolute positions for a tblinfo *)
 let abspos_ti (Ti (q, cs, ts, vs)) =
-  Ti ((abspos q (io (Cs.columns cs))), cs, ts, vs)
+  Ti ((abspos q cs), cs, ts, vs)
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
@@ -543,8 +544,8 @@ and compile_zip env loop args =
   assert ((List.length args) = 2);
   let Ti (q_e1, cs_e1, ts_e1, vs_e1) = compile_expression env loop (List.hd args) in
   let Ti (q_e2, cs_e2, ts_e2, vs_e2) = compile_expression env loop (List.nth args 1) in
-  let q_e1' = abspos q_e1 (io (Cs.columns cs_e1)) in
-  let q_e2' = abspos q_e2 (io (Cs.columns cs_e2)) in
+  let q_e1' = abspos q_e1 cs_e1 in
+  let q_e2' = abspos q_e2 cs_e2 in
     do_zip (Ti (q_e1', cs_e1, ts_e1, vs_e1)) (Ti (q_e2', cs_e2, ts_e2, vs_e2))
 
 and compile_unzip env loop args =
@@ -686,7 +687,7 @@ and compile_nth env loop operands =
   assert ((List.length operands) = 2);
   let Ti (q_i, _, _, _) = compile_expression env loop (List.hd operands) in
   let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth operands 1) in
-  let q_l' = abspos q_l (io (Cs.columns cs_l)) in
+  let q_l' = abspos q_l cs_l in
   let q_inner_just =
     (A.Dag.mk_project
        ([prj iter; prj pos] @ prjlist (io (Cs.columns cs_l)))
@@ -1155,7 +1156,7 @@ and compile_take env loop args =
   let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
   let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
   let cols = (io (Cs.columns cs_l)) in
-  let q_l' = abspos q_l cols in
+  let q_l' = abspos q_l cs_l in
   let c = A.Item 1 in
   let one = A.Item 2 in
   let q' = 
@@ -1186,7 +1187,7 @@ and compile_drop env loop args =
   let Ti(q_n, _, _, _) = compile_expression env loop (List.hd args) in
   let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.nth args 1) in
   let cols = (io (Cs.columns cs_l)) in
-  let q_l' = abspos q_l cols in
+  let q_l' = abspos q_l cs_l in
   let c = A.Item 1 in
   let q' =
     A.Dag.mk_project
@@ -1210,6 +1211,7 @@ and compile_drop env loop args =
 and compile_hd env loop args = 
   assert ((List.length args) = 1);
   let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
+  let q_l_abs = abspos q_l cs_l  in
   let q = 
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_l))))
@@ -1219,7 +1221,7 @@ and compile_hd env loop args =
 	    (res, (pos, pos'))
 	    (A.Dag.mk_attach
 	       (pos', A.Nat 1n)
-	       q_l)))
+	       q_l_abs)))
   in
   let q_error =
     A.Dag.mk_project
@@ -1230,10 +1232,17 @@ and compile_hd env loop args =
 	    loop
 	    (A.Dag.mk_project
 	       [prj iter]
-	       q_l)))
+	       q_l_abs)))
   in
     merge_error_plans q_error;
     Ti (q, cs_l, ts_l, vs_l)
+
+(*
+and compile_tl env loop args = 
+  assert ((List.length args) = 2);
+  let Ti (q_l, cs_l, ts_l, vs_l) = compile_expression env loop (List.hd args) in
+    let q_l_abs
+*)
 
 and compile_apply env loop f args =
   match f with
