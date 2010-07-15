@@ -237,6 +237,18 @@ struct
     let error msg = raise (DbEvaluationError msg) in
       Printf.kprintf error fmt
 
+  let reduce_append vs =
+    let vs' = 
+      (concat_map
+	 (function
+	    | `Append vs -> vs
+	    | v -> [v])
+	 vs)
+    in
+      match vs' with
+	| [`Singleton v] -> `Singleton v
+	| vs -> `Append vs
+
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
     Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'  
@@ -381,9 +393,9 @@ struct
     | `Primitive "Cons", [x; `Append []] ->
 	`Singleton x
     | `Primitive "Cons", [x; xs] ->
-	`Append [`Singleton x; xs]
+	reduce_append [`Singleton x; xs]
     | `Primitive "Concat", [xs; ys] ->
-	`Append [xs; ys]
+	reduce_append [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
         begin
           match f with

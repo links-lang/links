@@ -352,10 +352,12 @@ module Eval = struct
                 Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
 	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
+	  let time = Unix.gettimeofday () in
 	  let (exptree, imptype) = Query2.compile env (range, e) in
 	    match !Query2.used_database with
 	      | Some db -> 
 		  let (result_algebra_bundle, error_bundle) = CompileQuery.compile exptree in
+		    Debug.f "time %f" ((Unix.gettimeofday ()) -. time);
 		    Debug.print ">>>> execute error plans";
 		    if opt_app (Heapresult.execute_errors db) true error_bundle then
 		      begin
