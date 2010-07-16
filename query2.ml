@@ -23,67 +23,8 @@ type t =
     | `Var of Var.var | `Constant of Constant.constant 
     | `Case of t * (Var.var * t) name_map * (Var.var * t) option
     | `Wrong ]
-
 and env = Value.env * t Env.Int.t
     deriving (Show)
-
-let unbox_xml =
-  function
-    | `XML xmlitem -> xmlitem
-    | _ -> failwith ("failed to unbox XML")
-
-let rec unbox_list =
-  function
-    | `Append vs -> concat_map unbox_list vs
-    | `Singleton v -> [v]
-    | _ -> failwith ("failed to unbox list")
-
-let unbox_string =
-  function
-    | `Constant (`String s) -> s
-    | (`Append _ | `Singleton _) as v ->
-        implode
-          (List.map
-             (function
-                | `Constant (`Char c) -> c
-                | _ -> failwith ("failed to unbox string"))
-             (unbox_list v))
-    | _ -> failwith ("failed tounbox_string")
-
-(** Returns which database was used if any.
-
-   Currently this assumes that at most one database is used.
-*)
-(*
-let used_database v : Value.database option =
-  let rec generators =
-    function
-      | [] -> None
-      | (_x, source)::gs ->
-          begin
-            match used source with
-              | None -> generators gs
-              | Some db -> Some db
-          end
-  and used =
-    function
-      | `For (gs, _os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
-      | _ -> None in
-  let rec comprehensions =
-    function
-      | [] -> None
-      | v::vs ->
-          begin
-            match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
-          end
-  in
-    match v with
-      | `Append vs -> comprehensions vs
-      | v -> used v
-*)
 
 module S =
 struct
@@ -139,6 +80,127 @@ struct
   let t = Show.show show_pt -<- pt_of_t
 end
 let string_of_t = S.t
+
+let unbox_xml =
+  function
+    | `XML xmlitem -> xmlitem
+    | _ -> failwith ("failed to unbox XML")
+
+let rec unbox_list =
+  function
+    | `Append vs -> concat_map unbox_list vs
+    | `Singleton v -> [v]
+    | _ -> failwith ("failed to unbox list")
+
+let unbox_string =
+  function
+    | `Constant (`String s) -> s
+    | (`Append _ | `Singleton _) as v ->
+        implode
+          (List.map
+             (function
+                | `Constant (`Char c) -> c
+                | _ -> failwith ("failed to unbox string"))
+             (unbox_list v))
+    | _ -> failwith ("failed tounbox_string")
+
+let unbox_pair : t -> t * t = function
+  | `Extend (None, r) ->
+      begin
+	try
+	  StringMap.find "2" r, StringMap.find "1" r
+	with
+	    _ -> failwith "failed to unbox pair"
+      end
+  | _ -> failwith "failed to unbox pair"
+
+let is_dotstar p = 
+  match unbox_pair p with
+    | `Variant ("Any", _), `Variant ("Star", _) -> true
+    | _ -> false
+
+let quote s = 
+  let special = ['%'; '_'; '*'; '?'; '('; ')'; '['; ']'] in
+  let contains c = List.exists (fun x -> x = c) special in
+  let l = 
+    List.map 
+      (function 
+	 | x when contains x -> "\\" ^ (string_of_char x)
+	 | x -> string_of_char x)
+      (explode s)
+  in
+    mapstrcat "" identity l
+
+let rec similarify p = 
+  match p with
+    | `Variant ("Seq", l) -> 
+	mapstrcat "" similarify (unbox_list l)
+    | `Variant ("Range", p) -> 
+	let f, t = unbox_pair p in
+	  "[" ^ (unbox_string f) ^ "-" ^ (unbox_string t) ^ "]"
+    | `Variant ("Simply", s) ->
+	unbox_string s
+    | `Variant ("Quote", s) ->
+	quote (similarify s)
+    | `Variant ("Any", _) -> 
+	"_"
+    | `Variant ("StartAnchor", _) -> 
+	""
+    | `Variant ("EndAnchor", _) -> 
+	""
+    | `Variant ("Alternate", p) ->
+	let f, s = unbox_pair p in
+	  (similarify f) ^ "|" ^ (similarify s)
+    | `Variant ("Group", s) ->
+	"(" ^ (similarify s) ^ ")"
+    | `Variant ("Repeat", p) when is_dotstar p ->
+	"%"
+    | `Variant ("Repeat", p) ->
+	let f, s = unbox_pair p in
+	  (similarify f) ^ (similarify s)
+    | `Variant ("Plus", _) ->
+	"+"
+    | `Variant ("Question", _) ->
+	"?"
+    | `Variant ("Star", _) ->
+	"*"
+    | t -> Debug.print (string_of_t t);
+	assert false
+
+(** Returns which database was used if any.
+
+   Currently this assumes that at most one database is used.
+*)
+(*
+let used_database v : Value.database option =
+  let rec generators =
+    function
+      | [] -> None
+      | (_x, source)::gs ->
+          begin
+            match used source with
+              | None -> generators gs
+              | Some db -> Some db
+          end
+  and used =
+    function
+      | `For (gs, _os, _body) -> generators gs
+      | `Table ((db, _), _, _) -> Some db
+      | _ -> None in
+  let rec comprehensions =
+    function
+      | [] -> None
+      | v::vs ->
+          begin
+            match used v with
+              | None -> comprehensions vs
+              | Some db -> Some db
+          end
+  in
+    match v with
+      | `Append vs -> comprehensions vs
+      | v -> used v
+*)
 
 (** Return the type of rows associated with a top-level non-empty expression *)
 (*
@@ -460,6 +522,9 @@ struct
 	`If (`Apply (">", [e2; e1]),
 	     `Constant (`Bool true),
 	     Some (`Apply ("==", [e1; e2])))
+    | `Primitive "tilde", [s; p] -> 
+	let pattern_string = `Constant (`String (similarify p)) in
+	`Apply ("tilde", [s; pattern_string])
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, Some e), args ->
@@ -469,6 +534,7 @@ struct
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
 (*    | `Closure (bound_vars, computation),  *)
+
     | (f, args) -> 
 	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
 	eval_error "Application of non-function"
@@ -730,7 +796,7 @@ module Annotate = struct
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "not" -> 
+	    | "/" | "/." | "not" | "tilde" -> 
 		(* these operators are only ever applied to atomic
 		   values, so no need to annotate the arguments *)
 		(* `Atom -> `Atom -> `Atom *)

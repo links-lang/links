@@ -1,5 +1,4 @@
 open Utility
-
 open Itbls
 
 module A = Algebra
@@ -1241,6 +1240,25 @@ and compile_tl env loop l =
     merge_error_plans q_error;
     Ti (q, cs_l, ts_l, vs_l)
 
+and compile_tilde env loop s p =
+  let Ti (q_s, cs_s, _, _) = compile_expression env loop s in
+    assert (Cs.is_operand cs_s);
+    (* assume that p is a constant string *)
+    let p = 
+      match p with
+	| `Constant ((`String p), _) -> p
+	| _ -> assert false
+    in
+    let q = A.Dag.mk_project
+      [prj iter; prj pos; (A.Item 1, res)]
+      (A.Dag.mk_fun1to1
+	 (A.SimilarTo, res, [A.Item 1; A.Item 2])
+	 (A.Dag.mk_attach
+	    (A.Item 2, A.String p)
+	    q_s))
+    in
+      Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+
 and compile_apply env loop f args =
   match f, args with
     | "+", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `IntType op1 op2
@@ -1271,6 +1289,7 @@ and compile_apply env loop f args =
     | "empty", [l] -> compile_empty env loop l
     | "hd", [l] -> compile_hd env loop l
     | "tl", [l] -> compile_tl env loop l
+    | "tilde", [s; p] -> compile_tilde env loop s p
 (*    | "takeWhile" -> compile_takeWhile env loop args
     | "dropWhile" -> compile_dropWhile env loop args *)
     | "<", _ | "<=", _ | ">=", _->
