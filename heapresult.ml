@@ -304,10 +304,14 @@ and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type =
 	
 and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), cs, tsr, vsr)) =
   (* Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples; *)
-  (* Debug.print (Cs.print cs); *)
+  (* Debug.print (Cs.show cs); *)
   let rec loop_tuples i row_values inner_offsets =
+    (* Debug.f "loop_tuples i %d" i; *)
     if i = nr_tuples then
-      (i - 1), (List.rev row_values)
+      if i = 0 then
+	(0, (List.rev row_values))
+      else
+	(i - 1), (List.rev row_values)
     else
       let iter_val = int_of_string (iter i) in
 	if surrogate_key < iter_val then
