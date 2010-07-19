@@ -114,58 +114,78 @@ let unbox_pair : t -> t * t = function
       end
   | _ -> failwith "failed to unbox pair"
 
-let is_dotstar p = 
-  match unbox_pair p with
-    | `Variant ("Any", _), `Variant ("Star", _) -> true
-    | _ -> false
+module QueryRegex = struct
 
-let quote s = 
-  let special = ['%'; '_'; '*'; '?'; '('; ')'; '['; ']'] in
-  let contains c = List.exists (fun x -> x = c) special in
-  let l = 
-    List.map 
-      (function 
-	 | x when contains x -> "\\" ^ (string_of_char x)
-	 | x -> string_of_char x)
-      (explode s)
-  in
-    mapstrcat "" identity l
+  let is_dotstar p = 
+    match unbox_pair p with
+      | `Variant ("Any", _), `Variant ("Star", _) -> true
+      | _ -> false
 
-let rec similarify p = 
-  match p with
-    | `Variant ("Seq", l) -> 
-	mapstrcat "" similarify (unbox_list l)
-    | `Variant ("Range", p) -> 
-	let f, t = unbox_pair p in
-	  "[" ^ (unbox_string f) ^ "-" ^ (unbox_string t) ^ "]"
-    | `Variant ("Simply", s) ->
-	unbox_string s
-    | `Variant ("Quote", s) ->
-	quote (similarify s)
-    | `Variant ("Any", _) -> 
-	"_"
-    | `Variant ("StartAnchor", _) -> 
-	""
-    | `Variant ("EndAnchor", _) -> 
-	""
-    | `Variant ("Alternate", p) ->
-	let f, s = unbox_pair p in
-	  (similarify f) ^ "|" ^ (similarify s)
-    | `Variant ("Group", s) ->
-	"(" ^ (similarify s) ^ ")"
-    | `Variant ("Repeat", p) when is_dotstar p ->
-	"%"
-    | `Variant ("Repeat", p) ->
-	let f, s = unbox_pair p in
-	  (similarify f) ^ (similarify s)
-    | `Variant ("Plus", _) ->
-	"+"
-    | `Variant ("Question", _) ->
-	"?"
-    | `Variant ("Star", _) ->
-	"*"
-    | t -> Debug.print (string_of_t t);
-	assert false
+  let quote p = 
+    match p with
+      | `Constant `String s -> 
+	  let special = ['%'; '_'; '*'; '?'; '('; ')'; '['; ']'] in
+	  let contains c = List.exists (fun x -> x = c) special in
+	  let l = 
+	    List.map 
+	      (function 
+		 | x when contains x -> "\\" ^ (string_of_char x)
+		 | x -> string_of_char x)
+	      (explode s)
+	  in
+	    `Constant (`String (mapstrcat "" identity l))
+      | p ->
+	  `Apply ("quote", [p])
+
+  let unquote = function
+      | `Apply ("quote", [p']) -> p'
+      | p -> p
+
+    let append_patterns p1 p2 =
+      match p1, p2 with
+      | `Constant (`String s1), `Constant (`String s2) -> `Constant (`String (s1 ^ s2))
+      | `Constant (`String _), _ 
+      | _, `Constant (`String _) -> `Append [p1; p2]
+      |  p1, p2 -> quote (`Append [unquote p1; unquote p2])
+
+  let rec similarify (p : t) : t = 
+    match p with
+      | `Variant ("Seq", l) -> 
+	  let ps = List.map similarify (unbox_list l) in
+	    assert ((List.length ps) >= 1);
+	    List.fold_left append_patterns (List.hd ps) (drop 1 ps) (
+      | `Variant ("Range", p) -> 
+	  let f, s = unbox_pair p in
+	    append_patterns f s
+      | `Variant ("Simply", e) ->
+	  e
+      | `Variant ("Quote", s) ->
+	  quote (similarify s)
+      | `Variant ("Any", _) -> 
+	  `Constant (`String "_")
+      | `Variant ("StartAnchor", _) -> 
+	  `Constant (`String "")
+      | `Variant ("EndAnchor", _) -> 
+	  `Constant (`String "")
+      | `Variant ("Alternate", p) ->
+	  let f, s = unbox_pair p in
+	    append_patterns (similarify f) (append_patterns (`Constant (`String "|")) (similarify s))
+      | `Variant ("Group", s) ->
+	  append_patterns (`Constant (`String "(")) (append_patterns (similarify s) (`Constant (`String ")")))
+      | `Variant ("Repeat", p) when is_dotstar p ->
+	  `Constant (`String "%")
+      | `Variant ("Repeat", p) ->
+	  let f, s = unbox_pair p in
+	    append_patterns (similarify f) (similarify s)
+      | `Variant ("Plus", _) ->
+	  `Constant (`String "+")
+      | `Variant ("Question", _) ->
+	  `Constant (`String "?")
+      | `Variant ("Star", _) ->
+	  `Constant (`String "*")
+      | t -> Debug.print (string_of_t t);
+	  assert false
+end
 
 (** Returns which database was used if any.
 
@@ -456,6 +476,10 @@ struct
 	`Singleton x
     | `Primitive "Cons", [x; xs] ->
 	reduce_append [`Singleton x; xs]
+(*
+    | `Primitive "Concat", [`Constant (`String _) as l; `Constant (`String _) as r] ->
+	`Apply ("string_append", [l; r])
+*)
     | `Primitive "Concat", [xs; ys] ->
 	reduce_append [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
@@ -523,8 +547,8 @@ struct
 	     `Constant (`Bool true),
 	     Some (`Apply ("==", [e1; e2])))
     | `Primitive "tilde", [s; p] -> 
-	let pattern_string = `Constant (`String (similarify p)) in
-	`Apply ("tilde", [s; pattern_string])
+	let pattern = QueryRegex.similarify p in
+	`Apply ("tilde", [s; pattern])
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, Some e), args ->
@@ -796,7 +820,7 @@ module Annotate = struct
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "not" | "tilde" -> 
+	    | "/" | "/." | "not" | "tilde" | "quote" -> 
 		(* these operators are only ever applied to atomic
 		   values, so no need to annotate the arguments *)
 		(* `Atom -> `Atom -> `Atom *)

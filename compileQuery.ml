@@ -1242,22 +1242,32 @@ and compile_tl env loop l =
 
 and compile_tilde env loop s p =
   let Ti (q_s, cs_s, _, _) = compile_expression env loop s in
+  let Ti (q_p, cs_p, _, _) = compile_expression env loop p in
     assert (Cs.is_operand cs_s);
-    (* assume that p is a constant string *)
-    let p = 
-      match p with
-	| `Constant ((`String p), _) -> p
-	| _ -> assert false
-    in
-    let q = A.Dag.mk_project
-      [prj iter; prj pos; (A.Item 1, res)]
-      (A.Dag.mk_fun1to1
-	 (A.SimilarTo, res, [A.Item 1; A.Item 2])
-	 (A.Dag.mk_attach
-	    (A.Item 2, A.String p)
-	    q_s))
+    assert (Cs.is_operand cs_p);
+    let q = 
+      A.Dag.mk_project
+	[prj iter; prj pos; (A.Item 1, res)]
+	(A.Dag.mk_fun1to1
+	   (A.SimilarTo, res, [A.Item 1; A.Item 2])
+	   (A.Dag.mk_project
+	      [prj iter; prj pos; prj (A.Item 1); prj (A.Item 2)]
+	      (A.Dag.mk_select
+		 res
+		 (A.Dag.mk_funnumeq
+		    (res, (pos, pos'))
+		    (A.Dag.mk_eqjoin
+		       (iter, iter')
+		       q_s
+		       (A.Dag.mk_project
+			  [(iter', iter); (pos', pos); (A.Item 2, A.Item 1)]
+			  q_p))))))
     in
       Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+
+and compile_quote env loop s =
+  let Ti (_q_s, _cs_s, _, _) = compile_expression env loop s in
+    failwith "compile_quote not implemented"
 
 and compile_apply env loop f args =
   match f, args with
@@ -1290,6 +1300,7 @@ and compile_apply env loop f args =
     | "hd", [l] -> compile_hd env loop l
     | "tl", [l] -> compile_tl env loop l
     | "tilde", [s; p] -> compile_tilde env loop s p
+    | "quote", [s] -> compile_quote env loop s
 (*    | "takeWhile" -> compile_takeWhile env loop args
     | "dropWhile" -> compile_dropWhile env loop args *)
     | "<", _ | "<=", _ | ">=", _->

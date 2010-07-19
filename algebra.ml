@@ -41,7 +41,7 @@ let const = function
 (* aggregate functions *)
 type aggr = Avg | Max | Min | Sum | All
 
-type func = Add | Subtract | Multiply | Divide | Modulo | Contains | SimilarTo
+type func = Add | Subtract | Multiply | Divide | Modulo | Contains | SimilarTo | Concat
 
 (* relation operators *)
 type join_comparison = Eq | Gt | Ge | Lt | Le | Ne
@@ -176,6 +176,7 @@ let string_of_func = function
   | Modulo -> "modulo"
   | Contains -> "fn:contains"
   | SimilarTo -> "fn:similar_to"
+  | Concat -> "fn:concat"
 
 let string_of_aggr = function
   | Max -> "max"
