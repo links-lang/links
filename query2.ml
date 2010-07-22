@@ -145,8 +145,10 @@ module QueryRegex = struct
       match p1, p2 with
       | `Constant (`String s1), `Constant (`String s2) -> `Constant (`String (s1 ^ s2))
       | `Constant (`String _), _ 
-      | _, `Constant (`String _) -> `Append [p1; p2]
-      |  p1, p2 -> quote (`Append [unquote p1; unquote p2])
+	  (* HACK using string_append won't work in general. use a hybrid representation
+	     as [Char]/string and unbox/box as necessary *)
+      | _, `Constant (`String _) -> `Apply ("string_append", [p1; p2])
+      |  p1, p2 -> quote (`Apply ("string_append", [unquote p1; unquote p2]))
 
   let rec similarify (p : t) : t = 
     match p with
@@ -476,10 +478,10 @@ struct
 	`Singleton x
     | `Primitive "Cons", [x; xs] ->
 	reduce_append [`Singleton x; xs]
-(*
+	  (* HACK using string_append won't work in general. use a hybrid representation
+	     as [Char]/string and unbox/box as necessary *)
     | `Primitive "Concat", [`Constant (`String _) as l; `Constant (`String _) as r] ->
 	`Apply ("string_append", [l; r])
-*)
     | `Primitive "Concat", [xs; ys] ->
 	reduce_append [xs; ys]
     | `Primitive "ConcatMap", [f; xs] ->
@@ -820,7 +822,7 @@ module Annotate = struct
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "not" | "tilde" | "quote" -> 
+	    | "/" | "/." | "not" | "tilde" | "quote" | "string_append" -> 
 		(* these operators are only ever applied to atomic
 		   values, so no need to annotate the arguments *)
 		(* `Atom -> `Atom -> `Atom *)
