@@ -41,6 +41,7 @@ let const = function
 (* aggregate functions *)
 type aggr = Avg | Max | Min | Sum | All
 
+(* 1to1 functions *)
 type func = Add | Subtract | Multiply | Divide | Modulo | Contains | SimilarTo | Concat
 
 (* relation operators *)

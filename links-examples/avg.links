@@ -1,0 +1,11 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+var a = query {
+      switch(avg(for (p <-- players_table) [p.eff])) {
+      		     case Just(av) -> av
+		     case Nothing -> 42.4
+      }
+};
+
+a

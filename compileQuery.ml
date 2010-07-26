@@ -16,6 +16,8 @@ and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
 let q_of_tblinfo = function Ti (q, _, _, _) -> q
 let cs_of_tblinfo = function Ti (_, cs, _, _) -> cs
 
+(* module-global reference that stores the global error plan of the generated
+   plan bundle (if there is one) *)
 let errors = ref None
 
 (* merge a new error plan with the previous ones with a disjoint union *)
@@ -38,6 +40,7 @@ let pf_type_of_typ t =
   | `Application (l, [`Type (`Primitive `Char)]) when Types.Abstype.eq_t.Eq.eq l Types.list -> `StrType
   | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
 
+(* the environment mapping variables to algebra plans *)
 module AEnv = Env.Int
 type aenv = tblinfo AEnv.t
 
@@ -631,9 +634,17 @@ and compile_aggr_error env loop aggr_fun restype l =
     let q_inner_just = 
       A.Dag.mk_attach
 	(pos, A.Nat 1n)
-	(A.Dag.mk_funaggr
-	   (aggr_fun, (c, c), Some iter)
-	   q_l)
+	(match aggr_fun with
+	   | A.Avg -> 
+	       A.Dag.mk_funaggr
+		 (aggr_fun, (c, item'), Some iter)
+		 (A.Dag.mk_cast
+		    (item', c, `FloatType)
+		    q_l)
+	   | _ -> 
+	       A.Dag.mk_funaggr
+		 (aggr_fun, (c, c), Some iter)
+		 q_l)
     in
     let empty_iterations =
       A.Dag.mk_difference
