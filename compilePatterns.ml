@@ -737,6 +737,11 @@ and match_record
     let all_closed = List.for_all (function
                                      | (_, None, _) -> true
                                      | (_, Some _, _) -> false) xs in
+
+    (* type of the flattened record continuation *)
+    let restt = TypeUtils.erase_type names t in
+    let restb, rest = Var.fresh_var_of_type restt in
+
     let annotated_clauses =
       List.fold_right
         (fun (bs, p, (annotation, (ps, body))) annotated_clauses ->
@@ -776,10 +781,6 @@ and match_record
                  in
                    TypeUtils.erase_type original_names t in
 
-               (* type of the flattened record continuation *)
-               let xt = TypeUtils.erase_type names t in
-               let xb, x = Var.fresh_var_of_type xt in
-
                let body =
                  fun env ->
                    match p with
@@ -788,16 +789,16 @@ and match_record
                      | (annotation, `Any) ->
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
-                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
+                             [letmv (yb, `Extend (fields, Some (`Variable rest)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
-                     | (annotation, `Variable (yb)) ->
+                     | (annotation, `Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
-                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
+                             [letmv (yb, `Extend (fields, Some (`Variable rest)))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], `Variable xb)::rps, body in
+                 ([], `Variable restb)::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
@@ -811,6 +812,15 @@ and match_record
              binding::bindings, x::xs, bind_type x xt env)
         names
         ([], [], env) in 
+
+    let bindings, xs, env =
+      if all_closed then
+        bindings, xs, env
+      else          
+        let bindings = letmv (restb, `Erase (names, `Variable var)) :: bindings in
+        let xs = rest :: xs in
+        let env = bind_type rest restt env in
+          bindings, xs, env in
 
     let bindings = List.rev bindings in
     let xs = List.rev xs in
