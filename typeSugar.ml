@@ -249,6 +249,8 @@ sig
   val cons_pattern : griper
   val record_pattern : griper
   val pattern_annotation : griper
+
+  val splice_exp : griper
 end
   = struct
     type griper = 
@@ -788,6 +790,12 @@ tab() ^ code lexpr ^ nl() ^
 tab() ^ code (show_type lt) ^ nl() ^
 "but it is annotated with type" ^ nl() ^
 tab() ^ code (show_type rt))
+
+    let splice_exp ~pos:pos ~t1:(_,lt) ~t2:_ ~error:_ =
+      die pos ("\
+An expression enclosed in {} in a regex pattern must have type String, 
+but the expression here has type " ^ (show_type lt))
+
 
 end
 
@@ -2176,6 +2184,8 @@ and type_binding : context -> binding -> binding * context =
 and type_regex typing_env : regex -> regex =
   fun m -> 
     let erase (e, _) = e in
+    let typ ((_, _), t) = t in
+    let no_pos t = ("<unknown>", t) in
     let tr = type_regex typing_env in
       match m with
         | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> r
@@ -2184,7 +2194,12 @@ and type_regex typing_env : regex -> regex =
         | `Alternate (r1, r2) -> `Alternate (tr r1, tr r2)
         | `Group r -> `Group (tr r)
         | `Repeat (repeat, r) -> `Repeat (repeat, tr r)
-        | `Splice e -> `Splice (erase (type_check typing_env e))
+        | `Splice ((pn, pos) as e) -> 
+	    let e = type_check typing_env e in
+	    let () = unify ~pos:pos ~handle:Gripers.splice_exp
+	      (no_pos (typ e), no_pos Types.string_type)
+	    in
+	    `Splice (erase e)
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
 and type_bindings (globals : context)  bindings =
@@ -2212,7 +2227,7 @@ struct
     try
       Debug.if_set show_pre_sugar_typing
         (fun () ->
-           "before type checking: "^Show.show show_program (bindings, body));
+           "before type checking: \n"^Show.show show_program (bindings, body));
       let tyenv', bindings = type_bindings tyenv bindings in
         if Settings.get_value check_top_level_purity then
           binding_purity_check bindings; (* TBD: do this only in web mode? *)
