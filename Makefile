@@ -33,7 +33,11 @@ DERIVING_DIR=deriving-310
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
+ifdef PROF
+OCAMLOPT := ocamlopt.opt -p 
+else
 OCAMLOPT := ocamlopt.opt
+endif
 OCAMLC := ocamlc.opt
 
 # use ocamldep.opt if it exists
@@ -125,7 +129,7 @@ SOURCES = $(OPC)                		\
 #          tests.ml                              \
 
 
-LIBS    = nums str $(DB_LIBS) deriving
+LIBS    = nums str $(DB_LIBS) deriving unix
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 

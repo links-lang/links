@@ -18,6 +18,8 @@ let print_value rtype value =
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
+let optimize = Settings.add_bool("optimize", true, `User)
+
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
@@ -28,8 +30,18 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
      on the prelude would lead to lots of functions being deleted that
      might actually be used in the program itself.
   *)
-(*  let program = Ir.ElimDeadDefs.program tenv program in*)
-(*  let program = Ir.Inline.program tenv program in*)
+  
+  let optimize_program program = 
+    let program = Ir.ElimDeadDefs.program tenv program in
+    let program = Ir.Inline.program tenv program in
+    program
+  in
+  
+  let program = 
+    if Settings.get_value optimize 
+    then measure "optimize" optimize_program program   
+    else program 
+  in
 
   let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
   let valenv = Value.with_closures valenv closures in
@@ -336,7 +348,7 @@ let options : opt list =
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web-mode",            Some set_web_mode,                None);
-(*    ('O',     "optimize",            set Optimiser.optimising true,    None);*)
+    (noshort, "no-optimize",         set optimize false,               None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
@@ -364,7 +376,7 @@ let main () =
   (match !config_file with None -> () 
      | Some file -> Settings.load_file file);
 
-  let prelude, ((_valenv, nenv, tyenv) as envs) = load_prelude () in
+  let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
   let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
     (* TBD: accumulate type/value environment so that "interact" has access *)

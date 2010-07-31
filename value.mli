@@ -68,7 +68,7 @@ type t = [
 | `ClientFunction of string
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and env = (t * Ir.scope) Utility.intmap * Ir.closures
+and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
 val toplevel_cont : continuation
@@ -82,9 +82,13 @@ val shadow : env -> by:env -> env
 val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
 val get_closures : env -> Ir.closures
+(* used only by json.ml, webif.ml ... *)
+val get_parameters : env -> (t*Ir.scope) Utility.intmap
+
 val find_closure : env -> Ir.var -> Utility.IntSet.t
 val with_closures : env -> Ir.closures -> env
 val extend : env -> (t*Ir.scope) Utility.intmap -> env
+
 
 val localise : env -> Ir.var -> env
 

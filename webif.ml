@@ -42,19 +42,20 @@ let resolve_function funcmap x env =
 
 let rec resolve_functions closures funcmap = 
   function
-    | `FunctionPtr(x, (env, _)) -> 
+    | `FunctionPtr(x, env) -> 
         let env = IntMap.map (fun (x,s) -> 
-                                resolve_functions closures funcmap x,s) env in
-          resolve_function funcmap x (env, closures)
+                                resolve_functions closures funcmap x,s) (Value.get_parameters env) in
+          resolve_function funcmap x (Value.extend (Value.empty_env closures) env)
 (* Q: incorporate valenv here? *)
     | `List elems -> `List (map (resolve_functions closures funcmap) elems)
     | `Record fields -> `Record(alistmap (resolve_functions closures funcmap) fields)
     | `Variant(l, v) -> `Variant(l, resolve_functions closures funcmap v)
-    | `RecFunction(defs, (env, clos), f, scope) ->
+    | `RecFunction(defs, env, f, scope) ->
+	let clos = Value.get_closures env in
         let env = Utility.IntMap.map
-          (fun (x,s) -> resolve_functions closures funcmap x, s) env
+          (fun (x,s) -> resolve_functions closures funcmap x, s) (Value.get_parameters env)
         in `RecFunction(defs,
-                        (env, clos),
+                        (Value.extend (Value.empty_env clos) env),
                         f, scope)
     | `ClientFunction _ as x -> x
     | `Continuation _ as x -> assert false      (* Unimplemented. Traverse it? *)
@@ -63,7 +64,7 @@ let rec resolve_functions closures funcmap =
 
 let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args = 
   let funcmap = Ir.funcmap program in (* FIXME: Quite slow... *)
-  let closures = snd valenv in
+  let closures = Value.get_closures valenv in
   let fname = Utility.base64decode (assoc "__name" cgi_args) in
   let args = Utility.base64decode (assoc "__args" cgi_args) in
   let args = Value.untuple (Json.parse_json args) in
@@ -191,7 +192,7 @@ let parse_client_return envs program cgi_args =
     (* FIXME: refactor *)
   let funcmap = Ir.funcmap program in (* FIXME: Quite slow... *)
   let (valenv, _, _) = envs in
-  let closures = snd valenv in
+  let closures = Value.get_closures valenv in
   let arg = resolve_functions closures funcmap arg in
     ClientReturn(continuation, arg)
 

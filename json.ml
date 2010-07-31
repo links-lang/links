@@ -85,7 +85,7 @@ let rec jsonize_value : Value.t -> string = function
       " \"environment\": {" ^ 
         String.concat "," (IntMap.to_list(fun k (v,_) -> 
                                             string_of_int k ^ ":" ^
-                                              jsonize_value v) (fst env))
+                                              jsonize_value v) (Value.get_parameters env))
       ^ "}}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
