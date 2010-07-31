@@ -143,7 +143,8 @@ let rec equal l r =
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> length l = length r &&
             fold_left2 (fun result x y -> result && equal x y) true l r
-    | `NativeString s1, `NativeString s2 -> s1 = s2
+    | `NativeString (ls, lstart, llen), `NativeString (rs, rstart, rlen) ->
+        String.sub ls lstart llen = String.sub rs rstart rlen
     | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
 
 let rec less l r =
@@ -1020,9 +1021,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* All functions below are currenly server only; but client version should be relatively easy to provide *)
   ("ntilde",
    (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
-	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-        box_bool (Str.string_match regex string 0)),
+          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r) in
+            match s with
+              | `NativeString (s, start, len) ->
+                  box_bool (Str.string_match regex s start)
+              | _ -> failwith "Internal error: expected NativeString"),
     datatype "(NativeString, Regex) ~> Bool",
     PURE));
 
@@ -1043,27 +1046,31 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
         accumMatches ((box_string m)::l) (i - 1)
 	with 
 	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
-	accumMatches [] ngroups))),
+	   accumMatches [] ngroups))),
      datatype "(String, Regex) ~> [String]",
    PURE));
 
   ("lntilde",	
    (`Server (p2 (fun s r ->
-        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
-        and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
+        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r in
+        let s, start, _len =
+          match s with
+            | `NativeString (s, start, len) ->
+                s, start, len
+            | _ -> failwith "Internal error: expected NativeString" in
 	let regex = Regex.compile_ocaml re in
-	match (Str.string_match regex string 0) with
-	 false -> `List []
-	| _ -> 
-	(let rec accumMatches l : int -> Value.t = function 
-           0 -> `List ((box_string (Str.matched_group 0 string))::l)
-	|  i -> 
-	(try
-	let m = Str.matched_group i string in 
-        accumMatches ((box_string m)::l) (i - 1)
-	with 
-	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
-	accumMatches [] ngroups))),
+          if not (Str.string_match regex s start) then
+	    `List []
+          else
+	    let rec accumMatches l : int -> Value.t = function 
+              | 0 -> `List ((box_string (Str.matched_group 0 s))::l)
+	      | i -> 
+	          (try
+	             let m = Str.matched_group i s in 
+                       accumMatches ((box_string m)::l) (i - 1)
+	           with 
+	               NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
+	      accumMatches [] ngroups)),
     datatype "(NativeString, Regex) ~> [String]",
     PURE));
 
@@ -1081,35 +1088,53 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (`Server (p2 (fun s r ->
 	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
 	let (regex, tmpl) = Regex.compile_ocaml l, t in
-	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
+	let s =
+          match s with
+            | `NativeString (s, start, len) ->
+                Utility.decode_escapes (Str.replace_first regex tmpl (String.sub s start len))
+            | _ -> failwith "Internal error: expected NativeString"
+        in
+	  (`NativeString (s, 0, String.length s)))),
     datatype "(NativeString, Regex) ~> NativeString",
     PURE));
    
   (* NativeString utilities *)
   ("char_at",
-   (`Server (p2 (fun ((`NativeString ss) : Value.t) ((`Int ix):Value.t) -> `Char (ss.[Num.int_of_num ix]))),
-    (datatype ("(NativeString, Int) ~> Char")),
+   (`Server (p2 (fun ((`NativeString (s, start, len)) : Value.t) ((`Int ix):Value.t) ->                   
+                   `Char (s.[start + Num.int_of_num ix]))),
+    datatype ("(NativeString, Int) ~> Char"),
     IMPURE));
+
+  ("strsub",
+   (`Server (p3 (fun
+                   ((`NativeString (s, start, len)) : Value.t)
+                   ((`Int start') : Value.t)
+                   ((`Int len') : Value.t) ->
+                     let len = Num.int_of_num len' in
+                     `NativeString (String.sub s (start+Num.int_of_num start') len, 0, len))),
+(*                      `NativeString (s, start+Num.int_of_num start', Num.int_of_num len'))), *)
+(*                     `NativeString (String.sub s (start + Num.int_of_num start) (Num.int_of_num len)))),*)
+    datatype "(NativeString, Int, Int) ~> NativeString",
+    PURE));
 
   ("strlen",
    (`Server (p1 (fun s -> match s with
-                     `NativeString ss -> `Int (Num.num_of_int (String.length ss))
+                   | `NativeString (_s, _start, len) -> `Int (Num.num_of_int len)
 	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
-    (datatype ("(NativeString) ~> Int ")),
+    datatype ("(NativeString) ~> Int "),
     PURE));
 
   ("to_native_string",
-   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
-    (datatype ("(String) ~> NativeString")),
+   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString (n, 0, String.length n)))),
+    datatype ("(String) ~> NativeString"),
     PURE));
 	
   ("from_native_string",
    (`Server (p1 
 	       (fun s-> match s with  
-	            (`NativeString ss) -> box_string ss
+	          | `NativeString (s, start, len) -> box_string (String.sub s start len)
 	          | _  -> failwith "Internal error: Bad coercion from native string")),
-    (datatype ("(NativeString) ~> String")),
+    datatype ("(NativeString) ~> String"),
     PURE));
 	
   ("unsafePickleCont",

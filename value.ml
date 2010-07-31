@@ -138,7 +138,7 @@ type primitive_value_basis =  [
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
-| `NativeString of string ]
+| `NativeString of string * int * int ]
   deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
 
 type primitive_value = [
@@ -176,10 +176,12 @@ let lookupS name (env, _closures) = IntMap.lookup name env
 let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
 let shadow (outers, closures) ~by:(by, _closures') =
 (* WARNING:
-   The commented out code causes an enormous slowdown.
-   (NOTE: This is not an acceptable description of the problem! --ez)
+
+   The commented out code causes an enormous slowdown. The closures
+   are computed globally anyway, so closures and closures' should
+   always be the same.
 *)
-(*   let closures = *)
+  (*   let closures = *)
 (*     IntMap.fold *)
 (*       (fun name xs closures -> *)
 (*          IntMap.add name xs closures) *)
@@ -505,7 +507,7 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
-  | `NativeString s -> "\"" ^ s ^ "\""
+  | `NativeString (s, start, len) -> "\"" ^ String.sub s start len ^ "\""
 				
 and string_of_tuple (fields : (string * t) list) : string = 
     let fields = List.map (function
