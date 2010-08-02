@@ -18,8 +18,6 @@ let print_value rtype value =
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
-(* currently broken - breaks some of the tests *)
-let optimise = Settings.add_bool("optimise", false, `User)
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
@@ -50,7 +48,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let valenv, v = lazy (Evalir.run_program valenv program)
     <|measure_as|> "run_program"
   in
-    printer t v;
+    measure "print" printer t v;
     valenv, v
 
 (** Read Links source code, then optimise and run it. *)

@@ -73,3 +73,7 @@ let make_cache = Settings.add_bool("make_cache", true, `System)
    cache is newer than the Links binary
 *)
 let allow_stale_cache = Settings.add_bool("allow_stale_cache", false, `System)
+
+(* Optimization pass? *)
+let optimise = Settings.add_bool("optimise", false, `User)
+

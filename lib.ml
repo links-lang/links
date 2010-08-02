@@ -141,11 +141,16 @@ let rec equal l r =
                                      | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
-    | `List (l), `List (r) -> length l = length r &&
-            fold_left2 (fun result x y -> result && equal x y) true l r
+    | `List (l), `List (r) -> equal_lists l r
     | `NativeString (ls, lstart, llen), `NativeString (rs, rstart, rlen) ->
         String.sub ls lstart llen = String.sub rs rstart rlen
     | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
+and equal_lists l r = 
+  match l,r with
+    | [], [] -> true
+    | (l::ls), (r::rs) -> equal l r && equal_lists ls rs
+    | _,_ -> false
+  
 
 let rec less l r =
   match l, r with
@@ -1289,22 +1294,36 @@ let primitive_stub (name : string) : Value.t =
         begin
           match Env.Int.lookup (value_env) var with
             | Some (#Value.t as r) -> r
-            | Some _ -> `PrimitiveFunction name
+            | Some _ -> `PrimitiveFunction (name,Some var)
             | None -> `ClientFunction name
         end
     | None -> assert false
 
+(* jcheney: added to avoid Env.String.lookup *)
+let primitive_stub_by_code (var : Var.var) : Value.t =
+  let name = Env.Int.lookup venv var in 
+  match Env.Int.lookup (value_env) var with
+  | Some (#Value.t as r) -> r
+  | Some _ -> `PrimitiveFunction (name,Some var)
+  | None -> `ClientFunction name
+
+
+(* jcheney: added to expose lookup by var *)
+let apply_pfun_by_code var args = 
+  match Env.Int.lookup (value_env) var with
+  | Some (#Value.t as r) ->
+      failwith("Attempt to apply primitive non-function 
+		 (#" ^string_of_int var^ ").")
+  | Some (`PFun p) -> p args
+  | None -> assert false
+
+
 let apply_pfun name args = 
   match Env.String.find nenv name with
-    | Some var ->
-        begin
-          match Env.Int.lookup (value_env) var with
-            | Some (#Value.t as r) ->
-                failwith("Attempt to apply primitive non-function (" ^name^ ").")
-            | Some (`PFun p) -> p args
-            | None -> assert false
-        end
+    | Some var -> apply_pfun_by_code var args
     | None -> assert false
+
+
 
 let is_primitive name = List.mem_assoc name env
 

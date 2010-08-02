@@ -75,6 +75,9 @@ struct
   module type S = Map.S
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
+    let lookup item map =
+      try Some (find item map) 
+      with Not_found -> None
     let find x m = 
       try find x m
       with Not_found -> not_found "Map.find" x

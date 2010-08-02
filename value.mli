@@ -56,6 +56,7 @@ type primitive_value = [
 
 val show_primitive_value : primitive_value Show.show
 
+(* jcheney: Added value function component to PrimitiveFunction *)
 type t = [
 | primitive_value
 | `List of t list
@@ -64,7 +65,7 @@ type t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * 
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
-| `PrimitiveFunction of string
+| `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list

@@ -148,6 +148,7 @@ type primitive_value = [
 ]
   deriving (Show)
         
+(*jcheney: Added function component to PrimitiveFunction *)
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value
@@ -157,7 +158,7 @@ and t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
-| `PrimitiveFunction of string
+| `PrimitiveFunction of string * int option
 | `ClientFunction of string
 | `Continuation of continuation ]
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
@@ -329,7 +330,7 @@ and compress_t (v : t) : compressed_t =
                           compress_env locals, f)
       | `RecFunction (defs, _env, f, `Global) ->
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
-      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
 and compress_env env : compressed_env =
@@ -391,7 +392,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
                         localise globals f,
                         f,
                         `Global)
-      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
@@ -521,7 +522,7 @@ and charlist_as_string chlist =
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `FunctionPtr (x, env) -> string_of_int x ^ string_of_environment env
-  | `PrimitiveFunction (name) -> name
+  | `PrimitiveFunction (name,_op) -> name
   | `ClientFunction (name) -> name
   | `RecFunction(defs, env, var, _scope) -> 
       (* Choose from fancy or simple printing of functions: *)

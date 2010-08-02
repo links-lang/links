@@ -171,10 +171,11 @@ struct
     let pop item map = 
       (find item map, remove item map)
         
-    let lookup item map =
+(* Implemented in NotFound to use original Not_found exception *)
+(*  let lookup item map =
       try Some (find item map) 
       with NotFound _ -> None
-        
+*)        
     exception Not_disjoint of key * string
       
     let union_disjoint a b = 

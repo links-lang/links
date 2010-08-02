@@ -274,7 +274,7 @@ struct
       | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
-      | `PrimitiveFunction f -> `Primitive f
+      | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `NativeString of string ] *)
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
