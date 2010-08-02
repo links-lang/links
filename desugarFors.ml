@@ -120,13 +120,16 @@ object (o : 'self_type)
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
                      
-                   let t = TypeUtils.element_type t in
+                   let element_type = TypeUtils.element_type t in
+
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, t::ts)
+                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, element_type::ts)
                | `Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
+
+                   let element_type = TypeUtils.table_read_type t in
                      
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
@@ -137,7 +140,7 @@ object (o : 'self_type)
                                              [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, t::ts))
+                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in
