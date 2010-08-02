@@ -18,7 +18,8 @@ let print_value rtype value =
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
-let optimize = Settings.add_bool("optimize", true, `User)
+(* currently broken - breaks some of the tests *)
+let optimise = Settings.add_bool("optimise", false, `User)
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
@@ -31,15 +32,15 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
      might actually be used in the program itself.
   *)
   
-  let optimize_program program = 
+  let optimise_program program = 
     let program = Ir.ElimDeadDefs.program tenv program in
     let program = Ir.Inline.program tenv program in
     program
   in
   
   let program = 
-    if Settings.get_value optimize 
-    then measure "optimize" optimize_program program   
+    if Settings.get_value optimise 
+    then measure "optimise" optimise_program program   
     else program 
   in
 
@@ -348,7 +349,7 @@ let options : opt list =
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web-mode",            Some set_web_mode,                None);
-    (noshort, "no-optimize",         set optimize false,               None);
+    (noshort, "optimise",            set optimise true,                None);
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
