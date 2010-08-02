@@ -34,7 +34,7 @@ DERIVING_DIR=deriving-310
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
 ifdef PROF
-OCAMLOPT := ocamlopt.opt -p -inline 1
+OCAMLOPT := ocamlopt.opt -p -inline 0
 else
 OCAMLOPT := ocamlopt.opt
 endif

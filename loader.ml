@@ -4,6 +4,7 @@ open Performance
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
 
+
 (** Marshal an IR program to a file along with naming and typing
     environments and the fresh variable counters.
 *)
@@ -26,14 +27,24 @@ let read_program filename : (envs * program) =
     Var.variable_counter := vc;
     envs, program
 
+(* measuring only *)
+let read_program filename : (envs * program) = 
+  measure ("read_program "^filename) read_program filename
+
+
 (** Read source code from a file, parse, infer types and desugar to
     the IR *)
 let read_file_source (filename:string) (nenv, tyenv) =
   let sugar, pos_context =
-    lazy (Parse.parse_file Parse.program filename) <|measure_as|> "parse" in
+    Parse.parse_file Parse.program filename  in
   let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv = Sugartoir.desugar_program (nenv, Var.varify_env (nenv, tyenv.Types.var_env), tyenv.Types.effect_row) program in
     (nenv, tenv), (globals, main, t)
+
+(* measuring only *)
+let read_file_source (filename:string) (nenv, tyenv) = 
+  lazy (read_file_source filename (nenv,tyenv)) 
+    <|measure_as|> "read_file_source"
 
 let cachefile_path filename = 
   let cachedir = Settings.get_value Basicsettings.cache_directory in
@@ -56,15 +67,16 @@ let load_file : envs -> string -> (envs * program) =
     let cachename = cachefile_path infile in
     let result = 
       try
-        if not (Settings.get_value Basicsettings.use_cache) then None else
+	if not (Settings.get_value Basicsettings.use_cache) then None else
           if newer cachename infile &&
             (Settings.get_value Basicsettings.allow_stale_cache || newer cachename (Sys.argv.(0))) then
             Some (read_program cachename)
           else
-            raise No_cache
-      with (No_cache | Sys_error _| Unix.Unix_error _) ->
+            (raise No_cache)
+      with (No_cache | Sys_error _ | Unix.Unix_error _) ->
         Debug.print("No valid cache for " ^ infile);
         None
+     
     in
       match result with
           Some (envs, program) -> envs, program
@@ -76,6 +88,9 @@ let load_file : envs -> string -> (envs * program) =
                    write_program cachename envs program
                  with _ -> ()) (* Ignore errors writing the cache file *);
               envs, program
+
+(* measuring only *)
+let load_file envs filename = lazy (load_file envs filename) <|measure_as|> "load_file"
 
 (** Loads a named file and prints it as syntax; may use the cache or
     the original file, as per the caching policy. *)

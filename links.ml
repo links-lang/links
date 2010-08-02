@@ -42,25 +42,32 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     else program 
   in
 
-  let closures = Ir.ClosureTable.program tenv Lib.primitive_vars program in
+  let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
   let valenv = Value.with_closures valenv closures in
 
-  let valenv, v = lazy (Evalir.run_program valenv program)
-    <|measure_as|> "run_program"
+  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program"
   in
-    measure "print" printer t v;
+    lazy (printer t v) <|measure_as|> "print";
     valenv, v
+
+let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
+  lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
-  handle_errors
-    (fun x ->
-       let (program, t), (nenv', tyenv') = measure "parse" parse (nenv, tyenv) x in
-         
-       let valenv, v = process_program envs (program, t) in
-         (valenv,
-          Env.String.extend nenv nenv',
-          Types.extend_typing_environment tyenv tyenv'), v)
+  let evaluate_inner x = 
+    let (program, t), (nenv', tyenv') = parse (nenv, tyenv) x in
+    
+    let valenv, v = process_program envs (program, t) in
+    (valenv,
+     Env.String.extend nenv nenv',
+     Types.extend_typing_environment tyenv tyenv'), v
+  in
+  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate"
+  in 
+  handle_errors evaluate_inner
+
+
 
 (** Definition of the various repl directives *)
 let rec directives 
@@ -198,7 +205,7 @@ let interact envs =
       let valenv, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
           (lazy
-             (match measure "parse" parse input with
+             (match parse input with
                 | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       process_program
@@ -289,6 +296,10 @@ let run_file prelude envs filename =
     else 
       ignore (evaluate parse_and_desugar envs filename) 
           
+
+let run_file prelude envs filename = 
+  lazy (run_file prelude envs filename) <|measure_as|> ("run_file "^filename)
+
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s = 
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
@@ -297,7 +308,7 @@ let evaluate_string_in envs v =
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
     let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
-      ((globals @ locals, main), t), (nenv, tyenv)
+    ((globals @ locals, main), t), (nenv, tyenv)
   in
     (Settings.set_value interacting false;
      ignore (evaluate parse_and_desugar envs v))
@@ -305,16 +316,18 @@ let evaluate_string_in envs v =
 let load_prelude () = 
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value prelude_file)) in
+       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value prelude_file))
+  in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
 
   let () = Lib.prelude_tyenv := Some tyenv in
   let () = Lib.prelude_nenv := Some nenv in
 
-  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals in
+  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals
+  in
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in
-  let envs =
+  let envs = 
     (valenv,
      Env.String.extend Lib.nenv nenv,
      Types.extend_typing_environment Lib.typing_env tyenv)
@@ -381,15 +394,15 @@ let main () =
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
   let () =
-    Utility.for_each
+    lazy(
+      Utility.for_each
       !to_precompile
-      (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv))) in
+      (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <|measure_as|> "precompile" in
   let () = if !to_precompile <> [] then Settings.set_value interacting false in
           
   let () = Utility.for_each !file_list (run_file prelude envs) in       
     if Settings.get_value interacting then
       let () = print_endline (Settings.get_value welcome_note) in
-        interact envs
-
-let _ =
-  main ()
+      interact envs
+      
+let _ =  main ()

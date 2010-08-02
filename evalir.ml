@@ -23,10 +23,16 @@ module Eval = struct
     in
       Value.db_connect driver params
 
-   let lookup_var var env =
+(*   let lookup_var var env =
      match Value.lookup var env with
-       | Some v -> Some v
-       | None -> Some (Lib.primitive_stub_by_code var)
+       | Some v -> v
+       | None -> (Lib.primitive_stub_by_code var)
+*)
+
+   let lookup_var var env = 
+     if Lib.is_primitive_var var 
+     then Lib.primitive_stub_by_code var
+     else Value.find var env
 
    let serialize_call_to_client (continuation, name, arg) = 
      Json.jsonize_call continuation name arg
@@ -86,12 +92,14 @@ module Eval = struct
     | `Constant `Char c -> `Char c
     | `Constant `String s -> Value.box_string s
     | `Constant `Float f -> `Float f
-    | `Variable var ->
+    | `Variable var -> lookup_var var env
+(*
         begin
           match lookup_var var env with
             | Some v -> v
             | _      -> eval_error "Variable not found: %d" var
         end
+*)
     | `Extend (fields, r) -> 
         begin
           match opt_app (value env) (`Record []) r with

@@ -158,7 +158,7 @@ and t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
-| `PrimitiveFunction of string * int option
+| `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation ]
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap

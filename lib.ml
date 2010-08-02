@@ -1253,12 +1253,25 @@ let venv =
     nenv
     Env.Int.empty   
 
-let value_env = 
+let value_env : primitive option Env.Int.t = 
   List.fold_right
     (fun (name, (p, _, _)) env -> 
        Env.Int.bind env (Env.String.lookup nenv name, impl p))
     env
     Env.Int.empty
+
+let maxvar = 
+  Env.String.fold
+    (fun name var maxvar -> max var maxvar)
+    nenv 0
+
+let value_array : primitive option array = 
+  let array = Array.create (maxvar+1) None in
+  List.iter (fun (name, (p, _, _)) -> 
+    Array.set array (Env.String.lookup nenv name) (impl p)) env;
+  array
+
+let is_primitive_var var = 0 <= var && var <= maxvar
 
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
@@ -1288,11 +1301,17 @@ let primitive_arity (name : string) =
   let _, t, _ = assoc name env in
     function_arity t
 
+(*let primitive_by_code var = Env.Int.lookup value_env var*)
+(* use array instead? seems faster for primop-intensive code *)
+let primitive_by_code var = Array.get value_array var
+
+
+
 let primitive_stub (name : string) : Value.t =
   match Env.String.find nenv name with
     | Some var ->
         begin
-          match Env.Int.lookup (value_env) var with
+          match primitive_by_code var with
             | Some (#Value.t as r) -> r
             | Some _ -> `PrimitiveFunction (name,Some var)
             | None -> `ClientFunction name
@@ -1302,7 +1321,7 @@ let primitive_stub (name : string) : Value.t =
 (* jcheney: added to avoid Env.String.lookup *)
 let primitive_stub_by_code (var : Var.var) : Value.t =
   let name = Env.Int.lookup venv var in 
-  match Env.Int.lookup (value_env) var with
+  match primitive_by_code var with
   | Some (#Value.t as r) -> r
   | Some _ -> `PrimitiveFunction (name,Some var)
   | None -> `ClientFunction name
@@ -1310,7 +1329,7 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 
 (* jcheney: added to expose lookup by var *)
 let apply_pfun_by_code var args = 
-  match Env.Int.lookup (value_env) var with
+  match primitive_by_code var with
   | Some (#Value.t as r) ->
       failwith("Attempt to apply primitive non-function 
 		 (#" ^string_of_int var^ ").")

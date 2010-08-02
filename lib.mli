@@ -10,6 +10,7 @@ type primitive
 
 val primitive_names : string list
 val is_primitive : string -> bool
+val is_primitive_var : Var.var -> bool
 val is_pure_primitive : string -> bool
 val value_env : primitive option Env.Int.t
 val type_env : Types.environment

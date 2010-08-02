@@ -40,6 +40,11 @@ end
 module Hashtbl =
 struct
   include Hashtbl
+
+  let lookup (tbl : ('a,'b) t) (key : 'a) : 'b option =
+    try Some (find tbl key) 
+    with Not_found -> None
+
   let find tbl key = 
     try find tbl key 
     with Not_found -> not_found "Hashtbl.find" key
@@ -75,9 +80,11 @@ struct
   module type S = Map.S
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
-    let lookup item map =
+
+    let lookup (item: key) (map : 'a t) : 'a option =
       try Some (find item map) 
       with Not_found -> None
+
     let find x m = 
       try find x m
       with Not_found -> not_found "Map.find" x
