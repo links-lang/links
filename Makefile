@@ -76,13 +76,13 @@ SOURCES = $(OPC)                		\
           parser.mly            		\
           lexer.mli lexer.mll         		\
 	  typeUtils.mli typeUtils.ml            \
+          errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
-          errors.mli errors.ml                  \
           parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
@@ -129,7 +129,12 @@ SOURCES = $(OPC)                		\
 #          tests.ml                              \
 
 
-LIBS    = nums str $(DB_LIBS) deriving unix
+LIBS    = nums str $(DB_LIBS) deriving
+
+ifndef THREADS
+LIBS += unix
+endif
+
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
