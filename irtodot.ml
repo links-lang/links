@@ -66,11 +66,11 @@ and trees_of_list treefun id l env recnodes =
 and tree_of_binding id binding env recnodes =
   match binding with
     | `Let (binder, (_, tail_comp)) ->
-	let label = "let\\n" ^ (string_of_binder binder) in
+	let label = "Let\\n" ^ (string_of_binder binder) in
 	let (next_id, subtree) = tree_of_tailcomp (id + 1) tail_comp env recnodes in
 	  (next_id, Node (id, label, Binding, [subtree]))
     | `Fun (binder, (_, args, body), _) ->
-	let label = "fun\\n" ^ (string_of_binder binder) in
+	let label = "Fun\\n" ^ (string_of_binder binder) in
 	let bstring_list = List.map string_of_binder args in
 	let label = label ^ "\\nargs" in
 	let label = label ^ "\\n" ^ (concat_stringlist bstring_list) in
@@ -78,14 +78,14 @@ and tree_of_binding id binding env recnodes =
 	  (next_id, Node (id, label, Binding, [subtree]))
     | `Rec _ ->
 	(* FIXME: handle subtree *)
-	let label = "rec" in
+	let label = "Rec" in
 	  ((id + 1), Leaf (id, label, Binding))
     | `Alien (binder, language) ->
 	let binderstring = string_of_binder binder in
-	let label = Printf.sprintf "alien\\n%s\\nlang=%s" binderstring language in
+	let label = Printf.sprintf "Alien\\n%s\\nlang=%s" binderstring language in
 	  ((id + 1), Leaf (id, label, Binding))
     | `Module (name, bindings_option) ->
-	let label = "module\\n" ^ name in
+	let label = "Module\\n" ^ name in
 	  (match bindings_option with
 	     | Some bindings ->
 		 let (next_id, subtrees) = nodes_of_bindings (id + 1) bindings env recnodes in
@@ -97,7 +97,7 @@ and tree_of_binding id binding env recnodes =
 and tree_of_value id value env recnodes =
   match value with
     | `Constant c ->
-	let label = "constant " ^ (Constant.string_of_constant c) in
+	let label = "Constant " ^ (Constant.string_of_constant c) in
 	  ((id + 1), Leaf (id, label, Value))
     | `Variable var ->
 	(try 
@@ -118,7 +118,7 @@ and tree_of_value id value env recnodes =
 		   let (next_id, subtrees) = nodes_of_computations (id + 1) comps env (IntSet.add var recnodes) in
 		   let funsig = Value.string_of_value value in
 		   let value_string = name ^ " " ^ funsig in
-		   let label = "var " ^ (string_of_int var) in
+		   let label = "Var " ^ (string_of_int var) in
 		   let label = label ^ "\\n" ^ value_string in
 		   let label = label ^ "\\n" ^ def_label in
 		     if Env.Int.has !prelude_venv f then
@@ -127,17 +127,17 @@ and tree_of_value id value env recnodes =
 		       (next_id, Node (id, label, Variable, subtrees))
 	       | _ ->
 		   let value_string = Value.string_of_value value in
-		   let label = "var " ^ (string_of_int var) in
+		   let label = "Var " ^ (string_of_int var) in
 		   let label = label ^ "\\n" ^ value_string in
 		     ((id + 1), Leaf (id, label, Variable)))
 	with NotFound _ -> 
-	  let label = "var " ^ (string_of_int var) ^ "\\nnotfound" in
+	  let label = "Var " ^ (string_of_int var) ^ "\\nnotfound" in
 	    ((id + 1), Leaf (id, label, Variable)))
     | `Extend (fields, r) ->
 	(* fields: value name_map = map string -> value *)
 	let f k v (names, values) = (k :: names, v :: values) in
 	let (names, values) = Utility.StringMap.fold f fields ([], []) in
-	let label = "extend\\n" in
+	let label = "Extend\\n" in
 	let label = label ^ concat_stringlist names in
 	let (next_id, trees) = trees_of_list tree_of_value (id + 1) values env recnodes in
 	  (match r with
@@ -147,7 +147,7 @@ and tree_of_value id value env recnodes =
 	    | None ->
 		(next_id, Node (id, label, Value, trees)))
     | `Project (name, value) ->
-	let label = "project " ^ name in
+	let label = "Project " ^ name in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
     | `Erase (nameset, value) ->
@@ -156,53 +156,54 @@ and tree_of_value id value env recnodes =
 	  nameset
 	  ""
 	in
-	let label = "erase\\n" ^ names in
+	let label = "Erase\\n" ^ names in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
     | `Inject (name, value, datatype) ->
 	let typestring = Types.string_of_datatype datatype in
-	let label = Printf.sprintf "inject\\n%s\\n%s" name typestring in
+	let label = Printf.sprintf "Inject\\n%s\\n%s" name typestring in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
-    | `TAbs (_, value) ->
-	(* TODO: add tyvars to label *)
-	let label = "tabs" in
+    | `TAbs (tyvars, value) ->
+	let label = "TAbs\\n" ^ (mapstrcat "\\n" (Show.show Ir.show_tyvar) tyvars) in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
-    | `TApp (value, _) ->
-	tree_of_value id value env recnodes
+    | `TApp (value, tyargs) ->
+	let label = "TApp\\n" ^ (mapstrcat "\\n" Types.string_of_type_arg tyargs) in
+	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
+	  (next_id, Node (id, label, Value, [subtree]))
     | `XmlNode _ ->
 	(* TODO: handle subtree and label *)
-	let label = "xmlnode\\(subtree)" in
+	let label = "XmlnNde\\(subtree)" in
 	  ((id + 1), Leaf (id, label, Value))
     | `ApplyPure (f, args) ->
-	let label = "applypure" in
+	let label = "ApplyPure" in
 	let (next_id, f_tree) = tree_of_value (id + 1) f env recnodes in
 	let (next_id, args_trees) = trees_of_list tree_of_value next_id args env recnodes in
 	  (next_id, Node (id, label, Value, f_tree :: args_trees))
     | `Coerce (value, typ) ->
 	let typestring = Types.string_of_datatype typ in
-	let label =  "coerce\\n" ^ typestring in
+	let label =  "Coerce\\n" ^ typestring in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
 
 and tree_of_tailcomp id tailcomp env recnodes =
   match tailcomp with
     | `Return value ->
-	let label = "return" in
+	let label = "Return" in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, TailComp, [subtree]))
     | `Apply (f, args) ->
-	let label = "apply" in
+	let label = "Apply" in
 	let (next_id, f_tree) = tree_of_value (id + 1) f env recnodes in
 	let (next_id, args_trees) = trees_of_list tree_of_value next_id args env recnodes in
 	  (next_id, Node (id, label, TailComp, f_tree :: args_trees))
     | `Special t ->
-	let label = "special" in
+	let label = "Special" in
 	let (next_id, subtree) = tree_of_special (id + 1) t env recnodes in
 	  (next_id, Node (id, label, TailComp, [subtree]))
     | `Case (v, cases, default) -> 
-	let label = "case\\n" in
+	let label = "Case\\n" in
 	let (next_id, v_subtree) = tree_of_value (id + 1) v env recnodes in
 	  let case_labels =
 	    StringMap.fold
@@ -222,7 +223,7 @@ and tree_of_tailcomp id tailcomp env recnodes =
 	  let (next_id, case_subtrees) = nodes_of_computations next_id comps env recnodes in
 	    (next_id, Node (id, (label ^ case_labels), TailComp, v_subtree :: case_subtrees))
     | `If (c, t, e) ->
-	let label = "if" in
+	let label = "If" in
 	let (next_id, c_tree) = tree_of_value (id + 1) c env recnodes in
 	let (next_id, t_tree) = tree_of_computation next_id t env recnodes in
 	let (next_id, e_tree) = tree_of_computation next_id e env recnodes in
@@ -232,16 +233,16 @@ and tree_of_special id special env recnodes =
   match special with
     | `Wrong typ -> 
 	let typestring = Types.string_of_datatype typ in
-	let label = "wrong\\n" ^ typestring in
+	let label = "Wrong\\n" ^ typestring in
 	  ((id + 1), Leaf (id, label, Special))
     | `Database value ->
-	let label = "database" in
+	let label = "Database" in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Special, [subtree]))
-    | `Table (db, name, keys, _) ->
+    | `Table (db, name, _keys, _) ->
 	(* TODO: add types to label *)
 	(* FIXME: print keys *)
-	let label = "table with keys" in
+	let label = "Table with keys" in
 	let (next_id, db_tree) = tree_of_value (id + 1) db env recnodes in
 	let (next_id, name_tree) = tree_of_value next_id name env recnodes in
 	  (next_id, Node (id, label, Special, [db_tree; name_tree]))
@@ -256,10 +257,10 @@ and tree_of_special id special env recnodes =
 	in
 	let (next_id, e_tree) = tree_of_computation next_id e env recnodes in
 	let typestring = Types.string_of_datatype _t in
-	let label = "query\\n" ^ typestring in
+	let label = "Query\\n" ^ typestring in
 	  (next_id, Node (id, label, Special, range_trees @ [e_tree]))
     | `Update ((xb, source), where, body) ->
-	let label = "update" in
+	let label = "Update" in
 	let label = label ^ "\\n" ^ string_of_binder xb in
 	let (next_id, source_tree) = tree_of_value (id + 1) source env recnodes in
 	  (match where with
@@ -271,7 +272,7 @@ and tree_of_special id special env recnodes =
 		let (next_id, body_tree) = tree_of_computation next_id body env recnodes in
 		  (next_id, Node (id, label, Special, [source_tree; where_tree; body_tree])))
     | `Delete ((xb, source), where) ->
-	let label = "delete" in
+	let label = "Delete" in
 	let label = label ^ "\\n" ^ string_of_binder xb in
 	let (next_id, source_tree) = tree_of_value (id + 1) source env recnodes in
 	  (match where with
@@ -281,7 +282,7 @@ and tree_of_special id special env recnodes =
 		let (next_id, where_tree) = tree_of_computation next_id where_comp env recnodes in
 		  (next_id, Node (id, label, Special, [source_tree; where_tree])))
     | `CallCC (value) ->
-	let label = "callcc" in
+	let label = "CallCC" in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Special, [subtree]))
 
@@ -289,7 +290,7 @@ and tree_of_computation id (bindings, tailcomp) env recnodes =
   let (next_id, binding_trees) = nodes_of_bindings (id + 1) bindings env recnodes in
   let (next_id, tailcomp_tree) = tree_of_tailcomp next_id tailcomp env recnodes in
   let trees = binding_trees @ [tailcomp_tree] in
-    (next_id, Node (id, "computation", Comp, trees))
+    (next_id, Node (id, "Computation", Comp, trees))
 
 let rec apply_tree visit tree =
   match tree with
