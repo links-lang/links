@@ -1172,8 +1172,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let inner_type = `Variant (negative, row_var) in
               `Negative names, Env.empty, (outer_type, inner_type)
         | `Record (ps, default) -> 
-            let ps = alistmap tp ps
-            and default = opt_map tp default in
+            let ps = alistmap tp ps in
+            let default = opt_map tp default in
             let initial_outer, initial_inner, denv =
               match default with
                 | None ->
@@ -1196,8 +1196,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             let rtype typ initial =
               `Record (List.fold_right
                          (fun (l, f) -> Types.row_with (l, (`Present, typ f)))
-                         ps initial)
-            and penv = 
+                         ps initial) in
+            let penv = 
               List.fold_right (snd ->- env ->- (++)) ps Env.empty
             in
               (`Record (alistmap erase ps, opt_map erase default),

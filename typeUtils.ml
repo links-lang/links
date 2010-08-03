@@ -88,13 +88,57 @@ let rec project_type name t = match concrete_type t with
         t
   | t -> 
       error ("Attempt to project non-record type "^string_of_datatype t)
-    
-let rec erase_type names t = match concrete_type t with
-  | `ForAll (_, t) -> erase_type names t
+
+(*
+  This returns the type obtained by removing a set of
+  fields from a record.
+
+  It is complicated by our unusual row typing system in
+  which absent fields still have types. A quantifier is
+  added for each field removed:
+
+    |- v : R
+    ------------------------------------------------------------------
+    |- erase ({l1,...,lk}, v) : forall a1,...,ak.(-l1:a1,...,-lk:ak|R)
+*)
+let rec erase_type_poly names t = match concrete_type t with
+  | `ForAll (_, t) -> erase_type_poly names t
   | `Record row ->
-      let row = StringSet.fold (fun name row -> snd (split_row name row)) names row in
-        `Record row
+      let closed = is_closed_row row in
+      let (field_env, row_var) = fst (unwrap_row row) in
+      let qs, field_env =
+        StringSet.fold
+          (fun name (qs, field_env) ->
+             match StringMap.lookup name field_env with
+               | Some (`Present, t) ->
+                   let q, t = fresh_type_quantifier `Any in
+                     if closed then
+                       q::qs, StringMap.remove name field_env
+                     else
+                       q::qs, StringMap.add name (`Absent, t) field_env
+               | Some (`Absent, _) ->
+                   error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
+               | Some (`Var _, _) ->
+                   error ("Attempt to remove var field "^name^" from row "^string_of_row row)
+               | None ->
+                   error ("Attempt to remove absent field "^name^" from row "^string_of_row row))
+          names
+          ([], field_env) in
+        let qs = List.rev qs in
+          Types.for_all (qs, `Record (field_env, row_var))
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
+
+(*
+  This version doesn't work with typed absence information. We might
+  restore it if we move back to a simpler version, along with
+  explicit constraints for dealing with database updates.
+*)
+(* let rec erase_type names t = match concrete_type t with *)
+(*   | `ForAll (_, t) -> erase_type names t *)
+(*   | `Record row -> *)
+(*       let row = StringSet.fold (fun name row -> snd (split_row name row)) names row in *)
+(*         `Record row *)
+(*   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t) *)
 
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t

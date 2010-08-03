@@ -4,7 +4,8 @@ exception TypeDestructionError of string
 val concrete_type : Types.datatype -> Types.datatype
 
 val project_type : string -> Types.datatype -> Types.datatype
-val erase_type   : Utility.stringset -> Types.datatype -> Types.datatype
+(* val erase_type   : Utility.stringset -> Types.datatype -> Types.datatype *)
+val erase_type_poly : Utility.stringset -> Types.datatype -> Types.datatype
 val inject_type  : string -> Types.datatype -> Types.datatype
 val return_type  : Types.datatype -> Types.datatype
 val arg_types    : Types.datatype -> Types.datatype list

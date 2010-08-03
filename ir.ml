@@ -85,6 +85,11 @@ and special =
 and computation = binding list * tail_computation
   deriving (Show)  
 
+let tapp (v, tyargs) =
+  match tyargs with
+    | [] -> v
+    | _ -> `TApp (v, tyargs)
+
 let letm (b, tc) = `Let (b, ([], tc))
 let letmv (b, v) = letm (b, `Return v)
 (*let letv (b, v) = `Let (b, `Return v)*)
@@ -276,7 +281,7 @@ struct
               `Project (name, v), deconstruct (project_type name) vt, o
         | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type names) vt in
+            let t = deconstruct (erase_type_poly names) vt in
               `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in

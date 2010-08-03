@@ -76,6 +76,8 @@ and special =
 and computation = binding list * tail_computation
   deriving (Show)
 
+val tapp : value * tyarg list -> value
+
 val letm : binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)

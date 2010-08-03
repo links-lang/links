@@ -400,9 +400,35 @@ struct
     let t = TypeUtils.project_type name (sem_type s) in
       bind s (fun v -> lift (`Project (name, v), t))
 
-  let erase (s, names) =
-    let t = TypeUtils.erase_type names (sem_type s) in
-      bind s (fun v -> lift (`Erase (names, v), t))
+  (* HACK:
+     
+     We rely on only using this function for compiling
+     record update in the update function below.
+     
+     If v has type rho then `Erase ({l1,...,lk}, v)
+     has type:
+
+       forall a1,...,ak.(-l1:a1,...-lk:ak|rho)
+
+     Because we know that we are immediately going to add the
+     missing names back in it is sound to apply this type to
+     whatever type arguments we like. Here we use the type
+     variable corresponding to each quantifier, even though
+     they aren't in scope.
+  *)
+  let erase_poly (s, names) =
+    let t = TypeUtils.erase_type_poly names (sem_type s) in
+      match t with
+        | `ForAll (qs, _) ->
+            let tyargs = List.map (Types.type_arg_of_quantifier) (Types.unbox_quantifiers qs) in
+            let t = Instantiate.apply_type t tyargs in
+              bind s (fun v -> lift (`TApp (`Erase (names, v), tyargs), t))
+        | _ ->
+            bind s (fun v -> lift (`Erase (names, v), t))
+
+(*   let erase (s, names) = *)
+(*     let t = TypeUtils.erase_type names (sem_type s) in *)
+(*       bind s (fun v -> lift (`Erase (names, v), t)) *)
 
   let coerce (s, t) =
     bind s (fun v -> lift (`Coerce (v, t), sem_type s))
@@ -420,7 +446,7 @@ struct
         StringSet.empty
         fields in
     let t = TypeUtils.record_without (sem_type s) names in
-      record (fields, Some (erase (s, names)))
+      record (fields, Some (erase_poly (s, names)))
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))
