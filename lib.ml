@@ -92,7 +92,7 @@ let make_type_variable = Types.make_type_variable
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let q, r = Types.fresh_row_quantifier `Any in
-      (`ForAll ([q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
+      (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)), 
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 

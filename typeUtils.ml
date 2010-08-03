@@ -27,6 +27,18 @@ let concrete_type t =
                     ct (IntSet.add var rec_names) t
               | _ -> t
           end
+      | `ForAll (qs, t) ->
+          begin
+            match ct rec_names t with
+              | `ForAll (qs', t') ->
+                  `ForAll (box_quantifiers (unbox_quantifiers qs @ unbox_quantifiers qs'), t')
+              | t ->
+                  begin
+                    match unbox_quantifiers qs with
+                      | [] -> t
+                      | _ -> `ForAll (qs, t)
+                  end
+          end
       | _ -> t
   in
     ct (IntSet.empty) t
@@ -135,7 +147,7 @@ let abs_type _ = assert false
 let app_type _ _ = assert false
 
 let quantifiers t = match concrete_type t with
-  | `ForAll (qs, _) -> qs
+  | `ForAll (qs, _) -> Types.unbox_quantifiers qs
   | _ -> []
 
 let record_without t names =

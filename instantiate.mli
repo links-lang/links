@@ -1,6 +1,7 @@
 exception ArityMismatch
 
 val show_recursion : bool Settings.setting
+val quantified_instantiation : bool Settings.setting
 
 val var : Types.environment -> string -> (Types.type_arg list * Types.datatype)
 val rigid : Types.environment -> string -> (Types.type_arg list * Types.datatype)

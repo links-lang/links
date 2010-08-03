@@ -40,12 +40,8 @@ type 't meta_presence_var_basis =
     | `Body of 't ]
       deriving (Show)
 
-
 type istring = string deriving (Show)
 let eq_istring : istring Eq.eq = { Eq.eq = (=) }
-
-
-(* arity should be replaced by a list of kinds *)
 
 module Abstype =
 struct
@@ -95,7 +91,8 @@ type typ =
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list * typ)]
+    | `ForAll of (quantifier list ref * typ)]
+
 and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec     = presence_flag * typ
 and field_spec_map = field_spec field_env
@@ -227,6 +224,20 @@ let var_of_quantifier =
     | `RowVar ((var, _), _) -> var
     | `PresenceVar (var, _) -> var
 
+let kind_of_quantifier =
+  function
+    | `TypeVar ((_, `Any), _) -> `Type
+    | `RowVar ((_, `Any), _) -> `Row
+    | `TypeVar ((_, `Base), _) -> `BaseType
+    | `RowVar ((_, `Base), _) -> `BaseRow
+    | `PresenceVar _ -> `Presence
+
+let type_arg_of_quantifier =
+  function
+    | `TypeVar (_, point) -> `Type (`MetaTypeVar point)
+    | `RowVar (_, row_var) -> `Row (FieldEnv.empty, row_var)
+    | `PresenceVar (_, point) -> `Presence (`Var point)
+
 type datatype = typ
 
 (* useful for debugging: types tend to be too big to read *)
@@ -239,20 +250,6 @@ module Show_row = Show_unprintable (struct type a = row end)
 module Show_meta_type_var = Show_unprintable (struct type a = meta_type_var end)
 module Show_meta_row_var = Show_unprintable (struct type a = meta_row_var end)
 *)
-
-let for_all : quantifier list * datatype -> datatype = function
-  | [], t -> t
-  | qs, t ->
-      let qs =
-        List.map
-          (function
-             | `TypeVar x -> `TypeVar x
-             | `RowVar x -> `RowVar x
-             | `PresenceVar x -> `PresenceVar x) qs
-      in
-        match t with
-          | `ForAll (qs', t) -> `ForAll (qs @ qs', t)
-          | _ -> `ForAll (qs, t)
 
 let type_var_number = var_of_quantifier
 
@@ -368,6 +365,30 @@ let _ =
     let point = Unionfind.fresh (`Flexible var) in
       `PresenceVar (var, point), `Var point      
 
+let freshen_quantifier =
+  function
+    | `TypeVar ((_, subkind), _) ->
+        let q, t = fresh_type_quantifier subkind in
+          q, `Type t
+    | `RowVar ((_, subkind), _) ->
+        let q, row = fresh_row_quantifier subkind in
+          q, `Row row
+    | `PresenceVar _ ->
+        let q, f = fresh_presence_quantifier () in
+          q, `Presence f
+
+let freshen_quantifier_flexible =
+  function
+    | `TypeVar ((_, subkind), _) ->
+        let q, t = fresh_flexible_type_quantifier subkind in
+          q, `Type t
+    | `RowVar ((_, subkind), _) ->
+        let q, row = fresh_flexible_row_quantifier subkind in
+          q, `Row row
+    | `PresenceVar _ ->
+        let q, f = fresh_flexible_presence_quantifier () in
+          q, `Presence f
+
   let make_empty_closed_row () = empty_field_env, closed_row_var
   let make_empty_open_row subkind = empty_field_env, fresh_row_variable subkind
 
@@ -387,7 +408,11 @@ let _ =
 
 (*** end of type_basis ***)
 
-(** remove any top-level `MetaTypeVars from a type. *)
+let unbox_quantifiers = (!)
+let box_quantifiers = ref
+
+(** Remove any redundant top-level `MetaTypeVars from a type.
+    Additionally, collapse adjacent quantifiers. *)
 let concrete_type t =
   let rec ct rec_names t : datatype =
     match t with
@@ -402,9 +427,56 @@ let concrete_type t =
                     ct (IntSet.add var rec_names) t
               | _ -> t
           end
+      | `ForAll (qs, t) ->
+          begin
+            match ct rec_names t with
+              | `ForAll (qs', t') ->
+                  `ForAll (box_quantifiers (unbox_quantifiers qs @ unbox_quantifiers qs'), t')
+              | t ->
+                  begin
+                    match unbox_quantifiers qs with
+                      | [] -> t
+                      | _ -> `ForAll (qs, t)
+                  end
+          end
       | _ -> t
   in
-    ct (IntSet.empty) t
+    ct (IntSet.empty) t     
+
+let hoist_quantifiers =
+  function
+    | `ForAll (qsref, t) ->
+        let rec hq =
+          function
+            | `MetaTypeVar point ->
+                begin
+                  match Unionfind.find point with
+                    | `Body t -> hq t
+                    | _ -> []
+                end
+            | `ForAll (qsref, t) ->
+                let qs = !qsref in
+                  qsref := [];
+                  qs :: hq t
+            | _ -> [] in
+          
+        let qss = hq t in
+          qsref := List.concat (!qsref :: qss)
+    | _ -> ()
+
+(** remove any redundant top-level `Vars from a presence flag. *)
+let concrete_presence_flag p =
+  let rec cp p =
+    match p with
+      | `Var point ->
+          begin
+            match Unionfind.find point with
+              | `Body p -> cp p
+              | _ -> p
+          end
+      | _ -> p
+  in
+    cp p
 
 let free_type_vars, free_row_type_vars =
   let module S = TypeVarSet in
@@ -423,7 +495,7 @@ let free_type_vars, free_row_type_vars =
           S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, datatypes) -> S.union_all (List.map (free_tyarg_vars' rec_vars) datatypes)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body) 
-                                           (List.fold_right (S.add -<- type_var_number) tvars S.empty)
+                                           (List.fold_right (S.add -<- type_var_number) (unbox_quantifiers tvars) S.empty)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -658,6 +730,161 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
   let field_env = normalise_fields field_env in
     (field_env, row_var), rec_row
 
+
+(** building quantified types *)
+
+let quantifiers_of_type_args =
+  List.map
+    (function
+       | `Type (`MetaTypeVar point) ->
+           begin
+             match Unionfind.find point with
+               | `Flexible (var, subkind)
+               | `Rigid (var, subkind) -> `TypeVar ((var, subkind), point)
+               | _ -> assert false
+           end
+       | `Type _ -> assert false
+       | `Row (fields, row_var) ->
+           assert (StringMap.is_empty fields);
+           begin
+             match Unionfind.find row_var with
+               | `Flexible (var, subkind)
+               | `Rigid (var, subkind) -> `RowVar ((var, subkind), row_var)
+               | _ -> assert false
+           end
+       | `Presence (`Var point) ->
+           begin
+             match Unionfind.find point with
+               | `Flexible var
+               | `Rigid var -> `PresenceVar (var, point)
+               | _ -> assert false
+           end
+       | `Presence _ -> assert false)
+
+(* TODO: need to unwind `Body constructors *)
+let is_rigid_quantifier q =
+  let rigid point =
+    match Unionfind.find point with
+      | `Rigid _ -> true
+      | _ -> false
+  in
+    match q with
+      | `TypeVar (_, point) ->
+          rigid point
+      | `RowVar (_, point) ->
+          rigid point
+      | `PresenceVar (_, point) ->
+          rigid point
+
+let is_instantiated_quantifier q =
+  let is_concrete_type t =
+    match concrete_type t with
+      | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Recursive _ -> true
+              | _ -> false
+          end
+      | _ -> true in
+
+  let is_concrete_row row =
+    let (field_env, row_var) = flatten_row row in
+      FieldEnv.is_empty field_env &&
+        match Unionfind.find row_var with
+          | `Recursive _
+          | `Closed -> true
+          | _ -> false in
+
+  let is_concrete_presence_flag f =
+    match concrete_presence_flag f with
+      | `Var _ -> false
+      | _ -> true in
+  in
+    match q with
+      | `TypeVar (_, point) ->
+          begin
+            match Unionfind.find point with
+              | `Recursive _ -> true
+              | `Body t -> is_concrete_type t
+              | _ -> false
+          end
+      | `RowVar (_, point) ->
+          begin
+            match Unionfind.find point with
+              | `Recursive _ -> true
+              | `Body row -> is_concrete_row row
+              | _ -> false
+          end
+      | `PresenceVar (_, point) ->
+          begin
+            match Unionfind.find point with
+              | `Body f -> is_concrete_presence_flag f
+              | _ -> false
+          end
+
+(* update a quantifier with any changes to its point *)
+let normalise_quantifier = fun q ->
+  match q with
+    | `TypeVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible v
+            | `Rigid v -> `TypeVar (v, point)
+            | _ -> q
+        end
+    | `RowVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible v
+            | `Rigid v -> `RowVar (v, point)
+            | _ -> q
+        end
+    | `PresenceVar (_, point) ->
+        begin
+          match Unionfind.find point with
+            | `Flexible v
+            | `Rigid v -> `PresenceVar (v, point)
+            | _ -> q
+        end
+
+let rec flexible_of_type t =
+  match concrete_type t with
+    | `MetaTypeVar point as t ->
+        begin
+          match Unionfind.find point with
+            | `Flexible _ -> Some t
+            | _ -> None
+        end
+    | `ForAll (qs, t) when
+        List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) ->
+          begin
+            match flexible_of_type t with
+              | Some t ->
+                  (* WARNING: side-effect! *)
+                  qs := [];
+                  Some t
+              | None -> None
+          end
+    | _ -> None
+
+
+let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
+  concrete_type (`ForAll (box_quantifiers qs, t))
+
+(*   let qs, t = *)
+(*     match concrete_type t with *)
+(*       | `ForAll (qs', t') -> qs @ (unbox_quantifiers qs'), t' *)
+(*       | t -> qs, t *)
+(*   in *)
+(* (\*   let qs = *\) *)
+(* (\*     List.filter (not -<- is_instantiated_quantifier) qs in *\) *)
+(* (\*   let qs = *\) *)
+(* (\*     normalise_quantifiers (qs, List.map (fun _ -> `Flexible) qs) *\) *)
+(* (\*   in *\) *)
+(*     match qs with *)
+(*       | [] -> t *)
+(*       | _ -> `ForAll (box_quantifiers qs, t) *)
+
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
 let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)])))
@@ -778,7 +1005,9 @@ struct
               List.fold_left
                 (fun (bound_vars, vars) tyvar ->
                    let var, spec = varspec_of_tyvar tyvar in
-                     (TypeVarSet.add var bound_vars, (var, spec)::vars)) (TypeVarSet.empty, []) tyvars
+                     TypeVarSet.add var bound_vars, (var, spec)::vars)
+                (TypeVarSet.empty, [])
+                (unbox_quantifiers tyvars)
             in
               (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
         | `Alias ((_,ts), d) when include_aliases ->
@@ -926,18 +1155,35 @@ struct
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
     | `XmlItem -> "XmlItem" | `DB -> "Database" | `NativeString -> "NativeString"
 
-  let quantifier : (policy * names) -> quantifier -> string =
-    fun (policy, vars) ->
-      function
-        | `TypeVar ((var, _), _)
-        | `RowVar ((var, _), _)
-        | `PresenceVar (var, _) -> Vars.find var vars
-
   let subkind : (policy * names) -> subkind -> string =
     fun (_policy, _vars) ->
       function
         | `Any -> ""
         | `Base -> "::Base"
+
+  let kind : (policy * names) -> kind -> string =
+    fun (_policy, _vars) ->
+      function
+        | `Type     -> ""
+        | `BaseType -> "::Base"
+        | `Row      -> "::Row"
+        | `BaseRow  -> "::BaseRow"
+        | `Presence -> "::Presence"
+
+  let quantifier : (policy * names) -> quantifier -> string =
+    fun (policy, vars) q ->
+      let k = kind_of_quantifier q in
+      let prefix =
+        if not(policy.flavours) || is_rigid_quantifier q then
+          ""
+        else
+          "?"
+      in
+        match q with
+          | `TypeVar ((var, _), _)
+          | `RowVar ((var, _), _)
+          | `PresenceVar (var, _) ->
+              prefix ^ Vars.find var vars ^ kind (policy, vars) k
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
@@ -1078,6 +1324,7 @@ struct
                  else "(" ^ row "," bound_vars p r ^ ")")
           | `Variant r -> "[|" ^ row "|" bound_vars p r ^ "|]"
           | `ForAll (tyvars, body) ->
+              let tyvars = unbox_quantifiers tyvars in
               let bound_vars =
                 List.fold_left
                   (fun bound_vars tyvar ->
@@ -1416,7 +1663,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
                     | `RowVar ((var, _), _)
                     | `PresenceVar (var, _) ->
                         S.add var boundvars)
-               qs
+               (unbox_quantifiers qs)
                boundvars)
             t                       
       | `MetaTypeVar point       ->

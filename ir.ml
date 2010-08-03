@@ -96,7 +96,12 @@ let rec is_atom =
     | `Constant (`Char _)
     | `Constant (`Float _)
     | `Variable _ -> true
-    | `Erase (_, v)
+(*
+  This can only be an atom if
+  Erase is just an upcast, and our language
+  is properly parameteric.
+*)
+(*    | `Erase (_, v) *)
     | `Coerce (v, _) -> is_atom v
     | _ -> false
 
@@ -483,6 +488,7 @@ struct
     function
       | v when is_atom v -> true
       | `Project (_, v)
+      | `Erase (_, v)
       | `Inject (_, v, _) -> is_inlineable_value v
       | _ -> false
 

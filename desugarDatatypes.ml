@@ -51,10 +51,19 @@ object (self)
     | b          -> super#bindingnode b
 
   method datatype = function
-    | TypeVar (x, k)        -> self#add (`TypeVar (x, k))
-    | RigidTypeVar (x, k)   -> self#add (`RigidTypeVar (x, k))
-    | MuType (v, t)         -> let o = self#bind (`RigidTypeVar (v, `Any)) in o#datatype t
-    | dt                    -> super#datatype dt
+    | TypeVar (x, k)      -> self#add (`TypeVar (x, k))
+    | RigidTypeVar (x, k) -> self#add (`RigidTypeVar (x, k))
+    | MuType (v, t)       -> let o = self#bind (`RigidTypeVar (v, `Any)) in o#datatype t
+    | ForallType (qs, t)  ->
+        let o =
+          List.fold_left
+            (fun o q ->               
+               o#bind (type_variable_of_quantifier q))
+            self
+            qs
+        in
+          o#datatype t
+    | dt                  -> super#datatype dt
         
   method row_var = function
     | `Closed           -> self
@@ -97,6 +106,33 @@ struct
             let tenv = StringMap.add name point tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv; penv=penv} t)) in
               `MetaTypeVar point
+        | ForallType (qs, t) ->
+            let desugar_quantifier (var_env, qs) =
+              function
+                | `TypeVar (name, subkind) ->
+                    let var = Types.fresh_raw_variable () in
+                    let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                    let q = `TypeVar ((var, subkind), point) in
+                    let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
+                      var_env, q::qs
+                | `RowVar (name, subkind) ->
+                    let var = Types.fresh_raw_variable () in
+                    let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                    let q = `RowVar ((var, subkind), point) in
+                    let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
+                      var_env, q::qs
+                | `PresenceVar name ->
+                    let var = Types.fresh_raw_variable () in
+                    let point = Unionfind.fresh (`Rigid var) in
+                    let q = `PresenceVar (var, point) in
+                    let var_env = {var_env with penv=StringMap.add name point var_env.penv} in
+                      var_env, q::qs in
+              
+            let var_env, qs =
+              List.fold_left desugar_quantifier (var_env, []) qs in
+            let qs = List.rev qs in
+            let t = datatype var_env t in
+              `ForAll (Types.box_quantifiers qs, t)
         | UnitType -> Types.unit_type
         | TupleType ks -> 
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in

@@ -110,6 +110,7 @@ sig
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
+  val tabstr : (Types.quantifier list * value sem) -> value sem
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
@@ -602,6 +603,10 @@ struct
                 let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
+  let tabstr (tyvars, s) =
+    let t = Types.for_all (tyvars, sem_type s) in
+      bind s (fun v -> lift (`TAbs (tyvars, v), t))
+
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
       bind s (fun v -> lift (`TApp (v, tyargs), t))
@@ -695,6 +700,10 @@ struct
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) ->
               I.apply (ev e, evs es)
+          | `TAbstr (tyvars, e) ->
+              let v = ev e in
+              let vt = I.sem_type v in
+                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
           | `TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in

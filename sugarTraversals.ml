@@ -186,6 +186,8 @@ class map =
           let _x = o#phrase _x in
           let _x_i1 = o#list (fun o -> o#phrase) _x_i1
           in `FnAppl ((_x, _x_i1))
+      | `TAbstr ((_x, _x_i1)) ->
+          let _x_i1 = o#phrase _x_i1 in `TAbstr ((_x, _x_i1))
       | `TAppl ((_x, _x_i1)) ->
           let _x = o#phrase _x in `TAppl ((_x, _x_i1))
       | `TupleLit _x ->
@@ -431,6 +433,9 @@ class map =
       | MuType (_x, _x_i1) ->
           let _x = o#name _x in
           let _x_i1 = o#datatype _x_i1 in MuType (_x, _x_i1)
+      | ForallType (_x, _x_i1) ->
+          let _x = o#list (fun o -> o#quantifier) _x in
+          let _x_i1 = o#datatype _x_i1 in ForallType (_x, _x_i1)
       | UnitType -> UnitType
       | TupleType _x ->
           let _x = o#list (fun o -> o#datatype) _x in TupleType _x
@@ -696,6 +701,8 @@ class fold =
       | `FnAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
+      | `TAbstr ((_x, _x_i1)) ->
+          let o = o#phrase _x_i1 in o
       | `TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in o
       | `TupleLit _x -> let o = o#list (fun o -> o#phrase) _x in o
@@ -903,6 +910,8 @@ class fold =
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
       | MuType (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
+      | ForallType (_x, _x_i1) ->
+          let o = o#list (fun o -> o#quantifier) _x in let o = o#datatype _x_i1 in o
       | UnitType -> o
       | TupleType _x -> let o = o#list (fun o -> o#datatype) _x in o
       | RecordType _x -> let o = o#row _x in o
@@ -1195,6 +1204,8 @@ class fold_map =
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
           in (o, (`FnAppl ((_x, _x_i1))))
+      | `TAbstr ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (`TAbstr ((_x, _x_i1))))
       | `TAppl ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in (o, (`TAppl ((_x, _x_i1))))
       | `TupleLit _x ->
@@ -1462,6 +1473,9 @@ class fold_map =
       | MuType (_x, _x_i1) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (MuType (_x, _x_i1)))
+      | ForallType (_x, _x_i1) ->
+          let (o, _x) = o#list (fun o -> o#quantifier) _x in
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (ForallType (_x, _x_i1)))
       | UnitType -> (o, UnitType)
       | TupleType _x ->
           let (o, _x) = o#list (fun o -> o#datatype) _x

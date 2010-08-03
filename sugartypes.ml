@@ -72,11 +72,30 @@ type location = [`Client | `Server | `Native | `Unknown]
 type subkind = [`Any | `Base]
     deriving (Show)
 
+type type_variable =
+    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
+    | `RowVar of name * subkind | `RigidRowVar of name * subkind
+    | `PresenceVar of name | `RigidPresenceVar of name ]
+      deriving (Show)
+
+type quantifier =
+    [ `TypeVar of name * subkind
+    | `RowVar of name * subkind
+    | `PresenceVar of name ]
+      deriving (Show)
+
+let type_variable_of_quantifier =
+  function
+    | `TypeVar v -> `RigidTypeVar v
+    | `RowVar v -> `RigidRowVar v
+    | `PresenceVar v -> `RigidPresenceVar v
+
 type datatype =
   | TypeVar         of name * subkind
   | RigidTypeVar    of name * subkind
   | FunctionType    of datatype list * row * datatype
   | MuType          of name * datatype
+  | ForallType      of quantifier list * datatype
   | UnitType
   | TupleType       of (datatype list)
   | RecordType      of row
@@ -103,18 +122,6 @@ and type_arg =
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = datatype * Types.datatype option
     deriving (Show)
-
-type type_variable =
-    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
-    | `RowVar of name * subkind | `RigidRowVar of name * subkind
-    | `PresenceVar of name | `RigidPresenceVar of name ]
-      deriving (Show)
-
-type quantifier =
-    [ `TypeVar of name * subkind
-    | `RowVar of name * subkind
-    | `PresenceVar of name ]
-      deriving (Show)
 
 type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
@@ -183,6 +190,7 @@ and phrasenode = [
 | `Regex            of regex
 | `UnaryAppl        of (tyarg list * unary_op) * phrase
 | `FnAppl           of phrase * phrase list
+| `TAbstr           of tyvar list ref * phrase
 | `TAppl            of phrase * tyarg list
 | `TupleLit         of phrase list
 | `RecordLit        of (name * phrase) list * phrase option
@@ -245,6 +253,9 @@ exception ConcreteSyntaxError of (string * position)
 exception PatternDuplicateNameError of (SourceCode.pos * string)
 exception RedundantPatternMatch of SourceCode.pos
 
+let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
+  `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
+
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
@@ -290,6 +301,7 @@ struct
 
     | `Spawn (p, _)
     | `SpawnWait (p, _)
+    | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)
     | `Projection (p, _)

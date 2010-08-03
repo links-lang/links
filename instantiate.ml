@@ -6,6 +6,8 @@ open Types
 let show_recursion = Settings.add_bool("show_recursion", false, `User)
 let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
 
+let quantified_instantiation = Settings.add_bool("quantified_instantiation", false, `User)
+
 (*
   instantiation environment:
     for stopping cycles during instantiation
@@ -52,7 +54,8 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
           | `Record row -> `Record (inst_row rec_env row)
           | `Variant row -> `Variant (inst_row rec_env row)
           | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
-          | `ForAll (_,t) -> inst rec_env t
+          | `ForAll (qs, t) ->
+              `ForAll (qs, inst rec_env t)
           | `Alias ((name, ts), d) -> 
               `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
@@ -151,73 +154,100 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
 
     remove any quantifiers and rename bound type vars accordingly
 *)
-let instantiate_typ : datatype -> (type_arg list * datatype) = fun t ->
-  match t with
+let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid t ->
+  match concrete_type t with
     | `ForAll (quantifiers, t) as dtype ->
         let () =
           Debug.if_set (show_instantiation)
             (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
           
-        let typ (var, subkind) (tenv, renv, penv, tys) =
-          let t = fresh_type_variable subkind in
-            IntMap.add var t tenv, renv, penv, `Type t :: tys in
+        let wrap v =
+          if rigid then `Rigid v
+          else `Flexible v in
 
-        let row (var, subkind) (tenv, renv, penv, tys) =
-          let r = make_empty_open_row subkind in
-            tenv, IntMap.add var r renv, penv, `Row r :: tys in
+        let typ (var, subkind) (tenv, renv, penv, tys, qs) =
+          let var' = fresh_raw_variable () in
+          let point = Unionfind.fresh (wrap (var', subkind)) in
+          let t = `MetaTypeVar point in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys, (`TypeVar ((var', subkind), point)) :: qs in
 
-        let presence var (tenv, renv, penv, tys) =
-          let t = fresh_presence_variable () in
-            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
+        let row (var, subkind) (tenv, renv, penv, tys, qs ) =
+          let var' = fresh_raw_variable () in
+          let r = Unionfind.fresh (wrap (var', subkind)) in
+            tenv, IntMap.add var (StringMap.empty, r) renv, penv, `Row (StringMap.empty, r) :: tys, (`RowVar ((var', subkind), r)) :: qs in
 
-        let tenv, renv, penv, tys =
+        let presence var (tenv, renv, penv, tys, qs) =
+          let var' = fresh_raw_variable () in
+          let point = Unionfind.fresh (wrap var) in
+          let t = `Var point in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys, (`PresenceVar (var, point)) :: qs in
+
+        let tenv, renv, penv, tys, qs =
           List.fold_left
             (fun env ->
                function
                  | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
                  | `RowVar ((var, subkind), _) -> row (var, subkind) env
                  | `PresenceVar (var, _) -> presence var env)
-            (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
+            (IntMap.empty, IntMap.empty, IntMap.empty, [], []) (unbox_quantifiers quantifiers) in
 
         let tys = List.rev tys in
-          tys, instantiate_datatype (tenv, renv, penv) t
-    | t -> [], t
+        let qs = List.rev qs in
+        let body = instantiate_datatype (tenv, renv, penv) t in
+          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype");
+            (* EXPERIMENTAL *)
 
+            (* HACK: currently we appear to need to strip the quantifiers
+               in the one case where this function is called with
+               rigid set to true
+            *)
+(*             if rigid then *)
+(*               tys, body *)
+(*             else *)
+          if Settings.get_value quantified_instantiation then
+              tys, `ForAll (box_quantifiers qs, body)
+          else
+            tys, body           
+    | t -> [], t
 
 (** instantiate_rigid t
     
     as instantiate_typ, but instantiates the bound type variables with fresh
     rigid type variables
 *)
-let instantiate_rigid : datatype -> (type_arg list * datatype) = fun t ->
-  match t with
-    | `ForAll (quantifiers, t) as dtype ->
-        let () =
-          Debug.if_set (show_instantiation)
-            (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in
+let instantiate_rigid : datatype -> (type_arg list * datatype) = instantiate_typ true
+
+let instantiate_typ = instantiate_typ false
+
+(*  fun t -> *)
+(*   match concrete_type t with *)
+(*     | `ForAll (quantifiers, t) as dtype -> *)
+(*         let () = *)
+(*           Debug.if_set (show_instantiation) *)
+(*             (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in *)
           
-        let typ (var, subkind) (tenv, renv, penv, tys) =
-          let t = fresh_rigid_type_variable subkind in
-            IntMap.add var t tenv, renv, penv, `Type t :: tys in
+(*         let typ (var, subkind) (tenv, renv, penv, tys) = *)
+(*           let t = fresh_rigid_type_variable subkind in *)
+(*             IntMap.add var t tenv, renv, penv, `Type t :: tys in *)
 
-        let row (var, subkind) (tenv, renv, penv, tys) =
-          let r = fresh_rigid_row_variable subkind in
-            tenv, IntMap.add var (StringMap.empty, r) renv, penv, `Row (StringMap.empty, r) :: tys in
+(*         let row (var, subkind) (tenv, renv, penv, tys) = *)
+(*           let r = fresh_rigid_row_variable subkind in *)
+(*             tenv, IntMap.add var (StringMap.empty, r) renv, penv, `Row (StringMap.empty, r) :: tys in *)
 
-        let presence var (tenv, renv, penv, tys) =
-          let t = fresh_rigid_presence_variable () in
-            tenv, renv, IntMap.add var t penv, `Presence t :: tys in
+(*         let presence var (tenv, renv, penv, tys) = *)
+(*           let t = fresh_rigid_presence_variable () in *)
+(*             tenv, renv, IntMap.add var t penv, `Presence t :: tys in *)
 
-        let tenv, renv, penv, tys = List.fold_left
-          (fun env -> function
-             | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
-             | `RowVar ((var, subkind), _) -> row (var, subkind) env
-             | `PresenceVar (var, _) -> presence var env
-          ) (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in
+(*         let tenv, renv, penv, tys = List.fold_left *)
+(*           (fun env -> function *)
+(*              | `TypeVar ((var, subkind), _) -> typ (var, subkind) env *)
+(*              | `RowVar ((var, subkind), _) -> row (var, subkind) env *)
+(*              | `PresenceVar (var, _) -> presence var env *)
+(*           ) (IntMap.empty, IntMap.empty, IntMap.empty, []) quantifiers in *)
 
-        let tys = List.rev tys in
-          tys, instantiate_datatype (tenv, renv, penv) t
-    | t -> [], t
+(*         let tys = List.rev tys in *)
+(*           tys, instantiate_datatype (tenv, renv, penv) t *)
+(*     | t -> [], t *)
 
 
 (** instantiate env var
@@ -232,9 +262,12 @@ let instantiate : environment -> string -> type_arg list * datatype =
       try
         Env.String.lookup env var
       with NotFound _ ->
-        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
+        raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
     in
-      instantiate_typ t
+(*       Debug.print ("t1: " ^ Types.string_of_datatype t); *)
+      let t = instantiate_typ t in
+(*       Debug.print ("t2: " ^ Types.string_of_datatype (snd t)); *)
+        t
 
 let rigid : environment -> string -> type_arg list * datatype =
   fun env var ->
@@ -242,7 +275,8 @@ let rigid : environment -> string -> type_arg list * datatype =
       try
         Env.String.lookup env var
       with NotFound _ ->
-        failwith ("Variable '"^ var ^ "' does not refer to a declaration")
+        raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
+(*        failwith ("Variable '"^ var ^ "' does not refer to a declaration") *)
     in
       instantiate_rigid t
         
@@ -254,70 +288,76 @@ module SEnv = Env.String
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = 
   fun t tyargs ->
-  let vars =
-    match t with
-      | `ForAll (vars, _) -> vars
-      | _ -> [] in
-  let tenv, renv, penv =
-    if (List.length vars <> List.length tyargs) then raise ArityMismatch;
-    List.fold_right2
-      (fun var t (tenv, renv, penv) ->
-         match (var, t) with
-           | (`TypeVar ((var, _subkind), _), `Type t) ->
-               (IntMap.add var t tenv, renv, penv)
-           | (`RowVar ((var, _subkind), _), `Row row) ->
-               (* 
-                  QUESTION:
-                  
-                  What is the right way to put the row in the row_var environment?
-
-                  We can simply wrap it in a `Body tag, but then we need to be careful
-                  about which bits of the compiler are assuming that
-                  rows are already flattened. Maybe this is OK...
-               *)
-               begin
-                 match row with
-                   | fields, row_var when StringMap.is_empty fields ->
-                       (tenv, IntMap.add var (StringMap.empty, row_var) renv, penv)
-                   | _ ->
-                       (tenv, IntMap.add var row renv, penv)
-               end
-           | (`PresenceVar (var, _), `Presence f) ->
-               (tenv, renv, IntMap.add var f penv)
-           | _ -> assert false)
-      vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
-  in
-    instantiate_datatype (tenv, renv, penv) t
+(*    Debug.print ("t: " ^ Types.string_of_datatype t); *)
+    let t, vars =
+      match concrete_type t with
+        | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
+        | t -> t, [] in
+    let tenv, renv, penv =
+      if (List.length vars <> List.length tyargs) then raise ArityMismatch;
+      List.fold_right2
+        (fun var t (tenv, renv, penv) ->
+           match (var, t) with
+             | (`TypeVar ((var, _subkind), _), `Type t) ->
+                 (IntMap.add var t tenv, renv, penv)
+             | (`RowVar ((var, _subkind), _), `Row row) ->
+                 (* 
+                    QUESTION:
+                    
+                    What is the right way to put the row in the row_var environment?
+                    
+                    We can simply wrap it in a `Body tag, but then we need to be careful
+                    about which bits of the compiler are assuming that
+                    rows are already flattened. Maybe this is OK...
+                 *)
+                 begin
+                   match row with
+                     | fields, row_var when StringMap.is_empty fields ->
+                         (tenv, IntMap.add var (StringMap.empty, row_var) renv, penv)
+                     | _ ->
+                         (tenv, IntMap.add var row renv, penv)
+                 end
+             | (`PresenceVar (var, _), `Presence f) ->
+                 (tenv, renv, IntMap.add var f penv)
+             | _ -> assert false)
+        vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
+    in
+      instantiate_datatype (tenv, renv, penv) t
 
 (*
   ensure that t has fresh quantifiers
 *)
 let freshen_quantifiers t =
-  match t with
-    | `ForAll (qs, _) ->
-        let qs, tyargs =
-          List.split
-            (List.map
-               (function
-                  | `TypeVar ((_, subkind), _) ->
-                      let q, t = Types.fresh_type_quantifier subkind in
-                        q, `Type t
-                  | `RowVar ((_, subkind), _) ->
-                      let q, r = Types.fresh_row_quantifier subkind in
-                        q, `Row r
-                  | `PresenceVar _ ->
-                      let q, f = Types.fresh_presence_quantifier () in
-                        q, `Presence f)
-               qs)
-        in
-          `ForAll (qs, apply_type t tyargs)
+  match concrete_type t with
+    | `ForAll (qs, body) ->
+        begin
+          match Types.unbox_quantifiers qs with
+            | [] -> body
+            | qs ->
+                let qs, tyargs =
+                  List.split
+                    (List.map
+                       (function
+                          | `TypeVar ((_, subkind), _) ->
+                              let q, t = Types.fresh_type_quantifier subkind in
+                                q, `Type t
+                          | `RowVar ((_, subkind), _) ->
+                              let q, r = Types.fresh_row_quantifier subkind in
+                                q, `Row r
+                          | `PresenceVar _ ->
+                              let q, f = Types.fresh_presence_quantifier () in
+                                q, `Presence f)
+                       qs)
+                in
+                  `ForAll (Types.box_quantifiers qs, apply_type t tyargs)
+        end
     | t -> t
 
 (*
   replace the quantifiers in t with qs'
 *)
 let replace_quantifiers t qs' =
-  match t with
+  match concrete_type t with
     | `ForAll (qs, _) ->
         let tyargs =
           List.map2
@@ -329,10 +369,10 @@ let replace_quantifiers t qs' =
                      `Row (StringMap.empty, row_var)
                  | `PresenceVar _, `PresenceVar (_, point)  ->
                      `Presence (`Var point))
-            qs
+            (Types.unbox_quantifiers qs)
             qs'
         in
-          `ForAll (qs, apply_type t tyargs)
+          `ForAll (Types.box_quantifiers qs', apply_type t tyargs)
     | t -> t
 
 let alias name tyargs env = 
@@ -371,9 +411,9 @@ let alias name tyargs env =
 
         let qs = IntMap.fold (fun _ q qs -> q::qs) ftvs [] in
         let body =
-          match freshen_quantifiers (`ForAll (qs, body)) with
+          match freshen_quantifiers (`ForAll (Types.box_quantifiers qs, body)) with
             | `ForAll (_, body) -> body
-            | _ -> assert false
+            | t -> t
         in
           `Alias ((name, tyargs),
                   instantiate_datatype (tenv, renv, penv) body)

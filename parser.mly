@@ -138,7 +138,7 @@ let datatype d = d, None
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG INCLUDE
 %token QUESTION EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -803,6 +803,10 @@ squiggly_arrow:
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
+| forall_datatype                                              { $1 }
+
+forall_datatype:
+| FORALL varlist DOT datatype                                  { ForallType (List.map fst $2, $4) }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
