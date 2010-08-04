@@ -22,18 +22,19 @@ module Eval = struct
        else name ^ ":" ^ args)
     in
       Value.db_connect driver params
-
+(*
    let lookup_var var env =
      match Value.lookup var env with
        | Some v -> v
        | None -> (Lib.primitive_stub_by_code var)
+*)
 
-
-(*   let lookup_var var env = 
+(* Alternative, faster version *)
+   let lookup_var var env = 
      if Lib.is_primitive_var var 
      then Lib.primitive_stub_by_code var
      else Value.find var env
-*)
+
 
    let serialize_call_to_client (continuation, name, arg) = 
      Json.jsonize_call continuation name arg

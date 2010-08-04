@@ -1262,8 +1262,13 @@ let value_env : primitive option Env.Int.t =
 
 let maxvar = 
   Env.String.fold
-    (fun name var maxvar -> max var maxvar)
+    (fun name var x -> max var x)
     nenv 0
+
+let minvar = 
+  Env.String.fold
+    (fun name var x -> min var x)
+    nenv maxvar
 
 let value_array : primitive option array = 
   let array = Array.create (maxvar+1) None in
@@ -1271,7 +1276,8 @@ let value_array : primitive option array =
     Array.set array (Env.String.lookup nenv name) (impl p)) env;
   array
 
-let is_primitive_var var = 0 <= var && var <= maxvar
+let is_primitive_var var = 
+  minvar <= var && var <= maxvar
 
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
