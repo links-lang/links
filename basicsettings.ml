@@ -77,3 +77,5 @@ let allow_stale_cache = Settings.add_bool("allow_stale_cache", false, `System)
 (* Optimization pass? *)
 let optimise = Settings.add_bool("optimise", false, `User)
 
+(* Compile & cache whole program, closures, and HTML *)
+let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)

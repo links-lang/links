@@ -221,11 +221,11 @@ struct
   let show = show ->- PP.pretty 144
 end
 
-let show =
+let show x =
   if Settings.get_value(js_pretty_print) then
-    PP.show
+    PP.show x
   else
-    UP.show
+    UP.show x
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
@@ -984,17 +984,20 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program =
-  let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let program = FixPickles.program (closures, nenv, venv, tenv) program in
-  let _, code = generate_program venv program in
-  let code = wrap_with_server_stubs code in
-    (make_boiler_page
-       ~cgi_env:cgi_env
-       ~body:(show code)
+let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
+  let printed_code = Loader.wpcache "irtojs" (fun () -> 
+    let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
+    let program = FixPickles.program (closures, nenv, venv, tenv) program in
+    let _, code = generate_program venv program in
+    let code = wrap_with_server_stubs code in
+    show code) 
+  in
+  (make_boiler_page
+     ~cgi_env:cgi_env
+     ~body:printed_code
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
-       [])
-
+     [])
+    
 let generate_program_defs (closures, nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
