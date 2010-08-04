@@ -31,48 +31,31 @@ and csentry =
 
 let show = Show.show show_cs
 
-(* FIXME should be ok to remove this since the XML properties are not used *)
-let rec out_cs out cs =
-  let attr_list xml_attributes = 
-    List.map 
-      (fun (name, value) -> ("", name), value) 
-      xml_attributes
-  in
-  let tag_attr name attributes = ("", name), (attr_list attributes) in
-  let prop1 n = tag_attr "property" [("name", n); ("value", "")] in
-  let prop2 n v = tag_attr "property" [("name", n); ("value", v)] in
-  let csentry = function
-    | `Column (i, typ) ->
-	out (`El_start (prop2 "offset" (string_of_int i)));
-	out (`El_start (prop2 "type" (A.string_of_pf_type typ)));
-	out `El_end;
-	out `El_end
-    | `Mapping (name, cs) ->
-	out (`El_start (prop2 "mapping" name));
-	out_cs out cs;
-	out `El_end;
-    | `Tag _ -> assert false
-  in
-    out (`El_start (prop1 "cs"));
-    List.iter csentry cs;
-    out `El_end
-      
 (* return all columns together with their column type *)
 let rec leafs cs =
-  List.rev
-    (List.fold_left
-       (fun leaf_list cs_entry ->
+    List.fold_right
+       (fun cs_entry leaf_list ->
 	  match cs_entry with
-	    | `Column col -> col :: leaf_list
-	    | `Mapping (_, cs) -> (List.rev (leafs cs)) @ leaf_list
-	    | `Tag (tagcol, refcol, _) -> refcol :: tagcol :: leaf_list)
-       []
-       cs)
+	    | `Column _
+	    | `Tag _ -> cs_entry :: leaf_list
+	    | `Mapping (_, cs) -> (leafs cs) @ leaf_list)
+      cs
+      []
     
-(* return all columns *)	
-let rec columns cs = List.map fst (leafs cs)
+let offset_of_csentry = function
+  | `Column (off, _) -> [off]
+  | `Tag ((toff, _), (roff, _), _) -> [toff; roff]
+  | `Mapping _ -> assert false
 
-let cardinality (cs : cs) = List.length (columns cs)
+let is_atomic = function `Column (_, t) when is_primitive_col t -> true | _ -> false
+let is_variant = function `Tag _ -> true | _ -> false
+let is_record = function `Mapping _ -> true | _ -> false
+let is_boxed_list = function `Column (_, `Surrogate) -> true | _ -> false
+
+(* return all columns *)	
+let rec offsets = List.flatten -<- (List.map offset_of_csentry) -<- leafs
+
+let cardinality (cs : cs) = List.length (offsets cs)
 
 (* increase all column names by i *)
 let rec shift cs i =

@@ -181,7 +181,7 @@ let do_unbox q_e surr_col inner_ti =
   let Ti(q_sub, cs_sub, ts_sub, vs_sub) = inner_ti in
   let q_unbox =
     A.Dag.mk_project
-      ([(iter, iter'); prj pos] @ (prjlist (io (Cs.columns cs_sub))))
+      ([(iter, iter'); prj pos] @ (prjlist (io (Cs.offsets cs_sub))))
       (A.Dag.mk_eqjoin
 	 (c', iter)
 	 (A.Dag.mk_project
@@ -195,7 +195,7 @@ let do_unbox q_e surr_col inner_ti =
 let do_project field record =
   let Ti (q_r, cs_r, ts_r, vs_r) = record in
   let field_cs' = Cs.lookup_record_field cs_r field in
-  let old_cols = Cs.columns field_cs' in
+  let old_cols = Cs.offsets field_cs' in
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
   let field_cs = Cs.shift field_cs' (-offset + 1) in
@@ -221,13 +221,13 @@ let do_length loop (Ti (q_e, _, _, _)) =
 let do_zip e1 e2 =
   let Ti (q_e1, cs_e1, ts_e1, vs_e1) = e1 in
   let Ti (q_e2, cs_e2, ts_e2, vs_e2) = e2 in
-  let card_e1 = List.length (Cs.columns cs_e1) in
+  let card_e1 = List.length (Cs.offsets cs_e1) in
   let cs_e2' = Cs.shift cs_e2 card_e1 in
   let ts_e2' = Ts.incr_cols ts_e2 card_e1 in
   let ts = Ts.append ts_e1 ts_e2' in
   let vs_e2' = Vs.incr_cols vs_e2 card_e1 in
   let vs = Vs.append vs_e1 vs_e2' in
-  let items = io ((Cs.columns cs_e1) @ (Cs.columns cs_e2')) in
+  let items = io ((Cs.offsets cs_e1) @ (Cs.offsets cs_e2')) in
   let q =
     A.Dag.mk_project
       ([prj iter; prj pos] @ (prjlist items))
@@ -239,7 +239,7 @@ let do_zip e1 e2 =
 	       (iter, iter')
 	       q_e1
 	       (A.Dag.mk_project
-		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.columns cs_e2')) (io (Cs.columns cs_e2))))
+		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.offsets cs_e2')) (io (Cs.offsets cs_e2))))
 		  q_e2))))
   in
   let cs = [`Mapping ("1", cs_e1); `Mapping ("2", cs_e2')] in
@@ -300,7 +300,7 @@ let refresh_surr_cols cs ts_l ts_r  vs_l vs_r new_surr =
   let vs_cols = int_union (Vs.key_columns vs_l) (Vs.key_columns vs_r) in
 
   (* all columns which are neither vs nor ts surrogate columns *)
-  prjlist (io (difference (Cs.columns cs) (vs_cols @ ts_cols)))
+  prjlist (io (difference (Cs.offsets cs) (vs_cols @ ts_cols)))
 
   (* use new keys in vs surrogate columns *)
   @ (prjlist_single (io vs_cols) new_surr) 
@@ -402,7 +402,7 @@ let rec slice_inner_tables (q_outer : A.Dag.dag ref) (ts : ts) : ts =
   let slice (surr_col, Ti (q_inner, cs_inner, ts_inner, vs_inner)) =
     let q_inner' = 
       A.Dag.mk_project
-	([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_inner))))
+	([prj iter; prj pos] @ (prjlist (io (Cs.offsets cs_inner))))
 	(A.Dag.mk_eqjoin
 	   (iter, iter')
 	   q_inner
@@ -431,12 +431,12 @@ let map_forward q cs =
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_project
-	 ((iter, inner) :: (prjlist (io (Cs.columns cs))))
+	 ((iter, inner) :: (prjlist (io (Cs.offsets cs))))
 	 q_renumbered)
   in
   let map =
     A.Dag.mk_project
-      [(outer, iter); prj inner]
+      [(outer, iter); prj inner; (pos', pos)]
       q_renumbered
   in
   let loop =
@@ -450,7 +450,7 @@ let map_forward q cs =
 let lift map (Ti (q, cs, ts, vs)) =
   let q' =
     (A.Dag.mk_project
-       ([(iter, inner); prj pos] @ (prjlist (io (Cs.columns cs))))
+       ([(iter, inner); prj pos] @ (prjlist (io (Cs.offsets cs))))
        (A.Dag.mk_eqjoin
 	  (iter, outer)
 	  q
@@ -474,7 +474,7 @@ let rec omap map sort_criteria sort_cols =
 
 (* compute absolute positions for q *)
 let abspos q cs =
-  let cols = io (Cs.columns cs) in
+  let cols = io (Cs.offsets cs) in
   A.Dag.mk_project
     ([prj iter; prj pos] @ (prjlist cols))
     (A.Dag.mk_rownum
@@ -560,9 +560,9 @@ and compile_unzip env loop p =
   in
   let cs_1 = Cs.lookup_record_field cs_p "1" in
   let cs_2 = Cs.lookup_record_field cs_p "2" in
-  let cols_1 = Cs.columns cs_1 in
-  let card = List.length (Cs.columns cs_1) in
-  let cols_2 = Cs.columns cs_2 in
+  let cols_1 = Cs.offsets cs_1 in
+  let card = List.length (Cs.offsets cs_1) in
+  let cols_2 = Cs.offsets cs_2 in
   let cs_2' = Cs.shift cs_2 (-card) in
   let card = List.length cols_1 in
   let q_1 = 
@@ -685,7 +685,7 @@ and compile_nth env loop i l =
   let q_l' = abspos q_l cs_l in
   let q_inner_just =
     (A.Dag.mk_project
-       ([prj iter; prj pos] @ prjlist (io (Cs.columns cs_l)))
+       ([prj iter; prj pos] @ prjlist (io (Cs.offsets cs_l)))
        (A.Dag.mk_select
 	  res
 	  (A.Dag.mk_funnumeq
@@ -780,28 +780,7 @@ and do_table_greater loop wrapper l1 l2 =
 
     (* lift zipped *)
     let Ti (q_s, cs_s, ts_s, vs_s) = zipped in
-    let q_s' = 
-      A.Dag.mk_rownum
-	(inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	q_s
-    in
-    let q_s_mapped = 
-      A.Dag.mk_attach
-	(pos, A.Nat 1n)
-	(A.Dag.mk_project
-	   ((iter, inner) :: (prjlist (io (Cs.columns cs_s))))
-	   q_s')
-    in
-    let map =
-      A.Dag.mk_project
-	[(outer, iter); prj inner; (pos', pos)]
-	q_s'
-    in
-    let loop' =
-      A.Dag.mk_project
-	[prj iter]
-	q_s_mapped
-    in
+    let q_s_mapped, map, loop' = map_forward q_s cs_s in
     
     let zipped_mapped = Ti (q_s_mapped, cs_s, ts_s, vs_s) in
 
@@ -865,15 +844,21 @@ and do_row_greater loop wrapper e1 e2 =
 
 and do_row_greater_real loop wrapper zipped =
 
-  let column_greater ti_zipped ((col_l, type_l), (col_r, _type_r)) =
+  let column_greater ti_zipped (cse_l, cse_r) =
     let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
-      if Cs.is_primitive_col type_l then
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res)]
-	  (* no need to join since the two arguments are already zipped *)
-	  (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
+      if Cs.is_atomic cse_l then
+	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
+	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	  A.Dag.mk_project
+	    [prj iter; prj pos; (A.Item 1, res)]
+	    (* no need to join since the two arguments are already zipped *)
+	    (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
+      else if Cs.is_variant cse_l then
+	failwith "variant not implemented"
       else
+	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
+	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
 	(* inner tables need to be unboxed first *)
 	let inner_table_l, inner_table_r =
 	  try
@@ -888,15 +873,21 @@ and do_row_greater_real loop wrapper zipped =
       Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
   in
 
-  let column_equal ti_zipped ((col_l, type_l), (col_r, _type_r)) = 
+  let column_equal ti_zipped (cse_l, cse_r) = 
     let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
-      if Cs.is_primitive_col type_l then
-	A.Dag.mk_project
-	  [prj iter; prj pos; (A.Item 1, res)]
-	  (* no need to join since the two arguments are already zipped *)
-	  (wrap_eq res (A.Item col_l) (A.Item col_r) q_zipped)
+      if Cs.is_atomic cse_l then
+	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
+	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	  A.Dag.mk_project
+	    [prj iter; prj pos; (A.Item 1, res)]
+	    (* no need to join since the two arguments are already zipped *)
+	    (wrap_eq res (A.Item col_l) (A.Item col_r) q_zipped)
+      else if Cs.is_variant cse_l then
+	failwith "variant not implemented"
       else
+	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
+	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
 	(* we compare nested lists represented by a inner table *)
 
 	(* lookup the inner tables referred to by col1, col2 *)
@@ -961,40 +952,19 @@ and do_table_equal loop wrapper l1 l2 =
 
   let map_equal source =
     let Ti (q_s, cs_s, ts_s, vs_s) = source in
-     let q_s' = 
-       A.Dag.mk_rownum
-	 (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	 q_s
-     in
-     let q_s_mapped = 
-       A.Dag.mk_attach
-	 (pos, A.Nat 1n)
-	 (A.Dag.mk_project
-	    ((iter, inner) :: (prjlist (io (Cs.columns cs_s))))
-	    q_s')
-     in
-     let map =
-       A.Dag.mk_project
-	 [(outer, iter); prj inner; (pos', pos)]
-	 q_s'
-     in
-     let loop =
-       A.Dag.mk_project
-	 [prj iter]
-	 q_s_mapped
-     in
-     let ti_s = Ti (q_s_mapped, cs_s, ts_s, vs_s) in
-     let Ti (q_equal, _, _, _) = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
-     (* map the comparison result back into the outer iteration context *)
-     let result_backmapped =
-       A.Dag.mk_project
-	 [(iter, outer); (pos, pos'); prj (A.Item 1)]
-	 (A.Dag.mk_eqjoin
-	    (iter, inner)
-	    q_equal
-	    map)
-     in
-       Ti (result_backmapped, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+    let q_s_mapped, map, loop = map_forward q_s cs_s in
+    let ti_s = Ti (q_s_mapped, cs_s, ts_s, vs_s) in
+    let Ti (q_equal, _, _, _) = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)) in
+      (* map the comparison result back into the outer iteration context *)
+    let result_backmapped =
+      A.Dag.mk_project
+	[(iter, outer); (pos, pos'); prj (A.Item 1)]
+	(A.Dag.mk_eqjoin
+	   (iter, inner)
+	   q_equal
+	   map)
+    in
+      Ti (result_backmapped, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
   in
 
   let l1_abs = abspos_ti l1 in
@@ -1005,101 +975,72 @@ and do_table_equal loop wrapper l1 l2 =
       (equal l1_len l2_len)
       (all (map_equal (do_zip l1_abs l2_abs)))
 
-and do_row_equal loop wrapper r1 r2 =
-  let Ti (q_r1, cs_r1, ts_r1, _) = r1 in
-  let Ti (q_r2, cs_r2, ts_r2, _) = r2 in
+and do_row_equal loop wrapper ti_l ti_r =
+  let Ti (q_l, cs_l, ts_l, _) = ti_l in
+  let Ti (q_r, cs_r, ts_r, _) = ti_r in
 
   (* special case: if we are comparing lists of records and one of the lists is the empty 
      list, the length of its cs component does not match the other cs's length.  in this case, 
      we need to "fake" a compatible cs for the empty list *)
-  let cs_r1, cs_r2 = Cs.longer_cs cs_r1 cs_r2 in
+  let cs = Cs.fuse cs_l cs_r in
 
-  (* pair the item columns which belong to the respective record fields *)
-  (* FIXME sorting is unecessary because all records/tables are sorted by field names (invariant *)
-  let items1 = Cs.leafs (Cs.sort_record_columns cs_r1) in
-  let items2 = Cs.leafs (Cs.sort_record_columns cs_r2) in
+  let fields = Cs.leafs (Cs.sort_record_columns cs) in
 
-  let items = List.combine items1 items2 in
-
-  let c = A.Item 1 in
-  let c' = A.Item 2 in
-  let res = A.Item 3 in
   (* compare the columns for the first field. the result is then the conjuntion of
      this result and the result of the (recursive) comparison of the remaining fields *)
-  let rec assemble_equals = function
-    | [] -> 
-	failwith "do_row_equal: empty records"
-    | [((col1, coltype), (col2, _))] ->
-	let q_r1', q_r2' =
-	  (* no need to project if the row has only one item column *)
-	  if (Cs.cardinality cs_r1) = 1 then
-	    (q_r1, q_r2)
-	  else
-	    ((A.Dag.mk_project
-		[prj iter; prj pos; (c, A.Item col1)]
-		q_r1),
-	     (A.Dag.mk_project
-		[prj iter; prj pos; (c, A.Item col2)]
-		q_r2))
-	in
-	  if Cs.is_primitive_col coltype then
-	    (* normal comparison of atomic values *)
-	    do_primitive_binop wrapper q_r1' q_r2'
-	  else
-	    (* we compare nested lists represented by a inner table *)
 
-	    (* lookup the inner tables referred to by col1, col2 *)
-	    let inner_table_r1, inner_table_r2 = 
-	      try
-		Ts.lookup col1 ts_r1, Ts.lookup col2 ts_r2 
-	      with _ -> assert false
-	    in
-	    (* unbox the inner tables *)
-	    let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
-	    let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
-	      (* compare the inner tables *)
-	      q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2) 
-    | ((col1, coltype), (col2, _)) :: items ->
-	let col_equal_result = 
-	  let q_r1', q_r2' =
-	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col1)]
-		  q_r1),
-	       (A.Dag.mk_project
-		  [prj iter; prj pos; (c, A.Item col2)]
-		  q_r2)
-	  in
-	    if Cs.is_primitive_col coltype then
-	      do_primitive_binop wrapper q_r1' q_r2'
-	    else
-	      (* we compare nested lists represented by a inner table *)
-
-	      (* lookup the inner tables referred to by col1, col2 *)
-	      let inner_table_r1, inner_table_r2 = 
-		try
-		  Ts.lookup col1 ts_r1, Ts.lookup col2 ts_r2 
-		with _ -> assert false
-	      in
-		(* unbox the inner tables *)
-	      let ti_unboxed_r1 = do_unbox q_r1' col1 inner_table_r1 in
-	      let ti_unboxed_r2 = do_unbox q_r2' col2 inner_table_r2 in
-		(* compare the inner tables *)
-	      let result_ti = do_table_equal loop wrapper ti_unboxed_r1 ti_unboxed_r2 in
-	      let Ti (q_result, _, _, _) = result_ti in
-		q_result
+  let compare_field field_cse =
+    let project q col = 
+      A.Dag.mk_project
+	[prj iter; prj pos; (A.Item 1, A.Item col)]
+	q
+    in
+      if Cs.is_atomic field_cse then
+	(* normal comparison of atomic values *)
+	let col = List.hd (Cs.offset_of_csentry field_cse) in
+	  do_primitive_binop wrapper (project q_l col) (project q_r col)
+      else if Cs.is_variant field_cse then
+	let tagcol, refcol = 
+	  match Cs.offset_of_csentry field_cse with 
+	    | [tagcol; refcol] -> tagcol, refcol
+	    | _ -> assert false
 	in
-	  A.Dag.mk_project
-	    [prj iter; prj pos; (c, res)]
-	    (A.Dag.mk_funbooland
-	       (res, (c, c'))
-	       (A.Dag.mk_eqjoin
-		  (iter', iter)
-		  (A.Dag.mk_project
-		     [(iter', iter); (c', c)]
-		     col_equal_result)
-		  (assemble_equals items)))
+	(* compare tags *)
+	(* unzip *)
+	  failwith "variant not implemented"
+      else
+	(* we compare nested lists represented by a inner table *)
+	let col = List.hd (Cs.offset_of_csentry field_cse) in
+
+	(* lookup the inner tables referred to by col1, col2 *)
+	let inner_table_l, inner_table_r = 
+	  try
+	    Ts.lookup col ts_l, Ts.lookup col ts_r
+	  with _ -> assert false
+	in
+	  (* unbox the inner tables *)
+	let ti_unboxed_l = do_unbox (project q_l col) col inner_table_l in
+	let ti_unboxed_r = do_unbox (project q_r col) col inner_table_r in
+	  (* compare the inner tables *)
+	  q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r) 
   in
-  let q = assemble_equals items in
+
+  let q = 
+    List.fold_left
+      (fun q field ->
+	 A.Dag.mk_project
+	   [prj iter; prj pos; (A.Item 1, res)]
+	   (A.Dag.mk_funbooland
+	      (res, (A.Item 1, A.Item 2))
+	      (A.Dag.mk_eqjoin
+		 (iter', iter)
+		 (A.Dag.mk_project
+		    [(iter', iter); (A.Item 2, A.Item 1)]
+		    (compare_field field))
+		 q)))
+      (compare_field (List.hd fields))
+      (drop 1 fields)
+  in
     Ti(q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
 
 and compile_binop env loop wrapper restype operand_1 operand_2 =
@@ -1128,7 +1069,7 @@ and compile_concat env loop l =
     let c = A.Item 1 in
     let q =
       A.Dag.mk_project
-	([(iter, iter'); (pos, pos'')] @ (prjlist (io (Cs.columns cs_sub))))
+	([(iter, iter'); (pos, pos'')] @ (prjlist (io (Cs.offsets cs_sub))))
 	(A.Dag.mk_rank
 	   (pos'', [(pos', A.Ascending); (pos, A.Ascending)])
 	   (A.Dag.mk_eqjoin
@@ -1143,7 +1084,7 @@ and compile_concat env loop l =
 and compile_take env loop n l =
   let Ti(q_n, _, _, _) = compile_expression env loop n in
   let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
-  let cols = (io (Cs.columns cs_l)) in
+  let cols = (io (Cs.offsets cs_l)) in
   let q_l' = abspos q_l cs_l in
   let c = A.Item 1 in
   let one = A.Item 2 in
@@ -1173,7 +1114,7 @@ and compile_take env loop n l =
 and compile_drop env loop n l =
   let Ti(q_n, _, _, _) = compile_expression env loop n in
   let Ti(q_l, cs_l, ts_l, vs_l) = compile_expression env loop l in
-  let cols = (io (Cs.columns cs_l)) in
+  let cols = (io (Cs.offsets cs_l)) in
   let q_l_abs = abspos q_l cs_l in
   let c = A.Item 1 in
   let q' =
@@ -1200,7 +1141,7 @@ and compile_hd env loop l =
   let q_l_abs = abspos q_l cs_l  in
   let q = 
     A.Dag.mk_project
-      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_l))))
+      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets cs_l))))
       (A.Dag.mk_select
 	 res
 	 (A.Dag.mk_funnumeq
@@ -1228,7 +1169,7 @@ and compile_tl env loop l =
   let q_l_abs = abspos q_l cs_l in
   let q =
     A.Dag.mk_project
-      ([prj iter; prj pos] @ (prjlist (io (Cs.columns cs_l))))
+      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets cs_l))))
       (A.Dag.mk_select
 	 res
 	 (A.Dag.mk_funnumgt
@@ -1307,22 +1248,23 @@ and compile_for env loop v e1 e2 order_criteria =
 	  (* compile orderby expressions *)
 	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
 	  let q_os = List.map (fun (Ti (q, _, _, _)) -> q) q_os in
-	  let offset = (List.length (Cs.columns cs2)) + 1 in
+	  let offset = (List.length (Cs.offsets cs2)) + 1 in
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
 	    (order_cols, omap map q_os cols)
       | [] ->
 	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
   in
-  let q = A.Dag.mk_project
-    ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.columns cs2))))
-    (A.Dag.mk_rank
-       (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
-       (pos', order_cols)
-       (A.Dag.mk_eqjoin
-	  (iter, inner)
-	  q2
-	  map'))
+  let q = 
+    A.Dag.mk_project
+      ([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.offsets cs2))))
+      (A.Dag.mk_rank
+	 (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
+	 (pos', order_cols)
+	 (A.Dag.mk_eqjoin
+	    (iter, inner)
+	    q2
+	    map'))
   in
     Ti(q, cs2, ts2, vs2)
 
@@ -1349,9 +1291,9 @@ and extend_record env loop ext_fields r =
 	  failwith "CompileQuery.extend_record: empty ext_fields"
   in
     (* guarantee invariant: cs fields are sorted in increasing order *)
-    let cols_old = Cs.columns cs in
+    let cols_old = Cs.offsets cs in
     let cs_sorted = Cs.sort_record_columns cs in
-    let cols_sorted = Cs.columns cs_sorted in
+    let cols_sorted = Cs.offsets cs_sorted in
       if cols_old = cols_sorted then
 	(* columns were already in order *)
 	ti
@@ -1391,10 +1333,10 @@ and extend_record env loop ext_fields r =
 	    Ti (q', cs_mapped, ts', vs')
 
 and merge_records (Ti (r1_q, r1_cs, r1_ts, r1_vs)) (Ti (r2_q, r2_cs, r2_ts, r2_vs)) =
-  let r2_cols = Cs.columns r2_cs in
+  let r2_cols = Cs.offsets r2_cs in
   let new_names_r2 = io (incr r2_cols (Cs.cardinality r1_cs)) in
   let old_names_r2 = io r2_cols in
-  let names_r1 = io (Cs.columns r1_cs) in
+  let names_r1 = io (Cs.offsets r1_cs) in
   let card_r1 = Cs.cardinality r1_cs in
   let r2_ts' = Ts.incr_cols r2_ts card_r1 in
   let r2_vs' = Vs.incr_cols r2_vs card_r1 in
@@ -1420,7 +1362,7 @@ and compile_project env loop field record =
 and compile_erase env loop erase_fields r =
   let Ti (q_r, cs_r, ts_r, vs_r) = compile_expression env loop r in
   let remaining_cs = Cs.filter_record_fields cs_r erase_fields in
-  let remaining_cols = Cs.columns remaining_cs in
+  let remaining_cols = Cs.offsets remaining_cs in
   let remaining_ts = Ts.keep_cols ts_r remaining_cols in
   let remaining_vs = Vs.keep_cols vs_r remaining_cols in
   let q =
@@ -1504,7 +1446,7 @@ and compile_constant loop (c : Constant.constant) =
 and compile_if2 env loop e1 e2 =
   let c = A.Item 1 in
   let select loop (Ti (q, cs, ts, vs)) =
-    let cols = io (Cs.columns cs) in
+    let cols = io (Cs.offsets cs) in
     let q' =
       A.Dag.mk_project
 	([prj iter; prj pos] @ (prjlist cols))
@@ -1536,7 +1478,7 @@ and compile_if env loop e1 e2 e3 =
   let c = A.Item 1 in
   let res = A.Item 2 in
   let select loop (Ti (q, cs, ts, vs)) =
-    let cols = io (Cs.columns cs) in
+    let cols = io (Cs.offsets cs) in
     let q' =
       A.Dag.mk_project
 	([prj iter; prj pos] @ (prjlist cols))
@@ -1585,7 +1527,7 @@ and compile_if env loop e1 e2 e3 =
 	      q_e3))
     in
       Debug.print ("foo " ^ (Cs.show cs_e2));
-    let cols = Cs.columns cs_e2 in
+    let cols = Cs.offsets cs_e2 in
     let keys = (Ts.keys ts_e2) @ (Vs.key_columns vs_e2) in
     let proj = [prj iter; prj pos] in
     let proj = proj @ (prjlist (io (difference cols keys))) in
@@ -1620,14 +1562,14 @@ and compile_groupby env loop v g_e e =
     A.Dag.mk_attach
       (pos, A.Nat 1n)
       (A.Dag.mk_project
-	 ([(iter, inner)] @ (prjlist (io (Cs.columns cs_e))))
+	 ([(iter, inner)] @ (prjlist (io (Cs.offsets cs_e))))
 	 q_v)
   in
   let env_v = AEnv.map (lift map_v) env in
   let env_v = AEnv.bind env_v (v, Ti(q_v', cs_e, ts_e, vs_e)) in
   let Ti(q_eg, cs_eg, _, _) = compile_expression env_v loop_v g_e in
   let cs_eg' = Cs.shift cs_eg (Cs.cardinality cs_e) in
-  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.columns cs_eg') in
+  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_eg') in
   let q_1 =
     A.Dag.mk_rowrank
       (grp_key, (iter, A.Ascending) :: sortlist)
@@ -1635,19 +1577,19 @@ and compile_groupby env loop v g_e e =
 	 (inner, iter')
 	 q_v
 	 (A.Dag.mk_project
-	    ((iter', iter) :: (prjlist_map (io (Cs.columns cs_eg')) (io (Cs.columns cs_eg))))
+	    ((iter', iter) :: (prjlist_map (io (Cs.offsets cs_eg')) (io (Cs.offsets cs_eg))))
 	    q_eg))
   in
   let grpkey_col = (Cs.cardinality cs_eg) + 1 in
   let q_2 =
     A.Dag.mk_distinct
       (A.Dag.mk_project
-	 ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.columns cs_eg)) (io (Cs.columns cs_eg'))))
+	 ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.offsets cs_eg)) (io (Cs.offsets cs_eg'))))
 	 q_1)
   in
   let q_3 =
     A.Dag.mk_project
-      ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.columns cs_e))))
+      ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.offsets cs_e))))
       q_1
   in
   let cs = [`Mapping ("1", cs_eg); `Mapping ("2", [`Column (grpkey_col, `Surrogate)])] in
@@ -1817,7 +1759,7 @@ and compile_expression env loop e : tblinfo =
 let rec wrap_serialize (Ti (q, cs, ts, vs)) = 
   let serialize q cs =
     A.Dag.mk_serializerel 
-      (iter, pos, io (Cs.columns cs))
+      (iter, pos, io (Cs.offsets cs))
       (A.Dag.mk_nil)
       q
   in
