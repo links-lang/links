@@ -102,7 +102,7 @@ type cardinality = int
 type accessor_functions = item_access * iter_access * cardinality
 
 type tsr = (int * tblresult) list
-and vsr = ((int * string) * tblresult) list
+and vsr = ((int * string) * (tblresult * implementation_type)) list
 and tblresult = Tr of (accessor_functions * Cs.cs * tsr * vsr)
 
 (* Create functions which encapsulate the access to one table's 
@@ -167,7 +167,7 @@ let rec execute_queries database ti =
   let result = execute_query database query in
   let acc = table_access_functions schema result in
   let ts' = alistmap (execute_queries database) ts in
-  let vs' = alistmap (execute_queries database) vs in
+  let vs' = alistmap (fun (ti, itype) -> (execute_queries database ti, itype)) vs in
     Tr (acc, cs, ts', vs')
     
 let rec execute_errors database q_error =
@@ -265,14 +265,14 @@ and handle_row itbl_offsets item cs tsr vsr =
 	  mk_record itbl_offsets field_names cs item tsr vsr
       | `Tag -> 
 	  (match cs with
-	    | [`Tag ((tagcol, `Tag), (refcol, `Surrogate), itype)] ->
+	    | [`Tag ((tagcol, `Tag), (refcol, `Surrogate))] ->
 		(* Debug.print (Cs.show cs); *)
 		let tagval = item tagcol in
 		(* Debug.f "tagval %s" tagval; *)
 		let refval_raw = item refcol in
 		(* Debug.f "refval_raw %s" refval_raw; *)
 		let refval = int_of_string refval_raw in
-		let itbl = 
+		let (itbl, itype) = 
 		  try
 		    List.assoc (refcol, tagval) vsr
 		  with NotFound _ -> assert false

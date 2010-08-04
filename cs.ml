@@ -25,7 +25,7 @@ type column = offset * column_type deriving (Show)
 type cs = csentry list
 and csentry = 
     [ `Column of column 
-    | `Tag of column * column * implementation_type
+    | `Tag of column * column
     | `Mapping of string * cs ] 
       deriving (Show)
 
@@ -44,7 +44,7 @@ let rec leafs cs =
     
 let offset_of_csentry = function
   | `Column (off, _) -> [off]
-  | `Tag ((toff, _), (roff, _), _) -> [toff; roff]
+  | `Tag ((toff, _), (roff, _)) -> [toff; roff]
   | `Mapping _ -> assert false
 
 let is_atomic = function `Column (_, t) when is_primitive_col t -> true | _ -> false
@@ -62,7 +62,7 @@ let rec shift cs i =
   List.map
     (function
        | `Column (o, typ) -> `Column ((o + i), typ)
-       | `Tag ((tago, tagt), (refo, reft), itype) -> `Tag ((tago + i, tagt), (refo + i, reft), itype)
+       | `Tag ((tago, tagt), (refo, reft)) -> `Tag ((tago + i, tagt), (refo + i, reft))
        | `Mapping (key, cs) -> `Mapping (key, (shift cs i)))
     cs
 
@@ -173,11 +173,11 @@ let map_cols new_cols cs =
 		 let cols_rest, cs' = map_cols_1 cols cs in
 		   cols_rest, (`Column (c', t) :: cs')
 	     | _ -> assert false)
-      | `Tag (_, _, itype) :: cs ->
+      | `Tag (_, _) :: cs ->
 	  (match new_cols with
 	     | tagcol' :: refcol' :: cols ->
 		 let cols_rest, cs' = map_cols_1 cols cs in
-		   cols_rest, ((`Tag ((tagcol', `Tag), (refcol', `Surrogate), itype)) :: cs')
+		   cols_rest, ((`Tag ((tagcol', `Tag), (refcol', `Surrogate))) :: cs')
 	     | _ -> assert false)
       | `Mapping (field, nested_cs) :: cs ->
 	  let cols_rest, nested_cs' = map_cols_1 new_cols nested_cs in

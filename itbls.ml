@@ -32,6 +32,17 @@ module Vs = struct
 
   let lookup = List.assoc
 
+  let lookup_col vs c = List.filter (fun ((col, _), _) -> col = c) vs
+
+(*
+  let lookup_col vs c = 
+    List.fold_right 
+      (fun ((col, tag), ti) acc ->
+	 if col = c then ti :: acc else acc)
+      vs
+      []
+*)
+	   
   let length = List.length
 
   let keep_cols vs cols = 

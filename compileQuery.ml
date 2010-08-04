@@ -9,7 +9,7 @@ type ts = (int * tblinfo) list
 
 (* type for the assoc list mapping tags (variant types) and a surrogate 
    column (composite key) to the corresponding tables for tagged values *)
-and vs = ((int * string) * tblinfo) list
+and vs = ((int * string) * (tblinfo * Cs.implementation_type)) list
 
 and tblinfo = Ti of (A.Dag.dag ref * Cs.cs * ts * vs)
 
@@ -315,7 +315,7 @@ let rec append_vs q_outer vs_l vs_r =
   let r = List.map (append_missing_vs q_outer (A.Nat 2n)) (missing_keys vs_r vs_l) in
     List.sort compare (m @ l @ r)
 
-and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
+and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), ((ti_l, itype_l), (ti_r, _itype_r))) =
   let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
   let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
@@ -332,9 +332,9 @@ and append_matching_vs (q_outer : A.Dag.dag ref) ((refcol, tag), (ti_l, ti_r)) =
   let ts = append_ts q_combined ts_l ts_r in
 
   let vs = append_vs q_combined vs_l vs_r in
-    (refcol, tag), Ti (q, cs, ts, vs)
+    (refcol, tag), (Ti (q, cs, ts, vs), itype_l)
 
-and append_missing_vs q_outer ord_val ((refcol, tag), ti) =
+and append_missing_vs q_outer ord_val ((refcol, tag), (ti, itype)) =
   let Ti (q_l, cs_l, ts_l, vs_l) = ti in
   let q_combined = 
     A.Dag.mk_rownum
@@ -350,7 +350,7 @@ and append_missing_vs q_outer ord_val ((refcol, tag), ti) =
   let q_refreshed = A.Dag.mk_project projlist q_renumbered in
   let ts = append_ts q_combined ts_l [] in
   let vs = append_vs q_combined vs_l [] in
-    (refcol, tag), Ti (q_refreshed, cs_l, ts, vs)
+    (refcol, tag), (Ti (q_refreshed, cs_l, ts, vs), itype)
 
 and append_ts q_outer ts_l ts_r =
   let m = List.map (append_matching_ts q_outer) (same_keys ts_l ts_r) in
@@ -673,9 +673,9 @@ and compile_aggr_error env loop aggr_fun restype l =
 	      empty_iterations))
     in
     let inner_cs_just = [`Column (1, restype)] in
-    let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate), `Atom)] in
-    let vs = [((2, "Just"), Ti (q_inner_just, inner_cs_just, Ts.empty, Vs.empty)); 
-	      ((2, "Nothing"), ti_inner_nothing)] in
+    let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+    let vs = [((2, "Just"), (Ti (q_inner_just, inner_cs_just, Ts.empty, Vs.empty), `Atom)); 
+	      ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
     let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
       Ti (q_outer, outer_cs, Ts.empty, vs)
 
@@ -725,10 +725,10 @@ and compile_nth env loop i l =
 	    [prj iter; (A.Item 2, iter)]
 	    empty_iterations))
   in
-  let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate), `Atom)] in
+  let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
   let ts_l' = slice_inner_tables q_inner_just ts_l in
-  let vs = [((2, "Just"), Ti (q_inner_just, cs_l, ts_l', vs_l));
-	    ((2, "Nothing"), ti_inner_nothing)] in
+  let vs = [((2, "Just"), (Ti (q_inner_just, cs_l, ts_l', vs_l), `Atom));
+	    ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
   let q_outer = A.Dag.mk_disjunion q_outer_just q_outer_nothing in
     Ti (q_outer, outer_cs, Ts.empty, vs)
     
@@ -855,7 +855,7 @@ and do_row_greater_real loop wrapper zipped =
 	    (* no need to join since the two arguments are already zipped *)
 	    (wrap_gt res (A.Item col_l) (A.Item col_r) q_zipped)
       else if Cs.is_variant cse_l then
-	failwith "variant not implemented"
+	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
 	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
 	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
@@ -884,7 +884,7 @@ and do_row_greater_real loop wrapper zipped =
 	    (* no need to join since the two arguments are already zipped *)
 	    (wrap_eq res (A.Item col_l) (A.Item col_r) q_zipped)
       else if Cs.is_variant cse_l then
-	failwith "variant not implemented"
+	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
 	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
 	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
@@ -976,8 +976,8 @@ and do_table_equal loop wrapper l1 l2 =
       (all (map_equal (do_zip l1_abs l2_abs)))
 
 and do_row_equal loop wrapper ti_l ti_r =
-  let Ti (q_l, cs_l, ts_l, _) = ti_l in
-  let Ti (q_r, cs_r, ts_r, _) = ti_r in
+  let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
+  let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
   (* special case: if we are comparing lists of records and one of the lists is the empty 
      list, the length of its cs component does not match the other cs's length.  in this case, 
@@ -1005,9 +1005,52 @@ and do_row_equal loop wrapper ti_l ti_r =
 	    | [tagcol; refcol] -> tagcol, refcol
 	    | _ -> assert false
 	in
-	(* compare tags *)
-	(* unzip *)
-	  failwith "variant not implemented"
+	  (* compare tags *)
+	let tags_compared =
+	  A.Dag.mk_funnumeq
+	    (res, (A.Item 1, A.Item 2))
+	    (A.Dag.mk_eqjoin
+	       (iter, iter')
+	       (project q_l tagcol)
+	       (A.Dag.mk_project
+		  [(iter', iter); (A.Item 2, A.Item tagcol)]
+		  q_r))
+	in
+
+	let different_tags =
+	  A.Dag.mk_attach
+	    (A.Item 1, A.Bool false)
+	    (A.Dag.mk_attach
+	       (pos, A.Nat 1n)
+	       (A.Dag.mk_project
+		  [prj iter]
+		  (A.Dag.mk_select
+		     res'
+		     (A.Dag.mk_funboolnot
+			(res', res)
+			tags_compared))))
+	in
+
+	let same_tags = A.Dag.mk_select res tags_compared in
+	let matching_tis_compared =
+	  List.map
+	    (fun (_, ((inner_ti_l, itype_l), (inner_ti_r, _))) -> 
+	       let unboxed_l = do_unbox (project same_tags refcol) refcol inner_ti_l in
+	       let unboxed_r = do_unbox (project same_tags refcol) refcol inner_ti_r in
+	       let loop' = A.Dag.mk_project [prj iter] (q_of_tblinfo unboxed_l) in
+		 match itype_l with
+		   | `Atom ->
+		       do_row_equal loop' wrapper unboxed_l unboxed_r
+		   | `List ->
+		       failwith "comparison of tagged lists not implemented")
+	    (same_keys (Vs.lookup_col vs_l refcol) (Vs.lookup_col vs_r refcol))
+	in
+	  List.fold_left
+	    (fun q_union q -> A.Dag.mk_disjunion q_union (q_of_tblinfo q))
+	    different_tags
+	    matching_tis_compared
+	    
+	    
       else
 	(* we compare nested lists represented by a inner table *)
 	let col = List.hd (Cs.offset_of_csentry field_cse) in
@@ -1611,8 +1654,8 @@ and compile_variant env loop tag value =
   Debug.f "compile_variant %s" tag;
   let ti_value = compile_expression env loop value in
   let itype = Query2.Annotate.typeof_typed_t value in
-  let cs = [`Tag ((1, `Tag), (2, `Surrogate), itype)] in
-  let vs = [(2, tag), ti_value] in
+  let cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+  let vs = [(2, tag), (ti_value, itype)] in
   let q = 
     A.Dag.mk_attach
       (pos, A.Nat 1n)
@@ -1667,7 +1710,7 @@ and compile_case env loop value cases default =
   let case env vs_v tag (var, case_exp) (results, q_other) =
     let q_matching, q_other' = select_tag q_other tag in
       try 
-	let itbl = Vs.lookup (2, tag) vs_v in
+	let itbl = fst (Vs.lookup (2, tag) vs_v) in
 	let ti_unboxed = do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
 	let loop' = A.Dag.mk_project [prj iter] q_matching in
@@ -1765,7 +1808,7 @@ let rec wrap_serialize (Ti (q, cs, ts, vs)) =
   in
   let q' = serialize q cs in
   let ts' = alistmap wrap_serialize ts in
-  let vs' = alistmap wrap_serialize vs in
+  let vs' = alistmap (fun (ti, itype) ->  (wrap_serialize ti, itype)) vs in
     Ti (q', cs, ts', vs')
 
 let wrap_serialize_errors q_error =
