@@ -47,6 +47,8 @@ struct
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
+
+  let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module

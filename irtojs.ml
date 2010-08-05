@@ -9,6 +9,8 @@ open Utility
 let js_lib_url = Basicsettings.Js.lib_url
 let js_pretty_print = Basicsettings.Js.pp
 
+let js_hide_database_info = Basicsettings.Js.hide_database_info
+
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (** Intermediate language *)
@@ -745,6 +747,9 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           Call (Var "_yield",
                 Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
+      | `Database _ | `Table _
+          when Settings.get_value js_hide_database_info ->
+          callk_yielding kappa (Dict [])
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
       | `Table (db, table_name, (readtype, _writetype, _needtype)) ->
@@ -888,7 +893,14 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   "            ^ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
-  let db_config_script = script_tag("    function _getDatabaseConfig() {
+  let db_config_script =
+    if Settings.get_value js_hide_database_info then
+    script_tag("    function _getDatabaseConfig() {
+      return {}
+    }
+    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
+    else
+    script_tag("    function _getDatabaseConfig() {
       return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
       "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
     }
