@@ -1008,12 +1008,14 @@ and do_row_equal loop wrapper ti_l ti_r =
 	  (* compare tags *)
 	let tags_compared =
 	  A.Dag.mk_funnumeq
-	    (res, (A.Item 1, A.Item 2))
+	    (res, (item', item''))
 	    (A.Dag.mk_eqjoin
 	       (iter, iter')
-	       (project q_l tagcol)
 	       (A.Dag.mk_project
-		  [(iter', iter); (A.Item 2, A.Item tagcol)]
+		  [(prj iter); (item', A.Item tagcol)]
+		  q_l)
+	       (A.Dag.mk_project
+		  [(iter', iter); (item'', A.Item tagcol)]
 		  q_r))
 	in
 
@@ -1031,12 +1033,22 @@ and do_row_equal loop wrapper ti_l ti_r =
 			tags_compared))))
 	in
 
-	let same_tags = A.Dag.mk_select res tags_compared in
+	let same_tags q = 
+	  A.Dag.mk_eqjoin
+	    (iter, iter')
+	    q
+	    (A.Dag.mk_project
+	       [prj iter']
+	       (A.Dag.mk_select 
+		  res 
+		  tags_compared))
+	in
+
 	let matching_tis_compared =
 	  List.map
 	    (fun (_, ((inner_ti_l, itype_l), (inner_ti_r, _))) -> 
-	       let unboxed_l = do_unbox (project same_tags refcol) refcol inner_ti_l in
-	       let unboxed_r = do_unbox (project same_tags refcol) refcol inner_ti_r in
+	       let unboxed_l = do_unbox (same_tags q_l) refcol inner_ti_l in
+	       let unboxed_r = do_unbox (same_tags q_r) refcol inner_ti_r in
 	       let loop' = A.Dag.mk_project [prj iter] (q_of_tblinfo unboxed_l) in
 		 match itype_l with
 		   | `Atom ->
