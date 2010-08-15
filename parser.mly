@@ -833,6 +833,7 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
+								   | "String"  -> PrimitiveType `String
 								   | "NativeString" -> PrimitiveType `NativeString
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])

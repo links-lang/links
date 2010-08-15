@@ -6,7 +6,6 @@ let alias_env : Types.tycon_environment =
     AliasEnv.bind
     AliasEnv.empty
     [
-      "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)]));
       "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;

@@ -83,6 +83,11 @@ let float_op impl pure : located_primitive * Types.datatype * pure =
   `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
   datatype "(Float, Float) -> Float",
   pure
+
+let string_op impl pure : located_primitive * Types.datatype * pure =
+  (`PFun (fun [x; y] -> `String (impl (unbox_string x) (unbox_string y)))),
+  datatype "(String, String) -> String",
+  pure
     
 let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t =
   fun [x] -> (box (conv (unbox x)))
@@ -210,6 +215,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "*.", float_op ( *.) PURE;
   "/.", float_op (/.) PURE;
   "^.", float_op ( ** ) PURE;
+  "^^", string_op ( ^ ) PURE;
 
   (** Comparisons *)
   "==",

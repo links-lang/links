@@ -14,7 +14,7 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point deriving (Show)
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString ]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString | `String]
     deriving (Show)
 
 type subkind = [ `Any | `Base ]
@@ -887,7 +887,8 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
-let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)])))
+(* let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)]))) *)
+let string_type = `Primitive `String
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
@@ -1154,6 +1155,7 @@ struct
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
     | `XmlItem -> "XmlItem" | `DB -> "Database" | `NativeString -> "NativeString"
+    | `String -> "String"
 
   let subkind : (policy * names) -> subkind -> string =
     fun (_policy, _vars) ->

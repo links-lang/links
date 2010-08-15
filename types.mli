@@ -13,7 +13,7 @@ type 'a point = 'a Unionfind.point
 
 val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString | `String ]
     deriving (Show)
 
 type subkind = [ `Any | `Base ]

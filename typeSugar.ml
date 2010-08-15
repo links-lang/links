@@ -1842,7 +1842,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                             | `Function (fps, fe, rettyp) ->
                                 let rettyp = Types.for_all (rqs, rettyp) in
                                 let ft = `Function (fps, fe, rettyp) in
-(*                                  Debug.print ("ft: " ^ Types.string_of_datatype ft);*)
+                                  Debug.print ("ft: " ^ Types.string_of_datatype ft);
                                 let fn, fpos = erase f in
                                 let e = tabstr (rqs, `FnAppl ((tappl (fn, tyargs), fpos), List.map erase ps)) in
                                   unify ~handle:Gripers.fun_apply
