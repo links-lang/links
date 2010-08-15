@@ -113,8 +113,7 @@ type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 
 let rec is_base_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
     | `Alias (_, t) -> is_base_type t
     | `MetaTypeVar point ->
         begin
@@ -149,8 +148,7 @@ let rec is_base_row (fields, row_var) =
 
 let rec is_baseable_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
     | `Alias (_, t) -> is_baseable_type t
     | `MetaTypeVar point ->
         begin
@@ -183,8 +181,7 @@ let rec is_baseable_row (fields, row_var) =
 
 let rec basify_type =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> ()
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> ()
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> ()
     | `Alias (_, t) -> basify_type t
     | `MetaTypeVar point ->
         begin
