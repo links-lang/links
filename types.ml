@@ -14,7 +14,7 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point deriving (Show)
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString | `String]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     deriving (Show)
 
 type subkind = [ `Any | `Base ]
@@ -895,7 +895,6 @@ let int_type = `Primitive `Int
 let float_type = `Primitive `Float
 let xml_type = `Alias (("Xml", []), `Application (list, [`Type (`Primitive `XmlItem)]))
 let database_type = `Primitive `DB
-let native_string_type = `Primitive `NativeString
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
@@ -1154,8 +1153,7 @@ struct
 
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-    | `XmlItem -> "XmlItem" | `DB -> "Database" | `NativeString -> "NativeString"
-    | `String -> "String"
+    | `XmlItem -> "XmlItem" | `DB -> "Database" | `String -> "String"
 
   let subkind : (policy * names) -> subkind -> string =
     fun (_policy, _vars) ->

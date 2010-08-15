@@ -275,7 +275,6 @@ struct
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
-          (*     | `NativeString of string ] *)
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
       | _ -> failwith "Cannot convert value to expression"

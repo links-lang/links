@@ -71,7 +71,6 @@ let jsonize_primitive : Value.primitive_value -> string = function
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
   | `String s -> failwith "Can't yet jsonize String"
-  | `NativeString _ -> failwith "Can't yet jsonize NativeString"
 
 let rec jsonize_value : Value.t -> string = function
   | `PrimitiveFunction _

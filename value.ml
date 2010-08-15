@@ -138,7 +138,6 @@ type primitive_value_basis =  [
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
-| `NativeString of string * int * int 
 | `String of string ]
   deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
 
@@ -556,7 +555,6 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
-  | `NativeString (s, start, len) -> "\"" ^ String.sub s start len ^ "\""
   | `String s -> s
 				
 and string_of_tuple (fields : (string * t) list) : string = 
