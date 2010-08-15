@@ -24,11 +24,7 @@ let value_of_db_string (value:string) t =
         *)
         Value.box_bool (value = "1" || value = "t" || value = "true")
     | `Primitive `Char -> Value.box_char (String.get value 0)
-    | `Alias (("String", _), _) -> Value.string_as_charlist value
-        (* BUG: we should be more principled about detecting strings *)
-    | `Application (l, [`Type (`Primitive `Char)]) 
-        when Eq.eq Types.Abstype.eq_t l Types.list ->
-        Value.string_as_charlist value
+    | `Primitive `String -> Value.box_string value
     | `Primitive `Int  -> Value.box_int (num_of_string value)
     | `Primitive `Float -> (if value = "" then Value.box_float 0.00      (* HACK HACK *)
                             else Value.box_float (float_of_string value))
