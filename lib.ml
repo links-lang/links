@@ -1058,26 +1058,27 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(String, Regex) ~> String",
     PURE));
 	
-(* FIXME: should these functions return a Maybe Char/Maybe String?
-  (* NativeString utilities *)
+(* FIXME: should these functions return a Maybe Char/Maybe String? *)
+  (* String utilities *)
   ("char_at",
-   (`Server (p2 (fun ((`NativeString (s, start, len)) : Value.t) ((`Int ix):Value.t) ->                   
-                   `Char (s.[start + Num.int_of_num ix]))),
-    datatype ("(NativeString, Int) ~> Char"),
+   (`Server (p2 (fun s i ->
+		   let int = Num.int_of_num -<- unbox_int in
+		     try
+                       box_char ((unbox_string s).[int i])
+		     with
+			 Invalid_argument _ -> failwith "char_at: invalid index")),
+    datatype ("(String, Int) ~> Char"),
     IMPURE));
 
   ("strsub",
-   (`Server (p3 (fun
-                   ((`NativeString (s, start, len)) : Value.t)
-                   ((`Int start') : Value.t)
-                   ((`Int len') : Value.t) ->
-                     let len = Num.int_of_num len' in
-                     `NativeString (String.sub s (start+Num.int_of_num start') len, 0, len))),
-(*                      `NativeString (s, start+Num.int_of_num start', Num.int_of_num len'))), *)
-(*                     `NativeString (String.sub s (start + Num.int_of_num start) (Num.int_of_num len)))),*)
-    datatype "(NativeString, Int, Int) ~> NativeString",
+   (`Server (p3 (fun s start len -> 
+		   let int = Num.int_of_num -<- unbox_int in
+		     try
+		       box_string (String.sub (unbox_string s) (int start) (int len))
+		     with
+			 Invalid_argument _ -> failwith "strsub: invalid arguments")),
+    datatype "(String, Int, Int) ~> String",
     PURE));
-*)
 
   ("strlen",
    (`Server (p1 (fun s -> match s with
@@ -1086,21 +1087,36 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype ("(String) ~> Int "),
     PURE));
 
-(*
-  ("to_native_string",
-   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString (n, 0, String.length n)))),
-    datatype ("(String) ~> NativeString"),
+  ("string_of_list",
+   (`Server (p1 (fun l -> 
+		   let chars = List.map unbox_char (unbox_list l) in
+		   let len = List.length chars in
+		   let s = String.create len in
+		   let rec aux i l =
+		     match l with
+		       | [] -> ()
+		       | c :: cs -> s.[i] <- c; aux (i + 1) cs
+		   in
+		     aux 0 chars;
+		     box_string s)),
+    datatype ("([Char]) ~> String"),
     PURE));
 	
-  ("from_native_string",
-   (`Server (p1 
-	       (fun s-> match s with  
-	          | `NativeString (s, start, len) -> box_string (String.sub s start len)
-	          | _  -> failwith "Internal error: Bad coercion from native string")),
-    datatype ("(NativeString) ~> String"),
+  ("string_to_list",
+   (`Server (p1 (fun s -> match s with  
+	           | `String s ->
+		       let rec aux i l =
+			 if i < 0 then 
+			   l 
+			 else 
+			   aux (i - 1) (s.[i] :: l)
+		       in
+		       let chars = aux ((String.length s) - 1) [] in
+			 box_list (List.map box_char chars)
+	           | _  -> failwith "Internal error: non-String in string_to_list")),
+    datatype ("(String) ~> [Char]"),
     PURE));
-*)
-	
+  
   ("unsafePickleCont",
    (*
      HACK:
