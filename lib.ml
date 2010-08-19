@@ -101,8 +101,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 
-  | `List _ as c ->
-      `List [`XML (Text (charlist_as_string c))]
+  | `String s -> `List [`XML (Text s)]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
 let char_test_op fn pure = 
@@ -138,6 +137,7 @@ let rec equal l r =
     | `Int l   , `Int r    -> eq_num l r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
+    | `String l, `String r -> l = r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -161,6 +161,7 @@ let rec less l r =
     | `Int l, `Int r     -> lt_num l r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
+    | `String l, `String r -> l < r
       (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in
