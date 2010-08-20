@@ -5,6 +5,13 @@ module A = Algebra
 
 type column_type = [ A.pf_type | `Surrogate | `Unit | `Tag ] deriving (Show)
 
+let column_type_of_constant = function
+  | `Bool _ -> `BoolType
+  | `Int _ -> `IntType
+  | `String _ -> `StrType
+  | `Float _ -> `FloatType
+  | `Char _ -> `CharType
+
 let is_primitive_col = function
   | `Surrogate -> false
   | `Tag -> false

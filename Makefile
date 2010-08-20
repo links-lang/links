@@ -115,15 +115,16 @@ SOURCES = $(OPC)                		\
           $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
 	  irtodot.ml				\
-	  algebra.ml				\
-	  algebra_export.ml			\
+	  algebra.ml algebra.mli		\
+	  algebra_dag.ml algebra_dag.mli	\
+	  algebra_export.ml algebra_export.mli	\
 	  pf_toolchain.mli pf_toolchain.ml	\
-          query.ml                              \
 	  cs.ml					\
 	  itbls.ml				\
-	  query2.ml				\
+	  query2.ml query2.mli			\
 	  compileQuery.ml			\
 	  heapresult.ml				\
+          query.ml                              \
           evalir.ml                             \
           webif.mli webif.ml                    \
           links.ml              		\

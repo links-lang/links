@@ -1,10 +1,9 @@
-(*pp deriving *)
-open Utility
+(** types supported by pathfinder *)
+type pf_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType ]
 
-(* types supported by pathfinder *)
-(* FIXME: should char constants be allowed? *)
-type pf_type = [ `IntType | `StrType | `BoolType | `CharType | `FloatType | `NatType ] deriving (Show)
+val show_pf_type : pf_type Show.show
 
+(** Constructors for constant values in algebra expressions *)
 type pf_constant = 
   | Float  of float
   | Int    of Num.num
@@ -13,30 +12,24 @@ type pf_constant =
   | Char   of char 
   | Nat of nativeint 
 
-let pf_constant_of_constant = function
-  | `Bool b -> Bool b
-  | `Int i -> Int i
-  | `String s -> String s
-  | `Float f -> Float f
-  | `Char c -> Char c
+val pf_constant_of_constant : Constant.constant -> pf_constant
 
-(* aggregate functions *)
+(** aggregate functions *)
 type aggr = Avg | Max | Min | Sum | All
 
-(* 1to1 functions *)
+(** 1to1 functions *)
 type func = Add | Subtract | Multiply | Divide | Modulo | Contains | SimilarTo | Concat
 
-(* relation operators *)
+(** relation operators *)
 type join_comparison = Eq | Gt | Ge | Lt | Le | Ne
 
-type tbl_name = string
-
+(** categories of relational attributes *)
 type attr_name =
   | Iter of int
   | Pos of int
   | Item of int
 
-(* attribute names *)
+(* specific attribute types *)
 type result_attr_name = attr_name
 type partitioning_attr_name = attr_name
 type selection_attr_name = attr_name
@@ -47,12 +40,13 @@ type left_attr_name = attr_name
 type right_attr_name = attr_name
 
 type sort_direction = Ascending | Descending
+type tbl_name = string
 type sort_infos = (sort_attr_name * sort_direction) list
 type schema_infos = (attr_name * pf_type) list
 type key_infos = attr_name list list
 type tbl_attribute_infos = (attr_name * string * pf_type) list
 
-(* semantic informations on operator nodes *)
+(* semantic information on operator nodes *)
 type rownum_info = result_attr_name * sort_infos * partitioning_attr_name option
 type rowid_info = result_attr_name
 type rank_info = result_attr_name * sort_infos
@@ -74,6 +68,7 @@ type tbl_ref_info = tbl_name * tbl_attribute_infos * key_infos
 type empty_tbl_info = schema_infos
 type error_info = attr_name
 
+(** algebra operators with two children *)
 type binary_op =
   | EqJoin of eqjoin_info 
   | SemiJoin of eqjoin_info 
@@ -83,6 +78,7 @@ type binary_op =
   | SerializeRel of serialize_rel_info 
   | Cross 
 
+(** algebra operators with one child *)
 type unary_op =
   | RowNum of rownum_info 
   | RowID of rowid_info 
@@ -103,6 +99,7 @@ type unary_op =
   | FunAggr of fun_aggr_info 
   | FunAggrCount of fun_aggr_count_info 
 
+(** leaf algebra operators *)
 type nullary_op =
   | LitTbl of lit_tbl_info
   | EmptyTbl of schema_infos

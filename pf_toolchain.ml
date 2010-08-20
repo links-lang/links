@@ -48,7 +48,7 @@ let output_plan plan fname =
     close_out o
 
 let optimize_sql q = 
-  Algebra_export.export_plan_bundle (`Buffer !buf) q;
+  Algebra_export.export_plan !buf q;
   Debug.f ">>>> pfopt %d" !c;
   let optimized = pipe_pfopt (Buffer.contents !buf) in
     Debug.f ">>>> pfsql %d" !c;

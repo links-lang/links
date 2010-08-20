@@ -1,11 +1,16 @@
 (*pp deriving *)
 open Utility
 
+(* FIXME: this module needs a serious rewrite *)
+
 (* HACK: global variable which stores the database on which to execute
    the query (or none) *)
 let used_database = ref None
 
 type 'a name_map = 'a Utility.stringmap
+    deriving (Show)
+
+type name_set = Utility.stringset
     deriving (Show)
 
 type t =
@@ -14,7 +19,7 @@ type t =
     | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
-    | `Record of t name_map | `Project of t * string | `Erase of t * StringSet.t | `Extend of t option * t name_map 
+    | `Record of t name_map | `Project of t * string | `Erase of t * name_set | `Extend of t option * t name_map 
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of string * t list
@@ -35,7 +40,7 @@ struct
     | `If of pt * pt * pt option
     | `Table of Value.table
     | `Singleton of pt | `Append of pt list
-    | `Record of pt StringMap.t | `Project of pt * string | `Erase of pt * StringSet.t | `Extend of pt option * pt StringMap.t
+    | `Record of pt name_map | `Project of pt * string | `Erase of pt * name_set | `Extend of pt option * pt name_map
     | `Variant of string * pt
     | `XML of Value.xmlitem
     | `Apply of string * pt list
@@ -648,10 +653,10 @@ module Annotate = struct
       | `Table of Value.table * implementation_type
       | `Singleton of typed_t * implementation_type 
       | `Append of typed_t list * implementation_type
-      | `Record of typed_t StringMap.t * implementation_type
+      | `Record of typed_t name_map * implementation_type
       | `Project of (typed_t * string) * implementation_type
-      | `Erase of (typed_t * StringSet.t) * implementation_type
-      | `Extend of (typed_t option * typed_t StringMap.t) * implementation_type
+      | `Erase of (typed_t * name_set) * implementation_type
+      | `Extend of (typed_t option * typed_t name_map) * implementation_type
       | `Variant of (string * typed_t) * implementation_type
       | `XML of Value.xmlitem * implementation_type
       | `Apply of (string * typed_t list) * implementation_type
@@ -692,10 +697,10 @@ module Annotate = struct
       | `Table of Value.table * implementation_type
       | `Singleton of typed_pt * implementation_type 
       | `Append of typed_pt list * implementation_type
-      | `Record of typed_pt StringMap.t * implementation_type
+      | `Record of typed_pt name_map * implementation_type
       | `Project of (typed_pt * string) * implementation_type
-      | `Erase of (typed_pt * StringSet.t) * implementation_type
-      | `Extend of (typed_pt option * typed_pt StringMap.t) * implementation_type
+      | `Erase of (typed_pt * name_set) * implementation_type
+      | `Extend of (typed_pt option * typed_pt name_map) * implementation_type
       | `Variant of (string * typed_pt) * implementation_type
       | `XML of Value.xmlitem * implementation_type
       | `Apply of (string * typed_pt list) * implementation_type
