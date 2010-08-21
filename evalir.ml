@@ -352,24 +352,21 @@ module Eval = struct
                 Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
         let result =
 	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
-	  let time = Unix.gettimeofday () in
 	  let (exptree, imptype) = Query2.compile env (range, e) in
-	    match !Query2.used_database with
-	      | Some db -> 
-		  let (result_algebra_bundle, error_bundle) = CompileQuery.compile exptree in
-		    Debug.f "time %f" ((Unix.gettimeofday ()) -. time);
-		    Debug.print ">>>> execute error plans";
-		    if opt_app (Heapresult.execute_errors db) true error_bundle then
-		      begin
-			Debug.print ">>>> execute result plans";
-			let result_bundle = Heapresult.execute_queries db result_algebra_bundle in
-			  Heapresult.handle_table result_bundle imptype
-		      end
-		    else
+	  match !Query2.used_database with
+	    | Some db -> 
+	      begin
+		match Heapresult.execute db imptype (CompileQuery.compile exptree) with
+		  | Some value -> value
+		  | None -> 
+		    begin
+		      Debug.print ">>>> Error plan result is not empty -> abort";
 		      raise Wrong
-	      | None -> computation env cont e
+		    end
+	      end
+	    | None -> computation env cont e
         in
-          apply_cont cont env result
+        apply_cont cont env result
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with

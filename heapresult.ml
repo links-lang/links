@@ -321,3 +321,9 @@ and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), 
       | `List ->
 	  (next_offset, `List values)
 
+let execute db imptype (result_algebra_bundle, error_bundle) =
+  if opt_app (execute_errors db) true error_bundle then
+    let result_bundle = execute_queries db result_algebra_bundle in
+    Some (handle_table result_bundle imptype)
+  else
+    None

@@ -123,7 +123,7 @@ SOURCES = $(OPC)                		\
 	  itbls.ml				\
 	  query2.ml query2.mli			\
 	  compileQuery.ml			\
-	  heapresult.ml				\
+	  heapresult.ml	heapresult.mli		\
           query.ml                              \
           evalir.ml                             \
           webif.mli webif.ml                    \
