@@ -185,6 +185,7 @@ let mk_primitive raw_value t =
     | `FloatType -> (if raw_value = "" then Value.box_float 0.00      (* HACK HACK *)
                      else Value.box_float (float_of_string raw_value))
     | `Unit -> `Record []
+    | `EmptyListLit -> `List []
     | `NatType -> failwith "Heapresult.mk_primitive: nat is not a Links type"
     | `Tag 
     | `Surrogate -> assert false 
@@ -234,15 +235,8 @@ let rec mk_record itbl_offsets field_names cs (item : int -> string) tsr vsr =
      (new_offsets, `Record values)
 
 and handle_row itbl_offsets item cs tsr vsr = 
-  let typ = Cs.atom_type cs in
-    match typ with
-      | `Primitive `Surrogate ->
-	  let col = 
-	    (match cs with
-	       | [`Column (i, `Surrogate)] -> i
-	       | cs -> failwith ("Heapresult.handle_row: cs in no inner list surrogate column " ^
-				   (Cs.show cs)))
-	  in
+    match cs with
+      | Cs.Column (col, `Surrogate) ->
 	  let offset = Offsets.lookup_ts_offset itbl_offsets col in
 	  let itbl = 
 	    try
@@ -253,36 +247,30 @@ and handle_row itbl_offsets item cs tsr vsr =
 	  let (next_offset, value) = handle_inner_table `List surrogate_key offset itbl in
 	  let new_offsets = Offsets.update_ts_offset itbl_offsets col next_offset in
 	    (new_offsets, value)
-      | `Primitive t -> 
-	  let col =
-	    (match cs with
-	       | [`Column (i, _)] -> i
-	       | _ -> failwith "Heapresult.handle_row: cs does not represent a primitive value")
-	  in
+      | Cs.Column (col, t) ->
 	  let raw_value = item col in
 	    (itbl_offsets, mk_primitive raw_value t)
-      | `Record field_names -> 
+      | Cs.Mapping fields ->
+	let field_names = dom fields in
 	  mk_record itbl_offsets field_names cs item tsr vsr
-      | `Tag -> 
-	  (match cs with
-	    | [`Tag ((tagcol, `Tag), (refcol, `Surrogate))] ->
-		(* Debug.print (Cs.show cs); *)
-		let tagval = item tagcol in
-		(* Debug.f "tagval %s" tagval; *)
-		let refval_raw = item refcol in
-		(* Debug.f "refval_raw %s" refval_raw; *)
-		let refval = int_of_string refval_raw in
-		let (itbl, itype) = 
-		  try
-		    List.assoc (refcol, tagval) vsr
-		  with NotFound _ -> assert false
-		in
-		let offset = Offsets.lookup_vs_offset itbl_offsets (refcol, tagval) in
-		let (next_offset, tagged_value) = handle_inner_table itype refval offset itbl in
-		let variant = `Variant (tagval, tagged_value) in
-		let new_offsets = Offsets.update_vs_offset itbl_offsets (refcol, tagval) next_offset in
-		  (new_offsets, variant)
-	    | _ -> assert false)
+      | Cs.Tag ((tagcol, `Tag), (refcol, `Surrogate)) ->
+	(* Debug.print (Cs.show cs); *)
+	let tagval = item tagcol in
+	(* Debug.f "tagval %s" tagval; *)
+	let refval_raw = item refcol in
+	(* Debug.f "refval_raw %s" refval_raw; *)
+	let refval = int_of_string refval_raw in
+	let (itbl, itype) = 
+	  try
+	    List.assoc (refcol, tagval) vsr
+	  with NotFound _ -> assert false
+	in
+	let offset = Offsets.lookup_vs_offset itbl_offsets (refcol, tagval) in
+	let (next_offset, tagged_value) = handle_inner_table itype refval offset itbl in
+	let variant = `Variant (tagval, tagged_value) in
+	let new_offsets = Offsets.update_vs_offset itbl_offsets (refcol, tagval) next_offset in
+	(new_offsets, variant)
+      | _ -> assert false
 
 and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type = 
   (* Debug.print "handle_table"; *)

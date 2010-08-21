@@ -164,10 +164,10 @@ let do_primitive_binop wrapper op1 op2 =
 let do_primitive_binop_ti wrapper restype e1 e2 =
   let Ti (q_e1, cs_e1, _, _) = e1 in
   let Ti (q_e2, cs_e2, _, _) = e2 in
-    assert (Cs.is_operand cs_e1);
-    assert (Cs.is_operand cs_e2);
+    assert (Cs.is_atomic cs_e1);
+    assert (Cs.is_atomic cs_e2);
     let q = do_primitive_binop wrapper q_e1 q_e2 in
-      Ti (q, [`Column (1, restype)], Ts.empty, Vs.empty)
+      Ti (q, Cs.Column (1, restype), Ts.empty, Vs.empty)
 
 let smaller = do_primitive_binop_ti wrap_lt `BoolType
 let greater = do_primitive_binop_ti wrap_gt `BoolType
@@ -199,7 +199,7 @@ let do_project field record =
   let old_cols = Cs.offsets field_cs' in
   let offset = List.hd old_cols in
   let new_cols = incr old_cols (-offset + 1) in
-  let field_cs = Cs.shift field_cs' (-offset + 1) in
+  let field_cs = Cs.shift (-offset + 1) field_cs' in
   let field_ts = Ts.decr_cols (Ts.keep_cols ts_r old_cols) (offset - 1) in 
   let field_vs = Vs.decr_cols (Vs.keep_cols vs_r old_cols) (offset - 1) in
   let q =
@@ -216,14 +216,14 @@ let do_length loop (Ti (q_e, _, _, _)) =
       q_e
   in
   let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-    Ti (q', [`Column (1, `IntType)], Ts.empty, Vs.empty)
+    Ti (q', Cs.Column (1, `IntType), Ts.empty, Vs.empty)
 
 (* q_e1 and q_e2 must have absolute positions *)
 let do_zip e1 e2 =
   let Ti (q_e1, cs_e1, ts_e1, vs_e1) = e1 in
   let Ti (q_e2, cs_e2, ts_e2, vs_e2) = e2 in
   let card_e1 = List.length (Cs.offsets cs_e1) in
-  let cs_e2' = Cs.shift cs_e2 card_e1 in
+  let cs_e2' = Cs.shift card_e1 cs_e2 in
   let ts_e2' = Ts.incr_cols ts_e2 card_e1 in
   let ts = Ts.append ts_e1 ts_e2' in
   let vs_e2' = Vs.incr_cols vs_e2 card_e1 in
@@ -243,32 +243,32 @@ let do_zip e1 e2 =
 		  ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.offsets cs_e2')) (io (Cs.offsets cs_e2))))
 		  q_e2))))
   in
-  let cs = [`Mapping ("1", cs_e1); `Mapping ("2", cs_e2')] in
+  let cs = Cs.Mapping [("1", cs_e1); ("2", cs_e2')] in
     Ti (q, cs, ts, vs)
 
 (* apply the all aggregate operator to the first column grouped by iter 
    (corresponds to the function "and" from the links prelude *)
 let do_list_and loop (Ti (q, cs, _, _)) =
-  assert (Cs.is_operand cs);
+  assert (Cs.is_atomic cs);
   let q' = 
     (ADag.mk_funaggr
        (A.All, (A.Item 1, A.Item 1), Some iter)
        q)
   in
   let q'' = wrap_agg loop q' (A.Bool true) in
-    Ti (q'', [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+    Ti (q'', Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
 
 (* apply the min aggregate operator to the first column grouped by iter 
    (corresponds to the function "or" from the links prelude *)
 let do_list_or loop (Ti (q, cs, _, _)) =
-  assert (Cs.is_operand cs);
+  assert (Cs.is_atomic cs);
   let q' =
     ADag.mk_funaggr
       (A.Max, (A.Item 1, A.Item 1), Some iter)
       q
   in
   let q'' = wrap_agg loop q' (A.Bool false) in
-    Ti (q'', [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+    Ti (q'', Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
 
 (* join two inner tables together and compute new surrogate keys *)
 let combine_inner_tables q_l q_r =
@@ -328,7 +328,7 @@ and append_matching_vs (q_outer : ADag.dag ref) ((refcol, tag), ((ti_l, itype_l)
 
   let q = ADag.mk_project projlist q_renumbered in
 
-  let cs = Cs.fuse cs_l cs_r in
+  let cs = Cs.choose_nonempty cs_l cs_r in
 
   let ts = append_ts q_combined ts_l ts_r in
 
@@ -371,7 +371,7 @@ and append_matching_ts (q_outer : ADag.dag ref) (refcol, (ti_l, ti_r)) =
 
   let q = ADag.mk_project projlist q_renumbered in
 
-  let cs = Cs.fuse cs_l cs_r in
+  let cs = Cs.choose_nonempty cs_l cs_r in
 
   let ts = append_ts q_combined ts_l ts_r in
 
@@ -497,7 +497,7 @@ let rec compile_box env loop e =
 	 [(prj iter); (A.Item 1, iter)]
 	 loop)
   in
-    Ti(q_o, [`Column (1, `Surrogate)], [(1, ti_e)], Vs.empty)
+    Ti (q_o, Cs.Column (1, `Surrogate), [(1, ti_e)], Vs.empty)
 
 and compile_unbox env loop e =
   let Ti (q_e, cs_e, ts_e, _) = compile_expression env loop e in
@@ -515,10 +515,10 @@ and compile_append env loop l =
 	let tl = compile_append env loop tl_e in
 	  compile_list hd tl
     | [] ->
-	Ti (ADag.mk_emptytbl, [`Column (1, `IntType)], Ts.empty, Vs.empty)
+	Ti (ADag.mk_emptytbl, Cs.Column (1, `EmptyListLit), Ts.empty, Vs.empty)
 
 and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl)) =
-  let fused_cs = Cs.fuse cs_hd cs_tl in
+  let cs = Cs.choose_nonempty cs_hd cs_tl in
   (* combine the two lists and compute new surrogate values *)
   let q =
     ADag.mk_rownum
@@ -533,7 +533,7 @@ and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl
 	       (ord, A.Nat 2n)
 	       q_tl)))
   in
-  let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols fused_cs ts_hd ts_tl vs_hd vs_tl item') in
+  let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols cs ts_hd ts_tl vs_hd vs_tl item') in
   let q' = 
     ADag.mk_project
       q'_projlist
@@ -541,7 +541,7 @@ and compile_list (Ti (q_hd, cs_hd, ts_hd, vs_hd)) (Ti (q_tl, cs_tl, ts_tl, vs_tl
   in
   let ts' = append_ts q ts_hd ts_tl in
   let vs' = append_vs q vs_hd vs_tl in
-    Ti (q', fused_cs, ts', vs')
+    Ti (q', cs, ts', vs')
 
 and compile_zip env loop l1 l2 =
   let Ti (q_l1, cs_l1, ts_l1, vs_l1) = compile_expression env loop l1 in
@@ -564,7 +564,7 @@ and compile_unzip env loop p =
   let cols_1 = Cs.offsets cs_1 in
   let card = List.length (Cs.offsets cs_1) in
   let cols_2 = Cs.offsets cs_2 in
-  let cs_2' = Cs.shift cs_2 (-card) in
+  let cs_2' = Cs.shift (-card) cs_2 in
   let card = List.length cols_1 in
   let q_1 = 
     ADag.mk_project
@@ -582,7 +582,7 @@ and compile_unzip env loop p =
   let vs_1 = Vs.keep_cols vs_p cols_1 in
   let vs_2 = Vs.decr_cols (Vs.keep_cols vs_p cols_2) card in
   let ts = [(1, Ti(q_1, cs_1, ts_1, vs_1)); (2, Ti(q_2, cs_2', ts_2, vs_2))] in
-  let cs = [`Mapping ("1", [`Column (1, `Surrogate)]); `Mapping ("2", [`Column (2, `Surrogate)])] in
+  let cs = Cs.Mapping [("1", Cs.Column (1, `Surrogate)); ("2", Cs.Column (2, `Surrogate))] in
     Ti (q, cs, ts, Vs.empty)
 
 (* FIXME: unite at least compile_or/and/length *)
@@ -601,7 +601,7 @@ and compile_length env loop l =
 and compile_empty env loop l = 
   let ti_l = compile_expression env loop l in
   let Ti (q_length, cs_length, _, _) = do_length loop ti_l in
-    assert (Cs.is_operand cs_length);
+    assert (Cs.is_atomic cs_length);
     let q =
       ADag.mk_project
 	[prj iter; prj pos; (A.Item 1, res)]
@@ -611,27 +611,27 @@ and compile_empty env loop l =
 	      (A.Item 2, A.Int (Num.Int 0))
 	      q_length))
     in
-      Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+      Ti (q, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
 
 (* application of sum to [] is defined as 0 *)
 and compile_sum env loop l =
   let c = A.Item 1 in
   let Ti (q_l, cs_l, _, _) = compile_expression env loop l in
-    assert (Cs.is_operand cs_l);
+    assert (Cs.is_atomic cs_l);
     let q = 
       (ADag.mk_funaggr
 	 (A.Sum, (c, c), Some iter)
 	 q_l)
     in
     let q' = wrap_agg loop q (A.Int (Num.Int 0)) in
-      Ti (q', [`Column (1, `IntType)], Ts.empty, Vs.empty)
+      Ti (q', Cs.Column (1, `IntType), Ts.empty, Vs.empty)
 
 (* aggregate functions which are not defined on empty lists. the result
    is returned as a Maybe a, where sum(l) = Nothing iff l = [] *)
 and compile_aggr_error env loop aggr_fun restype l =
   let c = A.Item 1 in
   let  Ti (q_l, cs_l, _, _) = compile_expression env loop l in
-    assert (Cs.is_operand cs_l);
+    assert (Cs.is_atomic cs_l);
     let q_inner_just = 
       ADag.mk_attach
 	(pos, A.Nat 1n)
@@ -673,8 +673,8 @@ and compile_aggr_error env loop aggr_fun restype l =
 	      [prj iter; (A.Item 2, iter)]
 	      empty_iterations))
     in
-    let inner_cs_just = [`Column (1, restype)] in
-    let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+    let inner_cs_just = Cs.Column (1, restype) in
+    let outer_cs = Cs.Tag ((1, `Tag), (2, `Surrogate)) in
     let vs = [((2, "Just"), (Ti (q_inner_just, inner_cs_just, Ts.empty, Vs.empty), `Atom)); 
 	      ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
     let q_outer = ADag.mk_disjunion q_outer_just q_outer_nothing in
@@ -726,7 +726,7 @@ and compile_nth env loop i l =
 	    [prj iter; (A.Item 2, iter)]
 	    empty_iterations))
   in
-  let outer_cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+  let outer_cs = Cs.Tag ((1, `Tag), (2, `Surrogate)) in
   let ts_l' = slice_inner_tables q_inner_just ts_l in
   let vs = [((2, "Just"), (Ti (q_inner_just, cs_l, ts_l', vs_l), `Atom));
 	    ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
@@ -736,13 +736,9 @@ and compile_nth env loop i l =
 and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 operand_2 =
   let e1_ti = compile_expression env loop operand_1 in
   let e2_ti = compile_expression env loop operand_2 in
-  let is_boxed (Ti (_, cs, _, _)) =
-    match cs with
-      | [`Column (1, `Surrogate)] -> true
-      | _ -> false
-  in
+  let is_boxed_list = Cs.is_boxed_list -<- cs_of_tblinfo in
   let unbox (Ti (q, cs, ts, _)) =
-      assert (Cs.is_operand cs);
+      assert (Cs.is_atomic cs);
       assert ((Ts.length ts) = 1);
       let (offset, inner_ti) = List.hd ts in
 	do_unbox q offset inner_ti
@@ -750,11 +746,11 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 ope
     match (Query2.Annotate.typeof_typed_t operand_1, Query2.Annotate.typeof_typed_t operand_2) with
 	(* if arguments are boxed (i.e. they have list type), we need
 	   to unbox them first *)
-      | `Atom, `Atom when (is_boxed e1_ti) && (is_boxed e2_ti) ->
+      | `Atom, `Atom when (is_boxed_list e1_ti) && (is_boxed_list e2_ti) ->
 	  tablefun loop comparison_wrapper (unbox e1_ti) (unbox e2_ti)
-      | `Atom, `List when is_boxed e1_ti ->
+      | `Atom, `List when is_boxed_list e1_ti ->
 	  tablefun loop comparison_wrapper (unbox e1_ti) e2_ti
-      | `List, `Atom when is_boxed e2_ti ->
+      | `List, `Atom when is_boxed_list e2_ti ->
 	  tablefun loop comparison_wrapper e1_ti (unbox e2_ti)
       | `Atom, `Atom -> 
 	  rowfun loop comparison_wrapper e1_ti e2_ti
@@ -771,7 +767,7 @@ and do_table_greater loop wrapper l1 l2 =
     let Ti (q, cs, ts, vs) = ti in
     let cs1 = Cs.lookup_record_field cs "1" in
     let cs2 = Cs.lookup_record_field cs "2" in
-    let cs' = [`Mapping ("1", cs2); `Mapping ("2", cs1)] in
+    let cs' = Cs.Mapping [("1", cs2); ("2", cs1)] in
       Ti (q, cs', ts, vs)
   in
 
@@ -819,7 +815,7 @@ and do_table_greater loop wrapper l1 l2 =
 		    [prj iter]
 		    selected))))
     in
-      Ti (q, [`Column (1, `NatType)], Ts.empty, Vs.empty)
+      Ti (q, Cs.Column (1, `NatType), Ts.empty, Vs.empty)
   in
 
   (* l1 > l2 iff l2 < l1 -> swap arguments *)
@@ -841,7 +837,7 @@ and do_table_greater loop wrapper l1 l2 =
     
 and do_row_greater loop wrapper e1 e2 = 
   let q = do_row_greater_real loop wrapper (do_zip e1 e2) in
-    Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+    Ti (q, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
 
 and do_row_greater_real loop wrapper zipped =
 
@@ -849,8 +845,8 @@ and do_row_greater_real loop wrapper zipped =
     let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
       if Cs.is_atomic cse_l then
-	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
-	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	let col_l = List.hd (Cs.offsets cse_l) in
+	let col_r = List.hd (Cs.offsets cse_r) in
 	  ADag.mk_project
 	    [prj iter; prj pos; (A.Item 1, res)]
 	    (* no need to join since the two arguments are already zipped *)
@@ -858,8 +854,8 @@ and do_row_greater_real loop wrapper zipped =
       else if Cs.is_variant cse_l then
 	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
-	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
-	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	let col_l = List.hd (Cs.offsets cse_l) in
+	let col_r = List.hd (Cs.offsets cse_r) in
 	(* inner tables need to be unboxed first *)
 	let inner_table_l, inner_table_r =
 	  try
@@ -871,15 +867,15 @@ and do_row_greater_real loop wrapper zipped =
 	  q_of_tblinfo (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r)
 	    
     in
-      Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+      Ti (q, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
   in
 
   let column_equal ti_zipped (cse_l, cse_r) = 
     let Ti (q_zipped, _, ts_zipped, _) = ti_zipped in
     let q = 
       if Cs.is_atomic cse_l then
-	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
-	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	let col_l = List.hd (Cs.offsets cse_l) in
+	let col_r = List.hd (Cs.offsets cse_r) in
 	  ADag.mk_project
 	    [prj iter; prj pos; (A.Item 1, res)]
 	    (* no need to join since the two arguments are already zipped *)
@@ -887,8 +883,8 @@ and do_row_greater_real loop wrapper zipped =
       else if Cs.is_variant cse_l then
 	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
-	let col_l = List.hd (Cs.offset_of_csentry cse_l) in
-	let col_r = List.hd (Cs.offset_of_csentry cse_r) in
+	let col_l = List.hd (Cs.offsets cse_l) in
+	let col_r = List.hd (Cs.offsets cse_r) in
 	(* we compare nested lists represented by a inner table *)
 
 	(* lookup the inner tables referred to by col1, col2 *)
@@ -903,7 +899,7 @@ and do_row_greater_real loop wrapper zipped =
 	  (* compare the inner tables *)
 	  q_of_tblinfo (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r) 
     in
-      Ti (q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+      Ti (q, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
   in
 
   let Ti (_q_zipped, cs_zipped, _, _) = zipped in
@@ -913,7 +909,13 @@ and do_row_greater_real loop wrapper zipped =
   (* special case: if we are comparing lists of records and one of the lists is the empty 
      list, the length of its cs component does not match the other cs's length.  in this case, 
      we need to "fake" a compatible cs for the empty list *)
-  let cs_l, cs_r = Cs.longer_cs cs_l cs_r in
+  let cs_l, cs_r = 
+    match Cs.is_empty_list_lit cs_l, Cs.is_empty_list_lit cs_r with
+      | true, true
+      | false, false -> cs_l, cs_r
+      | true, false -> cs_r, cs_r
+      | false, true -> cs_l, cs_l
+  in
   
   (* sort record fields by field name so that the correct columns are
      compared *)
@@ -965,7 +967,7 @@ and do_table_equal loop wrapper l1 l2 =
 	   q_equal
 	   map)
     in
-      Ti (result_backmapped, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+      Ti (result_backmapped, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
   in
 
   let l1_abs = abspos_ti l1 in
@@ -983,7 +985,7 @@ and do_row_equal loop wrapper ti_l ti_r =
   (* special case: if we are comparing lists of records and one of the lists is the empty 
      list, the length of its cs component does not match the other cs's length.  in this case, 
      we need to "fake" a compatible cs for the empty list *)
-  let cs = Cs.fuse cs_l cs_r in
+  let cs = Cs.choose_nonempty cs_l cs_r in
 
   let fields = Cs.leafs (Cs.sort_record_columns cs) in
 
@@ -998,11 +1000,11 @@ and do_row_equal loop wrapper ti_l ti_r =
     in
       if Cs.is_atomic field_cse then
 	(* normal comparison of atomic values *)
-	let col = List.hd (Cs.offset_of_csentry field_cse) in
+	let col = List.hd (Cs.offsets field_cse) in
 	  do_primitive_binop wrapper (project q_l col) (project q_r col)
       else if Cs.is_variant field_cse then
 	let tagcol, refcol = 
-	  match Cs.offset_of_csentry field_cse with 
+	  match Cs.offsets field_cse with 
 	    | [tagcol; refcol] -> tagcol, refcol
 	    | _ -> assert false
 	in
@@ -1066,7 +1068,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 	    
       else
 	(* we compare nested lists represented by a inner table *)
-	let col = List.hd (Cs.offset_of_csentry field_cse) in
+	let col = List.hd (Cs.offsets field_cse) in
 
 	(* lookup the inner tables referred to by col1, col2 *)
 	let inner_table_l, inner_table_r = 
@@ -1097,7 +1099,7 @@ and do_row_equal loop wrapper ti_l ti_r =
       (compare_field (List.hd fields))
       (drop 1 fields)
   in
-    Ti(q, [`Column (1, `BoolType)], Ts.empty, Vs.empty)
+    Ti(q, Cs.Column (1, `BoolType), Ts.empty, Vs.empty)
 
 and compile_binop env loop wrapper restype operand_1 operand_2 =
   let ti_1 = compile_expression env loop operand_1 in
@@ -1106,7 +1108,7 @@ and compile_binop env loop wrapper restype operand_1 operand_2 =
 
 and compile_unop env loop wrapper operand =
   let Ti (op_q, op_cs, _, _) = compile_expression env loop operand in
-    assert (Cs.is_operand op_cs);
+    assert (Cs.is_atomic op_cs);
     let c = A.Item 1 in
     let res = A.Item 2 in
     let q = 
@@ -1326,7 +1328,7 @@ and compile_for env loop v e1 e2 order_criteria =
 
 and singleton_record env loop (name, e) =
   let Ti (q, cs, ts, vs) = compile_expression env loop e in
-  let cs' = [`Mapping (name, cs)] in
+  let cs' = Cs.Mapping [(name, cs)] in
     Ti (q, cs', ts, vs)
 
 and extend_record env loop ext_fields r =
@@ -1406,7 +1408,7 @@ and merge_records (Ti (r1_q, r1_cs, r1_ts, r1_vs)) (Ti (r2_q, r2_cs, r2_ts, r2_v
 	     ((iter', iter) :: (prjlist_map new_names_r2 old_names_r2))
 	     r2_q)))
   in
-  let cs = Cs.append r1_cs r2_cs in
+  let cs = Cs.append_mappings r1_cs r2_cs in
   let ts = Ts.append r1_ts r2_ts' in
   let vs = Vs.append r1_vs r2_vs' in
     Ti (q, cs, ts, vs)
@@ -1472,9 +1474,10 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
     | _ -> assert false
   in
   let cs = 
-    List.map 
-      (fun (i, c, typ) -> `Mapping (c, [`Column (offset i, typ)])) 
-      attr_infos 
+    let fields = 
+      List.map (fun (i, c, typ) -> (c, Cs.Column (offset i, typ))) attr_infos 
+    in
+    Cs.Mapping fields
   in
   let q =
     ADag.mk_cross
@@ -1487,7 +1490,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
     Ti (q, cs, Ts.empty, Vs.empty)
 
 and compile_constant loop (c : Constant.constant) =
-  let cs = [`Column (1, Cs.column_type_of_constant c)] in
+  let cs = Cs.Column (1, Cs.column_type_of_constant c) in
   let q =
     ADag.mk_attach
        (A.Item 1, A.pf_constant_of_constant c)
@@ -1518,7 +1521,7 @@ and compile_if2 env loop e1 e2 =
   in
   (* condition *)
   let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
-    assert (Cs.is_operand cs_e1);
+    assert (Cs.is_atomic cs_e1);
     let loop_then =
       ADag.mk_project
 	[prj iter]
@@ -1550,7 +1553,7 @@ and compile_if env loop e1 e2 e3 =
   in
   (* condition *)
   let Ti (q_e1, cs_e1, _, _) = compile_expression env loop e1 in
-    assert (Cs.is_operand cs_e1);
+    assert (Cs.is_atomic cs_e1);
     let loop_then =
       ADag.mk_project
 	[prj iter]
@@ -1624,7 +1627,7 @@ and compile_groupby env loop v g_e e =
   let env_v = AEnv.map (lift map_v) env in
   let env_v = AEnv.bind env_v (v, Ti(q_v', cs_e, ts_e, vs_e)) in
   let Ti(q_eg, cs_eg, _, _) = compile_expression env_v loop_v g_e in
-  let cs_eg' = Cs.shift cs_eg (Cs.cardinality cs_e) in
+  let cs_eg' = Cs.shift (Cs.cardinality cs_e) cs_eg in
   let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_eg') in
   let q_1 =
     ADag.mk_rowrank
@@ -1648,12 +1651,12 @@ and compile_groupby env loop v g_e e =
       ([(iter, grp_key); (prj pos)] @ (prjlist (io (Cs.offsets cs_e))))
       q_1
   in
-  let cs = [`Mapping ("1", cs_eg); `Mapping ("2", [`Column (grpkey_col, `Surrogate)])] in
+  let cs = Cs.Mapping [("1", cs_eg); ("2", Cs.Column (grpkey_col, `Surrogate))] in
   let ts = [(grpkey_col, Ti(q_3, cs_e, ts_e, vs_e))] in
     Ti(q_2, cs, ts, Vs.empty)
 
 and compile_unit (loop : ADag.dag ref) : tblinfo =
-  let cs = [`Column (1, `Unit)] in
+  let cs = Cs.Column (1, `Unit) in
   let q =
     ADag.mk_attach
       (A.Item 1, A.Nat 1n)
@@ -1667,7 +1670,7 @@ and compile_variant env loop tag value =
   Debug.f "compile_variant %s" tag;
   let ti_value = compile_expression env loop value in
   let itype = Query2.Annotate.typeof_typed_t value in
-  let cs = [`Tag ((1, `Tag), (2, `Surrogate))] in
+  let cs = Cs.Tag ((1, `Tag), (2, `Surrogate)) in
   let vs = [(2, tag), (ti_value, itype)] in
   let q = 
     ADag.mk_attach
@@ -1761,7 +1764,7 @@ and compile_case env loop value cases default =
 	      (ord, A.Nat 2n)
 	      q_r))
     in
-    let cs = Cs.fuse cs_l cs_r in
+    let cs = Cs.choose_nonempty cs_l cs_r in
     let q_union' = 
       ADag.mk_project
 	([prj iter; prj pos] @ (refresh_surr_cols cs ts_l ts_r vs_l vs_r item'))
@@ -1782,7 +1785,7 @@ and compile_wrong loop =
  	 loop)
   in
     merge_error_plans q_error;
-    Ti (ADag.mk_emptytbl, [`Column (1, `IntType)], Ts.empty, Vs.empty)
+    Ti (ADag.mk_emptytbl, Cs.Column (1, `IntType), Ts.empty, Vs.empty)
 
 and compile_expression env loop e : tblinfo =
   match e with

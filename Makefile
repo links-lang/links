@@ -119,7 +119,7 @@ SOURCES = $(OPC)                		\
 	  algebra_dag.ml algebra_dag.mli	\
 	  algebra_export.ml algebra_export.mli	\
 	  pf_toolchain.mli pf_toolchain.ml	\
-	  cs.ml					\
+	  cs.ml cs.mli				\
 	  itbls.ml				\
 	  query2.ml query2.mli			\
 	  compileQuery.ml			\
