@@ -555,7 +555,7 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
-  | `String s -> s
+  | `String s -> "\"" ^ s ^ "\""
 				
 and string_of_tuple (fields : (string * t) list) : string = 
     let fields = List.map (function
