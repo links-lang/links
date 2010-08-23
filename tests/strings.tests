@@ -15,7 +15,7 @@ hex literals
 stdout : "Links" : String
 
 concatenation
-"abc" ++ "def"
+"abc" ^^ "def"
 stdout : @"abcdef" : (\[Char\]|String)
 
 comparision

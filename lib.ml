@@ -1044,7 +1044,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let m = Str.matched_group i string in 
         accumMatches ((box_string m)::l) (i - 1)
 	with 
-	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
+	   NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
 	   accumMatches [] ngroups))),
      datatype "(String, Regex) ~> [String]",
    PURE));
