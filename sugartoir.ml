@@ -120,7 +120,7 @@ sig
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
   val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
+  val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
 
   val project : value sem * name -> value sem
@@ -358,11 +358,18 @@ struct
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (append, [s; s'])) s ss
 
-  let xml (nil, append, name, attrs, children) =
+  let rec string_concat (string_append, ss) =
+    match ss with
+      | [] -> lift (`Constant (`String ""), Types.string_type)
+      | [s] -> s
+      | s::ss ->
+          List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
+
+  let xml (string_append, name, attrs, children) =
     let lift_attrs attrs =
       List.fold_right
         (fun (name, ss) attrs ->
-           bind (concat (nil, append, ss))
+           bind (string_concat (string_append, ss))
              (fun v ->
                 M.bind attrs
                   (fun bs -> lift ((name, v) :: bs))))
@@ -825,8 +832,7 @@ struct
                   let attrs = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
                   let body =
-                         I.xml (instantiate "Nil" [`Type Types.char_type],
-                                instantiate "Concat" [`Type Types.char_type; `Row eff],
+                         I.xml (instantiate "^^" [`Row eff],
                                 tag, attrs, children)
                   in
                     begin match attrexp with
