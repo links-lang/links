@@ -36,9 +36,8 @@ let http_response_code = ref 200
 *)
 let value_as_string db =
   function
-    | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
-    | `List ([])  -> "\'\'"
-    | (a) -> string_of_value a
+    | `String s -> "\'" ^ db # escape_string s ^ "\'"
+    | v -> string_of_value v
 
 let cond_from_field db (k, v) =
   "("^ k ^" = "^ value_as_string db v ^")"
@@ -445,12 +444,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          fun elem attr ->
              match elem with
                | `List ((`XML (Node (_, children)))::_) -> 
-                   let attr = charlist_as_string attr in
+                   let attr = unbox_string attr in
                    let attr_match = (function
                                        | Attr (k, _) when k = attr -> true
                                        | _ -> false) in
                      (try match List.find attr_match children with
-                        | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
+                        | Attr (_, v) -> `Variant ("Some", box_string v)
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)
                | _ -> none),
@@ -745,8 +744,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Cookies *)
   "setCookie",
   (p2 (fun cookieName cookieVal ->
-         let cookieName = charlist_as_string cookieName in
-         let cookieVal = charlist_as_string cookieVal in
+         let cookieName = unbox_string cookieName in
+         let cookieVal = unbox_string cookieVal in
            http_response_headers := 
              ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
            `Record []
@@ -770,7 +769,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   *)
   "getCookie",
   (p1 (fun name ->
-         let name = charlist_as_string name in
+         let name = unbox_string name in
          let value =
            match getenv "HTTP_COOKIE" with
              | Some header ->
@@ -802,7 +801,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "redirect",
   (p1 (fun url ->
-         let url = charlist_as_string url in
+         let url = unbox_string url in
            (* This is all quite hackish, just testing an idea. --ez *)
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
@@ -818,12 +817,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             begin
-               let s = marshal_continuation k in
-                 match string_as_charlist s with
-                   | `List _ as value -> value
-                   | _ -> assert(false)
-             end
+             let s = marshal_continuation k in
+               box_string s
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
    datatype "((a) -> b) ~> String",
@@ -974,8 +969,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	  if driver = "" then
 	    failwith "Internal error: default database driver not defined"
 	  else
-	    `Record(["driver", string_as_charlist driver;
-		     "args", string_as_charlist args])),
+	    `Record(["driver", box_string driver;
+		     "args", box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
   
