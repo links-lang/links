@@ -1173,6 +1173,9 @@ struct
 		  ti_r.q))
 	in
 
+	(* select those iterations in which the tags are not
+	   equal. the result for these iterations is false regardless of
+	   the tagged values *)
 	let different_tags =
 	  ADag.mk_attach
 	    (A.Item 1, A.Bool false)
@@ -1187,37 +1190,54 @@ struct
 			tags_compared))))
 	in
 
+	(* iterations in which the tag is the same *)
+	let same_tag =
+	  ADag.mk_project
+	    [prj iter; prj item']
+	    (ADag.mk_select 
+	       res 
+	       tags_compared)
+	in
+	
+	(* select those iterations from q in which tag1 = tag2 = tag *)
 	let select_tag q tag = 
 	  ADag.mk_eqjoin
 	    (iter, iter')
 	    q
 	    (ADag.mk_project
-	       [prj iter']
+	       [(iter', iter)]
 	       (ADag.mk_select
-		  res'
+		  res
 		  (ADag.mk_funnumeq
-		     (res', (item', A.Item 1))
+		     (res, (item', item''))
 		     (ADag.mk_attach
-			(A.Item 1, A.String tag)
-			(ADag.mk_select 
-			   res 
-			   tags_compared)))))
+			(item'', A.String tag)
+			same_tag))))
 	in
 
+	(* compare the tagged values in iterations having the same tag
+	   _per tag_. for each tag which occurs in vs_left and
+	   vs_right, select the iterations which both have this tag,
+	   unbox the tagged values and compare them*)
 	let matching_tis_compared =
 	  List.map
 	    (fun ((_refcol, tag), ((inner_ti_l, itype_l), (inner_ti_r, _))) -> 
 	      (* select only the current tag *)
-	      let unboxed_l = do_unbox (select_tag ti_l.q tag) refcol inner_ti_l in
-	      let unboxed_r = do_unbox (select_tag ti_r.q tag) refcol inner_ti_r in
-	      let loop' = ADag.mk_project [prj iter] unboxed_l.q in
+	      
+	      let q_tag_l = select_tag ti_l.q tag in
+	      let q_tag_r = select_tag ti_r.q tag in
+	      let unboxed_l = do_unbox q_tag_l refcol inner_ti_l in
+	      let unboxed_r = do_unbox q_tag_r refcol inner_ti_r in
+	      let loop_tag = ADag.mk_project [prj iter] q_tag_l in
 	      match itype_l with
 		| `Atom ->
-		  do_row_equal loop' wrapper unboxed_l unboxed_r
+		  do_row_equal loop_tag wrapper unboxed_l unboxed_r
 		| `List ->
-		  do_table_equal loop' wrapper unboxed_l unboxed_r)
+		  do_table_equal loop_tag wrapper unboxed_l unboxed_r)
 	    (same_keys (Vs.lookup_col refcol ti_l.vs) (Vs.lookup_col refcol ti_r.vs))
 	in
+
+	(* union of the results for all tags *)
 	List.fold_left
 	  (fun q_union ti -> ADag.mk_disjunion q_union ti.q)
 	  different_tags

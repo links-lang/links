@@ -1,0 +1,12 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int) tablekeys [["id"]] from db;
+
+query {
+      var ignore = players_table;
+      #Foo("abc") == Bar(1,2)
+      #[Foo("abc"), Bar(1,2)]
+      #Foo(1,2) == Foo(3,2)
+      #Foo([1,2,3,4])
+      #Foo("abc") == Bar([1,2,3,4])
+      Foo([10, 20]) == Foo([10, 20])
+}
