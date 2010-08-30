@@ -530,7 +530,7 @@ struct
 	[prj iter]
 	q_v
     in
-    (q_v, map, loop)
+    (q_renumbered, q_v, map, loop)
 
 (* lift q into the new iteration context represented by map *)
   let lift map ti =
@@ -912,7 +912,7 @@ struct
     (* the comparison must be done loop-lifted so that inner tables can be unboxed and compared correctly *)
 
     (* lift zipped *)
-      let q_mapped, map, loop' = map_forward zipped.q zipped.cs in
+      let _, q_mapped, map, loop' = map_forward zipped.q zipped.cs in
       let zipped_mapped = { zipped with q = q_mapped } in
 
     (* we need "<" on rows but have only ">" -> switch arguments *)
@@ -1102,7 +1102,7 @@ struct
     let all = do_list_and loop in
 
     let map_equal source =
-      let q_s_mapped, map, loop = map_forward source.q source.cs in
+      let _, q_s_mapped, map, loop = map_forward source.q source.cs in
       let ti_s = { source with q = q_s_mapped } in
       let q_equal = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)).q in
     (* map the comparison result back into the outer iteration context *)
@@ -1482,7 +1482,7 @@ struct
 
   and compile_for env loop v source body order_criteria =
     let  ti_source = compile_expression env loop source in
-    let (q_v, map, loop_v) = map_forward ti_source.q ti_source.cs in
+    let _, q_v, map, loop_v = map_forward ti_source.q ti_source.cs in
     let env = AEnv.map (lift map) env in
     let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
     let ti_body = compile_expression env_v loop_v body in
@@ -1789,37 +1789,15 @@ struct
       vs = append_vs q ti_t.vs ti_e.vs
     }
 
-  and compile_groupby env loop v g_e e =
+  and compile_groupby env loop v ge e =
     let ti_e = compile_expression env loop e in
-    (* FIXME: use map_forward *)
-    let q_v =
-      ADag.mk_rownum
-	(inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
-	ti_e.q
-    in
-    let loop_v =
-      ADag.mk_project
-	[(iter, inner)]
-	q_v
-    in
-    let map_v = 
-      ADag.mk_project
-	[(outer, iter); (prj inner)]
-	q_v
-    in
-    let q_v' = 
-      ADag.mk_attach
-	(pos, A.Nat 1n)
-	(ADag.mk_project
-	   ([(iter, inner)] @ (prjlist (io (Cs.offsets ti_e.cs))))
-	   q_v)
-    in
+    let q_v, q_v', map_v, loop_v = map_forward ti_e.q ti_e.cs in
     let env_v = AEnv.map (lift map_v) env in
     let env_v = AEnv.bind env_v (v, { ti_e with q = q_v' }) in
     (* compile group expression *)
-    let ti_g_e = compile_expression env_v loop_v g_e in
-    let cs_eg' = Cs.shift (Cs.cardinality ti_e.cs) ti_g_e.cs in
-    let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_eg') in
+    let ti_ge = compile_expression env_v loop_v ge in
+    let cs_ge' = Cs.shift (Cs.cardinality ti_e.cs) ti_ge.cs in
+    let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_ge') in
     let q_1 =
       ADag.mk_rowrank
 	(grp_key, (iter, A.Ascending) :: sortlist)
@@ -1827,14 +1805,14 @@ struct
 	   (inner, iter')
 	   q_v
 	   (ADag.mk_project
-	      ((iter', iter) :: (prjlist_map (io (Cs.offsets cs_eg')) (io (Cs.offsets ti_g_e.cs))))
-	      ti_g_e.q))
+	      ((iter', iter) :: (prjlist_map (io (Cs.offsets cs_ge')) (io (Cs.offsets ti_ge.cs))))
+	      ti_ge.q))
     in
-    let grpkey_col = (Cs.cardinality ti_g_e.cs) + 1 in
+    let grpkey_col = (Cs.cardinality ti_ge.cs) + 1 in
     let q_2 =
       ADag.mk_distinct
 	(ADag.mk_project
-	   ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.offsets ti_g_e.cs)) (io (Cs.offsets cs_eg'))))
+	   ([prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (prjlist_map (io (Cs.offsets ti_ge.cs)) (io (Cs.offsets cs_ge'))))
 	   q_1)
     in
     let q_3 =
@@ -1844,7 +1822,7 @@ struct
     in
     {
       q = q_2;
-      cs = Cs.Mapping [("1", ti_g_e.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
+      cs = Cs.Mapping [("1", ti_ge.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
       ts = [(grpkey_col, { ti_e with q = q_3 })];
       vs = Vs.empty
     }
@@ -1920,7 +1898,7 @@ struct
   (* compile value to be matched *)
     let ti_v = compile_expression env loop value in
 
-    let (q_v', map, _loop_v) = map_forward ti_v.q ti_v.cs in
+    let _, q_v', map, _loop_v = map_forward ti_v.q ti_v.cs in
 
     let env' = AEnv.map (lift map) env in
 
