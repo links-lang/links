@@ -1046,11 +1046,8 @@ struct
 	| false, true -> cs_l, cs_l
     in
     
-  (* sort record fields by field name so that the correct columns are
-     compared *)
-  (* FIXME sorting is unecessary because all records/tables are sorted by field names (invariant *)
-    let cols_l = Cs.leafs (Cs.sort_record_columns cs_l) in
-    let cols_r = Cs.leafs (Cs.sort_record_columns cs_r) in
+    let cols_l = Cs.leafs cs_l in
+    let cols_r = Cs.leafs cs_r in
 
     let n = List.length cols_l in
     assert (n = List.length cols_r);
