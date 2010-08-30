@@ -316,7 +316,7 @@ let rec append_vs q_outer vs_l vs_r =
   let r = List.map (append_missing_vs q_outer (A.Nat 2n)) (missing_keys vs_r vs_l) in
     List.sort compare (m @ l @ r)
 
-and append_matching_vs (q_outer : ADag.dag ref) ((refcol, tag), ((ti_l, itype_l), (ti_r, _itype_r))) =
+and append_matching_vs (q_outer : ADag.t) ((refcol, tag), ((ti_l, itype_l), (ti_r, _itype_r))) =
   let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
   let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
@@ -359,7 +359,7 @@ and append_ts q_outer ts_l ts_r =
   let r = List.map (append_missing_ts q_outer (A.Nat 2n)) (missing_keys ts_r ts_l) in
     List.sort compare (m @ l @ r)
 
-and append_matching_ts (q_outer : ADag.dag ref) (refcol, (ti_l, ti_r)) =
+and append_matching_ts (q_outer : ADag.t) (refcol, (ti_l, ti_r)) =
   let Ti (q_l, cs_l, ts_l, vs_l) = ti_l in
   let Ti (q_r, cs_r, ts_r, vs_r) = ti_r in
 
@@ -398,7 +398,7 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
 
 (* only keep those tuples in an nested table which are actually referenced from the
    outer table *)
-let rec slice_inner_tables (q_outer : ADag.dag ref) (ts : ts) : ts =
+let rec slice_inner_tables (q_outer : ADag.t) (ts : ts) : ts =
 
   let slice (surr_col, Ti (q_inner, cs_inner, ts_inner, vs_inner)) =
     let q_inner' = 
@@ -1322,7 +1322,9 @@ and compile_for env loop v e1 e2 order_criteria =
 	 (ADag.mk_eqjoin
 	    (iter, inner)
 	    q2
-	    map'))
+	    (ADag.mk_project
+	       [prj outer; prj inner]
+	       map')))
   in
     Ti(q, cs2, ts2, vs2)
 
@@ -1655,7 +1657,7 @@ and compile_groupby env loop v g_e e =
   let ts = [(grpkey_col, Ti(q_3, cs_e, ts_e, vs_e))] in
     Ti(q_2, cs, ts, Vs.empty)
 
-and compile_unit (loop : ADag.dag ref) : tblinfo =
+and compile_unit (loop : ADag.t) : tblinfo =
   let cs = Cs.Column (1, `Unit) in
   let q =
     ADag.mk_attach
