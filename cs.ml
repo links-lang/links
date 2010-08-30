@@ -31,13 +31,13 @@ type field_name = string deriving (Show)
 (* the type of the cs component which describes how the represented 
    values (primitive values, records, lists, tags) are mapped onto 
    the flat columns *)
-type cs = 
+type t = 
   | Column of column
   | Tag of column * column
-  | Mapping of (field_name * cs) list
+  | Mapping of (field_name * t) list
       deriving (Show)
 
-let show = Show.show show_cs
+let show = Show.show show_t
 
 (* return all columns together with their column type *)
 let rec leafs = function
@@ -59,7 +59,7 @@ let is_empty_list_lit = function Column (_, `EmptyListLit) -> true | _ -> false
 (* return all columns *)	
 let rec offsets = List.flatten -<- (List.map offsets_of_cs) -<- leafs
 
-let cardinality (cs : cs) = List.length (offsets cs)
+let cardinality (cs : t) = List.length (offsets cs)
 
 let rec shift i cs =
   match cs with

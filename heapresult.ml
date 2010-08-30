@@ -1,7 +1,8 @@
 open Printf
 open Utility
 
-open Itbls
+open CompileQuery
+open ExpressionToAlgebra
 
 module A = Algebra
 module FieldEnv = Utility.StringMap
@@ -103,7 +104,7 @@ type accessor_functions = item_access * iter_access * cardinality
 
 type tsr = (int * tblresult) list
 and vsr = ((int * string) * (tblresult * implementation_type)) list
-and tblresult = Tr of (accessor_functions * Cs.cs * tsr * vsr)
+and tblresult = Tr of (accessor_functions * Cs.t * tsr * vsr)
 
 (* Create functions which encapsulate the access to one table's 
    item and iter fields. *)
@@ -161,14 +162,13 @@ let execute_query database query =
       | _ -> dbresult
 
 let rec execute_queries database ti =
-  let CompileQuery.ExpressionToAlgebra.Ti (q, cs, ts, vs) = ti in
-  let xml_sql = Pf_toolchain.optimize_sql q in
+  let xml_sql = Pf_toolchain.optimize_sql ti.q in
   let schema, query = XmlSqlPlan.extract_queries xml_sql in
   let result = execute_query database query in
   let acc = table_access_functions schema result in
-  let ts' = alistmap (execute_queries database) ts in
-  let vs' = alistmap (fun (ti, itype) -> (execute_queries database ti, itype)) vs in
-    Tr (acc, cs, ts', vs')
+  let ts' = alistmap (execute_queries database) ti.ts in
+  let vs' = alistmap (fun (ti, itype) -> (execute_queries database ti, itype)) ti.vs in
+    Tr (acc, ti.cs, ts', vs')
     
 let rec execute_errors database q_error =
   let xml_sql = Pf_toolchain.optimize_sql q_error in

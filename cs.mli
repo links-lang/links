@@ -15,46 +15,45 @@ type field_name = string
 (** the type of the cs component which describes how the represented 
     values (primitive values, records, lists, tags) are mapped onto 
     the flat columns *)
-type cs = 
+type t = 
   | Column of column
   | Tag of column * column
-  | Mapping of (field_name * cs) list
+  | Mapping of (field_name * t) list
 
-val show : cs -> string
+val show : t -> string
 
 (** return all leafs of the cs structure, i.e. all Column/Tag nodes *)
-val leafs : cs -> cs list
+val leafs : t -> t list
 
 (** return all offsets used in the cs structure *)
-val offsets : cs -> offset list
+val offsets : t -> offset list
 
-val is_atomic : cs -> bool
-val is_variant : cs -> bool
-val is_record : cs -> bool
-val is_boxed_list : cs -> bool
-val is_empty_list_lit : cs -> bool
+val is_atomic : t -> bool
+val is_variant : t -> bool
+val is_record : t -> bool
+val is_boxed_list : t -> bool
+val is_empty_list_lit : t -> bool
 
 (** number of columns in cs *)
-val cardinality : cs -> int
+val cardinality : t -> int
 
 (** increase all offsets in cs by i *)
-val shift : int -> cs -> cs
+val shift : int -> t -> t
 
 (** append two record cs structures *)
-val append_mappings : cs -> cs -> cs
+val append_mappings : t -> t -> t
 
 (** choose the non-empty one from two cs structures based on the length *)
-(* FIXME: this will lead to trouble if len(cs1) = len(cs2) and type(col1) != type(col2) *)
-val choose_nonempty : cs -> cs -> cs
+val choose_nonempty : t -> t -> t
 
 (** lookup the cs node belonging to a fieldname in a Mapping *)
-val lookup_record_field : cs -> string -> cs
+val lookup_record_field : t -> string -> t
 
 (** remove all fields which are in a set from a mapping *)
-val filter_record_fields : cs -> Utility.StringSet.t -> cs
+val filter_record_fields : t -> Utility.StringSet.t -> t
 
 (** recursively sort the fields of all mappings by field names *)
-val sort_record_columns : cs -> cs
+val sort_record_columns : t -> t
 
 (** replace all offsets in a cs structure by new offsets in a list (in-order) *)
-val map_cols : offset list -> cs -> cs
+val map_cols : offset list -> t -> t
