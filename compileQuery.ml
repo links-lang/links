@@ -140,7 +140,6 @@ struct
   let res' = A.Pos 9
   let res'' = A.Pos 10
   let pos'' = A.Pos 11
-
 (* wrapper for binary functions/operators *)
   let wrap_1to1 f res c c' algexpr =
     ADag.mk_fun1to1
@@ -480,6 +479,30 @@ struct
       List.map slice ts
     else
       ts
+
+  (* helper function for compile_if/compile_case:
+     remove all iterations from environment entries which are not in loop *)
+  let fragment_env loop env = 
+    let select loop ti =
+      let cols = io (Cs.offsets ti.cs) in
+      let q' =
+	ADag.mk_project
+	  ([prj iter; prj pos] @ (prjlist cols))
+	  (ADag.mk_eqjoin
+	     (iter, iter')
+	     ti.q
+	     (ADag.mk_project
+		[(iter', iter)]
+		loop))
+      in
+      {
+	q = q';
+	cs = ti.cs;
+	ts = slice_inner_tables ti.q ti.ts;
+	vs = ti.vs;
+      }
+    in
+    AEnv.map (select loop) env
 
 (* derive an iteration context from the list represented by q and map
    q into this new iteration context *)
@@ -1695,29 +1718,10 @@ struct
       vs = Vs.empty
     }
 
+
 (* if e1 then e2 else []:
    don't consider the else branch if it represents the empty list. *)
   and compile_if2 env loop c t =
-    let select loop ti =
-      let cols = io (Cs.offsets ti.cs) in
-      let q' =
-	ADag.mk_project
-	  ([prj iter; prj pos] @ (prjlist cols))
-	  (ADag.mk_eqjoin
-	     (iter, iter')
-	     ti.q
-	     (ADag.mk_project
-		[(iter', iter)]
-		loop))
-      in
-      {
-	q = q';
-	cs = ti.cs;
-	ts = slice_inner_tables ti.q ti.ts;
-	vs = ti.vs;
-      }
-
-    in
   (* condition *)
     let ti_c = compile_expression env loop c in
     assert (Cs.is_atomic ti_c.cs);
@@ -1728,31 +1732,10 @@ struct
 	   (A.Item 1)
 	   ti_c.q)
     in
-    let env_then = AEnv.map (select loop_then) env in
+    let env_then = fragment_env loop_then env in
     compile_expression env_then loop_then t
 
   and compile_if env loop c t e =
-    (* FIXME: function select appears in compile_if and compile_if2 *)
-    let select loop ti =
-      let cols = io (Cs.offsets ti.cs) in
-      let q' =
-	ADag.mk_project
-	  ([prj iter; prj pos] @ (prjlist cols))
-	  (ADag.mk_eqjoin
-	     (iter, iter')
-	     ti.q
-	     (ADag.mk_project
-		[(iter', iter)]
-		loop))
-      in
-      {
-	q = q';
-	cs = ti.cs;
-	ts = slice_inner_tables ti.q ti.ts;
-	vs = ti.vs;
-      }
-    in
-
   (* condition *)
     let ti_c = compile_expression env loop c in
     assert (Cs.is_atomic ti_c.cs);
@@ -1772,8 +1755,8 @@ struct
 	      (res, A.Item 1)
 	      ti_c.q))
     in
-    let env_then = AEnv.map (select loop_then) env in
-    let env_else = AEnv.map (select loop_else) env in
+    let env_then = fragment_env loop_then env in
+    let env_else = fragment_env loop_else env in
     let ti_t = compile_expression env_then loop_then t in
     let ti_e= compile_expression env_else loop_else e in
     let q =
@@ -1948,6 +1931,7 @@ struct
 	let ti_unboxed = do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
 	let loop' = ADag.mk_project [prj iter] q_matching in
+	let env' = fragment_env loop' env' in
 	let case_result = compile_expression env' loop' case_exp in
 	(case_result :: results), q_other'
       with NotFound _ -> 
@@ -1955,8 +1939,9 @@ struct
     in
 
     let default_case env q_other (default_var, default_exp) =
-      let loop = ADag.mk_project [prj iter] q_other in
+      let loop' = ADag.mk_project [prj iter] q_other in
       let env' = AEnv.bind env (default_var, (compile_unit loop)) in
+      let env' = fragment_env loop' env' in
       compile_expression env' loop default_exp
     in
 
