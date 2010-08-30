@@ -161,7 +161,7 @@ let execute_query database query =
       | _ -> dbresult
 
 let rec execute_queries database ti =
-  let CompileQuery.Ti (q, cs, ts, vs) = ti in
+  let CompileQuery.ExpressionToAlgebra.Ti (q, cs, ts, vs) = ti in
   let xml_sql = Pf_toolchain.optimize_sql q in
   let schema, query = XmlSqlPlan.extract_queries xml_sql in
   let result = execute_query database query in
