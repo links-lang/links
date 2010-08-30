@@ -1105,7 +1105,7 @@ struct
       let _, q_s_mapped, map, loop = map_forward source.q source.cs in
       let ti_s = { source with q = q_s_mapped } in
       let q_equal = (do_row_equal loop wrapper (do_project "1" ti_s) (do_project "2" ti_s)).q in
-    (* map the comparison result back into the outer iteration context *)
+      (* map the comparison result back into the outer iteration context *)
       let result_backmapped =
 	ADag.mk_project
 	  [(iter, outer); (pos, pos'); prj (A.Item 1)]
@@ -1153,6 +1153,7 @@ struct
 	let col = List.hd (Cs.offsets field_cse) in
 	do_primitive_binop wrapper (project ti_l.q col) (project ti_r.q col)
       else if Cs.is_variant field_cse then
+
 	let tagcol, refcol = 
 	  match Cs.offsets field_cse with 
 	    | [tagcol; refcol] -> tagcol, refcol
@@ -1186,28 +1187,35 @@ struct
 			tags_compared))))
 	in
 
-	let same_tags q = 
+	let select_tag q tag = 
 	  ADag.mk_eqjoin
 	    (iter, iter')
 	    q
 	    (ADag.mk_project
 	       [prj iter']
-	       (ADag.mk_select 
-		  res 
-		  tags_compared))
+	       (ADag.mk_select
+		  res'
+		  (ADag.mk_funnumeq
+		     (res', (item', A.Item 1))
+		     (ADag.mk_attach
+			(A.Item 1, A.String tag)
+			(ADag.mk_select 
+			   res 
+			   tags_compared)))))
 	in
 
 	let matching_tis_compared =
 	  List.map
-	    (fun (_, ((inner_ti_l, itype_l), (inner_ti_r, _))) -> 
-	      let unboxed_l = do_unbox (same_tags ti_l.q) refcol inner_ti_l in
-	      let unboxed_r = do_unbox (same_tags ti_r.q) refcol inner_ti_r in
+	    (fun ((_refcol, tag), ((inner_ti_l, itype_l), (inner_ti_r, _))) -> 
+	      (* select only the current tag *)
+	      let unboxed_l = do_unbox (select_tag ti_l.q tag) refcol inner_ti_l in
+	      let unboxed_r = do_unbox (select_tag ti_r.q tag) refcol inner_ti_r in
 	      let loop' = ADag.mk_project [prj iter] unboxed_l.q in
 	      match itype_l with
 		| `Atom ->
 		  do_row_equal loop' wrapper unboxed_l unboxed_r
 		| `List ->
-		  failwith "comparison of tagged lists not implemented")
+		  do_table_equal loop' wrapper unboxed_l unboxed_r)
 	    (same_keys (Vs.lookup_col refcol ti_l.vs) (Vs.lookup_col refcol ti_r.vs))
 	in
 	List.fold_left

@@ -277,18 +277,18 @@ and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type =
   (* Debug.print (Cs.print cs); *)
   match result_type with
     | `Atom ->
-	assert (nr_tuples = 1);
-	snd (handle_row Offsets.empty (item 0) cs tsr vsr)
+      assert (nr_tuples = 1);
+      snd (handle_row Offsets.empty (item 0) cs tsr vsr)
     | `List ->
-	let rec loop_tuples i row_values offsets =
-	  if i = nr_tuples then
-	    (offsets, List.rev row_values)
-	  else
-	    let col_value = item i in
-	    let (next_offsets, row_value) = handle_row offsets col_value cs tsr vsr in
-	      loop_tuples (i + 1) (row_value :: row_values) next_offsets
-	in
-	  `List (snd (loop_tuples 0 [] Offsets.empty))
+      let rec loop_tuples i row_values offsets =
+	if i = nr_tuples then
+	  (offsets, List.rev row_values)
+	else
+	  let col_value = item i in
+	  let (next_offsets, row_value) = handle_row offsets col_value cs tsr vsr in
+	  loop_tuples (i + 1) (row_value :: row_values) next_offsets
+      in
+      `List (snd (loop_tuples 0 [] Offsets.empty))
 	
 and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), cs, tsr, vsr)) =
   (* Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples; *)
