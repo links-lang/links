@@ -16,10 +16,10 @@ val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
     deriving (Show)
 
-type subkind = [ `Any | `Base ]
+type subkind = [ `Any | `Base | `Query ]
     deriving (Show)
 
-type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
+type kind = [ `Type | `BaseType | `QueryType | `Row | `BaseRow | `QueryRow | `Presence ]
     deriving (Show)
 
 type 't meta_type_var_basis =
@@ -97,6 +97,15 @@ val is_baseable_row : row -> bool
 
 val basify_type : datatype -> unit
 val basify_row : row -> unit
+
+val is_query_type : datatype -> bool
+val is_query_row : row -> bool
+
+val is_querifyable_type : datatype -> bool
+val is_querifyable_row : row -> bool
+
+val querify_type : datatype -> unit
+val querify_row : row -> unit
 
 val type_var_number : quantifier -> int
 

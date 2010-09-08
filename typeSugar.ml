@@ -1676,6 +1676,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 	    let shape = 
 	      if Settings.get_value Basicsettings.Ferry.relax_query_type_constraint then
 		Types.fresh_type_variable `Any
+	      else if Settings.get_value Basicsettings.Ferry.new_type_constraint then
+		Types.fresh_type_variable `Query
 	      else
 		Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base))
 	    in

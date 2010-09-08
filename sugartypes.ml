@@ -69,7 +69,7 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
-type subkind = [`Any | `Base]
+type subkind = [ `Any | `Base | `Query ]
     deriving (Show)
 
 type datatype =
