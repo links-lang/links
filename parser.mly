@@ -66,27 +66,27 @@ let attach_kind pos (t, k) =
      | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
 
 let attach_subkind pos (t, k) =
+  let attach t s =
+    match t with
+      | TypeVar (x, _) -> TypeVar (x, s)
+      | RigidTypeVar (x, _) -> RigidTypeVar (x, s)
+      | _ -> assert false in
    match k with
-     | "Any" -> t
-     | "Base" ->
-         begin
-           match t with
-             | TypeVar (x, _) -> TypeVar (x, `Base)
-             | RigidTypeVar (x, _) -> RigidTypeVar (x, `Base)
-             | _ -> assert false
-         end
+     | `Any -> t
+     | `Base 
+     | `Query -> attach t k
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
 
 let attach_row_subkind pos (r, k) =
+  let attach r s =
+    match r with
+      | `Open (x, _) -> `Open (x, s)
+      | `OpenRigid (x, _) -> `OpenRigid (x, s)
+      | _ -> assert false
+  in
    match k with
-     | "Any" -> r
-     | "Base" ->
-         begin
-           match r with
-             | `Open (x, _) -> `Open (x, `Base)
-             | `OpenRigid (x, _) -> `OpenRigid (x, `Base)
-             | _ -> assert false
-         end
+     | `Any -> r
+     | `Base | `Query -> attach r k
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
 
 let row_with field (fields, row_var) = field::fields, row_var
@@ -288,8 +288,9 @@ kind:
 | PRESENCE                                                     { "Presence" }
 
 subkind:
-| ANY                                                          { "Any" }
-| BASE                                                         { "Base" }
+| ANY                                                          { `Any }
+| BASE                                                         { `Base }
+| QUERY                                                        { `Query }
 
 typearg:
 | VARIABLE                                                     { (`TypeVar ($1, `Any), None) }

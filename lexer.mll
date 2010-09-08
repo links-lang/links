@@ -219,6 +219,7 @@ let kinds = [
 let subkinds = [
  "Any"    , ANY;
  "Base"   , BASE;
+ "Query"  , QUERY;
 ]
 
 exception LexicalError of (string * Lexing.position)
