@@ -59,9 +59,11 @@ let annotate (signame, datatype) : _ -> binding =
 let attach_kind pos (t, k) =
    match k with
      | "Type" -> `TypeVar (t, `Any)
-     | "Base" -> `TypeVar (t, `Base)
+     | "BaseType" -> `TypeVar (t, `Base)
+     | "QueryType" -> `TypeVar (t, `Query)
      | "Row" -> `RowVar (t, `Any)
      | "BaseRow" -> `RowVar (t, `Base)
+     | "QueryRow" -> `RowVar (t, `Query)
      | "Presence" -> `PresenceVar t
      | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
 
@@ -146,7 +148,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE
+%token TYPE BASETYPE QUERYTYPE ROW BASEROW QUERYROW PRESENCE ANY BASE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -283,8 +285,10 @@ typeargs_opt:
 kind:
 | TYPE                                                         { "Type" }
 | BASETYPE                                                     { "BaseType" }
+| QUERYTYPE                                                    { "QueryType" }
 | ROW                                                          { "Row" }
 | BASEROW                                                      { "BaseRow" }
+| QUERYROW                                                     { "QueryRow" }
 | PRESENCE                                                     { "Presence" }
 
 subkind:

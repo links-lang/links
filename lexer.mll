@@ -211,8 +211,10 @@ let keywords = [
 let kinds = [
  "Type"    , TYPE;
  "BaseType", BASETYPE;
+ "QueryType", QUERYTYPE;
  "Row"     , ROW;
  "BaseRow" , BASEROW;
+ "QueryRow", QUERYROW;
  "Presence", PRESENCE;
 ]
 
