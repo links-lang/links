@@ -58,12 +58,11 @@ let annotate (signame, datatype) : _ -> binding =
 
 let attach_kind pos (t, k) =
    match k with
-     | "Type" -> `TypeVar (t, `Any)
-     | "Base" -> `TypeVar (t, `Base)
-     | "Row" -> `RowVar (t, `Any)
-     | "BaseRow" -> `RowVar (t, `Base)
-     | "Presence" -> `PresenceVar t
-     | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
+     | `Type -> `TypeVar (t, `Any)
+     | `BaseType -> `TypeVar (t, `Base)
+     | `Row -> `RowVar (t, `Any)
+     | `BaseRow -> `RowVar (t, `Base)
+     | `Presence -> `PresenceVar t
 
 let attach_subkind pos (t, k) =
    match k with
@@ -281,11 +280,11 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 kind:
-| TYPE                                                         { "Type" }
-| BASETYPE                                                     { "BaseType" }
-| ROW                                                          { "Row" }
-| BASEROW                                                      { "BaseRow" }
-| PRESENCE                                                     { "Presence" }
+| TYPE                                                         { `Type }
+| BASETYPE                                                     { `BaseType }
+| ROW                                                          { `Row }
+| BASEROW                                                      { `BaseRow }
+| PRESENCE                                                     { `Presence }
 
 subkind:
 | ANY                                                          { "Any" }
