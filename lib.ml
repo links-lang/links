@@ -1226,6 +1226,7 @@ let patch_prelude_funs tyenv =
 	 ("or", datatype "([Bool]) -> Bool");
 	 ("all", datatype "((a) -> Bool, [a]) -> Bool");
 	 ("any", datatype "((a) -> Bool, [a]) -> Bool");
+	 ("distinct", datatype "([a]) -> [a]");
 	 ("takeWhile", datatype "((a) -> Bool, [a]) -> [a]");
 	 ("dropWhile", datatype "((a) -> Bool, [a]) -> [a]")]
         tyenv.Types.var_env}

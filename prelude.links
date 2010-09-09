@@ -158,6 +158,7 @@ fun member(e, l) {
 	}
 }
 
+#sig distinct : ([a]) ~> [a::Base]
 fun distinct(l) {
 	fun distinct_1(d, x) {
 		if (member(x, d))

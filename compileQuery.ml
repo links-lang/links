@@ -140,6 +140,7 @@ struct
   let res' = A.Pos 9
   let res'' = A.Pos 10
   let pos'' = A.Pos 11
+
 (* wrapper for binary functions/operators *)
   let wrap_1to1 f res c c' algexpr =
     ADag.mk_fun1to1
@@ -1463,6 +1464,43 @@ struct
       vs = ti_l.vs
     }
 
+  and compile_distinct env loop l =
+    let ti_l = compile_expression env loop l in
+      assert (not (Cs.is_variant ti_l.cs || Cs.is_boxed_list ti_l.cs));
+      let items = io (Cs.offsets ti_l.cs) in
+      let ranked = 
+	ADag.mk_rowrank
+	  (item', ((iter, A.Ascending) :: (List.map (fun i -> (i, A.Ascending)) items)))
+	  ti_l.q
+      in
+      let q =
+	ADag.mk_project
+	  ([prj iter; prj pos] @ (prjlist items))
+	  (ADag.mk_select
+	     res
+	     (ADag.mk_funnumeq
+		(res, (pos, pos'))
+		(ADag.mk_eqjoin
+		   (iter, iter')
+		   ti_l.q
+		   (ADag.mk_eqjoin
+		      (item', item'')
+		      (ADag.mk_funaggr
+			 (A.Min, (iter', iter), Some item')
+			 ranked)
+		      (ADag.mk_project
+			 [prj pos'; (item'', item')]
+			 (ADag.mk_funaggr
+			    (A.Min, (pos', pos), Some item')
+			    ranked))))))
+      in
+	{
+	  q = q;
+	  cs = ti_l.cs;
+	  ts = Ts.empty;
+	  vs = Vs.empty
+	}
+
   and compile_quote env loop s =
   (* FIXME quoting at runtime is not implemented *)
     Debug.print "Warning: quoting at runtime is not implemented (compile_quite)";
@@ -1501,6 +1539,7 @@ struct
       | "tilde", [s; p] -> compile_binop env loop (wrap_1to1 A.SimilarTo) `BoolType s p
       | "quote", [s] -> compile_quote env loop s
       | "string_append", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
+      | "distinct", [l] -> compile_distinct env loop l
     (*    | "takeWhile" -> compile_takeWhile env loop args
 	  | "dropWhile" -> compile_dropWhile env loop args *)
       | "<", _ | "<=", _ | ">=", _->
