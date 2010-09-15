@@ -207,7 +207,7 @@ fun showResults(wines) client {
       <#>
         {intToXml(w.year)}
         {stringToXml(w.region)}
-        <i>{stringToXml(w.wine_type ++ " " ++ w.name)}</i>
+        <i>{stringToXml(w.wine_type ^^ " " ^^ w.name)}</i>
         ${floatToXml(w.price)}
         <br/>
       </#>;
@@ -294,14 +294,14 @@ fun lookupYear() client {
 fun lookupType() client {
   var s = domValue("type-value");
   var id = stringToInt(s);
-  var name = domContent("type" ++ s);
+  var name = domContent("type" ^^ s);
   Just(Type(id, name))
 }
 
 fun lookupRegion() client {
   var s = domValue("region-value");
   var id = stringToInt(s);
-  var name = domContent("region" ++ s);
+  var name = domContent("region" ^^ s);
   Just(Region(id, name))
 }
 

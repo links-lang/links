@@ -60,7 +60,7 @@ fun editDef(def) client {
 }
 
 fun redraw(xml, defId) {
-  replaceChildren(xml, getNodeById("def:"++defId))
+  replaceChildren(xml, getNodeById("def:" ^^ defId))
 }
 
 fun formatDef(def) {

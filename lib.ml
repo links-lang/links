@@ -1056,35 +1056,35 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
 (* FIXME: should these functions return a Maybe Char/Maybe String? *)
   (* String utilities *)
-  ("char_at",
-   (`Server (p2 (fun s i ->
-		   let int = Num.int_of_num -<- unbox_int in
-		     try
-                       box_char ((unbox_string s).[int i])
-		     with
-			 Invalid_argument _ -> failwith "char_at: invalid index")),
+  ("charAt",
+   (p2 (fun s i ->
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+              box_char ((unbox_string s).[int i])
+	    with
+		Invalid_argument _ -> failwith "charAt: invalid index"),
     datatype ("(String, Int) ~> Char"),
     IMPURE));
 
   ("strsub",
-   (`Server (p3 (fun s start len -> 
-		   let int = Num.int_of_num -<- unbox_int in
-		     try
-		       box_string (String.sub (unbox_string s) (int start) (int len))
-		     with
-			 Invalid_argument _ -> failwith "strsub: invalid arguments")),
+   (p3 (fun s start len -> 
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+	      box_string (String.sub (unbox_string s) (int start) (int len))
+	    with
+		Invalid_argument _ -> failwith "strsub: invalid arguments"),
     datatype "(String, Int, Int) ~> String",
-    PURE));
+    IMPURE));
 
   ("strlen",
-   (`Server (p1 (fun s -> match s with
-                   | `String s -> `Int (Num.num_of_int (String.length s))
-	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
+   (p1 (fun s -> match s with
+          | `String s -> `Int (Num.num_of_int (String.length s))
+	  |  _ -> failwith "Internal error: strlen got wrong arguments"),
     datatype ("(String) ~> Int "),
     PURE));
 
-  ("string_of_list",
-   (`Server (p1 (fun l -> 
+  ("implode",
+   (p1 (fun l -> 
 		   let chars = List.map unbox_char (unbox_list l) in
 		   let len = List.length chars in
 		   let s = String.create len in
@@ -1094,12 +1094,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 		       | c :: cs -> s.[i] <- c; aux (i + 1) cs
 		   in
 		     aux 0 chars;
-		     box_string s)),
+		     box_string s),
     datatype ("([Char]) ~> String"),
     PURE));
 	
-  ("string_to_list",
-   (`Server (p1 (fun s -> match s with  
+  ("explode",
+   (p1 (fun s -> match s with  
 	           | `String s ->
 		       let rec aux i l =
 			 if i < 0 then 
@@ -1109,7 +1109,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 		       in
 		       let chars = aux ((String.length s) - 1) [] in
 			 box_list (List.map box_char chars)
-	           | _  -> failwith "Internal error: non-String in string_to_list")),
+	           | _  -> failwith "Internal error: non-String in implode"),
     datatype ("(String) ~> [Char]"),
     PURE));
   

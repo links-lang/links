@@ -297,8 +297,8 @@ fun valid_cc_details(card_no, expiry) {
 }
 
 fun purchase_confirmation(cust_id, order_id, total) {
-  debug("arrived at purchase confirmation with " ++ intToString(cust_id)
-        ++ " " ++ intToString(order_id) ++ " " ++ floatToString(total));
+  debug("arrived at purchase confirmation with " ^^ intToString(cust_id)
+        ^^ " " ^^ intToString(order_id) ^^ " " ^^ floatToString(total));
   page
    <html> {htmlHead()}
      <h1>Success!</h1>
@@ -378,7 +378,7 @@ fun checkout(cust_id, order_id, card_no, expiry, instr) {
       var the_order = getOrder(cust_id, order_id);
       switch (the_order) {
         case None -> errorPage("Internal error: You have no shopping cart. (**This may be due to a bug with claiming your cart; try signing in before adding items to your cart**) (" 
-               ++ intToString(cust_id) ++ ", " ++ intToString(order_id) ++ ")")
+               ^^ intToString(cust_id) ^^ ", " ^^ intToString(order_id) ^^ ")")
         case Some(order) -> {
           update (x <-- orderTable)
            where (x.order_id == order_id && cust_id == x.cust_id)
@@ -602,7 +602,7 @@ fun add_to_cart(cust_id, order_id, wine_id) {
   freshResource();
  
   show_cart(cust_id, order_id,
-            "Added " ++ wine_name(wine_id) ++ " to your cart.")
+            "Added " ^^ wine_name(wine_id) ^^ " to your cart.")
 }
 
 fun sessionCart() {

@@ -544,7 +544,7 @@ and string_of_value : t -> string = function
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_value value ^ ")"
   | `List [] -> "[]"
-  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_element_value elems
+  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
@@ -570,11 +570,6 @@ and string_of_tuple (fields : (string * t) list) : string =
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
-
-(* TBD: Can someone explain how this works? *)
-and string_of_element_value = function 
-  | `Char c -> String.make 1 c
-  | otherwise -> string_of_value otherwise
 
 (** {1 Record manipulations} *)
 
