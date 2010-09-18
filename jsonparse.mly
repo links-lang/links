@@ -6,6 +6,10 @@ open Utility
 (*   | `List (`Char _::_) as s -> Value.unbox_string s *)
 (*   | r -> (failwith "(json) error decoding label " ^ Show.show Value.show_t r) *)
 
+(* BUG: need to unescape strings
+   (where they are escaped in json.ml)
+*)
+
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
