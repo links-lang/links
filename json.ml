@@ -45,7 +45,7 @@ let rec json_of_xmlitem = function
         List.fold_right (fun xmlitem (attrs, body) ->
                            match xmlitem with
                              | Value.Attr (label, value) ->
-                                 ("\"" ^label ^ "\" : " ^ value) :: attrs, body
+                                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
                              | _ -> attrs, (json_of_xmlitem xmlitem) :: body) xml ([], [])
       in
         "[\"ELEMENT\",\"" ^ tag ^ "\",{" ^ String.concat "," attrs
