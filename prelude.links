@@ -148,13 +148,8 @@ fun nth(i, l) {
 
 fun member(e, l) {
 	switch (l) {
-		case x :: xs ->
-			if (x == e) 
-				true
-			else
-				member(e, xs)
-		case [] ->
-			false
+		case x :: xs -> if (x == e) true else member(e, xs)
+		case []      -> false
 	}
 }
 
@@ -168,8 +163,7 @@ fun distinct(l) {
 	reverse(fold_left(distinct_1, [], l))
 }
 
-sig groupByBase : ((a) ~b~> c::Base, [a]) ~b~> [(c::Base, [a])]
-fun groupByBase(project, t) {
+fun groupBy(project, t) {
 	var keys = distinct(for (p <- t) [project(p)]);
 	for (key <- keys)
 		[(key, 
@@ -1108,3 +1102,6 @@ fun max(ns) {
 fun min(ns) { 
     extremum((<), ns) 
 }
+
+sig groupByBase : ((a) ~b~> c::Base, [a]) ~b~> [(c::Base, [a])]
+fun groupByBase(project, t) { groupBy(project, t) }
