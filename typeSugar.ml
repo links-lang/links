@@ -1479,11 +1479,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let tname = tc tname 
             and db = tc db 
 	    and keys = tc keys in
-            let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
-            and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
-	    and () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
-              `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db), 
-            `Table (read_row, write_row, needed_row)
+            let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type) in
+	    let () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
+	    let () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
+	      `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db), 
+	    `Table (read_row, write_row, needed_row)
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in

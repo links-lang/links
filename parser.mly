@@ -651,9 +651,6 @@ formlet_expression:
 
 table_expression:
 | formlet_expression                                           { $1 }
-/*
-| TABLE exp WITH datatype perhaps_table_constraints  ... FROM exp  { `TableLit ($2, datatype $4, $5, $7), pos()}
-*/
 | TABLE exp WITH datatype perhaps_table_constraints TABLEKEYS exp FROM exp   { `TableLit ($2, datatype $4, $5, $7, $9), pos()} 
 
 perhaps_table_constraints:

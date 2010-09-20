@@ -390,8 +390,8 @@ struct
 	  `Primitive "unzip"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nth" = f ->
 	  `Primitive "nth"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupBy" = f ->
-	  `Primitive "groupBy"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupByBase" = f ->
+	  `Primitive "groupByBase"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
 	  `Primitive "sum"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
@@ -530,7 +530,7 @@ struct
 		  end
 	    | _ -> assert false
 	end
-    | `Primitive "groupBy", [f; source] ->
+    | `Primitive "groupByBase", [f; source] ->
 	begin
 	  match f with
 	    | `Closure (([x], body), closure_env) ->
