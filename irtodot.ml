@@ -172,10 +172,13 @@ and tree_of_value id value env recnodes =
 	let label = "TApp\\n" ^ (mapstrcat "\\n" Types.string_of_type_arg tyargs) in
 	let (next_id, subtree) = tree_of_value (id + 1) value env recnodes in
 	  (next_id, Node (id, label, Value, [subtree]))
-    | `XmlNode _ ->
-	(* TODO: handle subtree and label *)
-	let label = "XmlnNde\\(subtree)" in
-	  ((id + 1), Leaf (id, label, Value))
+    | `XmlNode (tag, attrs, children) ->
+	let attrs, attr_values = List.split (StringMap.to_alist attrs) in
+	let label = Printf.sprintf "XmlNode\\n%s\\nattributes:\\n" tag in
+	let label = label ^ (mapstrcat "\\n" identity attrs) in
+	let (next_id, attr_trees) = trees_of_list tree_of_value (id + 1) attr_values env recnodes in
+	let (next_id, children_trees) = trees_of_list tree_of_value next_id children env recnodes in
+	  (next_id, Node (id, label, Value, (attr_trees @ children_trees)))
     | `ApplyPure (f, args) ->
 	let label = "ApplyPure" in
 	let (next_id, f_tree) = tree_of_value (id + 1) f env recnodes in
