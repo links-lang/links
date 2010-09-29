@@ -1,5 +1,5 @@
 fun assert(ok, msg) {
-  if (not(ok)) debug("assertion failed: " ++ msg) else ();
+  if (not(ok)) debug("assertion failed: " ^^ msg) else ();
 }
 
 # Don't use a for comprehension to define concatMap, as
@@ -420,7 +420,7 @@ fun lookup(x,l) {
 sig assoc : (String,[(String,b)]) ~> b
 fun assoc(x,l) {
   switch (l) {
-    case []    -> error("Not found " ++ x)
+    case []    -> error("Not found " ^^ x)
     case (k,v)::xs -> if (k == x) v
                       else assoc(x, xs)
   }
@@ -550,7 +550,7 @@ op f `plug` m {
 }
 
 sig makeName : (Int) -> String
-fun makeName(i) { "input_" ++ intToString(i) }
+fun makeName(i) { "input_" ^^ intToString(i) }
 
 sig nextName : State (Int,String)
 var nextName = fun (i) { (makeName(i), i+1) };
@@ -989,20 +989,20 @@ fun transform(f, predicate, error, g) {
 # checked input components
 
 sig inputInt : Formlet(Int)
-var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ++ " is not an integer"}, stringToInt)(gen)};
+var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)(gen)};
 
 sig inputIntA : (Attributes) ~> Formlet(Int)
 fun inputIntA(attributes) {
-  transform(inputA(attributes), isInt, fun (s) {s ++ " is not an integer"}, stringToInt)
+  transform(inputA(attributes), isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)
 }
 
 sig inputIntValue : (Int) ~> Formlet(Int)
 fun inputIntValue(v) {
-  transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ++ "is not an integer"}, stringToInt)
+  transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ^^ "is not an integer"}, stringToInt)
 }
 
 sig inputFloat : Formlet(Float)
-var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ++ " is not a float"}, stringToFloat)(gen)};
+var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a float"}, stringToFloat)(gen)};
 
 #### WEB-RELATED ####
 
@@ -1016,7 +1016,7 @@ var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ++ " is not a f
 sig freshResource : () ~> ()
 fun freshResource() {
   escape esc in {
-    redirect("?_cont=" ++ reifyK(esc)); exit(0)
+    redirect("?_cont=" ^^ reifyK(esc)); exit(0)
   }
 }
 

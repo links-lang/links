@@ -189,9 +189,6 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `If (_, t, _) -> base env t
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | `Concat (xs) when List.for_all
-          (function `Singleton `Constant `Char x -> true|_->false) xs ->
-          Types.string_type
       | e -> Debug.print(Show.show show_t e); assert false in
   let record env fields : Types.datatype =
     Types.make_record_type (StringMap.map (base env) fields) in
@@ -260,6 +257,7 @@ struct
       | `Int i -> `Constant (`Int i)
       | `Char c -> `Constant (`Char c)
       | `Float f -> `Constant (`Float f)
+      | `String s -> `Constant (`String s)
       | `Table t -> `Table t 
       | `List vs ->
           `Concat (List.map (fun v -> `Singleton (expression_of_value v)) vs)
@@ -275,7 +273,6 @@ struct
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
-          (*     | `NativeString of string ] *)
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
       | _ -> failwith "Cannot convert value to expression"
@@ -318,12 +315,6 @@ struct
 
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
-    | `Concat xs when List.for_all (* HACKISH: handle Links string constants *)
-        (function `Singleton `Constant `Char x -> true|_->false) xs ->
-        `Constant (`String(mapstrcat ""
-                             (function `Singleton `Constant `Char x ->
-                                string_of_char x)
-                             xs))
     | `Variable var ->
         begin
           match lookup env var with
@@ -694,7 +685,11 @@ struct
           "^",   None      ;
           "^.",  None      ;
           "/.",  Some "/"  ;
-          "mod", Some "%"  ]
+          "mod", Some "%"  ;
+	  (* FIXME: The SQL99 || operator is supported in PostgreSQL and
+	     SQLite but not in MySQL, where it denotes the logical or
+	     operator *)
+	  "^^",  Some "||" ]
 
     let is x = StringMap.mem x builtin_ops
     let sql_name op = val_of (StringMap.find op builtin_ops)

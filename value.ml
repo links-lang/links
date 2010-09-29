@@ -138,7 +138,7 @@ type primitive_value_basis =  [
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
-| `NativeString of string * int * int ]
+| `String of string ]
   deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
 
 type primitive_value = [
@@ -544,8 +544,7 @@ and string_of_value : t -> string = function
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_value value ^ ")"
   | `List [] -> "[]"
-  | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
-  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_element_value elems
+  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
@@ -556,7 +555,7 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
-  | `NativeString (s, start, len) -> "\"" ^ String.sub s start len ^ "\""
+  | `String s -> "\"" ^ s ^ "\""
 				
 and string_of_tuple (fields : (string * t) list) : string = 
     let fields = List.map (function
@@ -571,11 +570,6 @@ and string_of_tuple (fields : (string * t) list) : string =
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
-
-(* TBD: Can someone explain how this works? *)
-and string_of_element_value = function 
-  | `Char c -> String.make 1 c
-  | otherwise -> string_of_value otherwise
 
 (** {1 Record manipulations} *)
 
@@ -615,8 +609,9 @@ and unbox_char :  t -> char = function
 and box_xml x = `XML x      
 and unbox_xml  :  t -> xmlitem = function
   | `XML x -> x | _ -> failwith "Type error unboxing xml"
-and box_string = string_as_charlist
-and unbox_string : t -> string = charlist_as_string
+and box_string s = `String s
+and unbox_string : t -> string = function
+  | `String s -> s | _ -> failwith "Type error unboxing string"
 and box_list l = `List l
 and unbox_list : t -> t list = function
   | `List l -> l | _ -> failwith "Type error unboxing list"

@@ -13,7 +13,7 @@ let constant_type = function
   | `Int _    -> `Primitive `Int
   | `Bool _   -> `Primitive `Bool
   | `Char _   -> `Primitive `Char
-  | `String _ ->  Types.string_type
+  | `String _ -> `Primitive `String
 
 let escape_string s = (* SQL standard for escaping single quotes in a string *)
   Str.global_replace (Str.regexp "'") "''" s

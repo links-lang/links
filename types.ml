@@ -14,7 +14,7 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point deriving (Show)
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString ]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     deriving (Show)
 
 type subkind = [ `Any | `Base ]
@@ -113,8 +113,7 @@ type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 
 let rec is_base_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
     | `Alias (_, t) -> is_base_type t
     | `MetaTypeVar point ->
         begin
@@ -149,8 +148,7 @@ let rec is_base_row (fields, row_var) =
 
 let rec is_baseable_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> true
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> true
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
     | `Alias (_, t) -> is_baseable_type t
     | `MetaTypeVar point ->
         begin
@@ -183,8 +181,7 @@ let rec is_baseable_row (fields, row_var) =
 
 let rec basify_type =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float)) -> ()
-    | `Application (l, [`Type (`Primitive `Char)]) when Abstype.eq_t.Eq.eq l list -> ()
+    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> ()
     | `Alias (_, t) -> basify_type t
     | `MetaTypeVar point ->
         begin
@@ -887,14 +884,14 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
-let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)])))
+(* let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)]))) *)
+let string_type = `Primitive `String
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
 let float_type = `Primitive `Float
 let xml_type = `Alias (("Xml", []), `Application (list, [`Type (`Primitive `XmlItem)]))
 let database_type = `Primitive `DB
-let native_string_type = `Primitive `NativeString
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
@@ -1153,7 +1150,7 @@ struct
 
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"  
-    | `XmlItem -> "XmlItem" | `DB -> "Database" | `NativeString -> "NativeString"
+    | `XmlItem -> "XmlItem" | `DB -> "Database" | `String -> "String"
 
   let subkind : (policy * names) -> subkind -> string =
     fun (_policy, _vars) ->

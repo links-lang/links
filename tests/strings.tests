@@ -1,10 +1,6 @@
 head and tail
-(hd("string"), tl("string")) == ('s', "tring")
+(charAt("string", 0), strsub("string", 1, 5)) == ('s', "tring")
 stdout : true : Bool
-
-list syntax
-['a', 'b', 'c']
-stdout : @"abc" : (\[Char\]|String)
 
 octal literals
 "L\151nks"
@@ -15,7 +11,7 @@ hex literals
 stdout : "Links" : String
 
 concatenation
-"abc" ++ "def"
+"abc" ^^ "def"
 stdout : @"abcdef" : (\[Char\]|String)
 
 comparision

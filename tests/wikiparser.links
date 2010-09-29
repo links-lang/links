@@ -22,13 +22,13 @@ typename ParseResult = [| None
 
 typename Document = BlockType (Int);
 
-var emptyString = to_native_string("");
+var emptyString = "";
 
 fun mydebug(s) {
     debug(s)
 }
 
-sig eatWhitespace : (NativeString) ~> (ParseResult, NativeString)
+sig eatWhitespace : (String) ~> (ParseResult, String)
 fun eatWhitespace(n) server {
     fun whitespaceTag(s) {
         switch(s) {
@@ -46,34 +46,34 @@ fun eatWhitespace(n) server {
         }
     }
 
-    var ws = (n =~ /^({"\x0d\x0a\x0d\x0a"}|{"\x0d\x0a\x0a"}|{"\x0a\x0a"}|{"\x0c"}|{"------"})/nl);
+    var ws = (n =~ /^({"\x0d\x0a\x0d\x0a"}|{"\x0d\x0a\x0a"}|{"\x0a\x0a"}|{"\x0c"}|{"------"})/l);
     switch (ws) {
         case [] -> 
             (None, n)
         case hd::tl -> 
-            var m = (n =~ s/^{hd}//nl);
+            var m = (n =~ s/^{hd}//l);
             (Some(FormattedBlock(None, WS(whitespaceTag(hd)), WordBlock(None, hd))), m)
     }
     
 }
 
-sig makeSentenceBlock : (NativeString) ~> (ParseResult, NativeString)
+sig makeSentenceBlock : (String) ~> (ParseResult, String)
 fun makeSentenceBlock(text) server {
-    var word = (text =~ /^([^{"\x0d\x0a!"}\\<\\_\\^\\=~\\[\\#\\*-])+/nl); #includes trailing punctuation like commas etc.    
+    var word = (text =~ /^([^{"\x0d\x0a!"}\\<\\_\\^\\=~\\[\\#\\*-])+/l); #includes trailing punctuation like commas etc.    
     switch (word) {
        case [] -> 
            (None, text)
        case hd::tl -> 
-           var next = (text =~ s/^{hd}//n); #make sure that word is quoted correctly
+           var next = (text =~ s/^{hd}//); #make sure that word is quoted correctly
            (Some(WordBlock(None, hd)), next)
     }
 }
 
 
-sig makeWordBlock : (NativeString) ~> (ParseResult, NativeString)
+sig makeWordBlock : (String) ~> (ParseResult, String)
 fun makeWordBlock(text) server {
     fun mwb(text, wbs : [ParseTree]) {
-      var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/nl); #includes trailing punctuation like commas etc.    
+      var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/l); #includes trailing punctuation like commas etc.    
       switch (word) {
        case [] -> 
           switch(wbs) {
@@ -82,7 +82,7 @@ fun makeWordBlock(text) server {
             case _ -> (Some(CompoundBlock(None, reverse(wbs))), text)
           }
        case hd::tl -> 
-            var next = (text =~ s/^{hd}//n); #make sure that word is quoted correctly
+            var next = (text =~ s/^{hd}//); #make sure that word is quoted correctly
             var wss = eatWhitespace(next);
             switch(wss) {
               case (None, tnext) ->         mwb(tnext, ((WordBlock(None, hd))::wbs))
@@ -106,7 +106,7 @@ fun nth(n, l) server {
   }
 }
 
-sig makeFormattedBlock : (NativeString) ~> (ParseResult, NativeString)
+sig makeFormattedBlock : (String) ~> (ParseResult, String)
 fun makeFormattedBlock(text) server {
    fun matchNth(f :[String], p) {
         switch(p) {
@@ -119,7 +119,7 @@ fun makeFormattedBlock(text) server {
                             matchNth(f, tl)
                       }
                       else {
-                        var zz = textToBlock(to_native_string(text));
+                        var zz = textToBlock(text);
                         switch(zz) {
                           case(sw, _) ->
                               switch(sw) {
@@ -135,7 +135,7 @@ fun makeFormattedBlock(text) server {
 
    #2 is bold; 4 is emph; 6 is sub; 8 is del; 10 is sup
 
-   var f = (text =~ /^({"**"}([^{"\x0d\x0a"}\\*]*){"**"})|({"*"}([^{"\x0d\x0a"}\\*]*){"*"})|({"_"}([^{"\x0d\x0a"}_]*){"_"})|(~([^{"\x0d\x0a"}~]*)~)|(-([^{"\x0d\x0a"}-]+)-)|({"^"}([^{"\x0d\x0a"}\\^]*){"^"})|({"##"}([^{"\x0d\x0a"}#]*){"##"})|(#([^{"\x0d\x0a"}#]*)#)|({"[["}([a-zA-Z0-9_\ ]*){"]]"})/nl);
+   var f = (text =~ /^({"**"}([^{"\x0d\x0a"}\\*]*){"**"})|({"*"}([^{"\x0d\x0a"}\\*]*){"*"})|({"_"}([^{"\x0d\x0a"}_]*){"_"})|(~([^{"\x0d\x0a"}~]*)~)|(-([^{"\x0d\x0a"}-]+)-)|({"^"}([^{"\x0d\x0a"}\\^]*){"^"})|({"##"}([^{"\x0d\x0a"}#]*){"##"})|(#([^{"\x0d\x0a"}#]*)#)|({"[["}([a-zA-Z0-9_\ ]*){"]]"})/l);
 
    switch(f) {
     case [] -> 
@@ -144,66 +144,66 @@ fun makeFormattedBlock(text) server {
         var fb = matchNth(f, [(2, Bold), (4, Emph), (6, Emph), (8, Sub), (10, Del), (12, Sup), (14, Hdr2), (16, Hdr1), (18, WikiLink)]);
         switch(fb : ParseResult) {
           case Some(_) -> 
-               var next = (text =~ s/^{hd}//nl);
-               (fb, next) : (ParseResult, NativeString)
-          case Error(e) ->  (Error(e), text) : (ParseResult, NativeString)
-          case None -> (Error("Unexpected return value of None"), text) : (ParseResult, NativeString)
+               var next = (text =~ s/^{hd}//l);
+               (fb, next) : (ParseResult, String)
+          case Error(e) ->  (Error(e), text) : (ParseResult, String)
+          case None -> (Error("Unexpected return value of None"), text) : (ParseResult, String)
         }
    }
 
 }
 
-sig makeHref : (NativeString) ~> (ParseResult, NativeString)
+sig makeHref : (String) ~> (ParseResult, String)
 fun makeHref(text) server {
         #[Link text]  (http://foobar.com)  ... or <http://foobar.com/>
-    var h =(text =~ /^{"["}(.*){"]"}\ *{"("}([^\ ]*){")"}|{"<"}([^\ <>]*){">"}/nl);
+    var h =(text =~ /^{"["}(.*){"]"}\ *{"("}([^\ ]*){")"}|{"<"}([^\ <>]*){">"}/l);
 
     switch(h) {
         case [] -> 
             (None, text)
 
-        case hd::[]::[]::lturl::tl->
-                var next = (text =~ s/^{hd}//nl);
+        case hd::""::""::lturl::tl->
+                var next = (text =~ s/^{hd}//l);
                 (Some(FormattedBlock(None, Link(lturl), WordBlock(None, lturl))), next)
 
         case hd::linktext::url::tl ->
-                var next = (text =~ s/^{hd}//nl);
+                var next = (text =~ s/^{hd}//l);
                 (Some(FormattedBlock(None, Link(url), WordBlock(None,linktext))), next)
     }
 }
 
-sig makeImageLink : (NativeString) ~> (ParseResult, NativeString)
+sig makeImageLink : (String) ~> (ParseResult, String)
 fun makeImageLink(text) server {
     #![Alt Text](http://foobar.com/image.gif)
-    var h =(text =~ /^{"!["}(.*){"]"}\ *{"("}([^\ ]*){")"}/nl);
+    var h =(text =~ /^{"!["}(.*){"]"}\ *{"("}([^\ ]*){")"}/l);
     switch(h) {
         case [] -> (None, text)
 
         case hd::altText::url::tl ->
-                var next = (text =~ s/^{hd}//nl);
+                var next = (text =~ s/^{hd}//l);
                 (Some(FormattedBlock(None, ImageLink(url), WordBlock(None, altText))), next)
     }
 
 }
 
-sig makeList : (NativeString) ~> (ParseResult, NativeString)
+sig makeList : (String) ~> (ParseResult, String)
 fun makeList(text) server {
    fun allListLines(t, lines) {
         
-      var listLine = (t =~ /^({"\x0a"}(({"    "})*)\ *([0-9]+\.|[\\*\\+-])\ (.*)){"\x0a"}/nl);
+      var listLine = (t =~ /^({"\x0a"}(({"    "})*)\ *([0-9]+\.|[\\*\\+-])\ (.*)){"\x0a"}/l);
         
       switch(listLine) {
         case [] -> 
-            var removedNl = (t =~ s/^{"\x0a"}//n);
+            var removedNl = (t =~ s/^{"\x0a"}//);
            switch(lines) {
-               case [] ->  (None, removedNl) : (ParseResult, NativeString)
+               case [] ->  (None, removedNl) : (ParseResult, String)
                case _ -> (Some(CompoundBlock(None, [WordBlock(None, "\x0a"),
-                                   FormattedBlock(None, List, CompoundBlock(None, reverse(lines)))])), removedNl) : (ParseResult, NativeString)
+                                   FormattedBlock(None, List, CompoundBlock(None, reverse(lines)))])), removedNl) : (ParseResult, String)
            }
         case (hd::notNl::indent::_::index::element::_) ->
-           var indentLevel = length(indent) / 4;
-           var next = (t =~ s/^{notNl}//nl); #prefix a new line that was consumed ... in case there's a another list element
-           var eblock  =  textToBlock(to_native_string(element ++ "\x0a"));
+           var indentLevel = strlen(indent) / 4;
+           var next = (t =~ s/^{notNl}//l); #prefix a new line that was consumed ... in case there's a another list element
+           var eblock  =  textToBlock(element ^^ "\x0a");
            switch(eblock) {
                case (b, _) ->
                    switch(b) {
@@ -223,21 +223,21 @@ fun makeList(text) server {
    allListLines(text, [])
 }
 
-sig makeBlockQuote : (NativeString) ~> (ParseResult, NativeString)
+sig makeBlockQuote : (String) ~> (ParseResult, String)
 fun makeBlockQuote(text) server {
    fun allQuoteLines(text, lines) {
-        var bql = (text =~ /^({"\x0a"}\ *>(.*)){"\x0a"}/nl);
+        var bql = (text =~ /^({"\x0a"}\ *>(.*)){"\x0a"}/l);
         switch (bql) {
             case [] -> 
                 switch(lines) {
                    case [] -> (None, text)
                    case _  -> 
                         (Some(CompoundBlock(None, [WordBlock(None, "\x0a"),
-                                                   FormattedBlock(None, BlockQuote, CompoundBlock(None, reverse(lines)))])), (text =~ s/^{"\x0a"}//n))
+                                                   FormattedBlock(None, BlockQuote, CompoundBlock(None, reverse(lines)))])), (text =~ s/^{"\x0a"}//))
                 }
             case hd::notNl::line::_ ->
-                var next = (text =~ s/^{notNl}//nl); #push new line back there to continue block quote
-                allQuoteLines(next, (WordBlock(None, line ++ "\x0a"))::lines)
+                var next = (text =~ s/^{notNl}//l); #push new line back there to continue block quote
+                allQuoteLines(next, (WordBlock(None, line ^^ "\x0a"))::lines)
         
         }
    }
@@ -246,7 +246,7 @@ fun makeBlockQuote(text) server {
 }
 
 
-sig textToBlock : (NativeString) ~> (ParseResult, NativeString)
+sig textToBlock : (String) ~> (ParseResult, String)
 fun textToBlock(text) server {
      fun tryAllParsers(parsers, text) {
         switch(parsers) {
@@ -261,8 +261,8 @@ fun textToBlock(text) server {
      }
 
 
-     fun t2b(text:NativeString, bs : [ParseTree]) {
-         var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: [(NativeString) ~> (ParseResult, NativeString)]);
+     fun t2b(text:String, bs : [ParseTree]) {
+         var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: [(String) ~> (ParseResult, String)]);
 
 
          if(text == emptyString) {
@@ -286,23 +286,23 @@ fun textToBlock(text) server {
                                     t2b(emptyString, EmptyBlock::bs)
                             }
                             else {
-                                 var s = from_native_string(txt);
-                                 switch(s) {#TBD ... coalesce adjacent small words... some junk in the way; remove it and move ahead
-                                     case hd::tl -> 
-                                         t2b(to_native_string(tl), (WordBlock(None, [hd])::bs))
-                                 }
+                                 var hd = strsub(txt, 0, 1);
+                                 var tl = strsub(txt, 1, strlen(txt)-1);
+                                 
+                                 #TBD ... coalesce adjacent small words... some junk in the way; remove it and move ahead
+                                 t2b(tl, (WordBlock(None, hd)::bs))
                             }
                     }
               }
          }           
      }
 
-     t2b(text, []) : (ParseResult, NativeString)
+     t2b(text, []) : (ParseResult, String)
 }
 
 sig parseWikibody : (String) ~> ParseTree
 fun parseWikibody(t) server {
-    var b = textToBlock(to_native_string(t));
+    var b = textToBlock(t);
     switch(b) {
         case (Some(bb), _) -> bb
         case _ -> EmptyBlock
@@ -313,7 +313,7 @@ fun blockToText(b) {
     fun b2t(t:String, b:ParseTree) {
         switch(b) {
             case EmptyBlock -> t
-            case WordBlock(None, w) -> t ++ w
+            case WordBlock(None, w) -> t ^^ w
             case FormattedBlock(None, tag, fb) -> fb2t(tag, fb,t)
             case CompoundBlock(None, bs) -> fold_left(b2t, t, bs)
             case LabeledBlock(None, _, lb) -> b2t(t,lb)
@@ -325,7 +325,7 @@ fun blockToText(b) {
             switch (n) {
                 case 0 ->  ""
                 case 1 -> s
-                case _ -> s ++ ntimes((n-1), s)
+                case _ -> s ^^ ntimes((n-1), s)
             }
         }
 
@@ -334,11 +334,11 @@ fun blockToText(b) {
             case [] -> t
             case FormattedBlock(None, Indent(i), FormattedBlock(None, pfxElt, listelt))::tl ->
                 var pfx = switch(pfxElt) {
-                          case OrderedElt(pfx) -> pfx ++ " "
-                          case UnorderedElt(pfx) -> pfx ++ " "
+                          case OrderedElt(pfx) -> pfx ^^ " "
+                          case UnorderedElt(pfx) -> pfx ^^ " "
                           case _ -> "Error : Impossible"
                 };
-                l2t(tl, b2t((t ++ ntimes(i, "    ") ++ pfx), listelt))
+                l2t(tl, b2t((t ^^ ntimes(i, "    ") ^^ pfx), listelt))
             case _ -> 
                 "Error: Unexpected list element"
             }
@@ -347,22 +347,22 @@ fun blockToText(b) {
         fun bq2t(bqs, t) {
             switch(bqs) {
             case [] -> t
-            case WordBlock(None, txt)::tl -> bq2t(tl, (t ++ ">" ++ txt))
+            case WordBlock(None, txt)::tl -> bq2t(tl, (t ^^ ">" ^^ txt))
             case _ -> "Error: Unexpected block quote element"
             }
         }
         
         switch(tag) {
-            case Bold -> t++("**" ++ b2t("", fb) ++ "**")
-            case Emph -> t++("*" ++ b2t("", fb) ++ "*")
-            case Sub -> t++("~" ++ b2t("", fb) ++ "~")
-            case Sup -> t++("^" ++ b2t("", fb) ++ "^")
-            case Del -> t++("-" ++ b2t("", fb) ++ "-")
-            case Hdr1 -> t++("#" ++ b2t("", fb) ++ "#")
-            case Hdr2 -> t++("##" ++ b2t("", fb) ++ "##")
-            case WikiLink -> t++("[[" ++ b2t("", fb) ++ "]]")
-            case Link(s) -> t++("["++b2t("", fb)++"] ("++s++")")
-            case ImageLink(s) -> t++("!["++b2t("", fb)++"] ("++s++")")
+            case Bold -> t^^("**" ^^ b2t("", fb) ^^ "**")
+            case Emph -> t^^("*" ^^ b2t("", fb) ^^ "*")
+            case Sub -> t^^("~" ^^ b2t("", fb) ^^ "~")
+            case Sup -> t^^("^" ^^ b2t("", fb) ^^ "^")
+            case Del -> t^^("-" ^^ b2t("", fb) ^^ "-")
+            case Hdr1 -> t^^("#" ^^ b2t("", fb) ^^ "#")
+            case Hdr2 -> t^^("##" ^^ b2t("", fb) ^^ "##")
+            case WikiLink -> t^^("[[" ^^ b2t("", fb) ^^ "]]")
+            case Link(s) -> t^^("["^^b2t("", fb)^^"] ("^^s^^")")
+            case ImageLink(s) -> t^^("!["^^b2t("", fb)^^"] ("^^s^^")")
             case WS(_) -> b2t(t, fb)
             case List -> 
                 switch (fb) {
@@ -387,13 +387,13 @@ fun blockToText(b) {
 fun myfst (rs) { switch(rs) { case (f,s) -> f }}
 
 fun testProto(text, expect) server{
-    var bb : (ParseResult, NativeString) = textToBlock(to_native_string(text));
+    var bb : (ParseResult, String) = textToBlock(text);
     var blockOpt : ParseResult = myfst(bb);
     if(blockOpt == expect){
             switch(blockOpt) {
                 case Some(bbb) -> 
                     var recover = blockToText(bbb);
-                    var again = textToBlock(to_native_string(recover));
+                    var again = textToBlock(recover);
                     (testresult = (again == bb), doc= myfst(bb), recover=recover, again=myfst(again))
                 case _ ->
                     (testresult = false, doc=None, recover="", again=None)
@@ -583,7 +583,7 @@ fun  testBlockQuote() server {
 }
 
 fun junkTest() server { 
-  textToBlock(to_native_string("9070adfh09ya0dpn23-------903-1-ad-1=ad-13713-\x0184\x84=d;h;kh34['u-=08=\x0a\x05\x93"))
+  textToBlock("9070adfh09ya0dpn23-------903-1-ad-1=ad-13713-\x0184\x84=d;h;kh34['u-=08=\x0a\x05\x93")
 }
 
 fun getList() server {
@@ -623,7 +623,7 @@ fun runTests(continue, t) server {
                             rt(allsuccess, tl)
                         }
                         else {
-                            mydebug(testname ++ " failed");
+                            mydebug(testname ^^ " failed");
                             if(continue) {
                                 rt(false, tl)    
                             }

@@ -1,5 +1,5 @@
 fun lowercase(s) {
-  for (c <- s) [toLower(c)]
+  implode(for (c <- explode(s)) [toLower(c)])
 }
 
 fun suggest(pre) client {
@@ -26,7 +26,7 @@ fun completions(pre) server {
     meaning : String
   ) from (database "dictionary");
 
-  debug("pre: " ++ pre);
+  debug("pre: " ^^ pre);
 
   if (pre == "") []
   else {

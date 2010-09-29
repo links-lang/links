@@ -36,9 +36,8 @@ let http_response_code = ref 200
 *)
 let value_as_string db =
   function
-    | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
-    | `List ([])  -> "\'\'"
-    | (a) -> string_of_value a
+    | `String s -> "\'" ^ db # escape_string s ^ "\'"
+    | v -> string_of_value v
 
 let cond_from_field db (k, v) =
   "("^ k ^" = "^ value_as_string db v ^")"
@@ -83,6 +82,11 @@ let float_op impl pure : located_primitive * Types.datatype * pure =
   `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
   datatype "(Float, Float) -> Float",
   pure
+
+let string_op impl pure : located_primitive * Types.datatype * pure =
+  (`PFun (fun [x; y] -> `String (impl (unbox_string x) (unbox_string y)))),
+  datatype "(String, String) -> String",
+  pure
     
 let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t =
   fun [x] -> (box (conv (unbox x)))
@@ -96,8 +100,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 
-  | `List _ as c ->
-      `List [`XML (Text (charlist_as_string c))]
+  | `String s -> `List [`XML (Text s)]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
 let char_test_op fn pure = 
@@ -133,6 +136,7 @@ let rec equal l r =
     | `Int l   , `Int r    -> eq_num l r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
+    | `String l, `String r -> l = r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -142,8 +146,6 @@ let rec equal l r =
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> equal_lists l r
-    | `NativeString (ls, lstart, llen), `NativeString (rs, rstart, rlen) ->
-        String.sub ls lstart llen = String.sub rs rstart rlen
     | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
 and equal_lists l r = 
   match l,r with
@@ -158,6 +160,7 @@ let rec less l r =
     | `Int l, `Int r     -> lt_num l r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
+    | `String l, `String r -> l < r
       (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in
@@ -210,6 +213,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "*.", float_op ( *.) PURE;
   "/.", float_op (/.) PURE;
   "^.", float_op ( ** ) PURE;
+  "^^", string_op ( ^ ) PURE;
 
   (** Comparisons *)
   "==",
@@ -440,12 +444,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          fun elem attr ->
              match elem with
                | `List ((`XML (Node (_, children)))::_) -> 
-                   let attr = charlist_as_string attr in
+                   let attr = unbox_string attr in
                    let attr_match = (function
                                        | Attr (k, _) when k = attr -> true
                                        | _ -> false) in
                      (try match List.find attr_match children with
-                        | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
+                        | Attr (_, v) -> `Variant ("Some", box_string v)
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)
                | _ -> none),
@@ -740,8 +744,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Cookies *)
   "setCookie",
   (p2 (fun cookieName cookieVal ->
-         let cookieName = charlist_as_string cookieName in
-         let cookieVal = charlist_as_string cookieVal in
+         let cookieName = unbox_string cookieName in
+         let cookieVal = unbox_string cookieVal in
            http_response_headers := 
              ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
            `Record []
@@ -765,7 +769,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   *)
   "getCookie",
   (p1 (fun name ->
-         let name = charlist_as_string name in
+         let name = unbox_string name in
          let value =
            match getenv "HTTP_COOKIE" with
              | Some header ->
@@ -797,7 +801,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "redirect",
   (p1 (fun url ->
-         let url = charlist_as_string url in
+         let url = unbox_string url in
            (* This is all quite hackish, just testing an idea. --ez *)
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
@@ -813,12 +817,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             begin
-               let s = marshal_continuation k in
-                 match string_as_charlist s with
-                   | `List _ as value -> value
-                   | _ -> assert(false)
-             end
+             let s = marshal_continuation k in
+               box_string s
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
    datatype "((a) -> b) ~> String",
@@ -969,8 +969,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	  if driver = "" then
 	    failwith "Internal error: default database driver not defined"
 	  else
-	    `Record(["driver", string_as_charlist driver;
-		     "args", string_as_charlist args])),
+	    `Record(["driver", box_string driver;
+		     "args", box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
   
@@ -1023,17 +1023,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(String, Regex) -> Bool",
     PURE));
 
-  (* All functions below are currenly server only; but client version should be relatively easy to provide *)
-  ("ntilde",
-   (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r) in
-            match s with
-              | `NativeString (s, start, len) ->
-                  box_bool (Str.string_match regex s start)
-              | _ -> failwith "Internal error: expected NativeString"),
-    datatype "(NativeString, Regex) ~> Bool",
-    PURE));
-
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
     (`Server (p2 (fun s r ->
@@ -1050,34 +1039,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let m = Str.matched_group i string in 
         accumMatches ((box_string m)::l) (i - 1)
 	with 
-	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
+	   NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
 	   accumMatches [] ngroups))),
      datatype "(String, Regex) ~> [String]",
    PURE));
-
-  ("lntilde",	
-   (`Server (p2 (fun s r ->
-        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r in
-        let s, start, _len =
-          match s with
-            | `NativeString (s, start, len) ->
-                s, start, len
-            | _ -> failwith "Internal error: expected NativeString" in
-	let regex = Regex.compile_ocaml re in
-          if not (Str.string_match regex s start) then
-	    `List []
-          else
-	    let rec accumMatches l : int -> Value.t = function 
-              | 0 -> `List ((box_string (Str.matched_group 0 s))::l)
-	      | i -> 
-	          (try
-	             let m = Str.matched_group i s in 
-                       accumMatches ((box_string m)::l) (i - 1)
-	           with 
-	               NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
-	      accumMatches [] ngroups)),
-    datatype "(NativeString, Regex) ~> [String]",
-    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
@@ -1089,59 +1054,65 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(String, Regex) ~> String",
     PURE));
 	
-  ("sntilde",	
-   (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
-	let (regex, tmpl) = Regex.compile_ocaml l, t in
-	let s =
-          match s with
-            | `NativeString (s, start, len) ->
-                Utility.decode_escapes (Str.replace_first regex tmpl (String.sub s start len))
-            | _ -> failwith "Internal error: expected NativeString"
-        in
-	  (`NativeString (s, 0, String.length s)))),
-    datatype "(NativeString, Regex) ~> NativeString",
-    PURE));
-   
-  (* NativeString utilities *)
-  ("char_at",
-   (`Server (p2 (fun ((`NativeString (s, start, len)) : Value.t) ((`Int ix):Value.t) ->                   
-                   `Char (s.[start + Num.int_of_num ix]))),
-    datatype ("(NativeString, Int) ~> Char"),
+(* FIXME: should these functions return a Maybe Char/Maybe String? *)
+  (* String utilities *)
+  ("charAt",
+   (p2 (fun s i ->
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+              box_char ((unbox_string s).[int i])
+	    with
+		Invalid_argument _ -> failwith "charAt: invalid index"),
+    datatype ("(String, Int) ~> Char"),
     IMPURE));
 
   ("strsub",
-   (`Server (p3 (fun
-                   ((`NativeString (s, start, len)) : Value.t)
-                   ((`Int start') : Value.t)
-                   ((`Int len') : Value.t) ->
-                     let len = Num.int_of_num len' in
-                     `NativeString (String.sub s (start+Num.int_of_num start') len, 0, len))),
-(*                      `NativeString (s, start+Num.int_of_num start', Num.int_of_num len'))), *)
-(*                     `NativeString (String.sub s (start + Num.int_of_num start) (Num.int_of_num len)))),*)
-    datatype "(NativeString, Int, Int) ~> NativeString",
-    PURE));
+   (p3 (fun s start len -> 
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+	      box_string (String.sub (unbox_string s) (int start) (int len))
+	    with
+		Invalid_argument _ -> failwith "strsub: invalid arguments"),
+    datatype "(String, Int, Int) ~> String",
+    IMPURE));
 
   ("strlen",
-   (`Server (p1 (fun s -> match s with
-                   | `NativeString (_s, _start, len) -> `Int (Num.num_of_int len)
-	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
-    datatype ("(NativeString) ~> Int "),
+   (p1 (fun s -> match s with
+          | `String s -> `Int (Num.num_of_int (String.length s))
+	  |  _ -> failwith "Internal error: strlen got wrong arguments"),
+    datatype ("(String) ~> Int "),
     PURE));
 
-  ("to_native_string",
-   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString (n, 0, String.length n)))),
-    datatype ("(String) ~> NativeString"),
+  ("implode",
+   (p1 (fun l -> 
+		   let chars = List.map unbox_char (unbox_list l) in
+		   let len = List.length chars in
+		   let s = String.create len in
+		   let rec aux i l =
+		     match l with
+		       | [] -> ()
+		       | c :: cs -> s.[i] <- c; aux (i + 1) cs
+		   in
+		     aux 0 chars;
+		     box_string s),
+    datatype ("([Char]) ~> String"),
     PURE));
 	
-  ("from_native_string",
-   (`Server (p1 
-	       (fun s-> match s with  
-	          | `NativeString (s, start, len) -> box_string (String.sub s start len)
-	          | _  -> failwith "Internal error: Bad coercion from native string")),
-    datatype ("(NativeString) ~> String"),
+  ("explode",
+   (p1 (fun s -> match s with  
+	           | `String s ->
+		       let rec aux i l =
+			 if i < 0 then 
+			   l 
+			 else 
+			   aux (i - 1) (s.[i] :: l)
+		       in
+		       let chars = aux ((String.length s) - 1) [] in
+			 box_list (List.map box_char chars)
+	           | _  -> failwith "Internal error: non-String in implode"),
+    datatype ("(String) ~> [Char]"),
     PURE));
-	
+  
   ("unsafePickleCont",
    (*
      HACK:

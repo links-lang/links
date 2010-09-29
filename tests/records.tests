@@ -36,7 +36,7 @@ fun foo(x) { x.a } (foo((a="a", b=2)), foo((a=1, c=3)))
 stdout : ("a", 1) : (String, Int)
 
 Passing two different list types to a polymorphic function
-fun foo(x) { hd(x) } (foo([1,2]), foo("abc"))
+fun foo(x) { hd(x) } (foo([1,2]), foo(['a', 'b', 'c']))
 stdout : (1, 'a') : (Int, Char)
 
 Row types preserved across functions

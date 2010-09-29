@@ -152,7 +152,7 @@ let is_expr_eval args =
 let parse_cont_apply (valenv, nenv, tyenv) program params =
   let pickled_continuation = assoc "_cont" params in
   let params = filter (not -<- is_cont_apply_param) params in
-  let params = alistmap Value.string_as_charlist params in
+  let params = alistmap Value.box_string params in
   let _, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) program in
     (* TBD: create a debug setting for printing webif modes. *)
     ContApply(Value.unmarshal_continuation unmarshal_envs pickled_continuation,

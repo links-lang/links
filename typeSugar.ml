@@ -862,11 +862,8 @@ let type_binary_op ctxt =
       and replacep = List.exists ((=) `RegexReplace) flags in
         begin
           match replacep, listp, nativep with
-           | true,   _   , true  -> (* sntilde *) datatype "(NativeString, Regex) -> NativeString"
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
-           | false, true , true  -> (* lntilde *) datatype "(NativeString, Regex) -> [String]"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
-           | false, false, true  -> (* ntilde *)  datatype "(NativeString, Regex) -> Bool"
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
         end
   | `And
@@ -1842,7 +1839,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                             | `Function (fps, fe, rettyp) ->
                                 let rettyp = Types.for_all (rqs, rettyp) in
                                 let ft = `Function (fps, fe, rettyp) in
-(*                                  Debug.print ("ft: " ^ Types.string_of_datatype ft);*)
+(*                                   Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                                 let fn, fpos = erase f in
                                 let e = tabstr (rqs, `FnAppl ((tappl (fn, tyargs), fpos), List.map erase ps)) in
                                   unify ~handle:Gripers.fun_apply

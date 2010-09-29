@@ -52,7 +52,7 @@ type primitive_value = [
 | `Float of float
 | `Int of Num.num
 | `XML of xmlitem 
-| `NativeString of string * int * int ]
+| `String of string ]
 
 val show_primitive_value : primitive_value Show.show
 

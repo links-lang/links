@@ -231,7 +231,7 @@ setCookie("username","frobulous t. vanderbilt");
 
 # getCookie        : (String) -> String
 
-#ignore(alertDialog("username cookie is: " ++ getCookie("username")));
+#ignore(alertDialog("username cookie is: " ^^ getCookie("username")));
 ignore(getCookie("username"));
 
 # redirect         : (String) -> ()
