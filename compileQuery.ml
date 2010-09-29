@@ -1553,7 +1553,7 @@ struct
     let env = AEnv.map (lift map) env in
     let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
     let ti_body = compile_expression env_v loop_v body in
-    let (order_cols, map') =
+    let (sort_cols, sort_info, map') =
       match order_criteria with
 	| _ :: _ ->
 	  (* compile orderby expressions *)
@@ -1562,21 +1562,21 @@ struct
 	  let offset = (List.length (Cs.offsets ti_body.cs)) + 1 in
 	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
 	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
-	  (order_cols, omap map q_os cols)
+	    cols, order_cols, omap map q_os cols
 	| [] ->
-	  ([(iter, A.Ascending); (pos, A.Ascending)], map)
+	  ([], [(iter, A.Ascending); (pos, A.Ascending)], map)
     in
     let q = 
       ADag.mk_project
 	([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.offsets ti_body.cs))))
 	(ADag.mk_rank
 	 (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
-	   (pos', order_cols)
+	   (pos', sort_info)
 	   (ADag.mk_eqjoin
 	      (iter, inner)
 	      ti_body.q
 	      (ADag.mk_project
-		 [prj outer; prj inner]
+		 ([prj outer; prj inner] @ (prjlist sort_cols))
 		 map')))
     in
     {
