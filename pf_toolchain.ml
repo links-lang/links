@@ -1,6 +1,8 @@
-let path = Settings.get_value Basicsettings.Ferry.pf_path
-let pfopt = path ^ "pfopt"
-let pfsql = path ^ "pfsql"
+(* These all have to be functions in order to
+   allow the pf_path to be updated. *)
+let path() = Settings.get_value Basicsettings.Ferry.pf_path
+let pfopt() = path() ^ "pfopt"
+let pfsql() = path() ^ "pfsql"
 
 exception PF_error of string
 
@@ -35,9 +37,8 @@ let pipe_through cmd input =
 	  Buffer.contents inbuf
   with _ -> raise (PF_error cmd)
 
-let pipe_pfopt = Debug.print ">>> pfopt"; pipe_through pfopt
-
-let pipe_pfsql = Debug.print ">>> pfsql"; pipe_through pfsql
+let pipe_pfopt input = Debug.print ">>> pfopt"; pipe_through (pfopt()) input
+let pipe_pfsql input = Debug.print ">>> pfsql"; pipe_through (pfsql()) input
 
 let buf = ref (Buffer.create 1024)
 let c = ref 0
