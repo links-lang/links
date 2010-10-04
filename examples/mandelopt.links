@@ -55,7 +55,7 @@ fun hexdigit(i) {
 fun redshade(i, max) {
   if (i == max) "#000"
   else
-    "#" ++ hexdigit(16*i/max) ++ "33"
+    "#" ^^ hexdigit(16*i/max) ^^ "33"
 }
 
 fun pixeldiv(x, y, size, color) {
@@ -92,7 +92,7 @@ fun mandelMadness(x, y, r, i, pixSize,
         mm(0, 0, minr, mini, pixSize/2)
       }
     } else {
-#      debug("x is " ++ intToString(x));
+#      debug("x is " ^^ intToString(x));
       appendChildren(mandelBlock(pixSize, x, y,
                                  regionSize, r, i), docElt);
       mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,

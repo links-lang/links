@@ -18,6 +18,10 @@ let statdiff (major, minor, promoted) (major', minor', promoted') =
 let time_l e          = measure_diff_l Sys.time (-.) e
 let measure_memory_l e = measure_diff_l Gc.counters statdiff e
 
+let write_begin s = 
+  Printf.fprintf stderr "%.20s : started\n" s;
+  flush stderr
+
 let write_time s t = 
   Printf.fprintf stderr "%.20s : %3f seconds taken\n" s t;
   flush stderr
@@ -28,6 +32,7 @@ let write_memory s t =
 
 let measure_l name (e) : 'b = 
   if Settings.get_value measuring then 
+    let _ = write_begin name in
     let (result, time_taken), memory_allocated = 
       measure_memory_l (lazy (time_l e))
     in

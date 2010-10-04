@@ -10,6 +10,7 @@ type primitive
 
 val primitive_names : string list
 val is_primitive : string -> bool
+val is_primitive_var : Var.var -> bool
 val is_pure_primitive : string -> bool
 val value_env : primitive option Env.Int.t
 val type_env : Types.environment
@@ -24,6 +25,10 @@ val patch_prelude_funs : Types.typing_environment -> Types.typing_environment
 
 val apply_pfun : string -> Value.t list -> Value.t
 val primitive_stub : string -> Value.t
+
+(* jcheney: added to avoid string comparisons at runtime *)
+val apply_pfun_by_code : Var.var -> Value.t list -> Value.t
+val primitive_stub_by_code : Var.var -> Value.t
 
 val primitive_name : Var.var -> string
 val primitive_location : string -> Sugartypes.location

@@ -13,7 +13,7 @@ let type_section env =
         let eb, e = Types.fresh_row_quantifier `Any in
 
         let r = `Record (StringMap.add label (`Present, a) fields, rho) in
-          `ForAll ([ab; rhob; eb],
+          `ForAll (Types.box_quantifiers [ab; rhob; eb],
                    `Function (Types.make_tuple_type [r], e, a))
     | `Name var -> TyEnv.lookup env var
 
@@ -32,11 +32,8 @@ let type_binary_op env tycon_env =
       and listp    = List.exists ((=) `RegexList)    flags 
       and replacep = List.exists ((=) `RegexReplace) flags in
         (match replacep, listp, nativep with
-           | true,   _   , true  -> (* sntilde *) datatype "(NativeString, Regex) -> NativeString"
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
-           | false, true , true  -> (* lntilde *) datatype "(NativeString, Regex) -> [String]"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
-           | false, false, true  -> (* ntilde *)  datatype "(NativeString, Regex) -> Bool"
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool")
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
@@ -50,7 +47,7 @@ let type_binary_op env tycon_env =
   | `Name "<>" ->
       let ab, a = Types.fresh_type_quantifier `Any in
       let eb, e = Types.fresh_row_quantifier `Any in
-        `ForAll ([ab; eb],
+        `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "send"
   | `Name n       -> TyEnv.lookup env n
@@ -289,6 +286,16 @@ class transform (env : Types.typing_environment) =
           let (o, f, ft) = o#phrase f in
           let (o, args, _) = list o (fun o -> o#phrase) args in
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
+      | `TAbstr (tyvars, e) ->
+          let (o, e, t) = o#phrase e in
+          let t = Types.for_all (Types.unbox_quantifiers tyvars, t) in
+            begin
+              match t with
+                | `ForAll (tyvars, _) ->
+                    (o, `TAbstr(tyvars, e), t)
+                | _ ->
+                    (o, fst e, t)
+            end
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -328,7 +335,9 @@ class transform (env : Types.typing_environment) =
                     match TypeUtils.concrete_type t with
                       | `Record row ->
                           `Record (Types.extend_row field_types row)
-                      | _ -> assert false
+                      | t ->
+                          Debug.print ("bad t: " ^ Types.string_of_datatype t);
+                          assert false
                   end
           in
             (o, `RecordLit (fields, base), t)

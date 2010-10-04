@@ -45,7 +45,17 @@ checker. For example, the program
 fails at run-time because the query-compiler doesn't know how to
 compile the inner for comprehension to the database.
 
- * Pattern-matching is always typed as being compleable to the
+ * Pattern-matching is always typed as being compileable to the
 database, but pattern matching on lists compiles to functions hd and
 tl that are not yet compileable to the database.
 
+ * We don't have a proper semantics for database and table values on
+the client. If js_hide_database_info is enabled then database and
+table statments are all interpreted as the unit value on the
+client. This happens to work for all of our examples, and in some
+cases prevents database information leaking to the client. It will
+fail if a function on the client tries to pass database or table
+information to the server. It won't prevent database and table
+information from being passed from the server to the client. If
+js_hide_database_info is disabled then all of the database information
+including the username and password is visible on the client.

@@ -58,14 +58,13 @@ let annotate (signame, datatype) : _ -> binding =
 
 let attach_kind pos (t, k) =
    match k with
-     | "Type" -> `TypeVar (t, `Any)
-     | "BaseType" -> `TypeVar (t, `Base)
-     | "QueryType" -> `TypeVar (t, `Query)
-     | "Row" -> `RowVar (t, `Any)
-     | "BaseRow" -> `RowVar (t, `Base)
-     | "QueryRow" -> `RowVar (t, `Query)
-     | "Presence" -> `PresenceVar t
-     | s -> raise (ConcreteSyntaxError ("Unknown kind", pos))
+     | `Type -> `TypeVar (t, `Any)
+     | `BaseType -> `TypeVar (t, `Base)
+     | `QueryType -> `TypeVar (t, `Query)
+     | `Row -> `RowVar (t, `Any)
+     | `BaseRow -> `RowVar (t, `Base)
+     | `QueryRow -> `RowVar (t, `Query)
+     | `Presence -> `PresenceVar t
 
 let attach_subkind pos (t, k) =
   let attach t s =
@@ -140,7 +139,7 @@ let datatype d = d, None
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG INCLUDE
 %token QUESTION EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -283,13 +282,13 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 kind:
-| TYPE                                                         { "Type" }
-| BASETYPE                                                     { "BaseType" }
-| QUERYTYPE                                                    { "QueryType" }
-| ROW                                                          { "Row" }
-| BASEROW                                                      { "BaseRow" }
-| QUERYROW                                                     { "QueryRow" }
-| PRESENCE                                                     { "Presence" }
+| TYPE                                                         { `Type }
+| BASETYPE                                                     { `BaseType }
+| QUERYTYPE                                                    { `QueryType }
+| ROW                                                          { `Row }
+| BASEROW                                                      { `BaseRow }
+| QUERYROW                                                     { `QueryRow }
+| PRESENCE                                                     { `Presence }
 
 subkind:
 | ANY                                                          { `Any }
@@ -808,6 +807,10 @@ squiggly_arrow:
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
+| forall_datatype                                              { $1 }
+
+forall_datatype:
+| FORALL varlist DOT datatype                                  { ForallType (List.map fst $2, $4) }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -834,7 +837,7 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
-								   | "NativeString" -> PrimitiveType `NativeString
+								   | "String"  -> PrimitiveType `String
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])
                                                                }

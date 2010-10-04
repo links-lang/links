@@ -4,7 +4,7 @@ open Utility
 let show_json = Settings.add_bool("show_json", false, `User)
 
 (*
-  [REMARK][SL]
+  REMARK (SL):
     Having implemented jsonisation of database values, I'm now
     unsure if this is what we really want. From a security point
     of view it certainly isn't a very good idea to pass this kind of
@@ -16,7 +16,7 @@ let json_of_db (db, params) =
     "{_db:{driver:\"" ^ driver ^ "\",name:\"" ^ name ^ "\", args:\"" ^ args ^ "\"}}"
 
 (*
-[WARNING]
+WARNING:
   May need to be careful about free type variables / aliases in row
 *)
 let json_of_table ((db, params), name, keys, row) =
@@ -40,13 +40,6 @@ let js_dq_escape_char =
   | '\\' -> "\\\\"
   | ch -> String.make 1 ch
 
-let jscharlist_of_string s =
-  "["^ 
-    Utility.mapstrcat ", "
-      (fun c -> "\"" ^ js_dq_escape_char c ^ "\"")
-      (Utility.StringUtils.explode s) 
-  ^"]"
-
 let rec json_of_xmlitem = function
   | Value.Text s ->
       "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
@@ -55,7 +48,7 @@ let rec json_of_xmlitem = function
         List.fold_right (fun xmlitem (attrs, body) ->
                            match xmlitem with
                              | Value.Attr (label, value) ->
-                                 ("\"" ^label ^ "\" : " ^ jscharlist_of_string(value)) :: attrs, body
+                                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
                              | _ -> attrs, (json_of_xmlitem xmlitem) :: body) xml ([], [])
       in
         "[\"ELEMENT\",\"" ^ tag ^ "\",{" ^ String.concat "," attrs
@@ -66,14 +59,11 @@ let jsonize_primitive : Value.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
   | `Float value -> string_of_float value
-  | `Char c -> "\"" ^ (js_dq_escape_char c) ^"\""
-(* [Q] what does Char.escape do?
-   [A] the wrong things!
-*)
+  | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `NativeString _ -> failwith "Can't yet jsonize NativeString"
+  | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
 
 let rec jsonize_value : Value.t -> string = function
   | `PrimitiveFunction _
@@ -88,7 +78,7 @@ let rec jsonize_value : Value.t -> string = function
       " \"environment\": {" ^ 
         String.concat "," (IntMap.to_list(fun k (v,_) -> 
                                             string_of_int k ^ ":" ^
-                                              jsonize_value v) (fst env))
+                                              jsonize_value v) (Value.get_parameters env))
       ^ "}}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)

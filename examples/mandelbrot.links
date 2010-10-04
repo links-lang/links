@@ -58,7 +58,7 @@ fun mandelbrot(x, y) {
 }
 
 fun makefreshname(colour, n) client {
-  var name = colour++intToString(n);
+  var name = colour ^^ intToString(n);
   if(isNull(getNodeById(name)))
     name
   else

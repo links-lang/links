@@ -33,8 +33,12 @@ DERIVING_DIR=deriving-310
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
+ifdef PROF
+OCAMLOPT := ocamlopt.opt -p -inline 0
+else
 OCAMLOPT := ocamlopt.opt
 OCAMLC := ocamlc
+endif
 
 # use ocamldep.opt if it exists
 # (it doesn't exist for all OCaml installations)
@@ -72,13 +76,13 @@ SOURCES = $(OPC)                		\
           parser.mly            		\
           lexer.mli lexer.mll         		\
 	  typeUtils.mli typeUtils.ml            \
+          errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
           typevarcheck.mli typevarcheck.ml      \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
-          errors.mli errors.ml                  \
           parse.mli parse.ml    		\
           sugarTraversals.mli  sugarTraversals.ml	\
           desugarDatatypes.mli desugarDatatypes.ml      \
@@ -136,6 +140,11 @@ SOURCES = $(OPC)                		\
 
 
 LIBS    = nums str $(DB_LIBS) deriving
+
+ifndef THREADS
+LIBS += unix
+endif
+
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 

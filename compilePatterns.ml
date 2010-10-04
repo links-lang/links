@@ -249,7 +249,7 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
                            StringSet.add name names)
                         fields
                         StringSet.empty in
-                    let rt = TypeUtils.erase_type names t in
+                    let rt = TypeUtils.erase_type_poly names t in
                       lp rt p (`Erase (names, value)) body
 (*                      lp rt p (`Coerce (value, rt)) body *)
             in
@@ -737,6 +737,11 @@ and match_record
     let all_closed = List.for_all (function
                                      | (_, None, _) -> true
                                      | (_, Some _, _) -> false) xs in
+
+    (* type of the flattened record continuation *)
+    let restt = TypeUtils.erase_type_poly names t in
+    let restb, rest = Var.fresh_var_of_type restt in
+
     let annotated_clauses =
       List.fold_right
         (fun (bs, p, (annotation, (ps, body))) annotated_clauses ->
@@ -765,20 +770,55 @@ and match_record
              else if closed then
                ([], `Any)::List.rev rps, body
              else
-               (* type of the original record continuation *)
-               let pt =
-                 let original_names =
-                   StringMap.fold
-                     (fun name _ names ->
-                        StringSet.add name names)
-                     bs
-                     StringSet.empty
-                 in
-                   TypeUtils.erase_type original_names t in
+               let original_names =
+                 StringMap.fold
+                   (fun name _ names ->
+                      StringSet.add name names)
+                   bs
+                   StringSet.empty in
 
-               (* type of the flattened record continuation *)
-               let xt = TypeUtils.erase_type names t in
-               let xb, x = Var.fresh_var_of_type xt in
+               (* type of the original record continuation *)
+               let pt = TypeUtils.erase_type_poly original_names t in
+
+               (* HACK:
+                  
+                  We rely on implementation details of
+                  TypeUtils.erase_type_poly.  The following only works
+                  if the quantifiers in pt appear in the same order
+                  that a fold traverses original_names.
+               *)
+               let qs, qmap =
+                 match pt with
+                   | `ForAll (qs, _) ->
+                       let qs = Types.unbox_quantifiers qs in
+                       let _, qmap =
+                         StringSet.fold
+                           (fun name (qs, qmap) ->
+                              let q::qs = qs in
+                                qs, StringMap.add name q qmap)
+                           original_names
+                           (qs, StringMap.empty)
+                       in
+                         qs, qmap
+                   | _ -> [], StringMap.empty in
+
+               (* HACK:
+                  
+                  As we know that any missing names are immediately
+                  going to be filled in it is sound to instantiate
+                  their quantifiers with any type at all. Here we
+                  pick Int.                  
+               *)
+               let tyargs =
+                 StringSet.fold
+                   (fun name tyargs ->
+                      match StringMap.lookup name qmap with
+                        | Some q ->
+                            Types.type_arg_of_quantifier q :: tyargs
+                        | None -> `Type (Types.int_type) :: tyargs)
+                   names
+                   [] in
+               let tyargs = List.rev tyargs in
 
                let body =
                  fun env ->
@@ -788,16 +828,16 @@ and match_record
                      | (annotation, `Any) ->
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
-                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
+                             [`Let (yb, (qs, `Return (`Extend (fields, Some (tapp (`Variable rest, tyargs))))))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
-                     | (annotation, `Variable (yb)) ->
+                     | (annotation, `Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
-                             [letmv (yb, `Extend (fields, Some (`Variable x)))]
+                             [`Let (yb, (qs, `Return (`Extend (fields, Some (tapp (`Variable rest, tyargs))))))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], `Variable xb)::rps, body in
+                 ([], `Variable restb)::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
@@ -812,13 +852,29 @@ and match_record
         names
         ([], [], env) in 
 
+    let bindings, xs, env =
+      if all_closed then
+        bindings, xs, env
+      else
+        let bindings =
+          let qs =
+            match restt with
+              | `ForAll (qs, _) ->
+                  Types.unbox_quantifiers qs
+              | _ -> [] in
+          let tyargs = List.map Types.type_arg_of_quantifier qs in
+            `Let (restb, (qs, `Return (tapp (`Erase (names, `Variable var), tyargs)))) :: bindings in
+        let xs = rest :: xs in
+        let env = bind_type rest restt env in
+          bindings, xs, env in
+
     let bindings = List.rev bindings in
     let xs = List.rev xs in
     let clauses = apply_annotations (`Variable var) annotated_clauses in
       with_bindings
         bindings
         (match_cases (xs @ vars) clauses def env)
-                   
+        
 (* the interface to the pattern-matching compiler *)
 let compile_cases
     : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =

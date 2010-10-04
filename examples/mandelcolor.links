@@ -81,7 +81,7 @@ fun hexdigit(i) {
 fun redshade(i, max) {
   if (i == max) "#000"
   else
-    "#" ++ hexdigit(16.0*.i/.max) ++ "33"
+    "#" ^^ hexdigit(16.0*.i/.max) ^^ "33"
   
 }
 
@@ -89,7 +89,7 @@ fun pixeldiv(x, y, size, color) {
   var size = intToString(floatToInt(size));
   var x = intToString(floatToInt(x));
   var y = intToString(floatToInt(y));
-  <div id="{"p" ++ x ++ "x" ++ y}"
+  <div id="{"p" ^^ x ^^ "x" ^^ y}"
        style="width: {size}px; 
               height: {size}px;
               position: absolute;

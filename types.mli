@@ -13,7 +13,7 @@ type 'a point = 'a Unionfind.point
 
 val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `NativeString]
+type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
 
 type subkind = [ `Any | `Base | `Query ]
@@ -63,7 +63,7 @@ type typ =
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list * typ)]
+    | `ForAll of (quantifier list ref * typ)]
 and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec = presence_flag * typ
 and field_spec_map = field_spec field_env
@@ -120,6 +120,16 @@ type environment        = datatype Env.String.t
 
 val concrete_type : datatype -> datatype
 
+val hoist_quantifiers : datatype -> unit
+
+val is_rigid_quantifier : quantifier -> bool
+
+val box_quantifiers : quantifier list -> quantifier list ref
+val unbox_quantifiers : quantifier list ref -> quantifier list
+
+val flexible_of_type : datatype -> datatype option
+
+val normalise_quantifier : quantifier -> quantifier
 val for_all : quantifier list * datatype -> datatype
 
 (** useful types *)
@@ -132,13 +142,17 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
-val native_string_type : datatype
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
 val var_of_quantifier : quantifier -> int
+val type_arg_of_quantifier : quantifier -> type_arg
+val freshen_quantifier : quantifier -> quantifier * type_arg
+val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
+
+val quantifiers_of_type_args : type_arg list -> quantifier list
 
 (* val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t *)
 (* val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t *)

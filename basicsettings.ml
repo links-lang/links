@@ -47,6 +47,8 @@ struct
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
+
+  let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
 end
 
 module Ferry = struct
@@ -83,3 +85,9 @@ let make_cache = Settings.add_bool("make_cache", true, `System)
    cache is newer than the Links binary
 *)
 let allow_stale_cache = Settings.add_bool("allow_stale_cache", false, `System)
+
+(* Optimization pass? *)
+let optimise = Settings.add_bool("optimise", false, `User)
+
+(* Compile & cache whole program, closures, and HTML *)
+let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)

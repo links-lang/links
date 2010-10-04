@@ -140,7 +140,7 @@ type primitive_value_basis =  [
 | `Float of float
 | `Int of num
 | `XML of xmlitem 
-| `NativeString of string ]
+| `String of string ]
   deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
 
 type primitive_value = [
@@ -150,6 +150,7 @@ type primitive_value = [
 ]
   deriving (Show)
         
+(*jcheney: Added function component to PrimitiveFunction *)
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value
@@ -159,29 +160,66 @@ and t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
-| `PrimitiveFunction of string
+| `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation ]
-and env = (t * Ir.scope) Utility.intmap * Ir.closures
-(* and env = (int * (t * Ir.scope)) list * Ir.closures *)
+and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
+(* and env = (t * Ir.scope) Utility.intmap  * Ir.closures *)
+(* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
   deriving (Show)
 
 let toplevel_cont : continuation = []
 
 (** {1 Environment stuff} *)
+(** {2 IntMap-based implementation with global memoization} *)
+
+let empty_env closures = (IntMap.empty, closures, IntMap.empty)
+let bind name (v,scope) (env, closures, globals) = 
+  (* Maintains globals as submap of global bindings. *)
+  match scope with 
+    `Local -> (IntMap.add name (v,scope) env, closures,globals)
+  | `Global -> (IntMap.add name (v,scope) env, closures, IntMap.add name (v,scope) globals)
+let find name (env, _closures, _globals) = fst (IntMap.find name env)
+let lookup name (env, _closures, _globals) = opt_map fst (IntMap.lookup name env) 
+let lookupS name (env, _closures, _globals) = IntMap.lookup name env
+let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
+
+let get_parameters (env,_closures,_globals) = env;;
+
+let shadow env ~by:(by, _closures',_globals') =
+(* Assumes that closures, globals never change *)
+    IntMap.fold (fun name v env -> bind name v env) by env
+
+
+
+let fold f (env, _closures,_globals) a = IntMap.fold f env a
+let globals (env, closures, genv) = (genv,closures,genv)
+
+let get_closures (_, closures,_) = closures
+let find_closure (_, closures,_) var = IntMap.find var closures
+let with_closures (env, closures',globals) closures =
+  (env, IntMap.fold IntMap.add closures closures',globals)
+
+
 (** {2 IntMap-based implementation} *)
-let empty_env closures = IntMap.empty, closures
-let bind name v (env, closures) = IntMap.add name v env, closures
+(*
+let empty_env closures = (IntMap.empty, closures)
+let bind name v (env, closures) = (IntMap.add name v env, closures)
 let find name (env, _closures) = fst (IntMap.find name env)
 let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env) 
 let lookupS name (env, _closures) = IntMap.lookup name env
 let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
+
+let get_parameters (env,_closures) = env;;
+
 let shadow (outers, closures) ~by:(by, _closures') =
 (* WARNING:
-   The commented out code causes an enormous slowdown.
-   (NOTE: This is not an acceptable description of the problem! --ez)
+
+   The commented out code causes an enormous slowdown. The closures
+   are computed globally anyway, so closures and closures' should
+   always be the same.
 *)
-(*   let closures = *)
+  (*   let closures = *)
 (*     IntMap.fold *)
 (*       (fun name xs closures -> *)
 (*          IntMap.add name xs closures) *)
@@ -189,16 +227,27 @@ let shadow (outers, closures) ~by:(by, _closures') =
 (*       closures *)
 (*   in *)
     IntMap.fold (fun name v env -> IntMap.add name v env) by outers, closures
+
+
+
 let fold f (env, closures) a = IntMap.fold f env a
 let globals (env, closures) =
-  IntMap.fold (fun name ((_, scope) as v) globals ->
-          match scope with
-            | `Global -> IntMap.add name v globals
-            | _ -> globals) env (IntMap.empty), closures
+      let g = 
+	IntMap.fold (fun name ((_, scope) as v) globals ->
+	  match scope with
+	  | `Global -> IntMap.add name v globals
+	  | _ -> globals) env (IntMap.empty)
+      in (g, closures)
+
 let get_closures (_, closures) = closures
 let find_closure (_, closures) var = IntMap.find var closures
 let with_closures (env, closures') closures =
   (env, IntMap.fold IntMap.add closures closures')
+*)
+
+
+
+
 
 (** {2 List-based environment implementation (disabled)} *)
 (* let empty_env closures = [], closures *)
@@ -222,6 +271,7 @@ let with_closures (env, closures') closures =
 (* let find_closure (_, closures) var = IntMap.find var closures *)
 (* let with_closures (env, closures') closures = *)
 (*   (env, IntMap.fold IntMap.add closures closures') *)
+
 
 
 (** {1 Compressed values for more efficient pickling} *)
@@ -264,6 +314,7 @@ let localise env var =
     (find_closure env var)
     (empty_env (get_closures env))
 
+
 let rec compress_continuation (cont:continuation) : compressed_continuation =
   List.map
     (fun (_scope, var, locals, _body) ->
@@ -281,7 +332,7 @@ and compress_t (v : t) : compressed_t =
                           compress_env locals, f)
       | `RecFunction (defs, _env, f, `Global) ->
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
-      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
 and compress_env env : compressed_env =
@@ -343,7 +394,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
                         localise globals f,
                         f,
                         `Global)
-      | `PrimitiveFunction f -> `PrimitiveFunction f
+      | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
@@ -355,7 +406,7 @@ and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
     env
   with NotFound str -> failwith("In uncompress_env: " ^ str)
 
-let build_unmarshal_envs ((venv, closures), nenv, tyenv) program
+let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
     : unmarshal_envs =
   let tyenv =
     try
@@ -430,7 +481,7 @@ let build_unmarshal_envs ((venv, closures), nenv, tyenv) program
   end in
   let _, _, o = build#computation program in
   let scopes, conts, funs = o#get_envs in
-  let globals = globals (venv, closures)
+  let globals = globals valenv
 (*   let globals = *)
 (*     ((IntMap.fold *)
 (*         (fun name (v, scope) env -> *)
@@ -473,7 +524,7 @@ and charlist_as_string chlist =
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
   | `FunctionPtr (x, env) -> string_of_int x ^ string_of_environment env
-  | `PrimitiveFunction (name) -> name
+  | `PrimitiveFunction (name,_op) -> name
   | `ClientFunction (name) -> name
   | `RecFunction(defs, env, var, _scope) -> 
       (* Choose from fancy or simple printing of functions: *)
@@ -495,8 +546,7 @@ and string_of_value : t -> string = function
   | `Variant (label, `Record []) -> label ^ "()"
   | `Variant (label, value) -> label ^ "(" ^ string_of_value value ^ ")"
   | `List [] -> "[]"
-  | `List (`Char _::_) as c  -> "\"" ^ escape (charlist_as_string c) ^ "\""
-  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_element_value elems
+  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
 and string_of_primitive : primitive_value -> string = function
@@ -507,7 +557,7 @@ and string_of_primitive : primitive_value -> string = function
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
   | `Table (_, table_name, _, _) -> "(table " ^ table_name ^")"
-  | `NativeString s -> "\"" ^ s ^ "\""
+  | `String s -> "\"" ^ s ^ "\""
 				
 and string_of_tuple (fields : (string * t) list) : string = 
     let fields = List.map (function
@@ -522,11 +572,6 @@ and string_of_tuple (fields : (string * t) list) : string =
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
-
-(* TBD: Can someone explain how this works? *)
-and string_of_element_value = function 
-  | `Char c -> String.make 1 c
-  | otherwise -> string_of_value otherwise
 
 (** {1 Record manipulations} *)
 
@@ -566,8 +611,9 @@ and unbox_char :  t -> char = function
 and box_xml x = `XML x      
 and unbox_xml  :  t -> xmlitem = function
   | `XML x -> x | _ -> failwith "Type error unboxing xml"
-and box_string = string_as_charlist
-and unbox_string : t -> string = charlist_as_string
+and box_string s = `String s
+and unbox_string : t -> string = function
+  | `String s -> s | _ -> failwith "Type error unboxing string"
 and box_list l = `List l
 and unbox_list : t -> t list = function
   | `List l -> l | _ -> failwith "Type error unboxing list"

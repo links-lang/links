@@ -30,6 +30,10 @@ List pattern
 switch (A ([])) { case A (_::_) -> 0 case A ([]) -> 1 }
 stdout : 1 : Int
 
+Open record pattern
+fun (r) {switch (r) {case (l=l|s) -> s}}
+stdout : @fun : \(\(l:_\|([a-z])\)\) -> \(l-:_\|\1\)
+
 HasType pattern [1]
 switch (1) {case (0:Int) -> 0 case (1:Int) -> 1}
 stdout : 1 : Int

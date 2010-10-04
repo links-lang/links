@@ -36,9 +36,8 @@ let http_response_code = ref 200
 *)
 let value_as_string db =
   function
-    | `List ((`Char _)::_) as c  -> "\'" ^ db # escape_string (charlist_as_string c) ^ "\'"
-    | `List ([])  -> "\'\'"
-    | (a) -> string_of_value a
+    | `String s -> "\'" ^ db # escape_string s ^ "\'"
+    | v -> string_of_value v
 
 let cond_from_field db (k, v) =
   "("^ k ^" = "^ value_as_string db v ^")"
@@ -83,6 +82,11 @@ let float_op impl pure : located_primitive * Types.datatype * pure =
   `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
   datatype "(Float, Float) -> Float",
   pure
+
+let string_op impl pure : located_primitive * Types.datatype * pure =
+  (`PFun (fun [x; y] -> `String (impl (unbox_string x) (unbox_string y)))),
+  datatype "(String, String) -> String",
+  pure
     
 let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t =
   fun [x] -> (box (conv (unbox x)))
@@ -92,12 +96,11 @@ let make_type_variable = Types.make_type_variable
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
    (let q, r = Types.fresh_row_quantifier `Any in
-      (`ForAll ([q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
+      (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)), 
    pure)
 
 let string_to_xml : Value.t -> Value.t = function 
-  | `List _ as c ->
-      `List [`XML (Text (charlist_as_string c))]
+  | `String s -> `List [`XML (Text s)]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
 let char_test_op fn pure = 
@@ -133,6 +136,7 @@ let rec equal l r =
     | `Int l   , `Int r    -> eq_num l r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
+    | `String l, `String r -> l = r
     | `Record lfields, `Record rfields -> 
         let rec one_equal_all = (fun alls (ref_label, ref_result) ->
                                    match alls with
@@ -141,10 +145,14 @@ let rec equal l r =
                                      | _ :: alls -> one_equal_all alls (ref_label, ref_result)) in
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
-    | `List (l), `List (r) -> length l = length r &&
-            fold_left2 (fun result x y -> result && equal x y) true l r
-    | `NativeString s1, `NativeString s2 -> s1 = s2
+    | `List (l), `List (r) -> equal_lists l r
     | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
+and equal_lists l r = 
+  match l,r with
+    | [], [] -> true
+    | (l::ls), (r::rs) -> equal l r && equal_lists ls rs
+    | _,_ -> false
+  
 
 let rec less l r =
   match l, r with
@@ -152,6 +160,7 @@ let rec less l r =
     | `Int l, `Int r     -> lt_num l r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
+    | `String l, `String r -> l < r
       (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf -> 
         let order = sort (fun x y -> compare (fst x) (fst y)) in
@@ -214,6 +223,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "*.", float_op ( *.) PURE;
   "/.", float_op (/.) PURE;
   "^.", float_op ( ** ) PURE;
+  "^^", string_op ( ^ ) PURE;
 
   (** Comparisons *)
   "==",
@@ -444,12 +454,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          fun elem attr ->
              match elem with
                | `List ((`XML (Node (_, children)))::_) -> 
-                   let attr = charlist_as_string attr in
+                   let attr = unbox_string attr in
                    let attr_match = (function
                                        | Attr (k, _) when k = attr -> true
                                        | _ -> false) in
                      (try match List.find attr_match children with
-                        | Attr (_, v) -> `Variant ("Some", string_as_charlist v)
+                        | Attr (_, v) -> `Variant ("Some", box_string v)
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)
                | _ -> none),
@@ -744,8 +754,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Cookies *)
   "setCookie",
   (p2 (fun cookieName cookieVal ->
-         let cookieName = charlist_as_string cookieName in
-         let cookieVal = charlist_as_string cookieVal in
+         let cookieName = unbox_string cookieName in
+         let cookieVal = unbox_string cookieVal in
            http_response_headers := 
              ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
            `Record []
@@ -769,7 +779,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   *)
   "getCookie",
   (p1 (fun name ->
-         let name = charlist_as_string name in
+         let name = unbox_string name in
          let value =
            match getenv "HTTP_COOKIE" with
              | Some header ->
@@ -801,7 +811,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "redirect",
   (p1 (fun url ->
-         let url = charlist_as_string url in
+         let url = unbox_string url in
            (* This is all quite hackish, just testing an idea. --ez *)
            http_response_headers := ("Location", url) :: !http_response_headers;
            http_response_code := 302;
@@ -817,12 +827,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "reifyK",
   (p1 (function
            `Continuation k -> 
-             begin
-               let s = marshal_continuation k in
-                 match string_as_charlist s with
-                   | `List _ as value -> value
-                   | _ -> assert(false)
-             end
+             let s = marshal_continuation k in
+               box_string s
          | _ -> failwith "argument to reifyK was not a continuation"
       ),
    datatype "((a) -> b) ~> String",
@@ -973,8 +979,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	  if driver = "" then
 	    failwith "Internal error: default database driver not defined"
 	  else
-	    `Record(["driver", string_as_charlist driver;
-		     "args", string_as_charlist args])),
+	    `Record(["driver", box_string driver;
+		     "args", box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
   
@@ -1027,15 +1033,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(String, Regex) -> Bool",
     PURE));
 
-  (* All functions below are currenly server only; but client version should be relatively easy to provide *)
-  ("ntilde",
-   (p2 (fun s r -> 
-          let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
-	  and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-        box_bool (Str.string_match regex string 0)),
-    datatype "(NativeString, Regex) ~> Bool",
-    PURE));
-
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",	
     (`Server (p2 (fun s r ->
@@ -1052,30 +1049,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	let m = Str.matched_group i string in 
         accumMatches ((box_string m)::l) (i - 1)
 	with 
-	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
-	accumMatches [] ngroups))),
+	   NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
+	   accumMatches [] ngroups))),
      datatype "(String, Regex) ~> [String]",
    PURE));
-
-  ("lntilde",	
-   (`Server (p2 (fun s r ->
-        let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
-        and string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-	let regex = Regex.compile_ocaml re in
-	match (Str.string_match regex string 0) with
-	 false -> `List []
-	| _ -> 
-	(let rec accumMatches l : int -> Value.t = function 
-           0 -> `List ((box_string (Str.matched_group 0 string))::l)
-	|  i -> 
-	(try
-	let m = Str.matched_group i string in 
-        accumMatches ((box_string m)::l) (i - 1)
-	with 
-	   NotFound _ -> accumMatches ((`List [])::l) (i - 1)) in
-	accumMatches [] ngroups))),
-    datatype "(NativeString, Regex) ~> [String]",
-    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",	
@@ -1087,41 +1064,65 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(String, Regex) ~> String",
     PURE));
 	
-  ("sntilde",	
-   (`Server (p2 (fun s r ->
-	let Regex.Replace(l, t) = Linksregex.Regex.ofLinks r in 
-	let (regex, tmpl) = Regex.compile_ocaml l, t in
-	let string = (match s with `NativeString ss -> ss | _ -> failwith "Internal error: expected NativeString") in
-	(`NativeString (Utility.decode_escapes (Str.replace_first regex tmpl string))))),
-    datatype "(NativeString, Regex) ~> NativeString",
-    PURE));
-   
-  (* NativeString utilities *)
-  ("char_at",
-   (`Server (p2 (fun ((`NativeString ss) : Value.t) ((`Int ix):Value.t) -> `Char (ss.[Num.int_of_num ix]))),
-    (datatype ("(NativeString, Int) ~> Char")),
+(* FIXME: should these functions return a Maybe Char/Maybe String? *)
+  (* String utilities *)
+  ("charAt",
+   (p2 (fun s i ->
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+              box_char ((unbox_string s).[int i])
+	    with
+		Invalid_argument _ -> failwith "charAt: invalid index"),
+    datatype ("(String, Int) ~> Char"),
+    IMPURE));
+
+  ("strsub",
+   (p3 (fun s start len -> 
+	  let int = Num.int_of_num -<- unbox_int in
+	    try
+	      box_string (String.sub (unbox_string s) (int start) (int len))
+	    with
+		Invalid_argument _ -> failwith "strsub: invalid arguments"),
+    datatype "(String, Int, Int) ~> String",
     IMPURE));
 
   ("strlen",
-   (`Server (p1 (fun s -> match s with
-                     `NativeString ss -> `Int (Num.num_of_int (String.length ss))
-	           |  _ -> failwith "Internal error: strlen got wrong arguments")),
-    (datatype ("(NativeString) ~> Int ")),
+   (p1 (fun s -> match s with
+          | `String s -> `Int (Num.num_of_int (String.length s))
+	  |  _ -> failwith "Internal error: strlen got wrong arguments"),
+    datatype ("(String) ~> Int "),
     PURE));
 
-  ("to_native_string",
-   (`Server (p1 (fun s -> let n = unbox_string s in (`NativeString n))),
-    (datatype ("(String) ~> NativeString")),
+  ("implode",
+   (p1 (fun l -> 
+		   let chars = List.map unbox_char (unbox_list l) in
+		   let len = List.length chars in
+		   let s = String.create len in
+		   let rec aux i l =
+		     match l with
+		       | [] -> ()
+		       | c :: cs -> s.[i] <- c; aux (i + 1) cs
+		   in
+		     aux 0 chars;
+		     box_string s),
+    datatype ("([Char]) ~> String"),
     PURE));
 	
-  ("from_native_string",
-   (`Server (p1 
-	       (fun s-> match s with  
-	            (`NativeString ss) -> box_string ss
-	          | _  -> failwith "Internal error: Bad coercion from native string")),
-    (datatype ("(NativeString) ~> String")),
+  ("explode",
+   (p1 (fun s -> match s with  
+	           | `String s ->
+		       let rec aux i l =
+			 if i < 0 then 
+			   l 
+			 else 
+			   aux (i - 1) (s.[i] :: l)
+		       in
+		       let chars = aux ((String.length s) - 1) [] in
+			 box_list (List.map box_char chars)
+	           | _  -> failwith "Internal error: non-String in implode"),
+    datatype ("(String) ~> [Char]"),
     PURE));
-	
+  
   ("unsafePickleCont",
    (*
      HACK:
@@ -1249,12 +1250,31 @@ let venv =
     nenv
     Env.Int.empty   
 
-let value_env = 
+let value_env : primitive option Env.Int.t = 
   List.fold_right
     (fun (name, (p, _, _)) env -> 
        Env.Int.bind env (Env.String.lookup nenv name, impl p))
     env
     Env.Int.empty
+
+let maxvar = 
+  Env.String.fold
+    (fun name var x -> max var x)
+    nenv 0
+
+let minvar = 
+  Env.String.fold
+    (fun name var x -> min var x)
+    nenv maxvar
+
+let value_array : primitive option array = 
+  let array = Array.create (maxvar+1) None in
+  List.iter (fun (name, (p, _, _)) -> 
+    Array.set array (Env.String.lookup nenv name) (impl p)) env;
+  array
+
+let is_primitive_var var = 
+  minvar <= var && var <= maxvar
 
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
@@ -1284,28 +1304,48 @@ let primitive_arity (name : string) =
   let _, t, _ = assoc name env in
     function_arity t
 
+(*let primitive_by_code var = Env.Int.lookup value_env var*)
+(* use array instead? seems faster for primop-intensive code *)
+let primitive_by_code var = Array.get value_array var
+
+
+
 let primitive_stub (name : string) : Value.t =
   match Env.String.find nenv name with
     | Some var ->
         begin
-          match Env.Int.lookup (value_env) var with
+          match primitive_by_code var with
             | Some (#Value.t as r) -> r
-            | Some _ -> `PrimitiveFunction name
+            | Some _ -> `PrimitiveFunction (name,Some var)
             | None -> `ClientFunction name
         end
     | None -> assert false
 
+(* jcheney: added to avoid Env.String.lookup *)
+let primitive_stub_by_code (var : Var.var) : Value.t =
+  let name = Env.Int.lookup venv var in 
+  match primitive_by_code var with
+  | Some (#Value.t as r) -> r
+  | Some _ -> `PrimitiveFunction (name,Some var)
+  | None -> `ClientFunction name
+
+
+(* jcheney: added to expose lookup by var *)
+let apply_pfun_by_code var args = 
+  match primitive_by_code var with
+  | Some (#Value.t as r) ->
+      failwith("Attempt to apply primitive non-function 
+		 (#" ^string_of_int var^ ").")
+  | Some (`PFun p) -> p args
+  | None -> assert false
+
+
 let apply_pfun name args = 
   match Env.String.find nenv name with
-    | Some var ->
-        begin
-          match Env.Int.lookup (value_env) var with
-            | Some (#Value.t as r) ->
-                failwith("Attempt to apply primitive non-function (" ^name^ ").")
-            | Some (`PFun p) -> p args
-            | None -> assert false
-        end
+    | Some var -> apply_pfun_by_code var args
     | None -> assert false
+
+
 
 let is_primitive name = List.mem_assoc name env
 

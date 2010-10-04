@@ -49,6 +49,15 @@ var theFormlet =
      colour=colour,
      file=file);
 
+sig stringConcat : (String, [String]) ~> String
+fun stringConcat(delimiter, ss) {
+  switch (ss) {
+    case [] -> ""
+    case [s] -> s
+    case s::ss -> s ^^ delimiter ^^ stringConcat(delimiter, ss)
+  }
+}
+
 fun renderer (formData) {
   page
    <html>
@@ -56,7 +65,7 @@ fun renderer (formData) {
     {if (formData.cmd == Checkout)
       <#> 
        <div> Bike style code: {intToXml(formData.bikeStyle)} </div> 
-       <div> Add-ons: {stringToXml(join(", ", map(intToString, formData.addons)))} </div>
+       <div> Add-ons: {stringToXml(stringConcat(", ", map(intToString, formData.addons)))} </div>
        <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
        <div> Comments: {stringToXml(formData.comments)} </div>
        <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>

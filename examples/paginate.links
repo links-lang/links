@@ -29,7 +29,7 @@ fun find(n,c) {
 }
 
 fun showPage(n, c) {
- var title = stringToXml("Results: page "++ intToString(n));
+ var title = stringToXml("Results: page " ^^ intToString(n));
 
  page
   <html>
@@ -52,8 +52,8 @@ page
   <body>
    <h1>Dictionary browser</h1>
     <ul>
-     {for (c <- "abcdefghijklmnopqrstuvwxyz")
-     <li><a l:href="{showPage(1, [c])}">Words beginning with {stringToXml([c])}</a></li>}
+     {for (c <- explode("abcdefghijklmnopqrstuvwxyz"))
+     <li><a l:href="{showPage(1, implode([c]))}">Words beginning with {stringToXml(implode([c]))}</a></li>}
     </ul>
   </body>
  </html>

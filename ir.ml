@@ -85,6 +85,11 @@ and special =
 and computation = binding list * tail_computation
   deriving (Show)  
 
+let tapp (v, tyargs) =
+  match tyargs with
+    | [] -> v
+    | _ -> `TApp (v, tyargs)
+
 let letm (b, tc) = `Let (b, ([], tc))
 let letmv (b, v) = letm (b, `Return v)
 (*let letv (b, v) = `Let (b, `Return v)*)
@@ -96,7 +101,12 @@ let rec is_atom =
     | `Constant (`Char _)
     | `Constant (`Float _)
     | `Variable _ -> true
-    | `Erase (_, v)
+(*
+  This can only be an atom if
+  Erase is just an upcast, and our language
+  is properly parameteric.
+*)
+(*    | `Erase (_, v) *)
     | `Coerce (v, _) -> is_atom v
     | _ -> false
 
@@ -271,7 +281,7 @@ struct
               `Project (name, v), deconstruct (project_type name) vt, o
         | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type names) vt in
+            let t = deconstruct (erase_type_poly names) vt in
               `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
@@ -484,6 +494,7 @@ struct
     function
       | v when is_atom v -> true
       | `Project (_, v)
+      | `Erase (_, v)
       | `Inject (_, v, _) -> is_inlineable_value v
       | _ -> false
 

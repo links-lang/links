@@ -52,7 +52,7 @@ type primitive_value_basis =  [
 | `Float of float
 | `Int of Num.num
 | `XML of xmlitem 
-| `NativeString of string ]
+| `String of string ]
     
 type primitive_value = [
 | `Bool of bool
@@ -61,11 +61,12 @@ type primitive_value = [
 | `Table of table
 | `Float of float
 | `Int of Num.num
-| `XML of xmlitem 
-| `NativeString of string ]
+| `String of string
+| `XML of xmlitem ]
 
 val show_primitive_value : primitive_value Show.show
 
+(* jcheney: Added value function component to PrimitiveFunction *)
 type t = [
 | primitive_value
 | `List of t list
@@ -74,11 +75,11 @@ type t = [
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * 
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
-| `PrimitiveFunction of string
+| `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and env = (t * Ir.scope) Utility.intmap * Ir.closures
+and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
 val toplevel_cont : continuation
@@ -92,9 +93,13 @@ val shadow : env -> by:env -> env
 val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
 val get_closures : env -> Ir.closures
+(* used only by json.ml, webif.ml ... *)
+val get_parameters : env -> (t*Ir.scope) Utility.intmap
+
 val find_closure : env -> Ir.var -> Utility.IntSet.t
 val with_closures : env -> Ir.closures -> env
 val extend : env -> (t*Ir.scope) Utility.intmap -> env
+
 
 val localise : env -> Ir.var -> env
 

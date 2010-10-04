@@ -1,10 +1,14 @@
 %{
 open Utility
 
-let unparse_label = function
-  | `Char c -> String.make 1 c
-  | `List (`Char _::_) as s -> Value.unbox_string s
-  | r -> (failwith "(json) error decoding label " ^ Show.show Value.show_t r)
+(* let unparse_label = function *)
+(*   | `Char c -> String.make 1 c *)
+(*   | `List (`Char _::_) as s -> Value.unbox_string s *)
+(*   | r -> (failwith "(json) error decoding label " ^ Show.show Value.show_t r) *)
+
+(* BUG: need to unescape strings
+   (where they are escaped in json.ml)
+*)
 
 %}
 
@@ -26,8 +30,9 @@ parse_json:
 object_:
 | LBRACE RBRACE         { `Record [] }
 | LBRACE members RBRACE { match $2 with 
+                            | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
-                            | ["_value", v; "_label", l] -> `Variant (unparse_label l, v)
+                            | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
                             | ["_db", db] ->
                                 begin
                                   match db with
@@ -74,18 +79,13 @@ object_:
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | ["_xml", t] ->
-                                let unbox_string_or_char r =
-                                  match r with
-                                    | `List _ -> Value.unbox_string r
-                                    | `Char c -> String.make 1 c
-                                    | _ -> failwith ("Cannot unbox '"^ Value.string_of_value r ^"' as a string") in
                                   begin
                                     match t with
                                       | `List [node_type; s] when (Value.unbox_string node_type = "TEXT") ->
-                                          `XML (Value.Text (unbox_string_or_char s))
+                                          `XML (Value.Text (Value.unbox_string s))
                                       | `List [node_type; tag; attrs; body]
                                           when (Value.unbox_string node_type = "ELEMENT") ->
-                                          let tag = unbox_string_or_char tag in
+                                          let tag = Value.unbox_string tag in
                                           let attrs =
                                             match attrs with
                                               | `Record attrs -> attrs
@@ -93,7 +93,7 @@ object_:
                                             let attrs =
                                               List.fold_left
                                                 (fun attrs (label, value) ->
-                                                   Value.Attr (label, unbox_string_or_char value) :: attrs)
+                                                   Value.Attr (label, Value.unbox_string value) :: attrs)
                                                 [] attrs in
                                               let body =
                                                 match body with
@@ -141,19 +141,17 @@ func:
 | SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE RBRACE
                                      { (* The underscore here is a nuisance; would be good to remove it. *)
                                        `FunctionPtr(Num.int_of_num $4,
-                                                    (Utility.IntMap.empty,
-                                                     Utility.IntMap.empty)) }
+                                                    Value.empty_env (Utility.IntMap.empty)) }
 | SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE members RBRACE
                                      { `FunctionPtr(Num.int_of_num $4,
-                                                    (Utility.IntMap.from_alist
+                                                    Value.extend (Value.empty_env Utility.IntMap.empty) 
+                                                      (Utility.IntMap.from_alist
                                                         (List.map (fun (x,y) ->
                                                             (int_of_string x,
-                                                                (y,`Local))) $7),
-                                                     Utility.IntMap.empty)) }
+                                                                (y,`Local))) $7))) }
 
 string:
-| STRING                             { if String.length $1 == 1 then Value.box_char (String.get $1 0)
-                                       else Value.box_string $1 }
+| STRING                             { Value.box_string $1 }
 id:
 | STRING                             { $1 }
 

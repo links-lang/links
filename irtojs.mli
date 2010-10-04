@@ -6,7 +6,7 @@ val generate_program_defs :
 
 val generate_program_page : ?cgi_env:(string * string) list -> ?onload:string -> 
   (Ir.closures * Var.var Env.String.t * Types.typing_environment) ->
-  Ir.program -> string
+  Ir.program ->  string
 
 val make_boiler_page : 
   ?cgi_env:(string * string) list ->

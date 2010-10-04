@@ -22,11 +22,19 @@ module Eval = struct
        else name ^ ":" ^ args)
     in
       Value.db_connect driver params
-
+(*
    let lookup_var var env =
      match Value.lookup var env with
-       | Some v -> Some v
-       | None -> Some (Lib.primitive_stub (Lib.primitive_name var))
+       | Some v -> v
+       | None -> (Lib.primitive_stub_by_code var)
+*)
+
+(* Alternative, faster version *)
+   let lookup_var var env = 
+     if Lib.is_primitive_var var 
+     then Lib.primitive_stub_by_code var
+     else Value.find var env
+
 
    let serialize_call_to_client (continuation, name, arg) = 
      Json.jsonize_call continuation name arg
@@ -43,8 +51,6 @@ module Eval = struct
                             (serialize_call_to_client (cont, name, args)) in
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
-
-  let apply_prim : string -> Value.t list -> Value.t = Lib.apply_pfun
 
 
   (** {0 Scheduling} *)
@@ -89,12 +95,14 @@ module Eval = struct
     | `Constant `Char c -> `Char c
     | `Constant `String s -> Value.box_string s
     | `Constant `Float f -> `Float f
-    | `Variable var ->
+    | `Variable var -> lookup_var var env
+(*
         begin
           match lookup_var var env with
             | Some v -> v
             | _      -> eval_error "Variable not found: %d" var
         end
+*)
     | `Extend (fields, r) -> 
         begin
           match opt_app (value env) (`Record []) r with
@@ -176,21 +184,22 @@ module Eval = struct
               
               (* extend env with locals *)
               let env = Value.shadow env ~by:locals in
-                
+ 
               (* extend env with recs *)
-              let env =
-                List.fold_right
+
+              let env =	      
+	        List.fold_right
                   (fun (name, _) env ->
-                     Value.bind name
-                       (`RecFunction (recs, locals, name, scope), scope) env)
-                  recs env in
-                
+                      Value.bind name
+			(`RecFunction (recs, locals, name, scope), scope) env)
+                    recs env in
+
               (* extend env with arguments *)
               let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
                 computation env cont body
           | None -> eval_error "Error looking up recursive function definition"
         end
-    | `PrimitiveFunction "send", [pid; msg] ->
+    | `PrimitiveFunction ("send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode then
            client_call "_sendWrapper" cont [pid; msg]
         else
@@ -203,12 +212,12 @@ module Eval = struct
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction "spawn", [func] ->
+    | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode then
            client_call "_spawnWrapper" cont [func]
         else 
-          apply_cont cont env (apply_prim "spawn" [func])
-    | `PrimitiveFunction "recv", [] ->
+          apply_cont cont env (Lib.apply_pfun "spawn" [func])
+    | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its
            continuation in the blocked_processes table) and let the
@@ -229,7 +238,10 @@ module Eval = struct
                 Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
-    | `PrimitiveFunction n, args -> apply_cont cont env (apply_prim n args)
+    | `PrimitiveFunction (n,None), args -> 
+	apply_cont cont env (Lib.apply_pfun n args)
+    | `PrimitiveFunction (n,Some code), args -> 
+	apply_cont cont env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont args
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->

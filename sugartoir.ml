@@ -110,6 +110,7 @@ sig
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
+  val tabstr : (Types.quantifier list * value sem) -> value sem
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
@@ -119,7 +120,7 @@ sig
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
   val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
+  val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
 
   val project : value sem * name -> value sem
@@ -357,11 +358,18 @@ struct
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (append, [s; s'])) s ss
 
-  let xml (nil, append, name, attrs, children) =
+  let rec string_concat (string_append, ss) =
+    match ss with
+      | [] -> lift (`Constant (`String ""), Types.string_type)
+      | [s] -> s
+      | s::ss ->
+          List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
+
+  let xml (string_append, name, attrs, children) =
     let lift_attrs attrs =
       List.fold_right
         (fun (name, ss) attrs ->
-           bind (concat (nil, append, ss))
+           bind (string_concat (string_append, ss))
              (fun v ->
                 M.bind attrs
                   (fun bs -> lift ((name, v) :: bs))))
@@ -399,9 +407,35 @@ struct
     let t = TypeUtils.project_type name (sem_type s) in
       bind s (fun v -> lift (`Project (name, v), t))
 
-  let erase (s, names) =
-    let t = TypeUtils.erase_type names (sem_type s) in
-      bind s (fun v -> lift (`Erase (names, v), t))
+  (* HACK:
+     
+     We rely on only using this function for compiling
+     record update in the update function below.
+     
+     If v has type rho then `Erase ({l1,...,lk}, v)
+     has type:
+
+       forall a1,...,ak.(-l1:a1,...-lk:ak|rho)
+
+     Because we know that we are immediately going to add the
+     missing names back in it is sound to apply this type to
+     whatever type arguments we like. Here we use the type
+     variable corresponding to each quantifier, even though
+     they aren't in scope.
+  *)
+  let erase_poly (s, names) =
+    let t = TypeUtils.erase_type_poly names (sem_type s) in
+      match t with
+        | `ForAll (qs, _) ->
+            let tyargs = List.map (Types.type_arg_of_quantifier) (Types.unbox_quantifiers qs) in
+            let t = Instantiate.apply_type t tyargs in
+              bind s (fun v -> lift (`TApp (`Erase (names, v), tyargs), t))
+        | _ ->
+            bind s (fun v -> lift (`Erase (names, v), t))
+
+(*   let erase (s, names) = *)
+(*     let t = TypeUtils.erase_type names (sem_type s) in *)
+(*       bind s (fun v -> lift (`Erase (names, v), t)) *)
 
   let coerce (s, t) =
     bind s (fun v -> lift (`Coerce (v, t), sem_type s))
@@ -419,7 +453,7 @@ struct
         StringSet.empty
         fields in
     let t = TypeUtils.record_without (sem_type s) names in
-      record (fields, Some (erase (s, names)))
+      record (fields, Some (erase_poly (s, names)))
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))
@@ -604,6 +638,10 @@ struct
                 let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
+  let tabstr (tyvars, s) =
+    let t = Types.for_all (tyvars, sem_type s) in
+      bind s (fun v -> lift (`TAbs (tyvars, v), t))
+
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
       bind s (fun v -> lift (`TApp (v, tyargs), t))
@@ -697,6 +735,10 @@ struct
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) ->
               I.apply (ev e, evs es)
+          | `TAbstr (tyvars, e) ->
+              let v = ev e in
+              let vt = I.sem_type v in
+                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
           | `TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in
@@ -792,8 +834,7 @@ struct
                   let attrs = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
                   let body =
-                         I.xml (instantiate "Nil" [`Type Types.char_type],
-                                instantiate "Concat" [`Type Types.char_type; `Row eff],
+                         I.xml (instantiate "^^" [`Row eff],
                                 tag, attrs, children)
                   in
                     begin match attrexp with

@@ -170,6 +170,7 @@ let keywords = [
  "escape"   , ESCAPE; 
  "false"    , FALSE; 
  "for"      , FOR;
+ "forall"   , FORALL;
  "from"     , FROM; 
  "tablekeys"     , TABLEKEYS;
  "fun"      , FUN; 

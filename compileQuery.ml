@@ -97,9 +97,7 @@ struct
       | `Primitive `Int -> `IntType
       | `Primitive `Char -> `CharType
       | `Primitive `Float -> `FloatType
-      | `Primitive `NativeString -> `StrType
-      | `Alias (("String", []), _) -> `StrType
-      | `Application (l, [`Type (`Primitive `Char)]) when Types.Abstype.eq_t.Eq.eq l Types.list -> `StrType
+      | `Primitive `String -> `StrType
       | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
 
 (* the environment mapping variables to algebra plans *)

@@ -45,7 +45,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Function (f, m, t) ->
             isg f && isgr m && isg t
         | `ForAll (qs, t) -> 
-            is_guarded (bind_quantifiers qs bound_vars) var t
+            is_guarded (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row ->
             begin
               (* HACK: silly 1-tuple test *)
@@ -113,7 +113,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
             end
         | `Function (f, m, t) ->
             isp f || isnr m || isn t
-        | `ForAll (qs, t) -> is_negative (bind_quantifiers qs bound_vars) var t
+        | `ForAll (qs, t) -> is_negative (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> isnr row
         | `Variant row -> isnr row
         | `Table (r, w, n) -> isn r || isn w || isn n
@@ -167,7 +167,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
             end
         | `Function (f, m, t) ->
             isn f || ispr m || isp t
-        | `ForAll (qs, t) -> is_positive (bind_quantifiers qs bound_vars) var t
+        | `ForAll (qs, t) -> is_positive (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> ispr row
         | `Variant row -> ispr row
         | `Table (r, w, n) -> isp r || isp w || isp n

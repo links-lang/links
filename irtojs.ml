@@ -9,6 +9,8 @@ open Utility
 let js_lib_url = Basicsettings.Js.lib_url
 let js_pretty_print = Basicsettings.Js.pp
 
+let js_hide_database_info = Basicsettings.Js.hide_database_info
+
 let get_js_lib_url () = Settings.get_value js_lib_url
 
 (** Intermediate language *)
@@ -221,11 +223,11 @@ struct
   let show = show ->- PP.pretty 144
 end
 
-let show =
+let show x =
   if Settings.get_value(js_pretty_print) then
-    PP.show
+    PP.show x
   else
-    UP.show
+    UP.show x
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
@@ -235,9 +237,14 @@ let string_js_quote s =
 (** Return a JS literal string from an OCaml string. *)
 let strlit s = Lit (string_js_quote s)
 (** Return a JS literal string from an OCaml character. *)
-let chrlit ch = Lit(string_js_quote(string_of_char ch))
+let chrlit ch = Dict ["_c", Lit(string_js_quote(string_of_char ch))]
 (** Return a literal for the JS representation of a Links string. *)
-let chrlistlit s  = Lst(List.map chrlit (explode s))
+let chrlistlit = strlit
+
+(* (\** Return a JS literal string from an OCaml character. *\) *)
+(* let chrlit ch = Lit(string_js_quote(string_of_char ch)) *)
+(* (\** Return a literal for the JS representation of a Links string. *\) *)
+(* let chrlistlit s  = Lst(List.map chrlit (explode s)) *)
 
 (* Specialness:
 
@@ -288,6 +295,22 @@ struct
       | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
       | "^." -> Call (Var "Math.pow", [l; r])
       | _ -> Binop(l, js_name op, r)
+end
+
+module StringOp :
+sig
+  val is : string -> bool
+  val gen : (code * string * code) -> code
+end =
+struct
+  let builtin_ops =
+    StringMap.from_alist
+      [ "^^",  Some "+"  ]
+
+  let is x = StringMap.mem x builtin_ops
+  let js_name op = val_of (StringMap.find op builtin_ops)
+  let gen (l, op, r) =
+    Binop(l, js_name op, r)
 end
 
 module Comparison :
@@ -525,6 +548,10 @@ let rec generate_value env : Ir.value -> code =
               Fn (["x"; "y"; "__kappa"],
                   callk_yielding (Var "__kappa")
                     (Arithmetic.gen (Var "x", name, Var "y")))
+            else if StringOp.is name then
+              Fn (["x"; "y"; "__kappa"],
+                  callk_yielding (Var "__kappa")
+                    (StringOp.gen (Var "x", name, Var "y")))
             else if Comparison.is name then
               Var (Comparison.js_name name)
             else
@@ -573,6 +600,8 @@ let rec generate_value env : Ir.value -> code =
                         match vs with
                           | [l; r] when Arithmetic.is f_name ->
                               Arithmetic.gen (gv l, f_name, gv r)
+                          | [l; r] when StringOp.is f_name ->
+                              StringOp.gen (gv l, f_name, gv r)
                           | [l; r] when Comparison.is f_name ->
                               Comparison.gen (gv l, f_name, gv r)
                           | [v] when f_name = "negate" || f_name = "negatef" ->
@@ -698,6 +727,8 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                       match vs with
                         | [l; r] when Arithmetic.is f_name ->
                             callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
+                        | [l; r] when StringOp.is f_name ->
+                            callk_yielding kappa (StringOp.gen (gv l, f_name, gv r))
                         | [l; r] when Comparison.is f_name ->
                             callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
                         | [v] when f_name = "negate" || f_name = "negatef" ->
@@ -745,6 +776,9 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           Call (Var "_yield",
                 Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
+      | `Database _ | `Table _
+          when Settings.get_value js_hide_database_info ->
+          callk_yielding kappa (Dict [])
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
       | `Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
@@ -889,7 +923,14 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   "            ^ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
-  let db_config_script = script_tag("    function _getDatabaseConfig() {
+  let db_config_script =
+    if Settings.get_value js_hide_database_info then
+    script_tag("    function _getDatabaseConfig() {
+      return {}
+    }
+    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
+    else
+    script_tag("    function _getDatabaseConfig() {
       return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
       "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
     }
@@ -985,17 +1026,20 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program =
-  let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let program = FixPickles.program (closures, nenv, venv, tenv) program in
-  let _, code = generate_program venv program in
-  let code = wrap_with_server_stubs code in
-    (make_boiler_page
-       ~cgi_env:cgi_env
-       ~body:(show code)
+let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
+  let printed_code = Loader.wpcache "irtojs" (fun () -> 
+    let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
+    let program = FixPickles.program (closures, nenv, venv, tenv) program in
+    let _, code = generate_program venv program in
+    let code = wrap_with_server_stubs code in
+    show code) 
+  in
+  (make_boiler_page
+     ~cgi_env:cgi_env
+     ~body:printed_code
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
-       [])
-
+     [])
+    
 let generate_program_defs (closures, nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
