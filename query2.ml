@@ -415,8 +415,8 @@ struct
 	  `Primitive "takeWhile"
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "dropWhile" = f ->
 	  `Primitive "dropWhile"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "distinct" = f ->
-	  `Primitive "distinct"
+      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nubBase" = f ->
+	  `Primitive "nubBase"
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -870,7 +870,7 @@ module Annotate = struct
 		in
 		let l' = aot `List env l in
 		  `Apply ((f, [l']), `Atom)
-	    | "concat" | "tl" | "distinct" ->
+	    | "concat" | "tl" | "nubBase" ->
 		(* `List -> `List *)
 		let l =
 		  (match args with

@@ -1462,7 +1462,7 @@ struct
       vs = ti_l.vs
     }
 
-  and compile_distinct env loop l =
+  and compile_nubbase env loop l =
     let ti_l = compile_expression env loop l in
       assert (not (Cs.is_variant ti_l.cs || Cs.is_boxed_list ti_l.cs));
       let items = io (Cs.offsets ti_l.cs) in
@@ -1537,7 +1537,7 @@ struct
       | "tilde", [s; p] -> compile_binop env loop (wrap_1to1 A.SimilarTo) `BoolType s p
       | "quote", [s] -> compile_quote env loop s
       | "^^", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
-      | "distinct", [l] -> compile_distinct env loop l
+      | "nubBase", [l] -> compile_nubbase env loop l
     (*    | "takeWhile" -> compile_takeWhile env loop args
 	  | "dropWhile" -> compile_dropWhile env loop args *)
       | "<", _ | "<=", _ | ">=", _->

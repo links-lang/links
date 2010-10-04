@@ -153,18 +153,18 @@ fun member(e, l) {
 	}
 }
 
-fun distinct(l) {
-	fun distinct_1(d, x) {
+fun nub(l) {
+	fun nub_1(d, x) {
 		if (member(x, d))
 			d
 		else	
 			x :: d
 	}
-	reverse(fold_left(distinct_1, [], l))
+	reverse(fold_left(nub_1, [], l))
 }
 
 fun groupBy(project, t) {
-	var keys = distinct(for (p <- t) [project(p)]);
+	var keys = nub(for (p <- t) [project(p)]);
 	for (key <- keys)
 		[(key, 
 		for (p <- t) where (project(p) == key) [p]
@@ -1105,3 +1105,7 @@ fun min(ns) {
 
 sig groupByBase : ((a) ~b~> c::Base, [a]) ~b~> [(c::Base, [a])]
 fun groupByBase(project, t) { groupBy(project, t) }
+
+sig nubBase : ([a]) ~> [a::Base]
+fun nubBase(l) { nub(l) }
+
