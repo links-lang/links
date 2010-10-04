@@ -97,6 +97,7 @@ let rec unbox_list =
     | `Singleton v -> [v]
     | _ -> failwith ("failed to unbox list")
 
+(* FIXME: this won't work with native strings *)
 let unbox_string =
   function
     | `Constant (`String s) -> s
@@ -151,8 +152,6 @@ module QueryRegex = struct
       match p1, p2 with
       | `Constant (`String s1), `Constant (`String s2) -> `Constant (`String (s1 ^ s2))
       | `Constant (`String _), _ 
-	  (* HACK using string_append won't work in general. use a hybrid representation
-	     as [Char]/string and unbox/box as necessary *)
       | _, `Constant (`String _) -> `Apply ("^^", [p1; p2])
       |  p1, p2 -> quote (`Apply ("^^", [unquote p1; unquote p2]))
 
@@ -830,7 +829,7 @@ module Annotate = struct
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	  (match f with
 	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "not" | "tilde" | "quote" -> 
+	    | "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
 		(* these operators are only ever applied to atomic
 		   values, so no need to annotate the arguments *)
 		(* `Atom -> `Atom -> `Atom *)

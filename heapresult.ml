@@ -179,7 +179,7 @@ let rec execute_errors database q_error =
 let mk_primitive raw_value t = 
   match t with
     | `IntType -> Value.box_int (Num.num_of_string raw_value)
-    | `StrType -> Value.string_as_charlist raw_value
+    | `StrType -> Value.box_string raw_value
     | `BoolType -> Value.box_bool ((int_of_string raw_value) = 1)
     | `CharType -> Value.box_char (String.get raw_value 0)
     | `FloatType -> (if raw_value = "" then Value.box_float 0.00      (* HACK HACK *)

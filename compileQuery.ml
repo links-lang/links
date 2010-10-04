@@ -1536,7 +1536,7 @@ struct
       | "tl", [l] -> compile_tl env loop l
       | "tilde", [s; p] -> compile_binop env loop (wrap_1to1 A.SimilarTo) `BoolType s p
       | "quote", [s] -> compile_quote env loop s
-      | "string_append", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
+      | "^^", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
       | "distinct", [l] -> compile_distinct env loop l
     (*    | "takeWhile" -> compile_takeWhile env loop args
 	  | "dropWhile" -> compile_dropWhile env loop args *)
@@ -1568,7 +1568,6 @@ struct
       ADag.mk_project
 	([(iter, outer); (pos, pos')] @ (prjlist (io (Cs.offsets ti_body.cs))))
 	(ADag.mk_rank
-	 (* (pos', [(iter, A.Ascending); (pos, A.Ascending)]) *)
 	   (pos', sort_info)
 	   (ADag.mk_eqjoin
 	      (iter, inner)
