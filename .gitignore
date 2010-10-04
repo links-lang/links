@@ -24,3 +24,7 @@ lexer.ml
 foo.links
 /deriving-310/syntax/deriving
 Makefile.config
+*.config
+xmlLexer.ml
+xmlParser.ml
+xmlParser.mli
