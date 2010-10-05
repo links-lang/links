@@ -11,8 +11,9 @@ module Annotate : sig
 
   (** expression tree, annotated with the implementation type on every node *)
   type typed_t =
-    [ `For of ((Var.var * typed_t) * typed_t list * typed_t) * implementation_type
-    | `GroupBy of ((Var.var * typed_t) * typed_t) * implementation_type
+    [ `For of (typed_t * typed_t list * typed_t) * implementation_type
+    | `Lambda of ((Var.var list * typed_t) * implementation_type)
+(*    | `GroupBy of ((Var.var * typed_t) * typed_t) * implementation_type *)
     | `If of (typed_t * typed_t * typed_t option) * implementation_type
     | `Table of Value.table * implementation_type
     | `Singleton of typed_t * implementation_type 

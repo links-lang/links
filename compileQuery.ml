@@ -1545,9 +1545,10 @@ struct
       | s, _->
 	failwith ("CompileQuery.compile_apply: " ^ s ^ " not implemented")
 
-  and compile_for env loop v source body order_criteria =
+  and compile_for env loop source f order_criteria =
     let  ti_source = compile_expression env loop source in
     let _, q_v, map, loop_v = map_forward ti_source.q ti_source.cs in
+    let v, body = match f with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
     let env = AEnv.map (lift map) env in
     let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
     let ti_body = compile_expression env_v loop_v body in
@@ -2048,23 +2049,24 @@ struct
       | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
       | `Extend ((None, empty), _) when (StringMap.size empty) = 0-> compile_unit loop 
       | `Extend ((r, ext_fields), _) ->
-	let ext_fields = StringMap.to_alist ext_fields in
-	extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
+	  let ext_fields = StringMap.to_alist ext_fields in
+	    extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
       | `Erase ((r, erase_fields), _) -> compile_erase env loop erase_fields r
       | `Singleton (e, _) -> compile_expression env loop e
       | `Append (l, _) -> compile_append env loop l
       | `Table (t, _) -> compile_table loop t
       | `If ((c, t, Some e), _) -> compile_if env loop c t e
       | `If ((c, t, None), _) -> compile_if2 env loop c t
-      | `For (((x, l), os, body), _) -> compile_for env loop x l body os
+      | `For ((l, os, f), _) -> compile_for env loop l f os
       | `Box (e, _) -> compile_box env loop e
       | `Unbox (e, _) -> compile_unbox env loop e
-      | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source 
+(*      | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source  *)
       | `Variant ((tag, value), _) -> compile_variant env loop tag value
       | `Case ((v, cases, default), _) -> compile_case env loop v cases default
       | `Wrong _  -> compile_wrong loop 
       | `XML _ -> failwith "compile_expression: not implemented"
       | `Primitive _ -> failwith "compile_expression: eval error"
+      | `Lambda _ -> assert false
 
   let rec wrap_serialize ti = 
     let serialize q cs =

@@ -14,8 +14,7 @@ type name_set = Utility.stringset
     deriving (Show)
 
 type t =
-    [ `For of (Var.var * t) * t list * t
-    | `GroupBy of (Var.var * t) * t
+    [ `For of t * t list * t
     | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
@@ -23,7 +22,7 @@ type t =
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of string * t list
-    | `Closure of (Ir.var list * Ir.computation) * env
+    | `Lambda of (Var.var list * t)
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
     | `Case of t * (Var.var * t) name_map * (Var.var * t) option
@@ -35,8 +34,7 @@ module S =
 struct
   (** [pt]: A printable version of [t] *)
   type pt =
-    [ `For of (Var.var * pt) * pt list * pt
-    | `GroupBy of (Var.var * pt) * pt
+    [ `For of pt * pt list * pt
     | `If of pt * pt * pt option
     | `Table of Value.table
     | `Singleton of pt | `Append of pt list
@@ -44,7 +42,7 @@ struct
     | `Variant of string * pt
     | `XML of Value.xmlitem
     | `Apply of string * pt list
-    | `Lam of Ir.var list * Ir.computation
+    | `Lambda of Var.var list * pt
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
     | `Case of pt * (Var.var * pt) name_map * (Var.var * pt) option
@@ -53,11 +51,10 @@ struct
 
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
+
       match v with
-        | `For ((x, source), os, b) -> 
-            `For ((x, bt source) , List.map bt os, bt b)
-	| `GroupBy ((x, group_exp), source) ->
-	    `GroupBy ((x, bt group_exp), bt source)
+	| `For (source, os, body) ->
+	    `For (bt source, List.map bt os, bt body)
         | `If (c, t, Some e) -> `If (bt c, bt t, Some (bt e))
         | `If (c, t, None) -> `If (bt c, bt t, None)
         | `Table t -> `Table t
@@ -70,7 +67,7 @@ struct
         | `Project (v, name) -> `Project (bt v, name)
         | `Erase (v, names) -> `Erase (bt v, names)
         | `Apply (f, vs) -> `Apply (f, List.map bt vs)
-        | `Closure ((xs, e), _) -> `Lam (xs, e)
+        | `Lambda (xs, e) -> `Lambda (xs, bt e)
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
@@ -342,39 +339,17 @@ struct
   let (++) (venv, eenv) (venv', eenv') =
     Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'  
 
-  let rec expression_of_value : Value.t -> t =
-    function
-      | `Bool b -> `Constant (`Bool b)
-      | `Int i -> `Constant (`Int i)
-      | `Char c -> `Constant (`Char c)
-      | `Float f -> `Constant (`Float f)
-      | `Table (((db, _), _, _, _) as t) -> 
-	  used_database := Some db;
-	  `Table t 
-      | `List vs ->
-          `Append (List.map (fun v -> `Singleton (expression_of_value v)) vs)
-      | `Record fields ->
-          `Record
-            (List.fold_left
-               (fun fields (name, v) -> StringMap.add name (expression_of_value v) fields)
-               StringMap.empty
-               fields)
-      | `Variant (name, v) -> `Variant (name, expression_of_value v)
-      | `XML xmlitem -> `XML xmlitem
-      | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
-          assert (f=f');
-          `Closure ((xs, body), env_of_value_env env)
-      (* FIXME: what is the second tuple component (Var.var option)? *)
-      | `PrimitiveFunction (f, _) -> `Primitive f
-          (*     | `NativeString of string ] *)
-          (*     | `ClientFunction f ->  *)
-          (*     | `Continuation cont ->  *)
-      | _ -> failwith "Cannot convert value to expression"
-
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))
 
-  let lookup (val_env, exp_env) var =
+  let identity_exp x = `Lambda ([x], `Var x)
+
+  let is_identity_exp f = 
+    match f with
+      | `Lambda ([x], `Var x') when x = x' -> true
+      | _ -> false
+
+  let rec lookup (val_env, exp_env) var =
     match Value.lookup var val_env, Env.Int.find exp_env var with
       | None, Some v -> v
       | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
@@ -421,12 +396,47 @@ struct
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
 
+(*
   let lookup_lib_fun (val_env, _exp_env) var =
     match Value.lookup var val_env with
       | Some v -> expression_of_value v
       | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
+*)
 
-  let rec value env : Ir.value -> t = function
+  and expression_of_value : Value.t -> t =
+    function
+      | `Bool b -> `Constant (`Bool b)
+      | `Int i -> `Constant (`Int i)
+      | `Char c -> `Constant (`Char c)
+      | `Float f -> `Constant (`Float f)
+      | `Table (((db, _), _, _, _) as t) -> 
+	  used_database := Some db;
+	  `Table t 
+      | `List vs ->
+          `Append (List.map (fun v -> `Singleton (expression_of_value v)) vs)
+      | `Record fields ->
+          `Record
+            (List.fold_left
+               (fun fields (name, v) -> StringMap.add name (expression_of_value v) fields)
+               StringMap.empty
+               fields)
+      | `Variant (name, v) -> `Variant (name, expression_of_value v)
+      | `XML xmlitem -> `XML xmlitem
+      | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
+          assert (f=f');
+	  let env = env_of_value_env env in
+	  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env xs in
+	  let body = computation body_env body in
+	    `Lambda (xs, body)
+	    
+      (* FIXME: what is the second tuple component (Var.var option)? *)
+      | `PrimitiveFunction (f, _) -> `Primitive f
+          (*     | `NativeString of string ] *)
+          (*     | `ClientFunction f ->  *)
+          (*     | `Continuation cont ->  *)
+      | _ -> failwith "Cannot convert value to expression"
+
+  and value env : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Append xs when List.for_all (* HACKISH: handle Links string constants *)
         (function `Singleton `Constant `Char _c -> true|_->false) xs ->
@@ -475,70 +485,81 @@ struct
         apply env (value env f, List.map (value env) ps)
     | `Coerce (v, _) -> value env v
 
+  and apply_exp (parameters, body) env args =
+    
+    let env = List.fold_left bind env (List.combine parameters args) in
+    let rec inline = function
+      | `Var x -> lookup env x 
+      | `For (l, os, body) -> `For (inline l, List.map inline os, inline body)
+      | `If (c, t, e) -> `If (inline c, inline t, opt_map inline e)
+      | `Singleton t -> `Singleton (inline t)
+      | `Append ts -> `Append (List.map inline ts)
+      | `Record r -> `Record (StringMap.map inline r)
+      | `Project (r, field) -> `Project (inline r, field)
+      | `Erase (r, fields) -> `Erase (inline r, fields)
+      | `Extend (r, fields) -> `Extend (opt_map inline r, StringMap.map inline fields)
+      | `Variant (tag, value) -> `Variant (tag, inline value)
+      | `Apply (f, args) -> `Apply (f, List.map inline args)
+      | `Lambda (args, body) -> `Lambda (args, inline body)
+      | `Case (v, cases, default) -> 
+	  let case (x, body) = (x, inline body) in
+	    `Case (inline v, StringMap.map case cases, opt_map case default)
+      | e -> e 
+    in
+      inline body
+
+	
   and apply env : t * t list -> t = function
-    | `Closure ((xs, body), closure_env), args ->
-        let env = env ++ closure_env in
+    | `Lambda (parameters, body), args -> apply_exp (parameters, body) env args
+    (*
+    | `Lambda ((xs, body), Lambda_env), args ->
+        let env = env ++ Lambda_env in
         let env = List.fold_right2 (fun x arg env ->
                                       bind env (x, arg)) xs args env in
           computation env body
+    *)
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; `Append []] ->
 	`Singleton x
     | `Primitive "Cons", [x; xs] ->
 	reduce_append [`Singleton x; xs]
-	  (* HACK using string_append won't work in general. use a hybrid representation
-	     as [Char]/string and unbox/box as necessary *)
     | `Primitive "Concat", [xs; ys] ->
 	reduce_append [xs; ys]
-    | `Primitive "ConcatMap", [f; xs] ->
-        begin
-          match f with
-            | `Closure (([x], body), closure_env) ->
-                let env = env ++ closure_env in
-                  reduce_for_source
-                    env
-                    (fun env (x, v, body) -> computation (bind env (x, v)) body)
-                    (x, xs, body)
-            | _ -> assert false
-        end
+    | `Primitive "ConcatMap", [f; xs] -> reduce_for_source env f xs
     | `Primitive "Map", [f; xs] ->
         begin
           match f with
-            | `Closure (([x], body), closure_env) ->
-                let env = env ++ closure_env in
-                  reduce_for_source
-                    env
-                    (fun env (x, v, body) -> `Singleton (computation (bind env (x, v)) body)) 
-                    (x, xs, body)
+            | `Lambda ([x], body) ->
+		reduce_for_source env (`Lambda ([x], `Singleton body)) xs
             | _ -> assert false
         end
     | `Primitive "SortBy", [f; xs] ->
 	begin
 	  match f with
-	    | `Closure (([x], body), closure_env) ->
-		let env = env ++ closure_env in
-		let os_fun = computation (bind env (x, `Var x)) body in
-		  begin
-		    match os_fun with
+	    | `Lambda ([x], body) ->
+		begin
+		    match body with
 		      | `Extend (_r, ext_fields) ->
 			  let l = StringMap.fold (fun k v l -> (int_of_string k, v) :: l) ext_fields [] in
 			  let l = List.sort compare l in
 			  let os = List.map snd l in
-			    `For ((x, xs), os, `Var x)
+			    `For (xs, os, identity_exp x)
 		      | _ -> assert false
 		  end
 	    | _ -> assert false
 	end
+(*
     | `Primitive "groupByBase", [f; source] ->
 	begin
 	  match f with
-	    | `Closure (([x], body), closure_env) ->
-		let env = env ++ closure_env in
+	    | `Lambda (([x], body), Lambda_env) ->
+		let env = env ++ Lambda_env in
 		let group_exp = computation (bind env (x, `Var x)) body in
 		  `GroupBy ((x, group_exp), source)
 	    | _ -> assert false
 	end
+*)
     | `Primitive "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
 	`Apply ("and", [(apply env (`Primitive "Map", [p; l]))])
@@ -566,11 +587,12 @@ struct
 	`If (c, apply env (t, args), None)
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
-(*    | `Closure (bound_vars, computation),  *)
+(*    | `Lambda (bound_vars, computation),  *)
 
     | (f, args) -> 
 	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
 	eval_error "Application of non-function"
+
   and computation env (binders, tailcomp) : t =
     match binders with
       | [] -> tail_computation env tailcomp
@@ -581,11 +603,14 @@ struct
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
-                  eval_error "Client function"
+                  eval_error "Client function in query block"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
-                  computation
-                    (bind env (f, `Closure ((List.map fst args, body), env)))
-                    (bs, tailcomp)
+		  let arg_vars = List.map fst args in
+		  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env arg_vars in
+		  let body = computation body_env body in
+		    computation
+		      (bind env (f, `Lambda (arg_vars, body)))
+		      (bs, tailcomp)
               | `Rec _defs ->
                   eval_error "Recursive function"
               | `Alien _ 
@@ -593,6 +618,7 @@ struct
                   computation env (bs, tailcomp)
               | `Module _ -> failwith "Not implemented modules yet"
           end
+
   and tail_computation env : Ir.tail_computation -> t = function
     | `Return v -> value env v
     | `Apply (f, args) ->
@@ -616,28 +642,27 @@ struct
 	    | e -> `If (c, t, Some e)
             (*     | `Special (`For (x, source, body)) -> *)
             (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
-  and reduce_for_source env eval_body (x, source, body) =
+
+  and reduce_for_source _env f source =
+    let x, _body =
+      match f with
+	| `Lambda ([x], body) -> x, body
+	| _ -> assert false
+    in
     let for_expr = 
       match source with
-	  (* merge for-comprehension with its orderby clause *)
-	| `For ((y, source'), ((_ :: _) as os), (`Var y')) when y = y' ->
-	    `For ((x, source'), (List.map (replace_var y x) os), eval_body env (x, `Var x, body))
-        | `Singleton _ 
-        | `Append _ 
-        | `If _ 
-        | `For _ 
-        | `Table _ 
-	| `Apply _
-	| `GroupBy _ 
-	| `Project _ ->
-	    `For ((x, source), [], eval_body env (x, `Var x, body))
+     (* merge for-comprehension with its orderby clause *)
+	| `For (source', ((_ :: _) as os), (`Lambda ([y], _) as f')) when is_identity_exp f' ->
+	    `For (source', (List.map (replace_var y x) os), f)
+        | `Singleton _ | `Append _ | `If _ | `For _ | `Table _ | `Apply _ | `Project _ ->
+	    `For (source, [], f)
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
     in
       match for_expr with
 	(* use an optimization if the else branch is the empty list. 
 	   this occurs for where-clauses in for-comprehensions *)
-	| `For (gs, os, `If (c, t, (Some (`Append [])))) ->
-	    `For (gs, os, `If (c, t, None))
+	| `For (source, os, `Lambda ([x], `If (c, t, (Some (`Append []))))) ->
+	    `For (source, os, `Lambda ([x], `If (c, t, None)))
 	| e -> 
 	    e
 
@@ -649,8 +674,8 @@ module Annotate = struct
   deriving (Show)
 
   type typed_t =
-      [ `For of ((Var.var * typed_t) * typed_t list * typed_t) * implementation_type
-      | `GroupBy of ((Var.var * typed_t) * typed_t) * implementation_type
+      [ `For of (typed_t * typed_t list * typed_t) * implementation_type
+      | `Lambda of ((Var.var list * typed_t) * implementation_type)
       | `If of (typed_t * typed_t * typed_t option) * implementation_type
       | `Table of Value.table * implementation_type
       | `Singleton of typed_t * implementation_type 
@@ -672,7 +697,7 @@ module Annotate = struct
 
   let typeof_typed_t = function
     | `For (_, t) -> t
-    | `GroupBy (_, t) -> t
+    | `Lambda (_, t) -> t
     | `If (_, t) -> t 
     | `Table (_, t) -> t 
     | `Singleton (_, t) -> t
@@ -693,8 +718,7 @@ module Annotate = struct
     | `Wrong t -> t
 
   type typed_pt = 
-      [ `For of ((Var.var * typed_pt) * typed_pt list * typed_pt) * implementation_type
-      | `GroupBy of ((Var.var * typed_pt) * typed_pt) * implementation_type
+      [ `For of (typed_pt * typed_pt list * typed_pt) * implementation_type
       | `If of (typed_pt * typed_pt * typed_pt option) * implementation_type
       | `Table of Value.table * implementation_type
       | `Singleton of typed_pt * implementation_type 
@@ -706,7 +730,7 @@ module Annotate = struct
       | `Variant of (string * typed_pt) * implementation_type
       | `XML of Value.xmlitem * implementation_type
       | `Apply of (string * typed_pt list) * implementation_type
-      | `Lam of (Ir.var list * Ir.computation) * implementation_type
+      | `Lambda of (Var.var list * typed_pt) * implementation_type
       | `Primitive of string * implementation_type
       | `Var of Var.var * implementation_type 
       | `Constant of Constant.constant * implementation_type
@@ -719,10 +743,8 @@ module Annotate = struct
   let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
     let bt = typed_pt_of_typed_t in
       match v with
-        | `For (((x, source), os, b), typ) -> 
-            `For (((x, bt source), List.map bt os, bt b), typ)
-	| `GroupBy (((x, group_exp), source), typ) ->
-	    `GroupBy (((x, bt group_exp), bt source), typ)
+        | `For ((source, os, b), typ) -> 
+            `For ((bt source, List.map bt os, bt b), typ)
         | `If ((c, t, Some e), typ) -> `If ((bt c, bt t, Some (bt e)), typ)
         | `If ((c, t, None), typ) -> `If ((bt c, bt t, None), typ)
         | `Table (t, typ) -> `Table (t, typ)
@@ -735,7 +757,7 @@ module Annotate = struct
         | `Project ((v, name), typ) -> `Project ((bt v, name), typ)
         | `Erase ((v, names), typ) -> `Erase ((bt v, names), typ)
         | `Apply ((f, vs), typ) -> `Apply ((f, List.map bt vs), typ)
-        | `Closure (((xs, e), _), typ) -> `Lam ((xs, e), typ)
+        | `Lambda ((xs, e), typ) -> `Lambda ((xs, e), typ)
         | `Primitive (f, typ) -> `Primitive (f, typ)
         | `Var (v, typ) -> `Var (v, typ)
         | `Constant (c, typ) -> `Constant (c, typ)
@@ -788,18 +810,20 @@ module Annotate = struct
 	  let ext_fields' = StringMap.map (aot `Atom env) ext_fields in
 	  let r' = opt_map (fun r -> transform env r) r in
 	    `Extend ((r' ,ext_fields'), `Atom)
-      | `For (gs, os, body) ->
-	  let (x, source) = gs in
-	  let env' = Env.Int.bind env (x, `Atom) in
-	  let gs' = (x, aot `List env source) in
-	  let os' = List.map (fun o -> transform env' o) os in
-	  let body' = aot `List env' body in
-	    `For ((gs', os', body'), `List)
-      | `GroupBy ((x, group_exp), source) ->
+      | `For (source, os, body) ->
+	  let source' = aot `List env source in
+	  let os' = List.map (fun o -> transform env o) os in
+	  let body' = aot `List env body in
+	    `For ((source', os', body'), `List)
+(*       | `GroupBy ((x, group_exp), source) ->
 	  let env' = Env.Int.bind env (x, `Atom) in
 	  let group_exp' = aot `Atom env' group_exp in
 	  let source' = aot `List env source in
-	    `GroupBy (((x, group_exp'), source'), `List)
+	    `GroupBy (((x, group_exp'), source'), `List) *)
+      | `Lambda (xs, body) -> 
+	  let env' = List.fold_left (fun env' x -> Env.Int.bind env' (x, `Atom)) env xs in
+	  let body' = transform env' body in
+	    `Lambda ((xs, body'), typeof_typed_t body')
       | `Var x -> 
 	  `Var (x, Env.Int.lookup env x) 
       | `Case (v, cases, default) ->
