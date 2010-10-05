@@ -94,19 +94,6 @@ let rec unbox_list =
     | `Singleton v -> [v]
     | _ -> failwith ("failed to unbox list")
 
-(* FIXME: this won't work with native strings *)
-let unbox_string =
-  function
-    | `Constant (`String s) -> s
-    | (`Append _ | `Singleton _) as v ->
-        implode
-          (List.map
-             (function
-                | `Constant (`Char c) -> c
-                | _ -> failwith ("failed to unbox string"))
-             (unbox_list v))
-    | _ -> failwith ("failed tounbox_string")
-
 let unbox_pair : t -> t * t = function
   | `Extend (None, r) ->
       begin
@@ -342,19 +329,10 @@ struct
 	    
       (* FIXME: what is the second tuple component (Var.var option)? *)
       | `PrimitiveFunction (f, _) -> `Primitive f
-          (*     | `NativeString of string ] *)
-          (*     | `ClientFunction f ->  *)
-          (*     | `Continuation cont ->  *)
       | _ -> failwith "Cannot convert value to expression"
 
   and value env : Ir.value -> t = function
     | `Constant c -> `Constant c
-    | `Append xs when List.for_all (* HACKISH: handle Links string constants *)
-        (function `Singleton `Constant `Char _c -> true|_->false) xs ->
-        `Constant (`String(mapstrcat ""
-                             (function `Singleton `Constant `Char x ->
-                                string_of_char x)
-                             xs))
     | `Variable var ->
         begin
           match lookup env var with
@@ -376,6 +354,8 @@ struct
     | `TApp (v, _) -> value env v
 
     (* FIXME: handle XmlNode somehow *)
+    | `XmlNode _ -> assert false
+    (*
     | `XmlNode (tag, attrs, children) ->
         (* TODO: deal with variables in XML *)
         let children =
@@ -391,6 +371,7 @@ struct
             attrs children
         in
           `Singleton (`XML (Value.Node (tag, children)))
+    *)
 
     | `ApplyPure (f, ps) -> 
         apply env (value env f, List.map (value env) ps)
