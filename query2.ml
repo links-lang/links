@@ -189,81 +189,8 @@ module QueryRegex = struct
 	  `Constant (`String "*")
       | t -> Debug.print (string_of_t t);
 	  assert false
-end
+	    end
 
-(** Returns which database was used if any.
-
-   Currently this assumes that at most one database is used.
-*)
-(*
-let used_database v : Value.database option =
-  let rec generators =
-    function
-      | [] -> None
-      | (_x, source)::gs ->
-          begin
-            match used source with
-              | None -> generators gs
-              | Some db -> Some db
-          end
-  and used =
-    function
-      | `For (gs, _os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
-      | _ -> None in
-  let rec comprehensions =
-    function
-      | [] -> None
-      | v::vs ->
-          begin
-            match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
-          end
-  in
-    match v with
-      | `Append vs -> comprehensions vs
-      | v -> used v
-*)
-
-(** Return the type of rows associated with a top-level non-empty expression *)
-(*
-let rec type_of_expression : t -> Types.datatype = fun v ->
-  let rec generators env : _ -> Types.datatype Env.Int.t =
-    function
-      | [] -> env
-      | (x, `Table (_, _, row))::gs ->
-          generators (Env.Int.bind env (x, `Record row)) gs
-      | _ -> assert false in
-  let rec base env : t -> Types.datatype =
-    function
-      | `Constant (`Bool _) -> Types.bool_type
-      | `Constant (`Int _) -> Types.int_type
-      | `Constant (`Char _) -> Types.char_type
-      | `Constant (`Float _) -> Types.float_type
-      | `Constant (`String _) -> Types.string_type
-      | `Project (`Var x, name) ->
-          TypeUtils.project_type name (Env.Int.lookup env x)
-      | `If (_, t, _) -> base env t
-      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | `Append (xs) when List.for_all
-          (function `Singleton `Constant `Char _ -> true|_->false) xs ->
-          Types.string_type
-      | e -> Debug.print(Show.show show_t e); assert false in
-  let record env fields : Types.datatype =
-    Types.make_record_type (StringMap.map (base env) fields) in
-  let rec tail env : t -> Types.datatype =
-    function
-      | `Singleton (`Record fields) -> record env fields
-      | `If (_c, t, `Append []) -> tail env t
-      | `Table (_, _, row) -> `Record row
-      | _ -> assert false
-  in
-    match v with
-      | `Append (v :: _) -> type_of_expression v
-      | `For (gens, _os, body) -> tail (generators Env.Int.empty gens) body
-      | _ -> tail Env.Int.empty v
-*)
 let rec value_of_expression : t -> Value.t = fun v ->
   let ve = value_of_expression in
   let value_of_singleton = fun s ->
@@ -309,16 +236,6 @@ struct
 
   let nil = `Append []
 
-  (* takes a normal form expression and returns true iff it has list type *)
-  let is_list =
-    function
-      | `For _
-      | `Table _
-      | `Singleton _
-      | `Append _
-      | `If (_, _, `Append []) -> true
-      | _ -> false    
-
   let eval_error fmt = 
     let error msg = raise (DbEvaluationError msg) in
       Printf.kprintf error fmt
@@ -336,6 +253,7 @@ struct
 	| vs -> `Append vs
 
   let env_of_value_env value_env = (value_env, Env.Int.empty)
+
   let (++) (venv, eenv) (venv', eenv') =
     Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'  
 
@@ -395,13 +313,6 @@ struct
       | Some v, None -> expression_of_value v
       | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
-
-(*
-  let lookup_lib_fun (val_env, _exp_env) var =
-    match Value.lookup var val_env with
-      | Some v -> expression_of_value v
-      | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
-*)
 
   and expression_of_value : Value.t -> t =
     function
@@ -511,13 +422,6 @@ struct
 	
   and apply env : t * t list -> t = function
     | `Lambda (parameters, body), args -> apply_exp (parameters, body) env args
-    (*
-    | `Lambda ((xs, body), Lambda_env), args ->
-        let env = env ++ Lambda_env in
-        let env = List.fold_right2 (fun x arg env ->
-                                      bind env (x, arg)) xs args env in
-          computation env body
-    *)
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; `Append []] ->
@@ -587,8 +491,6 @@ struct
 	`If (c, apply env (t, args), None)
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
-(*    | `Lambda (bound_vars, computation),  *)
-
     | (f, args) -> 
 	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
 	eval_error "Application of non-function"
@@ -603,7 +505,7 @@ struct
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
-                  eval_error "Client function in query block"
+                  eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
 		  let arg_vars = List.map fst args in
 		  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env arg_vars in
@@ -651,7 +553,7 @@ struct
     in
     let for_expr = 
       match source with
-     (* merge for-comprehension with its orderby clause *)
+	  (* merge for-comprehension with its orderby clause *)
 	| `For (source', ((_ :: _) as os), (`Lambda ([y], _) as f')) when is_identity_exp f' ->
 	    `For (source', (List.map (replace_var y x) os), f)
         | `Singleton _ | `Append _ | `If _ | `For _ | `Table _ | `Apply _ | `Project _ ->
@@ -745,8 +647,7 @@ module Annotate = struct
       match v with
         | `For ((source, os, b), typ) -> 
             `For ((bt source, List.map bt os, bt b), typ)
-        | `If ((c, t, Some e), typ) -> `If ((bt c, bt t, Some (bt e)), typ)
-        | `If ((c, t, None), typ) -> `If ((bt c, bt t, None), typ)
+        | `If ((c, t, e), typ) -> `If ((bt c, bt t, opt_map bt e), typ)
         | `Table (t, typ) -> `Table (t, typ)
         | `Singleton (v, typ) -> `Singleton ((bt v), typ)
         | `Append (vs, typ) -> `Append ((List.map bt vs), typ)
