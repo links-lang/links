@@ -1538,6 +1538,7 @@ struct
       | "quote", [s] -> compile_quote env loop s
       | "^^", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
       | "nubBase", [l] -> compile_nubbase env loop l
+      | "groupByBase", [f; source] -> compile_groupby env loop f source
     (*    | "takeWhile" -> compile_takeWhile env loop args
 	  | "dropWhile" -> compile_dropWhile env loop args *)
       | "<", _ | "<=", _ | ">=", _->
@@ -1548,8 +1549,8 @@ struct
   and compile_for env loop source f order_criteria =
     let  ti_source = compile_expression env loop source in
     let _, q_v, map, loop_v = map_forward ti_source.q ti_source.cs in
-    let v, body = match f with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
     let env = AEnv.map (lift map) env in
+    let v, body = match f with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
     let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
     let ti_body = compile_expression env_v loop_v body in
     let (sort_cols, sort_info, map') =
@@ -1854,13 +1855,14 @@ struct
       vs = append_vs q ti_t.vs ti_e.vs
     }
 
-  and compile_groupby env loop v ge e =
+  and compile_groupby env loop ge e =
+    let v, ge_body = match ge with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
     let ti_e = compile_expression env loop e in
     let q_v, q_v', map_v, loop_v = map_forward ti_e.q ti_e.cs in
     let env_v = AEnv.map (lift map_v) env in
     let env_v = AEnv.bind env_v (v, { ti_e with q = q_v' }) in
     (* compile group expression *)
-    let ti_ge = compile_expression env_v loop_v ge in
+    let ti_ge = compile_expression env_v loop_v ge_body in
     let cs_ge' = Cs.shift (Cs.cardinality ti_e.cs) ti_ge.cs in
     let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_ge') in
     let q_1 =
@@ -2060,7 +2062,6 @@ struct
       | `For ((l, os, f), _) -> compile_for env loop l f os
       | `Box (e, _) -> compile_box env loop e
       | `Unbox (e, _) -> compile_unbox env loop e
-(*      | `GroupBy (((x, group_exp), source), _) -> compile_groupby env loop x group_exp source  *)
       | `Variant ((tag, value), _) -> compile_variant env loop tag value
       | `Case ((v, cases, default), _) -> compile_case env loop v cases default
       | `Wrong _  -> compile_wrong loop 

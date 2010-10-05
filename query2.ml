@@ -464,6 +464,8 @@ struct
 	    | _ -> assert false
 	end
 *)
+    | `Primitive "groupByBase", [f; source] ->
+	`Apply ("groupByBase", [f; source])
     | `Primitive "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
 	`Apply ("and", [(apply env (`Primitive "Map", [p; l]))])
@@ -776,7 +778,7 @@ module Annotate = struct
 		let n' = transform env n in
 		let l' = aot `List env l in
 		  `Apply ((f, [n'; l']), `Atom)
-	    | "take" | "drop" | "dropWhile" | "takeWhile" ->
+	    | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
 		(* `Atom -> `List -> `List *)
 		let (n, l) = 
 		  (match args with 
