@@ -1330,9 +1330,7 @@ struct
       vs = ti_sub.vs
     }
 
-  and compile_take env loop n l =
-    let ti_n = compile_expression env loop n in
-    let ti_l = compile_expression env loop l in
+  and do_take ti_n ti_l =
     let cols = (io (Cs.offsets ti_l.cs)) in
     let q_l' = abspos ti_l.q ti_l.cs in
     let c = A.Item 1 in
@@ -1365,9 +1363,12 @@ struct
       vs = ti_l.vs
     }
 
-  and compile_drop env loop n l =
+  and compile_take env loop n l =
     let ti_n = compile_expression env loop n in
     let ti_l = compile_expression env loop l in
+      do_take ti_n ti_l
+
+  and do_drop ti_n ti_l =
     let cols = (io (Cs.offsets ti_l.cs)) in
     let q_l_abs = abspos ti_l.q ti_l.cs in
     let c = A.Item 1 in
@@ -1394,6 +1395,17 @@ struct
       ts = ts';
       vs = ti_l.vs
     }
+
+  and compile_drop env loop n l =
+    let ti_n = compile_expression env loop n in
+    let ti_l = compile_expression env loop l in
+      do_drop ti_n ti_l
+
+  and compile_limit env loop limit offset e =
+    let ti_limit = compile_expression env loop limit in
+    let ti_offset = compile_expression env loop offset in
+    let ti_e = compile_expression env loop e in
+      do_take ti_limit (do_drop ti_offset ti_e)
 
   and compile_hd env loop l = 
     let ti_l = compile_expression env loop l in
@@ -2042,6 +2054,7 @@ struct
       | "groupByBase", [f; source] -> compile_groupby env loop f source
       | "takeWhile", [p; l] -> compile_takewhile env loop p l
       | "dropWhile", [p; l] -> compile_dropwhile env loop p l
+      | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
       | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
       | s, _->

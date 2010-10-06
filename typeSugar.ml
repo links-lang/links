@@ -253,6 +253,8 @@ sig
   val pattern_annotation : griper
 
   val splice_exp : griper
+
+  val range_nonlist : griper
 end
   = struct
     type griper = 
@@ -801,6 +803,10 @@ tab() ^ code (show_type rt))
 An expression enclosed in {} in a regex pattern must have type String, 
 but the expression here has type " ^ (show_type lt))
 
+    let range_nonlist ~pos:pos ~t1:(_,lt) ~t2:_ ~error:_ =
+      die pos ("\
+A range must only be used on list-typed query blocks,
+but the query block here has type " ^ (show_type lt))
 
 end
 
@@ -1743,6 +1749,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 		Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base))
 	    in
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
+
+	    (* range must only be used on list-typed query blocks *)
+	    let () = 
+	      match range with 
+		| None -> ()
+		| Some _ -> 
+		    let shape = Types.make_list_type (Types.fresh_type_variable `Query) in
+		      unify ~handle:Gripers.range_nonlist (pos_and_typ p, no_pos shape) 
+	    in
               `Query (range, erase p, Some (typ p)), typ p
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable `Any in

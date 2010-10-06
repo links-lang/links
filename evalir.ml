@@ -357,14 +357,15 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
-	begin
-          match range with
-            | None -> ()
-            | Some _ -> failwith "range not supported on Ferry query blocks";
-	end;
+	let range =
+	  match range with
+	    | None -> Query2.NoRange
+	    | Some (limit, offset) ->
+		Query2.Value (value env limit, value env offset)
+	in
         let result =
 	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
-	  let (exptree, imptype) = Query2.compile env e in
+	  let (exptree, imptype) = Query2.compile env range e in
 	  match !Query2.used_database with
 	    | Some db -> 
 	      begin

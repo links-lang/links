@@ -7,6 +7,8 @@ open Utility
    the query (or none) *)
 let used_database = ref None
 
+type range = NoRange | Value of Value.t * Value.t | Ir of Ir.value * Ir.value
+
 type 'a name_map = 'a Utility.stringmap
     deriving (Show)
 
@@ -324,7 +326,7 @@ struct
           assert (f=f');
 	  let env = env_of_value_env env in
 	  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env xs in
-	  let body = computation body_env body in
+	  let body = computation body_env NoRange body in
 	    `Lambda (xs, body)
 	    
       (* FIXME: what is the second tuple component (Var.var option)? *)
@@ -477,55 +479,69 @@ struct
 	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
 	eval_error "Application of non-function"
 
-  and computation env (binders, tailcomp) : t =
+  and computation env range (binders, tailcomp) : t =
     match binders with
-      | [] -> tail_computation env tailcomp
+      | [] -> tail_computation env range tailcomp
       | b::bs ->
           begin
             match b with
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
-                    computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
+                    computation (bind env (x, tail_computation env NoRange tc)) range (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
 		  let arg_vars = List.map fst args in
 		  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env arg_vars in
-		  let body = computation body_env body in
+		  let body = computation body_env NoRange body in
 		    computation
 		      (bind env (f, `Lambda (arg_vars, body)))
+		      range
 		      (bs, tailcomp)
               | `Rec _defs ->
                   eval_error "Recursive function"
               | `Alien _ 
               | `Alias _ -> (* just skip it *)
-                  computation env (bs, tailcomp)
+                  computation env range (bs, tailcomp)
               | `Module _ -> failwith "Not implemented modules yet"
           end
 
-  and tail_computation env : Ir.tail_computation -> t = function
-    | `Return v -> value env v
-    | `Apply (f, args) ->
-        apply env (value env f, List.map (value env) args)
-    | `Special (`Query (None, e, _)) -> computation env e
-    | `Special `Wrong _ -> `Wrong
-    | `Special _s -> failwith "special not allowed in query block"
-    | `Case (v, cases, default) ->
-	let v' = value env v in
-	let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) c) in
-	let cases' = StringMap.map case cases in
-	let default' = opt_map case default in
-	  `Case (v', cases', default')
+  and tail_computation env range tailcomp : t =
+    let tc = function
+      | `Return v -> value env v
+      | `Apply (f, args) ->
+          apply env (value env f, List.map (value env) args)
+      | `Special (`Query (range, e, _)) -> 
+	  let range = match range with
+	    | None -> NoRange
+	    | Some (limit, offset) -> Ir (limit, offset)
+	  in
+	    computation env range e
+      | `Special `Wrong _ -> `Wrong
+      | `Special _s -> failwith "special not allowed in query block"
+      | `Case (v, cases, default) ->
+	  let v' = value env v in
+	  let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) NoRange c) in
+	  let cases' = StringMap.map case cases in
+	  let default' = opt_map case default in
+	    `Case (v', cases', default')
 
-   | `If (c, t, e) ->
-        let c = value env c in
-        let t = computation env t in
-        let e = computation env e in
-	  match e with
-	    | `Append [] -> `If (c, t, None)
-	    | e -> `If (c, t, Some e)
-            (*     | `Special (`For (x, source, body)) -> *)
-            (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
+      | `If (c, t, e) ->
+          let c = value env c in
+          let t = computation env NoRange t in
+          let e = computation env NoRange e in
+	    match e with
+	      | `Append [] -> `If (c, t, None)
+	      | e -> `If (c, t, Some e)
+    in
+    let exp = tc tailcomp in
+      match range with
+	| NoRange -> exp
+	| Ir (limit, offset) ->
+	    `Apply ("limit", [value env limit; value env offset; exp])
+	| Value (limit, offset) ->
+	    `Apply ("limit", [expression_of_value limit; expression_of_value offset; exp])
+	      
 
   and reduce_for_source _env f source =
     let x, _body =
@@ -550,7 +566,7 @@ struct
 	| e -> 
 	    e
 
-  let eval env e = computation (env_of_value_env env) e
+  let eval env range e = computation (env_of_value_env env) range e
 end
 
 module Annotate = struct
@@ -734,78 +750,91 @@ module Annotate = struct
 
       | `Apply (f, args) ->
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
-	  (match f with
-	    | "+" | "+." | "-" | "-." | "*" | "*." 
-	    | "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
-		(* these operators are only ever applied to atomic
-		   values, so no need to annotate the arguments *)
-		(* `Atom -> `Atom -> `Atom *)
-		`Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
-	    | "<>" | "==" | ">" ->
-		(* arguments can have any type because we can compare
-		   atomic values, records and lists. boxed lists are
-		   unboxed in compileQuery so we need no annotation
-		   here *)
-		(* a -> b -> `Atom *)
-		`Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
-	    | "nth" ->
-		(* `Atom -> `List -> `Atom *)
-		let (n, l) = 
-		  (match args with 
-		    | [a1; a2] -> (a1, a2)
-		    | _ -> fail_arg "nth")
-		in
-		let n' = transform env n in
-		let l' = aot `List env l in
-		  `Apply ((f, [n'; l']), `Atom)
-	    | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
-		(* `Atom -> `List -> `List *)
-		let (n, l) = 
-		  (match args with 
-		     | [a1; a2] -> (a1, a2)
-		     | _ -> fail_arg "take/drop")
-		in
-		let n' = transform env n in
-		let l' = aot `List env l in
-		  `Apply ((f, [n'; l']), `List)
-	    | "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
-		(* `List -> `Atom *)
-		let l = 
-		  (match args with 
-		     | [a1] -> a1
-		     | _ -> fail_arg "length")
-		in
-		let l' = aot `List env l in
-		  `Apply ((f, [l']), `Atom)
-	    | "concat" | "tl" | "nubBase" ->
-		(* `List -> `List *)
-		let l =
-		  (match args with
-		     | [a] -> a
-		     | _ -> fail_arg "concat")
-		in
-		let l' = aot `List env l in
-		  `Apply ((f, [l']), `List)
-	    | "zip" ->
-		(* `List -> `List -> `List *)
-		let (l, r) =
-		  (match args with 
-		     | [a1; a2] -> (a1, a2)
-		     | _ -> fail_arg "zip")
-		in
-		let l' = aot `List env l in
-		let r' = aot `List env r in
-		  `Apply ((f, [l'; r']), `List)
-	    | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented"))
+	    begin
+	      match f with
+		| "limit" ->
+		    let (l, o, e) =
+		      match args with 
+			| [l; o; e] -> (l, o, e)
+			| _ -> fail_arg "limit"
+		    in
+		    let l = transform env l in
+		    let o = transform env o in
+		    let e = transform env e in
+		      `Apply ((f, [l; o; e]), typeof_typed_t e)
+		      
+		| "+" | "+." | "-" | "-." | "*" | "*." 
+		| "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
+		    (* these operators are only ever applied to atomic
+		       values, so no need to annotate the arguments *)
+		    (* `Atom -> `Atom -> `Atom *)
+		    `Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
+		| "<>" | "==" | ">" ->
+		    (* arguments can have any type because we can compare
+		       atomic values, records and lists. boxed lists are
+		       unboxed in compileQuery so we need no annotation
+		       here *)
+		    (* a -> b -> `Atom *)
+		    `Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
+		| "nth" ->
+		    (* `Atom -> `List -> `Atom *)
+		    let (n, l) = 
+		      (match args with 
+			 | [a1; a2] -> (a1, a2)
+			 | _ -> fail_arg "nth")
+		    in
+		    let n' = transform env n in
+		    let l' = aot `List env l in
+		      `Apply ((f, [n'; l']), `Atom)
+		| "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
+		    (* `Atom -> `List -> `List *)
+		    let (n, l) = 
+		      (match args with 
+			 | [a1; a2] -> (a1, a2)
+			 | _ -> fail_arg "take/drop")
+		    in
+		    let n' = transform env n in
+		    let l' = aot `List env l in
+		      `Apply ((f, [n'; l']), `List)
+		| "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
+		    (* `List -> `Atom *)
+		    let l = 
+		      (match args with 
+			 | [a1] -> a1
+			 | _ -> fail_arg "length")
+		    in
+		    let l' = aot `List env l in
+		      `Apply ((f, [l']), `Atom)
+		| "concat" | "tl" | "nubBase" ->
+		    (* `List -> `List *)
+		    let l =
+		      (match args with
+			 | [a] -> a
+			 | _ -> fail_arg "concat")
+		    in
+		    let l' = aot `List env l in
+		      `Apply ((f, [l']), `List)
+		| "zip" ->
+		    (* `List -> `List -> `List *)
+		    let (l, r) =
+		      (match args with 
+			 | [a1; a2] -> (a1, a2)
+			 | _ -> fail_arg "zip")
+		    in
+		    let l' = aot `List env l in
+		    let r' = aot `List env r in
+		      `Apply ((f, [l'; r']), `List)
+		| _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented")
+	    end
       | _ -> failwith "Query2.Annotate.transform: not implemented"
-    
+	  
 end
 
-let compile : Value.env -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
-  fun env e ->
+let compile : Value.env -> range -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
+  fun env range e ->
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
-    let v = Eval.eval env e in
+    let v = Eval.eval env range e in
       if Settings.get_value Basicsettings.Ferry.print_backend_expression then
 	print_endline ("query2:\n "^string_of_t v);
       let v_annot = Annotate.transform Env.Int.empty v in
