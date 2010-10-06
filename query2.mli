@@ -38,4 +38,4 @@ end
 
 (** compile a IR tree together with the local environment to an expression tree 
     annotated with the implementation type *)
-val compile : Value.env -> ((Num.num * Num.num) option * Ir.computation) -> (Annotate.typed_t * Annotate.implementation_type)
+val compile : Value.env -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)

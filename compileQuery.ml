@@ -73,6 +73,7 @@ end
 = 
 struct
 
+  (* the environment mapping variables to algebra plans *)
   module AEnv = Env.Int
 
   type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t }
@@ -100,7 +101,6 @@ struct
       | `Primitive `String -> `StrType
       | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
 
-(* the environment mapping variables to algebra plans *)
 
   let incr l i = List.map (fun j -> j + i) l
   let decr l i = List.map (fun j -> j - i) l
@@ -1504,47 +1504,6 @@ struct
     Debug.print "Warning: quoting at runtime is not implemented (compile_quite)";
     compile_expression env loop s
 
-  and compile_apply env loop f args =
-    match f, args with
-      | "+", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `IntType op1 op2
-      | "+.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `FloatType op1 op2
-      | "-", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `IntType op1 op2
-      | "-.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `FloatType op1 op2
-      | "*", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `IntType op1 op2
-      | "*.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `FloatType op1 op2
-      | "/", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `IntType op1 op2
-      | "/.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `FloatType op1 op2
-      | "==", [op1; op2] -> compile_comparison env loop wrap_eq do_table_equal do_row_equal op1 op2
-      | "<>", [op1; op2] -> compile_comparison env loop wrap_ne do_table_equal do_row_equal op1 op2
-      | ">", [op1; op2] -> compile_comparison env loop wrap_gt do_table_greater do_row_greater op1 op2
-      | "not", [op]->  compile_unop env loop wrap_not op
-      | "nth", [i; l] -> compile_nth env loop i l
-      | "length", [l] -> compile_length env loop l
-      | "sum", [l] -> compile_sum env loop l
-      | "max", [l] -> compile_aggr_error env loop A.Max `IntType l
-      | "min", [l] -> compile_aggr_error env loop A.Min `IntType l
-      | "avg", [l] -> compile_aggr_error env loop A.Avg `FloatType l
-      | "take", [n; l] -> compile_take env loop n l
-      | "drop", [n; l] -> compile_drop env loop n l
-      | "zip", [l1; l2] -> compile_zip env loop l1 l2
-      | "unzip", [p] -> compile_unzip env loop p
-      | "concat", [l] -> compile_concat env loop l
-      | "and", [l] -> compile_and env loop l
-      | "or", [l] -> compile_or env loop l
-      | "empty", [l] -> compile_empty env loop l
-      | "hd", [l] -> compile_hd env loop l
-      | "tl", [l] -> compile_tl env loop l
-      | "tilde", [s; p] -> compile_binop env loop (wrap_1to1 A.SimilarTo) `BoolType s p
-      | "quote", [s] -> compile_quote env loop s
-      | "^^", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
-      | "nubBase", [l] -> compile_nubbase env loop l
-      | "groupByBase", [f; source] -> compile_groupby env loop f source
-    (*    | "takeWhile" -> compile_takeWhile env loop args
-	  | "dropWhile" -> compile_dropWhile env loop args *)
-      | "<", _ | "<=", _ | ">=", _->
-	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
-      | s, _->
-	failwith ("CompileQuery.compile_apply: " ^ s ^ " not implemented")
 
   and compile_for env loop source f order_criteria =
     let  ti_source = compile_expression env loop source in
@@ -2041,6 +2000,52 @@ struct
       ts = Ts.empty;
       vs = Vs.empty
     }
+
+  and compile_takewhile _env _loop _p _l = failwith "compile_takewhile not implemented"
+
+  and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not implemented"
+
+  and compile_apply env loop f args =
+    match f, args with
+      | "+", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `IntType op1 op2
+      | "+.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `FloatType op1 op2
+      | "-", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `IntType op1 op2
+      | "-.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Subtract) `FloatType op1 op2
+      | "*", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `IntType op1 op2
+      | "*.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Multiply) `FloatType op1 op2
+      | "/", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `IntType op1 op2
+      | "/.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Divide) `FloatType op1 op2
+      | "==", [op1; op2] -> compile_comparison env loop wrap_eq do_table_equal do_row_equal op1 op2
+      | "<>", [op1; op2] -> compile_comparison env loop wrap_ne do_table_equal do_row_equal op1 op2
+      | ">", [op1; op2] -> compile_comparison env loop wrap_gt do_table_greater do_row_greater op1 op2
+      | "not", [op]->  compile_unop env loop wrap_not op
+      | "nth", [i; l] -> compile_nth env loop i l
+      | "length", [l] -> compile_length env loop l
+      | "sum", [l] -> compile_sum env loop l
+      | "max", [l] -> compile_aggr_error env loop A.Max `IntType l
+      | "min", [l] -> compile_aggr_error env loop A.Min `IntType l
+      | "avg", [l] -> compile_aggr_error env loop A.Avg `FloatType l
+      | "take", [n; l] -> compile_take env loop n l
+      | "drop", [n; l] -> compile_drop env loop n l
+      | "zip", [l1; l2] -> compile_zip env loop l1 l2
+      | "unzip", [p] -> compile_unzip env loop p
+      | "concat", [l] -> compile_concat env loop l
+      | "and", [l] -> compile_and env loop l
+      | "or", [l] -> compile_or env loop l
+      | "empty", [l] -> compile_empty env loop l
+      | "hd", [l] -> compile_hd env loop l
+      | "tl", [l] -> compile_tl env loop l
+      | "tilde", [s; p] -> compile_binop env loop (wrap_1to1 A.SimilarTo) `BoolType s p
+      | "quote", [s] -> compile_quote env loop s
+      | "^^", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Concat) `StrType op1 op2
+      | "nubBase", [l] -> compile_nubbase env loop l
+      | "groupByBase", [f; source] -> compile_groupby env loop f source
+      | "takeWhile", [p; l] -> compile_takewhile env loop p l
+      | "dropWhile", [p; l] -> compile_dropwhile env loop p l
+      | "<", _ | "<=", _ | ">=", _->
+	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
+      | s, _->
+	failwith ("CompileQuery.compile_apply: " ^ s ^ " not implemented")
 
   and compile_expression env loop e : tblinfo =
     match e with

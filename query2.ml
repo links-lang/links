@@ -355,6 +355,7 @@ struct
 
     (* FIXME: handle XmlNode somehow *)
     | `XmlNode _ -> assert false
+
     (*
     | `XmlNode (tag, attrs, children) ->
         (* TODO: deal with variables in XML *)
@@ -445,8 +446,6 @@ struct
 	    | _ -> assert false
 	end
 *)
-    | `Primitive "groupByBase", [f; source] ->
-	`Apply ("groupByBase", [f; source])
     | `Primitive "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
 	`Apply ("and", [(apply env (`Primitive "Map", [p; l]))])
@@ -802,8 +801,8 @@ module Annotate = struct
     
 end
 
-let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
-  fun env (_range, e) ->
+let compile : Value.env -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
+  fun env e ->
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env e in
