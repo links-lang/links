@@ -36,8 +36,6 @@ module Annotate : sig
   val typeof_typed_t : typed_t -> implementation_type
 end
 
-type range = NoRange | Value of Value.t * Value.t | Ir of Ir.value * Ir.value
-
 (** compile a IR tree together with the local environment to an expression tree 
     annotated with the implementation type *)
-val compile : Value.env -> range -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)
+val compile : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)

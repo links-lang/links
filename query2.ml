@@ -7,8 +7,6 @@ open Utility
    the query (or none) *)
 let used_database = ref None
 
-type range = NoRange | Value of Value.t * Value.t | Ir of Ir.value * Ir.value
-
 type 'a name_map = 'a Utility.stringmap
     deriving (Show)
 
@@ -326,7 +324,7 @@ struct
           assert (f=f');
 	  let env = env_of_value_env env in
 	  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env xs in
-	  let body = computation body_env NoRange body in
+	  let body = computation body_env None body in
 	    `Lambda (xs, body)
 	    
       (* FIXME: what is the second tuple component (Var.var option)? *)
@@ -487,13 +485,13 @@ struct
             match b with
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
-                    computation (bind env (x, tail_computation env NoRange tc)) range (bs, tailcomp)
+                    computation (bind env (x, tail_computation env None tc)) range (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
 		  let arg_vars = List.map fst args in
 		  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env arg_vars in
-		  let body = computation body_env NoRange body in
+		  let body = computation body_env None body in
 		    computation
 		      (bind env (f, `Lambda (arg_vars, body)))
 		      range
@@ -511,37 +509,29 @@ struct
       | `Return v -> value env v
       | `Apply (f, args) ->
           apply env (value env f, List.map (value env) args)
-      | `Special (`Query (range, e, _)) -> 
-	  let range = match range with
-	    | None -> NoRange
-	    | Some (limit, offset) -> Ir (limit, offset)
-	  in
-	    computation env range e
+      | `Special (`Query (None, e, _)) -> computation env range e
       | `Special `Wrong _ -> `Wrong
       | `Special _s -> failwith "special not allowed in query block"
       | `Case (v, cases, default) ->
 	  let v' = value env v in
-	  let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) NoRange c) in
+	  let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) None c) in
 	  let cases' = StringMap.map case cases in
 	  let default' = opt_map case default in
 	    `Case (v', cases', default')
 
       | `If (c, t, e) ->
           let c = value env c in
-          let t = computation env NoRange t in
-          let e = computation env NoRange e in
+          let t = computation env None t in
+          let e = computation env None e in
 	    match e with
 	      | `Append [] -> `If (c, t, None)
 	      | e -> `If (c, t, Some e)
     in
     let exp = tc tailcomp in
       match range with
-	| NoRange -> exp
-	| Ir (limit, offset) ->
-	    `Apply ("limit", [value env limit; value env offset; exp])
-	| Value (limit, offset) ->
-	    `Apply ("limit", [expression_of_value limit; expression_of_value offset; exp])
-	      
+	| None -> exp
+	| Some (limit, offset) ->
+	    `Apply ("limit", [`Constant (`Int limit); `Constant (`Int offset); exp])
 
   and reduce_for_source _env f source =
     let x, _body =
@@ -830,7 +820,7 @@ module Annotate = struct
 	  
 end
 
-let compile : Value.env -> range -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type)=
+let compile : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (Annotate.typed_t * Annotate.implementation_type) =
   fun env range e ->
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";

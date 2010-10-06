@@ -359,9 +359,9 @@ module Eval = struct
     | `Query (range, e, t) ->
 	let range =
 	  match range with
-	    | None -> Query2.NoRange
+	    | None -> None
 	    | Some (limit, offset) ->
-		Query2.Value (value env limit, value env offset)
+		Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset))
 	in
         let result =
 	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
