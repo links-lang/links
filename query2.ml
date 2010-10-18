@@ -34,61 +34,11 @@ type t =
     | `Var of Var.var | `Constant of Constant.constant 
     | `Case of t * (Var.var * t) name_map * (Var.var * t) option
     | `Wrong ]
-and env = Value.env * t Env.Int.t
-    deriving (Show)
+deriving (Show)
 
-module S =
-struct
-  (** [pt]: A printable version of [t] *)
-  type pt =
-    [ `For of pt * pt list * pt
-    | `If of pt * pt * pt option
-    | `Table of Value.table
-    | `Singleton of pt | `Append of pt list
-    | `Record of pt name_map | `Project of pt * string | `Erase of pt * name_set | `Extend of pt option * pt name_map
-    | `Variant of string * pt
-    | `XML of Value.xmlitem
-    | `Apply of pt * pt list
-    | `Lambda of Var.var list * pt
-    | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant 
-    | `Case of pt * (Var.var * pt) name_map * (Var.var * pt) option
-    | `Wrong ]
-      deriving (Show)
+let string_of_t = Show.show show_t
 
-  let rec pt_of_t : t -> pt = fun v ->
-    let bt = pt_of_t in
-
-      match v with
-	| `For (source, os, body) ->
-	    `For (bt source, List.map bt os, bt body)
-        | `If (c, t, Some e) -> `If (bt c, bt t, Some (bt e))
-        | `If (c, t, None) -> `If (bt c, bt t, None)
-        | `Table t -> `Table t
-        | `Singleton v -> `Singleton (bt v)
-        | `Append vs -> `Append (List.map bt vs)
-        | `Record fields -> `Record (StringMap.map bt fields)
-	| `Extend (r, ext_fields) -> `Extend (opt_map bt r, StringMap.map bt ext_fields)
-        | `Variant (name, v) -> `Variant (name, bt v)
-        | `XML xmlitem -> `XML xmlitem
-        | `Project (v, name) -> `Project (bt v, name)
-        | `Erase (v, names) -> `Erase (bt v, names)
-        | `Apply (f, vs) -> `Apply (bt f, List.map bt vs)
-        | `Lambda (xs, e) -> `Lambda (xs, bt e)
-        | `Primitive f -> `Primitive f
-        | `Var v -> `Var v
-        | `Constant c -> `Constant c
-	| `Case (value, case_map, default) ->
-	    let value' = bt value in
-	    let case = (fun (v, c) -> (v, bt c)) in
-	    let case_map' = StringMap.map case case_map in
-	    let default' = opt_map case default in
-	    `Case (value', case_map', default')
-	| `Wrong -> `Wrong
-          
-  let t = Show.show show_pt -<- pt_of_t
-end
-let string_of_t = S.t
+type env = Value.env * t Env.Int.t
 
 let unbox_xml =
   function
@@ -549,8 +499,7 @@ struct
 end
 
 module Annotate = struct
-  type implementation_type = [`Atom | `List]
-  deriving (Show)
+  type implementation_type = [`Atom | `List] deriving (Show)
 
   type typed_t =
       [ `For of (typed_t * typed_t list * typed_t) * implementation_type
@@ -573,6 +522,9 @@ module Annotate = struct
       | `Unbox of typed_t * implementation_type
       | `Case of (typed_t * (Var.var * typed_t) name_map * (Var.var * typed_t) option) * implementation_type
       | `Wrong of implementation_type ]
+  deriving (Show)
+
+  let string_of_typed_t = Show.show show_typed_t
 
   let typeof_typed_t = function
     | `For (_, t) -> t
@@ -595,58 +547,6 @@ module Annotate = struct
     | `Unbox (_, t) -> t
     | `Case (_, t) -> t
     | `Wrong t -> t
-
-  type typed_pt = 
-      [ `For of (typed_pt * typed_pt list * typed_pt) * implementation_type
-      | `If of (typed_pt * typed_pt * typed_pt option) * implementation_type
-      | `Table of Value.table * implementation_type
-      | `Singleton of typed_pt * implementation_type 
-      | `Append of typed_pt list * implementation_type
-      | `Record of typed_pt name_map * implementation_type
-      | `Project of (typed_pt * string) * implementation_type
-      | `Erase of (typed_pt * name_set) * implementation_type
-      | `Extend of (typed_pt option * typed_pt name_map) * implementation_type
-      | `Variant of (string * typed_pt) * implementation_type
-      | `XML of Value.xmlitem * implementation_type
-      | `Apply of (typed_pt * typed_pt list) * implementation_type
-      | `Lambda of (Var.var list * typed_pt) * implementation_type
-      | `Primitive of string 
-      | `Var of Var.var * implementation_type 
-      | `Constant of Constant.constant * implementation_type
-      | `Box of typed_pt * implementation_type 
-      | `Unbox of typed_pt * implementation_type 
-      | `Case of (typed_pt * (Var.var * typed_pt) name_map * (Var.var * typed_pt) option) * implementation_type
-      | `Wrong of implementation_type] 
-	deriving (Show)
-
-  let rec typed_pt_of_typed_t : typed_t -> typed_pt = fun v ->
-    let bt = typed_pt_of_typed_t in
-      match v with
-        | `For ((source, os, b), typ) -> 
-            `For ((bt source, List.map bt os, bt b), typ)
-        | `If ((c, t, e), typ) -> `If ((bt c, bt t, opt_map bt e), typ)
-        | `Table (t, typ) -> `Table (t, typ)
-        | `Singleton (v, typ) -> `Singleton ((bt v), typ)
-        | `Append (vs, typ) -> `Append ((List.map bt vs), typ)
-        | `Record (fields, typ) -> `Record ((StringMap.map bt fields), typ)
-	| `Extend ((r, ext_fields), typ) -> `Extend ((opt_map bt r, StringMap.map bt ext_fields), typ)
-        | `Variant ((name, v), typ) -> `Variant ((name, bt v), typ)
-        | `XML (xmlitem, typ) -> `XML (xmlitem, typ)
-        | `Project ((v, name), typ) -> `Project ((bt v, name), typ)
-        | `Erase ((v, names), typ) -> `Erase ((bt v, names), typ)
-        | `Apply ((f, vs), typ) -> `Apply ((bt f, List.map bt vs), typ)
-        | `Lambda ((xs, e), typ) -> `Lambda ((xs, e), typ)
-        | `Primitive f -> `Primitive f
-        | `Var (v, typ) -> `Var (v, typ)
-        | `Constant (c, typ) -> `Constant (c, typ)
-	| `Box (e, typ) -> `Box (bt e, typ)
-	| `Unbox (e, typ) -> `Box (bt e, typ)
-	| `Case ((v, cases, default), typ) ->
-	    let case = fun (v, c) -> (v, bt c) in
-	      `Case ((bt v, StringMap.map case cases, opt_map case default), typ)
-	| `Wrong t -> `Wrong t
-
-  let string_of_typed_t = Show.show show_typed_pt -<- typed_pt_of_typed_t
 
   let annotate want (expression : typed_t) : typed_t =
     match (want, typeof_typed_t expression) with
