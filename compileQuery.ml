@@ -2063,7 +2063,7 @@ struct
   and compile_expression env loop e : tblinfo =
     match e with
       | `Constant (c, _) -> compile_constant loop c
-      | `Apply ((f, args), _) -> compile_apply env loop f args 
+      | `Apply ((`Primitive f, args), _) -> compile_apply env loop f args 
       | `Var (x, _) -> AEnv.lookup env x
       | `Project ((r, field), _) -> compile_project env loop field r
       | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
@@ -2084,8 +2084,9 @@ struct
       | `Case ((v, cases, default), _) -> compile_case env loop v cases default
       | `Wrong _  -> compile_wrong loop 
       | `XML _ -> failwith "compile_expression: not implemented"
+      | `Lambda _ 
       | `Primitive _ -> failwith "compile_expression: eval error"
-      | `Lambda _ -> assert false
+      | _ -> assert false
 
   let rec wrap_serialize ti = 
     let serialize q cs =

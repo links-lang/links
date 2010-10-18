@@ -24,8 +24,8 @@ module Annotate : sig
     | `Extend of (typed_t option * typed_t name_map) * implementation_type
     | `Variant of (string * typed_t) * implementation_type
     | `XML of Value.xmlitem * implementation_type
-    | `Apply of (string * typed_t list) * implementation_type
-    | `Primitive of string * implementation_type
+    | `Apply of (typed_t * typed_t list) * implementation_type
+    | `Primitive of string
     | `Var of Var.var * implementation_type
     | `Constant of Constant.constant * implementation_type
     | `Box of typed_t * implementation_type

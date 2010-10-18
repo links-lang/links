@@ -13,6 +13,13 @@ type 'a name_map = 'a Utility.stringmap
 type name_set = Utility.stringset
     deriving (Show)
 
+type var_set = Utility.intset
+    deriving (Show)
+
+module VarSet = Utility.IntSet
+
+type bound_vars = var_set
+
 type t =
     [ `For of t * t list * t
     | `If of t * t * t option
@@ -21,7 +28,7 @@ type t =
     | `Record of t name_map | `Project of t * string | `Erase of t * name_set | `Extend of t option * t name_map 
     | `Variant of string * t
     | `XML of Value.xmlitem
-    | `Apply of string * t list
+    | `Apply of t * t list
     | `Lambda of (Var.var list * t)
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
@@ -41,7 +48,7 @@ struct
     | `Record of pt name_map | `Project of pt * string | `Erase of pt * name_set | `Extend of pt option * pt name_map
     | `Variant of string * pt
     | `XML of Value.xmlitem
-    | `Apply of string * pt list
+    | `Apply of pt * pt list
     | `Lambda of Var.var list * pt
     | `Primitive of string
     | `Var of Var.var | `Constant of Constant.constant 
@@ -66,7 +73,7 @@ struct
         | `XML xmlitem -> `XML xmlitem
         | `Project (v, name) -> `Project (bt v, name)
         | `Erase (v, names) -> `Erase (bt v, names)
-        | `Apply (f, vs) -> `Apply (f, List.map bt vs)
+        | `Apply (f, vs) -> `Apply (bt f, List.map bt vs)
         | `Lambda (xs, e) -> `Lambda (xs, bt e)
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
@@ -126,18 +133,18 @@ module QueryRegex = struct
 	  in
 	    `Constant (`String (mapstrcat "" identity l))
       | p ->
-	  `Apply ("quote", [p])
+	  `Apply (`Primitive "quote", [p])
 
   let unquote = function
-      | `Apply ("quote", [p']) -> p'
+      | `Apply (`Primitive "quote", [p']) -> p'
       | p -> p
 
     let append_patterns p1 p2 =
       match p1, p2 with
       | `Constant (`String s1), `Constant (`String s2) -> `Constant (`String (s1 ^ s2))
       | `Constant (`String _), _ 
-      | _, `Constant (`String _) -> `Apply ("^^", [p1; p2])
-      |  p1, p2 -> quote (`Apply ("^^", [unquote p1; unquote p2]))
+      | _, `Constant (`String _) -> `Apply (`Primitive "^^", [p1; p2])
+      |  p1, p2 -> quote (`Apply (`Primitive "^^", [unquote p1; unquote p2]))
 
   let rec similarify (p : t) : t = 
     match p with
@@ -178,29 +185,6 @@ module QueryRegex = struct
 	  assert false
 	    end
 
-let rec value_of_expression : t -> Value.t = fun v ->
-  let ve = value_of_expression in
-  let value_of_singleton = fun s ->
-    match s with
-      | `Singleton v -> ve v
-      | _ -> assert false
-  in
-    match v with
-      | `Constant (`Bool b) -> `Bool b
-      | `Constant (`Int i) -> `Int i
-      | `Constant (`Char c) -> `Char c
-      | `Constant (`Float f) -> `Float f
-      | `Constant (`String s) -> Value.box_string s
-      | `Table t -> `Table t
-      | `Append vs -> `List (List.map value_of_singleton vs)
-      | `Variant (name, v) -> `Variant (name, ve v)
-      | `XML xmlitem -> `XML xmlitem
-      | `Record fields ->
-          `Record (List.rev (StringMap.fold (fun name v fields ->
-                                               (name, ve v)::fields) 
-                               fields []))
-      | _ -> assert false
-
 module Eval =
 struct
   exception DbEvaluationError of string
@@ -217,7 +201,7 @@ struct
 	| `Erase (e, labels) -> `Erase (rep e, labels)
 	| `Extend (record, ext_fields) -> `Extend (opt_map rep record, StringMap.map rep ext_fields)
 	| `Variant (s, t) -> `Variant (s, rep t)
-	| `Apply (f, args) -> `Apply (f, List.map rep args)
+	| `Apply (f, args) -> `Apply (rep f, List.map rep args)
 	| `Var v when v = old_var -> `Var new_var
 	| n -> n
 
@@ -254,54 +238,57 @@ struct
       | `Lambda ([x], `Var x') when x = x' -> true
       | _ -> false
 
-  let rec lookup (val_env, exp_env) var =
-    match Value.lookup var val_env, Env.Int.find exp_env var with
-      | None, Some v -> v
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
-          `Primitive "ConcatMap"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
-          `Primitive "Map"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
-          `Primitive "SortBy"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
-	  `Primitive "AsList"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
-	  `Primitive "zip"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
-	  `Primitive "unzip"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nth" = f ->
-	  `Primitive "nth"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupByBase" = f ->
-	  `Primitive "groupByBase"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
-	  `Primitive "sum"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
-	  `Primitive "concat"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "and" = f ->
-	  `Primitive "and"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "or" = f ->
-	  `Primitive "or"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "all" = f ->
-	  `Primitive "all"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "any" = f ->
-	  `Primitive "any"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "max" = f ->
-	  `Primitive "max"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "min" = f ->
-	  `Primitive "min"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "avg" = f ->
-	  `Primitive "avg"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "takeWhile" = f ->
-	  `Primitive "takeWhile"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "dropWhile" = f ->
-	  `Primitive "dropWhile"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nubBase" = f ->
-	  `Primitive "nubBase"
-      | Some v, None -> expression_of_value v
-      | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
-      | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+  let rec lookup bound (val_env, exp_env) var =
+    if VarSet.mem var bound then
+      `Var var
+    else
+      match Value.lookup var val_env, Env.Int.find exp_env var with
+	| None, Some v -> v
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
+            `Primitive "ConcatMap"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
+            `Primitive "Map"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
+            `Primitive "SortBy"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
+	    `Primitive "AsList"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
+	    `Primitive "zip"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
+	    `Primitive "unzip"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nth" = f ->
+	    `Primitive "nth"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupByBase" = f ->
+	    `Primitive "groupByBase"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
+	    `Primitive "sum"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
+	    `Primitive "concat"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "and" = f ->
+	    `Primitive "and"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "or" = f ->
+	    `Primitive "or"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "all" = f ->
+	    `Primitive "all"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "any" = f ->
+	    `Primitive "any"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "max" = f ->
+	    `Primitive "max"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "min" = f ->
+	    `Primitive "min"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "avg" = f ->
+	    `Primitive "avg"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "takeWhile" = f ->
+	    `Primitive "takeWhile"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "dropWhile" = f ->
+	    `Primitive "dropWhile"
+	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nubBase" = f ->
+	    `Primitive "nubBase"
+	| Some v, None -> expression_of_value bound v
+	| None, None -> expression_of_value bound (Lib.primitive_stub (Lib.primitive_name var))
+	| Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
 
-  and expression_of_value : Value.t -> t =
+  and expression_of_value bound : Value.t -> t =
     function
       | `Bool b -> `Constant (`Bool b)
       | `Int i -> `Constant (`Int i)
@@ -311,47 +298,53 @@ struct
 	  used_database := Some db;
 	  `Table t 
       | `List vs ->
-          `Append (List.map (fun v -> `Singleton (expression_of_value v)) vs)
+          `Append (List.map (fun v -> `Singleton (expression_of_value bound v)) vs)
       | `Record fields ->
           `Record
             (List.fold_left
-               (fun fields (name, v) -> StringMap.add name (expression_of_value v) fields)
+               (fun fields (name, v) -> StringMap.add name (expression_of_value bound v) fields)
                StringMap.empty
                fields)
-      | `Variant (name, v) -> `Variant (name, expression_of_value v)
+      | `Variant (name, v) -> `Variant (name, expression_of_value bound v)
       | `XML xmlitem -> `XML xmlitem
       | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
           assert (f=f');
 	  let env = env_of_value_env env in
-	  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env xs in
-	  let body = computation body_env None body in
+	  let bound = VarSet.union bound (VarSet.from_list xs) in
+	  let body = computation env bound None body in
 	    `Lambda (xs, body)
 	    
       (* FIXME: what is the second tuple component (Var.var option)? *)
       | `PrimitiveFunction (f, _) -> `Primitive f
       | _ -> failwith "Cannot convert value to expression"
 
-  and value env : Ir.value -> t = function
+  and value env bound : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Variable var ->
-        begin
-          match lookup env var with
-            | `Primitive "Nil" -> nil
-            | v -> v
-        end
+	(* Debug.f "lookup var %d" var; *)
+	if VarSet.mem var bound then
+	  begin 
+	    (* Debug.f "%d is bound" var; *)
+	    `Var var
+	  end
+	else
+	  begin
+	    (* Debug.f "%d is not bound" var; *)
+	    lookup bound env var
+	  end
     | `Extend (ext_fields, r) -> 
-	let r = opt_map (value env) r in
+	let r = opt_map (value env bound) r in
 	  `Extend (r, (StringMap.fold 
-		       (fun label v fields -> StringMap.add label (value env v) fields)
-		       ext_fields
-		       StringMap.empty))
+			 (fun label v fields -> StringMap.add label (value env bound v) fields)
+			 ext_fields
+			 StringMap.empty))
     | `Project (label, r) ->
-        `Project (value env r, label)
+        `Project (value env bound r, label)
     | `Erase (labels, r) ->
-        `Erase (value env r, labels)
-    | `Inject (label, v, _t) -> `Variant (label, value env v)
-    | `TAbs (_, v) -> value env v
-    | `TApp (v, _) -> value env v
+        `Erase (value env bound r, labels)
+    | `Inject (label, v, _t) -> `Variant (label, value env bound v)
+    | `TAbs (_, v) -> value env bound v
+    | `TApp (v, _) -> value env bound v
 
     (* FIXME: handle XmlNode somehow *)
     | `XmlNode _ -> assert false
@@ -375,14 +368,14 @@ struct
     *)
 
     | `ApplyPure (f, ps) -> 
-        apply env (value env f, List.map (value env) ps)
-    | `Coerce (v, _) -> value env v
+        apply env bound (value env bound f, List.map (value env bound) ps)
+    | `Coerce (v, _) -> value env bound v
 
-  and apply_exp (parameters, body) env args =
+  and apply_exp bound (parameters, body) env args =
     
     let env = List.fold_left bind env (List.combine parameters args) in
     let rec inline = function
-      | `Var x -> lookup env x 
+      | `Var x -> lookup bound env x 
       | `For (l, os, body) -> `For (inline l, List.map inline os, inline body)
       | `If (c, t, e) -> `If (inline c, inline t, opt_map inline e)
       | `Singleton t -> `Singleton (inline t)
@@ -392,7 +385,7 @@ struct
       | `Erase (r, fields) -> `Erase (inline r, fields)
       | `Extend (r, fields) -> `Extend (opt_map inline r, StringMap.map inline fields)
       | `Variant (tag, value) -> `Variant (tag, inline value)
-      | `Apply (f, args) -> `Apply (f, List.map inline args)
+      | `Apply (f, args) -> apply env bound (inline f, List.map inline args)
       | `Lambda (args, body) -> `Lambda (args, inline body)
       | `Case (v, cases, default) -> 
 	  let case (x, body) = (x, inline body) in
@@ -401,9 +394,8 @@ struct
     in
       inline body
 
-	
-  and apply env : t * t list -> t = function
-    | `Lambda (parameters, body), args -> apply_exp (parameters, body) env args
+  and apply env bound : t * t list -> t = function
+    | `Lambda (parameters, body), args -> apply_exp bound (parameters, body) env args
     | `Primitive "AsList", [xs] ->
         xs
     | `Primitive "Cons", [x; `Append []] ->
@@ -435,94 +427,97 @@ struct
 		  end
 	    | _ -> assert false
 	end
-(*
-    | `Primitive "groupByBase", [f; source] ->
-	begin
-	  match f with
-	    | `Lambda (([x], body), Lambda_env) ->
-		let env = env ++ Lambda_env in
-		let group_exp = computation (bind env (x, `Var x)) body in
-		  `GroupBy ((x, group_exp), source)
-	    | _ -> assert false
-	end
-*)
     | `Primitive "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
-	`Apply ("and", [(apply env (`Primitive "Map", [p; l]))])
+	`Apply (`Primitive "and", [(apply env bound (`Primitive "Map", [p; l]))])
     | `Primitive "any", [p; l] -> 
 	(* any(p, l) = or(map p l) *)
-	`Apply ("or", [(apply env (`Primitive "Map", [p; l]))])
+	`Apply (`Primitive "or", [(apply env bound (`Primitive "Map", [p; l]))])
     | `Primitive "<", [e1; e2] ->
-	`Apply (">", [e2; e1])
+	`Apply (`Primitive ">", [e2; e1])
     | `Primitive ">=", [e1; e2] ->
-	`If (`Apply (">", [e1; e2]),
+	`If (`Apply (`Primitive ">", [e1; e2]),
 	     `Constant (`Bool true),
-	     Some (`Apply ("==", [e1; e2])))
+	     Some (`Apply (`Primitive "==", [e1; e2])))
     | `Primitive "<=", [e1; e2] ->
-	`If (`Apply (">", [e2; e1]),
+	`If (`Apply (`Primitive ">", [e2; e1]),
 	     `Constant (`Bool true),
-	     Some (`Apply ("==", [e1; e2])))
+	     Some (`Apply (`Primitive "==", [e1; e2])))
     | `Primitive "tilde", [s; p] -> 
 	let pattern = QueryRegex.similarify p in
-	`Apply ("tilde", [s; pattern])
+	`Apply (`Primitive "tilde", [s; pattern])
     | `Primitive f, args ->
-        `Apply (f, args)
+        `Apply (`Primitive f, args)
     | `If (c, t, Some e), args ->
-        `If (c, apply env (t, args), Some (apply env (e, args)))
+        `If (c, apply env bound (t, args), Some (apply env bound (e, args)))
     | `If (c, t, None), args ->
-	`If (c, apply env (t, args), None)
+	`If (c, apply env bound (t, args), None)
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
+    | (`Var x, args) -> 
+	(* Debug.f "apply lookup %d" x; *)
+	`Apply (lookup bound env x, args)
     | (f, args) -> 
-	List.iter (fun t -> Debug.print (string_of_t t)) (f :: args);
-	eval_error "Application of non-function"
+	let t = mapstrcat "\n" string_of_t (f :: args) in
+	  failwith ("Application of non-function\n" ^ t)
 
-  and computation env range (binders, tailcomp) : t =
+  and computation env bound range (binders, tailcomp) : t =
     match binders with
-      | [] -> tail_computation env range tailcomp
+      | [] -> 
+	  (* Debug.print "tailcomp"; *)
+	  tail_computation env bound range tailcomp
       | b::bs ->
           begin
             match b with
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
-                    computation (bind env (x, tail_computation env None tc)) range (bs, tailcomp)
+		  let value = tail_computation env bound None tc in
+		    (* Debug.f "let %d -> %s" x (string_of_t value); *)
+		    computation (bind env (x, value)) bound range (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
+		  (*Debug.f "fun %d" f; *)
 		  let arg_vars = List.map fst args in
-		  let body_env = List.fold_left (fun env x -> bind env (x, `Var x)) env arg_vars in
-		  let body = computation body_env None body in
+		  let bound' = VarSet.union bound (VarSet.from_list arg_vars) in
+		  let body = computation env bound' None body in
+		  let lambda = `Lambda (arg_vars, body) in
+		    (* Debug.f "fun %d -> %s" f (string_of_t lambda); *)
 		    computation
-		      (bind env (f, `Lambda (arg_vars, body)))
+		      (bind env (f, lambda))
+		      bound
 		      range
 		      (bs, tailcomp)
               | `Rec _defs ->
                   eval_error "Recursive function"
               | `Alien _ 
               | `Alias _ -> (* just skip it *)
-                  computation env range (bs, tailcomp)
+                  computation env bound range (bs, tailcomp)
               | `Module _ -> failwith "Not implemented modules yet"
           end
 
-  and tail_computation env range tailcomp : t =
+  and tail_computation env bound range tailcomp : t =
     let tc = function
-      | `Return v -> value env v
+      | `Return v -> value env bound v
       | `Apply (f, args) ->
-          apply env (value env f, List.map (value env) args)
-      | `Special (`Query (None, e, _)) -> computation env range e
+	  let f = value env bound f in
+	  let args = List.map (value env bound) args in
+	    (* Debug.f "apply %s %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]"); *)
+	    apply env bound (f, args)
+      | `Special (`Query (None, e, _)) -> computation env bound range e
       | `Special `Wrong _ -> `Wrong
       | `Special _s -> failwith "special not allowed in query block"
       | `Case (v, cases, default) ->
-	  let v' = value env v in
-	  let case = fun ((x, _), c) -> (x, computation (bind env (x, `Var x)) None c) in
+	  let v' = value env bound v in
+	  let case ((x, _), c) = (x, computation env (VarSet.add x bound) None c) in
 	  let cases' = StringMap.map case cases in
 	  let default' = opt_map case default in
 	    `Case (v', cases', default')
 
       | `If (c, t, e) ->
-          let c = value env c in
-          let t = computation env None t in
-          let e = computation env None e in
+          let c = value env bound c in
+          let t = computation env bound None t in
+          let e = computation env bound None e in
 	    match e with
 	      | `Append [] -> `If (c, t, None)
 	      | e -> `If (c, t, Some e)
@@ -531,7 +526,7 @@ struct
       match range with
 	| None -> exp
 	| Some (limit, offset) ->
-	    `Apply ("limit", [`Constant (`Int limit); `Constant (`Int offset); exp])
+	    `Apply (`Primitive "limit", [`Constant (`Int limit); `Constant (`Int offset); exp])
 
   and reduce_for_source _env f source =
     let x, _body =
@@ -556,7 +551,7 @@ struct
 	| e -> 
 	    e
 
-  let eval env range e = computation (env_of_value_env env) range e
+  let eval env range e = computation (env_of_value_env env) VarSet.empty range e
 end
 
 module Annotate = struct
@@ -576,8 +571,8 @@ module Annotate = struct
       | `Extend of (typed_t option * typed_t name_map) * implementation_type
       | `Variant of (string * typed_t) * implementation_type
       | `XML of Value.xmlitem * implementation_type
-      | `Apply of (string * typed_t list) * implementation_type
-      | `Primitive of string * implementation_type
+      | `Apply of (typed_t * typed_t list) * implementation_type
+      | `Primitive of string 
       | `Var of Var.var * implementation_type
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_t * implementation_type
@@ -599,7 +594,7 @@ module Annotate = struct
     | `Variant (_, t) -> t 
     | `XML (_, t) -> t 
     | `Apply (_, t) -> t 
-    | `Primitive (_, t) -> t
+    | `Primitive _ -> assert false
     | `Var (_, t) -> t 
     | `Constant (_, t) -> t 
     | `Box (_, t) -> t 
@@ -619,9 +614,9 @@ module Annotate = struct
       | `Extend of (typed_pt option * typed_pt name_map) * implementation_type
       | `Variant of (string * typed_pt) * implementation_type
       | `XML of Value.xmlitem * implementation_type
-      | `Apply of (string * typed_pt list) * implementation_type
+      | `Apply of (typed_pt * typed_pt list) * implementation_type
       | `Lambda of (Var.var list * typed_pt) * implementation_type
-      | `Primitive of string * implementation_type
+      | `Primitive of string 
       | `Var of Var.var * implementation_type 
       | `Constant of Constant.constant * implementation_type
       | `Box of typed_pt * implementation_type 
@@ -645,9 +640,9 @@ module Annotate = struct
         | `XML (xmlitem, typ) -> `XML (xmlitem, typ)
         | `Project ((v, name), typ) -> `Project ((bt v, name), typ)
         | `Erase ((v, names), typ) -> `Erase ((bt v, names), typ)
-        | `Apply ((f, vs), typ) -> `Apply ((f, List.map bt vs), typ)
+        | `Apply ((f, vs), typ) -> `Apply ((bt f, List.map bt vs), typ)
         | `Lambda ((xs, e), typ) -> `Lambda ((xs, e), typ)
-        | `Primitive (f, typ) -> `Primitive (f, typ)
+        | `Primitive f -> `Primitive f
         | `Var (v, typ) -> `Var (v, typ)
         | `Constant (c, typ) -> `Constant (c, typ)
 	| `Box (e, typ) -> `Box (bt e, typ)
@@ -738,7 +733,7 @@ module Annotate = struct
 
       | `Wrong -> `Wrong `Atom
 
-      | `Apply (f, args) ->
+      | `Apply ((`Primitive f), args) ->
 	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
 	    begin
 	      match f with
@@ -751,21 +746,21 @@ module Annotate = struct
 		    let l = transform env l in
 		    let o = transform env o in
 		    let e = transform env e in
-		      `Apply ((f, [l; o; e]), typeof_typed_t e)
+		      `Apply (((`Primitive f), [l; o; e]), typeof_typed_t e)
 		      
 		| "+" | "+." | "-" | "-." | "*" | "*." 
 		| "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
 		    (* these operators are only ever applied to atomic
 		       values, so no need to annotate the arguments *)
 		    (* `Atom -> `Atom -> `Atom *)
-		    `Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
+		    `Apply (((`Primitive f), List.map (fun arg -> transform env arg) args), `Atom)
 		| "<>" | "==" | ">" ->
 		    (* arguments can have any type because we can compare
 		       atomic values, records and lists. boxed lists are
 		       unboxed in compileQuery so we need no annotation
 		       here *)
 		    (* a -> b -> `Atom *)
-		    `Apply ((f, List.map (fun arg -> transform env arg) args), `Atom)
+		    `Apply (((`Primitive f), List.map (fun arg -> transform env arg) args), `Atom)
 		| "nth" ->
 		    (* `Atom -> `List -> `Atom *)
 		    let (n, l) = 
@@ -775,7 +770,7 @@ module Annotate = struct
 		    in
 		    let n' = transform env n in
 		    let l' = aot `List env l in
-		      `Apply ((f, [n'; l']), `Atom)
+		      `Apply (((`Primitive f), [n'; l']), `Atom)
 		| "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
 		    (* `Atom -> `List -> `List *)
 		    let (n, l) = 
@@ -785,7 +780,7 @@ module Annotate = struct
 		    in
 		    let n' = transform env n in
 		    let l' = aot `List env l in
-		      `Apply ((f, [n'; l']), `List)
+		      `Apply (((`Primitive f), [n'; l']), `List)
 		| "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
 		    (* `List -> `Atom *)
 		    let l = 
@@ -794,7 +789,7 @@ module Annotate = struct
 			 | _ -> fail_arg "length")
 		    in
 		    let l' = aot `List env l in
-		      `Apply ((f, [l']), `Atom)
+		      `Apply (((`Primitive f), [l']), `Atom)
 		| "concat" | "tl" | "nubBase" ->
 		    (* `List -> `List *)
 		    let l =
@@ -803,7 +798,7 @@ module Annotate = struct
 			 | _ -> fail_arg "concat")
 		    in
 		    let l' = aot `List env l in
-		      `Apply ((f, [l']), `List)
+		      `Apply (((`Primitive f), [l']), `List)
 		| "zip" ->
 		    (* `List -> `List -> `List *)
 		    let (l, r) =
@@ -813,7 +808,7 @@ module Annotate = struct
 		    in
 		    let l' = aot `List env l in
 		    let r' = aot `List env r in
-		      `Apply ((f, [l'; r']), `List)
+		      `Apply (((`Primitive f), [l'; r']), `List)
 		| _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented")
 	    end
       | _ -> failwith "Query2.Annotate.transform: not implemented"
