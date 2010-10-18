@@ -245,13 +245,13 @@ struct
       match Value.lookup var val_env, Env.Int.find exp_env var with
 	| None, Some v -> v
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
-            `Primitive "ConcatMap"
+            `Primitive "concatMap"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
-            `Primitive "Map"
+            `Primitive "map"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
-            `Primitive "SortBy"
+            `Primitive "sortBy"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
-	    `Primitive "AsList"
+	    `Primitive "asList"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
 	    `Primitive "zip"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
@@ -321,15 +321,15 @@ struct
   and value env bound : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Variable var ->
-	(* Debug.f "lookup var %d" var; *)
+	Debug.f "lookup var %d" var;
 	if VarSet.mem var bound then
 	  begin 
-	    (* Debug.f "%d is bound" var; *)
+	    Debug.f "%d is bound" var;
 	    `Var var
 	  end
 	else
 	  begin
-	    (* Debug.f "%d is not bound" var; *)
+	    Debug.f "%d is not bound" var;
 	    lookup bound env var
 	  end
     | `Extend (ext_fields, r) -> 
@@ -371,48 +371,46 @@ struct
         apply env bound (value env bound f, List.map (value env bound) ps)
     | `Coerce (v, _) -> value env bound v
 
-  and apply_exp bound (parameters, body) env args =
-    
+  and beta_reduce bound (parameters, body) env args =
     let env = List.fold_left bind env (List.combine parameters args) in
-    let rec inline = function
+    let rec reduce = function
       | `Var x -> lookup bound env x 
-      | `For (l, os, body) -> `For (inline l, List.map inline os, inline body)
-      | `If (c, t, e) -> `If (inline c, inline t, opt_map inline e)
-      | `Singleton t -> `Singleton (inline t)
-      | `Append ts -> `Append (List.map inline ts)
-      | `Record r -> `Record (StringMap.map inline r)
-      | `Project (r, field) -> `Project (inline r, field)
-      | `Erase (r, fields) -> `Erase (inline r, fields)
-      | `Extend (r, fields) -> `Extend (opt_map inline r, StringMap.map inline fields)
-      | `Variant (tag, value) -> `Variant (tag, inline value)
-      | `Apply (f, args) -> apply env bound (inline f, List.map inline args)
-      | `Lambda (args, body) -> `Lambda (args, inline body)
+      | `For (l, os, body) -> `For (reduce l, List.map reduce os, reduce body)
+      | `If (c, t, e) -> `If (reduce c, reduce t, opt_map reduce e)
+      | `Singleton t -> `Singleton (reduce t)
+      | `Append ts -> `Append (List.map reduce ts)
+      | `Record r -> `Record (StringMap.map reduce r)
+      | `Project (r, field) -> `Project (reduce r, field)
+      | `Erase (r, fields) -> `Erase (reduce r, fields)
+      | `Extend (r, fields) -> `Extend (opt_map reduce r, StringMap.map reduce fields)
+      | `Variant (tag, value) -> `Variant (tag, reduce value)
+      | `Apply (f, args) -> apply env bound (reduce f, List.map reduce args)
+      | `Lambda (args, body) -> `Lambda (args, reduce body)
       | `Case (v, cases, default) -> 
-	  let case (x, body) = (x, inline body) in
-	    `Case (inline v, StringMap.map case cases, opt_map case default)
+	  let case (x, body) = (x, reduce body) in
+	    `Case (reduce v, StringMap.map case cases, opt_map case default)
       | e -> e 
     in
-      inline body
+      reduce body
 
-  and apply env bound : t * t list -> t = function
-    | `Lambda (parameters, body), args -> apply_exp bound (parameters, body) env args
-    | `Primitive "AsList", [xs] ->
+  and rewrite_primitive env bound : string * t list -> t = function
+    | "asList", [xs] ->
         xs
-    | `Primitive "Cons", [x; `Append []] ->
+    | "Cons", [x; `Append []] ->
 	`Singleton x
-    | `Primitive "Cons", [x; xs] ->
+    | "Cons", [x; xs] ->
 	reduce_append [`Singleton x; xs]
-    | `Primitive "Concat", [xs; ys] ->
+    | "Concat", [xs; ys] ->
 	reduce_append [xs; ys]
-    | `Primitive "ConcatMap", [f; xs] -> reduce_for_source env f xs
-    | `Primitive "Map", [f; xs] ->
+    | "concatMap", [f; xs] -> reduce_for_source env f xs
+    | "map", [f; xs] ->
         begin
           match f with
             | `Lambda ([x], body) ->
 		reduce_for_source env (`Lambda ([x], `Singleton body)) xs
             | _ -> assert false
         end
-    | `Primitive "SortBy", [f; xs] ->
+    | "sortBy", [f; xs] ->
 	begin
 	  match f with
 	    | `Lambda ([x], body) ->
@@ -427,44 +425,40 @@ struct
 		  end
 	    | _ -> assert false
 	end
-    | `Primitive "all", [p; l] ->
+    | "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
 	`Apply (`Primitive "and", [(apply env bound (`Primitive "Map", [p; l]))])
-    | `Primitive "any", [p; l] -> 
+    | "any", [p; l] -> 
 	(* any(p, l) = or(map p l) *)
 	`Apply (`Primitive "or", [(apply env bound (`Primitive "Map", [p; l]))])
-    | `Primitive "<", [e1; e2] ->
+    | "<", [e1; e2] ->
 	`Apply (`Primitive ">", [e2; e1])
-    | `Primitive ">=", [e1; e2] ->
+    | ">=", [e1; e2] ->
 	`If (`Apply (`Primitive ">", [e1; e2]),
 	     `Constant (`Bool true),
 	     Some (`Apply (`Primitive "==", [e1; e2])))
-    | `Primitive "<=", [e1; e2] ->
+    | "<=", [e1; e2] ->
 	`If (`Apply (`Primitive ">", [e2; e1]),
 	     `Constant (`Bool true),
 	     Some (`Apply (`Primitive "==", [e1; e2])))
-    | `Primitive "tilde", [s; p] -> 
+    | "tilde", [s; p] -> 
 	let pattern = QueryRegex.similarify p in
 	`Apply (`Primitive "tilde", [s; pattern])
-    | `Primitive f, args ->
-        `Apply (`Primitive f, args)
-    | `If (c, t, Some e), args ->
-        `If (c, apply env bound (t, args), Some (apply env bound (e, args)))
-    | `If (c, t, None), args ->
-	`If (c, apply env bound (t, args), None)
-    | `Apply (f, args), args' ->
-        `Apply (f, args @ args')
-    | (`Var x, args) -> 
-	(* Debug.f "apply lookup %d" x; *)
+    | f, args ->
+	`Apply (`Primitive f, args)
+
+  and apply env bound : t * t list -> t = function
+    | `Lambda (parameters, body), args -> beta_reduce bound (parameters, body) env args
+    | `Primitive f, args -> rewrite_primitive env bound (f, args)
+    | `Var x, args -> 
+	Debug.f "apply lookup %d" x;
 	`Apply (lookup bound env x, args)
-    | (f, args) -> 
-	let t = mapstrcat "\n" string_of_t (f :: args) in
-	  failwith ("Application of non-function\n" ^ t)
+    | f, args -> `Apply (f, args)
 
   and computation env bound range (binders, tailcomp) : t =
     match binders with
       | [] -> 
-	  (* Debug.print "tailcomp"; *)
+	  Debug.print "tailcomp";
 	  tail_computation env bound range tailcomp
       | b::bs ->
           begin
@@ -472,17 +466,17 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
 		  let value = tail_computation env bound None tc in
-		    (* Debug.f "let %d -> %s" x (string_of_t value); *)
+		    Debug.f "let %d -> %s" x (string_of_t value);
 		    computation (bind env (x, value)) bound range (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
-		  (*Debug.f "fun %d" f; *)
+		  Debug.f "fun %d" f;
 		  let arg_vars = List.map fst args in
 		  let bound' = VarSet.union bound (VarSet.from_list arg_vars) in
 		  let body = computation env bound' None body in
 		  let lambda = `Lambda (arg_vars, body) in
-		    (* Debug.f "fun %d -> %s" f (string_of_t lambda); *)
+		    Debug.f "fun %d -> %s" f (string_of_t lambda);
 		    computation
 		      (bind env (f, lambda))
 		      bound
@@ -502,7 +496,7 @@ struct
       | `Apply (f, args) ->
 	  let f = value env bound f in
 	  let args = List.map (value env bound) args in
-	    (* Debug.f "apply %s %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]"); *)
+	    Debug.f "apply %s %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]");
 	    apply env bound (f, args)
       | `Special (`Query (None, e, _)) -> computation env bound range e
       | `Special `Wrong _ -> `Wrong
