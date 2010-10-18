@@ -38,7 +38,8 @@ deriving (Show)
 
 let string_of_t = Show.show show_t
 
-type env = Value.env * t Env.Int.t
+type query_env = t Env.Int.t deriving (Show)
+type env = Value.env * query_env
 
 let unbox_xml =
   function
@@ -323,28 +324,34 @@ struct
 
   and beta_reduce bound (parameters, body) env args =
     let env = List.fold_left bind env (List.combine parameters args) in
-    let rec reduce = function
-      | `Var x -> lookup bound env x 
-      | `For (l, os, body) -> `For (reduce l, List.map reduce os, reduce body)
-      | `If (c, t, e) -> `If (reduce c, reduce t, opt_map reduce e)
-      | `Singleton t -> `Singleton (reduce t)
-      | `Append ts -> `Append (List.map reduce ts)
-      | `Record r -> `Record (StringMap.map reduce r)
-      | `Project (r, field) -> `Project (reduce r, field)
-      | `Erase (r, fields) -> `Erase (reduce r, fields)
-      | `Extend (r, fields) -> `Extend (opt_map reduce r, StringMap.map reduce fields)
-      | `Variant (tag, value) -> `Variant (tag, reduce value)
-      | `Apply (f, args) -> apply env bound (reduce f, List.map reduce args)
-      | `Lambda (args, body) -> `Lambda (args, reduce body)
-      | `Case (v, cases, default) -> 
-	  let case (x, body) = (x, reduce body) in
-	    `Case (reduce v, StringMap.map case cases, opt_map case default)
-      | e -> e 
+    let rec reduce bound e = 
+      match e with
+	| `Var x -> lookup bound env x 
+	| `For (l, os, body) -> `For (reduce bound l, List.map (reduce bound) os, reduce bound body)
+	| `If (c, t, e) -> `If (reduce bound c, reduce bound t, opt_map (reduce bound) e)
+	| `Singleton t -> `Singleton (reduce bound t)
+	| `Append ts -> `Append (List.map (reduce bound) ts)
+	| `Record r -> `Record (StringMap.map (reduce bound) r)
+	| `Project (r, field) -> `Project (reduce bound r, field)
+	| `Erase (r, fields) -> `Erase (reduce bound r, fields)
+	| `Extend (r, fields) -> `Extend (opt_map (reduce bound) r, StringMap.map (reduce bound) fields)
+	| `Variant (tag, value) -> `Variant (tag, reduce bound value)
+	| `Apply (f, args) -> apply env bound (reduce bound f, List.map (reduce bound) args)
+	| `Lambda (args, body) ->
+	    let bound' = VarSet.union bound (VarSet.from_list args) in
+	      `Lambda (args, reduce bound' body)
+	| `Case (v, cases, default) -> 
+	    let case (x, body) = 
+	      let bound' = VarSet.add x bound in
+		(x, reduce bound' body) 
+	    in
+	      `Case (reduce bound v, StringMap.map case cases, opt_map case default)
+	| e -> e 
     in
-      reduce body
+      reduce bound body
 
   and rewrite_primitive env bound : string * t list -> t = function
-    | "asList", [xs] ->
+    | "AsList", [xs] ->
         xs
     | "Cons", [x; `Append []] ->
 	`Singleton x
@@ -398,9 +405,13 @@ struct
 	`Apply (`Primitive f, args)
 
   and apply env bound : t * t list -> t = function
-    | `Lambda (parameters, body), args -> beta_reduce bound (parameters, body) env args
-    | `Primitive f, args -> rewrite_primitive env bound (f, args)
+    | `Lambda (parameters, body), args -> 
+	beta_reduce bound (parameters, body) env args
+(*    | `Lambda (parameters, body), args -> `Apply ((`Lambda (parameters, body)), args) *)
+    | `Primitive f, args -> rewrite_primitive env bound (f, args) 
     | `Var x, args -> 
+	print_endline "apply_var";
+	flush stdout;
 	Debug.f "apply lookup %d" x;
 	`Apply (lookup bound env x, args)
     | f, args -> `Apply (f, args)
@@ -649,8 +660,6 @@ module Annotate = struct
 		      [`Atom; `Atom; `Any], (typeof_typed_t (transform env e))
 		| "+" | "+." | "-" | "-." | "*" | "*." 
 		| "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
-		    (* these operators are only ever applied to atomic
-		       values, so no need to annotate the arguments *)
 		    (* `Atom -> `Atom -> `Atom *)
 		      [`Atom; `Atom], `Atom
 		| "<>" | "==" | ">" ->
