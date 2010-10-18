@@ -556,6 +556,14 @@ module Annotate = struct
 
   let rec transform env (expression : t) : typed_t =
     let aot want env = (fun e -> (annotate want (transform env e))) in
+    let enforce_shape args shape =
+      let aux e = function
+	| `Any -> transform env e
+	| `List -> aot `List env e
+	| `Atom -> aot `Atom env e
+      in
+	List.map2 aux args shape
+    in
     match expression with
       | `Constant c -> `Constant (c, `Atom)
       | `Table t -> `Table (t, `List) 
@@ -628,83 +636,49 @@ module Annotate = struct
       | `Wrong -> `Wrong `Atom
 
       | `Apply ((`Primitive f), args) ->
-	  let fail_arg f = failwith ("Annotate.transform: invalid argument number for " ^ f) in
+	  let fail_arg f = failwith ("Annotate.transform: wrong number of arguments for " ^ f) in
+	  let shape, typ =
 	    begin
 	      match f with
 		| "limit" ->
-		    let (l, o, e) =
+		    let e =
 		      match args with 
-			| [l; o; e] -> (l, o, e)
+			| [_; _; e] -> e
 			| _ -> fail_arg "limit"
 		    in
-		    let l = transform env l in
-		    let o = transform env o in
-		    let e = transform env e in
-		      `Apply (((`Primitive f), [l; o; e]), typeof_typed_t e)
-		      
+		      [`Atom; `Atom; `Any], (typeof_typed_t (transform env e))
 		| "+" | "+." | "-" | "-." | "*" | "*." 
 		| "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
 		    (* these operators are only ever applied to atomic
 		       values, so no need to annotate the arguments *)
 		    (* `Atom -> `Atom -> `Atom *)
-		    `Apply (((`Primitive f), List.map (fun arg -> transform env arg) args), `Atom)
+		      [`Atom; `Atom], `Atom
 		| "<>" | "==" | ">" ->
 		    (* arguments can have any type because we can compare
 		       atomic values, records and lists. boxed lists are
 		       unboxed in compileQuery so we need no annotation
 		       here *)
 		    (* a -> b -> `Atom *)
-		    `Apply (((`Primitive f), List.map (fun arg -> transform env arg) args), `Atom)
+		      [`Any; `Any], `Atom
 		| "nth" ->
 		    (* `Atom -> `List -> `Atom *)
-		    let (n, l) = 
-		      (match args with 
-			 | [a1; a2] -> (a1, a2)
-			 | _ -> fail_arg "nth")
-		    in
-		    let n' = transform env n in
-		    let l' = aot `List env l in
-		      `Apply (((`Primitive f), [n'; l']), `Atom)
+		    [`Atom; `List], `Atom
 		| "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
 		    (* `Atom -> `List -> `List *)
-		    let (n, l) = 
-		      (match args with 
-			 | [a1; a2] -> (a1, a2)
-			 | _ -> fail_arg "take/drop")
-		    in
-		    let n' = transform env n in
-		    let l' = aot `List env l in
-		      `Apply (((`Primitive f), [n'; l']), `List)
-		| "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
-		    (* `List -> `Atom *)
-		    let l = 
-		      (match args with 
-			 | [a1] -> a1
-			 | _ -> fail_arg "length")
-		    in
-		    let l' = aot `List env l in
-		      `Apply (((`Primitive f), [l']), `Atom)
-		| "concat" | "tl" | "nubBase" ->
-		    (* `List -> `List *)
-		    let l =
-		      (match args with
-			 | [a] -> a
-			 | _ -> fail_arg "concat")
-		    in
-		    let l' = aot `List env l in
-		      `Apply (((`Primitive f), [l']), `List)
+		    [`Atom; `List], `List
 		| "zip" ->
 		    (* `List -> `List -> `List *)
-		    let (l, r) =
-		      (match args with 
-			 | [a1; a2] -> (a1, a2)
-			 | _ -> fail_arg "zip")
-		    in
-		    let l' = aot `List env l in
-		    let r' = aot `List env r in
-		      `Apply (((`Primitive f), [l'; r']), `List)
+		    [`List; `List], `List
+		| "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
+		    (* `List -> `Atom *)
+		    [`List], `Atom
+		| "concat" | "tl" | "nubBase" ->
+		    (* `List -> `List *)
+		    [`List], `List
 		| _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented")
 	    end
+	  in
+	    `Apply (((`Primitive f), (enforce_shape args shape)), typ)
       | _ -> failwith "Query2.Annotate.transform: not implemented"
 	  
 end
