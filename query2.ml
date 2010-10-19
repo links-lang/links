@@ -405,15 +405,10 @@ struct
 	`Apply (`Primitive f, args)
 
   and apply env bound : t * t list -> t = function
-    | `Lambda (parameters, body), args -> 
-	beta_reduce bound (parameters, body) env args
+    | `Lambda (parameters, body), args -> beta_reduce bound (parameters, body) env args
 (*    | `Lambda (parameters, body), args -> `Apply ((`Lambda (parameters, body)), args) *)
     | `Primitive f, args -> rewrite_primitive env bound (f, args) 
-    | `Var x, args -> 
-	print_endline "apply_var";
-	flush stdout;
-	Debug.f "apply lookup %d" x;
-	`Apply (lookup bound env x, args)
+    | `Var x, args -> `Apply (lookup bound env x, args)
     | f, args -> `Apply (f, args)
 
   and computation env bound range (binders, tailcomp) : t =
@@ -565,16 +560,18 @@ module Annotate = struct
       | `Atom, `List -> `Box (expression, want)
       | `List, `Atom -> `Unbox (expression, want)
 
-  let rec transform env (expression : t) : typed_t =
-    let aot want env = (fun e -> (annotate want (transform env e))) in
-    let enforce_shape args shape =
-      let aux e = function
-	| `Any -> transform env e
-	| `List -> aot `List env e
-	| `Atom -> aot `Atom env e
-      in
-	List.map2 aux args shape
+  let rec enforce_shape env args shape =
+    let aux e = function
+      | `Any -> transform env e
+      | `List -> aot `List env e
+      | `Atom -> aot `Atom env e
     in
+      List.map2 aux args shape
+
+  and aot want env e = annotate want (transform env e)
+
+  and transform env (expression : t) : typed_t =
+    let enforce_shape = enforce_shape env in
     match expression with
       | `Constant c -> `Constant (c, `Atom)
       | `Table t -> `Table (t, `List) 
@@ -607,11 +604,12 @@ module Annotate = struct
 	  let ext_fields' = StringMap.map (aot `Atom env) ext_fields in
 	  let r' = opt_map (fun r -> transform env r) r in
 	    `Extend ((r' ,ext_fields'), `Atom)
-      | `For (source, os, body) ->
+      | `For (source, os, `Lambda ([x], body)) ->
 	  let source' = aot `List env source in
 	  let os' = List.map (fun o -> transform env o) os in
-	  let body' = aot `List env body in
-	    `For ((source', os', body'), `List)
+	  let env' = Env.Int.bind env (x, `Atom) in
+	  let body' = aot `List env' body in
+	    `For ((source', os', `Lambda (([x], body'), `Atom)), `List)
 (*       | `GroupBy ((x, group_exp), source) ->
 	  let env' = Env.Int.bind env (x, `Atom) in
 	  let group_exp' = aot `Atom env' group_exp in
@@ -619,8 +617,8 @@ module Annotate = struct
 	    `GroupBy (((x, group_exp'), source'), `List) *)
       | `Lambda (xs, body) -> 
 	  let env' = List.fold_left (fun env' x -> Env.Int.bind env' (x, `Atom)) env xs in
-	  let body' = transform env' body in
-	    `Lambda ((xs, body'), typeof_typed_t body')
+	  let body' = aot `Atom env' body in
+	    `Lambda ((xs, body'), `Atom)
       | `Var x -> 
 	  `Var (x, Env.Int.lookup env x) 
       | `Case (v, cases, default) ->
@@ -645,6 +643,7 @@ module Annotate = struct
 	    `Case ((v', cases', default'), case_typ)
 
       | `Wrong -> `Wrong `Atom
+
 
       | `Apply ((`Primitive f), args) ->
 	  let fail_arg f = failwith ("Annotate.transform: wrong number of arguments for " ^ f) in
@@ -688,6 +687,10 @@ module Annotate = struct
 	    end
 	  in
 	    `Apply (((`Primitive f), (enforce_shape args shape)), typ)
+      | `Apply (e, args) -> 
+
+	  let shape = List.map (fun _ -> `Atom) args in
+	  `Apply ((transform env e, enforce_shape args shape), `Atom)
       | _ -> failwith "Query2.Annotate.transform: not implemented"
 	  
 end
