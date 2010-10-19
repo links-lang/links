@@ -34,6 +34,8 @@ module Annotate : sig
     | `Wrong of implementation_type ]
       
   val typeof_typed_t : typed_t -> implementation_type
+
+  val string_of_typed_t : typed_t -> string
 end
 
 (** compile a IR tree together with the local environment to an expression tree 

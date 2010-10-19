@@ -351,7 +351,7 @@ struct
       reduce bound body
 
   and rewrite_primitive env bound : string * t list -> t = function
-    | "AsList", [xs] ->
+    | "asList", [xs] ->
         xs
     | "Cons", [x; `Append []] ->
 	`Singleton x
@@ -691,7 +691,7 @@ module Annotate = struct
 
 	  let shape = List.map (fun _ -> `Atom) args in
 	  `Apply ((transform env e, enforce_shape args shape), `Atom)
-      | _ -> failwith "Query2.Annotate.transform: not implemented"
+      | e -> failwith ("Query2.Annotate.transform: " ^ (string_of_t e) ^ "not implemented")
 	  
 end
 

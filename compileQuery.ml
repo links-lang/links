@@ -1,6 +1,5 @@
 open Utility
 
-
 module A = Algebra
 module ADag = Algebra_dag
 
@@ -64,9 +63,26 @@ struct
   let keep_cols vs cols = List.filter (fun ((col, _), _) -> List.mem col cols) vs
 end
 
+and Fs :
+sig
+  type fundev = (ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type t = (int * (fundev list)) list
+
+  val empty : t
+  val lookup : int -> t -> fundev list
+end
+=
+struct
+  type fundev = (ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type t = (int * (fundev list)) list
+
+  let empty = []
+  let lookup = List.assoc
+end
+
 and ExpressionToAlgebra : 
 sig
-  type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t }
+  type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t ; fs : Fs.t }
   type error_plan = ADag.t option
       
   val compile : Query2.Annotate.typed_t -> tblinfo * error_plan
@@ -77,7 +93,7 @@ struct
   (* the environment mapping variables to algebra plans *)
   module AEnv = Env.Int
 
-  type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t }
+  type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t; fs : Fs.t}
   type error_plan = ADag.t option
 
 (* module-global reference that stores the global error plan of the generated
@@ -101,7 +117,6 @@ struct
       | `Primitive `Float -> `FloatType
       | `Primitive `String -> `StrType
       | _ -> failwith ("unsupported type " ^ (Types.string_of_datatype concrete_t))
-
 
   let incr l i = List.map (fun j -> j + i) l
   let decr l i = List.map (fun j -> j - i) l
@@ -226,7 +241,8 @@ struct
       q = do_primitive_binop wrapper e1.q e2.q;
       cs = Cs.Column (1, restype);
       ts = Ts.empty; 
-      vs = Vs.empty 
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   let smaller = do_primitive_binop_ti wrap_lt `BoolType
@@ -253,7 +269,8 @@ struct
       q = q_unbox;
       cs = inner_ti.cs;
       ts = inner_ti.ts;
-      vs = inner_ti.vs 
+      vs = inner_ti.vs;
+      fs = Fs.empty
     }
 
   (* *)
@@ -272,6 +289,7 @@ struct
       cs = Cs.shift (-offset + 1) field_cs';
       ts = Ts.decr_cols (Ts.keep_cols record.ts old_cols) (offset - 1); 
       vs = Vs.decr_cols (Vs.keep_cols record.vs old_cols) (offset - 1);
+      fs = Fs.empty;
     }
 
   let do_length loop l =
@@ -280,14 +298,15 @@ struct
 	(A.Item 1, Some iter)
 	l.q
     in
-    {
-      q =  wrap_agg loop q (A.Int (Num.Int 0));
-      cs = Cs.Column (1, `IntType); 
-      ts = Ts.empty; 
-      vs = Vs.empty 
-    }
+      {
+	q =  wrap_agg loop q (A.Int (Num.Int 0));
+	cs = Cs.Column (1, `IntType); 
+	ts = Ts.empty; 
+	vs = Vs.empty;
+	fs = Fs.empty
+      }
 
-(* q_e1 and q_e2 must have absolute positions *)
+  (* q_e1 and q_e2 must have absolute positions *)
   let do_zip e1 e2 =
     let card_e1 = List.length (Cs.offsets e1.cs) in
     let cs_e2' = Cs.shift card_e1 e2.cs in
@@ -308,15 +327,16 @@ struct
 		    ([(iter', iter); (pos', pos)] @ (prjlist_map (io (Cs.offsets cs_e2')) (io (Cs.offsets e2.cs))))
 		    e2.q))))
     in
-    {
-      q = q;
-      cs = Cs.Mapping [("1", e1.cs); ("2", cs_e2')];
-      ts = Ts.append e1.ts ts_e2';
-      vs = Vs.append e1.vs vs_e2';
-    }
+      {
+	q = q;
+	cs = Cs.Mapping [("1", e1.cs); ("2", cs_e2')];
+	ts = Ts.append e1.ts ts_e2';
+	vs = Vs.append e1.vs vs_e2';
+	fs = Fs.empty
+      }
 
-(* apply the all aggregate operator to the first column grouped by iter 
-   (corresponds to the function "and" from the links prelude *)
+  (* apply the all aggregate operator to the first column grouped by iter 
+     (corresponds to the function "and" from the links prelude *)
   let do_list_and loop l =
     assert (Cs.is_atomic l.cs);
     let q' = 
@@ -325,7 +345,13 @@ struct
 	 l.q)
     in
     let q'' = wrap_agg loop q' (A.Bool true) in
-    { q = q''; cs = Cs.Column (1, `BoolType); ts = Ts.empty; vs = Vs.empty }
+      { 
+	q = q'';
+	cs = Cs.Column (1, `BoolType); 
+	ts = Ts.empty; 
+	vs = Vs.empty;
+	fs = Fs.empty
+      }
 
 (* apply the min aggregate operator to the first column grouped by iter 
    (corresponds to the function "or" from the links prelude *)
@@ -337,7 +363,13 @@ struct
 	l.q
     in
     let q'' = wrap_agg loop q' (A.Bool false) in
-    { q = q''; cs = Cs.Column (1, `BoolType); ts = Ts.empty; vs = Vs.empty }
+      { 
+	q = q''; 
+	cs = Cs.Column (1, `BoolType); 
+	ts = Ts.empty; 
+	vs = Vs.empty;
+	fs = Fs.empty
+      }
 
 (* join two inner tables together and compute new surrogate keys *)
   let combine_inner_tables q_l q_r =
@@ -399,7 +431,7 @@ struct
     let ts = append_ts q_combined ti_l.ts ti_r.ts in
 
     let vs = append_vs q_combined ti_l.vs ti_r.vs in
-    (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs }, itype_l)
+    (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs; fs = Fs.empty }, itype_l)
 
   and append_missing_vs q_outer ord_val ((refcol, tag), (ti, itype)) =
     let q_combined = 
@@ -416,7 +448,7 @@ struct
     let q_refreshed = ADag.mk_project projlist q_renumbered in
     let ts = append_ts q_combined ti.ts [] in
     let vs = append_vs q_combined ti.vs [] in
-    (refcol, tag), ({ q = q_refreshed; cs = ti.cs; ts = ts; vs = vs }, itype)
+    (refcol, tag), ({ q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = Fs.empty }, itype)
 
   and append_ts q_outer ts_l ts_r =
     let m = List.map (append_matching_ts q_outer) (same_keys ts_l ts_r) in
@@ -438,7 +470,7 @@ struct
     let ts = append_ts q_combined ti_l.ts ti_r.ts in
 
     let vs = append_vs q_combined ti_l.vs ti_r.vs in
-    refcol, { q = q; cs = cs; ts = ts; vs = vs }
+    refcol, { q = q; cs = cs; ts = ts; vs = vs; fs = Fs.empty }
 
   and append_missing_ts q_outer ord_val (refcol, ti) =
     let q_combined = 
@@ -455,7 +487,7 @@ struct
     let q_refreshed = ADag.mk_project projlist q_renumbered in
     let ts = append_ts q_combined ti.ts [] in
     let vs = append_vs q_combined ti.vs [] in
-    refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs }
+    refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = Fs.empty }
 
 (* only keep those tuples in an nested table which are actually referenced from the
    outer table *)
@@ -472,7 +504,7 @@ struct
 		[(iter', A.Item surr_col)]
 		q_outer))
       in
-      (surr_col, { q = q_inner'; cs = inner.cs; ts = (slice_inner_tables q_inner' inner.ts); vs = inner.vs })
+      (surr_col, { q = q_inner'; cs = inner.cs; ts = (slice_inner_tables q_inner' inner.ts); vs = inner.vs; fs = Fs.empty })
     in
 
     if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
@@ -500,6 +532,7 @@ struct
 	cs = ti.cs;
 	ts = slice_inner_tables ti.q ti.ts;
 	vs = ti.vs;
+	fs = Fs.empty
       }
     in
     AEnv.map (select loop) env
@@ -585,7 +618,8 @@ struct
       q = q_o;
       cs = Cs.Column (1, `Surrogate);
       ts = [(1, ti_e)];
-      vs = Vs.empty 
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_unbox env loop e =
@@ -608,7 +642,8 @@ struct
 	    q = ADag.mk_emptytbl;
 	    cs = Cs.Column (1, `EmptyListLit);
 	    ts = Ts.empty;
-	    vs = Vs.empty
+	    vs = Vs.empty;
+	    fs = Fs.empty
 	  }
 
   and compile_list hd tl = 
@@ -638,6 +673,7 @@ struct
       cs = cs;
       ts = append_ts q hd.ts tl.ts;
       vs = append_vs q hd.vs tl.vs;
+      fs = Fs.empty
     }
 
   and compile_zip env loop l1 l2 =
@@ -681,9 +717,10 @@ struct
     {
       q = q; 
       cs = Cs.Mapping [("1", Cs.Column (1, `Surrogate)); ("2", Cs.Column (2, `Surrogate))];
-      ts = [(1, { q = q_1; cs = cs_1; ts = ts_1; vs = vs_1 });
-	    (2, { q = q_2; cs = cs_2'; ts = ts_2; vs = vs_2 })];
-      vs = Vs.empty 
+      ts = [(1, { q = q_1; cs = cs_1; ts = ts_1; vs = vs_1; fs = Fs.empty });
+	    (2, { q = q_2; cs = cs_2'; ts = ts_2; vs = vs_2; fs = Fs.empty })];
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   (* FIXME: unite at least compile_or/and/length *)
@@ -716,7 +753,8 @@ struct
       q = q; 
       cs = Cs.Column (1, `BoolType);
       ts = Ts.empty; 
-      vs = Vs.empty 
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
 (* application of sum to [] is defined as 0 *)
@@ -734,7 +772,8 @@ struct
       q = q';
       cs = Cs.Column (1, `IntType);
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
 (* aggregate functions which are not defined on empty lists. the result
@@ -791,7 +830,8 @@ struct
 	q = q_inner_just;
 	cs = cs_inner_just;
 	ts = Ts.empty;
-	vs = Vs.empty
+	vs = Vs.empty;
+	fs = Fs.empty
       }
     in	
     let vs = [((2, "Just"), (ti_inner_just, `Atom)); 
@@ -801,7 +841,8 @@ struct
       q = q_outer;
       cs = outer_cs;
       ts = Ts.empty;
-      vs = vs
+      vs = vs;
+      fs = Fs.empty
     }
 
   and compile_nth env loop i l =
@@ -857,7 +898,8 @@ struct
 	q = q_inner_just;
 	cs = ti_l.cs;
 	ts = ts_l';
-	vs = ti_l.vs
+	vs = ti_l.vs;
+	fs = Fs.empty
       }
     in	
     let vs = [((2, "Just"), (ti_inner_just, `Atom));
@@ -867,7 +909,8 @@ struct
       q = q_outer;
       cs = outer_cs;
       ts = Ts.empty;
-      vs = vs
+      vs = vs;
+      fs = Fs.empty
     }
       
   and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 operand_2 =
@@ -953,7 +996,8 @@ struct
 	q = q;
 	cs = Cs.Column (1, `NatType);
 	ts = Ts.empty;
-	vs = Vs.empty
+	vs = Vs.empty;
+	fs = Fs.empty
       }
 	  
     in
@@ -981,7 +1025,8 @@ struct
       q = q;
       cs = Cs.Column (1, `BoolType);
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty;
     }
 
   and do_row_greater_real loop wrapper zipped =
@@ -1015,7 +1060,8 @@ struct
 	q = q;
 	cs = Cs.Column (1, `BoolType);
 	ts = Ts.empty;
-	vs = Vs.empty
+	vs = Vs.empty;
+	fs = Fs.empty
       }
     in
 
@@ -1051,7 +1097,8 @@ struct
 	q = q;
 	cs = Cs.Column (1, `BoolType);
 	ts = Ts.empty;
-	vs = Vs.empty
+	vs = Vs.empty;
+	fs = Fs.empty;
       }
     in
 
@@ -1118,7 +1165,8 @@ struct
 	q = result_backmapped;
 	cs = Cs.Column (1, `BoolType);
 	ts = Ts.empty;
-	vs = Vs.empty
+	vs = Vs.empty;
+	fs = Fs.empty
       }
     in
 
@@ -1280,7 +1328,8 @@ struct
       q = q;
       cs = Cs.Column (1, `BoolType);
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_binop env loop wrapper restype operand_1 operand_2 =
@@ -1304,7 +1353,8 @@ struct
       q = q;
       cs = ti_operand.cs;
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_concat env loop l =
@@ -1328,7 +1378,8 @@ struct
       q = q;
       cs = ti_sub.cs;
       ts = ti_sub.ts;
-      vs = ti_sub.vs
+      vs = ti_sub.vs;
+      fs = Fs.empty
     }
 
   and do_take ti_n ti_l =
@@ -1361,7 +1412,8 @@ struct
       q = q';
       cs = ti_l.cs;
       ts = ts';
-      vs = ti_l.vs
+      vs = ti_l.vs;
+      fs = Fs.empty
     }
 
   and compile_take env loop n l =
@@ -1394,7 +1446,8 @@ struct
       q = q';
       cs = ti_l.cs;
       ts = ts';
-      vs = ti_l.vs
+      vs = ti_l.vs;
+      fs = Fs.empty
     }
 
   and compile_drop env loop n l =
@@ -1439,7 +1492,8 @@ struct
       q = q;
       cs = ti_l.cs;
       ts = ti_l.ts;
-      vs = ti_l.vs
+      vs = ti_l.vs;
+      fs = Fs.empty
     }
 
   and compile_tl env loop l = 
@@ -1472,7 +1526,8 @@ struct
       q = q;
       cs = ti_l.cs;
       ts = ti_l.ts;
-      vs = ti_l.vs
+      vs = ti_l.vs;
+      fs = Fs.empty
     }
 
   and compile_nubbase env loop l =
@@ -1509,14 +1564,14 @@ struct
 	  q = q;
 	  cs = ti_l.cs;
 	  ts = Ts.empty;
-	  vs = Vs.empty
+	  vs = Vs.empty;
+	  fs = Fs.empty
 	}
 
   and compile_quote env loop s =
   (* FIXME quoting at runtime is not implemented *)
-    Debug.print "Warning: quoting at runtime is not implemented (compile_quite)";
+    Debug.print "Warning: quoting at runtime is not implemented (compile_quote)";
     compile_expression env loop s
-
 
   and compile_for env loop source f order_criteria =
     let  ti_source = compile_expression env loop source in
@@ -1554,7 +1609,8 @@ struct
       q = q;
       cs = ti_body.cs;
       ts = ti_body.ts;
-      vs = ti_body.vs
+      vs = ti_body.vs;
+      fs = Fs.empty
     }
 
   and singleton_record env loop (name, e) =
@@ -1623,7 +1679,8 @@ struct
 	q = q';
 	cs = cs_mapped;
 	ts = ts';
-	vs = vs'
+	vs = vs';
+	fs = Fs.empty
       }
 
   and merge_records ti_r1 ti_r2 =
@@ -1651,7 +1708,8 @@ struct
       q = q;
       cs = cs;
       ts = ts;
-      vs = vs
+      vs = vs;
+      fs = Fs.empty
     }
 
   and compile_project env loop field record =
@@ -1673,7 +1731,8 @@ struct
       q = q;
       cs = remaining_cs;
       ts = remaining_ts;
-      vs = remaining_vs
+      vs = remaining_vs;
+      fs = Fs.empty
     }
 
   and compile_record env loop r =
@@ -1737,7 +1796,8 @@ struct
       q = q;
       cs = cs;
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_constant loop (c : Constant.constant) =
@@ -1753,7 +1813,8 @@ struct
       q = q;
       cs = cs;
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
 
@@ -1824,7 +1885,8 @@ struct
       q = q';
       cs = ti_t.cs;
       ts = append_ts q ti_t.ts ti_e.ts;
-      vs = append_vs q ti_t.vs ti_e.vs
+      vs = append_vs q ti_t.vs ti_e.vs;
+      fs = Fs.empty
     }
 
   and compile_groupby env loop ge e =
@@ -1863,7 +1925,8 @@ struct
       q = q_2;
       cs = Cs.Mapping [("1", ti_ge.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
       ts = [(grpkey_col, { ti_e with q = q_3 })];
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_unit (loop : ADag.t) : tblinfo =
@@ -1878,7 +1941,8 @@ struct
       q = q;
       cs = Cs.Column (1, `Unit);
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_variant env loop tag value =
@@ -1898,7 +1962,8 @@ struct
       q = q;
       cs = Cs.Tag ((1, `Tag), (2, `Surrogate));
       ts = Ts.empty;
-      vs = [(2, tag), (ti_value, itype)]
+      vs = [(2, tag), (ti_value, itype)];
+      fs = Fs.empty
     }
 
   and compile_case env loop value cases default =
@@ -1993,6 +2058,7 @@ struct
 	cs = cs;
 	ts = append_ts q_union ti_l.ts ti_r.ts;
 	vs = append_vs q_union ti_l.vs ti_r.vs;
+	fs = Fs.empty
       }
 	
     in
@@ -2011,14 +2077,33 @@ struct
       q = ADag.mk_emptytbl;
       cs = Cs.Column (1, `IntType);
       ts = Ts.empty;
-      vs = Vs.empty
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
   and compile_takewhile _env _loop _p _l = failwith "compile_takewhile not implemented"
 
   and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not implemented"
 
-  and compile_apply env loop f args =
+  and compile_lambda _env loop xs body =
+    let q = 
+      ADag.mk_attach
+	(pos, A.Int (Num.Int 1))
+	(ADag.mk_project
+	   [prj iter; (A.Item 1, iter)]
+	   loop)
+    in
+    let map = ADag.mk_project [(outer, iter); (inner, iter)] loop in
+    let fs = [(1, [(map, (xs, body))])] in
+    {
+      q = q;
+      cs = Cs.Column (1, `Surrogate);
+      ts = Ts.empty;
+      vs = Vs.empty;
+      fs = fs
+    }
+
+  and apply_primitive env loop f args =
     match f, args with
       | "+", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `IntType op1 op2
       | "+.", [op1; op2] -> compile_binop env loop (wrap_1to1 A.Add) `FloatType op1 op2
@@ -2059,12 +2144,66 @@ struct
       | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
       | s, _->
-	failwith ("CompileQuery.compile_apply: " ^ s ^ " not implemented")
+	failwith ("CompileQuery.compile_apply: primitive " ^ s ^ " not implemented")
+
+  and apply_lambda env loop lambda_exp args =
+    (* compile the function arguments *)
+    let args_tis = List.map (compile_expression env loop) args in
+    (* compile the function expression *)
+    let ti_f = compile_expression env loop lambda_exp in
+    (* extract the fundev list *)
+    let fundevs = Fs.lookup 1 ti_f.fs in
+
+    let fundev (map, (xs, body)) =
+      (* lift and filter the fundev map (1) *)
+      let map_lift = ADag.mk_eqjoin (outer, A.Item 1) map ti_f.q in
+      (* new loop (2) *)
+      let loop' = ADag.mk_project [prj iter] map_lift in
+
+      let filter_arg arg = 
+	let q_filtered = 
+	  ADag.mk_project
+	    ([prj iter; prj pos] @ (prjlist (io (Cs.offsets arg.cs))))
+	    (ADag.mk_eqjoin 
+	       (iter, iter') 
+	       arg.q 
+	       (ADag.mk_project
+		  [(iter', iter)]
+		  loop'))
+	in
+	  { arg with q = q_filtered }
+
+      in
+
+      (* filter the function arguments for this function (3) *)
+      let args_filtered = List.map filter_arg args_tis in
+
+      (* extend the environment with the function arguments (5) *)
+      let env_args = List.fold_left AEnv.bind env (List.combine xs args_filtered) in
+
+	(* compile the function body (6) *)
+	compile_expression env_args loop' body
+
+    in
+
+    let results = List.map fundev fundevs in
+
+    let result_qs = List.map (fun ti -> ti.q) results in
+    let q_combined = List.fold_left ADag.mk_disjunion (List.hd result_qs) (drop 1 result_qs) in
+      (* FIXME: generate new surrogate keys, renumber key columns, append ts, vs, fs *)
+      {
+	q = q_combined;
+	cs = (List.hd results).cs;
+	ts = Ts.empty;
+	vs = Vs.empty;
+	fs = Fs.empty;
+      }
 
   and compile_expression env loop e : tblinfo =
     match e with
       | `Constant (c, _) -> compile_constant loop c
-      | `Apply ((`Primitive f, args), _) -> compile_apply env loop f args 
+      | `Apply ((`Primitive f, args), _) -> apply_primitive env loop f args 
+      | `Apply ((lambda_exp, args), _) -> apply_lambda env loop lambda_exp args
       | `Var (x, _) -> AEnv.lookup env x
       | `Project ((r, field), _) -> compile_project env loop field r
       | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
@@ -2084,8 +2223,8 @@ struct
       | `Variant ((tag, value), _) -> compile_variant env loop tag value
       | `Case ((v, cases, default), _) -> compile_case env loop v cases default
       | `Wrong _  -> compile_wrong loop 
+      | `Lambda ((xs, body), _) -> compile_lambda env loop xs body
       | `XML _ -> failwith "compile_expression: not implemented"
-      | `Lambda _ 
       | `Primitive _ -> failwith "compile_expression: eval error"
       | _ -> assert false
 
@@ -2101,6 +2240,7 @@ struct
       cs = ti.cs;
       ts = alistmap wrap_serialize ti.ts;
       vs = alistmap (fun (ti, itype) ->  (wrap_serialize ti, itype)) ti.vs;
+      fs = Fs.empty
     }
 
   let wrap_serialize_errors q_error =
