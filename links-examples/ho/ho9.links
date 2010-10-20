@@ -1,0 +1,15 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
+var players = table "players" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
+
+query { 
+      var ignore = t;
+      var funs = for (p <-- players) 
+      	  if (p.eff > 14) 
+	     [fun (x) { x + p.id }] 
+	  else 
+	     [fun (x) { x - p.id }];
+      for (f <- funs)
+      	  [f(42)]
+}
+

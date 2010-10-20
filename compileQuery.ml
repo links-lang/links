@@ -3,6 +3,8 @@ open Utility
 module A = Algebra
 module ADag = Algebra_dag
 
+module AEnv = Env.Int
+
 (* FIXME: implement common parts of Ts, Fs, (Vs?) as a functor. *)
 module rec Ts : sig
 
@@ -66,7 +68,7 @@ end
 
 and Fs :
 sig
-  type fundev = (ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type fundev = (ExpressionToAlgebra.aenv * ADag.t * (Var.var list * Query2.Annotate.typed_t))
   type t = (int * (fundev list)) list
 
   val append : t -> t -> t
@@ -79,7 +81,7 @@ sig
 end
 =
 struct
-  type fundev = (ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type fundev = (ExpressionToAlgebra.aenv * ADag.t * (Var.var list * Query2.Annotate.typed_t))
   type t = (int * (fundev list)) list
 
   let empty = []
@@ -95,17 +97,18 @@ and ExpressionToAlgebra :
 sig
   type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t ; fs : Fs.t }
   type error_plan = ADag.t option
-      
+
+  type aenv = tblinfo AEnv.t
+
   val compile : Query2.Annotate.typed_t -> tblinfo * error_plan
 end
 = 
 struct
 
-  (* the environment mapping variables to algebra plans *)
-  module AEnv = Env.Int
-
   type tblinfo = { q : ADag.t; cs : Cs.t; ts : Ts.t; vs : Vs.t; fs : Fs.t}
   type error_plan = ADag.t option
+
+  type aenv = tblinfo AEnv.t
 
 (* module-global reference that stores the global error plan of the generated
    plan bundle (if there is one) *)
@@ -488,7 +491,7 @@ struct
 
     (* refresh the outer column of all maps with the new keys *)
     let refresh_fs q_i fs_i =
-      let refresh_map refcol (map, lambda) = 
+      let refresh_map refcol (env, map, lambda) = 
 	let map' =
 	  ADag.mk_project
 	    [(outer, A.Item refcol); prj inner]
@@ -498,7 +501,7 @@ struct
 	       (ADag.mk_distinct
 		  q_i))
 	in
-	  (map', lambda)
+	  (env, map', lambda)
       in
       let refresh_maps (refcol, fundevs) = 
 	(refcol, List.map (refresh_map refcol) fundevs)
@@ -2203,7 +2206,7 @@ struct
 
   and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not implemented"
 
-  and compile_lambda _env loop xs body =
+  and compile_lambda env loop xs body =
     let q = 
       ADag.mk_attach
 	(pos, A.Int (Num.Int 1))
@@ -2212,7 +2215,7 @@ struct
 	   loop)
     in
     let map = ADag.mk_project [(outer, iter); (inner, iter)] loop in
-    let fs = [(1, [(map, (xs, body))])] in
+    let fs = [(1, [(env, map, (xs, body))])] in
     {
       q = q;
       cs = Cs.Column (1, `Surrogate);
@@ -2272,11 +2275,15 @@ struct
     (* extract the fundev list *)
     let fundevs = Fs.lookup 1 ti_f.fs in
 
-    let fundev (map, (xs, body)) =
+    let fundev (function_env, map, (xs, body)) =
       (* lift and filter the fundev map (1) *)
       let map_lift = ADag.mk_eqjoin (outer, A.Item 1) map ti_f.q in
+
       (* new loop (2) *)
       let loop' = ADag.mk_project [prj iter] map_lift in
+
+      (* reduce the map to (outer, inner) again *)
+      let map_lift = ADag.mk_project [prj outer; prj inner] map_lift in
 
       let filter_arg arg = 
 	let q_filtered = 
@@ -2295,9 +2302,24 @@ struct
 
       (* filter the function arguments for this function (3) *)
       let args_filtered = List.map filter_arg args_tis in
+	
+      let lift_env map ti =
+	let q_lifted = 
+	  ADag.mk_project
+	    ([prj iter; prj pos] @ (prjlist (io (Cs.offsets ti.cs))))
+	    (ADag.mk_eqjoin
+	       (inner, iter)
+	       map
+	       ti.q)
+	in
+	  { ti with q = q_lifted }
+
+      in
+
+      let env_lifted = AEnv.map (lift_env map_lift) function_env in
 
       (* extend the environment with the function arguments (5) *)
-      let env_args = List.fold_left AEnv.bind env (List.combine xs args_filtered) in
+      let env_args = List.fold_left AEnv.bind env_lifted (List.combine xs args_filtered) in
 
 	(* compile the function body (6) *)
 	compile_expression env_args loop' body
