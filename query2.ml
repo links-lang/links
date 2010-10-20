@@ -202,7 +202,7 @@ struct
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
             `Primitive "sortBy"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
-	    `Primitive "asList"
+	    `Primitive "AsList"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
 	    `Primitive "zip"
 	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
@@ -351,7 +351,7 @@ struct
       reduce bound body
 
   and rewrite_primitive env bound : string * t list -> t = function
-    | "asList", [xs] ->
+    | "AsList", [xs] ->
         xs
     | "Cons", [x; `Append []] ->
 	`Singleton x
