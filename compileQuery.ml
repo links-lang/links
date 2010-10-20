@@ -3,6 +3,7 @@ open Utility
 module A = Algebra
 module ADag = Algebra_dag
 
+(* FIXME: implement common parts of Ts, Fs, (Vs?) as a functor. *)
 module rec Ts : sig
 
   (* type for the assoc list mapping surrogate columns to the corresponding 
@@ -410,6 +411,7 @@ struct
   (* use new keys in ts surrogate columns *)
     @ (prjlist_single (io ts_cols) new_surr)
 
+(* FIXME: need comments on append_ crap *)
 (* append the corresponding vs entries from vs_l and vs_r *)
   let rec append_vs q_outer vs_l vs_r =
     let m = List.map (append_matching_vs q_outer) (same_keys vs_l vs_r) in
@@ -511,6 +513,9 @@ struct
       List.map slice ts
     else
       ts
+
+  (* FIXME: fragment_env seems unnecessary: if an env entry is used, it is 
+     joined anyway, which has the same effect *)
 
   (* helper function for compile_if/compile_case:
      remove all iterations from environment entries which are not in loop *)
@@ -629,6 +634,10 @@ struct
     let (offset, inner_ti) = List.hd ti.ts in
     do_unbox ti.q offset inner_ti
 
+  (* FIXME: compile append operation on all lists
+     at once, i.e. not as hd and tl -> use
+     ord = 1,2, ..., n. compute surrogates/positions
+     only once. *)
   and compile_append env loop l =
     match l with
       | e :: [] ->
@@ -2035,6 +2044,8 @@ struct
 	| None -> explicit_case_results
     in
     
+    (* FIXME: union all cases at once, compute new keys only once:
+       ord = 1, ..., nr_cases *)
     let union ti_l ti_r =
       let q_union = 
 	ADag.mk_rownum
