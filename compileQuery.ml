@@ -69,8 +69,13 @@ sig
   type fundev = (ADag.t * (Var.var list * Query2.Annotate.typed_t))
   type t = (int * (fundev list)) list
 
+  val append : t -> t -> t
   val empty : t
   val lookup : int -> t -> fundev list
+  val keys : t -> int list
+  val incr_cols : t -> int -> t
+  val decr_cols : t -> int -> t
+  val keep_cols : t -> int list -> t
 end
 =
 struct
@@ -79,6 +84,11 @@ struct
 
   let empty = []
   let lookup = List.assoc
+  let keys fs = List.map fst fs
+  let append = List.append
+  let incr_cols fs i = List.map (fun (col, fundevs) -> ((col + i), fundevs)) fs
+  let decr_cols ts i =  List.map (fun (offset, ti) -> (offset - i, ti)) ts
+  let keep_cols = keep_keys
 end
 
 and ExpressionToAlgebra : 
@@ -271,7 +281,7 @@ struct
       cs = inner_ti.cs;
       ts = inner_ti.ts;
       vs = inner_ti.vs;
-      fs = Fs.empty
+      fs = inner_ti.fs;
     }
 
   (* *)
@@ -290,7 +300,7 @@ struct
       cs = Cs.shift (-offset + 1) field_cs';
       ts = Ts.decr_cols (Ts.keep_cols record.ts old_cols) (offset - 1); 
       vs = Vs.decr_cols (Vs.keep_cols record.vs old_cols) (offset - 1);
-      fs = Fs.empty;
+      fs = Fs.decr_cols (Fs.keep_cols record.fs old_cols) (offset - 1);
     }
 
   let do_length loop l =
@@ -351,6 +361,7 @@ struct
     let cs_e2' = Cs.shift card_e1 e2.cs in
     let ts_e2' = Ts.incr_cols e2.ts card_e1 in
     let vs_e2' = Vs.incr_cols e2.vs card_e1 in
+    let fs_e2' = Fs.incr_cols e2.fs card_e1 in
     let items = io ((Cs.offsets e1.cs) @ (Cs.offsets cs_e2')) in
     let q =
       ADag.mk_project
@@ -371,7 +382,7 @@ struct
 	cs = Cs.Mapping [("1", e1.cs); ("2", cs_e2')];
 	ts = Ts.append e1.ts ts_e2';
 	vs = Vs.append e1.vs vs_e2';
-	fs = Fs.empty
+	fs = Fs.append e1.fs fs_e2';
       }
 
   (* apply the all aggregate operator to the first column grouped by iter 
@@ -438,16 +449,20 @@ struct
 
     let int_union l r = IntSet.elements (IntSet.union (IntSet.from_list l) (IntSet.from_list r)) in
     let ts_cols = int_union (Ts.keys ti_l.ts) (Ts.keys ti_r.ts) in
+    let fs_cols = int_union (Fs.keys ti_l.fs) (Fs.keys ti_r.fs) in
     let vs_cols = int_union (Vs.key_columns ti_l.vs) (Vs.key_columns ti_r.vs) in
 
   (* all columns which are neither vs nor ts surrogate columns *)
-    prjlist (io (difference (Cs.offsets cs) (vs_cols @ ts_cols)))
+    prjlist (io (difference (Cs.offsets cs) (vs_cols @ ts_cols @ fs_cols)))
 
   (* use new keys in vs surrogate columns *)
     @ (prjlist_single (io vs_cols) new_surr) 
 
   (* use new keys in ts surrogate columns *)
     @ (prjlist_single (io ts_cols) new_surr)
+
+  (* use new keys in fs surrogate columns *)
+    @ (prjlist_single (io fs_cols) new_surr)
 
 (* FIXME: need comments on append_ crap *)
 
@@ -519,7 +534,8 @@ struct
     let ts = append_ts q_combined ti_l.ts ti_r.ts in
 
     let vs = append_vs q_combined ti_l.vs ti_r.vs in
-    (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs; fs = Fs.empty }, itype_l)
+    let fs = append_fs q_combined ti_l.fs ti_r.fs in
+      (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs; fs = fs }, itype_l)
 
   and append_missing_vs q_outer ord_val ((refcol, tag), (ti, itype)) =
     let q_combined = 
@@ -530,19 +546,20 @@ struct
 	   ti.q)
     in
     let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti { ti with ts = Ts.empty; vs = Vs.empty } item') in
-    
+      
     let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
     let q_refreshed = ADag.mk_project projlist q_renumbered in
     let ts = append_ts q_combined ti.ts [] in
     let vs = append_vs q_combined ti.vs [] in
-    (refcol, tag), ({ q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = Fs.empty }, itype)
+    let fs = append_fs q_combined ti.fs [] in
+    (refcol, tag), ({ q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = fs }, itype)
 
   and append_ts q_outer ts_l ts_r =
     let m = List.map (append_matching_ts q_outer) (same_keys ts_l ts_r) in
     let l = List.map (append_missing_ts q_outer (A.Nat 1n)) (missing_keys ts_l ts_r) in
     let r = List.map (append_missing_ts q_outer (A.Nat 2n)) (missing_keys ts_r ts_l) in
-    List.sort compare (m @ l @ r)
+      List.sort compare (m @ l @ r)
 
   and append_matching_ts (q_outer : ADag.t) (refcol, (ti_l, ti_r)) =
     let q_combined = combine_inner_tables ti_l.q ti_r.q in
@@ -558,7 +575,8 @@ struct
     let ts = append_ts q_combined ti_l.ts ti_r.ts in
 
     let vs = append_vs q_combined ti_l.vs ti_r.vs in
-    refcol, { q = q; cs = cs; ts = ts; vs = vs; fs = Fs.empty }
+    let fs = append_fs q_combined ti_l.fs ti_r.fs in
+      refcol, { q = q; cs = cs; ts = ts; vs = vs; fs = fs }
 
   and append_missing_ts q_outer ord_val (refcol, ti) =
     let q_combined = 
@@ -575,7 +593,8 @@ struct
     let q_refreshed = ADag.mk_project projlist q_renumbered in
     let ts = append_ts q_combined ti.ts [] in
     let vs = append_vs q_combined ti.vs [] in
-    refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = Fs.empty }
+    let fs = append_fs q_combined ti.fs [] in
+      refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = fs }
 
 (* only keep those tuples in an nested table which are actually referenced from the
    outer table *)
@@ -592,7 +611,7 @@ struct
 		[(iter', A.Item surr_col)]
 		q_outer))
       in
-      (surr_col, { q = q_inner'; cs = inner.cs; ts = (slice_inner_tables q_inner' inner.ts); vs = inner.vs; fs = Fs.empty })
+      (surr_col, { q = q_inner'; cs = inner.cs; ts = (slice_inner_tables q_inner' inner.ts); vs = inner.vs; fs = inner.fs })
     in
 
     if Settings.get_value Basicsettings.Ferry.slice_inner_tables then
@@ -623,7 +642,7 @@ struct
 	cs = ti.cs;
 	ts = slice_inner_tables ti.q ti.ts;
 	vs = ti.vs;
-	fs = Fs.empty
+	fs = ti.fs;
       }
     in
     AEnv.map (select loop) env
@@ -768,7 +787,7 @@ struct
       cs = cs;
       ts = append_ts q hd.ts tl.ts;
       vs = append_vs q hd.vs tl.vs;
-      fs = Fs.empty
+      fs = append_fs q hd.fs tl.fs;
     }
 
   and compile_zip env loop l1 l2 =
@@ -809,11 +828,13 @@ struct
     let ts_2 = Ts.decr_cols (Ts.keep_cols ti_zipped.ts cols_2) card in
     let vs_1 = Vs.keep_cols ti_zipped.vs cols_1 in
     let vs_2 = Vs.decr_cols (Vs.keep_cols ti_zipped.vs cols_2) card in
+    let fs_1 = Fs.keep_cols ti_zipped.fs cols_1 in
+    let fs_2 = Fs.decr_cols (Fs.keep_cols ti_zipped.fs cols_2) card in
     {
       q = q; 
       cs = Cs.Mapping [("1", Cs.Column (1, `Surrogate)); ("2", Cs.Column (2, `Surrogate))];
-      ts = [(1, { q = q_1; cs = cs_1; ts = ts_1; vs = vs_1; fs = Fs.empty });
-	    (2, { q = q_2; cs = cs_2'; ts = ts_2; vs = vs_2; fs = Fs.empty })];
+      ts = [(1, { q = q_1; cs = cs_1; ts = ts_1; vs = vs_1; fs = fs_1 });
+	    (2, { q = q_2; cs = cs_2'; ts = ts_2; vs = vs_2; fs = fs_2 })];
       vs = Vs.empty;
       fs = Fs.empty
     }
@@ -994,7 +1015,7 @@ struct
 	cs = ti_l.cs;
 	ts = ts_l';
 	vs = ti_l.vs;
-	fs = Fs.empty
+	fs = ti_l.fs;
       }
     in	
     let vs = [((2, "Just"), (ti_inner_just, `Atom));
@@ -1005,7 +1026,7 @@ struct
       cs = outer_cs;
       ts = Ts.empty;
       vs = vs;
-      fs = Fs.empty
+      fs = Fs.empty;
     }
       
   and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 operand_2 =
@@ -1474,7 +1495,7 @@ struct
       cs = ti_sub.cs;
       ts = ti_sub.ts;
       vs = ti_sub.vs;
-      fs = Fs.empty
+      fs = ti_sub.fs;
     }
 
   and do_take ti_n ti_l =
@@ -1508,7 +1529,7 @@ struct
       cs = ti_l.cs;
       ts = ts';
       vs = ti_l.vs;
-      fs = Fs.empty
+      fs = ti_l.fs;
     }
 
   and compile_take env loop n l =
@@ -1542,7 +1563,7 @@ struct
       cs = ti_l.cs;
       ts = ts';
       vs = ti_l.vs;
-      fs = Fs.empty
+      fs = ti_l.fs;
     }
 
   and compile_drop env loop n l =
@@ -1588,7 +1609,7 @@ struct
       cs = ti_l.cs;
       ts = ti_l.ts;
       vs = ti_l.vs;
-      fs = Fs.empty
+      fs = ti_l.fs;
     }
 
   and compile_tl env loop l = 
@@ -1622,7 +1643,7 @@ struct
       cs = ti_l.cs;
       ts = ti_l.ts;
       vs = ti_l.vs;
-      fs = Fs.empty
+      fs = ti_l.fs;
     }
 
   and compile_nubbase env loop l =
@@ -1705,7 +1726,7 @@ struct
       cs = ti_body.cs;
       ts = ti_body.ts;
       vs = ti_body.vs;
-      fs = Fs.empty
+      fs = ti_body.fs;
     }
 
   and singleton_record env loop (name, e) =
@@ -1748,17 +1769,19 @@ struct
       in
       (* change the offsets in the ts mappings accordingly *)
       let col_mapping = List.combine cols_old cols_new in
-      let ts' =
+      let replace_key mapping alist =
 	List.map
-	  (fun (col, itbl) -> 
-	    let new_col = 
+	  (fun (key, value) -> 
+	    let new_key = 
 	      try 
-		List.assoc col col_mapping 
+		List.assoc key mapping 
 	      with _ -> assert false
 	    in
-	    (new_col, itbl))
-	  ti.ts
+	    (new_key, value))
+	  alist
       in
+      let ts' = replace_key col_mapping ti.ts in
+      let fs' = replace_key col_mapping ti.fs in
       let vs' =
 	List.map
 	  (fun ((col, tag), itbl) ->
@@ -1775,7 +1798,7 @@ struct
 	cs = cs_mapped;
 	ts = ts';
 	vs = vs';
-	fs = Fs.empty
+	fs = fs';
       }
 
   and merge_records ti_r1 ti_r2 =
@@ -1786,6 +1809,7 @@ struct
     let card_r1 = Cs.cardinality ti_r1.cs in
     let r2_ts' = Ts.incr_cols ti_r2.ts card_r1 in
     let r2_vs' = Vs.incr_cols ti_r2.vs card_r1 in
+    let r2_fs' = Fs.incr_cols ti_r2.fs card_r1 in
     let q =
       ADag.mk_project
 	(prjlist ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
@@ -1799,12 +1823,13 @@ struct
     let cs = Cs.append_mappings ti_r1.cs ti_r2.cs in
     let ts = Ts.append ti_r1.ts r2_ts' in
     let vs = Vs.append ti_r1.vs r2_vs' in
+    let fs = Fs.append ti_r1.fs r2_fs' in
     {
       q = q;
       cs = cs;
       ts = ts;
       vs = vs;
-      fs = Fs.empty
+      fs = fs;
     }
 
   and compile_project env loop field record =
@@ -1817,6 +1842,7 @@ struct
     let remaining_cols = Cs.offsets remaining_cs in
     let remaining_ts = Ts.keep_cols ti_r.ts remaining_cols in
     let remaining_vs = Vs.keep_cols ti_r.vs remaining_cols in
+    let remaining_fs = Fs.keep_cols ti_r.fs remaining_cols in
     let q =
       ADag.mk_project
 	([prj iter; prj pos] @ (prjlist (io remaining_cols)))
@@ -1827,7 +1853,7 @@ struct
       cs = remaining_cs;
       ts = remaining_ts;
       vs = remaining_vs;
-      fs = Fs.empty
+      fs = remaining_fs;
     }
 
   and compile_record env loop r =
@@ -2114,7 +2140,7 @@ struct
       let loop' = ADag.mk_project [prj iter] q_other in
       let env' = AEnv.bind env (default_var, (compile_unit loop)) in
       let env' = fragment_env loop' env' in
-      compile_expression env' loop default_exp
+	compile_expression env' loop default_exp
     in
 
     let explicit_case_results, q_other = StringMap.fold (case env' ti_v.vs) cases ([], q_v') in
@@ -2150,7 +2176,7 @@ struct
 	cs = cs;
 	ts = append_ts q_union ti_l.ts ti_r.ts;
 	vs = append_vs q_union ti_l.vs ti_r.vs;
-	fs = Fs.empty
+	fs = append_fs q_union ti_l.fs ti_r.fs;
       }
 	
     in
