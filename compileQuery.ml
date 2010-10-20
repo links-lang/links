@@ -396,11 +396,11 @@ struct
 
 (* project all columns which do _not_ contain reference values onto itself and use the fresh
    surrogate values in new_surr in all columns which _do_ contain reference values *)
-  let refresh_surr_cols cs ts_l ts_r  vs_l vs_r new_surr =
+  let refresh_surr_cols cs ti_l ti_r new_surr =
 
     let int_union l r = IntSet.elements (IntSet.union (IntSet.from_list l) (IntSet.from_list r)) in
-    let ts_cols = int_union (Ts.keys ts_l) (Ts.keys ts_r) in
-    let vs_cols = int_union (Vs.key_columns vs_l) (Vs.key_columns vs_r) in
+    let ts_cols = int_union (Ts.keys ti_l.ts) (Ts.keys ti_r.ts) in
+    let vs_cols = int_union (Vs.key_columns ti_l.vs) (Vs.key_columns ti_r.vs) in
 
   (* all columns which are neither vs nor ts surrogate columns *)
     prjlist (io (difference (Cs.offsets cs) (vs_cols @ ts_cols)))
@@ -422,7 +422,7 @@ struct
   and append_matching_vs (q_outer : ADag.t) ((refcol, tag), ((ti_l, itype_l), (ti_r, _itype_r))) =
     let q_combined = combine_inner_tables ti_l.q ti_r.q in
 
-    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l.ts ti_r.ts ti_l.vs ti_r.vs item') in
+    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l ti_r item') in
 
     let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -443,7 +443,7 @@ struct
 	   (ord, ord_val)
 	   ti.q)
     in
-    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti.ts Ts.empty ti.vs Vs.empty item') in
+    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti { ti with ts = Ts.empty; vs = Vs.empty } item') in
     
     let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -461,7 +461,7 @@ struct
   and append_matching_ts (q_outer : ADag.t) (refcol, (ti_l, ti_r)) =
     let q_combined = combine_inner_tables ti_l.q ti_r.q in
 
-    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l.ts ti_r.ts ti_l.vs ti_r.vs item') in
+    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l ti_r item') in
 
     let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -482,7 +482,7 @@ struct
 	   (ord, ord_val)
 	   ti.q)
     in
-    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti.ts Ts.empty ti.vs Vs.empty item') in
+    let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti { ti with ts = Ts.empty; vs = Vs.empty } item') in
     
     let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -671,7 +671,7 @@ struct
 		 (ord, A.Nat 2n)
 		 tl.q)))
     in
-    let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols cs hd.ts tl.ts hd.vs tl.vs item') in
+    let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols cs hd tl item') in
     let q' = 
       ADag.mk_project
 	q'_projlist
@@ -1878,21 +1878,16 @@ struct
 	      (ord, A.Nat 2n)
 	      ti_e.q))
     in
-    (* FIXME: need to check if the then branch is a empty list literal *)
-    let cols = Cs.offsets ti_t.cs in
-    (* FIXME: use refresh_surr_cols *)
-    let keys = (Ts.keys ti_t.ts) @ (Vs.key_columns ti_t.vs) in
-    let proj = [prj iter; prj pos] in
-    let proj = proj @ (prjlist (io (difference cols keys))) in
-    let proj = proj @ (prjlist_single (io keys) item') in
+    let cs = Cs.choose_nonempty ti_t.cs ti_e.cs in
+    let projection = [prj iter; prj pos] @ (refresh_surr_cols cs ti_t ti_e item') in
     let q' = 
       ADag.mk_project
-	proj
+	projection
 	q
     in
     {
       q = q';
-      cs = ti_t.cs;
+      cs = cs;
       ts = append_ts q ti_t.ts ti_e.ts;
       vs = append_vs q ti_t.vs ti_e.vs;
       fs = Fs.empty
@@ -2061,7 +2056,7 @@ struct
       let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
       let q_union' = 
 	ADag.mk_project
-	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l.ts ti_r.ts ti_l.vs ti_r.vs item'))
+	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
 	  q_union
       in
       {
