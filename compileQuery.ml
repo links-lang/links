@@ -307,6 +307,44 @@ struct
 	fs = Fs.empty
       }
 
+(*
+  let sequence_construction (tis : tblinfo list) : tblinfo =
+    assert ((List.length tis) > 0);
+
+    (* union over all q's with corresponding ords *)
+    let ord ti n = ADag.mk_attach (ord, A.Nat (Nativeint.of_int n)) ti.q in
+    let qs = mapIndex ord tis in
+    let q_union = List.fold_left ADag.mk_disjunion (List.hd qs) (drop 1 qs) in
+
+    (* generate new keys -> item' *)
+    let q_new_key = 
+      ADag.mk_rownum 
+	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+	q_union
+    in
+
+    (* ts, vs, fs *)
+    let key_columns = 
+    (* use new surr cols *)
+    let q_new_keys = 
+
+    (* choose a nonempty cs, if it exists *)
+    let cs = List.fold_left (fun cs ti -> Cs.choose_nonempty cs ti.cs) ((List.hd tis).cs) (drop 1 tis) in
+
+    let ts = List.fold_left (fun ts ti -> append_ts cs 
+      
+
+    let ts = 
+
+      {
+	q = q_union;
+	cs = Cs.Column (1, `Surrogate);
+	ts = Ts.empty;
+	vs = Vs.empty;
+	fs = Fs.empty;
+      }
+*)
+
   (* q_e1 and q_e2 must have absolute positions *)
   let do_zip e1 e2 =
     let card_e1 = List.length (Cs.offsets e1.cs) in
@@ -641,11 +679,11 @@ struct
   and compile_append env loop l =
     match l with
       | e :: [] ->
-	compile_expression env loop e
+	  compile_expression env loop e
       | hd_e :: tl_e ->
-	let hd = compile_expression env loop hd_e in
-	let tl = compile_append env loop tl_e in
-	compile_list hd tl
+	  let hd = compile_expression env loop hd_e in
+	  let tl = compile_append env loop tl_e in
+	    compile_list hd tl
       | [] ->
 	  {
 	    q = ADag.mk_emptytbl;
