@@ -1,0 +1,16 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
+var players = table "players" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
+
+#query { for (r <-- t) orderby(r.bar, r.foo) [(foo=r.foo, bar=r.bar)]}
+#query { for (r <-- t) orderby(r.bar) [(foo=r.foo, bar=r.bar)]}
+
+var z = 1;
+
+query { 
+      fun add1(x) { x + 23 }
+      fun sub(x) { x - 42 }
+      var f = if (length(asList(players)) > 130) add1 else sub;
+      f(42)
+}
+

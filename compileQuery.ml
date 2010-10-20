@@ -450,6 +450,54 @@ struct
     @ (prjlist_single (io ts_cols) new_surr)
 
 (* FIXME: need comments on append_ crap *)
+
+(* append the fundev-lists of two fs components *)
+  let append_fs q_outer fs_l fs_r =
+
+    (* from the unioned results select those tupels with ord = o,
+       i.e. the tupels from left or right respectively. we can't just
+       use q_l or q_r from before the union because we need the new
+       surrogate keys computed after the union *)
+    let select_ord o =
+      ADag.mk_select
+	res
+	(ADag.mk_funnumeq
+	   (res, (ord, ord'))
+	   (ADag.mk_attach
+	      (ord', (A.Nat o))
+	       q_outer))
+    in
+
+    let q_1 = select_ord 1n in
+    let q_2 = select_ord 2n in
+
+    (* refresh the outer column of all maps with the new keys *)
+    let refresh_fs q_i fs_i =
+      let refresh_map refcol (map, lambda) = 
+	let map' =
+	  ADag.mk_project
+	    [(outer, A.Item refcol); prj inner]
+	    (ADag.mk_eqjoin
+	       (outer, A.Item refcol)
+	       map
+	       (ADag.mk_distinct
+		  q_i))
+	in
+	  (map', lambda)
+      in
+      let refresh_maps (refcol, fundevs) = 
+	(refcol, List.map (refresh_map refcol) fundevs)
+      in
+	List.map refresh_maps fs_i
+
+    in
+    let fs_l' = refresh_fs q_1 fs_l in
+    let fs_r' = refresh_fs q_2 fs_r in
+
+    let combined = same_keys fs_l' fs_r' in
+      List.map (fun (col, (funs_l, funs_r)) -> (col, funs_l @ funs_r)) combined
+      
+
 (* append the corresponding vs entries from vs_l and vs_r *)
   let rec append_vs q_outer vs_l vs_r =
     let m = List.map (append_matching_vs q_outer) (same_keys vs_l vs_r) in
@@ -1928,7 +1976,7 @@ struct
       cs = cs;
       ts = append_ts q ti_t.ts ti_e.ts;
       vs = append_vs q ti_t.vs ti_e.vs;
-      fs = Fs.empty
+      fs = append_fs q ti_t.fs ti_e.fs;
     }
 
   and compile_groupby env loop ge e =
