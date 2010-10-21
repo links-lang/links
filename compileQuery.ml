@@ -494,7 +494,7 @@ struct
       let refresh_map refcol (env, map, lambda) = 
 	let map' =
 	  ADag.mk_project
-	    [(outer, A.Item refcol); prj inner]
+	    [(outer, item'); prj inner]
 	    (ADag.mk_eqjoin
 	       (outer, A.Item refcol)
 	       map
@@ -1979,9 +1979,9 @@ struct
 	      ti_c.q))
     in
     let env_then = fragment_env loop_then env in
-    let env_else = fragment_env loop_else env in
+    let env_else = fragment_env loop_else env in 
     let ti_t = compile_expression env_then loop_then t in
-    let ti_e= compile_expression env_else loop_else e in
+    let ti_e = compile_expression env_else loop_else e in
     let q =
       ADag.mk_rownum
 	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
@@ -2221,7 +2221,7 @@ struct
       cs = Cs.Column (1, `Surrogate);
       ts = Ts.empty;
       vs = Vs.empty;
-      fs = fs
+      fs = fs;
     }
 
   and apply_primitive env loop f args =
@@ -2306,17 +2306,16 @@ struct
       let lift_env map ti =
 	let q_lifted = 
 	  ADag.mk_project
-	    ([prj iter; prj pos] @ (prjlist (io (Cs.offsets ti.cs))))
+	    ([(iter, outer); prj pos] @ (prjlist (io (Cs.offsets ti.cs))))
 	    (ADag.mk_eqjoin
 	       (inner, iter)
 	       map
 	       ti.q)
 	in
 	  { ti with q = q_lifted }
-
       in
 
-      let env_lifted = AEnv.map (lift_env map_lift) function_env in
+      let env_lifted = AEnv.map (lift_env map_lift) function_env in 
 
       (* extend the environment with the function arguments (5) *)
       let env_args = List.fold_left AEnv.bind env_lifted (List.combine xs args_filtered) in
@@ -2329,7 +2328,17 @@ struct
     let results = List.map fundev fundevs in
 
     let result_qs = List.map (fun ti -> ti.q) results in
-    let q_combined = List.fold_left ADag.mk_disjunion (List.hd result_qs) (drop 1 result_qs) in
+    let union q1 q2 =
+      ADag.mk_disjunion
+	(ADag.mk_attach
+	   (ord, A.Nat 1n)
+	   q1)
+	(ADag.mk_attach
+	   (ord, A.Nat 2n)
+	   q2)
+    in
+
+    let q_combined = List.fold_left union (List.hd result_qs) (drop 1 result_qs) in
       (* FIXME: generate new surrogate keys, renumber key columns, append ts, vs, fs *)
       {
 	q = q_combined;
