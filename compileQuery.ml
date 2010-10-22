@@ -1978,12 +1978,10 @@ struct
 	      (res, A.Item 1)
 	      ti_c.q))
     in
-(*    let env_then = fragment_env loop_then env in
+    let env_then = fragment_env loop_then env in
     let env_else = fragment_env loop_else env in 
     let ti_t = compile_expression env_then loop_then t in
-    let ti_e = compile_expression env_else loop_else e in *)
-    let ti_t = compile_expression env loop_then t in
-    let ti_e = compile_expression env loop_else e in
+    let ti_e = compile_expression env_else loop_else e in
     let q =
       ADag.mk_rownum
 	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
@@ -2285,7 +2283,7 @@ struct
       let loop' = ADag.mk_project [prj iter] map_lift in
 
       (* reduce the map to (outer, inner) again *)
-      let map_lift = ADag.mk_project [prj outer; prj inner] map_lift in
+      let map_lift = ADag.mk_project [(outer, iter); prj inner] map_lift in
 
       let filter_arg arg = 
 	let q_filtered = 
