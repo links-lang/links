@@ -369,7 +369,7 @@ module Eval = struct
 	  match !Query2.used_database with
 	    | Some db -> 
 	      begin
-		match Heapresult.execute db imptype (CompileQuery.compile exptree) with
+		match Heapresult.execute db imptype (ExpressionToAlgebraCompile.compile exptree) with
 		  | Some value -> value
 		  | None -> 
 		    begin

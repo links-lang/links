@@ -1,8 +1,7 @@
 open Printf
 open Utility
 
-open CompileQuery
-open ExpressionToAlgebra
+open ExpressionToAlgebraDefinitions
 
 module A = Algebra
 module FieldEnv = Utility.StringMap

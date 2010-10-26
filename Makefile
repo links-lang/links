@@ -125,7 +125,10 @@ SOURCES = $(OPC)                		\
 	  pf_toolchain.mli pf_toolchain.ml	\
 	  cs.ml cs.mli				\
 	  query2.ml query2.mli			\
-	  compileQuery.ml			\
+	  components.ml				\
+	  expressionToAlgebraDefinitions.ml	\
+	  expressionToAlgebraHelpers.ml		\
+	  expressionToAlgebraCompile.ml		\
 	  heapresult.ml	heapresult.mli		\
           query.ml                              \
           evalir.ml                             \
