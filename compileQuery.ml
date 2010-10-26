@@ -2326,26 +2326,33 @@ struct
 
     let results = List.map fundev fundevs in
 
-    let result_qs = List.map (fun ti -> ti.q) results in
-    let union q1 q2 =
-      ADag.mk_disjunion
-	(ADag.mk_attach
-	   (ord, A.Nat 1n)
-	   q1)
-	(ADag.mk_attach
-	   (ord, A.Nat 2n)
-	   q2)
-    in
-
-    let q_combined = List.fold_left union (List.hd result_qs) (drop 1 result_qs) in
-      (* FIXME: generate new surrogate keys, renumber key columns, append ts, vs, fs *)
+    let union ti_l ti_r =
+      let q_union = 
+	ADag.mk_rownum
+	  (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
+	  (ADag.mk_disjunion 
+	     (ADag.mk_attach
+		(ord, A.Nat 1n)
+		ti_l.q) 
+	     (ADag.mk_attach
+		(ord, A.Nat 2n)
+		ti_r.q))
+      in
+      let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
+      let q_union' = 
+	ADag.mk_project
+	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
+	  q_union
+      in
       {
-	q = q_combined;
-	cs = (List.hd results).cs;
-	ts = Ts.empty;
-	vs = Vs.empty;
-	fs = Fs.empty;
+	q = q_union';
+	cs = cs;
+	ts = append_ts q_union ti_l.ts ti_r.ts;
+	vs = append_vs q_union ti_l.vs ti_r.vs;
+	fs = append_fs q_union ti_l.fs ti_r.fs;
       }
+    in
+      List.fold_left union (List.hd results) (drop 1 results)
 
   and compile_expression env loop e : tblinfo =
     match e with
