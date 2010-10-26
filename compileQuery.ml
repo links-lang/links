@@ -320,44 +320,6 @@ struct
 	fs = Fs.empty
       }
 
-(*
-  let sequence_construction (tis : tblinfo list) : tblinfo =
-    assert ((List.length tis) > 0);
-
-    (* union over all q's with corresponding ords *)
-    let ord ti n = ADag.mk_attach (ord, A.Nat (Nativeint.of_int n)) ti.q in
-    let qs = mapIndex ord tis in
-    let q_union = List.fold_left ADag.mk_disjunion (List.hd qs) (drop 1 qs) in
-
-    (* generate new keys -> item' *)
-    let q_new_key = 
-      ADag.mk_rownum 
-	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-	q_union
-    in
-
-    (* ts, vs, fs *)
-    let key_columns = 
-    (* use new surr cols *)
-    let q_new_keys = 
-
-    (* choose a nonempty cs, if it exists *)
-    let cs = List.fold_left (fun cs ti -> Cs.choose_nonempty cs ti.cs) ((List.hd tis).cs) (drop 1 tis) in
-
-    let ts = List.fold_left (fun ts ti -> append_ts cs 
-      
-
-    let ts = 
-
-      {
-	q = q_union;
-	cs = Cs.Column (1, `Surrogate);
-	ts = Ts.empty;
-	vs = Vs.empty;
-	fs = Fs.empty;
-      }
-*)
-
   (* q_e1 and q_e2 must have absolute positions *)
   let do_zip e1 e2 =
     let card_e1 = List.length (Cs.offsets e1.cs) in
@@ -598,6 +560,50 @@ struct
     let fs = append_fs q_combined ti.fs [] in
       refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = fs }
 
+  (* generic pairwise sequence construction. union all q's with ord and
+     append fs/ts/vs components.
+     if ~newpos is true, new positions are computed with a rank over ord
+     and pos *)
+  (* FIXME: union all cases at once, compute new keys only once:
+     ord = 1, ..., nr_cases *)
+  let sequence_construction (tis : tblinfo list) ~newpos : tblinfo =
+    assert ((List.length tis) > 0);
+    let union ti_l ti_r =
+      let q_union = 
+	ADag.mk_rownum
+	  (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
+	  (ADag.mk_rank
+	     (pos', [(ord, A.Ascending); (pos, A.Ascending)])
+	     (ADag.mk_disjunion 
+		(ADag.mk_attach
+		   (ord, A.Nat 1n)
+		   ti_l.q) 
+		(ADag.mk_attach
+		   (ord, A.Nat 2n)
+		   ti_r.q)))
+      in
+      let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
+      let q_union' = 
+	if newpos then
+	  ADag.mk_project
+	    ([prj iter; (pos, pos')] @ (refresh_surr_cols cs ti_l ti_r item'))
+	    q_union
+	else
+	  ADag.mk_project
+	    ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
+	    q_union
+      in
+	{
+	  q = q_union';
+	  cs = cs;
+	  ts = append_ts q_union ti_l.ts ti_r.ts;
+	  vs = append_vs q_union ti_l.vs ti_r.vs;
+	  fs = append_fs q_union ti_l.fs ti_r.fs;
+	}
+	  
+    in
+      List.fold_left union (List.hd tis) (drop 1 tis)
+
 (* only keep those tuples in an nested table which are actually referenced from the
    outer table *)
   let rec slice_inner_tables (q_outer : ADag.t) (ts : Ts.t) : Ts.t =
@@ -741,10 +747,6 @@ struct
     let (offset, inner_ti) = List.hd ti.ts in
     do_unbox ti.q offset inner_ti
 
-  (* FIXME: compile append operation on all lists
-     at once, i.e. not as hd and tl -> use
-     ord = 1,2, ..., n. compute surrogates/positions
-     only once. *)
   and compile_append env loop l =
     match l with
       | e :: [] ->
@@ -752,7 +754,7 @@ struct
       | hd_e :: tl_e ->
 	  let hd = compile_expression env loop hd_e in
 	  let tl = compile_append env loop tl_e in
-	    compile_list hd tl
+	    sequence_construction [hd; tl] ~newpos:true
       | [] ->
 	  {
 	    q = ADag.mk_emptytbl;
@@ -761,36 +763,6 @@ struct
 	    vs = Vs.empty;
 	    fs = Fs.empty
 	  }
-
-  and compile_list hd tl = 
-    let cs = Cs.choose_nonempty hd.cs tl.cs in
-  (* combine the two lists and compute new surrogate values *)
-    let q =
-      ADag.mk_rownum
-	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-	(ADag.mk_rank
-	   (pos', [(ord, A.Ascending); (pos, A.Ascending)])
-	   (ADag.mk_disjunion
-	      (ADag.mk_attach
-		 (ord, A.Nat 1n)
-		 hd.q)
-	      (ADag.mk_attach
-		 (ord, A.Nat 2n)
-		 tl.q)))
-    in
-    let q'_projlist = [prj iter; (pos, pos')] @ (refresh_surr_cols cs hd tl item') in
-    let q' = 
-      ADag.mk_project
-	q'_projlist
-	q
-    in
-    {
-      q = q';
-      cs = cs;
-      ts = append_ts q hd.ts tl.ts;
-      vs = append_vs q hd.vs tl.vs;
-      fs = append_fs q hd.fs tl.fs;
-    }
 
   and compile_zip env loop l1 l2 =
     let ti_l1 = compile_expression env loop l1 in
@@ -1981,31 +1953,7 @@ struct
     let env_else = fragment_env loop_else env in 
     let ti_t = compile_expression env_then loop_then t in
     let ti_e = compile_expression env_else loop_else e in
-    let q =
-      ADag.mk_rownum
-	(item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-	(ADag.mk_disjunion
-	   (ADag.mk_attach
-	      (ord, A.Nat 1n)
-	      ti_t.q)
-	   (ADag.mk_attach
-	      (ord, A.Nat 2n)
-	      ti_e.q))
-    in
-    let cs = Cs.choose_nonempty ti_t.cs ti_e.cs in
-    let projection = [prj iter; prj pos] @ (refresh_surr_cols cs ti_t ti_e item') in
-    let q' = 
-      ADag.mk_project
-	projection
-	q
-    in
-    {
-      q = q';
-      cs = cs;
-      ts = append_ts q ti_t.ts ti_e.ts;
-      vs = append_vs q ti_t.vs ti_e.vs;
-      fs = append_fs q ti_t.fs ti_e.fs;
-    }
+      sequence_construction [ti_t; ti_e] ~newpos:false
 
   and compile_groupby env loop ge e =
     let v, ge_body = match ge with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
@@ -2153,36 +2101,7 @@ struct
 	| None -> explicit_case_results
     in
     
-    (* FIXME: union all cases at once, compute new keys only once:
-       ord = 1, ..., nr_cases *)
-    let union ti_l ti_r =
-      let q_union = 
-	ADag.mk_rownum
-	  (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
-	  (ADag.mk_disjunion 
-	     (ADag.mk_attach
-		(ord, A.Nat 1n)
-		ti_l.q) 
-	     (ADag.mk_attach
-		(ord, A.Nat 2n)
-		ti_r.q))
-      in
-      let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
-      let q_union' = 
-	ADag.mk_project
-	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
-	  q_union
-      in
-      {
-	q = q_union';
-	cs = cs;
-	ts = append_ts q_union ti_l.ts ti_r.ts;
-	vs = append_vs q_union ti_l.vs ti_r.vs;
-	fs = append_fs q_union ti_l.fs ti_r.fs;
-      }
-	
-    in
-    List.fold_left union (List.hd all_results) (drop 1 all_results) 
+      sequence_construction all_results ~newpos:false
 
   and compile_wrong loop =
     let q_error = 
@@ -2323,36 +2242,7 @@ struct
 	compile_expression env_args loop' body
 
     in
-
-    let results = List.map fundev fundevs in
-
-    let union ti_l ti_r =
-      let q_union = 
-	ADag.mk_rownum
-	  (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
-	  (ADag.mk_disjunion 
-	     (ADag.mk_attach
-		(ord, A.Nat 1n)
-		ti_l.q) 
-	     (ADag.mk_attach
-		(ord, A.Nat 2n)
-		ti_r.q))
-      in
-      let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
-      let q_union' = 
-	ADag.mk_project
-	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
-	  q_union
-      in
-      {
-	q = q_union';
-	cs = cs;
-	ts = append_ts q_union ti_l.ts ti_r.ts;
-	vs = append_vs q_union ti_l.vs ti_r.vs;
-	fs = append_fs q_union ti_l.fs ti_r.fs;
-      }
-    in
-      List.fold_left union (List.hd results) (drop 1 results)
+      sequence_construction (List.map fundev fundevs) ~newpos:false
 
   and compile_expression env loop e : tblinfo =
     match e with
