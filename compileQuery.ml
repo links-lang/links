@@ -498,8 +498,7 @@ struct
 	    (ADag.mk_eqjoin
 	       (outer, A.Item refcol)
 	       map
-	       (ADag.mk_distinct
-		  q_i))
+	       q_i)
 	in
 	  (env, map', lambda)
       in
