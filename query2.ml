@@ -189,52 +189,28 @@ struct
       | `Lambda ([x], `Var x') when x = x' -> true
       | _ -> false
 
+  let prelude_venv = ref None
+
+  let reverse_prelude_nenv nenv =
+    Env.String.fold 
+      (fun name var venv -> Env.Int.bind venv (var, name))
+      nenv
+      Env.Int.empty
+
+  let prelude_primitives = 
+    List.fold_right 
+      StringSet.add 
+      ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
+       "nth"; "groupByBase"; "sum"; "concat"; "and"; "or"; "all";
+       "any"; "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";]
+      StringSet.empty
+
   let rec lookup bound (val_env, exp_env) var =
     if VarSet.mem var bound then
       `Var var
     else
       match Value.lookup var val_env, Env.Int.find exp_env var with
 	| None, Some v -> v
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
-            `Primitive "concatMap"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
-            `Primitive "map"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
-            `Primitive "sortBy"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "asList" = f ->
-	    `Primitive "AsList"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "zip" = f ->
-	    `Primitive "zip"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "unzip" = f ->
-	    `Primitive "unzip"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nth" = f ->
-	    `Primitive "nth"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "groupByBase" = f ->
-	    `Primitive "groupByBase"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sum" = f ->
-	    `Primitive "sum"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concat" = f ->
-	    `Primitive "concat"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "and" = f ->
-	    `Primitive "and"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "or" = f ->
-	    `Primitive "or"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "all" = f ->
-	    `Primitive "all"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "any" = f ->
-	    `Primitive "any"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "max" = f ->
-	    `Primitive "max"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "min" = f ->
-	    `Primitive "min"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "avg" = f ->
-	    `Primitive "avg"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "takeWhile" = f ->
-	    `Primitive "takeWhile"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "dropWhile" = f ->
-	    `Primitive "dropWhile"
-	| Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "nubBase" = f ->
-	    `Primitive "nubBase"
 	| Some v, None -> expression_of_value bound v
 	| None, None -> expression_of_value bound (Lib.primitive_stub (Lib.primitive_name var))
 	| Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -259,14 +235,36 @@ struct
       | `Variant (name, v) -> `Variant (name, expression_of_value bound v)
       | `XML xmlitem -> `XML xmlitem
       | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
+	  
           assert (f=f');
-	  let env = env_of_value_env env in
-	  let bound = VarSet.union bound (VarSet.from_list xs) in
-	  let body = computation env bound None body in
-	    `Lambda (xs, body)
-	    
+	  let lambda xs body =
+	    let env = env_of_value_env env in
+	    let bound = VarSet.union bound (VarSet.from_list xs) in
+	    let body = computation env bound None body in
+	      `Lambda (xs, body)
+	  in
+	    begin
+
+	      (* check if the `RecFunction is actually a prelude function
+		 that is a Ferry primitive function *)
+	      match Env.Int.find (val_of !prelude_venv) f with
+		| Some name ->
+		    if StringSet.mem name prelude_primitives then
+		      let vars_t = List.map (fun x -> `Var x) xs in
+			`Lambda (xs, `Apply ((`Primitive name), vars_t))
+		    else
+		      lambda xs body
+		| None ->
+		    lambda xs body
+	    end
+	      
       (* FIXME: what is the second tuple component (Var.var option)? *)
-      | `PrimitiveFunction (f, _) -> `Primitive f
+      | `PrimitiveFunction (f, _) -> 
+	  (* eta-expand primitive functions so that they can be used as first-class values *)
+	  let arity = val_of (Lib.primitive_arity f) in
+	  let fresh_vars = List.map (fun _ -> Var.fresh_raw_var ()) (fromTo 0 arity) in
+	  let fresh_vars_t = List.map (fun x -> `Var x) fresh_vars in
+	    `Lambda (fresh_vars, `Apply ((`Primitive f), fresh_vars_t))
       | _ -> failwith "Cannot convert value to expression"
 
   and value env bound : Ir.value -> t = function
@@ -351,7 +349,7 @@ struct
       reduce bound body
 
   and rewrite_primitive env bound : string * t list -> t = function
-    | "AsList", [xs] ->
+    | "AsList", [xs] | "asList", [xs] ->
         xs
     | "Cons", [x; `Append []] ->
 	`Singleton x
@@ -367,7 +365,7 @@ struct
 		reduce_for_source env (`Lambda ([x], `Singleton body)) xs
             | _ -> assert false
         end
-    | "sortBy", [f; xs] ->
+    | "sortByBase", [f; xs] ->
 	begin
 	  match f with
 	    | `Lambda ([x], body) ->
@@ -501,7 +499,9 @@ struct
 	| e -> 
 	    e
 
-  let eval env range e = computation (env_of_value_env env) VarSet.empty range e
+  let eval env range e = 
+    prelude_venv := Some (reverse_prelude_nenv (val_of !Lib.prelude_nenv));
+    computation (env_of_value_env env) VarSet.empty range e
 end
 
 module Annotate = struct
