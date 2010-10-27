@@ -407,6 +407,17 @@ struct
 (*    | `Lambda (parameters, body), args -> `Apply ((`Lambda (parameters, body)), args) *)
     | `Primitive f, args -> rewrite_primitive env bound (f, args) 
     | `Var x, args -> `Apply (lookup bound env x, args)
+    | `If (c, t, e), args -> 
+	let e' = opt_map (fun e -> apply env bound (e, args)) e in
+	`If (c, apply env bound (t, args), e')
+    | `Case (v, cases, default), args -> 
+	let case (var, body) =
+	  let bound' = VarSet.add var bound in
+	  (var, apply env bound' (body, args))
+	in
+	let cases' = StringMap.map case cases in
+	let default' = opt_map case default in
+	  `Case (v, cases', default')
     | f, args -> `Apply (f, args)
 
   and computation env bound range (binders, tailcomp) : t =
