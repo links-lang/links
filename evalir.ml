@@ -370,12 +370,9 @@ module Eval = struct
 	    | Some db -> 
 	      begin
 		match Heapresult.execute db imptype (ExpressionToAlgebraCompile.compile exptree) with
-		  | Some value -> value
-		  | None -> 
-		    begin
-		      Debug.print ">>>> Error plan result is not empty -> abort";
-		      raise Wrong
-		    end
+		  | Heapresult.Result value -> value
+		  | Heapresult.Error "something is wrong" -> raise Wrong
+		  | Heapresult.Error s -> eval_error "Error during query execution: %s" s
 	      end
 	    | None -> computation env cont e
         in

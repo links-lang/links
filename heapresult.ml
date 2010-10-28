@@ -171,9 +171,13 @@ let rec execute_queries database ti =
     
 let rec execute_errors database q_error =
   let xml_sql = Pf_toolchain.optimize_sql q_error in
-  let _, query = XmlSqlPlan.extract_queries xml_sql in
+  let schema, query = XmlSqlPlan.extract_queries xml_sql in
   let result = execute_query database query in
-    if result#ntuples > 0 then false else true
+  let (item, _, ntuples) = table_access_functions schema result in
+    if ntuples > 0 then
+      Some (item 0 1)
+    else 
+      None
 
 let mk_primitive raw_value t = 
   match t with
@@ -320,9 +324,19 @@ and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), 
       | `List ->
 	  (next_offset, `List values)
 
-let execute db imptype (result_algebra_bundle, error_bundle) =
-  if opt_app (execute_errors db) true error_bundle then
-    let result_bundle = execute_queries db result_algebra_bundle in
-    Some (handle_table result_bundle imptype)
-  else
-    None
+exception ErrorExc of string
+
+type outcome = Result of Value.t | Error of string
+
+let execute db imptype (result_algebra_bundle, error_plans) =
+  let error q =
+    match execute_errors db q with 
+      | Some errorstring -> raise (ErrorExc errorstring)
+      | None -> ()
+  in
+    try
+      List.iter error error_plans;
+      let result_bundle = execute_queries db result_algebra_bundle in
+	Result (handle_table result_bundle imptype)
+    with
+	ErrorExc s -> Error s

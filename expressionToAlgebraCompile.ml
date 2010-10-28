@@ -10,15 +10,15 @@ module Helpers = ExpressionToAlgebraHelpers
 
 (* module-global reference that stores the global error plan of the generated
    plan bundle (if there is one) *)
-let errors = ref None
+let errors = ref []
 
-(* merge a new error plan with the previous ones with a disjoint union *)
-let merge_error_plans q_error =
-  match !errors with
-    | Some q_old ->
- 	errors := Some (ADag.mk_disjunion q_old q_error)
-    | None ->
-	errors := Some q_error
+(* add new error plan to the front of the list of current error plans.
+   since compilation is essentialy a bottom-up traversal, the reversed list
+   !errors contains a reverse topological ordering of the error plans. If 
+   executed in this order, the error condition of any expression can be 
+   safely checked, because all error plans of any subexpressions have already
+   been executed *)
+let add_error_plan q_error = errors := q_error :: !errors
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
@@ -811,7 +811,7 @@ and compile_hd env loop l =
 	       [Helpers.prj iter]
 	       q_l_abs)))
   in
-    merge_error_plans q_error;
+    add_error_plan q_error;
     (* FIXME: slice the inner tables *)
     {
       q = q;
@@ -846,7 +846,7 @@ and compile_tl env loop l =
 	       [Helpers.prj iter]
 	       q_l_abs)))
   in
-    merge_error_plans q_error;
+    add_error_plan q_error;
     {
       q = q;
       cs = ti_l.cs;
@@ -1346,7 +1346,7 @@ and compile_wrong loop =
  	 (A.Item 1, A.String "something is wrong")
  	 loop)
   in
-    merge_error_plans q_error;
+    add_error_plan q_error;
     {
       q = ADag.mk_emptytbl;
       cs = Cs.Column (1, `IntType);
@@ -1524,17 +1524,14 @@ let rec wrap_serialize ti =
     }
 
 let wrap_serialize_errors q_error =
-  let wrap q = 
-    ADag.mk_serializerel 
-      (iter, pos, [A.Item 1])
-      ADag.mk_nil
-      (ADag.mk_attach
-	 (pos, A.Nat 1n)
-	 (ADag.mk_rank
-	    (iter, [(A.Item 1, A.Ascending)])
-	    q))
-  in
-    opt_map wrap q_error
+  ADag.mk_serializerel 
+    (iter, pos, [A.Item 1])
+    ADag.mk_nil
+    (ADag.mk_attach
+       (pos, A.Nat 1n)
+       (ADag.mk_rank
+	  (iter, [(A.Item 1, A.Ascending)])
+	  q_error))
 
 let compile e =
   let loop = 
@@ -1542,4 +1539,6 @@ let compile e =
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
   let ti = compile_expression AEnv.empty loop e in
-    wrap_serialize ti, wrap_serialize_errors !errors
+    (* reverse error plan list so that they can be executed from the beginning
+       in the proper bottom-up order *)
+    wrap_serialize ti, List.map wrap_serialize_errors (List.rev !errors)

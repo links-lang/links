@@ -25,13 +25,17 @@ type t =
     | `If of t * t * t option
     | `Table of Value.table
     | `Singleton of t | `Append of t list
-    | `Record of t name_map | `Project of t * string | `Erase of t * name_set | `Extend of t option * t name_map 
+    | `Record of t name_map 
+    | `Project of t * string 
+    | `Erase of t * name_set 
+    | `Extend of t option * t name_map 
     | `Variant of string * t
     | `XML of Value.xmlitem
     | `Apply of t * t list
     | `Lambda of (Var.var list * t)
     | `Primitive of string
-    | `Var of Var.var | `Constant of Constant.constant 
+    | `Var of Var.var 
+    | `Constant of Constant.constant 
     | `Case of t * (Var.var * t) name_map * (Var.var * t) option
     | `Wrong ]
 deriving (Show)

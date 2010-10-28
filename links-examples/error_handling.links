@@ -1,0 +1,18 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
+var players = table "players" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
+
+#query { for (r <-- t) orderby(r.bar, r.foo) [(foo=r.foo, bar=r.bar)]}
+#query { for (r <-- t) orderby(r.bar) [(foo=r.foo, bar=r.bar)]}
+
+query { 
+      var ignore = t;
+      var ps = asList(players);
+      hd(tl(drop(length(ps) + 10, ps)))
+      #switch ([]) {
+#	      case x :: xs -> 5
+#      }
+
+
+}
+
