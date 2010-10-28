@@ -43,17 +43,8 @@ sig
   include Map.S
   exception Not_disjoint of key * string
 
-  val singleton : key -> 'a -> 'a t 
-  (** create a singleton map *)
-
-  val filter : ('a -> bool) -> 'a t -> 'a t
+  val filterv : ('a -> bool) -> 'a t -> 'a t
   (** filter by value *)
-
-  val filteri : (key -> 'a -> bool) -> 'a t -> 'a t
-  (** filter by key and value *)
-
-  val for_all : ('a -> bool) -> 'a t -> bool
-  (** return true if p holds for all values in the range of m *)
 
   val size : 'a t -> int
   (** the number of distinct keys in the map *)
@@ -83,7 +74,7 @@ sig
   val superimpose : 'a t -> 'a t -> 'a t
   (** Extend the second map with the first *)
 
-  val split : ('a * 'b) t -> ('a t * 'b t)
+  val split_paired : ('a * 'b) t -> ('a t * 'b t)
   (** split a pair map into a pair of maps *)
 
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
@@ -131,38 +122,27 @@ struct
   module Make (Ord : OrderedType) = struct
     include Map.Make(Ord)
 
-    let singleton i v =
-      add i v empty
-
-    let filter f map =
-      fold (fun name v map ->
-              if f v then add name v map
-              else map) map empty
-
-    let filteri f map =
-      fold (fun name v map ->
-              if f name v then add name v map
-              else map) map empty
+    exception Not_disjoint of key * string
+    module S = Show.Show_map(Ord)
 
     let find elem map = 
       try find elem map 
       with NotFound _ -> raise (NotFound (Show.show Ord.show_t elem ^ 
                                   " (in Map.find)"))
-      
-    let for_all p m =
-      fold (fun _ v b -> b && p v) m true
-        
+    let filterv f map =
+      filter (fun _ -> f) map
+
     let size m =
       fold (fun _ _ n -> n+1) m 0
         
     let to_alist map =
       List.rev (fold (fun x y l -> (x, y) :: l) map [])
         
-    let to_list f map =
-      List.rev (fold (fun x y l -> (f x y) :: l) map [])
-        
     let from_alist l =
       List.fold_right (uncurry add) l empty 
+        
+    let to_list f map =
+      List.rev (fold (fun x y l -> (f x y) :: l) map [])
         
     (** Transform each key-value pair in [m] to a new key-value pair
         by calling [f] and return the resulting [Map]. *)
@@ -176,7 +156,6 @@ struct
       try Some (find item map) 
       with NotFound _ -> None
 *)        
-    exception Not_disjoint of key * string
       
     let union_disjoint a b = 
       fold
@@ -189,7 +168,7 @@ struct
 
     let superimpose a b = fold add b a
 
-    let split m =
+    let split_paired m =
       fold
         (fun i (v1, v2) (m1, m2) -> (add i v1 m1, add i v2 m2))
         m (empty, empty)
@@ -203,9 +182,6 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    let defined_on m x = (match lookup x m with None -> false | Some _ -> true)
-
-    module S = Show.Show_map(Ord)
     let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
   end
 end

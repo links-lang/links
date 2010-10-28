@@ -795,7 +795,7 @@ let is_instantiated_quantifier q =
   let is_concrete_presence_flag f =
     match concrete_presence_flag f with
       | `Var _ -> false
-      | _ -> true in
+      | _ -> true
   in
     match q with
       | `TypeVar (_, point) ->

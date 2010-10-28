@@ -101,6 +101,7 @@ struct
   ;
   END
 
+(*
   EXTEND Gram
   expr: LEVEL "simple"
   [
@@ -132,7 +133,7 @@ struct
                             ^"the syntax is not valid");
   ]];
   END
-  
+*)  
 end
 
 module M = Camlp4.Register.OCamlSyntaxExtension(Id)(Deriving)

@@ -1073,7 +1073,7 @@ let check_for_duplicate_names : Sugartypes.position -> pattern list -> unit = fu
 
   let binderss =
     List.fold_left gather StringMap.empty ps in
-  let dups = StringMap.filter (fun (i, _) -> i > 1) binderss in
+  let dups = StringMap.filterv (fun (i, _) -> i > 1) binderss in
     if not (StringMap.is_empty dups) then
       Gripers.duplicate_names_in_pattern pos
 

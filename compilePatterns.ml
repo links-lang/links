@@ -702,7 +702,7 @@ and match_constant
             else
               def env
         | `NConstant constants ->
-            let bs = ConstMap.filteri (fun c _ -> not (ConstSet.mem c constants)) bs in
+            let bs = ConstMap.filter (fun c _ -> not (ConstSet.mem c constants)) bs in
             let comp, constants =
               ConstMap.fold
                 (fun constant annotated_clauses (comp, constants) ->

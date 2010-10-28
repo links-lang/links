@@ -597,9 +597,23 @@ struct
     method with_env env =
       {< env = env >}
 
-    method with_envs (env, rec_env, mutrec_env) =
-      {< env = env; rec_env = rec_env; mutrec_env = mutrec_env >}
+    method private with_env env =
+      {< env = env >}
 
+    method private with_rec_env recenv =
+      {< rec_env = rec_env >}
+
+    method private with_mutrec_env mutrec_env =
+      {< mutrec_env = mutrec_env >}
+
+    method with_envs (env, rec_env, mutrec_env) =
+       (* This three-stage update is a workaround for a camlp4 parsing bug 
+          http://caml.inria.fr/mantis/view.php?id=4673
+       *)
+      ((o#with_env env)
+         #with_rec_env rec_env)
+         #with_mutrec_env mutrec_env
+        
     method init (x, (_, name, _)) =
       o#with_env (IntMap.add x 0 env)
 

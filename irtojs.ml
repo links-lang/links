@@ -399,6 +399,12 @@ struct
 
     val closures = closures
 
+    method private with_nenv nenv =
+      {< nenv = nenv >}
+
+    method private with_venv venv =
+      {< venv = venv >}
+
     method bind_name b =
       let name = Var.name_of_binder b in
       let var = Var.var_of_binder b in
@@ -406,7 +412,12 @@ struct
         if name = "" then nenv
         else Env.String.bind nenv (name, var) in
       let venv = VEnv.bind venv (var, name) in
-        {< nenv = nenv; venv = venv >}
+      (*
+        This two-stage update is a workaround for a camlp4 parsing bug.
+        http://caml.inria.fr/mantis/view.php?id=4673
+      *)
+      (o#with_nenv nenv)
+        #with_venv venv
 
     method bind_fun f lam =
       {< fun_env = VEnv.bind fun_env (f, lam) >}

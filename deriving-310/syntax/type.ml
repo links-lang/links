@@ -1,4 +1,4 @@
-(*pp camlp4of *)
+(*pp camlp4orf *)
 (* More convenient representation for types, and translation from the
    Camlp4 representation *)
 
@@ -589,8 +589,8 @@ struct
 
   and app ~loc f = function
     | []    -> f
-    | [x]   -> <:ctyp< $atomic ~loc x$ $f$ >>
-    | x::xs -> app ~loc (<:ctyp< $atomic ~loc x$ $f$ >>) xs
+    | [x]   -> <:ctyp< $f$ $atomic ~loc x$ >>
+    | x::xs -> app ~loc (<:ctyp< $f$ $atomic ~loc x$ >>) xs
 
   let tagspec ~loc : tagspec -> _ = function
     | `Tag (c, None) -> <:ctyp< `$c$ >>
@@ -602,10 +602,10 @@ struct
     let atomic = atomic ~loc in
     function
       | #atomic as a -> atomic a
-      | `Function (f, t) -> <:ctyp< $atomic f$ -> $atomic t$ >>
+      | `Function (f, t) -> <:ctyp< ($atomic f$ -> $atomic t$) >>
       | `Tuple [t] -> atomic t
       | `Tuple ts -> Ast.TyTup (loc, unlist ~loc (pair ~loc) ts atomic)
-      | `Variant (`Eq, tags) -> <:ctyp< [  $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
+      | `Variant (`Eq, tags) -> <:ctyp< [= $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
       | `Variant (`Gt, tags) -> <:ctyp< [> $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
       | `Variant (`Lt, tags) -> <:ctyp< [< $unlist ~loc (bar ~loc) tags (tagspec ~loc)$ ] >>
 
@@ -625,7 +625,7 @@ struct
   let rhs ~loc : rhs -> Ast.ctyp = function
     | `Fresh (None, t, `Private) -> <:ctyp< private $repr ~loc t$ >>
     | `Fresh (None, t, `Public) -> repr ~loc t
-    | `Fresh (Some e, t, `Private) -> <:ctyp< $expr ~loc e$ = private $repr ~loc t$ >>
+    | `Fresh (Some e, t, `Private) -> <:ctyp< $expr ~loc e$ == private $repr ~loc t$ >>
     | `Fresh (Some e, t, `Public) -> Ast.TyMan (loc, expr ~loc e, repr ~loc t)
     | #expr as t          -> expr ~loc t
 
