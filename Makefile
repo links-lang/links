@@ -37,8 +37,8 @@ ifdef PROF
 OCAMLOPT := ocamlopt.opt -p -inline 0
 else
 OCAMLOPT := ocamlopt.opt
-OCAMLC := ocamlc
 endif
+OCAMLC := ocamlc.opt
 
 # use ocamldep.opt if it exists
 # (it doesn't exist for all OCaml installations)
@@ -142,7 +142,7 @@ SOURCES = $(OPC)                		\
 #          tests.ml                              \
 
 
-LIBS    = nums str $(DB_LIBS) deriving
+LIBS    = bigarray nums str $(DB_LIBS) deriving
 
 ifndef THREADS
 LIBS += unix

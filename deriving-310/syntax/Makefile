@@ -1,6 +1,6 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-OCAMLC     = ocamlc
+OCAMLC     = ocamlc.opt
 OCAMLOPT   = ocamlopt.opt
 OCAMLDEP   = ocamldep.opt
 ANNOTATE   = yes

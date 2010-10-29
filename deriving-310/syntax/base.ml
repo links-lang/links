@@ -225,7 +225,7 @@ struct
               <:ctyp< '$name$ $typ$ >>))
           ((fun x -> x), <:ctyp< $lid:name$ >>)
           params in
-        maker <:ctyp< $typ$ $lid:typename$ >>
+        maker <:ctyp< ($typ$ $lid:typename$) >>
   
     method decls params (decls : (is_generated * rhs) NameMap.t list) : Ast.str_item =
       let () = List.iter (fun m -> assert (not (NameMap.is_empty m))) decls in

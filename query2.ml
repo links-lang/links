@@ -106,7 +106,7 @@ module QueryRegex = struct
       | `Variant ("Seq", l) -> 
 	  let ps = List.map similarify (unbox_list l) in
 	    assert ((List.length ps) >= 1);
-	    List.fold_left append_patterns (List.hd ps) (drop 1 ps) (
+	    List.fold_left append_patterns (List.hd ps) (drop 1 ps)
       | `Variant ("Range", p) -> 
 	  let f, s = unbox_pair p in
 	    append_patterns f s

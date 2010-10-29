@@ -15,6 +15,7 @@ let exists cmd =
   with Unix.Unix_error _ -> false
 
 let pipe_through cmd input =
+  Debug.f "FOOBAR %s" cmd;
   assert (exists cmd);
   try
     let (ic, oc) = Unix.open_process cmd in
