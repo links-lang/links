@@ -245,7 +245,8 @@ struct
 	    let (valenv, tenv) = env in
 	    let valenv' = Value.shadow valenv ~by:locals in
 	    let env' = (valenv', tenv) in
-	    let body = computation env' bound None body in
+	    let bound' = VarSet.union bound (VarSet.from_list xs) in
+	    let body = computation env' bound' None body in
 	      `Lambda (xs, body)
 	  in
 	    begin
@@ -503,7 +504,7 @@ struct
 	  (* merge for-comprehension with its orderby clause *)
 	| `For (source', ((_ :: _) as os), (`Lambda ([y], _) as f')) when is_identity_exp f' ->
 	    `For (source', (List.map (replace_var y x) os), f)
-        | `Singleton _ | `Append _ | `If _ | `For _ | `Table _ | `Apply _ | `Project _ ->
+        | `Singleton _ | `Append _ | `If _ | `For _ | `Table _ | `Apply _ | `Project _  | `Var _ ->
 	    `For (source, [], f)
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
     in
