@@ -28,3 +28,8 @@ Makefile.config
 xmlLexer.ml
 xmlParser.ml
 xmlParser.mli
+._ncdi
+*.o
+*.cmx
+*.a
+*.cmxa

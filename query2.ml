@@ -215,11 +215,11 @@ struct
     else
       match Value.lookup var val_env, Env.Int.find exp_env var with
 	| None, Some v -> v
-	| Some v, None -> expression_of_value bound v
-	| None, None -> expression_of_value bound (Lib.primitive_stub (Lib.primitive_name var))
+	| Some v, None -> expression_of_value (val_env, exp_env) bound v
+	| None, None -> expression_of_value (val_env, exp_env) bound (Lib.primitive_stub (Lib.primitive_name var))
 	| Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
 
-  and expression_of_value bound : Value.t -> t =
+  and expression_of_value env bound : Value.t -> t =
     function
       | `Bool b -> `Constant (`Bool b)
       | `Int i -> `Constant (`Int i)
@@ -229,22 +229,23 @@ struct
 	  used_database := Some db;
 	  `Table t 
       | `List vs ->
-          `Append (List.map (fun v -> `Singleton (expression_of_value bound v)) vs)
+          `Append (List.map (fun v -> `Singleton (expression_of_value env bound v)) vs)
       | `Record fields ->
           `Record
             (List.fold_left
-               (fun fields (name, v) -> StringMap.add name (expression_of_value bound v) fields)
+               (fun fields (name, v) -> StringMap.add name (expression_of_value env bound v) fields)
                StringMap.empty
                fields)
-      | `Variant (name, v) -> `Variant (name, expression_of_value bound v)
+      | `Variant (name, v) -> `Variant (name, expression_of_value env bound v)
       | `XML xmlitem -> `XML xmlitem
-      | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
+      | `RecFunction ([(f, (xs, body))], locals, f', _scope) ->
 	  
           assert (f=f');
 	  let lambda xs body =
-	    let env = env_of_value_env env in
-	    let bound = VarSet.union bound (VarSet.from_list xs) in
-	    let body = computation env bound None body in
+	    let (valenv, tenv) = env in
+	    let valenv' = Value.shadow valenv ~by:locals in
+	    let env' = (valenv', tenv) in
+	    let body = computation env' bound None body in
 	      `Lambda (xs, body)
 	  in
 	    begin
@@ -408,7 +409,7 @@ struct
 
   and apply env bound : t * t list -> t = function
     | `Lambda (parameters, body), args -> beta_reduce bound (parameters, body) env args
-(*    | `Lambda (parameters, body), args -> `Apply ((`Lambda (parameters, body)), args) *)
+(*    | `Lambda (parameters, body), args -> `Apply ((`Lambda (parameters, body)), args)  *)
     | `Primitive f, args -> rewrite_primitive env bound (f, args) 
     | `Var x, args -> `Apply (lookup bound env x, args)
     | `If (c, t, e), args -> 

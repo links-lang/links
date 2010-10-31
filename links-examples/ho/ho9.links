@@ -1,4 +1,4 @@
-var db = database "test" "postgresql" ":5432:test:foobar";
+var db = database "test" "postgresql" ":5432:ulricha:";
 var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
 var players = table "players" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
 
