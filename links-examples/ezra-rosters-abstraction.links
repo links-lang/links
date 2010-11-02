@@ -1,6 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var t = table "test1" with (foo : Int, bar : Int ) tablekeys [["foo"]] from db;
-var players = table "players" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
+var players = table "players_large" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
 
 fun teamRosters() {
 	groupByBase(fun (p) { p.team }, asList(players))
@@ -20,7 +19,7 @@ fun playersBySelectedTeams(pred) {
 	}
 }
 
-fun fullTeam(list) { length(list) > 12 }
+fun fullTeam(list) { length(list) > 9 }
 fun effectivePlayers(list) { for (p <- list) where (p.eff > 12) [p] }
 playersBySelectedTeams(fun (x) { fullTeam(effectivePlayers(x)) })
 
