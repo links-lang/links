@@ -1,0 +1,11 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players = table "players_large" with (name : String, team : String, id : Int, eff : Int) tablekeys [["id"], ["name"]] from db;
+
+query {
+	var maybe_max = max(for (p <-- players) [p.eff]);
+	switch (maybe_max) {
+		case Just(max_eff) -> 
+			for (p <-- players) where (max_eff == p.eff) [p.name]
+		case Nothing -> []
+	}
+}
