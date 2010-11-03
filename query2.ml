@@ -623,8 +623,8 @@ module Annotate = struct
 	    `Extend ((r' ,ext_fields'), `Atom)
       | `For (source, os, `Lambda ([x], body)) ->
 	  let source' = aot `List env source in
-	  let os' = List.map (fun o -> transform env o) os in
 	  let env' = Env.Int.bind env (x, `Atom) in
+	  let os' = List.map (fun o -> transform env' o) os in
 	  let body' = aot `List env' body in
 	    `For ((source', os', `Lambda (([x], body'), `Atom)), `List)
 (*       | `GroupBy ((x, group_exp), source) ->
