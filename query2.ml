@@ -213,11 +213,19 @@ struct
     if VarSet.mem var bound then
       `Var var
     else
-      match Value.lookup var val_env, Env.Int.find exp_env var with
-	| None, Some v -> v
-	| Some v, None -> expression_of_value (val_env, exp_env) bound v
-	| None, None -> expression_of_value (val_env, exp_env) bound (Lib.primitive_stub (Lib.primitive_name var))
-	| Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+      try
+	begin
+	  match Value.lookup var val_env, Env.Int.find exp_env var with
+	    | None, Some v -> v
+	    | Some v, None -> expression_of_value (val_env, exp_env) bound v
+	    | None, None -> expression_of_value (val_env, exp_env) bound (Lib.primitive_stub (Lib.primitive_name var))
+	    | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+	end
+      with
+	  (NotFound x) ->
+	    Debug.print (Show.show VarSet.show_t bound);
+	    raise (NotFound x)
+	    
 
   and expression_of_value env bound : Value.t -> t =
     function
@@ -331,7 +339,11 @@ struct
     let rec reduce bound e = 
       match e with
 	| `Var x -> lookup bound env x 
-	| `For (l, os, body) -> `For (reduce bound l, List.map (reduce bound) os, reduce bound body)
+	| `For (l, os, `Lambda ([x], body)) -> 
+	    let l' = reduce bound l in
+	    let os' = List.map (reduce (VarSet.add x bound)) os in
+	    let body' = reduce bound (`Lambda ([x], body)) in
+	      `For (l', os', body')
 	| `If (c, t, e) -> `If (reduce bound c, reduce bound t, opt_map (reduce bound) e)
 	| `Singleton t -> `Singleton (reduce bound t)
 	| `Append ts -> `Append (List.map (reduce bound) ts)
@@ -467,7 +479,7 @@ struct
       | `Apply (f, args) ->
 	  let f = value env bound f in
 	  let args = List.map (value env bound) args in
-	    Debug.f "apply %s %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]");
+	    Debug.f "apply %s\n %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]");
 	    apply env bound (f, args)
       | `Special (`Query (None, e, _)) -> computation env bound range e
       | `Special `Wrong _ -> `Wrong
