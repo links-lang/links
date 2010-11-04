@@ -1,0 +1,50 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+
+typename Fenc = [| Sumrow:Int | Cell:(Int, Int) | Const:Int |];
+
+fun sumrow(row) { Sumrow(row) }
+fun cell(row, col) { Cell(row, col) }
+fun const(x) { Const(x) }
+
+fun app(enc, arg) {
+	switch(enc) {
+		case Sumrow(row) ->
+			switch (nth(row, arg)) {
+				case Just(row) -> sum(row)
+				case Nothing -> 0
+			}
+		case Cell(row, col) ->
+			switch (nth(row, arg)) {
+				case Just(row) -> 
+					switch (nth(col, row)) {
+						case Just(e) -> e
+						case Nothing -> 0
+					}
+				case Nothing -> 0
+			}
+		case Const(x) ->
+			x
+	}
+}
+
+#var ss = [[const(5), cell(2,2), const(3), const(5)], [sumrow(1), cell(3,3), sumrow(2)]];
+#var ss = [[const(5)], [sumrow(1)]];
+var ss = [[const(5), cell(2,2)], [sumrow(1), cell(3,3)]];
+
+fun apply(data, f_enc) { app(f_enc, data) }
+
+query { 
+	var rows = nubBase(for (e <-- data) [e.row]);
+	var m = 
+		for (r <- rows)
+			[for (e <-- data) where (e.row == r) orderby (e.row, e.col)
+				[e.val]];
+
+	for (row <- ss)
+		[for (f <- row)
+			[apply(m, f)]]
+
+}
+
+
