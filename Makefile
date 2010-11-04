@@ -124,6 +124,7 @@ SOURCES = $(OPC)                		\
 	  algebra_export.ml algebra_export.mli	\
 	  pf_toolchain.mli pf_toolchain.ml	\
 	  cs.ml cs.mli				\
+	  exptodot.ml				\
 	  query2.ml query2.mli			\
 	  components.ml				\
 	  expressionToAlgebraDefinitions.ml	\

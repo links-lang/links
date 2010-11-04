@@ -639,11 +639,6 @@ module Annotate = struct
 	  let os' = List.map (fun o -> transform env' o) os in
 	  let body' = aot `List env' body in
 	    `For ((source', os', `Lambda (([x], body'), `Atom)), `List)
-(*       | `GroupBy ((x, group_exp), source) ->
-	  let env' = Env.Int.bind env (x, `Atom) in
-	  let group_exp' = aot `Atom env' group_exp in
-	  let source' = aot `List env source in
-	    `GroupBy (((x, group_exp'), source'), `List) *)
       | `Lambda (xs, body) -> 
 	  let env' = List.fold_left (fun env' x -> Env.Int.bind env' (x, `Atom)) env xs in
 	  let body' = aot `Atom env' body in
@@ -733,5 +728,8 @@ let compile : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (Anno
 	print_endline ("query2:\n "^string_of_t v);
       let v_annot = Annotate.transform Env.Int.empty v in
 	if Settings.get_value Basicsettings.Ferry.print_backend_expression then
-	  print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
+	  begin
+	    print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
+	    Exptodot.output_dot v_annot "exp_query.dot"
+	  end;
 	(v_annot, (Annotate.typeof_typed_t v_annot))
