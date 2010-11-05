@@ -1335,8 +1335,17 @@ and compile_case env loop value cases default =
       | Some c -> (default_case env' q_other c) :: explicit_case_results
       | None -> explicit_case_results
   in
-    
-    Helpers.sequence_construction all_results ~newpos:false
+  let result_union = Helpers.sequence_construction all_results ~newpos:false in
+  let q' = 
+    (* map back into original iteration scope *)
+    ADag.mk_project
+      ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets result_union.cs))))
+      (ADag.mk_eqjoin
+	 (iter, inner)
+	 result_union.q
+	 map)
+  in
+    { result_union with q = q' }
 
 and compile_wrong loop =
   let q_error = 

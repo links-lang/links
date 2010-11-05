@@ -255,7 +255,7 @@ let do_list_or loop l =
 (* join two inner tables together and compute new surrogate keys *)
 let combine_inner_tables q_l q_r =
   ADag.mk_rownum 
-    (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
+    (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
     (ADag.mk_disjunion
        (ADag.mk_attach
 	  (ord, A.Nat 1n)

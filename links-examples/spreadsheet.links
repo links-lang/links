@@ -2,7 +2,7 @@ var db = database "test" "postgresql" ":5432:test:foobar";
 var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 fun sumrow(row)(data) {
-	switch (nth(2, data)) {
+	switch (nth(row, data)) {
 		case Just(row) -> sum(row)
 		case Nothing -> 0
 	}
