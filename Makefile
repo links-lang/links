@@ -118,6 +118,7 @@ SOURCES = $(OPC)                		\
           loader.mli loader.ml                  \
           $(DB_CODE)            		\
           irtojs.mli irtojs.ml                  \
+	  dot.ml				\
 	  irtodot.ml				\
 	  algebra.ml algebra.mli		\
 	  algebra_dag.ml algebra_dag.mli	\
