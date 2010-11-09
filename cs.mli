@@ -5,6 +5,8 @@ type column_type = [ Algebra.pf_type | `Surrogate | `Unit | `Tag | `EmptyListLit
 
 val column_type_of_constant : Constant.constant -> column_type
 
+val column_type_of_pf_type : Algebra.pf_type -> column_type 
+
 (** the number of a column starting with 1 *)
 type offset = int
 

@@ -1445,6 +1445,24 @@ and compile_lambda env loop xs body =
       fs = fs;
     }
 
+and compile_conversion_op env loop arg dest_type  =
+  let ti_arg = compile_expression env loop arg in
+    assert (Cs.is_atomic ti_arg.cs);
+    let q_conv = 
+      ADag.mk_project
+	[Helpers.prj iter; Helpers.prj pos; (A.Item 1, A.Item 2)]
+	(ADag.mk_cast
+	   (A.Item 2, A.Item 1, dest_type)
+	   ti_arg.q)
+    in
+      {
+	q = q_conv;
+	cs = Cs.Column (1, (Cs.column_type_of_pf_type dest_type));
+	ts = Ts.empty;
+	vs = Vs.empty;
+	fs = Fs.empty;
+      }
+
 and apply_primitive env loop f args =
   match f, args with
     | "+", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Add) `IntType op1 op2
@@ -1483,6 +1501,7 @@ and apply_primitive env loop f args =
     | "takeWhile", [p; l] -> compile_takewhile env loop p l
     | "dropWhile", [p; l] -> compile_dropwhile env loop p l
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
+    | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->

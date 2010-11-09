@@ -707,6 +707,8 @@ module Annotate = struct
 		| "concat" | "tl" | "nubBase" ->
 		    (* `List -> `List *)
 		    [`List], `List
+		| "floatToInt" ->
+		    [`Atom], `Atom
 		| _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented")
 	    end
 	  in

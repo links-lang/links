@@ -12,6 +12,14 @@ let column_type_of_constant = function
   | `Float _ -> `FloatType
   | `Char _ -> `CharType
 
+let column_type_of_pf_type : Algebra.pf_type -> column_type = function
+  | `BoolType -> `BoolType
+  | `IntType -> `IntType
+  | `StrType -> `StrType
+  | `FloatType -> `FloatType
+  | `CharType -> `CharType
+  | `NatType -> `NatType
+
 let is_primitive_col = function
   | `Surrogate -> false
   | `Tag -> false

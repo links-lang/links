@@ -6,17 +6,23 @@ typename Fenc = [| Sumrow:Int | Cell:(Int, Int) | Const:Int |];
 fun sumrow(row) { Sumrow(row) }
 fun cell(row, col) { Cell(row, col) }
 fun const(x) { Const(x) }
+fun avgrow(row) { Avgrow(row) }
 
 fun app(enc, arg) {
 	switch(enc) {
 		case Sumrow(row) -> sum(nth(row, arg))
+		case Avgrow(row) -> 
+			switch (avg(nth(row, arg))) {
+				case Just(avg) -> floatToInt(avg)
+				case Nothing -> 0
+			}
 		case Cell(row, col) -> nth(col, nth(row, arg))
 		case Const(x) -> x
 	}
 }
 
 var ss = [[const(5), cell(2,2), const(123)],
-	  [sumrow(1), cell(3,3), sumrow(2)], 
+	  [sumrow(1), avgrow(15), sumrow(2)], 
 	  [cell(2,1), const(2048), sumrow(1)]];
 
 fun apply(data, f_enc) { app(f_enc, data) }

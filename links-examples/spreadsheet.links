@@ -5,9 +5,15 @@ var data = table "ss" with (row : Int, col : Int, val : Int) tablekeys [["row", 
 fun sumrow(row)(data) { sum(nth(row, data)) }
 fun cell(row, col) (data) { nth(col, nth(row, data)) }
 fun const(x)(data) { x }
+fun avgrow(row)(data) {
+	switch (avg(nth(row, data))) {
+		case Just(avg) -> floatToInt(avg)
+		case Nothing -> 0
+	}
+}
 
 var ss = [[const(5), cell(2,2), const(123)],
-	  [sumrow(1), cell(3,3), sumrow(2)], 
+	  [sumrow(1), avgrow(15), sumrow(2)], 
 	  [cell(2,1), const(1024), sumrow(1)]];
 
 fun apply(data)(f) { f(data) }
