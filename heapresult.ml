@@ -331,9 +331,12 @@ type outcome = Result of Value.t | Error of string
 
 let execute db imptype (result_algebra_bundle, error_plans, keytags) =
   let error q =
-    match execute_errors db q with 
-      | Some errorstring -> raise (ErrorExc errorstring)
-      | None -> ()
+    if Settings.get_value Basicsettings.Ferry.check_error_plans then
+      match execute_errors db q with 
+	| Some errorstring -> raise (ErrorExc errorstring)
+	| None -> ()
+    else
+      ()
   in
     try
       List.iter error error_plans;

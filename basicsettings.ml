@@ -59,6 +59,7 @@ module Ferry = struct
   let print_backend_expression = Settings.add_bool("print_backend_expression", false, `User)
   let print_sql_queries = Settings.add_bool("print_sql_queries", false, `User)
   let pf_path = Settings.add_string("pf_path", "/usr/local/bin/", `User)
+  let check_error_plans = Settings.add_bool("check_error_plans", true, `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module
