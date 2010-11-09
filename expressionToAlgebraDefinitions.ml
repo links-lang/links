@@ -12,10 +12,10 @@ struct
 			  end)
 end
 
-and Vs : (Components.S with type key = (int * string) and type value = Ti.tblinfo * Cs.implementation_type) =
+and Vs : (Components.S with type key = (int * nativeint) and type value = Ti.tblinfo * Cs.implementation_type) =
 struct
   include Components.Make(struct
-			    type key = int * string
+			    type key = int * nativeint
 			    type value = Ti.tblinfo * Cs.implementation_type
 			    let incr = fun (col, tag) i -> ((col + i), tag)
 			    let decr = fun (col, tag) i -> ((col - i), tag)

@@ -20,6 +20,20 @@ let errors = ref []
    been executed *)
 let add_error_plan q_error = errors := q_error :: !errors
 
+let next_key = ref 0
+let tagkeys = ref StringMap.empty
+let keytags = ref IntMap.empty
+
+let tagkey tag = 
+  match StringMap.lookup tag !tagkeys with
+    | Some key -> Nativeint.of_int key
+    | None ->
+	let key = !next_key in
+	  incr next_key;
+	  tagkeys := StringMap.add tag key !tagkeys;
+	  keytags := IntMap.add key tag !keytags;
+	  Nativeint.of_int key
+
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
   let q_o = 
@@ -192,11 +206,13 @@ and compile_aggr_error env loop aggr_fun restype l =
 	   ti_l.q)
     in
     let ti_inner_nothing = compile_unit empty_iterations in
+    let just_key = tagkey "Just" in
+    let nothing_key = tagkey "Nothing" in
     let q_outer_just =
       ADag.mk_attach
 	(pos, A.Nat 1n)
 	(ADag.mk_attach
-	   (A.Item 1, A.String "Just")
+	   (A.Item 1, A.Nat just_key)
 	   (ADag.mk_project
 	      [Helpers.prj iter; (A.Item 2, iter)]
 	      q_inner_just))
@@ -205,7 +221,7 @@ and compile_aggr_error env loop aggr_fun restype l =
       ADag.mk_attach
 	(pos, A.Nat 1n)
 	(ADag.mk_attach
-	   (A.Item 1, A.String "Nothing")
+	   (A.Item 1, A.Nat nothing_key)
 	   (ADag.mk_project
 	      [Helpers.prj iter; (A.Item 2, iter)]
 	      empty_iterations))
@@ -221,8 +237,8 @@ and compile_aggr_error env loop aggr_fun restype l =
 	fs = Fs.empty
       }
     in	
-    let vs = [((2, "Just"), (ti_inner_just, `Atom)); 
-	      ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
+    let vs = [((2, just_key), (ti_inner_just, `Atom)); 
+	      ((2, nothing_key), (ti_inner_nothing, `Atom))] in
     let q_outer = ADag.mk_disjunion q_outer_just q_outer_nothing in
       {
 	q = q_outer;
@@ -260,11 +276,13 @@ and compile_nth env loop i l =
 	 q_inner_just)
   in
   let ti_inner_nothing = compile_unit empty_iterations in
+  let just_key = tagkey "Just" in
+  let nothing_key = tagkey "Nothing" in
   let q_outer_just =
     ADag.mk_attach
       (pos, A.Nat 1n)
       (ADag.mk_attach
-	 (A.Item 1, A.String "Just")
+	 (A.Item 1, A.Nat just_key)
 	 (ADag.mk_project
 	    [Helpers.prj iter; (A.Item 2, iter)]
 	    q_inner_just))
@@ -273,7 +291,7 @@ and compile_nth env loop i l =
     ADag.mk_attach
       (pos, A.Nat 1n)
       (ADag.mk_attach
-	 (A.Item 1, A.String "Nothing")
+	 (A.Item 1, A.Nat nothing_key)
 	 (ADag.mk_project
 	    [Helpers.prj iter; (A.Item 2, iter)]
 	    empty_iterations))
@@ -289,8 +307,8 @@ and compile_nth env loop i l =
       fs = ti_l.fs;
     }
   in	
-  let vs = [((2, "Just"), (ti_inner_just, `Atom));
-	    ((2, "Nothing"), (ti_inner_nothing, `Atom))] in
+  let vs = [((2, just_key), (ti_inner_just, `Atom));
+	    ((2, nothing_key), (ti_inner_nothing, `Atom))] in
   let q_outer = ADag.mk_disjunion q_outer_just q_outer_nothing in
     {
       q = q_outer;
@@ -646,7 +664,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 		  (ADag.mk_funnumeq
 		     (res, (item', item''))
 		     (ADag.mk_attach
-			(item'', A.String tag)
+			(item'', A.Nat tag)
 			same_tag))))
 	in
 
@@ -1076,7 +1094,6 @@ and compile_record env loop r =
 	failwith "CompileQuery.compile_record_value: empty record"
 
 and compile_table loop ((_db, _params), tblname, keys, row) =
-  List.iter (fun k -> Debug.print ("key " ^ (mapstrcat " " (fun x -> x) k))) keys;
   (* collect the column names of the table and their types from the row type *)
   let cs_ts = 
     StringMap.fold
@@ -1247,14 +1264,14 @@ and compile_unit (loop : ADag.t) : tblinfo =
     }
 
 and compile_variant env loop tag value =
-  Debug.f "compile_variant %s" tag;
   let ti_value = compile_expression env loop value in
   let itype = Query2.Annotate.typeof_typed_t value in
+  let key = tagkey tag in
   let q = 
     ADag.mk_attach
       (pos, A.Nat 1n)
       (ADag.mk_attach
-	 (A.Item 1, A.String tag)
+	 (A.Item 1, A.Nat key)
 	 (ADag.mk_project
 	    [Helpers.prj iter; (A.Item 2, iter)]
 	    loop))
@@ -1263,18 +1280,18 @@ and compile_variant env loop tag value =
       q = q;
       cs = Cs.Tag ((1, `Tag), (2, `Surrogate));
       ts = Ts.empty;
-      vs = [(2, tag), (ti_value, itype)];
+      vs = [(2, key), (ti_value, itype)];
       fs = Fs.empty
     }
 
 and compile_case env loop value cases default =
 
-  let select_tag q tag =
+  let select_key q key =
     let q_compared = 
       ADag.mk_funnumeq
 	(res, (A.Item 1, item'))
 	(ADag.mk_attach
-	   (item', A.String tag)
+	   (item', A.Nat key)
 	   q)
     in
       (* all iterations which have the tag *)
@@ -1308,9 +1325,10 @@ and compile_case env loop value cases default =
   let env' = AEnv.map (Helpers.lift map) env in
 
   let case env vs_v tag (var, case_exp) (results, q_other) =
-    let q_matching, q_other' = select_tag q_other tag in
+    let key = tagkey tag in
+    let q_matching, q_other' = select_key q_other key in
       try 
-	let itbl = fst (Vs.lookup vs_v (2, tag)) in
+	let itbl = fst (Vs.lookup vs_v (2, key)) in
 	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
 	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
@@ -1550,4 +1568,4 @@ let compile e =
   let ti = compile_expression AEnv.empty loop e in
     (* reverse error plan list so that they can be executed from the beginning
        in the proper bottom-up order *)
-    wrap_serialize ti, List.map wrap_serialize_errors (List.rev !errors)
+    wrap_serialize ti, List.map wrap_serialize_errors (List.rev !errors), !keytags
