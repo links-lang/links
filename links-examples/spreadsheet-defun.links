@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var data = table "ss1000" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 typename Fenc = [| Sumrow:Int | Cell:(Int, Int) | Const:Int |];
 
@@ -9,28 +9,15 @@ fun const(x) { Const(x) }
 
 fun app(enc, arg) {
 	switch(enc) {
-		case Sumrow(row) ->
-			switch (nth(row, arg)) {
-				case Just(row) -> sum(row)
-				case Nothing -> 0
-			}
-		case Cell(row, col) ->
-			switch (nth(row, arg)) {
-				case Just(row) -> 
-					switch (nth(col, row)) {
-						case Just(e) -> e
-						case Nothing -> 0
-					}
-				case Nothing -> 0
-			}
-		case Const(x) ->
-			x
+		case Sumrow(row) -> sum(nth(row, arg))
+		case Cell(row, col) -> nth(col, nth(row, arg))
+		case Const(x) -> x
 	}
 }
 
 var ss = [[const(5), cell(2,2), const(123)],
 	  [sumrow(1), cell(3,3), sumrow(2)], 
-	  [cell(2,1), const(1024), sumrow(1)]];
+	  [cell(2,1), const(2048), sumrow(1)]];
 
 fun apply(data, f_enc) { app(f_enc, data) }
 

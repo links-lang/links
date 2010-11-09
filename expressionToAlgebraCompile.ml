@@ -247,7 +247,7 @@ and compile_aggr_error env loop aggr_fun restype l =
 	vs = vs;
 	fs = Fs.empty
       }
-
+(*
 and compile_nth env loop i l =
   let ti_i = compile_expression env loop i in
   let ti_l = compile_expression env loop l in
@@ -316,6 +316,47 @@ and compile_nth env loop i l =
       ts = Ts.empty;
       vs = vs;
       fs = Fs.empty;
+    }
+*)
+
+and compile_nth env loop i l =
+  let ti_i = compile_expression env loop i in
+  let ti_l = compile_expression env loop l in
+  let q_l' = Helpers.abspos ti_l.q ti_l.cs in
+  let q_result =
+    ADag.mk_project
+      ([Helpers.prj iter; Helpers.prj pos] @ Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs)))
+      (ADag.mk_select
+	 res
+	 (ADag.mk_funnumeq
+	    (res, (pos', c'))
+	    (ADag.mk_eqjoin
+	       (iter, iter')
+	       (ADag.mk_cast
+		  (pos', pos, `IntType)
+		  q_l')
+	       (ADag.mk_project
+		  [(iter', iter); (c', A.Item 1)]
+		  ti_i.q))))
+  in
+  let q_error =
+    ADag.mk_project
+      [Helpers.prj (A.Item 1)]
+      (ADag.mk_attach
+	 (A.Item 1, A.String "nth(): index too large")
+	 (ADag.mk_difference
+	    loop
+	    (ADag.mk_project
+	       [Helpers.prj iter]
+	       q_result)))
+  in
+    add_error_plan q_error;
+    {
+      q = q_result;
+      cs = ti_l.cs;
+      ts = ti_l.ts;
+      vs = ti_l.vs;
+      fs = ti_l.fs;
     }
       
 and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 operand_2 =

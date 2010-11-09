@@ -1,28 +1,10 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
 #var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
-var data = table "ss1000" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
-fun sumrow(row)(data) {
-	switch (nth(row, data)) {
-		case Just(row) -> sum(row)
-		case Nothing -> 0
-	}
-}
-
-fun cell(row, col) (data) {
-	switch (nth(row, data)) {
-		case Just(row) -> 
-			switch (nth(col, row)) {
-				case Just(e) -> e
-				case Nothing -> 0
-			}
-		case Nothing -> 0
-	}
-}
-
-fun const(x)(data) {
-	x
-}
+fun sumrow(row)(data) { sum(nth(row, data)) }
+fun cell(row, col) (data) { nth(col, nth(row, data)) }
+fun const(x)(data) { x }
 
 var ss = [[const(5), cell(2,2), const(123)],
 	  [sumrow(1), cell(3,3), sumrow(2)], 

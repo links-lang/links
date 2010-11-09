@@ -134,11 +134,11 @@ fun fold_right1(f, l) {
 
 fun nth(i, l) {
   if (i >= length(l)) {
-     Nothing
+    error("nth(): index too large")
   } else {
     fun nth1(j, l) {
       if (i == j) 
-        Just(hd(l))
+        hd(l)
       else
         nth1((j + 1), tl(l)) 
     }

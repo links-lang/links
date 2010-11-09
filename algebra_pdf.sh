@@ -3,6 +3,8 @@
 LINKS=~/dev/git-links/links
 LINKSARGS="-d --config=algebra.config"
 
+rm *.xml
+
 $LINKS $LINKSARGS $@
 BASE=`basename -s .links $@`
 for file in `ls plan_unopt_*.xml`;
