@@ -1,5 +1,6 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+#var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss1000" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 fun sumrow(row)(data) {
 	switch (nth(row, data)) {
@@ -23,7 +24,9 @@ fun const(x)(data) {
 	x
 }
 
-var ss = [[const(5), cell(2,2), const(123)], [sumrow(1), cell(3,3), sumrow(2)], [cell(2,1), const(1024), sumrow(1)]];
+var ss = [[const(5), cell(2,2), const(123)],
+	  [sumrow(1), cell(3,3), sumrow(2)], 
+	  [cell(2,1), const(1024), sumrow(1)]];
 
 fun apply(data)(f) { f(data) }
 

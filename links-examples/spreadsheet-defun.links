@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var data = table "ss1" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss1000" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 typename Fenc = [| Sumrow:Int | Cell:(Int, Int) | Const:Int |];
 
@@ -28,10 +28,9 @@ fun app(enc, arg) {
 	}
 }
 
-#var ss = [[const(5), cell(2,2), const(3), const(5)], [sumrow(1), cell(3,3), sumrow(2)]];
-#var ss = [[const(5)], [sumrow(1)]];
-#var ss = [[const(5), cell(2,2), sumrow(2)], [sumrow(1), cell(3,3), const(512)]];
-var ss = [[const(5), cell(2,2), const(123)], [sumrow(1), cell(3,3), sumrow(2)], [cell(2,1), const(1024), sumrow(1)]];
+var ss = [[const(5), cell(2,2), const(123)],
+	  [sumrow(1), cell(3,3), sumrow(2)], 
+	  [cell(2,1), const(1024), sumrow(1)]];
 
 fun apply(data, f_enc) { app(f_enc, data) }
 
