@@ -1371,7 +1371,7 @@ and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not impleme
 and compile_lambda env loop xs body =
   let q = 
     ADag.mk_attach
-      (pos, A.Int (Num.Int 1))
+      (pos, A.Nat 1n)
       (ADag.mk_project
 	 [Helpers.prj iter; (A.Item 1, iter)]
 	 loop)

@@ -30,7 +30,7 @@ fun app(enc, arg) {
 
 #var ss = [[const(5), cell(2,2), const(3), const(5)], [sumrow(1), cell(3,3), sumrow(2)]];
 #var ss = [[const(5)], [sumrow(1)]];
-var ss = [[const(5), cell(2,2)], [sumrow(1), cell(3,3)]];
+var ss = [[const(5), cell(2,2), sumrow(2)], [sumrow(1), cell(3,3), const(512)]];
 
 fun apply(data, f_enc) { app(f_enc, data) }
 
