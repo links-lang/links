@@ -1,7 +1,7 @@
 
 type implementation_type = [`Atom | `List] 
 
-type column_type = [ Algebra.pf_type | `Surrogate | `Unit | `Tag | `EmptyListLit ]
+type column_type = [ Algebra.pf_type | `Surrogate | `Unit | `EmptyRecord | `Tag | `EmptyListLit ]
 
 val column_type_of_constant : Constant.constant -> column_type
 

@@ -1132,7 +1132,20 @@ and compile_record env loop r =
 	let f = singleton_record env loop (name, value) in
 	  merge_records f (compile_record env loop tl)
     | [] ->
-	failwith "CompileQuery.compile_record_value: empty record"
+	let q =
+	  ADag.mk_attach
+	    (A.Item 1, A.Nat 1n)
+	    (ADag.mk_attach
+	       (pos, A.Nat 1n)
+	       loop)
+	in
+	  {
+	    q = q;
+	    cs = Cs.Column (1, `EmptyRecord);
+	    ts = Ts.empty;
+	    vs = Vs.empty;
+	    fs = Fs.empty
+	  }
 
 and compile_table loop ((_db, _params), tblname, keys, row) =
   (* collect the column names of the table and their types from the row type *)

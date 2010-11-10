@@ -726,12 +726,11 @@ let compile : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (Anno
     if Settings.get_value Basicsettings.Ferry.output_ir_dot then
       Irtodot.output_dot e env "ir_query.dot";
     let v = Eval.eval env range e in
+    let v_annot = Annotate.transform Env.Int.empty v in
       if Settings.get_value Basicsettings.Ferry.print_backend_expression then
-	print_endline ("query2:\n "^string_of_t v);
-      let v_annot = Annotate.transform Env.Int.empty v in
-	if Settings.get_value Basicsettings.Ferry.print_backend_expression then
-	  begin
-	    print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
-	    Exptodot.output_dot v_annot "exp_query.dot"
-	  end;
-	(v_annot, (Annotate.typeof_typed_t v_annot))
+	begin
+	  print_endline ("query2:\n "^string_of_t v);
+	  print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
+	  Exptodot.output_dot v_annot "exp_query.dot"
+	end;
+      (v_annot, (Annotate.typeof_typed_t v_annot))

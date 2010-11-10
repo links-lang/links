@@ -3,7 +3,7 @@ open Utility
 
 module A = Algebra
 
-type column_type = [ A.pf_type | `Surrogate | `Unit | `Tag | `EmptyListLit ] deriving (Show)
+type column_type = [ A.pf_type | `Surrogate | `EmptyRecord | `Unit | `Tag | `EmptyListLit ] deriving (Show)
 
 let column_type_of_constant = function
   | `Bool _ -> `BoolType
