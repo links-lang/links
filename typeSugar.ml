@@ -187,6 +187,7 @@ sig
 
   val query_outer : griper
   val query_base_row : griper
+  val query_row : griper
 
   val receive_mailbox : griper
   val receive_patterns : griper
@@ -527,7 +528,12 @@ code (show_type rt) ^ nl() ^
 code (show_type lt) ^ ".")
 
     let query_base_row ~pos ~t1:(lexpr, lt) ~t2:(_, _rt) ~error:_ =
-      with_but pos ("Query blocks must have LOROB type") (lexpr, lt)
+            with_but pos ("Query blocks must have LOROB type") (lexpr, lt)
+
+    let query_row ~pos ~t1:(lexpr, lt) ~t2:(_, _rt) ~error:_ =
+            with_but pos ("\
+Query blocks must have Query type (Records, Variants, Lists, Base)") 
+            (lexpr, lt)
 
     let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
@@ -1740,15 +1746,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-	    let shape = 
+	    let shape, griper = 
 	      if Settings.get_value Basicsettings.Ferry.relax_query_type_constraint then
-		Types.fresh_type_variable `Any
+		Types.fresh_type_variable `Any,
+                Gripers.query_row
 	      else if Settings.get_value Basicsettings.Ferry.new_type_constraint then
-		Types.fresh_type_variable `Query
+		Types.fresh_type_variable `Query,
+                Gripers.query_row
 	      else
-		Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base))
+		Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable `Base)),
+                Gripers.query_base_row
 	    in
-            let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
+            let () = unify ~handle:griper (pos_and_typ p, no_pos shape) in
 
 	    (* range must only be used on list-typed query blocks *)
 	    let () = 
