@@ -62,10 +62,8 @@ and compile_append env loop l =
   match l with
     | e :: [] ->
 	compile_expression env loop e
-    | hd_e :: tl_e ->
-	let hd = compile_expression env loop hd_e in
-	let tl = compile_append env loop tl_e in
-	  Helpers.sequence_construction [hd; tl] ~newpos:true
+    | _ :: _ ->
+	  Helpers.sequence_construction (List.map (compile_expression env loop) l) ~newpos:true
     | [] ->
 	{
 	  q = ADag.mk_emptytbl;
@@ -1550,7 +1548,6 @@ and apply_lambda env loop lambda_exp args =
 		loop'))
       in
 	{ arg with q = q_filtered }
-
     in
 
     (* filter the function arguments for this function (3) *)

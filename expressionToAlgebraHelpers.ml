@@ -1,5 +1,7 @@
 open Utility
-open ExpressionToAlgebraDefinitions
+(* open ExpressionToAlgebraDefinitions *)
+module Defs = ExpressionToAlgebraDefinitions
+open Defs
 (*open ExpressionToAlgebraDefinitions.Ti *)
 open Components
 
@@ -253,16 +255,24 @@ let do_list_or loop l =
     }
 
 (* join two inner tables together and compute new surrogate keys *)
-let combine_inner_tables q_l q_r =
-  ADag.mk_rownum 
-    (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
-    (ADag.mk_disjunion
-       (ADag.mk_attach
-	  (ord, A.Nat 1n)
-	  q_l)
-       (ADag.mk_attach
-	  (ord, A.Nat 2n)
-	  q_r))
+let combine_inner_tables ti_ords =
+  let attach_ord (ti, ord_val) =
+    ADag.mk_attach (ord, A.Nat ord_val) ti.q
+  in
+
+  let union acc ti_ord = ADag.mk_disjunion acc (attach_ord ti_ord) in
+
+  (* union over all q's with ord = 1, ..., n *)
+  let q_union = List.fold_left union (attach_ord (List.hd ti_ords)) (drop 1 ti_ords) in
+
+  (* new keys and position *)
+    ADag.mk_rownum
+      (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
+      (* FIXME: compute new positions for inner tables?
+	 (ADag.mk_rank
+	 (pos', [(ord, A.Ascending), (pos, A.Ascending)])
+      *)
+      q_union
 
 (* use the new surrogate keys from q_outer in column surr_col in the 
    nested plan q_inner *)
@@ -276,147 +286,213 @@ let renumber_inner_table q_outer q_inner surr_col =
 
 (* project all columns which do _not_ contain reference values onto itself and use the fresh
    surrogate values in new_surr in all columns which _do_ contain reference values *)
-let refresh_surr_cols cs ti_l ti_r new_surr =
+let refresh_surr_cols cs tis new_surr =
 
-  let int_union l r = IntSet.elements (IntSet.union (IntSet.from_list l) (IntSet.from_list r)) in
-  let ts_cols = int_union (Ts.columns ti_l.ts) (Ts.columns ti_r.ts) in
-  let fs_cols = int_union (Fs.columns ti_l.fs) (Fs.columns ti_r.fs) in
-  let vs_cols = int_union (Vs.columns ti_l.vs) (Vs.columns ti_r.vs) in
+  let union s ti =
+    let key_cols = 
+      IntSet.from_list
+	((Ts.columns ti.ts) @ (Vs.columns ti.vs) @ (Fs.columns ti.fs))
+    in
+      IntSet.union s key_cols
+  in
+  let all_key_cols = IntSet.elements (List.fold_left union IntSet.empty tis) in
 
     (* all columns which are neither vs nor ts surrogate columns *)
-    prjlist (io (difference (Cs.offsets cs) (vs_cols @ ts_cols @ fs_cols)))
+    prjlist (io (difference (Cs.offsets cs) all_key_cols))
 
-    (* use new keys in vs surrogate columns *)
-    @ (prjlist_single (io vs_cols) new_surr) 
-
-    (* use new keys in ts surrogate columns *)
-    @ (prjlist_single (io ts_cols) new_surr)
-
-    (* use new keys in fs surrogate columns *)
-    @ (prjlist_single (io fs_cols) new_surr)
+    (* use new keys in ts/vs/fs surrogate columns *)
+    @ (prjlist_single (io all_key_cols) new_surr) 
 
 (* FIXME: need comments on append_ crap *)
 
 (* append the fundev-lists of two fs components *)
-let append_fs q_outer fs_l fs_r =
+let append_fs q_outer ti_ords =
 
-  (* from the unioned results select those tupels with ord = o,
-     i.e. the tupels from left or right respectively. we can't just
-     use q_l or q_r from before the union because we need the new
-     surrogate keys computed after the union *)
-  let select_ord o =
-    ADag.mk_select
-      res
-      (ADag.mk_funnumeq
-	 (res, (ord, ord'))
-	 (ADag.mk_attach
-	    (ord', (A.Nat o))
-	    q_outer))
-  in
+  let refresh (ti, ord_val) =
+    (* from the unioned results select those tupels with ord = o,
+       i.e. the tupels from left or right respectively. we can't just
+       use q_l or q_r from before the union because we need the new
+       surrogate keys computed after the union *)
+    let select_ord o =
+      ADag.mk_select
+	res
+	(ADag.mk_funnumeq
+	   (res, (ord, ord'))
+	   (ADag.mk_attach
+	      (ord', (A.Nat o))
+	      q_outer))
+    in
 
-  let q_1 = select_ord 1n in
-  let q_2 = select_ord 2n in
-
-  (* refresh the outer column of all maps with the new keys *)
-  let refresh_fs q_i fs_i =
-    let refresh_map refcol (env, map, lambda) = 
-      let map' =
-	ADag.mk_project
-	  [(outer, item'); prj inner]
-	  (ADag.mk_eqjoin
-	     (outer, A.Item refcol)
-	     map
-	     q_i)
+    (* refresh the outer column of all maps with the new keys *)
+    let refresh_fs q_i fs_i =
+      let refresh_map refcol (env, map, lambda) = 
+	let map' =
+	  ADag.mk_project
+	    [(outer, item'); prj inner]
+	    (ADag.mk_eqjoin
+	       (outer, A.Item refcol)
+	       map
+	       q_i)
+	in
+	  (env, map', lambda)
       in
-	(env, map', lambda)
+      let refresh_maps (refcol, fundevs) = 
+	(refcol, List.map (refresh_map refcol) fundevs)
+      in
+	List.map refresh_maps fs_i
     in
-    let refresh_maps (refcol, fundevs) = 
-      (refcol, List.map (refresh_map refcol) fundevs)
-    in
-      List.map refresh_maps fs_i
-
+      refresh_fs (select_ord ord_val) ti.fs
   in
-  let fs_l' = refresh_fs q_1 fs_l in
-  let fs_r' = refresh_fs q_2 fs_r in
 
-  let combined = same_keys fs_l' fs_r' in
-    List.map (fun (col, (funs_l, funs_r)) -> (col, funs_l @ funs_r)) combined
-      
+  let fs_refreshed = List.map refresh ti_ords in
+
+  let insert map fs =
+    List.fold_left
+      (fun map (col, fds) ->
+	 match IntMap.lookup col map with
+	   | Some fds' -> IntMap.add col (fds @ fds') map
+	   | None -> IntMap.add col fds map)
+      map
+      fs
+  in
+
+    IntMap.to_alist (List.fold_left insert IntMap.empty fs_refreshed)
+
+module VsMap = Map.Make(struct 
+			  type t = Vs.key
+			  let compare = Pervasives.compare
+			  let show_t = (Show.show_from_string_of (fun _ -> "foo"))
+			end)
 
 (* append the corresponding vs entries from vs_l and vs_r *)
-let rec append_vs q_outer vs_l vs_r =
-  let m = List.map (append_matching_vs q_outer) (same_keys vs_l vs_r) in
-  let l = List.map (append_missing_vs q_outer (A.Nat 1n)) (missing_keys vs_l vs_r) in
-  let r = List.map (append_missing_vs q_outer (A.Nat 2n)) (missing_keys vs_r vs_l) in
-    List.sort compare (m @ l @ r)
-
-and append_matching_vs (q_outer : ADag.t) ((refcol, tag), ((ti_l, itype_l), (ti_r, _itype_r))) =
-  let q_combined = combine_inner_tables ti_l.q ti_r.q in
-
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l ti_r item') in
-
-  let q_renumbered = renumber_inner_table q_outer q_combined refcol in
-
-  let q = ADag.mk_project projlist q_renumbered in
-
-  let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
-
-  let ts = append_ts q_combined ti_l.ts ti_r.ts in
-
-  let vs = append_vs q_combined ti_l.vs ti_r.vs in
-  let fs = append_fs q_combined ti_l.fs ti_r.fs in
-    (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs; fs = fs }, itype_l)
-
-and append_missing_vs q_outer ord_val ((refcol, tag), (ti, itype)) =
-  let q_combined = 
-    ADag.mk_rownum
-      (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
-      (ADag.mk_attach
-	 (ord, ord_val)
-	 ti.q)
+let rec append_vs q_outer ti_ords =
+  let insert map (ti, ord) =
+    List.fold_left
+      (fun map (key, (inner_ti, itype)) ->
+	 match VsMap.lookup key map with
+	   | Some value -> VsMap.add key ((((inner_ti, itype), ord) :: value)) map
+	   | None -> VsMap.add key [((inner_ti, itype), ord)] map)
+      map
+      ti.vs
   in
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti { ti with ts = Ts.empty; vs = Vs.empty } item') in
-    
+    (* maps from a vs key column/tag to the list of all inner tis for this key column/tag
+       together with the corresponding ords *)
+  let m = List.fold_left insert VsMap.empty ti_ords in
+
+  (* partition the map into one which contains all columns which appear as keys
+     in more than one ts, and one which contains all columns which appear in exactly one
+     ts *)
+  let more_than_one, one = VsMap.partition (fun _key inner_tis -> List.length inner_tis > 1) m in
+
+  let append_map map append_fun =
+    VsMap.fold
+      (fun key inner_tis_ord vs -> (append_fun q_outer key inner_tis_ord) :: vs)
+      map
+      []
+      
+  in
+  let vs = (append_map more_than_one append_matching_vs) @ (append_map one append_missing_vs) in
+    List.sort compare vs
+
+and append_matching_vs q_outer (refcol, tag) innerti_ords = 
+  let itype = (snd -<- fst) (List.hd innerti_ords) in
+  let inner_tis = List.map (fst -<- fst) innerti_ords in
+  let innerti_ords = List.map (fun ((ti, _), ord) -> (ti, ord)) innerti_ords in
+  let q_combined = combine_inner_tables innerti_ords in
+
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
-  let q_refreshed = ADag.mk_project projlist q_renumbered in
-  let ts = append_ts q_combined ti.ts [] in
-  let vs = append_vs q_combined ti.vs [] in
-  let fs = append_fs q_combined ti.fs [] in
-    (refcol, tag), ({ q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = fs }, itype)
+  (* choose a nonempty cs (if there is one) *)
+  let cs = List.fold_left (fun cs_acc ti -> Cs.choose_nonempty cs_acc ti.cs) (List.hd inner_tis).cs (drop 1 inner_tis) in
 
-and append_ts q_outer ts_l ts_r =
-  let m = List.map (append_matching_ts q_outer) (same_keys ts_l ts_r) in
-  let l = List.map (append_missing_ts q_outer (A.Nat 1n)) (missing_keys ts_l ts_r) in
-  let r = List.map (append_missing_ts q_outer (A.Nat 2n)) (missing_keys ts_r ts_l) in
-    List.sort compare (m @ l @ r)
-
-and append_matching_ts (q_outer : ADag.t) (refcol, (ti_l, ti_r)) =
-  let q_combined = combine_inner_tables ti_l.q ti_r.q in
-
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti_l.cs ti_l ti_r item') in
-
-  let q_renumbered = renumber_inner_table q_outer q_combined refcol in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs inner_tis item') in
 
   let q = ADag.mk_project projlist q_renumbered in
 
-  let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
+  let ts = append_ts q_combined innerti_ords in
+  let vs = append_vs q_combined innerti_ords in
+  let fs = append_fs q_combined innerti_ords in
 
-  let ts = append_ts q_combined ti_l.ts ti_r.ts in
+    (refcol, tag), ({ q = q; cs = cs; ts = ts; vs = vs; fs = fs }, itype)
 
-  let vs = append_vs q_combined ti_l.vs ti_r.vs in
-  let fs = append_fs q_combined ti_l.fs ti_r.fs in
+and append_missing_vs q_outer (refcol, tag) innerti_ords =
+  assert (List.length innerti_ords = 1);
+  let ((inner_ti, itype), ord_val) = List.hd innerti_ords in
+
+  let q_ord = ADag.mk_attach (ord, A.Nat ord_val) inner_ti.q in 
+  let q_renumbered = renumber_inner_table q_outer q_ord refcol in
+  let q_prj =
+    ADag.mk_project
+      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
+      q_renumbered
+  in
+    (refcol, tag), ({ inner_ti with q = q_prj }, itype)
+
+and append_ts q_outer ti_ords =
+  let insert map (ti, ord) =
+    List.fold_left
+      (fun map (col, inner_ti) ->
+	 match IntMap.lookup col map with
+	   | Some inner_ti_ords -> IntMap.add col ((inner_ti, ord) :: inner_ti_ords) map
+	   | None -> IntMap.add col [inner_ti, ord] map)
+      map
+      ti.ts
+  in
+  (* maps from a ts key column to the list of all inner tis for this key column 
+     together with the corresponding ords *)
+  let m = List.fold_left insert IntMap.empty ti_ords in
+
+  (* partition the map into one which contains all columns which appear as keys
+     in more than one ts, and one which contains all columns which appear in exactly one
+     ts *)
+  let more_than_one, one = IntMap.partition (fun _col inner_tis -> List.length inner_tis > 1) m in
+
+  let append_map map append_fun =
+    IntMap.fold
+      (fun col inner_tis_ord ts -> (append_fun q_outer col inner_tis_ord) :: ts)
+      map
+      []
+  
+  in
+  let ts = (append_map more_than_one append_matching_ts) @ (append_map one append_missing_ts) in
+    List.sort compare ts
+
+and append_matching_ts q_outer refcol innerti_ords =
+  let inner_tis = List.map fst innerti_ords in
+  let q_combined = combine_inner_tables innerti_ords in
+
+  let q_renumbered = renumber_inner_table q_outer q_combined refcol in
+
+  (* choose a nonempty cs (if there is one) *)
+  let cs = List.fold_left (fun cs_acc ti -> Cs.choose_nonempty cs_acc ti.cs) (List.hd inner_tis).cs (drop 1 inner_tis) in
+
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols cs inner_tis item') in
+
+  let q = ADag.mk_project projlist q_renumbered in
+
+  let ts = append_ts q_combined innerti_ords in
+  let vs = append_vs q_combined innerti_ords in
+  let fs = append_fs q_combined innerti_ords in
+
     refcol, { q = q; cs = cs; ts = ts; vs = vs; fs = fs }
 
-and append_missing_ts q_outer ord_val (refcol, ti) =
+
+(* FIXME: is it sufficient to just align the iter values of the inner table
+   with the new surrogate values from the outer table or do we have to compute
+   new surrogate keys for the inner table itself?
+   shouldn't be necessary, because the inner table is not appended to anything *)
+(*
+and append_missing_ts q_outer refcol (inner_tis, ord_val) =
+  assert (List.length inner_tis = 1);
+  let inner_ti = List.hd inner_tis in
   let q_combined = 
     ADag.mk_rownum
       (item', [(iter, A.Ascending); (ord, A.Ascending); (pos, A.Ascending)], None)
       (ADag.mk_attach
 	 (ord, ord_val)
-	 ti.q)
+	 inner_ti.q)
   in
-  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols ti.cs ti { ti with ts = Ts.empty; vs = Vs.empty } item') in
+  let projlist = [(iter, item''); prj pos] @ (refresh_surr_cols inner_ti.cs inner_ti item') in
     
   let q_renumbered = renumber_inner_table q_outer q_combined refcol in
 
@@ -425,6 +501,19 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
   let vs = append_vs q_combined ti.vs [] in
   let fs = append_fs q_combined ti.fs [] in
     refcol, { q = q_refreshed; cs = ti.cs; ts = ts; vs = vs; fs = fs }
+*)
+
+and append_missing_ts q_outer refcol innerti_ords =
+  assert (List.length innerti_ords = 1);
+  let (inner_ti, ord_val) = List.hd innerti_ords in
+  let q_ord = ADag.mk_attach (ord, A.Nat ord_val) inner_ti.q in 
+  let q_renumbered = renumber_inner_table q_outer q_ord refcol in
+  let q_prj =
+    ADag.mk_project
+      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
+      q_renumbered
+  in
+    refcol, { inner_ti with q = q_prj }
 
 (* generic pairwise sequence construction. union all q's with ord and
    append fs/ts/vs components.
@@ -434,41 +523,46 @@ and append_missing_ts q_outer ord_val (refcol, ti) =
    ord = 1, ..., nr_cases *)
 let sequence_construction (tis : tblinfo list) ~newpos : tblinfo =
   assert ((List.length tis) > 0);
-  let union ti_l ti_r =
-    let q_union = 
-      ADag.mk_rownum
-	(item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
-	(ADag.mk_rank
-	   (pos', [(ord, A.Ascending); (pos, A.Ascending)])
-	   (ADag.mk_disjunion 
-	      (ADag.mk_attach
-		 (ord, A.Nat 1n)
-		 ti_l.q) 
-	      (ADag.mk_attach
-		 (ord, A.Nat 2n)
-		 ti_r.q)))
-    in
-    let cs = Cs.choose_nonempty ti_l.cs ti_r.cs in
-    let q_union' = 
-      if newpos then
-	ADag.mk_project
-	  ([prj iter; (pos, pos')] @ (refresh_surr_cols cs ti_l ti_r item'))
-	  q_union
-      else
-	ADag.mk_project
-	  ([prj iter; prj pos] @ (refresh_surr_cols cs ti_l ti_r item'))
-	  q_union
-    in
-      {
-	q = q_union';
-	cs = cs;
-	ts = append_ts q_union ti_l.ts ti_r.ts;
-	vs = append_vs q_union ti_l.vs ti_r.vs;
-	fs = append_fs q_union ti_l.fs ti_r.fs;
-      }
-	
+  let ords = List.map Nativeint.of_int (fromTo 1 ((List.length tis) + 1)) in
+  let ti_ords = List.combine tis ords in
+  let attach_ord (ti, ord_val) =
+    ADag.mk_attach (ord, A.Nat ord_val) ti.q
   in
-    List.fold_left union (List.hd tis) (drop 1 tis)
+
+  let union acc ti_ord = ADag.mk_disjunion acc (attach_ord ti_ord) in
+
+  (* union over all q's with ord = 1, ..., n *)
+  let q_union = List.fold_left union (attach_ord (List.hd ti_ords)) (drop 1 ti_ords) in
+
+  (* new keys and position *)
+  let q_new_keys = 
+    ADag.mk_rownum
+      (item', [(iter, A.Ascending); (pos, A.Ascending); (ord, A.Ascending)], None)
+      (ADag.mk_rank
+	 (pos', [(ord, A.Ascending); (pos, A.Ascending)])
+	 q_union)
+  in
+
+  (* choose a nonempty cs (if there is one) *)
+  let cs = List.fold_left (fun cs_acc ti -> Cs.choose_nonempty cs_acc ti.cs) (List.hd tis).cs (drop 1 tis) in
+
+  let q_new_keys' = 
+    if newpos then
+      ADag.mk_project
+	([prj iter; (pos, pos')] @ (refresh_surr_cols cs tis item'))
+	q_new_keys
+    else
+      ADag.mk_project
+	([prj iter; prj pos] @ (refresh_surr_cols cs tis item'))
+	q_new_keys
+  in
+    {
+      q = q_new_keys';
+      cs = cs;
+      ts = append_ts q_new_keys ti_ords;
+      vs = append_vs q_new_keys ti_ords;
+      fs = append_fs q_new_keys ti_ords;
+    }
 
 (* only keep those tuples in an nested table which are actually referenced from the
    outer table *)

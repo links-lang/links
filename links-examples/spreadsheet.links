@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var data = table "ss1000_index" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss20" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 fun sumrow(row)(data) { sum(nth(row, data)) }
 fun cell(row, col) (data) { nth(col, nth(row, data)) }
@@ -15,18 +15,15 @@ var ss = [[const(5), cell(2,2), const(123)],
 	  [sumrow(1), maxrow(15), sumrow(2)], 
 	  [cell(2,1), const(1024), maxrow(80)]];
 
-fun apply(data)(f) { f(data) }
-
 query { 
 	var rows = nubBase(for (e <-- data) [e.row]);
 	var m = for (r <- rows)
 			[for (e <-- data) where (e.row == r) orderby (e.row, e.col)
 				[e.val]];
 
-	var apply = apply(m);
 	for (row <- ss)
 		[for (f <- row)
-			[apply(f)]]
+			[f(m)]]
 
 }
 

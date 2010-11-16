@@ -30,6 +30,8 @@ val show_ref    : 'a show -> 'a ref show
 val show_option : 'a show -> 'a option show
 val show_array  : 'a show -> 'a array show
 
+val show_from_string_of : ('a -> string) -> 'a show
+
 module Show_map (O : Map.OrderedType) : sig
   val show_t : O.t show -> 'a show -> 'a Map.Make(O).t show
 end
