@@ -423,7 +423,7 @@ and append_missing_vs q_outer (refcol, tag) innerti_ords =
   let q_renumbered = renumber_inner_table q_outer q_ord refcol in
   let q_prj =
     ADag.mk_project
-      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
+      ([(iter, item''); prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
       q_renumbered
   in
     (refcol, tag), ({ inner_ti with q = q_prj }, itype)
@@ -510,7 +510,7 @@ and append_missing_ts q_outer refcol innerti_ords =
   let q_renumbered = renumber_inner_table q_outer q_ord refcol in
   let q_prj =
     ADag.mk_project
-      ([prj iter; prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
+      ([(iter, item''); prj pos] @ (prjlist (io (Cs.offsets inner_ti.cs))))
       q_renumbered
   in
     refcol, { inner_ti with q = q_prj }
