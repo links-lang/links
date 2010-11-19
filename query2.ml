@@ -223,7 +223,7 @@ struct
 	end
       with
 	  (NotFound x) ->
-	    Debug.print (Show.show VarSet.show_t bound);
+	    (*Debug.print (Show.show VarSet.show_t bound); *)
 	    raise (NotFound x)
 	    
 
@@ -284,15 +284,15 @@ struct
   and value env bound : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Variable var ->
-	Debug.f "lookup var %d" var;
+	(* Debug.f "lookup var %d" var; *)
 	if VarSet.mem var bound then
-	  begin 
-	    Debug.f "%d is bound" var;
+	  begin  
+	    (* Debug.f "%d is bound" var; *)
 	    `Var var
 	  end
 	else
 	  begin
-	    Debug.f "%d is not bound" var;
+	    (* Debug.f "%d is not bound" var; *)
 	    lookup bound env var
 	  end
     | `Extend (ext_fields, r) -> 
@@ -441,7 +441,7 @@ struct
   and computation env bound range (binders, tailcomp) : t =
     match binders with
       | [] -> 
-	  Debug.print "tailcomp";
+	  (* Debug.print "tailcomp"; *)
 	  tail_computation env bound range tailcomp
       | b::bs ->
           begin
@@ -449,7 +449,7 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
 		  let value = tail_computation env bound None tc in
-		    Debug.f "let %d -> %s" x (string_of_t value);
+		    (* Debug.f "let %d -> %s" x (string_of_t value); *)
 		    computation (bind env (x, value)) bound range (bs, tailcomp)
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
@@ -459,7 +459,7 @@ struct
 		  let bound' = VarSet.union bound (VarSet.from_list arg_vars) in
 		  let body = computation env bound' None body in
 		  let lambda = `Lambda (arg_vars, body) in
-		    Debug.f "fun %d -> %s" f (string_of_t lambda);
+		    (* Debug.f "fun %d -> %s" f (string_of_t lambda); *)
 		    computation
 		      (bind env (f, lambda))
 		      bound
@@ -479,7 +479,7 @@ struct
       | `Apply (f, args) ->
 	  let f = value env bound f in
 	  let args = List.map (value env bound) args in
-	    Debug.f "apply %s\n %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]");
+	    (* Debug.f "apply %s\n %s" (string_of_t f) ("[" ^ (mapstrcat ", " string_of_t args) ^ "]"); *)
 	    apply env bound (f, args)
       | `Special (`Query (None, e, _)) -> computation env bound range e
       | `Special `Wrong _ -> `Wrong

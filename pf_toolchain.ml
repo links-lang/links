@@ -16,7 +16,7 @@ let exists cmd =
 
 let pipe_through cmd input =
   assert (exists cmd);
-  try
+  try 
     let (ic, oc) = Unix.open_process cmd in
       output_string oc input;
       close_out oc;
@@ -33,9 +33,9 @@ let pipe_through cmd input =
 	      ()
 	in
 	  loop ();
-	  close_in ic;
+	  Unix.close_process (ic, oc);
 	  Buffer.contents inbuf
-  with _ -> raise (PF_error cmd)
+  with Unix.Unix_error (ec, funct, _) -> raise (PF_error (Printf.sprintf "%s error during %s: %s" cmd funct (Unix.error_message ec)))
 
 let pipe_pfopt input = pipe_through (pfopt()) input
 let pipe_pfsql input = pipe_through (pfsql()) input

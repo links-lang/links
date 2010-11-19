@@ -470,7 +470,6 @@ and append_matching_ts q_outer refcol innerti_ords =
 
     refcol, { q = q; cs = cs; ts = ts; vs = vs; fs = fs }
 
-
 (* FIXME: is it sufficient to just align the iter values of the inner table
    with the new surrogate values from the outer table or do we have to compute
    new surrogate keys for the inner table itself?
@@ -513,8 +512,6 @@ and append_missing_ts q_outer refcol innerti_ords =
    append fs/ts/vs components.
    if ~newpos is true, new positions are computed with a rank over ord
    and pos *)
-(* FIXME: union all cases at once, compute new keys only once:
-   ord = 1, ..., nr_cases *)
 let sequence_construction (tis : tblinfo list) ~newpos : tblinfo =
   assert ((List.length tis) > 0);
   let ords = List.map Nativeint.of_int (fromTo 1 ((List.length tis) + 1)) in
