@@ -37,8 +37,8 @@ let pipe_through cmd input =
 	  Buffer.contents inbuf
   with _ -> raise (PF_error cmd)
 
-let pipe_pfopt input = Debug.print ">>> pfopt"; pipe_through (pfopt()) input
-let pipe_pfsql input = Debug.print ">>> pfsql"; pipe_through (pfsql()) input
+let pipe_pfopt input = pipe_through (pfopt()) input
+let pipe_pfsql input = pipe_through (pfsql()) input
 
 let buf = ref (Buffer.create 1024)
 let c = ref 0
@@ -49,18 +49,18 @@ let output_plan plan fname =
     close_out o
 
 let optimize_sql q = 
-  Algebra_export.export_plan !buf q;
-  Debug.f ">>>> pfopt %d" !c;
-  let optimized = pipe_pfopt (Buffer.contents !buf) in
-    Debug.f ">>>> pfsql %d" !c;
-    let sql = pipe_pfsql optimized in
+  let i = string_of_int !c in
+    Algebra_export.export_plan !buf q;
+    output_plan (Buffer.contents !buf) ("plan_unopt_" ^ i ^ ".xml");
+    Debug.f ">>>> pfopt %d" !c;
+    let optimized = pipe_pfopt (Buffer.contents !buf) in
+      Debug.f ">>>> pfsql %d" !c;
+      let sql = pipe_pfsql optimized in
 
-    let i = string_of_int !c in
-      output_plan (Buffer.contents !buf) ("plan_unopt_" ^ i ^ ".xml");
-      output_plan optimized ("plan_opt_" ^ i ^ ".xml");
-      output_plan sql ("plan_sql_" ^ i ^ ".xml");
+	output_plan optimized ("plan_opt_" ^ i ^ ".xml");
+	output_plan sql ("plan_sql_" ^ i ^ ".xml");
 
-      Buffer.clear !buf;
-      incr c;
+	Buffer.clear !buf;
+	incr c;
 
-      sql
+	sql

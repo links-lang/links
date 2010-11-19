@@ -147,13 +147,7 @@ let do_unbox q_e surr_col inner_ti =
 	    q_e)
 	 inner_ti.q)
   in
-    {
-      q = q_unbox;
-      cs = inner_ti.cs;
-      ts = inner_ti.ts;
-      vs = inner_ti.vs;
-      fs = inner_ti.fs;
-    }
+    { inner_ti with q = q_unbox }
 
 (* *)
 let do_project field record =
@@ -617,7 +611,7 @@ let fragment_env loop env =
 
 (* derive an iteration context from the list represented by q and map
    q into this new iteration context *)
-let map_forward q cs =
+let lift q cs =
   let q_renumbered = 
     ADag.mk_rownum
       (inner, [(iter, A.Ascending); (pos, A.Ascending)], None)
@@ -643,17 +637,23 @@ let map_forward q cs =
   in
     (q_renumbered, q_v, map, loop)
 
-(* lift q into the new iteration context represented by map *)
-let lift map ti =
-  let q' =
-    (ADag.mk_project
-       ([(iter, inner); prj pos] @ (prjlist (io (Cs.offsets ti.cs))))
-       (ADag.mk_eqjoin
-	  (iter, outer)
-	  ti.q
-	  map))
+(* lift q into the new iteration context represented by map 
+   the column new_iter from the map is used as the new iter column,
+   whereas the column old_iter from the map will be used in the join
+   on iter *)
+let lift_env map env new_iter old_iter =
+  let lift map ti =
+    let q' =
+      (ADag.mk_project
+	 ([(iter, new_iter); prj pos] @ (prjlist (io (Cs.offsets ti.cs))))
+	 (ADag.mk_eqjoin
+	    (iter, old_iter)
+	    ti.q
+	    map))
+    in
+      { ti with q = q' }
   in
-    { ti with q = q' }
+    AEnv.map (lift map) env
 
 (* construct the ordering map of a for-loop *)
 let rec omap map sort_criteria sort_cols =

@@ -399,7 +399,7 @@ and do_table_greater loop wrapper l1 l2 =
     (* the comparison must be done loop-lifted so that inner tables can be unboxed and compared correctly *)
 
     (* lift zipped *)
-    let _, q_mapped, map, loop' = Helpers.map_forward zipped.q zipped.cs in
+    let _, q_mapped, map, loop' = Helpers.lift zipped.q zipped.cs in
     let zipped_mapped = { zipped with q = q_mapped } in
 
     (* we need "<" on rows but have only ">" -> switch arguments *)
@@ -593,7 +593,7 @@ and do_table_equal loop wrapper l1 l2 =
   let all = Helpers.do_list_and loop in
 
   let map_equal source =
-    let _, q_s_mapped, map, loop = Helpers.map_forward source.q source.cs in
+    let _, q_s_mapped, map, loop = Helpers.lift source.q source.cs in
     let ti_s = { source with q = q_s_mapped } in
     let q_equal = (do_row_equal loop wrapper (Helpers.do_project "1" ti_s) (Helpers.do_project "2" ti_s)).q in
       (* map the comparison result back into the outer iteration context *)
@@ -957,8 +957,8 @@ and compile_quote env loop s =
 
 and compile_for env loop source f order_criteria =
   let  ti_source = compile_expression env loop source in
-  let _, q_v, map, loop_v = Helpers.map_forward ti_source.q ti_source.cs in
-  let env = AEnv.map (Helpers.lift map) env in
+  let _, q_v, map, loop_v = Helpers.lift ti_source.q ti_source.cs in
+  let env = Helpers.lift_env map env inner outer in
   let v, body = match f with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
   let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
   let ti_body = compile_expression env_v loop_v body in
@@ -1262,8 +1262,8 @@ and compile_if env loop c t e =
 and compile_groupby env loop ge e =
   let v, ge_body = match ge with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
   let ti_e = compile_expression env loop e in
-  let q_v, q_v', map_v, loop_v = Helpers.map_forward ti_e.q ti_e.cs in
-  let env_v = AEnv.map (Helpers.lift map_v) env in
+  let q_v, q_v', map_v, loop_v = Helpers.lift ti_e.q ti_e.cs in
+  let env_v = Helpers.lift_env map_v env inner outer in
   let env_v = AEnv.bind env_v (v, { ti_e with q = q_v' }) in
     (* compile group expression *)
   let ti_ge = compile_expression env_v loop_v ge_body in
@@ -1372,9 +1372,9 @@ and compile_case env loop value cases default =
   (* compile value to be matched *)
   let ti_v = compile_expression env loop value in
 
-  let _, q_v', map, _loop_v = Helpers.map_forward ti_v.q ti_v.cs in
+  let _, q_v', map, _loop_v = Helpers.lift ti_v.q ti_v.cs in
 
-  let env' = AEnv.map (Helpers.lift map) env in
+  let env' = Helpers.lift_env map env inner outer in
 
   let case env vs_v tag (var, case_exp) (results, q_other) =
     let key = tagkey tag in
@@ -1393,9 +1393,9 @@ and compile_case env loop value cases default =
 
   let default_case env q_other (default_var, default_exp) =
     let loop' = ADag.mk_project [Helpers.prj iter] q_other in
-    let env' = AEnv.bind env (default_var, (compile_unit loop)) in
+    let env' = AEnv.bind env (default_var, (compile_unit loop')) in
     let env' = Helpers.fragment_env loop' env' in
-      compile_expression env' loop default_exp
+      compile_expression env' loop' default_exp
   in
 
   let explicit_case_results, q_other = StringMap.fold (case env' ti_v.vs) cases ([], q_v') in
@@ -1553,19 +1553,7 @@ and apply_lambda env loop lambda_exp args =
     (* filter the function arguments for this function (3) *)
     let args_filtered = List.map filter_arg args_tis in
       
-    let lift_env map ti =
-      let q_lifted = 
-	ADag.mk_project
-	  ([(iter, outer); Helpers.prj pos] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti.cs))))
-	  (ADag.mk_eqjoin
-	     (inner, iter)
-	     map
-	     ti.q)
-      in
-	{ ti with q = q_lifted }
-    in
-
-    let env_lifted = AEnv.map (lift_env map_lift) function_env in 
+    let env_lifted = Helpers.lift_env map_lift function_env outer inner in
 
     (* extend the environment with the function arguments (5) *)
     let env_args = List.fold_left AEnv.bind env_lifted (List.combine xs args_filtered) in
