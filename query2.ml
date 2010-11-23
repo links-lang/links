@@ -489,7 +489,20 @@ struct
 	  let case ((x, _), c) = (x, computation env (VarSet.add x bound) None c) in
 	  let cases' = StringMap.map case cases in
 	  let default' = opt_map case default in
-	    `Case (v', cases', default')
+	    begin
+	      (* if the value that is dispatched on is a variant literal, beta reduce the
+		 corresponding case arm *)
+	      match v' with
+		| `Variant (tag, value) ->
+		    begin
+		      match StringMap.lookup tag cases', default' with
+			| Some (x, exp), _ 
+			| None, Some (x, exp) -> beta_reduce bound ([x], exp) env [value]
+			| None, None -> assert false
+		    end
+		| _ -> 
+		    `Case (v', cases', default')
+	    end
 
       | `If (c, t, e) ->
           let c = value env bound c in
