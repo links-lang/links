@@ -233,6 +233,7 @@ struct
       | `Int i -> `Constant (`Int i)
       | `Char c -> `Constant (`Char c)
       | `Float f -> `Constant (`Float f)
+      | `String s -> `Constant (`String s)
       | `Table (((db, _), _, _, _) as t) -> 
 	  used_database := Some db;
 	  `Table t 
@@ -279,7 +280,9 @@ struct
 	  let fresh_vars = List.map (fun _ -> Var.fresh_raw_var ()) (fromTo 0 arity) in
 	  let fresh_vars_t = List.map (fun x -> `Var x) fresh_vars in
 	    `Lambda (fresh_vars, `Apply ((`Primitive f), fresh_vars_t))
-      | _ -> failwith "Cannot convert value to expression"
+      | v -> 
+	  Debug.print (Show.show Value.show_t v);
+	  failwith "Cannot convert value to expression"
 
   and value env bound : Ir.value -> t = function
     | `Constant c -> `Constant c
@@ -454,7 +457,7 @@ struct
               | `Fun ((_f, _) as _fb, (_, _args, _body), (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as _fb, (_, args, body), _) ->
-		  Debug.f "fun %d" f;
+		  (* Debug.f "fun %d" f; *)
 		  let arg_vars = List.map fst args in
 		  let bound' = VarSet.union bound (VarSet.from_list arg_vars) in
 		  let body = computation env bound' None body in
@@ -744,6 +747,6 @@ let compile : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (Anno
 	begin
 	  print_endline ("query2:\n "^string_of_t v);
 	  print_endline ("query2 annotated:\n "^Annotate.string_of_typed_t v_annot);
-	  Exptodot.output_dot v_annot "exp_query.dot"
 	end;
+      Exptodot.output_dot v_annot "exp_query.dot";
       (v_annot, (Annotate.typeof_typed_t v_annot))
