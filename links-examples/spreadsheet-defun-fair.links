@@ -1,5 +1,5 @@
 var db = database "test" "postgresql" ":5432:test:foobar";
-var data = table "s" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
+var data = table "ss" with (row : Int, col : Int, val : Int) tablekeys [["row", "col"]] from db;
 
 fun sumrow(row)(data) { sum(nth(row, data)) }
 fun cell(row, col) (data) { nth(col, nth(row, data)) }
@@ -16,6 +16,13 @@ var ss = [[const(5), cell(2,2), const(123)],
 	  [cell(2,1), const(1024), maxrow(80)]];
 
 fun apply(data)(f) { f(data) }
+
+fun matrix(t) {
+	var rows = nubBase(for (e <-- data) [e.row]);
+	for (r <- rows)
+			[for (e <-- data) where (e.row == r) orderby (e.row, e.col)
+				[e.val]]
+}
 
 query { 
 	var ss = [[Lam1(5), Lam2(2,2), Lam3(123)],
@@ -43,11 +50,8 @@ query {
 				}
 		}
 	}
-	var rows = nubBase(for (e <-- data) [e.row]);
-	var m = for (r <- rows)
-			[for (e <-- data) where (e.row == r) orderby (e.row, e.col)
-				[e.val]];
 
+	var m = matrix(data);
 	for (row <- ss)
 		[for (f <- row)
 			[apply(f, m)]]

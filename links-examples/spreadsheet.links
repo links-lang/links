@@ -15,17 +15,17 @@ var ss = [[const(5), cell(2,2), const(123)],
 	  [sumrow(1), maxrow(15), sumrow(2)], 
 	  [cell(2,1), const(1024), maxrow(80)]];
 
-fun data(t) {
+fun matrix(t) {
 	query {
 		var rows = nubBase(for (e <-- t) [e.row]);
-		var m = for (r <- rows)
+		for (r <- rows)
 			[for (e <-- t) where (e.row == r) orderby (e.row, e.col)
-			[e.val]];
+			[e.val]]
 	}
 }
 
 query { 
-	var m = data(ss);
+	var m = matrix(data);
 	for (row <- ss)
 		[for (f <- row)
 			[f(m)]]

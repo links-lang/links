@@ -21,17 +21,22 @@ fun app(enc, arg) {
 
 var ss = [[const(5), cell(2,2), const(123)],
 	  [sumrow(1), maxrow(15), sumrow(2)], 
-	  [cell(2,1), const(2048), maxrow(80)]];
+	  [cell(2,1), const(1024), maxrow(80)]];
 
 fun apply(data, f_enc) { app(f_enc, data) }
 
-query { 
-	var rows = nubBase(for (e <-- data) [e.row]);
-	var m = 
+fun matrix(t) {
+	query {
+		var rows = nubBase(for (e <-- data) [e.row]);
 		for (r <- rows)
 			[for (e <-- data) where (e.row == r) orderby (e.row, e.col)
-				[e.val]];
+				[e.val]]
+	}
+}
 
+query { 
+
+	var m = matrix(data);
 	for (row <- ss)
 		[for (f <- row)
 			[apply(m, f)]]
