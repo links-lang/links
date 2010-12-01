@@ -1265,7 +1265,61 @@ and compile_variant env loop tag value =
       fs = Fs.empty
     }
 
-and compile_case env loop value cases default =
+and compile_case env loop value cases =
+
+  let select_key q key =
+    let q_compared = 
+      ADag.mk_funnumeq
+	(res, (A.Item 1, item'))
+	(ADag.mk_attach
+	   (item', A.Nat key)
+	   q)
+    in
+      (* all iterations which have the tag *)
+      ADag.mk_project
+	[Helpers.prj iter; Helpers.prj pos; Helpers.prj (A.Item 2)]
+	(ADag.mk_select
+	   res
+	   q_compared)
+  in
+    
+  (* compile value to be matched *)
+  let ti_v = compile_expression env loop value in
+
+  let _, q_v', map, _loop_v = Helpers.lift ti_v.q ti_v.cs in
+
+  let env' = Helpers.lift_env map env inner outer in
+
+  let case env vs_v tag (var, case_exp) results =
+    let key = tagkey tag in
+    let q_matching = select_key q_v' key in
+      try 
+	let itbl = fst (Vs.lookup vs_v (2, key)) in
+	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
+	let env' = AEnv.bind env (var, ti_unboxed) in
+	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
+	let env' = Helpers.fragment_env loop' env' in
+	let case_result = compile_expression env' loop' case_exp in
+	  (case_result :: results)
+      with NotFound _ -> 
+	results
+  in
+
+  let results = StringMap.fold (case env' ti_v.vs) cases [] in
+
+  let result_union = Helpers.sequence_construction results ~newpos:false in
+  let q' = 
+    (* map back into original iteration scope *)
+    ADag.mk_project
+      ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets result_union.cs))))
+      (ADag.mk_eqjoin
+	 (iter, inner)
+	 result_union.q
+	 map)
+  in
+    { result_union with q = q' }
+
+and compile_case_default env loop value cases default =
 
   let select_key q key =
     let q_compared = 
@@ -1329,11 +1383,7 @@ and compile_case env loop value cases default =
 
   let explicit_case_results, q_other = StringMap.fold (case env' ti_v.vs) cases ([], q_v') in
 
-  let all_results = 
-    match default with
-      | Some c -> (default_case env' q_other c) :: explicit_case_results
-      | None -> explicit_case_results
-  in
+  let all_results = (default_case env' q_other default) :: explicit_case_results in
   let result_union = Helpers.sequence_construction all_results ~newpos:false in
   let q' = 
     (* map back into original iteration scope *)
@@ -1515,7 +1565,8 @@ and compile_expression env loop e : tblinfo =
     | `Box (e, _) -> compile_box env loop e
     | `Unbox (e, _) -> compile_unbox env loop e
     | `Variant ((tag, value), _) -> compile_variant env loop tag value
-    | `Case ((v, cases, default), _) -> compile_case env loop v cases default
+    | `Case ((v, cases, Some default), _) -> compile_case_default env loop v cases default
+    | `Case ((v, cases, None), _) -> compile_case env loop v cases
     | `Wrong _  -> compile_wrong loop 
     | `Lambda ((xs, body), _) -> compile_lambda env loop xs body
     | `XML _ -> failwith "compile_expression: not implemented"
