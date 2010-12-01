@@ -1598,12 +1598,16 @@ let wrap_serialize_errors q_error =
 	  (iter, [(A.Item 1, A.Ascending)])
 	  q_error))
 
-let compile e =
+let compile exp =
   let loop = 
     (ADag.mk_littbl
        ([[A.Nat 1n]], [(A.Iter 0, `NatType)]))
   in
-  let ti = compile_expression AEnv.empty loop e in
+  let ti = compile_expression AEnv.empty loop exp in
+  let e = !errors in
+  let kt = !keytags in
+    errors := [];
+    keytags := IntMap.empty;
     (* reverse error plan list so that they can be executed from the beginning
        in the proper bottom-up order *)
-    wrap_serialize ti, List.map wrap_serialize_errors (List.rev !errors), !keytags
+    wrap_serialize ti, List.map wrap_serialize_errors (List.rev e), kt

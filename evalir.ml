@@ -368,12 +368,13 @@ module Eval = struct
 	  let (exptree, imptype) = Query2.compile env range e in
 	  match !Query2.used_database with
 	    | Some db -> 
-	      begin
-		match Heapresult.execute db imptype (ExpressionToAlgebraCompile.compile exptree) with
-		  | Heapresult.Result value -> value
-		  | Heapresult.Error "something is wrong" -> raise Wrong
-		  | Heapresult.Error s -> eval_error "Error during query execution: %s" s
-	      end
+		begin
+		  Query2.used_database := None;
+		  match Heapresult.execute db imptype (ExpressionToAlgebraCompile.compile exptree) with
+		    | Heapresult.Result value -> value
+		    | Heapresult.Error "something is wrong" -> raise Wrong
+		    | Heapresult.Error s -> eval_error "Error during query execution: %s" s
+		end;
 	    | None -> computation env cont e
         in
         apply_cont cont env result
