@@ -1,0 +1,52 @@
+# DEFECT
+# does not work at the moment, because there is no defunctionalized groupByBase 
+# primitive function which takes the dispatch function as an argument
+
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+fun efficient_players(pos, eff) { Lam3(pos, eff) }
+
+fun apply_pred(fenc, arg) {
+	switch (fenc) {
+		case Lam1 -> arg.pos == "C"
+		case Lam2 -> arg.pos == "F" || arg.pos == "G"
+		case Lam3(pos, eff) -> arg.pos == pos && arg.eff > eff
+	}
+}
+
+fun apply_entry(fenc, arg) {
+	switch (fenc) {
+		case Lam4 -> Center(arg.name, arg.team, arg.eff)
+		case Lam5 -> Other(arg.name, arg.team)
+	}
+}
+
+fun apply_group(fenc, arg) {
+	switch (fenc) {
+		case Lam6 -> arg.team
+	}
+}
+
+var l = [(pred = Lam1, entry = Lam4, agg = Just(Lam6)), 
+	(pred = Lam2, entry = Lam5, agg = Nothing), 
+	(pred = Lam3("C", 15), entry = Lam4, agg = Nothing)];
+
+fun apply_queries(qs, t) {
+	query {
+		for (q <- qs) {
+			var rs = for (r <-- t) where (apply_pred(q.pred, r)) [r];
+			var grouped =
+				switch (q.agg) {
+					case Just(g) -> Group(groupByBase_defun(apply_group, g, rs))
+					case Nothing -> Flat(rs)
+				};
+			[switch (grouped) {
+				case Group(gs) -> Group(for (g <- gs) [(g.1, for (r <- g.2) [q.proj(r)])])
+				case Flat(rs) -> Flat(for (r <- rs) [q.proj(r)])
+			}]
+		}
+	}
+}
+
+apply_queries(l, players_table)

@@ -1,0 +1,28 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+fun centers(p) { p.pos == "C" }
+fun forwards_guards(p) { p.pos == "F" || p.pos == "G" }
+fun efficient_players(pos, eff)(p) { p.pos == pos && p.eff > eff }
+fun center(p) { Center(p.name, p.team, p.eff) }
+fun other(p) { Other(p.name, p.team) }
+fun max_eff(ps) { max(for (p <-- ps) [p.eff]) }
+
+var l = [(pred = centers, entry = center, agg = Just(length)), 
+	(pred = forwards_guards, entry = other, agg = Nothing), 
+	(pred = efficient_players("C", 15), entry = center, agg = Nothing)];
+
+fun apply_queries(qs, t) {
+	for (q <- qs) {
+		var filtered = for (r <-- t) where (q.pred(r)) [r];
+		var rs = for (r <- filtered) [q.entry(r)];
+		var agg =
+			switch (q.agg) {
+				case Just(agg) -> Just(agg(rs))
+				case Nothing -> Nothing
+			};
+		[(rs, agg)]
+	}
+}
+
+apply_queries(l, players_table)

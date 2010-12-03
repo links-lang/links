@@ -1,0 +1,55 @@
+var db = database "test" "postgresql" ":5432:test:foobar";
+var players_table = table "players" with (id : Int, team : String, name : String, pos : String, eff : Int) tablekeys [["id"]] from db;
+
+fun centers(p) { p.pos == "C" }
+fun forwards_guards(p) { p.pos == "F" || p.pos == "G" }
+fun efficient_players(pos, eff)(p) { p.pos == pos && p.eff > eff }
+fun center(p) { Center(p.name, p.team, p.eff) }
+fun other(p) { Other(p.name, p.team) }
+fun max_eff(ps) { max(for (p <-- ps) [p.eff]) }
+
+var l = [(pred = centers, proj = center, group = Just(fun (p) { p.team })), 
+	(pred = forwards_guards, proj = other, group = Nothing), 
+	(pred = efficient_players("C", 32), proj = center, group = Nothing)];
+
+fun member(e, l) {
+	switch (l) {
+		case x :: xs -> if (x == e) true else member(e, xs)
+		case []      -> false
+	}
+}
+
+fun nub(l) {
+	fun nub_1(d, x) {
+		if (member(x, d))
+			d
+		else	
+			x :: d
+	}
+	reverse(fold_left(nub_1, [], l))
+}
+
+fun groupBy(pred, keys, project, t) {
+	for (key <- nub(keys))
+		[(key, 
+		for (p <-- t) where (pred(p) && project(p) == key) [p]
+		)]
+}
+
+fun apply_queries(qs, t) {
+	for (q <- qs) {
+		var grouped = 
+			switch (q.group) {
+				case Just(g) -> 
+					var keys = for (r <-- t) [g(r)];
+					Group(groupBy(q.pred, keys, g, t))
+				case Nothing -> Flat(for(r <-- t) where (q.pred(r)) [r])
+			};
+		[switch (grouped) {
+			case Group(gs) -> Group(for (g <- gs) [(g.1, for (r <- g.2) [q.proj(r)])])
+			case Flat(rs) -> Flat(for (r <- rs) [q.proj(r)])
+		}]
+	}
+}
+
+apply_queries(l, players_table)
