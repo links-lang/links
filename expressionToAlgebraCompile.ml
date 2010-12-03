@@ -1189,13 +1189,12 @@ and compile_if env loop c t e =
       Helpers.sequence_construction [ti_t; ti_e] ~newpos:false
 
 and compile_groupby env loop ge e =
-  let v, ge_body = match ge with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
   let ti_e = compile_expression env loop e in
   let q_v, q_v', map_v, loop_v = Helpers.lift ti_e.q ti_e.cs in
   let env_v = Helpers.lift_env map_v env inner outer in
-  let env_v = AEnv.bind env_v (v, { ti_e with q = q_v' }) in
+  let ti_lambda = compile_expression env_v loop_v ge in
     (* compile group expression *)
-  let ti_ge = compile_expression env_v loop_v ge_body in
+  let ti_ge = do_apply_lambda ti_lambda [{ ti_e with q = q_v' }] in
   let cs_ge' = Cs.shift (Cs.cardinality ti_e.cs) ti_ge.cs in
   let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_ge') in
   let q_1 =
@@ -1502,6 +1501,9 @@ and apply_lambda env loop lambda_exp args =
   let args_tis = List.map (compile_expression env loop) args in
     (* compile the function expression *)
   let ti_f = compile_expression env loop lambda_exp in
+    do_apply_lambda ti_f args_tis
+
+and do_apply_lambda ti_f args_tis =
     (* extract the fundev list *)
   let fundevs = Fs.lookup ti_f.fs 1 in
 
