@@ -413,10 +413,14 @@ struct
 	end
     | "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
-	`Apply (`Primitive "and", [(apply env bound (`Primitive "Map", [p; l]))])
+	let var = Var.fresh_raw_var () in
+	let f = `For (l, [], `Lambda ([var], `Singleton (`Apply (p, [`Var var])))) in
+	  `Apply (`Primitive "and", [f])
     | "any", [p; l] -> 
 	(* any(p, l) = or(map p l) *)
-	`Apply (`Primitive "or", [(apply env bound (`Primitive "Map", [p; l]))])
+	let var = Var.fresh_raw_var () in
+	let f = `For (l, [], `Lambda ([var], `Singleton (`Apply (p, [`Var var])))) in
+	  `Apply (`Primitive "or", [f])
     | "<", [e1; e2] ->
 	`Apply (`Primitive ">", [e2; e1])
     | ">=", [e1; e2] ->
