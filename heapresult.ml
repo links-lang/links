@@ -110,8 +110,6 @@ and tblresult = Tr of (accessor_functions * Cs.t * tsr * vsr)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
   let result_fields = fromTo 0 dbvalue#nfields in
   let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
-   (* List.iter (fun (s, i) -> Debug.f "%s = %d " s i) result_names;
-    Debug.print ""; *)
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
   let find_field col_name = 
@@ -133,10 +131,7 @@ let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue 
 	   (offset, find_field schema_name))
 	offsets_and_schema_names
     in
-      (*let foo = List.map (fun (offset, col) -> sprintf "(%d -> %d)" offset col) offsets_to_fields in 
-      Debug.print (mapstrcat " " (fun x -> x) foo);  *)
     let item row offset = 
-      (* Debug.f "item access %d\n" offset; *)
       try 
 	assert (row < nr_tuples);
 	let field = List.assoc offset offsets_to_fields in
@@ -194,137 +189,82 @@ let mk_primitive raw_value t =
     | `Tag 
     | `Surrogate -> assert false 
 
-module Offsets : sig
-  type offsets
-  type offset = int
+let lookup itype m key =
+  match IntMap.lookup key m with
+    | Some valuelist -> 
+	begin
+	  match itype with
+	    | `List -> `List (List.rev valuelist)
+	    | `Atom -> 
+		assert ((List.length valuelist) = 1);
+		List.hd valuelist
+	end
+    | None -> `List []
 
-  val lookup_ts_offset : offsets -> int -> offset
-  val lookup_vs_offset : offsets -> (int * string) -> offset
-  val update_ts_offset : offsets -> int -> offset -> offsets
-  val update_vs_offset : offsets -> (int * string) -> offset -> offsets
-  val empty : offsets
-end = struct
+let append key value m =
+  match IntMap.lookup key m with
+    | Some valuelist -> IntMap.add key (value :: valuelist) m
+    | None -> IntMap.add key [value] m
 
-  type offset = int
-  type offsets = { ts : (int * offset) list; vs : ((int * string) * offset) list }
-
-  let empty = { ts = []; vs = [] }
-
-  let lookup_ts_offset offsets refcol = 
-    try
-      List.assoc refcol offsets.ts
-    with NotFound _ -> 0
-
-  let lookup_vs_offset offsets (refcol, tag) = 
-    try
-      List.assoc (refcol, tag) offsets.vs
-    with NotFound _ -> 0
-
-  let update_ts_offset offsets refcol new_offset = 
-    { offsets with ts = (refcol, new_offset) :: (remove_keys offsets.ts [refcol])}
-
-  let update_vs_offset offsets (refcol, tag) new_offset = 
-    { offsets with vs = ((refcol, tag), new_offset) :: (remove_keys offsets.vs [(refcol, tag)])}
-end
-
-let rec mk_record itbl_offsets field_names cs (item : int -> string) tsr vsr keytags =
-   let mk_field (next_offsets, record) field_name =
-     let field_cs = Cs.lookup_record_field cs field_name in
-(*       Debug.print (Cs.print cs);
-       Debug.print ("mk_record " ^ field_name); *)
-     let (new_offsets, value) = handle_row next_offsets item field_cs tsr vsr keytags in
-       (new_offsets, ((field_name, value) :: record))
-   in
-   let (new_offsets, values) = List.fold_left mk_field (itbl_offsets, []) field_names in
-     (new_offsets, `Record values)
-
-and handle_row itbl_offsets item cs tsr vsr keytags = 
-    match cs with
-      | Cs.Column (col, `Surrogate) ->
-	  let offset = Offsets.lookup_ts_offset itbl_offsets col in
-	  let itbl = 
-	    try
-	      List.assoc col tsr
-	    with NotFound _ -> assert false
-	  in
-	  let surrogate_key = int_of_string (item col) in
-	  let (next_offset, value) = handle_inner_table `List surrogate_key offset itbl keytags in
-	  let new_offsets = Offsets.update_ts_offset itbl_offsets col next_offset in
-	    (new_offsets, value)
-      | Cs.Column (col, t) ->
-	  let raw_value = item col in
-	    (itbl_offsets, mk_primitive raw_value t)
-      | Cs.Mapping fields ->
-	let field_names = dom fields in
-	  mk_record itbl_offsets field_names cs item tsr vsr keytags
-      | Cs.Tag ((tagcol, `Tag), (refcol, `Surrogate)) ->
-	(* Debug.print (Cs.show cs); *)
-	let keyval = Nativeint.of_string (item tagcol) in
-	let tagval = IntMap.find (Nativeint.to_int keyval) keytags in
-	(* Debug.f "tagval %s" tagval; *)
-	let refval_raw = item refcol in
-	(* Debug.f "refval_raw %s" refval_raw; *)
-	let refval = int_of_string refval_raw in
-	let (itbl, itype) = 
+let rec value_from_row item cs tsm vsm keytags = 
+  match cs with
+    | Cs.Column (col, `Surrogate) ->
+	let m = 
 	  try
-	    List.assoc (refcol, keyval) vsr
+	    List.assoc col tsm
 	  with NotFound _ -> assert false
 	in
-	let offset = Offsets.lookup_vs_offset itbl_offsets (refcol, tagval) in
-	let (next_offset, tagged_value) = handle_inner_table itype refval offset itbl keytags in
-	let variant = `Variant (tagval, tagged_value) in
-	let new_offsets = Offsets.update_vs_offset itbl_offsets (refcol, tagval) next_offset in
-	(new_offsets, variant)
-      | _ -> assert false
+	let surrogate_key = int_of_string (item col) in
+	  lookup `List m surrogate_key
+    | Cs.Column (col, t) ->
+	  mk_primitive (item col) t
+    | Cs.Mapping fields ->
+	let field (field_name, field_cs) =
+	  (field_name, value_from_row item field_cs tsm vsm keytags)
+	in
+	  `Record (List.map field fields)
+    | Cs.Tag ((tagcol, `Tag), (refcol, `Surrogate)) ->
+	let keyval = Nativeint.of_string (item tagcol) in
+	let tagval = IntMap.find (Nativeint.to_int keyval) keytags in
+	let surrogate_key = int_of_string (item refcol) in
+	let (m, itype) = 
+	  try
+	    List.assoc (refcol, keyval) vsm
+	  with NotFound _ -> assert false
+	in
+	let tagged_value = lookup itype m surrogate_key in
+	  `Variant (tagval, tagged_value)
+    | _ -> assert false
 
-and handle_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type keytags = 
-  (* Debug.print "handle_table"; *)
-  (* Debug.print (Cs.print cs); *)
+and value_from_table (Tr ((item, _, nr_tuples), cs, tsr, vsr)) result_type keytags = 
+  let tsm = List.map (fun (col, tr) -> (col, valmap tr keytags)) tsr in
+  let vsm = List.map (fun (k, (tr, itype)) -> (k, (valmap tr keytags, itype))) vsr in 
   match result_type with
     | `Atom ->
-      assert (nr_tuples = 1);
-      snd (handle_row Offsets.empty (item 0) cs tsr vsr keytags)
+	assert (nr_tuples = 1);
+	value_from_row (item 0) cs tsm vsm keytags
     | `List ->
-      let rec loop_tuples i row_values offsets =
+      let rec loop_tuples i row_values =
 	if i = nr_tuples then
-	  (offsets, List.rev row_values)
+	  List.rev row_values
 	else
-	  let col_value = item i in
-	  let (next_offsets, row_value) = handle_row offsets col_value cs tsr vsr keytags in
-	  loop_tuples (i + 1) (row_value :: row_values) next_offsets
+	  let row_value = value_from_row (item i) cs tsm vsm keytags in
+	    loop_tuples (i + 1) (row_value :: row_values) 
       in
-      `List (snd (loop_tuples 0 [] Offsets.empty))
-	
-and handle_inner_table itype surrogate_key offset (Tr ((item, iter, nr_tuples), cs, tsr, vsr)) keytags =
-  (* Debug.f "handle_inner_table surr_key %d offset %d nr_tuples %d" surrogate_key offset nr_tuples; *)
-  (* Debug.print (Cs.show cs); *)
-  let rec loop_tuples i row_values inner_offsets =
-    (* Debug.f "loop_tuples i %d" i; *)
+	`List (loop_tuples 0 [])
+
+and valmap (Tr ((item, iter, nr_tuples), cs, tsr, vsr)) keytags =
+  let tsm = List.map (fun (col, tr) -> (col, valmap tr keytags)) tsr in
+  let vsm = List.map (fun (k, (tr, itype)) -> (k, (valmap tr keytags, itype))) vsr in 
+  let rec loop_tuples i m =
     if i = nr_tuples then
-      if i = 0 then
-	(0, (List.rev row_values))
-      else
-	(i - 1), (List.rev row_values)
+      m
     else
       let iter_val = int_of_string (iter i) in
-	if surrogate_key < iter_val then
-	  if i = 0 then
-	    (0, (List.rev row_values))
-	  else
-	    (i - 1), (List.rev row_values)
-	else if surrogate_key = iter_val then
-	  let (new_inner_offsets, row_value) = handle_row inner_offsets (item i) cs tsr vsr keytags in
-	    loop_tuples (i + 1) (row_value :: row_values) new_inner_offsets
-	else
-	  loop_tuples (i + 1) row_values inner_offsets
+      let value = value_from_row (item i) cs tsm vsm keytags in
+	loop_tuples (i + 1) (append iter_val value m)
   in
-  let (next_offset, values) = loop_tuples offset [] Offsets.empty in
-    match itype with
-      | `Atom -> 
-	  assert ((List.length values) = 1);
-	  (next_offset, List.hd values)
-      | `List ->
-	  (next_offset, `List values)
+    loop_tuples 0 IntMap.empty
 
 exception ErrorExc of string
 
@@ -342,6 +282,6 @@ let execute db imptype (result_algebra_bundle, error_plans, keytags) =
     try
       List.iter error error_plans;
       let result_bundle = execute_queries db result_algebra_bundle in
-	Result (handle_table result_bundle imptype keytags)
+	Result (value_from_table result_bundle imptype keytags)
     with
 	ErrorExc s -> Error s

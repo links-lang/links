@@ -53,7 +53,8 @@ let optimize_sql q =
     Algebra_export.export_plan !buf q;
     output_plan (Buffer.contents !buf) ("plan_unopt_" ^ i ^ ".xml");
     Debug.f ">>>> pfopt %d" !c;
-    let optimized = pipe_pfopt (Buffer.contents !buf) in
+    let optimized = pipe_pfopt (Buffer.contents !buf) in 
+(*    let optimized = pipe_pfopt optimized in *)
       Debug.f ">>>> pfsql %d" !c;
       let sql = pipe_pfsql optimized in
 
