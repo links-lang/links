@@ -357,6 +357,7 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
+	let before = Unix.gettimeofday () in
 	let range =
 	  match range with
 	    | None -> None
@@ -377,7 +378,9 @@ module Eval = struct
 		end;
 	    | None -> computation env cont e
         in
-        apply_cont cont env result
+	let after = Unix.gettimeofday () in
+	  Printf.printf "took %f\n" (after -. before);
+          apply_cont cont env result
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with
