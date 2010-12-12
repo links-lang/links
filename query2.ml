@@ -205,8 +205,8 @@ struct
     List.fold_right 
       StringSet.add 
       ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
-       "nth"; "groupByBase"; "sum"; "concat"; "and"; "or"; "all";
-       "any"; "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";]
+       "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
+       "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";]
       StringSet.empty
 
   let rec lookup bound (val_env, exp_env) var =
@@ -411,6 +411,7 @@ struct
 		  end
 	    | _ -> assert false
 	end
+(*
     | "all", [p; l] ->
 	(* all(p, l) = and(map p l) *)
 	let var = Var.fresh_raw_var () in
@@ -421,6 +422,7 @@ struct
 	let var = Var.fresh_raw_var () in
 	let f = `For (l, [], `Lambda ([var], `Singleton (`Apply (p, [`Var var])))) in
 	  `Apply (`Primitive "or", [f])
+*)
     | "<", [e1; e2] ->
 	`Apply (`Primitive ">", [e2; e1])
     | ">=", [e1; e2] ->
@@ -722,9 +724,9 @@ module Annotate = struct
 		       here *)
 		    (* a -> b -> `Atom *)
 		      [`Any; `Any], `Atom
-		| "nth" ->
+		| "select" ->
 		    (* `Atom -> `List -> `Atom *)
-		    [`Atom; `List], `Atom
+		    [`List; `Atom], `Atom
 		| "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" ->
 		    (* `Atom -> `List -> `List *)
 		    [`Atom; `List], `List

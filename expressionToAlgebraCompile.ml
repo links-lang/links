@@ -246,7 +246,7 @@ and compile_aggr_error env loop aggr_fun restype l =
 	fs = Fs.empty
       }
 
-and compile_nth env loop i l =
+and compile_select env loop l i =
   let ti_i = compile_expression env loop i in
   let ti_l = compile_expression env loop l in
   let q_l' = Helpers.abspos ti_l.q ti_l.cs in
@@ -270,7 +270,7 @@ and compile_nth env loop i l =
     ADag.mk_project
       [Helpers.prj (A.Item 1)]
       (ADag.mk_attach
-	 (A.Item 1, A.String "nth(): index too large")
+	 (A.Item 1, A.String "select(): index too large")
 	 (ADag.mk_difference
 	    loop
 	    (ADag.mk_project
@@ -1466,7 +1466,7 @@ and apply_primitive env loop f args =
     | "<>", [op1; op2] -> compile_comparison env loop Helpers.wrap_ne do_table_equal do_row_equal op1 op2
     | ">", [op1; op2] -> compile_comparison env loop Helpers.wrap_gt do_table_greater do_row_greater op1 op2
     | "not", [op]->  compile_unop env loop Helpers.wrap_not op
-    | "nth", [i; l] -> compile_nth env loop i l
+    | "select", [i; l] -> compile_select env loop i l
     | "length", [l] -> compile_length env loop l
     | "sum", [l] -> compile_sum env loop l
     | "max", [l] -> compile_aggr_error env loop A.Max `IntType l

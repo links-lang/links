@@ -40,18 +40,16 @@ fun sortBy (f, l) {
 sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
-fun all(p, l) {
-   switch (l) {
-     case []    -> true
-     case x::xs -> p(x) && all(p, xs)
-   }
-}
 
 fun and(l) { 
    switch (l) {
      case [] -> true
      case x::xs -> x && and(xs)
    }
+}
+
+fun all(p, xs) {
+   and(for (x <- xs) [p(x)])
 }
 
 fun or(l) { 
@@ -61,11 +59,8 @@ fun or(l) {
    }
 }
 
-fun any(p, l) {
-   switch (l) {
-     case [] -> false
-     case x::xs -> p(x) || any(p, xs)
-   }
+fun any(p, xs) {
+    or(for (x <- xs) [p(x)])
 }
 
 fun the(l) {
@@ -130,20 +125,6 @@ fun fold_right(f, u, l) {
 
 fun fold_right1(f, l) {
   fold_right(f, hd(l), tl(l))
-}
-
-fun nth(i, l) {
-  if (i >= length(l)) {
-    error("nth(): index too large")
-  } else {
-    fun nth1(j, l) {
-      if (i == j) 
-        hd(l)
-      else
-        nth1((j + 1), tl(l)) 
-    }
-    nth1(1, l)
-  }
 }
 
 fun member(e, l) {
