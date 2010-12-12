@@ -305,7 +305,17 @@ struct
 			 ext_fields
 			 StringMap.empty))
     | `Project (label, r) ->
-        `Project (value env bound r, label)
+	let rec project exp =
+	  begin
+	    match exp with
+	      | `Record fields -> StringMap.find label fields
+	      | `Extend (_, extend_fields) when StringMap.mem label extend_fields ->
+		  StringMap.find label extend_fields
+	      | `Extend (Some r, _) -> project r
+	      | r -> `Project (r, label)
+	  end
+	in
+	  project (value env bound r)
     | `Erase (labels, r) ->
         `Erase (value env bound r, labels)
     | `Inject (label, v, _t) -> `Variant (label, value env bound v)
