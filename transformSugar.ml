@@ -141,6 +141,21 @@ class transform (env : Types.typing_environment) =
     method with_effects : Types.row -> 'self_type = fun effects ->
       {< effect_row = fst (Types.unwrap_row effects) >}
 
+    method sugar_datatype : datatype -> ('self_type * datatype) =
+      fun s -> (o, s)
+
+    method datatype : Types.datatype -> ('self_type * Types.datatype) =
+      fun t -> (o, t)
+
+    method datatype' : datatype' -> ('self_type * datatype') =
+      fun (s, t) ->
+        let (o, s) = o#sugar_datatype s in
+        let (o, t) = optionu o (fun o -> o#datatype) t in
+          (o, (s, t))
+
+    method row : Types.row -> ('self_type * Types.row) =
+      fun row -> (o, row)
+
     method unary_op : unary_op -> ('self_type * unary_op * Types.datatype) =
       fun op ->
         (o, op, type_unary_op var_env tycon_env op)
@@ -196,18 +211,21 @@ class transform (env : Types.typing_environment) =
       | `FunLit (Some argss, lam) ->
           let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
-          let t =
+          let (o, t) =
             List.fold_right
-              (fun (args, effects) rt ->
-                 `Function (args, effects, rt))
+              (fun (args, effects) (o, rt) ->
+                 let (o, args) = o#datatype args in
+                 let (o, effects) = o#row effects in
+                   (o, `Function (args, effects, rt)))
               argss
-              rt
+              (o, rt)
           in
             (o, `FunLit (Some argss, lam), t)
       | `Spawn (body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
+          let (o, inner_effects) = o#row inner_effects in
           let process_type = `Application (Types.process, [`Row inner_effects]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
@@ -217,6 +235,7 @@ class transform (env : Types.typing_environment) =
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
+          let (o, inner_effects) = o#row inner_effects in
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
@@ -230,9 +249,11 @@ class transform (env : Types.typing_environment) =
                    (o, (limit, offset)))
               range in                   
           let (o, body, _) = o#phrase body in
+          let (o, t) = o#datatype t in
             (o, (`Query (range, body, Some t)), t)
       | `ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
+          let (o, t) = o#datatype t in
             (o, `ListLit (es, Some t), Types.make_list_type t)
       | `RangeLit (e1, e2) ->
           let (o, e1, _) = o#phrase e1 in
@@ -287,15 +308,12 @@ class transform (env : Types.typing_environment) =
           let (o, args, _) = list o (fun o -> o#phrase) args in
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAbstr (tyvars, e) ->
+          let outer_tyvars = o#backup_quantifiers in
+          let (o, qs) = o#quantifiers (Types.unbox_quantifiers tyvars) in
           let (o, e, t) = o#phrase e in
-          let t = Types.for_all (Types.unbox_quantifiers tyvars, t) in
-            begin
-              match t with
-                | `ForAll (tyvars, _) ->
-                    (o, `TAbstr(tyvars, e), t)
-                | _ ->
-                    (o, fst e, t)
-            end
+          let o = o#restore_quantifiers outer_tyvars in
+          let t = Types.for_all (qs, t) in
+            (o, tabstr (qs, fst e), t)
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -358,14 +376,20 @@ class transform (env : Types.typing_environment) =
               list o fields
           in
             (o, `With (e, fields), t)
-      | `TypeAnnotation (e, ((_, Some t) as ann_type)) ->
+      | `TypeAnnotation (e, ann_type) ->
           let (o, e, _) = o#phrase e in
+          let (o, ann_type) = o#datatype' ann_type in
+          let (_, Some t) = ann_type in
             (o, `TypeAnnotation (e, ann_type), t)
-      | `Upcast (e, ((_, Some t) as to_type), from_type) ->
+      | `Upcast (e, to_type, from_type) ->
           let (o, e, _) = o#phrase e in
+          let (o, to_type) = o#datatype' to_type in
+          let (o, from_type) = o#datatype' from_type in
+          let (_, Some t) = to_type in 
             (o, `Upcast (e, to_type, from_type), t)
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
+          let (o, t) = o#datatype t in
             (o, `ConstructorLit (name, e, Some t), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
@@ -374,8 +398,8 @@ class transform (env : Types.typing_environment) =
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
-              cases
-          in
+              cases in
+          let (o, t) = o#datatype t in
             (o, `Switch (v, cases, Some t), t)
       | `Receive (cases, Some t) ->
           let (o, cases) =
@@ -383,8 +407,8 @@ class transform (env : Types.typing_environment) =
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
-              cases
-          in
+              cases in
+          let (o, t) = o#datatype t in
             (o, `Receive (cases, Some t), t)
       | `DatabaseLit (name, (driver, args)) ->
           let (o, name, _) = o#phrase name in
@@ -394,6 +418,10 @@ class transform (env : Types.typing_environment) =
       | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
           let (o, name, _) = o#phrase name in
           let (o, db, _) = o#phrase db in
+          let (o, dtype) = o#sugar_datatype dtype in
+          let (o, read_row) = o#datatype read_row in
+          let (o, write_row) = o#datatype write_row in
+          let (o, needed_row) = o#datatype needed_row in
             (o, `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db), `Table (read_row, write_row, needed_row))
       | `DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
@@ -528,58 +556,87 @@ class transform (env : Types.typing_environment) =
         | `Bool v -> (o, `Bool v, Types.bool_type)
         | `Char v -> (o, `Char v, Types.char_type)
             
+    method quantifiers : Types.quantifier list -> ('self_type * Types.quantifier list) =
+      fun qs -> (o, qs)
+    method backup_quantifiers : IntSet.t = IntSet.empty
+    method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
+
+    method rec_bodies :
+      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      ('self_type *
+         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+      let outer_tyvars = o#backup_quantifiers in
+      let rec list o =
+        function
+          | [] -> (o, [])
+          | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+              let (o, tyvars) = o#quantifiers tyvars in
+              let (o, inner) = o#datatype inner in
+              let inner_effects = fun_effects inner (fst lam) in
+              let (o, lam, _) = o#funlit inner_effects lam in
+              let o = o#restore_quantifiers outer_tyvars in
+              let (o, defs) = list o defs in
+                (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+      in
+        list o
+
+    method rec_activate_outer_bindings :
+      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      ('self_type *
+         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+      let rec list o =
+        function
+          | [] -> o, []
+          | (f, body, location, t, pos)::defs ->
+              let (o, f) = o#binder f in
+              let (o, defs) = list o defs in
+              let (o, t) = optionu o (fun o -> o#datatype') t in
+                o, (f, body, location, t, pos)::defs
+      in
+        list o
+
+    method rec_activate_inner_bindings :
+      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      'self_type =
+      let bt (name, _, pos) t = (name, Some t, pos) in        
+      let rec list o =
+        function
+          | [] -> o
+          | (f, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
+              let (o, _) = o#binder (bt f inner) in
+                list o defs
+      in
+        list o
+
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
         | `Val (tyvars, p, e, location, t) ->
+            let outer_tyvars = o#backup_quantifiers in
+            let (o, tyvars) = o#quantifiers tyvars in
             let (o, e, _) = o#phrase e in
+            let o = o#restore_quantifiers outer_tyvars in
             let (o, p) = o#pattern p in
+            let (o, t) = optionu o (fun o -> o#datatype') t in
               (o, `Val (tyvars, p, e, location, t))
         | `Fun ((_, Some ft, _) as f, (tyvars, lam), location, t) ->
+            let outer_tyvars = o#backup_quantifiers in
+            let (o, tyvars) = o#quantifiers tyvars in
             let inner_effects = fun_effects ft (fst lam) in
             let (o, lam, _) = o#funlit inner_effects lam in
+            let o = o#restore_quantifiers outer_tyvars in
             let (o, f) = o#binder f in
+            let (o, t) = optionu o (fun o -> o#datatype') t in
               (o, `Fun (f, (tyvars, lam), location, t))
         | `Funs defs ->
-            let bt (name, _, pos) t = (name, Some t, pos) in
-
             (* put the inner bindings in the environment *)
-            let o =
-              let rec list o =
-                function
-                  | [] -> o
-                  | (f, ((_tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
-                      let (o, _) = o#binder (bt f inner) in
-                        list o defs
-              in
-                list o defs in
-              
+            let o = o#rec_activate_inner_bindings defs in
+
             (* transform the function bodies *)
-            let (o, defs) =
-              let rec list o =
-                function
-                  | [] -> (o, [])
-                  | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
-                      let ft = inner in
-                      let inner_effects = fun_effects ft (fst lam) in
-                      let (o, lam, _) = o#funlit inner_effects lam in
-                      let (o, defs) = list o defs in
-                        (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
-            in
-              list o defs in
+            let (o, defs) = o#rec_bodies defs in
               
             (* put the outer bindings in the environment *)
-            let o, defs =
-              let rec list o =
-                function
-                  | [] -> o, []
-                  | (f, body, location, t, pos)::defs ->
-                      let (o, f) = o#binder f in
-                      let (o, defs) = list o defs in
-                        o, (f, body, location, t, pos)::defs
-              in
-                list o defs
-          in
-            (o, (`Funs defs))
+            let o, defs = o#rec_activate_outer_bindings defs in
+              (o, (`Funs defs))
       | `Foreign (f, language, t) ->
           let (o, f) = o#binder f in
             (o, `Foreign (f, language, t))

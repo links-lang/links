@@ -677,6 +677,14 @@ struct
                       prerr_endline ("type: "^Types.string_of_datatype xt);
                       prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
                       failwith "fatal internal error" in
+
+      let rec is_pure_primitive (e, _) =
+        match e with
+          | `TAbstr (_, e)
+          | `TAppl (e, _) -> is_pure_primitive e
+          | `Var f when Lib.is_pure_primitive f -> true
+          | _ -> false in
+
       let eff = lookup_effects env in
       let instantiate_mb name = instantiate name [`Row eff] in
       let cofv = I.comp_of_value in
@@ -731,6 +739,8 @@ struct
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
+          | `FnAppl (e, es) when is_pure_primitive e ->
+              cofv (I.apply_pure (ev e, evs es)) 
           | `FnAppl (e, es) ->
               I.apply (ev e, evs es)
           | `TAbstr (tyvars, e) ->

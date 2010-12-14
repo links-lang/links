@@ -25,9 +25,20 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
 
   (* TODO: optimisation *)
 
-  (* need to be careful here as, for instance, running ElimDeadDefs
+  (* We need to be careful here as, for instance, running ElimDeadDefs
      on the prelude would lead to lots of functions being deleted that
      might actually be used in the program itself.
+
+     Actually, this code isn't currently called on the
+     prelude. However, it does cause problems in the interactive loop
+     as if you define a function it immediately gets optimised away as
+     it isn't yet used!
+
+     In order to resolve the problem we could either simply disable
+     optimisation for the interactive loop, or we could more usefully
+     disable optimisation of the top level definitions by returning a
+     tuple containing all of them. That way we could also optimise the
+     prelude.
   *)
   
   let optimise_program program = 

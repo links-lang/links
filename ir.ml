@@ -494,7 +494,9 @@ struct
       | v when is_atom v -> true
       | `Project (_, v)
       | `Erase (_, v)
-      | `Inject (_, v, _) -> is_inlineable_value v
+      | `Inject (_, v, _)
+      | `TAbs (_, v)
+      | `TApp (v, _) -> is_inlineable_value v 
       | _ -> false
 
   let inliner tyenv env =

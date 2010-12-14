@@ -254,7 +254,10 @@ exception PatternDuplicateNameError of (SourceCode.pos * string)
 exception RedundantPatternMatch of SourceCode.pos
 
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
-  `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
+  match tyvars with
+    | [] -> e
+    | _ -> 
+        `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with

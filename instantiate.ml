@@ -6,7 +6,7 @@ open Types
 let show_recursion = Settings.add_bool("show_recursion", false, `User)
 let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
 
-let quantified_instantiation = Settings.add_bool("quantified_instantiation", false, `User)
+let quantified_instantiation = Settings.add_bool("quantified_instantiation", true, `User)
 
 (*
   instantiation environment:

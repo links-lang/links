@@ -1356,33 +1356,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
       in
         binders, pt, bt in
 
-(*
-  BUG:
-
-  If quantified instantiation is enabled then bogus type abstractions
-  may be inserted at each instantiation point.
-
-  Perhaps, all is not lost, though. We might be able to go back and
-  fix them. Certainly if a quantifier gets unified with a concrete
-  type then it can be dropped.
-
-  If it is still a type variable, then we need to check whether it
-  appears in the type environment: if it does then it should be
-  dropped; if not then it should be kept.
-
-  Maybe this could actually work!
-
-  It still doesn't feel quite right though. It isn't clear what
-  happens to type applications when quantifiers get deleted from type
-  abstractions.
-
-  Perhaps we can use some kind of gratuitous hack such as explicitly
-  detecting and reducing forall-eta-redexes before they become a
-  problem. (At first glance it looks like bogus type arguments can
-  only occur in eta redexes - otherwise the expression in question can
-  always be made to be genuinely polymorphic.)
-*)
-
     let e, t =
       match (expr : phrasenode) with
         | `Var v            ->
@@ -1508,9 +1481,31 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                   | (`Function (args, effects, t)) -> (args, effects) :: arg_types t
                   | _ -> []
               in
-                arg_types ftype
-            in
-              `FunLit (Some argss, (List.map (List.map erase_pat) pats, erase body)), ftype
+                arg_types ftype in 
+
+            (*
+              FIXME:
+
+              fun (x:a) {x:a} : (b) -> b
+
+              should probably give an error, but doesn't if quantified
+              instantiation is switched on.
+
+              Perhaps what we should be doing is filtering out all type
+              variables that appear in patterns and type annotations
+              from the quantifiers. We could do this by adding them
+              to the environment passed to Utils.generalise.
+
+              Needs more thought...
+            *)
+
+            let e = `FunLit (Some argss, (List.map (List.map erase_pat) pats, erase body)) in
+              if Settings.get_value Instantiate.quantified_instantiation then
+                let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
+                let _, ftype = Instantiate.typ ftype in
+                  tabstr (qs, e), ftype
+              else
+                e, ftype                
 
         | `ConstructorLit (c, None, _) ->
             let type' = `Variant (Types.make_singleton_open_row 
@@ -2253,7 +2248,8 @@ and type_binding : context -> binding -> binding * context =
               | Some (_, Some ft) ->
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft pats effects return_type in
-                  let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft) in
+                  let _, fti = Instantiate.typ ft in
+                  let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos fti) in
                     ft in
 
           (* type check the body *)
@@ -2267,7 +2263,7 @@ and type_binding : context -> binding -> binding * context =
 
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
-          let ft = Instantiate.freshen_quantifiers ft in            
+          let ft = Instantiate.freshen_quantifiers ft in
             (`Fun ((name, Some ft, fpos),
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
@@ -2337,27 +2333,7 @@ and type_binding : context -> binding -> binding * context =
                       let effects = fresh_wild () in
                       let body = type_check (bind_effects context' effects) body in
                       let shape =
-                        (* FIXME:
-
-                           Is this right?
-
-                           Probably, because generalisation followed by
-                           instantiation freshens any type variables.
-                           Then we're just making sure the shape fits.
-                           The reason we need to do this is in order to be
-                           able to unify with rigid annotations.
-
-                           Nope. It's broken. We should throw away any quantifiers
-                           before unifying with the type from the context.
-                        *)
-(*                         if Settings.get_value Instantiate.quantified_instantiation then *)
-(*                           let t = make_ft pats effects (typ body) in *)
-(*                           let _, t = *)
-(*                             Utils.generalise body_env t in *)
-(*                           let _, t = Instantiate.typ t in *)
-(*                             t *)
-(*                         else *)
-                          make_ft pats effects (typ body) in
+                        make_ft pats effects (typ body) in
                         (* it is important to instantiate with rigid
                            type variables in order to ensure that the
                            inferred type is consistent with any
@@ -2472,12 +2448,14 @@ struct
         (fun () ->
            "before type checking: \n"^Show.show show_program (bindings, body));
       let tyenv', bindings = type_bindings tyenv bindings in
+      let tyenv' = Types.normalise_typing_environment tyenv' in
         if Settings.get_value check_top_level_purity then
           binding_purity_check bindings; (* TBD: do this only in web mode? *)
         match body with
           | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->
               let body, typ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+              let typ = Types.normalise_datatype typ in
                 (bindings, Some body), typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg
@@ -2486,9 +2464,11 @@ struct
     function
       | `Definitions bindings -> 
           let tyenv', bindings = type_bindings tyenv bindings in
+          let tyenv' = Types.normalise_typing_environment tyenv' in
             `Definitions bindings, Types.unit_type, tyenv'
       | `Expression (_, pos as body) -> 
           let body, t = (type_check tyenv body) in
+          let t = Types.normalise_datatype t in
             `Expression body, t, tyenv
       | `Directive d -> `Directive d, Types.unit_type, tyenv
 end

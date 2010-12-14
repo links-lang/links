@@ -140,7 +140,7 @@ type quantifier_stack = int * int IntMap.t * int IntMap.t
 
 let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
   match IntMap.lookup lvar lenv, IntMap.lookup rvar renv with
-    | Some x, Some y when x=y -> true
+    | Some ldepth, Some rdepth when ldepth=rdepth -> true
     | _ -> false
 
 type unify_env = {tenv: unify_type_env; renv: unify_row_env; qs: quantifier_stack}
@@ -453,41 +453,26 @@ fun rec_env ->
           | `Application (l, ls), `Application (r, rs) ->
               List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
           | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
-              (** Normalise quantifiers:
-                  
-                  Update each quantifier with changes to its point.
-                  Keep the first instance of duplicated quantifiers.
-                  Raise an error if two rigid quantifiers have been unified.
-              *)
-              let rec normalise_quantifiers bound_vars env (qs, ss) =
-                let nqs = normalise_quantifiers bound_vars in
+              (* Check that all quantifiers that were originally rigid
+                 are still distinct *)
+              let rec distinct_rigid_check (qs, ss) =
+                let rec drc rigids (qs, ss) =
                   match qs, ss with
-                    | [], [] -> []
+                    | [], [] -> ()
                     | q::qs, s::ss ->
-                        let q = normalise_quantifier q in
-                        let x = Types.var_of_quantifier q in
-                          if IntSet.mem x bound_vars then 
-                            match s with
-                              | `Flexible ->
-                                  begin
-                                    match IntMap.lookup x env with
-                                      | None ->
-                                          q::nqs (IntMap.add x 0 env) (qs, ss)
-                                      | Some i ->
-                                          nqs env (qs, ss)
-                                  end
-                              | `Rigid ->
-                                  begin
-                                    match IntMap.lookup x env with
-                                      | None ->
-                                          q::nqs (IntMap.add x 1 env) (qs, ss)
-                                      | Some 0 ->
-                                          nqs (IntMap.add x 1 env) (qs, ss)
-                                      | Some 1 ->
-                                          raise (Failure (`Msg ("incompatible quantifiers")))
-                                  end
-                            else
-                              raise (Failure (`Msg ("incompatible quantifiers"))) in
+                        begin
+                          match s with
+                            | `Flexible ->
+                                drc rigids (qs, ss)
+                            | `Rigid ->
+                                let x = Types.var_of_quantifier q in
+                                  if IntSet.mem x rigids then
+                                    raise (Failure (`Msg ("incompatible quantifiers (duplicate rigid quantifiers)")))
+                                  else
+                                    drc (IntSet.add x rigids) (qs, ss)
+                        end
+                in
+                  drc (IntSet.empty) in
 
               let ls = !lsref in
               let rs = !rsref in
@@ -498,14 +483,10 @@ fun rec_env ->
                   (fun q bound_vars ->
                      IntSet.add (Types.var_of_quantifier q) bound_vars) in
 
-                (* the original quantifiers:
+              (* the original variables before unification *)
+              let original_vars = collect ls (collect rs IntSet.empty) in
 
-                   after unification, we must throw away any
-                   quantifiers which were not in the original set
-                *)
-              let bound_vars = collect rs (collect ls IntSet.empty) in
-              let normalise_quantifiers = normalise_quantifiers bound_vars IntMap.empty in
-
+              (* check that two quantifiers have the same kind *)
               let are_compatible =
                 function
                   | `TypeVar ((l, _), _), `TypeVar ((r, _), _)
@@ -517,15 +498,40 @@ fun rec_env ->
               let status q =
                 if Types.is_rigid_quantifier q then `Rigid
                 else `Flexible in
-                
+
+              (* We're assuming that all of the quantifiers start off atomic
+                 (either rigid or flexible type variables, rather than instantiated
+                 as some other type). Does this assumption always hold?
+
+                 Perhaps we should extract the quantifiers initially just in case.
+                 This might allow us to think about other simplifications as well,
+                 such as getting rid of the annoying reference type constructor.
+
+                 We could add quantifier extraction to the FixTypeAbstractions
+                 sugar transformer pass.
+
+                 Doing this kind of thing may be too difficult,
+                 because we might not have enough information
+                 available (e.g. how do we know which quantifiers need
+                 to be thrown away). Storing the information might
+                 take more effort than the current implementation
+                 which just requires the quantifier list to be
+                 mutable. *)
               let lstatus = List.map status ls in
               let rstatus = List.map status rs in
 
-              let rec unify_quantifiers =
-                function
-                  | [], [] -> ()                  
-                  | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs)
-                  | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) in
+              (* Sort the quantifiers, then check that:
+                 a) there are the same number of quantifiers on the left and the right
+                 b) the kinds of the quantifiers match up
+              *)
+              let rec unify_quantifiers (ls, rs) =
+                let compare q q' =
+                  Int.compare (Types.var_of_quantifier q) (Types.var_of_quantifier q')
+                in
+                  match List.sort compare ls, List.sort compare rs with
+                    | [], [] -> ()                  
+                    | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs)
+                    | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) in
                       
               let depth, lenv, renv = qs in
               let depth = depth+1 in
@@ -534,7 +540,7 @@ fun rec_env ->
 
               let () = unify' {rec_env with qs=(depth, lenv, renv)} (lbody, rbody) in
 
-              (* here we need to expand instantiated quantifiers
+              (* Here we need to extract instantiated quantifiers
                  e.g.:
 
                  if we unify
@@ -555,38 +561,32 @@ fun rec_env ->
 
                  by pulling out a and b from the ?a quantifier (which
                  was instantiated to (a) -> b).
+
+                 Generalise.extract_quantifiers does this.
+
+                 We then propagate any changes due to unification of
+                 the bodies back into the quantifiers.
               *)
 
-              (* need to expose an API in Generalise to get
-                 quantifiers from rows and presence information *)
+                distinct_rigid_check (ls, lstatus);
+                distinct_rigid_check (rs, rstatus);
 
-              (* propagate any changes due to unification of the bodies back into the quantifiers *)
-
-              (* The normalisation procedure (normalise_quantifiers) is now somewhat redundant.
-                 Generalise.expand_quantifiers updates the quantifiers and removes duplicates.
-
-                 What we really need to do here is check that all rigid
-                 quantifiers in the source are in one-to-one correspondence with
-                 a subset of the rigid quantifiers in the target (for both the
-                 left and the right hand sides).
-
-                 Furthermore, after expanding, we need to ensure that
-                 all quantifiers in the target were present in the
-                 source.
-
-                 It seems highly likely that we should be able to simplify this code.
-              *)
-              let ls = normalise_quantifiers (ls, lstatus) in
-              let rs = normalise_quantifiers (rs, rstatus) in
-
-              let ls = Generalise.expand_quantifiers ls in
-              let rs = Generalise.expand_quantifiers rs in
-
-              let ls = normalise_quantifiers (ls, List.map (fun _ -> `Flexible) ls) in
-              let rs = normalise_quantifiers (rs, List.map (fun _ -> `Flexible) rs) in
+              let ls = Generalise.extract_quantifiers ls in
+              let rs = Generalise.extract_quantifiers rs in
 
               let lvars = collect ls IntSet.empty in
               let rvars = collect rs IntSet.empty in
+
+              (* throw away any rigid quantifiers that weren't in the
+                 original set of quantifiers, as they must be unbound
+                 or bound at an outer scope *)
+              let ls, rs =
+                let filter =
+                  List.filter
+                    (fun q -> not (is_rigid_quantifier q)
+                       || IntSet.mem (Types.var_of_quantifier q) original_vars)
+                in
+                  filter ls, filter rs in
 
               (* throw away any unpartnered flexible quantifiers
                  raise an error for unpartnered rigid quantifiers *)

@@ -184,7 +184,11 @@ let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_ar
 (* let get_row_var_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_row_var_type_args `All bound_vars) *)
 (* let get_presence_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_presence_type_args `All bound_vars) *)
 
-let expand_quantifiers quantifiers =
+(* pull out all the type variables in the quantifiers, as quantifiers,
+   e.g. if a quantifier gets instantiated as (a) -> b, then that
+   results in two quantifiers: a and b.
+*)
+let extract_quantifiers quantifiers =
   let quantifier_type_args =
     function
       | `TypeVar (_, point) ->
@@ -233,7 +237,25 @@ let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = Types.quantifiers_of_type_args type_args in
     let () = List.iter rigidify_quantifier quantifiers in
-    let quantified = Types.for_all (quantifiers, t) in 
+    let quantified = Types.for_all (quantifiers, t) in
+      (* Make sure that any existing quantifiers are accounted for.
+         This can be necessary if we have type annotations involving
+         explicit quantifiers.
+      *)
+    let quantifiers, type_args =
+      begin
+        let qs =
+          match quantified with
+            | `ForAll (qs, _) ->
+                Types.unbox_quantifiers qs
+            | _ -> []
+        in
+          if List.length qs <> List.length quantifiers then
+            qs, (List.map Types.type_arg_of_quantifier qs)
+          else
+            quantifiers, type_args
+      end
+    in
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
       ((quantifiers, type_args), quantified)
 

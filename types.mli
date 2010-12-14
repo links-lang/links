@@ -111,6 +111,10 @@ type environment        = datatype Env.String.t
 
 val concrete_type : datatype -> datatype
 
+val normalise_datatype : datatype -> datatype
+val normalise_row : row -> row
+val normalise_typing_environment : typing_environment -> typing_environment
+
 val hoist_quantifiers : datatype -> unit
 
 val is_rigid_quantifier : quantifier -> bool

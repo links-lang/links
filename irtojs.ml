@@ -13,6 +13,13 @@ let js_hide_database_info = Basicsettings.Js.hide_database_info
 
 let get_js_lib_url () = Settings.get_value js_lib_url
 
+(* strip any top level polymorphism from an expression *)
+let rec strip_poly =
+  function
+    | `TAbs (_, e)
+    | `TApp (e, _) -> strip_poly e
+    | e -> e
+
 (** Intermediate language *)
 type code = | Var    of string
             | Lit    of string
@@ -445,45 +452,49 @@ struct
         b, o#bind_name b
 
     method tail_computation =
-      fun e ->
+      fun e ->        
         match e with
-          | `Apply (`TApp (`Variable v, _), [cont])
-          | `Apply (`Variable v, [cont]) when VEnv.lookup venv v = "pickleCont" ->
-              (* an instance of [pickleCont(cont)] *)
-              let f =
-                match cont with
-                  | `TApp (`Variable f, _)
-                  | `Variable f -> f
-                  | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
-
-              (* hereafter [cont] is a variable, [`Variable f] *)
-
-              let e, t, o = super#tail_computation e in
-              let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
-              let concat = `Variable (Env.String.lookup nenv "Concat") in
-
-              let lam = 
-                let _tyvars, xsb, body = VEnv.lookup fun_env f in
-                  (List.map Var.var_of_binder xsb, body) in
-              let fv = IntMap.find f closures in
-
-              let func = Value.marshal_value
-                (`RecFunction([f, lam],
-                              Value.empty_env closures, 
-                              f, `Local)) in
-              let fields =
-                IntSet.fold
-                  (fun x fields ->
-                     StringMap.add (string_of_int x) (`Variable x) fields)
-                  fv
-                  StringMap.empty
-              in
-              let json_args =
-                  `ApplyPure (stringifyB64,
-                              [`Extend (fields, None)])
-              in
-                `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
-          | e -> super#tail_computation e
+          | `Apply (f, [cont]) ->
+              let f = strip_poly f in
+                begin
+                  match f with
+                    | `Variable v when VEnv.lookup venv v = "pickleCont" ->
+                        (* an instance of [pickleCont(cont)] *)
+                        let f =
+                          match strip_poly cont with
+                            | `Variable f -> f
+                            | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
+                          
+                        (* hereafter [cont] is a variable, [`Variable f] *)
+                          
+                        let e, t, o = super#tail_computation e in
+                        let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
+                        let concat = `Variable (Env.String.lookup nenv "Concat") in
+                          
+                        let lam = 
+                          let _tyvars, xsb, body = VEnv.lookup fun_env f in
+                            (List.map Var.var_of_binder xsb, body) in
+                        let fv = IntMap.find f closures in
+                          
+                        let func = Value.marshal_value
+                          (`RecFunction([f, lam],
+                                        Value.empty_env closures, 
+                                        f, `Local)) in
+                        let fields =
+                          IntSet.fold
+                            (fun x fields ->
+                               StringMap.add (string_of_int x) (`Variable x) fields)
+                            fv
+                            StringMap.empty
+                        in
+                        let json_args =
+                          `ApplyPure (stringifyB64,
+                                      [`Extend (fields, None)])
+                        in
+                          `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
+                    | _ -> super#tail_computation (`Apply (f, [cont]))
+              end
+          | _ -> super#tail_computation e
   end
 
   let bindings envs bindings =
@@ -598,11 +609,7 @@ let rec generate_value env : Ir.value -> code =
           generate_xml env name attributes children
 
       | `ApplyPure (f, vs) ->
-          let f =
-            match f with
-              | `TApp (f, _) -> f
-              | f -> f
-          in
+          let f = strip_poly f in
             begin
               match f with
                 | `Variable f ->
@@ -726,35 +733,32 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
       | `Return v ->           
           callk_yielding kappa (gv v)
       | `Apply (f, vs) ->
-          let f =
-            match f with
-              | `TApp (f, _) -> f
-              | f -> f
-          in
-            begin match f with
-              | `Variable f ->
-                  let f_name = VEnv.lookup env f in
-                    begin
-                      match vs with
-                        | [l; r] when Arithmetic.is f_name ->
-                            callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
-                        | [l; r] when StringOp.is f_name ->
-                            callk_yielding kappa (StringOp.gen (gv l, f_name, gv r))
-                        | [l; r] when Comparison.is f_name ->
-                            callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
-                        | [v] when f_name = "negate" || f_name = "negatef" ->
-                            callk_yielding kappa (Unop ("-", gv v))
-                        | _ ->
-                            if Lib.is_primitive f_name
-                              && not (List.mem f_name cps_prims)
-                              && Lib.primitive_location f_name <> `Server 
-                            then
-                              Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
-                            else
-                              apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
-                    end
-              | _ ->
-                  apply_yielding (gv f, [Lst (List.map gv vs); kappa])
+          let f = strip_poly f in
+            begin
+              match f with
+                | `Variable f ->
+                    let f_name = VEnv.lookup env f in
+                      begin
+                        match vs with
+                          | [l; r] when Arithmetic.is f_name ->
+                              callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
+                          | [l; r] when StringOp.is f_name ->
+                              callk_yielding kappa (StringOp.gen (gv l, f_name, gv r))
+                          | [l; r] when Comparison.is f_name ->
+                              callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
+                          | [v] when f_name = "negate" || f_name = "negatef" ->
+                              callk_yielding kappa (Unop ("-", gv v))
+                          | _ ->
+                              if Lib.is_primitive f_name
+                                && not (List.mem f_name cps_prims)
+                                && Lib.primitive_location f_name <> `Server 
+                              then
+                                Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
+                              else
+                                apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
+                      end
+                | _ ->
+                    apply_yielding (gv f, [Lst (List.map gv vs); kappa])
             end
       | `Special special ->
           generate_special env special kappa

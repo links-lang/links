@@ -112,6 +112,7 @@ class fold :
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
+    method tyvar           : tyvar -> 'self
     method datatype        : datatype -> 'self
     method datatype'       : datatype' -> 'self
     method type_arg        : type_arg -> 'self
