@@ -1228,7 +1228,8 @@ let patch_prelude_funs tyenv =
 	 ("any", datatype "((a) -> Bool, [a]) -> Bool");
 	 ("nubBase", datatype "([a::Base]) -> [a::Base]");
 	 ("takeWhile", datatype "((a) -> Bool, [a]) -> [a]");
-	 ("dropWhile", datatype "((a) -> Bool, [a]) -> [a]")]
+	 ("dropWhile", datatype "((a) -> Bool, [a]) -> [a]");
+	 ("reverse", datatype "[a] -> [a]")]
         tyenv.Types.var_env}
 
 let impl : located_primitive -> primitive option = function

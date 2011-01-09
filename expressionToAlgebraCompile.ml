@@ -1424,6 +1424,17 @@ and compile_conversion_op env loop arg dest_type  =
 	fs = Fs.empty;
       }
 
+and compile_reverse env loop l =
+  let ti_l = compile_expression env loop l in
+  let q' =
+    ADag.mk_project
+      ([Helpers.prj iter; (pos, pos')] @ Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs)))
+      (ADag.mk_rank
+	 (pos', [(pos, A.Descending)])
+	 ti_l.q)
+  in
+    { ti_l with q = q' }
+
 and apply_primitive env loop f args =
   match f, args with
     | "+", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Add) `IntType op1 op2
@@ -1462,6 +1473,7 @@ and apply_primitive env loop f args =
     | "takeWhile", [p; l] -> compile_takewhile env loop p l
     | "dropWhile", [p; l] -> compile_dropwhile env loop p l
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
+    | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")

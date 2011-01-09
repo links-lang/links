@@ -206,7 +206,8 @@ struct
       StringSet.add 
       ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
        "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
-       "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";]
+       "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";
+       "reverse"]
       StringSet.empty
 
   let rec lookup bound (val_env, exp_env) var =
@@ -736,7 +737,7 @@ module Annotate = struct
 		| "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
 		    (* `List -> `Atom *)
 		    [`List], `Atom
-		| "concat" | "tl" | "nubBase" ->
+		| "concat" | "tl" | "nubBase" | "reverse" ->
 		    (* `List -> `List *)
 		    [`List], `List
 		| "floatToInt" ->
