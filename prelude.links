@@ -134,6 +134,8 @@ fun member(e, l) {
 	}
 }
 
+fun foo(x) { x }
+
 fun nub(l) {
 	fun nub_1(d, x) {
 		if (member(x, d))
