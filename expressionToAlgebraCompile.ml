@@ -1285,15 +1285,11 @@ and compile_case env loop value cases =
   (* compile value to be matched *)
   let ti_v = compile_expression env loop value in
 
-  let _, q_v', map, _loop_v = Helpers.lift ti_v.q ti_v.cs in
-
-  let env' = Helpers.lift_env map env inner outer in
-
-  let case env vs_v tag (var, case_exp) results =
+  let case env tag (var, case_exp) results =
     let key = tagkey tag in
-    let q_matching = select_key q_v' key in
+    let q_matching = select_key ti_v.q key in
       try 
-	let itbl = fst (Vs.lookup vs_v (2, key)) in
+	let itbl = fst (Vs.lookup ti_v.vs (2, key)) in
 	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
 	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
@@ -1304,19 +1300,9 @@ and compile_case env loop value cases =
 	results
   in
 
-  let results = StringMap.fold (case env' ti_v.vs) cases [] in
+  let results = StringMap.fold (case env) cases [] in
 
-  let result_union = Helpers.sequence_construction results ~newpos:false in
-  let q' = 
-    (* map back into original iteration scope *)
-    ADag.mk_project
-      ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets result_union.cs))))
-      (ADag.mk_eqjoin
-	 (iter, inner)
-	 result_union.q
-	 map)
-  in
-    { result_union with q = q' }
+    Helpers.sequence_construction results ~newpos:false
 
 and compile_case_default env loop value cases default =
 
@@ -1354,15 +1340,11 @@ and compile_case_default env loop value cases default =
   (* compile value to be matched *)
   let ti_v = compile_expression env loop value in
 
-  let _, q_v', map, _loop_v = Helpers.lift ti_v.q ti_v.cs in
-
-  let env' = Helpers.lift_env map env inner outer in
-
-  let case env vs_v tag (var, case_exp) (results, q_other) =
+  let case tag (var, case_exp) (results, q_other) =
     let key = tagkey tag in
     let q_matching, q_other' = select_key q_other key in
       try 
-	let itbl = fst (Vs.lookup vs_v (2, key)) in
+	let itbl = fst (Vs.lookup ti_v.vs (2, key)) in
 	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
 	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
@@ -1373,27 +1355,17 @@ and compile_case_default env loop value cases default =
 	(results, q_other')
   in
 
-  let default_case env q_other (default_var, default_exp) =
+  let default_case q_other (default_var, default_exp) =
     let loop' = ADag.mk_project [Helpers.prj iter] q_other in
     let env' = AEnv.bind env (default_var, (compile_unit loop')) in
     let env' = Helpers.fragment_env loop' env' in
       compile_expression env' loop' default_exp
   in
 
-  let explicit_case_results, q_other = StringMap.fold (case env' ti_v.vs) cases ([], q_v') in
+  let explicit_case_results, q_other = StringMap.fold case cases ([], ti_v.q) in
 
-  let all_results = (default_case env' q_other default) :: explicit_case_results in
-  let result_union = Helpers.sequence_construction all_results ~newpos:false in
-  let q' = 
-    (* map back into original iteration scope *)
-    ADag.mk_project
-      ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets result_union.cs))))
-      (ADag.mk_eqjoin
-	 (iter, inner)
-	 result_union.q
-	 map)
-  in
-    { result_union with q = q' }
+  let all_results = (default_case q_other default) :: explicit_case_results in
+    Helpers.sequence_construction all_results ~newpos:false
 
 and compile_wrong loop =
   let q_error = 
