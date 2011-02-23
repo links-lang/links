@@ -353,10 +353,12 @@ struct
     method with_tyenv : environment -> 'self_type = fun tyenv -> {< tyenv = tyenv >}
 
     method bindings : bindings -> bindings * 'self_type = fun bs ->
+      Debug.print "super bindings";
       List.fold_right
-	(fun (((x, (t, _, _)), _, _) as b) (bs, o) ->
+	(fun (((x, (t, _, _)), _tyvars, tc) as b) (bs, o) ->
 	   (* FIXME: really need to update the tyenv? should already be complete *)
 	   let env = Env.Int.bind tyenv (x, t) in
+	   let tc, _, o = o#qr tc in
 	     b :: bs, o#with_tyenv env)
 	bs
 	([], o)
@@ -380,6 +382,7 @@ struct
         | `Float _ -> c, Types.float_type, o
 
     method qr : qr -> (qr * Types.datatype * 'self_type) = fun e ->
+      Debug.print ("super#qr " ^ (Show.show show_qr e));
       match e with
 	| `Constant c -> 
 	    let c, t, o = o#constant c in
@@ -490,7 +493,18 @@ struct
 	| `Let (bindings, comp) ->
 	    let bindings, o = o#bindings bindings in
 	    let comp, t, o = o#qr comp in
-	      `Let (bindings, comp), t, o
+	      begin
+		match bindings with
+		  | [] -> comp, t, o
+		  | bindings ->
+		      begin
+			match comp with
+			  | `Let (bsi, tci) ->
+			      `Let (bindings @ bsi, tci), t, o
+			  | comp ->
+			      `Let (bindings, comp), t, o
+		      end
+	      end
 	| `Wrong t ->
 	    e, t, o
   end
@@ -502,7 +516,9 @@ let qr_of_query tyenv env comp =
   let binding name (value, _) (bindings, tyenv) =
     (* Debug.f "qr_of_query tyenv %d" name; *)
     let t = Env.Int.lookup tyenv name in
-    (* FIXME: really no tyvars on value-bindings? *)
+    (* FIXME: really no tyvars on value-bindings?
+       rationale: type variables in env-values can only stem from function types,
+       those are already quantified over in the function's type *)
     (* let tyvars = TypeUtils.quantifiers t in *)
     let tyvars = [] in
     let binder = (name, (t, "", `Local)) in

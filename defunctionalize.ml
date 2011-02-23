@@ -11,7 +11,7 @@ struct
     
     method get_cm = cm
 
-    method var var =
+    method! var var =
       let prev = 
 	match IntMap.lookup var cm with
 	  | Some c -> c
@@ -33,7 +33,7 @@ struct
 
     val census = census
 
-    method bindings : bindings -> bindings * 'self_type = fun bs ->
+    method! bindings : bindings -> bindings * 'self_type = fun bs ->
       List.fold_right
 	(fun (((x, (t, _, _)), _tyvars , _q) as b) (bs, o) ->
 	   match IntMap.lookup x census with
@@ -45,7 +45,7 @@ struct
 	bs
 	([], o)
 
-    method qr q =
+    method! qr q =
       let q, t, o = super#qr q in
 	match q with
 	  | `Let (bs, tc) -> 
@@ -73,13 +73,11 @@ struct
 
     val census = census
 
-    method bind name value =
-      {< env = Env.Int.bind env (name, value) >}
-
     (* FIXME: create type abstraction if type is quantified over *)
     method bind_if_inlineable name value tyvars =
       match IntMap.lookup name census with
 	| Some c when c < 2 -> 
+	    Debug.f "bind %d" name;
 	    let value = 
 	      begin
 		match tyvars with
@@ -90,10 +88,16 @@ struct
 	      end
 	    in
 	      {< env = Env.Int.bind env (name, value) >}
-	| None | Some _ -> o
+	| None ->
+	    Debug.f "don't bind %d 1" name;
+	    o
+	| Some _ -> 
+	    Debug.f "don't bind %d 2" name;
+	    o
 
     method bindings bs = 
-      let bs, o = super#bindings bs in
+      Debug.print "bindings";
+      (*let bs, o = super#bindings bs in *)
       List.fold_right
 	(fun ((name, _) as binder, tyvars, qr) (bs, o) ->
 	   let qr, _, o = o#qr qr in
@@ -104,16 +108,30 @@ struct
 
     method apply : qr -> qr list -> qr * Types.datatype * 'self_type = fun f args ->
       match f with
-	| `Fun (binders, _tyvars, body, _) ->
+	| `Fun (binders, _tyvars, body, _) 
+	| `TApp (`Fun (binders, _tyvars, body, _), _) ->
 	    (* FIXME: handle typevars for argument bindings *)
 	    Debug.print "inline function";
 	    let arg_bindings = List.map (fun (b, a) -> (b, [], a)) (List.combine binders args) in
+	      Debug.print ("apply " ^ (Show.show show_qr body));
+	      Debug.print ("apply args " ^ (Show.show show_bindings arg_bindings));
 	      o#qr (`Let (arg_bindings, body))
+	| `Let (bindings, `Fun (binders, _tyvars, body, _)) ->
+	    Debug.print "inline function";
+	    let arg_bindings = List.map (fun (b, a) -> (b, [], a)) (List.combine binders args) in
+	      Debug.print ("apply " ^ (Show.show show_qr body));
+	      Debug.print ("apply args " ^ (Show.show show_bindings arg_bindings));
+	      o#qr (`Let (bindings @ arg_bindings, body))
 	(* FIXME: handle case/if functional expressions *)
 	| _ -> o#qr (`Apply (f, args))
 
-    method qr q =
-      let q, t, o = super#qr q in
+    method! qr q =
+      Debug.print "call super";
+      let q, t, _ = super#qr q in 
+	Debug.print "finished calling super";
+(*	let t = `Not_typed in *)
+	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_qr) env));
+	Debug.print ("o#qr " ^ (Show.show show_qr q));
 	match q with
 	  | `Apply (f, args) -> 
 	      let args, _, o = o#list (fun o -> o#qr) args in
@@ -121,10 +139,11 @@ struct
 		o#apply f args
 	  | `Constant _ -> q, t, o
 	  | `Variable name ->
-	      let _, t, o = super#qr q in
 		begin
 		  match Env.Int.find env name with
-		    | Some e -> e, t, o
+		    | Some e -> 
+			Debug.f "inline %d" name;
+			e, t, o
 		    | None -> q, t, o
 		end
 	| `Extend (extend_fields, r) ->
@@ -154,6 +173,7 @@ struct
 	| `PrimitiveFun _ ->
 	    q, t, o
 	| `Fun (binders, tyvars, body, ft) ->
+	    Debug.print "fun";
 	    let body, _, o = o#qr body in
 	      `Fun (binders, tyvars, body, ft), t, o
 	| `Case (v, cases, default) ->
@@ -173,7 +193,9 @@ struct
 	    let eb, _, o = o#qr eb in
 	      `If (c, tb, eb), t, o
 	| `Let (bs, tc) ->
+	    Debug.print "let";
 	    let bs, o = o#bindings bs in
+	      Debug.print "tailcomp";
 	    let tc, _, o = o#qr tc in
 	      begin
 		match tc with
@@ -207,17 +229,10 @@ struct
 end
 
 let optphase tyenv q =
-  let q = 
-  ElimDeadDefs.eliminate 
-    tyenv 
-    (Census.census 
-       tyenv 
-       q) 
-    (Inliner.inline 
-       tyenv 
-       (Census.census tyenv q)
-       q)
-  in
+  let census = Census.census tyenv q in
+    Debug.print ">>>>> inliner";
+  let q = Inliner.inline tyenv census q in
+  let q = ElimDeadDefs.eliminate tyenv (Census.census tyenv q) q in
     Debug.print ("inlined\n" ^ (Show.show show_qr q));
     q
     
@@ -234,4 +249,9 @@ let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
   let optphase = optphase tyenv in
     applyn optphase q 1
+(*
+  let q = (fst3 ((new Transform.visitor tyenv)#qr q))  in
+    Debug.print (Show.show show_qr q);
+    q
     
+*)
