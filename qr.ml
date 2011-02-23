@@ -77,12 +77,14 @@ type qr =
   | `List of qr list
   | `PrimitiveFun of string * Var.var option
 (*  | `Fun of binder list * qr * Types.datatype * env *)
+  (* FIXME: add tyvar list to fun (one or per parameter?) *)
   | `Fun of binder list * qr * Types.datatype
 
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
   | `If of qr * qr * qr
   
+  (* FIXME: add tyvars list (quantifiers) to let *)
   | `Let of bindings * qr
 
   | `Wrong of Types.datatype ]
@@ -99,6 +101,7 @@ and bindings bs = List.map binding bs
 
 and binding b =
   match b with
+    (* FIXME: maintain tyvar list on bindings *)
     | `Let (binder, (_tyvars, tc)) ->
 	(binder, tail_computation tc)
     | `Fun ((_, (t, _, _)) as binder, (_tyvars, binders, body), _loc) ->
@@ -152,6 +155,7 @@ let local_freevars tyenv xs comp =
 
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
+(* FIXME: maintain tyvar lists when creating bindings (types that are quantified) *)
 let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
  function
    | `Bool b -> `Constant (`Bool b), tyenv
@@ -167,19 +171,6 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
        let s = IntMap.find f (val_of !prelude_primitive_namemap) in
        `PrimitiveFun (s, None), tyenv
    | `RecFunction ([(f, (xs, body))], locals, f', _scope) ->
-(*
-       assert (f = f');
-       let t = Env.Int.lookup tyenv f in
-       let binders = List.map (fun (x, t) -> (x, (t, "", `Local))) (List.combine xs (TypeUtils.arg_types t)) in
-       let env = Value.fold
-	 (fun x (value, _scope) env ->
-	    Env.Int.bind env (x, qr_of_value `Not_typed tyenv value))
-	 locals
-	 Env.Int.empty
-       in
-       let body = computation body in
-	 `Fun (binders, body, t, env)
-*)
        assert (f = f');
        (* Debug.f "qr_of_value tyenv %d" f; *)
        let t = Env.Int.lookup tyenv f in
@@ -289,6 +280,8 @@ sig
 
     method with_tyenv : environment -> 'self_type
 
+    method var : var -> var * 'self_type
+
     method bindings : bindings -> bindings * 'self_type
 
     method binders : binder list -> 'self_type
@@ -311,6 +304,9 @@ struct
 
     method lookup_type : var -> Types.datatype = fun var ->
       Env.Int.lookup tyenv var
+
+    method var : var -> var * 'self_type = fun var ->
+      var, o
 
     method list :
       'a.
@@ -357,6 +353,7 @@ struct
     method bindings : bindings -> bindings * 'self_type = fun bs ->
       List.fold_right
 	(fun (((x, (t, _, _)), _) as b) (bs, o) ->
+	   (* FIXME: really need to update the tyenv? should already be complete *)
 	   let env = Env.Int.bind tyenv (x, t) in
 	     b :: bs, o#with_tyenv env)
 	bs
@@ -387,6 +384,7 @@ struct
 	      `Constant c, t, o
 	| `Variable var -> 
 	    let t = o#lookup_type var in
+	    let var, o = o#var var in
 	      `Variable var, t, o
 	| `Extend (fields, base) ->
             let (fields, field_types, o) = o#name_map (fun o -> o#qr) fields in
@@ -424,6 +422,7 @@ struct
                     prerr_endline ("Arity mismatch in type application (Ir.Transform)");
                     prerr_endline ("expression: "^Show.show show_qr (`TApp (v, ts)));
                     prerr_endline ("type: "^Types.string_of_datatype t);
+		    prerr_endline ("raw type: "^Show.show Types.show_typ t);
                     prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
                     failwith "fatal internal error"
               end

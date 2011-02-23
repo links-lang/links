@@ -66,6 +66,49 @@ and bindings = (binder * qr) list
 and env = qr Env.Int.t 
     deriving (Show)
 
+module type TRANSFORM =
+sig
+  type environment = Types.datatype Env.Int.t
+
+  class visitor : environment -> 
+  object ('self_type)
+
+    val tyenv : environment
+
+    method lookup_type : var -> Types.datatype
+
+    method list :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a list -> 'a list * Types.datatype list * 'self_type
+
+    method name_map :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
+
+    method option :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a option -> 'a option * Types.datatype option * 'self_type
+
+    method with_tyenv : environment -> 'self_type
+
+    method var : var -> var * 'self_type
+
+    method bindings : bindings -> bindings * 'self_type
+
+    method binders : binder list -> 'self_type
+    method binder : binder -> 'self_type
+
+    method constant : constant -> constant * Types.datatype * 'self_type
+
+    method qr : qr -> (qr * Types.datatype * 'self_type)
+  end
+end
+
+module Transform : TRANSFORM
+
 val computation : Ir.computation -> qr
 
 val qr_of_query : Types.datatype Env.Int.t -> Value.env -> Ir.computation -> (qr * Types.datatype Env.Int.t)

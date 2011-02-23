@@ -127,6 +127,7 @@ SOURCES = $(OPC)                		\
 	  cs.ml cs.mli				\
 	  exptodot.ml				\
 	  qr.mli qr.ml				\
+	  defunctionalize.mli defunctionalize.ml \
 	  query2.ml query2.mli			\
 	  components.ml				\
 	  expressionToAlgebraDefinitions.ml	\
