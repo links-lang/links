@@ -44,35 +44,53 @@ type qr =
   | `Extend of qr name_map * qr option
   | `Project of name * qr
   | `Erase of name_set * qr
-  | `Inject of name * qr * Types.datatype
+  | `Inject of name * qr
 
-  | `TApp of qr * tyarg list
-  | `TAbs of tyvar list * qr
-  
-  | `Database of Value.database * string
   | `Table of Value.table
-  | `List of qr list
-
+  | `Singleton of qr
+  | `Concat of qr list
   | `Apply of qr * qr list
-  | `Case of qr * (binder * qr) name_map * (binder * qr) option
-  | `If of qr * qr * qr
-  | `Computation of binding list * qr
+  | `Case of qr * (Var.var * qr) name_map * (Var.var * qr) option
+  | `If of qr * qr * qr option
   
-  | `Wrong of Types.datatype ]
-and funct = binder * binder list * qr * tyvar list
-and binding = 
-  [ `Let of (binder * tyvar list * qr)
-  | `PFun of binder * qr option
-  | `Fun of funct ]
-and env = qr Env.Int.t 
+  | `Computation of binding list * qr
+  | `Primitive of string
+  | `Lambda of Var.var list * qr
+
+  | `Wrong ]
+and binding = [ `Let of Var.var * qr ]
     deriving (Show)
 
-val var_of_binding : binding -> var
+module ImpType :
+sig
 
-val computation : Ir.computation -> qr
+  type imptype = [`Atom | `List] deriving (Show)
 
-val qr_of_query : Types.datatype Env.Int.t -> Value.env -> Ir.computation -> (qr * Types.datatype Env.Int.t)
+  type tqr =
+      [ `Lambda of ((Var.var list * tqr) * imptype)
+      | `If of (tqr * tqr * tqr option) * imptype
+      | `Table of Value.table * imptype
+      | `Singleton of tqr * imptype 
+      | `Concat of tqr list * imptype
+      | `Extend of tqr name_map * tqr option * imptype
+      | `Project of (string * tqr) * imptype
+      | `Erase of (name_set * tqr) * imptype
+      | `Inject of (string * tqr) * imptype
+      | `Apply of (tqr * tqr list) * imptype
+      | `Primitive of string 
+      | `Variable of Var.var * imptype
+      | `Constant of Constant.constant * imptype
+      | `Box of tqr * imptype
+      | `Unbox of tqr * imptype
+      | `Case of (tqr * (Var.var * tqr) name_map * (Var.var * tqr) option) * imptype
+      | `Computation of binding list * tqr * imptype
+      | `Wrong of imptype ]
+  and binding = [ `Let of Var.var * tqr ]
+      deriving (Show)
 
-val type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype
+  val string_of_tqr : tqr -> string
 
-val complete_tyenv : Types.datatype Env.Int.t -> qr -> Types.datatype * Types.datatype Env.Int.t
+end
+
+val pipeline : Value.env -> Types.datatype Env.Int.t -> Ir.computation -> ImpType.tqr
+

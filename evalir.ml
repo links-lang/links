@@ -366,10 +366,7 @@ module Eval = struct
 	Irtodot.output_dot e env "ir_query.dot";
 	Qr.prelude_primitives ();
 	let tyenv = val_of !tenv in
-	let q, _ = Qr.qr_of_query tyenv env e in
-	  ignore (Defunctionalize.pipeline q tyenv);
-	(* let e' = Query3.pipeline (val_of !tenv) env e in
-	  Irtodot.output_dot e' env "ir_query_optimized.dot"; *)
+	  ignore (Qr.pipeline env tyenv e);
 	  exit 0;
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =

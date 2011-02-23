@@ -10,7 +10,7 @@ let prelude_primitive_names =
     ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
      "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
      "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";
-     "reverse"]
+     "reverse"; "filter"; "ignore"]
 
 let prelude_primitive_vars = ref None
 let prelude_primitive_namemap = ref None
@@ -67,49 +67,40 @@ type qr =
   | `Extend of qr name_map * qr option
   | `Project of name * qr
   | `Erase of name_set * qr
-  | `Inject of name * qr * Types.datatype
+  | `Inject of name * qr
 
-  | `TApp of qr * tyarg list
-  | `TAbs of tyvar list * qr
-  
-  | `Database of Value.database * string
   | `Table of Value.table
-  | `List of qr list
+  | `Singleton of qr
+  | `Concat of qr list
   | `Apply of qr * qr list
-  | `Case of qr * (binder * qr) name_map * (binder * qr) option
-  | `If of qr * qr * qr
+  | `Case of qr * (Var.var * qr) name_map * (Var.var * qr) option
+  | `If of qr * qr * qr option
   
   | `Computation of binding list * qr
+  | `Primitive of string
+  | `Lambda of Var.var list * qr
 
-  | `Wrong of Types.datatype ]
-and funct = binder * binder list * qr * tyvar list
-and binding = 
-  [ `Let of binder * tyvar list * qr
-  | `PFun of binder * qr option
-  | `Fun of funct ]
-and env = qr Env.Int.t 
+  | `Wrong ]
+and binding = [ `Let of Var.var * qr ]
     deriving (Show)
-
-let var_of_binding = 
-  function
-    | `Let ((name, _), _, _) 
-    | `Fun ((name, _), _, _, _)
-    | `PFun ((name, _), _) -> name
 
 let rec computation (bs, tc) : qr =
   let bs = bindings bs in
   let e = tail_computation tc in
-    `Computation (bs, e)
+    match e with
+      | `Computation (bs', e) ->
+	  `Computation (bs @ bs', e)
+      | _ -> `Computation (bs, e)
 
 and bindings bs = List.map binding bs
 
 and binding (b : Ir.binding) : binding =
   match b with
-    | `Let (binder, (tyvars, tc)) ->
-	`Let (binder, tyvars, tail_computation tc)
-    | `Fun (binder, (tyvars, binders, body), _loc) ->
+    | `Let (binder, (_tyvars, tc)) ->
+	`Let (Var.var_of_binder binder, tail_computation tc)
+    | `Fun (binder, (_tyvars, binders, body), _loc) ->
 	(* FIXME: really have tyvars on `Fun AND binding? *)
-	`Fun (binder, binders, computation body, tyvars)
+	`Let (Var.var_of_binder binder, `Lambda ((List.map Var.var_of_binder binders), computation body))
     | _ -> failwith "foo"
 
 and value v =
@@ -122,11 +113,12 @@ and value v =
 	  `Extend (extend_fields, r)
     | `Project (label, r) -> `Project (label, value r)
     | `Erase (labels, r) -> `Erase (labels, value r)
-    | `Inject (tag, v, t) -> `Inject (tag, value v, t)
-    | `TAbs (tyvars, v) -> `TAbs (tyvars, value v)
-    | `TApp (v, tyargs) -> `TApp (value v, tyargs)
+    | `Inject (tag, v, _) -> `Inject (tag, value v)
     | `ApplyPure (f, args) -> `Apply (value f, List.map value args)
-    | _ -> failwith "unsupported value"
+    | `TApp (v, _) | `TAbs (_, v) -> value v
+    | _ -> 
+	Debug.print (Show.show Ir.show_value v);
+	failwith "unsupported value"
 
 and tail_computation tc =
   match tc with
@@ -135,317 +127,212 @@ and tail_computation tc =
     | `Special s -> special s
     | `Case (v, cases, default) ->
 	let v = value v in
-	let case (binder, body) = (binder, computation body) in
+	let case (binder, body) = (Var.var_of_binder binder, computation body) in
 	let cases = StringMap.map case cases in
 	let default = opt_map case default in
 	  `Case (v, cases, default)
-    | `If (c, t, e) -> `If (value c, computation t, computation e)
+    | `If (c, t, e) -> `If (value c, computation t, Some (computation e))
 
 and special s =
   match s with
-    | `Wrong t -> `Wrong t
+    | `Wrong _ -> `Wrong
 (*    | `Database
     | `Table
     | `Query *)
     | _ -> failwith "unsupported special"
 
-let local_freevars tyenv xs comp =
-  let bound_vars = IntSet.from_list xs in
-  let freevars = Ir.FreeVars.computation tyenv bound_vars comp in
-  let freevars = IntSet.diff freevars Lib.primitive_vars in
-    IntSet.diff freevars (val_of !prelude_primitive_vars)
 
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
-let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
+let rec inline_primitive env (q : qr) : qr =
+  let rec binding b = 
+    let `Let (name, e) = b in
+      `Let (name, replace e) 
+  and replace q =
+    match q with
+      | `Constant _ | `Table _ | `Wrong -> q
+      | `Project (label, v) -> `Project (label, replace v)
+      | `Extend (extend_fields, r) -> `
+	  Extend (StringMap.map replace extend_fields, opt_map replace r)
+      | `Erase (labels, v) -> `Erase (labels, replace v)
+      | `Inject (tag, v) -> `Inject (tag, replace v)
+      | `Concat xs -> `Concat (List.map replace xs)
+      | `Apply (f, args) -> `Apply (replace f, List.map replace args)
+      | `Case (v, cases, default) ->
+	  let v = replace v in
+	  let case (binder, body) = (binder, replace body) in
+	  let cases = StringMap.map case cases in
+	  let default = opt_map case default in
+	    `Case (v, cases, default)
+      | `If (c, t, e) -> `If (replace c, replace t, opt_map replace e)
+      | `Computation (bs, tc) -> 
+	  `Computation (List.map binding bs, replace tc)
+      | `Variable var ->
+	  begin
+	    match IntMap.lookup var env with
+	      | Some v -> v
+	      | None -> `Variable var
+	  end
+      | `Primitive s -> `Primitive s
+      | `Lambda (xs, body) -> `Lambda (xs, replace body)
+      | `Singleton v -> `Singleton (replace v)
+  in
+    replace q
+
+module FreeVars =
+struct
+
+  let rec name_map bound proj map =
+    StringMap.fold
+      (fun _ v free -> 
+	 let free' = fv bound (proj v) in
+	   IntSet.union free' free)
+      map
+      IntSet.empty
+
+  and bindings bound bs =
+    List.fold_left
+      (fun (free, bound) (`Let (var, tc)) ->
+	 let bound' = IntSet.add var bound in
+	 let free = IntSet.union (fv bound tc) free in
+	   (free, bound'))
+      (IntSet.empty, bound)
+      bs
+
+  and fv bound = function
+    | `Variable name -> 
+	if not (IntSet.mem name bound) then
+	  IntSet.add name IntSet.empty
+	else
+	  IntSet.empty
+    | `Extend (extend_fields, base) ->
+	let free = 
+	  StringMap.fold
+	    (fun _ v free -> IntSet.union (fv bound v) free)
+	    extend_fields
+	    IntSet.empty
+	in
+	  begin
+	    match base with
+	      | Some r -> IntSet.union (fv bound r) free
+	      | None -> free
+	  end
+    | `Project (_, value) | `Erase (_, value) | `Inject (_, value) 
+    | `Singleton value ->
+	fv bound value
+    | `Computation (bs, tc) ->
+	let free, bound = bindings bound bs in
+	  IntSet.union (fv bound tc) free
+    | `Lambda (xs, body) ->
+	let bound = List.fold_right IntSet.add xs bound in
+	  fv bound body
+    | `Case (v, cases, default) ->
+	let case _ (var, body) free =
+	  IntSet.union (fv (IntSet.add var bound) body) free
+	in
+	let v_free = fv bound v in
+	let cases_free = StringMap.fold case cases IntSet.empty in
+	let default_free = 
+	  opt_app 
+	    (fun (var, body) -> fv (IntSet.add var bound) body) 
+	    IntSet.empty
+	    default 
+	in
+	  IntSet.union_all [v_free; cases_free; default_free]
+    | `Concat xs -> IntSet.union_all (List.map (fv bound) xs)
+    | `If (c, t, Some e) -> IntSet.union_all [fv bound c; fv bound t; fv bound e]
+    | `If (c, t, None) -> IntSet.union_all [fv bound c; fv bound t]
+    | `Table _ | `Primitive _ | `Wrong | `Constant _ ->
+	IntSet.empty
+    | `Apply (f, args) ->
+	IntSet.union_all ((fv bound f) :: (List.map (fv bound) args))
+
+  let freevars = fv
+
+  let boundvars =
+    function
+      | `Fun (binders, _, _, _) -> 
+	  List.fold_right IntSet.add (List.map fst binders) IntSet.empty
+      | `Let (bindings, _) ->
+	  List.fold_right IntSet.add (List.map (fst -<- fst) bindings) IntSet.empty 
+      | `Case (_, cases, default) ->
+	  let case_bound = 
+	    StringMap.fold 
+	      (fun _ ((name, _), _) bound -> IntSet.add name bound)
+	      cases
+	      IntSet.empty
+	  in
+	  let default_bound = opt_app 
+	    (fun ((var, _), _) -> IntSet.singleton var) 
+	    IntSet.empty 
+	    default 
+	  in
+	    IntSet.union case_bound default_bound
+      | _ -> IntSet.empty
+end
+
+let local_freevars xs comp =
+  let bound_vars = IntSet.from_list xs in
+  let freevars = FreeVars.fv bound_vars comp in
+  let freevars = IntSet.diff freevars Lib.primitive_vars in
+    IntSet.diff freevars (val_of !prelude_primitive_vars)
+
+let rec qr_of_value env : Value.t -> qr =
  function
-   | `Bool b -> `Constant (`Bool b), tyenv
-   | `Char c -> `Constant (`Char c), tyenv
-   | `Float f -> `Constant (`Float f), tyenv
-   | `Int i -> `Constant (`Int i), tyenv
-   | `String s -> `Constant (`String s), tyenv
-   | `Database (db, s) -> `Database (db, s), tyenv
-   | `Table t -> `Table t, tyenv
-   | `PrimitiveFunction (fs, _) -> 
-       let name = Env.String.lookup Lib.nenv fs in
-       let t = Env.Int.lookup tyenv name in
-       let binder = (name, (t, fs, `Local)) in
-       (* dispatch is added after defunctionalization *)
-       let binding = `PFun (binder, None) in
-	 (* FIXME: add TAbs if there are type variables *)
-	 (* better: add tyvars to `PFun if the primitive type is quantified over *)
-	 `Computation ([binding], `Variable name), tyenv
+   | `Bool b -> `Constant (`Bool b)
+   | `Char c -> `Constant (`Char c)
+   | `Float f -> `Constant (`Float f)
+   | `Int i -> `Constant (`Int i)
+   | `String s -> `Constant (`String s)
+   | `Table t -> `Table t
+   | `PrimitiveFunction (fs, _) -> `Primitive fs
        
    | `RecFunction ([(f, _)], _, _, _) when IntSet.mem f (val_of !prelude_primitive_vars) ->
        let s = IntMap.find f (val_of !prelude_primitive_namemap) in
-       let t = Env.Int.lookup tyenv f in
-       let binder = (f, (t, s, `Local)) in
-       (* dispatch is added after defunctionalization *)
-       let binding = `PFun (binder, None) in
-	 (* FIXME: add TAbs if there are type variables *)
-	 `Computation ([binding], `Variable f), tyenv
+	 `Primitive s
 
    | `RecFunction ([(f, (xs, body))], locals, f', _scope) ->
        assert (f = f');
-       (* Debug.f "qr_of_value tyenv %d" f; *)
-       let t = Env.Int.lookup tyenv f in
-       let tyvars = TypeUtils.quantifiers t in
-       let arg_binders = List.map (fun (x, t) -> (x, (t, "", `Local))) (List.combine xs (TypeUtils.arg_types t)) in
-       let freevars = local_freevars tyenv xs body in
-       (* Debug.print ("closure freevars " ^ (Show.show IntSet.show_t freevars)); *)
-       let bindings, new_names, tyenv = bindings_from_closure_env tyenv freevars env locals in
-       let body = Ir.ReplaceVars.computation tyenv new_names body in
        let body = computation body in
-       let tyenv = 
-	 Env.Int.fold
-	   (fun name t tyenv ->
-	      match IntMap.lookup name new_names with
-		| Some new_name -> 
-		    let tyenv = Env.Int.bind tyenv (new_name, t) in
-		      Env.Int.bind tyenv (name, t)
-		| None -> Env.Int.bind tyenv (name, t))
-	   tyenv
-	   Env.Int.empty
-       in
-       let fun_binder, fun_var = Var.fresh_var (t, "", `Local) in
-       let (fun_binding : binding) = `Fun (fun_binder, arg_binders, body, tyvars) in
-       let tyenv = Env.Int.bind tyenv (fun_var, t) in
-	 `Computation (bindings @ [fun_binding], `Variable fun_var), tyenv
+       let freevars = local_freevars xs body in
+       let env' : (Value.t * Ir.scope) IntMap.t = restrict (fst3 (Value.shadow env ~by:locals)) freevars in
+       let env' = IntMap.map ((qr_of_value env) -<- fst) env' in
+       let body = inline_primitive env' body in
+	 `Lambda (xs, body)
 	 
    | `RecFunction _ -> failwith "t_of_value: mutually recursive functions"
-   | `List l -> 
-       let elementt = TypeUtils.element_type t in
-       let tyenv, elts =
-	 List.fold_right
-	   (fun elt (tyenv, elts) ->
-	      let elt, tyenv = qr_of_value elementt tyenv env elt in
-		tyenv, elt :: elts)
-	   l
-	   (tyenv, [])
-       in
-       `List elts, tyenv
+   | `List l -> `Concat (List.map (fun v -> `Singleton (qr_of_value env v)) l)
    | `Record fs ->
-       let m, tyenv = 
+       let m = 
 	 List.fold_right
-	   (fun (label, value) (m, tyenv) ->
-	      let fieldt = TypeUtils.project_type label t in
-	      let value, tyenv = qr_of_value fieldt tyenv env value in
-		StringMap.add label value m, tyenv)
+	   (fun (label, value) m ->
+	      let value = qr_of_value env value in
+		StringMap.add label value m)
 	   fs
-	   (StringMap.empty, tyenv)
+	   StringMap.empty
        in
-	 `Extend (m, None), tyenv
+	 `Extend (m, None)
    | `Variant (tag, value) -> 
-       let vt = TypeUtils.variant_at tag t in
-       let v, tyenv = qr_of_value vt tyenv env value in
-	 `Inject (tag, v, t), tyenv
+       let v = qr_of_value env value in
+	 `Inject (tag, v)
    | v -> failwith ("t_of_value: unsupported value " ^ (Show.show Value.show_t v))
 
-and bindings_from_closure_env tyenv freevars valenv closure_env =
-  let env = Value.shadow valenv ~by:closure_env in
-  let env = fst3 env in
-  (*  Debug.print ("closure env domain " ^ (Show.show (Show.show_list Show.show_int) (IntMap.domain env))); *)
-  let env = restrict env freevars in
-  (*  Debug.print ("closure env domain filtered " ^ (Show.show (Show.show_list Show.show_int) (IntMap.domain env))); *)
-
-  let qr name (value, _) (qr_env, new_names, tyenv) =
-    let t = Env.Int.lookup tyenv name in
-    let value', tyenv = qr_of_value t tyenv valenv value in
-    let new_name = Var.fresh_raw_var () in
-    let qr_env = Env.Int.bind qr_env (new_name, value') in
-    let tyenv = Env.Int.bind tyenv (new_name, t) in
-    let new_names = IntMap.add name new_name new_names in
-      qr_env, new_names, tyenv
-
-  in
-  let qr_env, new_names, tyenv = IntMap.fold qr env (Env.Int.empty, IntMap.empty, tyenv) in
-
-  let binding name qr bindings =
-    (* Debug.f "bindings_from_closure_env binding tyenv %d" name; *)
-    let t = Env.Int.lookup tyenv name in
-    let tyvars = TypeUtils.quantifiers t in
-    let binder = (name, (t, "", `Local)) in
-      (`Let (binder, tyvars, qr)) :: bindings
-  in
-  let bindings = List.rev (Env.Int.fold binding qr_env []) in
-    bindings, new_names, tyenv
-
-let type_constant c =
-  match c with
-    | `Bool _ -> Types.bool_type
-    | `Int _ -> Types.int_type
-    | `Char _ -> Types.char_type
-    | `String _ -> Types.string_type
-    | `Float _ -> Types.float_type
-
-(* HACK HACK HACK *)
-let globtyenv = ref Env.Int.empty
-
-let type_binder tyenv (var, (t, _, _)) = 
-  globtyenv := Env.Int.bind !globtyenv (var, t);
-  Env.Int.bind tyenv (var, t)
-
-let type_list xs type_value =
-  List.map type_value xs
-
-let type_name_map map type_value =
-  StringMap.map
-    (fun v -> type_value v)
-    map
-
-let rec bindings tyenv bs =
-  List.fold_left
-    (fun tyenv binding -> 
-       match binding with
-	 | `PFun (binder, _) ->
-	     type_binder tyenv binder
-	 | `Let (binder, _, tc) ->
-	     let tyenv = type_binder tyenv binder in
-	       ignore (type_qr tyenv tc);
-	       tyenv
-	 | `Fun (binder, arg_binders, body, _tyvars) -> 
-	     let tyenv = type_binder tyenv binder in
-	     let tyenv' =
-	       List.fold_left
-		 (fun tyenv b -> type_binder tyenv b)
-		 tyenv 
-		 arg_binders
-	     in
-	       ignore (type_qr tyenv' body);
-	       type_binder tyenv binder)
-    tyenv 
-    bs
-
-(* reconstruct types of qr expressions *)
-and type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
-  fun tyenv q ->
-    let lookup_type = Env.Int.lookup tyenv in
-    let t = 
-    match q with 
-      | `Constant c -> type_constant c
-      | `Variable var -> lookup_type var
-      | `Extend (fields, base) ->
-	  let (type_field : qr -> Types.datatype) = type_qr tyenv in
-	  let (field_types : Types.datatype StringMap.t) = type_name_map fields type_field in
-	  let base_type = opt_map (type_qr tyenv) base in
-	    begin
-              match base_type with
-                | None -> Types.make_record_type field_types
-                | Some t ->
-                    begin
-                      match TypeUtils.concrete_type t with
-                        | `Record row ->
-                            `Record (Types.extend_row field_types row)
-                        | _ -> assert false
-                    end
-	    end
-      | `Project (label, r) ->
-	  let rt = type_qr tyenv r in
-	    TypeUtils.project_type label rt
-      | `Erase (names, r) ->
-	  let rt = type_qr tyenv r in
-	    TypeUtils.erase_type_poly names rt
-      | `Inject (_, _, t) -> t
-      | `TApp (v, ts) ->
-	  let t = type_qr tyenv v in
-            begin try
-              Instantiate.apply_type t ts 
-            with
-                Instantiate.ArityMismatch ->
-                  prerr_endline ("Arity mismatch in type application (Qr.type_qr)");
-                  prerr_endline ("expression: "^Show.show show_qr (`TApp (v, ts)));
-                  prerr_endline ("type: "^Types.string_of_datatype t);
-		  prerr_endline ("raw type: "^Show.show Types.show_typ t);
-                  prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
-                  failwith "fatal internal error"
-	    end
-      | `TAbs (tyvars, v) ->
-	  let t = type_qr tyenv v in
-	    Types.for_all (tyvars, t)
-      | `Database (_db, _name) ->
-	  `Primitive `DB
-      | `Table (_, _, _, row_type) ->
-	  Types.make_table_type (`Record row_type, `Record row_type, `Record row_type)
-      | `List xs ->
-	  let ts = type_list xs (type_qr tyenv) in
-	    begin
-	      match ts with
-		| t :: ts ->
-		    assert (List.for_all (fun t' -> t = t') ts);
-		    Types.make_list_type t
-		| [] -> 
-		    Env.String.lookup Lib.type_env "Nil"
-	    end
-      | `Apply (f, _args) ->
-	  let ft = type_qr tyenv f in
-	    TypeUtils.return_type ft
-      | `Case (_v, cases, default) ->
-	  let type_case (b, body) = type_qr (type_binder tyenv b) body in
-	  let case_types = type_name_map cases type_case in
-	  let default_type = opt_map type_case default in
-            if not (StringMap.is_empty case_types) then
-              (StringMap.to_alist ->- List.hd ->- snd) case_types
-            else
-              val_of default_type
-      | `If (_, then_branch, _) ->
-	  type_qr tyenv then_branch
-      | `Computation (bs, tc) ->
-	  type_qr (bindings tyenv bs) tc
-      | `Wrong t -> t
-    in
-      (* Debug.print ("q expr " ^ (Show.show show_qr q));
-      Debug.print ("of type " ^ (Show.show Types.show_datatype t)); *)
-      t
-
-let complete_tyenv tyenv q =
-  let t = type_qr tyenv q in
-    t, !globtyenv
-
 (* FIXME: ugly code *)
-let qr_of_query tyenv env comp =
+let qr_of_query env tyenv comp =
   let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in
   let restricted_env = restrict (fst3 env) freevars in
-  let binding name (value, _) (bindings, tyenv) =
-    (* Debug.f "qr_of_query tyenv %d" name; *)
-    let t = Env.Int.lookup tyenv name in
-    (* FIXME: really no tyvars on value-bindings?
-       rationale: type variables in env-values can only stem from function types,
-       those are already quantified over in the function's type *)
-    (* let tyvars = TypeUtils.quantifiers t in *)
-    let tyvars = [] in
-    let binder = (name, (t, "", `Local)) in
-    let qr, tyenv = qr_of_value t tyenv env value in
-    let bindings' = 
-      match qr with
-	(* FIXME: this needs to be tested thoroughly *)
-	| `Computation (bindings, `Variable new_name) ->
-	    begin
-	      match List.rev bindings with
-		| `Fun ((new_name', _), arg_binders, body, tyvars) :: closenv_bindings when new_name = new_name' ->
-		    closenv_bindings @ [`Fun (binder, arg_binders, body, tyvars)]
-		| `PFun ((new_name', _), dispatch) :: closenv_bindings when new_name = new_name' ->
-		    closenv_bindings @ [`PFun (binder, dispatch)]
-		| _ -> [`Let (binder, tyvars, qr)]
-	    end
-	| _ -> [`Let (binder, tyvars, qr)]
-    in
-      bindings' @ bindings, tyenv
+  let binding name (value, _) bindings = 
+    let b = `Let (name, qr_of_value env value) in
+      b :: bindings
   in
-  let free_bindings, tyenv = IntMap.fold binding restricted_env ([], tyenv) in
+  let free_bindings = IntMap.fold binding restricted_env [] in
 
   let primitive_free_vars = IntSet.inter freevars Lib.primitive_vars in
     
   let primitive var bindings =
-    let t = Env.Int.lookup tyenv var in
     let stub = Lib.primitive_stub_by_code var in
-    let qr, _tyenv = qr_of_value t tyenv env stub in
-    let binding =
-      match qr with
-	| `Computation ([`PFun ((new_name, info), dispatch)], `Variable new_name') when new_name = new_name' ->
-	    `PFun ((var, info), dispatch)
-	| _ -> failwith ("unexpected primitive value: " ^ (Show.show show_qr qr))
-    in
-      binding :: bindings
+    let qr = qr_of_value env stub in
+      (`Let (var, qr)) :: bindings
   in
 
   let primitive_bindings = IntSet.fold primitive primitive_free_vars [] in
@@ -453,6 +340,595 @@ let qr_of_query tyenv env comp =
   let qr_comp = computation comp in
     match qr_comp with
       | `Computation (local_bindings, tc) ->
-	  `Computation (primitive_bindings @ free_bindings @ local_bindings, tc), tyenv
+	  `Computation (primitive_bindings @ free_bindings @ local_bindings, tc)
       | _ -> assert false
     
+module Census =
+struct
+  let merge maps = 
+    let aux _ a b =
+      match a, b with
+	| Some a, Some b -> Some (a + b)
+	| None, Some b -> Some b
+	| Some a, None -> Some a
+	| None, None -> assert false
+    in
+      match maps with
+	| m :: ms -> 
+	    List.fold_left (IntMap.merge aux) m ms
+	| [] ->
+	    IntMap.empty
+
+  let rec bindings (bs : binding list)=
+    let binding  (`Let (_, body)) = count body
+    in
+      List.map binding bs
+	
+  and count q =
+    match q with
+      | `Variable var -> IntMap.add var 1 IntMap.empty
+      | `Constant _ | `Table _ | `Primitive _
+      | `Wrong -> IntMap.empty
+      | `Extend (extend_fields, r) ->
+	  let cm = StringMap.fold (fun _ f cm -> merge [cm; count f]) extend_fields IntMap.empty in
+	    opt_app (fun r -> merge [cm; count r]) cm r 
+      | `Singleton v
+      | `Lambda (_, v)
+      | `Project (_, v) 
+      | `Erase (_, v) 
+      | `Inject (_, v) -> count v
+      | `Concat xs -> merge (List.map count xs)
+      | `Apply (f, args) ->
+	  merge ((count f) :: (List.map count args))
+      | `Case (v, cases, default) ->
+	  let cm = count v in
+	  let cm = 
+	    StringMap.fold 
+	      (fun _ (_, body) cm -> merge [cm; count body]) 
+	      cases 
+	      cm 
+	  in
+	    opt_app (fun (_, body) -> merge [cm; count body]) cm default
+      | `If (c, t, Some e) -> merge [count c; count t; count e]
+      | `If (c, t, None) -> merge [count c; count t]
+      | `Computation (bs, tc) ->
+	  merge ((count tc) :: (bindings bs))
+end
+
+module ElimDeadDefs =
+struct
+  let bindings cm bs =
+    let filter (`Let (name, _)) =
+	      match IntMap.lookup name cm with
+		| Some c when c > 0 -> true
+		| _ -> false
+    in
+      List.filter filter bs
+
+  let rec eliminate cm q = 
+    match q with
+      | `Constant _ | `Variable _ | `Table _
+      | `Wrong -> q
+      | `Project (label, v)  -> `Project (label, eliminate cm v)
+      | `Erase (labels, v) -> `Erase (labels, eliminate cm v)
+      | `Extend (extend_fields, r) ->
+	  let extend_fields = StringMap.map (eliminate cm) extend_fields in
+	  let r = opt_map (eliminate cm) r in
+	    `Extend (extend_fields, r)
+      | `Inject (tag, v) -> `Inject (tag, eliminate cm v)
+      | `Concat xs -> `Concat (List.map (eliminate cm) xs)
+      | `Apply (f, args) -> `Apply (eliminate cm f, List.map (eliminate cm) args)
+      | `If (c, t, e) -> `If (eliminate cm c, eliminate cm t, opt_map (eliminate cm) e)
+      | `Case (v, cases, default) ->
+	  let case (binder, body) = (binder, eliminate cm body) in
+	  let v = eliminate cm v in
+	  let cases = StringMap.map case cases in
+	  let default = opt_map case default in
+	    `Case (v, cases, default)
+      | `Computation (bs, tc) ->
+	  begin
+	    let tc = eliminate cm tc in
+	      match bindings cm bs with
+		| [] -> tc
+		| bs -> `Computation (bs, tc)
+	  end
+      | `Lambda (xs, body) -> `Lambda (xs, eliminate cm body)
+      | `Primitive f -> `Primitive f
+      | `Singleton v -> `Singleton (eliminate cm v)
+end
+
+(* FIXME: adapt QueryRegex to native strings *)
+module QueryRegex = struct
+  let rec unbox_list =
+    function
+      | `Concat vs -> concat_map unbox_list vs
+      | `Singleton v -> [v]
+      | _ -> failwith ("failed to unbox list")
+
+  let unbox_pair = function
+    | `Extend (r, None) ->
+	begin
+	  try
+	    StringMap.find "2" r, StringMap.find "1" r
+	  with
+	      _ -> failwith "failed to unbox pair"
+	end
+    | _ -> failwith "failed to unbox pair"
+
+  let is_dotstar p = 
+    match unbox_pair p with
+      | `Inject ("Any", _), `Inject ("Star", _) -> true
+      | _ -> false
+
+  let quote p = 
+    match p with
+      | `Constant `String s -> 
+	  let special = ['%'; '_'; '*'; '?'; '('; ')'; '['; ']'] in
+	  let contains c = List.exists (fun x -> x = c) special in
+	  let l = 
+	    List.map 
+	      (function 
+		 | x when contains x -> "\\" ^ (string_of_char x)
+		 | x -> string_of_char x)
+	      (explode s)
+	  in
+	    `Constant (`String (mapstrcat "" identity l))
+      | p ->
+	  `Apply (`Primitive "quote", [p])
+
+  let unquote = function
+      | `Apply (`Primitive "quote", [p']) -> p'
+      | p -> p
+
+    let append_patterns p1 p2 =
+      match p1, p2 with
+      | `Constant (`String s1), `Constant (`String s2) -> `Constant (`String (s1 ^ s2))
+      | `Constant (`String _), _ 
+      | _, `Constant (`String _) -> `Apply (`Primitive "^^", [p1; p2])
+      |  p1, p2 -> quote (`Apply (`Primitive "^^", [unquote p1; unquote p2]))
+
+  let rec similarify p = 
+    match p with
+      | `Inject ("Seq", l) -> 
+	  let ps = List.map similarify (unbox_list l) in
+	    assert ((List.length ps) >= 1);
+	    List.fold_left append_patterns (List.hd ps) (drop 1 ps)
+      | `Inject ("Range", p) -> 
+	  let f, s = unbox_pair p in
+	    append_patterns f s
+      | `Inject ("Simply", e) ->
+	  e
+      | `Inject ("Quote", s) ->
+	  quote (similarify s)
+      | `Inject ("Any", _) -> 
+	  `Constant (`String "_")
+      | `Inject ("StartAnchor", _) -> 
+	  `Constant (`String "")
+      | `Inject ("EndAnchor", _) -> 
+	  `Constant (`String "")
+      | `Inject ("Alternate", p) ->
+	  let f, s = unbox_pair p in
+	    append_patterns (similarify f) (append_patterns (`Constant (`String "|")) (similarify s))
+      | `Inject ("Group", s) ->
+	  append_patterns (`Constant (`String "(")) (append_patterns (similarify s) (`Constant (`String ")")))
+      | `Inject ("Repeat", p) when is_dotstar p ->
+	  `Constant (`String "%")
+      | `Inject ("Repeat", p) ->
+	  let f, s = unbox_pair p in
+	    append_patterns (similarify f) (similarify s)
+      | `Inject ("Plus", _) ->
+	  `Constant (`String "+")
+      | `Inject ("Question", _) ->
+	  `Constant (`String "?")
+      | `Inject ("Star", _) ->
+	  `Constant (`String "*")
+      | t -> Debug.print (Show.show show_qr t);
+	  assert false
+	    end
+
+module Inliner =
+struct
+
+  type ctx = { venv : qr Env.Int.t; 
+	       census : int IntMap.t }
+
+  (* FIXME: differentiate between functions and other values based on type *)
+  (* FIXME: differentiate between function inlining and value propagation *)
+  let conservative ctx name =
+    let value = Env.Int.lookup ctx.venv name in
+    match value with
+      | `Table _ | `Constant _ | `Primitive _ | `Wrong 
+      | `Singleton _ | `Concat [] -> value
+      | `Extend _ | `Project _ | `Erase _ | `Inject _
+      | `Concat _ | `Apply _ | `Case _ | `If _
+      | `Computation _  | `Variable _ ->
+	  begin
+	    match IntMap.lookup name ctx.census with
+	      | Some c when c < 2 -> value
+	      | _ -> `Variable name
+	  end
+      | `Lambda _ -> value
+
+  let reduce_append vs =
+    let vs' = 
+      (concat_map
+	 (function
+	    | `Concat vs -> vs
+	    | v -> [v])
+	 vs)
+    in
+      match vs' with
+	| [`Singleton v] -> `Singleton v
+	| vs -> `Concat vs
+
+  let rewrite_primitive = function
+    | "asList", [t] -> t
+    | "filter", [p; l] -> 
+	let x = Var.fresh_raw_var () in
+	  `Apply 
+	    (`Primitive "concatMap", 
+	     [`Lambda 
+		([x], 
+		 `If 
+		   (`Apply (p, [`Variable x]), 
+		    `Singleton (`Variable x), 
+		    None)); 
+	      l])
+    | "all", [p; l] ->
+	let x = Var.fresh_raw_var () in
+	  `Apply
+	    (`Primitive "and",
+	     [`Apply
+		(`Primitive "concatMap",
+		 [`Lambda
+		    ([x],
+		     `Apply (p, [`Variable x]));
+		  l])])
+    | "any", [p; l] ->
+	let x = Var.fresh_raw_var () in
+	  `Apply
+	    (`Primitive "or",
+	     [`Apply
+		(`Primitive "concatMap",
+		 [`Lambda
+		    ([x],
+		     `Apply (p, [`Variable x]));
+		  l])])
+    | "Cons", [x; `Concat []] -> `Singleton x
+    | "Cons", [x; xs] -> reduce_append [`Singleton x; xs]
+    | "Concat", [xs; ys] -> reduce_append [xs; ys]
+    | "tilde", [s; p] -> 
+	let pattern = QueryRegex.similarify p in
+	`Apply (`Primitive "tilde", [s; pattern])
+    | f, args -> `Apply (`Primitive f, args)
+	    
+  let rec inline test (ctx : ctx) (q : qr) =
+    let inl = inline test ctx in
+      match q with
+	| `Variable name ->
+	    begin
+	      match Env.Int.find ctx.venv name with
+		| Some e -> e
+		| None -> q
+	    end
+	| `Extend (extend_fields, r) ->
+	    let extend_fields = StringMap.map inl extend_fields in
+	    let r = opt_map inl r in
+	      `Extend (extend_fields, r)
+	| `Project (label, r) ->
+	    `Project (label, inl r)
+	| `Erase (names, r) ->
+	    `Erase (names, inl r)
+	| `Inject (tag, value) ->
+	    `Inject (tag, inl value)
+	| `Computation ([], tc) -> inl tc
+	| `Computation (bs, tc) ->
+	    let bs, venv = bindings test ctx bs in
+	    let tc = inline test { ctx with venv = venv } tc in
+	      `Computation (bs, tc)
+	| `Concat xs -> 
+	    `Concat (List.map inl xs)
+	| `Apply (f, args) ->
+	    apply test ctx (inl f) (List.map inl args)
+	| `Case (v, cases, default) ->
+	    let case (binder, body) =
+	      (binder, inl body)
+	    in
+	    let v = inl v in
+	    let cases = StringMap.map case cases in
+	    let default = opt_map case default in
+	      begin
+		match inl v with
+		  | `Inject (tag, value) ->
+		      let (x, body) =
+			begin
+			  match StringMap.lookup tag cases, default with
+			    | Some case, _ -> case
+			    | None, Some default -> default
+			    | None, None -> failwith "Inline.inline: neither matching case nor default case"
+			end
+		      in
+			beta test ctx [x] [value] body
+		  | _ -> `Case (v, cases, default)
+	      end
+	      
+	| `If (c, t, e) ->
+	    let c = inl c in
+	    let t = inl t in
+	    let e = opt_map inl e in
+	      begin
+		match c with
+		  | `Constant (`Bool true) -> t
+		  | `Constant (`Bool false) -> from_option (`Concat []) e
+		  | _ -> `If (inl c, inl t, opt_map inl e)
+	      end
+	| `Constant _
+	| `Wrong
+	| `Table _
+	| `Primitive _ -> q
+	| `Lambda (xs, body) -> `Lambda (xs, inl body)
+	| `Singleton v -> `Singleton (inl v)
+
+  and bindings test ctx bs =
+    let binding (`Let (name, tc)) (bs, venv) =
+      let tc = inline test { ctx with venv = venv } tc in
+      let b = `Let (name, tc) in
+      let venv = Env.Int.bind venv (name, tc) in
+	b :: bs, venv
+    in
+      List.fold_right binding bs ([], ctx.venv)
+
+  and beta test ctx xs args body =
+    try
+      let arg_bindings = List.map2 (fun x arg -> `Let (x, arg)) xs args in
+	inline test ctx (`Computation (arg_bindings, body))
+    with Invalid_argument _ -> failwith "arity mismatch in function inlining"
+
+  and apply test ctx f args =
+      match f with
+(*	| `Variable fvar -> `Apply *)
+	| `Lambda (xs, body) -> beta test ctx xs args body
+	| `Case (v, cases, default) -> 
+	    let case (var, body) = (var, apply test ctx body args) in
+	    let cases' = StringMap.map case cases in
+	    let default' = opt_map case default in
+	      `Case (v, cases', default')
+	      
+	| `If (c, t, e) ->
+	    let t' = apply test ctx t args in
+	    let e' = opt_map (fun e -> apply test ctx e args) e in
+	      `If (c, t', e')
+	| `Primitive s -> rewrite_primitive (s, args)
+	| _ -> `Apply (f, args)
+
+end
+
+module ImpType = struct
+  type imptype = [`Atom | `List] deriving (Show)
+
+  type tqr =
+      [ `Lambda of ((Var.var list * tqr) * imptype)
+      | `If of (tqr * tqr * tqr option) * imptype
+      | `Table of Value.table * imptype
+      | `Singleton of tqr * imptype 
+      | `Concat of tqr list * imptype
+      | `Extend of tqr name_map * tqr option * imptype
+      | `Project of (string * tqr) * imptype
+      | `Erase of (name_set * tqr) * imptype
+      | `Inject of (string * tqr) * imptype
+      | `Apply of (tqr * tqr list) * imptype
+      | `Primitive of string 
+      | `Variable of Var.var * imptype
+      | `Constant of Constant.constant * imptype
+      | `Box of tqr * imptype
+      | `Unbox of tqr * imptype
+      | `Case of (tqr * (Var.var * tqr) name_map * (Var.var * tqr) option) * imptype
+      | `Computation of binding list * tqr * imptype
+      | `Wrong of imptype ]
+  and binding = [ `Let of Var.var * tqr ]
+      deriving (Show)
+
+  let string_of_tqr = Show.show show_tqr
+
+  let typeof_tqr = function
+(*    | `For (_, t) -> t *)
+    | `Lambda (_, t) -> t
+    | `If (_, t) -> t 
+    | `Table (_, t) -> t 
+    | `Singleton (_, t) -> t
+    | `Concat (_, t) -> t 
+    | `Project (_, t) -> t 
+    | `Erase (_, t) -> t 
+    | `Extend (_, _, t) -> t
+    | `Inject (_, t) -> t 
+    | `Apply (_, t) -> t 
+    | `Primitive _ -> assert false
+    | `Variable (_, t) -> t 
+    | `Constant (_, t) -> t 
+    | `Box (_, t) -> t 
+    | `Unbox (_, t) -> t
+    | `Case (_, t) -> t
+    | `Wrong t -> t
+    | `Computation (_, _, t) -> t
+
+  let annotate want (q : tqr) : tqr =
+    match (want, typeof_tqr q) with
+      | `Atom, `Atom | `List, `List -> q
+      | `Atom, `List -> `Box (q, want)
+      | `List, `Atom -> `Unbox (q, want)
+
+  let rec enforce_shape env args shape =
+    let aux e = function
+      | `Any -> transform env e
+      | `List -> aot `List env e
+      | `Atom -> aot `Atom env e
+    in
+      List.map2 aux args shape
+
+  and aot want env e = annotate want (transform env e)
+
+  and binding (env, bs) (`Let (var, tc)) =
+    let tc' = transform env tc in
+    let env' = Env.Int.bind env (var, typeof_tqr tc') in
+    let b = `Let (var, tc') in
+      (env', b :: bs)
+
+  and transform env (q : qr) : tqr =
+    let enforce_shape = enforce_shape env in
+      match q with
+	| `Computation (bs, tc) ->
+	    let env, bs = List.fold_left binding (env, []) bs in
+	    let bs = List.rev bs in
+	    let tc = transform env tc in
+	      `Computation (bs, tc, typeof_tqr tc)
+	| `Constant c -> `Constant (c, `Atom)
+	| `Table t -> `Table (t, `List) 
+	| `Inject (tag, t) ->
+	    let t' = aot `Atom env t in
+	      `Inject ((tag, t'), `Atom)
+	| `If (c, t, Some e) -> 
+	    let c' = transform env c in
+	    let t' = transform env t in
+	    let e' = transform env e in
+	      `If ((c', t', Some e'), (typeof_tqr t'))
+	| `If (c, t, None) ->
+	    let c' = transform env c in
+	    let t' = transform env t in
+	      `If ((c', t', None), (typeof_tqr t'))
+	| `Singleton e ->
+	    (* row or table? *)
+	    `Singleton ((aot `Atom env e), `List)
+	| `Concat xs ->
+	    let xs' = List.map (aot `List env) xs in
+	      `Concat (xs', `List)
+	| `Project (label, r) ->
+	    let r' = transform env r in
+	      `Project ((label, r'), `Atom)
+	| `Erase (erase_fields, r) ->
+	    `Erase ((erase_fields, (aot `Atom env r)), `Atom)
+	| `Extend (ext_fields, r) ->
+	    let ext_fields' = StringMap.map (aot `Atom env) ext_fields in
+	    let r' = opt_map (transform env) r in
+	      `Extend (ext_fields', r', `Atom)
+(*
+	| `For (source, os, `Lambda ([x], body)) ->
+	    let source' = aot `List env source in
+	    let env' = Env.Int.bind env (x, `Atom) in
+	    let os' = List.map (fun o -> transform env' o) os in
+	    let body' = aot `List env' body in
+	      `For ((source', os', `Lambda (([x], body'), `Atom)), `List)
+*)
+	| `Lambda (xs, body) -> 
+	    let env' = List.fold_left (fun env' x -> Env.Int.bind env' (x, `Atom)) env xs in
+	    let body' = aot `Atom env' body in
+	      `Lambda ((xs, body'), `Atom)
+	| `Variable x -> 
+	    `Variable (x, Env.Int.lookup env x) 
+	| `Case (v, cases, default) ->
+	    let v' = transform env v in
+	    let case (x, c) =
+	      let env' = Env.Int.bind env (x, `Atom) in
+	      let c' = aot `Atom env' c in
+		(x, c')
+	    in
+	    let cases' = StringMap.map case cases in
+	    let default' = opt_map case default in
+	      `Case ((v', cases', default'), `Atom)
+
+	| `Wrong -> `Wrong `Atom
+
+	| `Apply ((`Primitive "concatMap"), [`Lambda (xs, body); l]) ->
+	    let l' = aot `List env l in
+	    let env' = List.fold_left (fun env x -> Env.Int.bind env (x, `Atom)) env xs in
+	    let body' = aot `List env' body in
+	      `Apply (((`Primitive "concatMap"), [`Lambda ((xs, body'), `List); l']), `List)
+
+(*
+	| `Apply ((`Primitive "concatMap"), [f, l] ->
+*)
+
+	| `Apply ((`Primitive f), args) ->
+	    let fail_arg f = failwith ("Annotate.transform: wrong number of arguments for " ^ f) in
+	    let shape, typ =
+	      begin
+		match f with
+		  | "limit" ->
+		      begin
+			let e : qr =
+			  match args with 
+			    | [_; _; e] -> e
+			    | _ -> fail_arg "limit"
+			in
+			  [`Atom; `Atom; `Any], (typeof_tqr (transform env e))
+		      end
+		  | "+" | "+." | "-" | "-." | "*" | "*." 
+		  | "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
+		      (* `Atom -> `Atom -> `Atom *)
+		      [`Atom; `Atom], `Atom
+		  | "<>" | "==" | ">" ->
+		      (* arguments can have any type because we can compare
+			 atomic values, records and lists. boxed lists are
+			 unboxed in compileQuery so we need no annotation
+			 here *)
+		      (* a -> b -> `Atom *)
+		      [`Any; `Any], `Atom
+		  | "select" ->
+		      (* `Atom -> `List -> `Atom *)
+		      [`List; `Atom], `Atom
+		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "orderByBase" ->
+		      (* `Atom -> `List -> `List *)
+		      [`Atom; `List], `List
+		  | "zip" ->
+		      (* `List -> `List -> `List *)
+		      [`List; `List], `List
+		  | "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
+		      (* `List -> `Atom *)
+		      [`List], `Atom
+		  | "concat" | "tl" | "nubBase" | "reverse" ->
+		      (* `List -> `List *)
+		      [`List], `List
+		  | "floatToInt" ->
+		      [`Atom], `Atom
+		  | _ -> failwith ("Annotate.transform: function " ^ f ^ " not implemented")
+	      end
+	    in
+	    let p : tqr = `Primitive f in
+(*	      `Apply ((`Primitive f, enforce_shape args shape), typ) *)
+	    let args : tqr list = enforce_shape args shape in
+	    let a : tqr = `Apply ((p, args), typ) in
+	      a
+	| `Apply (e, args) -> 
+	    let shape = List.map (fun _ -> `Atom) args in
+	    let a : tqr = `Apply ((transform env e, enforce_shape args shape), `Atom) in
+	      a
+	| e -> failwith ("Query2.Annotate.transform: " ^ (Show.show show_qr e) ^ "not implemented")
+	    
+end
+
+let optphase q =
+  let census = Census.count q in
+    Debug.print ">>>>> inliner";
+    let ctx = { Inliner.venv = Env.Int.empty; 
+		Inliner.census = census; } 
+    in
+    let q = Inliner.inline Inliner.conservative ctx q in
+    let census = Census.count q in
+      let q = ElimDeadDefs.eliminate census q in
+	Debug.print ("inlined\n" ^ (Show.show show_qr q));
+	q
+
+let rec applyn f arg n =
+  if n = 1 then
+    f arg
+  else if n > 1 then
+    f (applyn f arg (n-1))
+  else
+    arg
+
+let pipeline env tyenv comp =
+  let q = qr_of_query env tyenv comp in
+    Debug.print (">>>>> before\n" ^ (Show.show show_qr q));
+    let q = applyn optphase q 3 in
+    let qt = ImpType.transform Env.Int.empty q in
+      Debug.print (">>>>> boxed\n" ^ (Show.show ImpType.show_tqr qt));
+      qt
