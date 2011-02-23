@@ -202,13 +202,7 @@ struct
       Env.Int.empty
 
   let prelude_primitives = 
-    List.fold_right 
-      StringSet.add 
-      ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
-       "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
-       "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";
-       "reverse"]
-      StringSet.empty
+    List.fold_right StringSet.add Query4.prelude_primitive_names StringSet.empty
 
   let rec lookup bound (val_env, exp_env) var =
     if VarSet.mem var bound then

@@ -167,6 +167,20 @@ sig
   val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
 end
 
+module ReplaceVars :
+sig
+  val computation : Types.datatype Env.Int.t -> var Utility.IntMap.t -> computation -> computation
+end
+
+module FreeVars :
+sig
+  val value : Types.datatype Env.Int.t -> Utility.IntSet.t -> value -> Utility.IntSet.t
+  val tail_computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> tail_computation -> Utility.IntSet.t
+  val binding : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding -> Utility.IntSet.t
+  val bindings : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding list -> Utility.IntSet.t
+  val computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> computation -> Utility.IntSet.t
+end
+
 val var_appln : var Env.String.t -> Env.String.name -> value list -> 
   tail_computation
 

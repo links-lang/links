@@ -834,6 +834,29 @@ struct
   let program = computation
 end
 
+(** Compute free variables *)
+module ReplaceVars =
+struct
+  class visitor tenv new_names =
+  object (o)
+    inherit Transform.visitor(tenv) as super
+      
+    val new_names = new_names
+
+    method var =
+      fun x ->
+        let x, t, o = super#var x in
+	match IntMap.lookup x new_names with
+	  | Some x' -> 
+	      x', t, o
+	  | None ->
+              x, t, o
+  end
+
+  let computation tyenv new_names e =
+    fst3 ((new visitor tyenv new_names)#computation e)
+end
+
 (** The [closures] type represents the set of free variables of a
     collection of functions *)
 type closures = intset intmap

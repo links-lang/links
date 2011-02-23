@@ -3,6 +3,7 @@
 open Utility
 open Ir
 
+
 let complete_tyenv tyenv p =
   let _, _, o = (new Transform.visitor tyenv)#computation p in
     o#get_type_environment
@@ -16,7 +17,6 @@ module OptimizeQuery =
 struct
 
   let rec is_inlineable_value census v =
-    Debug.print ("v " ^ (Show.show Ir.show_value v));
     match v with
       | `TApp (`Variable var, _)
       | `Variable var -> (IntMap.find var census) < 3 
@@ -70,8 +70,10 @@ struct
 
     method value =
       fun v ->
+	(*
 	Debug.print ("value " ^ (Show.show Ir.show_value v));
 	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
+	*)
 	let v, t, o = super#value v in
 	  match v with
 	    | `TApp (`Variable var, _)
@@ -154,8 +156,8 @@ struct
 		in
 		  Debug.print ("binding " ^ (Show.show Ir.show_binding b));
                   match b with
-                    | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) 
-		    | `Let ((x, (_, _, `Local)), (tyvars, `Return (`TApp (v, _)))) when is_inlineable_value census v ->
+		    | `Let ((x, (_, _, `Local)), (tyvars, `Return (`TApp (v, _)))) 
+                    | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) when is_inlineable_value census v ->
 			Debug.f "let %d" x;
 			(* bind inlineable values to the environment *)
 			let v =
@@ -185,12 +187,12 @@ struct
     method computation =
       fun (bs, tc) ->
 	Debug.print "computation";
-	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
+	(* Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env)); *)
 	let bs, o = o#bindings bs in
-	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
+	(* Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc)); *)
 	let tc, t, o = o#tail_computation tc in
-	  Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
-	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
+	  (* Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
+	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc)); *)
 	  match tc with
 	    | `Apply (f, args) ->
 		(* inline known functions (beta) *)
@@ -251,8 +253,87 @@ struct
 		(bs, tc), t, o
   end
 
-let program typing_env p census =
-  fst3 ((inliner typing_env Env.Int.empty census)#computation p)
+let nil_v = `Variable (Env.String.lookup Lib.nenv "Nil")
+let cons_v = `Variable (Env.String.lookup Lib.nenv "Cons")
+    
+let rec ir_of_value t (value : Value.t) =
+  match value with
+    | `Bool b -> [], `Constant (`Bool b)
+    | `Char c -> [], `Constant (`Char c)
+    | `Float f -> [], `Constant (`Float f)
+    | `Int i -> [], `Constant (`Int i)
+    | `String s -> [], `Constant (`String s)
+    | `List l ->
+	let elt_t = TypeUtils.element_type t in
+	let cons = 
+	  (fun elt (list_bs, list_ir) -> 
+	     let elt_bs, elt_ir = ir_of_value elt_t elt in
+	     let bs = list_bs @ elt_bs in
+	     let list_ir' =
+	       `ApplyPure ((`TApp (cons_v, [`Type elt_t])), [elt_ir; list_ir]) 
+	     in
+	       bs, list_ir')
+	in
+	  List.fold_right cons l ([], nil_v)
+	  
+    | `Record r ->
+	let bs, m = 
+	  List.fold_right
+	    (fun (label, value) (bs, m) ->
+	       let v_t = TypeUtils.project_type label t in
+	       let bs_value, ir_value = ir_of_value v_t value in
+		 (bs_value @ bs, StringMap.add label ir_value m))
+	    r
+	    ([], StringMap.empty)
+	in
+	  bs, `Extend (m, None)
+    | `Variant (tag, v) -> 
+	let v_t = TypeUtils.variant_at tag t in
+	let bs, v_ir = ir_of_value v_t v in
+	  bs, `Inject (tag, v_ir, t)
+	  
+(*
+    | `RecFunction ([(f, (xs, body))], locals, f', _scope) ->
+*)
+	
+    | _ -> assert false
+
+let merge_bindings tenv var (value, _scope) bs =
+  let t = Env.Int.lookup tenv var in
+  let bs_value, ir_value = ir_of_value t value in
+    match (ir_value : Ir.value) with
+      | `Variable _ ->
+	  bs @ bs_value
+      | _ -> 
+	  let binder = (var, (t, "", `Local)) in
+	    (* FIXME: tyvar list? *)
+	  let b = `Let (binder, ([], `Return ir_value)) in
+	    bs @ bs_value @ [b]
+	
+let preload_env tenv valenv inliner =
+  (* remove primitives from env (not inlineable) *)
+  let filtered_env =
+    Value.filter_locals (fun v _ -> not (IntSet.mem v Lib.primitive_vars)) valenv
+  in
+  (* remove non-databaseable (wild) functions from env *)
+  let filtered_env =
+    Value.filter_locals
+      (fun v (value, _scope) ->
+	 match value with
+	   | `RecFunction _ ->
+	       let t = Env.Int.lookup tenv v in
+		 not (Types.is_empty_row (TypeUtils.effect_row t))
+	   | _ -> true)
+      filtered_env
+  in
+  (* construct IR binding list from remaining env values *)
+  let bs = Value.fold (merge_bindings tenv) filtered_env [] in
+    snd (inliner#bindings bs)
+
+let program typing_env valenv p census =
+  let inliner = inliner typing_env Env.Int.empty census in
+  let inliner = preload_env typing_env valenv inliner in 
+    fst3 (inliner#computation p)
 end
 
 module Census =
@@ -295,12 +376,12 @@ let rec applyn f arg n =
   else
     arg
 
-let pipeline tenv program = 
+let pipeline tenv valenv program = 
   let phase p = 
     Debug.print "phase";
-    Ir.ElimDeadDefs.program tenv (OptimizeQuery.program tenv p (Census.program tenv p)) 
+    Ir.ElimDeadDefs.program tenv (OptimizeQuery.program tenv valenv p (Census.program tenv p)) 
   in
 (*  let p = Ir.ElimDeadDefs.program tenv (phase (phase (phase program))) in *)
-  let p = applyn phase program 1 in
+  let p = applyn phase program 2 in
     Debug.print "opt finished";
     p

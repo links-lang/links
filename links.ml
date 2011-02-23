@@ -41,8 +41,10 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     then measure "optimise" optimise_program program   
     else program 
   in
+(*
   let tenv = Query3.complete_tyenv tenv program in
     Evalir.tenv := Some tenv;
+*)
 
   let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
   let valenv = Value.with_closures valenv closures in

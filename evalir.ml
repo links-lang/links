@@ -2,7 +2,7 @@ open Notfound
 
 open Utility
 
-let tenv = ref None
+(* let tenv = ref None *)
 
 module Eval = struct
   open Ir
@@ -359,9 +359,15 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
+	(*
+	Debug.print (Show.show (Show.show_list Show.show_int ) (List.sort compare (Value.domain env)));
+	Debug.print (Show.show IntSet.show_t Lib.primitive_vars);
+	*)
 	Irtodot.output_dot e env "ir_query.dot";
-	let e' = Query3.pipeline (val_of !tenv) e in
-	  Irtodot.output_dot e' env "ir_query_optimized.dot";
+	let t = Query4.computation e in
+	  Debug.print (Show.show Query4.show_qr t);
+	(* let e' = Query3.pipeline (val_of !tenv) env e in
+	  Irtodot.output_dot e' env "ir_query_optimized.dot"; *)
 	  exit 0;
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =

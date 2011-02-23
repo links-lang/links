@@ -37,6 +37,4 @@ val cgi_parameters : (string * string) list ref
 
 val print_http_response : (string * string) list -> string -> unit
 
-val primitive_names : string list
-
 val prim_appln : Env.String.name -> Ir.value list -> Ir.tail_computation
