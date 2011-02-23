@@ -202,7 +202,7 @@ struct
       Env.Int.empty
 
   let prelude_primitives = 
-    List.fold_right StringSet.add Query4.prelude_primitive_names StringSet.empty
+    List.fold_right StringSet.add Qr.prelude_primitive_names StringSet.empty
 
   let rec lookup bound (val_env, exp_env) var =
     if VarSet.mem var bound then

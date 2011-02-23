@@ -2,7 +2,7 @@ open Notfound
 
 open Utility
 
-(* let tenv = ref None *)
+let tenv = ref None
 
 module Eval = struct
   open Ir
@@ -364,8 +364,9 @@ module Eval = struct
 	Debug.print (Show.show IntSet.show_t Lib.primitive_vars);
 	*)
 	Irtodot.output_dot e env "ir_query.dot";
-	let t = Query4.computation e in
-	  Debug.print (Show.show Query4.show_qr t);
+	Qr.prelude_primitives ();
+	let t, _ = Qr.qr_of_query (val_of !tenv) env e in
+	  Debug.print (Show.show Qr.show_qr t);
 	(* let e' = Query3.pipeline (val_of !tenv) env e in
 	  Irtodot.output_dot e' env "ir_query_optimized.dot"; *)
 	  exit 0;
