@@ -75,10 +75,6 @@ type qr =
   | `Database of Value.database * string
   | `Table of Value.table
   | `List of qr list
-  | `PrimitiveFun of string * Var.var option
-(*  | `Fun of binder list * qr * Types.datatype * env *)
-(*  | `Fun of binder list * tyvar list * qr * Types.datatype *)
-
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
   | `If of qr * qr * qr
@@ -88,7 +84,8 @@ type qr =
   | `Wrong of Types.datatype ]
 and funct = binder * binder list * qr * tyvar list
 and binding = 
-  [ `Let of (binder * tyvar list * qr)
+  [ `Let of binder * tyvar list * qr
+  | `PFun of binder * qr option
   | `Fun of funct ]
 and env = qr Env.Int.t 
     deriving (Show)
@@ -164,10 +161,24 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
    | `Database (db, s) -> `Database (db, s), tyenv
    | `Table t -> `Table t, tyenv
 (* FIXME eta-expand primitive functions? *)
-   | `PrimitiveFunction f -> `PrimitiveFun f, tyenv
+   | `PrimitiveFunction (fs, _) -> 
+       let name = Env.String.lookup Lib.nenv fs in
+       let t = Env.Int.lookup tyenv name in
+       let binder = (name, (t, fs, `Local)) in
+       (* dispatch is added after defunctionalization *)
+       let binding = `PFun (binder, None) in
+	 (* FIXME: add TAbs if there are type variables *)
+	 `Computation ([binding], `Variable name), tyenv
+       
    | `RecFunction ([(f, _)], _, _, _) when IntSet.mem f (val_of !prelude_primitive_vars) ->
        let s = IntMap.find f (val_of !prelude_primitive_namemap) in
-       `PrimitiveFun (s, None), tyenv
+       let t = Env.Int.lookup tyenv f in
+       let binder = (f, (t, s, `Local)) in
+       (* dispatch is added after defunctionalization *)
+       let binding = `PFun (binder, None) in
+	 (* FIXME: add TAbs if there are type variables *)
+	 `Computation ([binding], `Variable f), tyenv
+
    | `RecFunction ([(f, (xs, body))], locals, f', _scope) ->
        assert (f = f');
        (* Debug.f "qr_of_value tyenv %d" f; *)
@@ -275,6 +286,7 @@ let bindings tyenv bs =
   List.fold_left
     (fun tyenv binding -> 
        match binding with
+	 | `PFun (binder, _)
 	 | `Let (binder, _, _)
 	 | `Fun (binder, _, _, _) -> 
 	     type_binder tyenv binder) 
@@ -341,8 +353,6 @@ let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype =
 		| [] -> 
 		    Env.String.lookup Lib.type_env "Nil"
 	    end
-      | `PrimitiveFun (f, _) ->
-	  Env.String.lookup Lib.type_env f
       | `Apply (f, _args) ->
 	  let ft = type_qr tyenv f in
 	    TypeUtils.return_type ft

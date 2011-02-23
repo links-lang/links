@@ -1,3 +1,4 @@
+(*pp deriving *)
 open Utility
 open Qr
 
@@ -16,6 +17,7 @@ struct
   let rec bindings (bs : binding list)=
     let binding =
       function
+	| `PFun _ -> IntMap.empty
 	| `Fun (_, _, body, _) 
 	| `Let (_, _, body) -> 
 	    count body
@@ -26,7 +28,7 @@ struct
     match q with
       | `Variable var -> IntMap.add var 1 IntMap.empty
       | `Constant _ | `Database _ | `Table _
-      | `PrimitiveFun _ | `Wrong _ -> IntMap.empty
+      | `Wrong _ -> IntMap.empty
       | `Extend (extend_fields, r) ->
 	  let cm = StringMap.fold (fun _ f cm -> merge [cm; count f]) extend_fields IntMap.empty in
 	    opt_app (fun r -> merge [cm; count r]) cm r 
@@ -57,6 +59,7 @@ struct
   let bindings cm bs =
     let filter =
 	function
+	  | `PFun ((name, _), _)
 	  | `Let ((name, _), _, _)
 	  | `Fun ((name, _), _, _, _) ->
 	      match IntMap.lookup name cm with
@@ -68,7 +71,7 @@ struct
   let rec eliminate cm q = 
     match q with
       | `Constant _ | `Variable _ | `Database _ |`Table _
-      | `PrimitiveFun _ | `Wrong _ -> q
+      | `Wrong _ -> q
       | `Project (label, v)  -> `Project (label, eliminate cm v)
       | `Erase (labels, v) -> `Erase (labels, eliminate cm v)
       | `Extend (extend_fields, r) ->
@@ -274,6 +277,7 @@ struct
     let binding b (bs, venv, fenv) =
       let b, venv, fenv = 
 	match b with
+	  | `PFun _ -> b, venv, fenv
 	  | `Let ((name, _) as binder, tyvars, tc) ->
 	      let tc = inline { ctx with venv = venv; fenv = fenv } tc in
 	      let b = `Let (binder, tyvars, tc) in
@@ -328,6 +332,177 @@ end
 
 module Monomorphize =
 struct
+
+(*
+  module MultiSubst =
+  struct
+    type tyarg_seq = tyarg list deriving (Show)
+    type tyvar_seq = tyvar list deriving (Show)
+    type t = tyvar_seq * tyarg_seq list deriving (Show)
+
+    let lookup 
+
+    let eq_tyarg_seq ta1 ta2 =
+      List.for_all Unify.eq_type_args (List.combine ta1 ta2)
+
+    let eq_tyvar_seq tv1 tv2 =
+      List.for_all Unify.eq_quantifier (List.combine tv1 tv2)
+
+    let apply_subst : tyvar_seq * tyarg_seq -> Types.datatype -> Types.datatype = fun tvs tas t ->
+      failwith "apply_subst not implemented"
+
+    let flatten_substs : t -> (tyvar_seq * tyarg_seq) list = fun (tyvar_seq, tyarg_seqs) ->
+      List.map (fun tyarg_seq -> (tyvar_seq, tyarg_seq)) tyarg_seqs
+      
+    let apply : t -> Types.datatype -> Types.datatype list = fun msubst t =
+      List.map apply_subst (flatten_substs msubst)
+      
+    let apply_seq : t list -> Types.datatype -> Types.datatype list list = fun msubst_seq ->
+      failwith "not implemented"
+
+    let sum : t -> t -> t = fun ms1 ms2 ->
+      let domain1 = domain ms1 in
+      let domain2 = domain ms2 in
+	assert (eq_tyvar_seq domain1 domain2);
+	List.unduplicate equal_tyarg_seq ((snd ms1) @ (snd ms2))
+
+    let compose : t -> t -> t = fun ms1 ms2 -> 
+      
+
+  end
+
+  module InstMap =
+  struct
+    type t = (var * MultiSubst.t) list
+
+    let restrict : t -> var list -> t = remove_keys 
+
+    let domain = List.map fst
+
+    let sum : t -> t -> t = fun im1 im2 ->
+      let d1 = domain im1 in
+      let d2 = domain im2 in
+      let d = List.unduplicate (=) (d1 @ d2) in
+      let aux name =
+	match lookup name im1, lookup name im2 with
+	  | Some ms1, Some ms2 -> (name, MultiSubst.sum ms1 ms2)
+	  | Some ms1, None -> (name, ms1)
+	  | None, Some ms2 -> (name, ms2)
+	  | None, None -> assert false
+      in
+	List.map aux d
+      
+    let compose_multisubst : t -> MultiSubst.t -> t = fun im ms ->
+      assert ((List.length im) = 1);
+      let (name, ms_name) = List.hd im in
+	[(name, MultiSubst.compose ms ms_name)]
+
+    let lookup : t -> var -> MultiSubst.t = fun im v ->
+      List.assoc var im
+  end
+
+  let instmap : q -> InstMap.t = fun q ->
+    failwith "instmap not implemented"
+    
+  let specialize : q -> InstMap.t -> q = fun q im ->
+    failwith "specialize not implemented"
+    
+*)
+
+  module InstMap =
+  struct
+    type t = (tyarg list list) IntMap.t
+	deriving (Show)
+
+    let eq_tyarg_seq ta1 ta2 =
+      List.for_all Unify.eq_type_args (List.combine ta1 ta2)
+
+    let empty = IntMap.empty
+
+    let sum : t -> t -> t = fun m1 m2 ->
+      let aux _k tas1 tas2 =
+	match tas1, tas2 with
+	  | Some tas1, Some tas2 -> Some (unduplicate eq_tyarg_seq (tas1 @ tas2))
+	  | Some tas1, None -> Some tas1
+	  | None, Some tas2 -> Some tas2
+	  | None, None -> assert false
+      in
+	IntMap.merge aux m1 m2
+
+    let sum_list : t list -> t = fun ims ->
+      List.fold_left sum empty ims
+
+    let make name tyargs =
+      IntMap.add name tyargs IntMap.empty
+
+    (* let restrict foo *)
+
+    let fold = IntMap.fold
+
+  end
+
+  let rec instmap = function
+    | `TApp (`Variable name, tyargs) -> 
+	InstMap.make name [tyargs]
+    | `Variable _ -> 
+	InstMap.empty
+    | `TApp (_v, _) -> 
+	failwith "TApp applied to non-variable"
+    | `Extend (extend_fields, r) ->
+	let aux _label v acc = InstMap.sum (instmap v) acc in
+	  InstMap.sum 
+	    (StringMap.fold aux extend_fields InstMap.empty)
+	    (opt_app instmap InstMap.empty r)
+    | `Project (_, r) -> 
+	instmap r
+    | `Erase (_, r) -> 
+	instmap r
+    | `Inject (_, v, _t) -> 
+	instmap v
+    | `TAbs (_, v) -> 
+	instmap v
+    | `List xs -> 
+	InstMap.sum_list (List.map instmap xs)
+    | `Apply (f, args) -> 
+	InstMap.sum_list ((instmap f) :: (List.map instmap args))
+    | `Case (v, cases, default) -> 
+	(* specialize binders? *)
+	let im = instmap v in
+	let case _tag (_binder, body) acc =
+	  InstMap.sum (instmap body) acc
+	in
+	let im = StringMap.fold case cases im in
+	  InstMap.sum im (opt_app (instmap -<- snd) InstMap.empty default)
+    | `If (c, t, e) -> 
+	InstMap.sum_list [instmap c; instmap t; instmap e]
+    | `Computation (bs, tc) ->
+	(* collect instmap from tc, 
+	   clone bindings, 
+	   specialize tc, 
+	   pass remaining instmap upwards *)
+	(* FIXME: do this correctly *)
+	InstMap.sum (bindings bs) (instmap tc)
+    | `Constant _ | `Database _ | `Table _ | `PrimitiveFun _ | `Wrong _ ->
+	InstMap.empty
+
+  and bindings bs =
+    let binding =
+      function
+	| `PFun _ -> InstMap.empty
+	| `Let (_binder, _tyvars, tc) -> instmap tc
+	| `Fun (_binder, _binders, body, _tyvars) -> instmap body
+    in
+      InstMap.sum_list (List.map binding bs)
+
+  and clone im b =
+    failwith "not implemented"
+
+  and clone_bindings im bs =
+    failwith "not implemented"
+
+  and specialize _im _q =
+    failwith "not implemented"
+
 end
 
 module Defunctionalize =
@@ -359,6 +534,7 @@ let rec applyn f arg n =
 let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
   let optphase = optphase tyenv in
-  let q = applyn optphase q 1 in
-    ignore (Qr.type_qr tyenv q);
+(*  let q = applyn optphase q 2 in *)
+    (*ignore (Qr.type_qr tyenv q); *)
+    Debug.print (Show.show Monomorphize.InstMap.show_t (Monomorphize.instmap q));
     q
