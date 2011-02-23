@@ -459,6 +459,109 @@ struct
     in
       aux l
 
+  (* a special kind of structural equality on types that doesn't look
+     inside points *)
+  let rec eq_types_relaxed : (Types.datatype * Types.datatype) -> bool =
+    fun (t1, t2) ->
+      let rec unalias = function
+	| `Alias (_, x) -> unalias x
+	| x             -> x in
+	match unalias t1 with 
+	  | `Not_typed -> 
+              begin match unalias t2 with
+		  `Not_typed -> true
+		| _          -> false
+              end
+	  | `Primitive x ->
+              begin match unalias t2 with
+		  `Primitive y -> x = y
+		| _            -> false
+              end
+	  | `MetaTypeVar lpoint ->
+              begin match unalias t2 with
+		  `MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
+		| _                   -> false
+              end
+	  | `Function (lfrom, lm, lto) ->
+              begin match unalias t2 with
+		  `Function (rfrom, rm, rto) -> eq_types_relaxed (lfrom, rfrom)
+                    && eq_types_relaxed (lto,   rto)
+                    (* && eq_rows  (lm,    rm) *)
+		| _                          -> false
+              end
+	  | `Record l ->
+              begin match unalias t2 with
+		  `Record r -> eq_rows (l, r)
+		| _         -> false
+              end
+	  | `Variant l ->
+              begin match unalias t2 with
+		  `Variant r -> eq_rows (l, r)
+		| _          -> false
+              end
+	  | `Application (s, ts) ->
+              begin match unalias t2 with
+		  `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
+		| _ -> false
+              end
+	  | `ForAll (qs, t) ->
+              begin match unalias t2 with
+		| `ForAll (qs', t') ->
+                    List.for_all2 (fun q q' -> eq_quantifier (q, q'))
+                      (Types.unbox_quantifiers qs)
+                      (Types.unbox_quantifiers qs') &&
+                      eq_types_relaxed (t, t')
+		| _ -> false
+              end
+
+	  | `Alias  _ -> assert false
+	  | `Table _  -> assert false
+  and eq_quantifier : (Types.quantifier * Types.quantifier) -> bool =
+    function
+      | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
+      | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
+      | `PresenceVar (lvar, _), `PresenceVar (rvar, _) -> lvar = rvar
+  and eq_rows : (Types.row * Types.row) -> bool =
+    fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
+      eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
+  and eq_presence =
+    function
+      | `Absent, `Absent
+      | `Present, `Present -> true
+      | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
+  and eq_field_envs (lfield_env, rfield_env) =
+    let eq_specs (lf, lt) (rf, rt) = eq_presence (lf, rf) && eq_types_relaxed (lt, rt) in
+      StringMap.equal eq_specs lfield_env rfield_env
+  and eq_row_vars (lpoint, rpoint) =
+    (* QUESTION:
+       Do we need to deal with closed rows specially?
+    *)
+    match Unionfind.find lpoint, Unionfind.find rpoint with
+      | `Closed, `Closed -> true
+      | `Flexible (var, _), `Flexible (var', _)
+      | `Rigid (var, _), `Rigid (var', _)
+      | `Recursive (var, _), `Recursive (var', _) -> var=var'
+      | _, _ -> Unionfind.equivalent lpoint rpoint
+  and eq_type_args =
+    function
+      | `Type lt, `Type rt -> eq_types_relaxed (lt, rt)
+      | `Row lr, `Row rr -> eq_rows (lr, rr)
+      | `Presence lf, `Presence rf -> eq_presence (lf, rf)
+      | _, _ -> false
+
+  (* FIXME: this should be possible more elegantly *)
+  let eq_types_mod_effects origt instt =
+    let strip_quantifiers = function
+	| `ForAll (_, t) -> t
+	| t -> t
+    in
+    let origt = TypeUtils.concrete_type origt in
+    let instt = TypeUtils.concrete_type instt in
+      match TypeUtils.quantifiers origt with
+	| [`RowVar _] -> 
+	    eq_types_relaxed ((strip_quantifiers origt), instt)
+	| _ -> false
+
   let rec instmap = function
     | `TApp (`Variable name, tyargs) -> 
 	InstMap.make name [tyargs]
@@ -514,7 +617,6 @@ struct
 
   (* clone a function binding at a concrete type *)
   (* basic assumption: type gets fully instantiated *)
-  (* FIXME: before cloning, check if the instantiated type is really different modulo effects *)
   and clone b tyargs : binding list * specmap =
     let clone_binder (_f, (t, fs, _)) =
       let t' = Instantiate.apply_type t tyargs in
@@ -528,11 +630,19 @@ struct
     in
       try
 	match b with
-	  | `PFun ((f, _) as binder, dispatch) ->
-	      let binder', f' = clone_binder binder in
+	  | `PFun ((f, (t, _, _)) as binder, dispatch) ->
+	      let (_, (t', _, _)) as binder', f' = clone_binder binder in
 (*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
-		[`PFun (binder', dispatch)], [((f, tyargs), f')]
-	  | `Fun ((f, _) as binder, arg_binders, body, tyvars) ->
+	      let b' = `PFun (binder', dispatch) in
+		if not (eq_types_mod_effects t t') then
+		  [b'], [((f, tyargs), f')]
+		else
+		  begin
+		    Debug.f "not cloning at type %s (orig %s)" (Types.string_of_datatype t') (Types.string_of_datatype t);
+		    [], []
+		  end
+		  
+	  | `Fun ((f, (t, _, _)) as binder, arg_binders, body, tyvars) ->
 	      let (_, (t', _, _)) as binder', f' = clone_binder binder in
 (*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
 		(* FIXME: adapt type annotations in body *)
@@ -542,7 +652,13 @@ struct
 		  (fun ((n, (_argt, s, l)), argt') -> (n, (argt', s, l))) 
 		  (List.combine arg_binders argts)
 	      in
-		[`Fun (binder', arg_binders', body, tyvars)], [((f, tyargs), f')]
+		if not (eq_types_mod_effects t t') then
+		  [`Fun (binder', arg_binders', body, tyvars)], [((f, tyargs), f')]
+		else
+		  begin
+		    Debug.f "not cloning at type %s (orig %s)" (Types.string_of_datatype t') (Types.string_of_datatype t);
+		    [], []
+		  end
 	  | `Let _ -> failwith "Monomorphize.clone: attempto to clone non-function binding"
       with
 	  Instantiate.ArityMismatch ->
