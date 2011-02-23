@@ -4,6 +4,46 @@ open Qr
 
 (* TODO: instantiate every effect row var with an empty closed row (normalization of types) *)
 
+(*
+let normalize_types q normalized =
+  let rec binding b =
+    match b with
+      | `Let ->
+      | `Fun ->
+      | `PFun ->
+
+  and walk q =
+    match q with
+      | `Computation (bs, tc) ->
+	  let bs, specmap = clone_bindings im bs in
+	  let bs' = List.map (replace_spec_binding specmap) bs in
+	  let tc' = replace_spec specmap tc in 
+	    Debug.print (Show.show show_specmap specmap);
+	  (* TODO: restrict im by names which have already been handled *)
+(*	  let tc' = specialize (InstMap.restrict im cloned) tc' in *)
+	  let tc' = specialize im tc' in
+	    `Computation (bs', tc')
+      | `Constant _ | `Database _ | `Table _ | `Wrong _ | `Variable _ -> q
+      | `Project (label, v) -> `Project (label, specialize im v)
+      | `Extend (extend_fields, r) -> `
+	  Extend (StringMap.map (specialize im) extend_fields, opt_map (specialize im) r)
+      | `Erase (labels, v) -> `Erase (labels, specialize im v)
+      | `Inject (tag, v, t) -> `Inject (tag, specialize im v, t)
+      | `TAbs (tyvars, v) -> `TAbs (tyvars, specialize im v)
+      | `List xs -> `List (List.map (specialize im) xs)
+      | `Apply (f, args) -> `Apply (specialize im f, List.map (specialize im) args)
+      | `Case (v, cases, default) ->
+	  let v = specialize im v in
+	  let case (binder, body) = (binder, specialize im body) in
+	  let cases = StringMap.map case cases in
+	  let default = opt_map case default in
+	    `Case (v, cases, default)
+      | `If (c, t, e) -> `If (specialize im c, specialize im t, specialize im e)
+      | `TApp (v, tyargs) -> `TApp (specialize im v, tyargs)
+  in
+*)    
+
+
 module Census =
 struct
   let merge maps = 
@@ -624,13 +664,15 @@ struct
   (* clone a function binding at a concrete type *)
   (* basic assumption: type gets fully instantiated *)
   and clone b tyargs : binding list * specmap =
+    (* generate a fresh binder with the instantiated type and a
+       new variable *)
     let clone_binder (_f, (t, fs, _)) =
       let t' = Instantiate.apply_type t tyargs in
       let fs' = 
 	if (String.length fs) = 0 then 
 	  "" 
 	else
-	  fs ^ "___" ^ (Types.string_of_datatype t) 
+	  fs ^ "___" ^ (Types.string_of_datatype t') 
       in
 	Var.fresh_var (t', fs', `Local)
     in
@@ -640,6 +682,8 @@ struct
 	      let (_, (t', _, _)) as binder', f' = clone_binder binder in
 (*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
 	      let b' = `PFun (binder', dispatch) in
+		(* don't clone if the original and cloned types differ
+		   only by their effects *)
 		if not (eq_types_mod_effects t t') then
 		  [b; b'], [((f, tyargs), f')]
 		else
@@ -658,6 +702,8 @@ struct
 		  (fun ((n, (_argt, s, l)), argt') -> (n, (argt', s, l))) 
 		  (List.combine arg_binders argts)
 	      in
+		(* don't clone if the original and cloned types differ
+		   only by their effects *)
 		if not (eq_types_mod_effects t t') then
 		  [b; `Fun (binder', arg_binders', body, [])], [((f, tyargs), f')]
 		else
@@ -670,10 +716,11 @@ struct
 	  Instantiate.ArityMismatch ->
             prerr_endline ("Arity mismatch in type application (Defunctionalize.Monomorphize.clone)");
             prerr_endline ("expression: "^Show.show show_binding b);
-            (* prerr_endline ("type: "^Types.string_of_datatype t); *)
             prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
 	    failwith "fatal internal error"
 
+  (* traverse binding list, clone bindings if there are entries
+     in the instantiation map *)
   and clone_bindings im bs : binding list * specmap =
     let binding : binding -> binding list * specmap =
       fun b ->
@@ -694,7 +741,8 @@ struct
     in
     let bindings, varmapping = List.split (List.map binding bs) in
       List.flatten bindings, List.flatten varmapping
-
+ 
+  (* replace variabled with their specialized equivalents *)
   let rec replace_spec_binding specmap b =
     match b with
       | `Let (binder, tyvars, tc) -> 
@@ -776,6 +824,12 @@ end
 
 module Defunctionalize =
 struct
+
+(*
+  let lift
+
+  let convert
+*)
 end
 
 let optphase tyenv q =
