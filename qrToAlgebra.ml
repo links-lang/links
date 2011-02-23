@@ -884,7 +884,7 @@ and compile_quote env loop s =
   Debug.print "Warning: quoting at runtime is not implemented (compile_quote)";
   compile_expression env loop s
 
-and compile_concatmap env loop f source order_criteria =
+and compile_concatmap env loop f source =
   let ti_source = compile_expression env loop source in
   let _, q_v, map, loop_v = Helpers.lift ti_source.q ti_source.cs in
   let env = Helpers.lift_env map env inner outer in
@@ -895,19 +895,7 @@ and compile_concatmap env loop f source order_criteria =
   in
   let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
   let ti_body = compile_expression env_v loop_v body in
-  let (sort_cols, sort_info, map') =
-    match order_criteria with
-      | _ :: _ ->
-	  (* compile orderby expressions *)
-	  let q_os = List.map (compile_expression env_v loop_v) order_criteria in
-	  let q_os = List.map (fun ti -> ti.q) q_os in
-	  let offset = (List.length (Cs.offsets ti_body.cs)) + 1 in
-	  let cols = mapIndex (fun _ i -> A.Item (i + offset)) q_os in
-	  let order_cols = List.map (fun c -> (c, A.Ascending)) (cols @ [pos]) in
-	    cols, order_cols, Helpers.omap map q_os cols
-      | [] ->
-	  ([], [(iter, A.Ascending); (pos, A.Ascending)], map)
-  in
+  let (sort_cols, sort_info, map') = ([], [(iter, A.Ascending); (pos, A.Ascending)], map) in
   let q = 
     ADag.mk_project
       ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_body.cs))))
@@ -1148,7 +1136,6 @@ and compile_constant loop (c : Constant.constant) =
       vs = Vs.empty;
       fs = Fs.empty
     }
-
 
 (* if e1 then e2 else []:
    don't consider the else branch if it represents the empty list. *)
@@ -1479,7 +1466,7 @@ and apply_primitive env loop f args =
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
-    | "concatMap", [f; l] -> compile_concatmap env loop f l []
+    | "concatMap", [f; l] -> compile_concatmap env loop f l
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->
