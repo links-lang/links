@@ -33,3 +33,4 @@ xmlParser.mli
 *.cmx
 *.a
 *.cmxa
+*.log
