@@ -5,8 +5,8 @@ module ADag = Algebra_dag
 
 module AEnv = Env.Int
 
-open ExpressionToAlgebraDefinitions
-module Helpers = ExpressionToAlgebraHelpers
+open QrToAlgebraDefinitions
+module Helpers = QrToAlgebraHelpers
 
 (* module-global reference that stores the global error plan of the generated
    plan bundle (if there is one) *)
@@ -296,7 +296,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 ope
     let (offset, inner_ti) = List.hd ti.ts in
       Helpers.do_unbox ti.q offset inner_ti
   in
-    match (Query2.Annotate.typeof_typed_t operand_1, Query2.Annotate.typeof_typed_t operand_2) with
+    match (Qr.ImpType.typeof_tqr operand_1, Qr.ImpType.typeof_tqr operand_2) with
 	(* if arguments are boxed (i.e. they have list type), we need
 	   to unbox them first *)
       | `Atom, `Atom when (is_boxed_list e1_ti) && (is_boxed_list e2_ti) ->
@@ -884,11 +884,15 @@ and compile_quote env loop s =
   Debug.print "Warning: quoting at runtime is not implemented (compile_quote)";
   compile_expression env loop s
 
-and compile_for env loop source f order_criteria =
-  let  ti_source = compile_expression env loop source in
+and compile_concatmap env loop f source order_criteria =
+  let ti_source = compile_expression env loop source in
   let _, q_v, map, loop_v = Helpers.lift ti_source.q ti_source.cs in
   let env = Helpers.lift_env map env inner outer in
-  let v, body = match f with `Lambda (([x], body), _) -> (x, body) | _ -> assert false in
+  let v, body = 
+    match f with 
+      | `Lambda (([x], body), _) -> (x, body) 
+      | _ -> assert false 
+  in
   let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
   let ti_body = compile_expression env_v loop_v body in
   let (sort_cols, sort_info, map') =
@@ -1245,7 +1249,7 @@ and compile_unit (loop : ADag.t) : tblinfo =
 
 and compile_variant env loop tag value =
   let ti_value = compile_expression env loop value in
-  let itype = Query2.Annotate.typeof_typed_t value in
+  let itype = Qr.ImpType.typeof_tqr value in
   let key = tagkey tag in
   let q = 
     ADag.mk_attach
@@ -1475,6 +1479,7 @@ and apply_primitive env loop f args =
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
+    | "concatMap", [f; l] -> compile_concatmap env loop f l []
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->
@@ -1529,33 +1534,37 @@ and do_apply_lambda ti_f args_tis =
   in
     Helpers.sequence_construction (List.map fundev fundevs) ~newpos:false
 
-and compile_expression env loop e : tblinfo =
-  match e with
+and binding loop env (`Let (name, t)) =
+  let ti = compile_expression env loop t in
+    Env.Int.bind env (name, ti)
+
+and compile_expression env loop q : tblinfo =
+  match q with
     | `Constant (c, _) -> compile_constant loop c
     | `Apply ((`Primitive f, args), _) -> apply_primitive env loop f args 
     | `Apply ((lambda_exp, args), _) -> apply_lambda env loop lambda_exp args
-    | `Var (x, _) -> AEnv.lookup env x
-    | `Project ((r, field), _) -> compile_project env loop field r
-    | `Record (r, _) -> compile_record env loop (StringMap.to_alist r)
-    | `Extend ((None, empty), _) when (StringMap.size empty) = 0-> compile_unit loop 
-    | `Extend ((r, ext_fields), _) ->
+    | `Variable (x, _) -> AEnv.lookup env x
+    | `Project ((label, r), _) -> compile_project env loop label r
+    | `Extend (empty, None, _) when (StringMap.size empty) = 0 -> compile_unit loop 
+    | `Extend (ext_fields, r, _) ->
 	let ext_fields = StringMap.to_alist ext_fields in
 	  extend_record env loop ext_fields (opt_map (compile_expression env loop) r)
-    | `Erase ((r, erase_fields), _) -> compile_erase env loop erase_fields r
+    | `Erase ((erase_fields, r), _) -> compile_erase env loop erase_fields r
     | `Singleton (e, _) -> compile_expression env loop e
-    | `Append (l, _) -> compile_append env loop l
+    | `Concat (l, _) -> compile_append env loop l
     | `Table (t, _) -> compile_table loop t
     | `If ((c, t, Some e), _) -> compile_if env loop c t e
     | `If ((c, t, None), _) -> compile_if2 env loop c t
-    | `For ((l, os, f), _) -> compile_for env loop l f os
     | `Box (e, _) -> compile_box env loop e
     | `Unbox (e, _) -> compile_unbox env loop e
-    | `Variant ((tag, value), _) -> compile_variant env loop tag value
+    | `Inject ((tag, value), _) -> compile_variant env loop tag value
     | `Case ((v, cases, Some default), _) -> compile_case_default env loop v cases default
     | `Case ((v, cases, None), _) -> compile_case env loop v cases
-    | `Wrong _  -> compile_wrong loop 
+    | `Wrong _ -> compile_wrong loop 
     | `Lambda ((xs, body), _) -> compile_lambda env loop xs body
-    | `XML _ -> failwith "compile_expression: not implemented"
+    | `Computation (bs, tc, _) -> 
+	let env = List.fold_left (binding loop) env bs in
+	  compile_expression env loop tc
     | `Primitive _ -> failwith "compile_expression: eval error"
     | _ -> assert false
 

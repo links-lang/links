@@ -1,7 +1,7 @@
 open Printf
 open Utility
 
-open ExpressionToAlgebraDefinitions
+open QrToAlgebraDefinitions
 
 module A = Algebra
 module FieldEnv = Utility.StringMap

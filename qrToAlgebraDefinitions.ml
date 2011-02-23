@@ -38,7 +38,7 @@ sig
   type error_plan = ADag.t option
 
   type aenv = tblinfo AEnv.t
-  type fundev = (aenv * ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type fundev = (aenv * ADag.t * (Var.var list * Qr.ImpType.tqr))
 
 end
 = 
@@ -48,7 +48,7 @@ struct
   type error_plan = ADag.t option
 
   type aenv = tblinfo AEnv.t
-  type fundev = (aenv * ADag.t * (Var.var list * Query2.Annotate.typed_t))
+  type fundev = (aenv * ADag.t * (Var.var list * Qr.ImpType.tqr))
 end
 
 include Ti

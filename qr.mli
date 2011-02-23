@@ -9,21 +9,10 @@ val prelude_primitive_namemap : string Utility.IntMap.t option ref
 
 val complete_tyenv_ir : Types.datatype Env.Int.t -> Ir.computation -> Types.datatype Env.Int.t
 
-type scope = Var.scope
-  deriving (Show)
+val used_database : Value.database option ref
 
 (* term variables *)
 type var = Var.var
-  deriving (Show)
-type var_info = Var.var_info
-  deriving (Show)
-type binder = Var.binder
-  deriving (Show)
-
-(* type variables *)
-type tyvar = Types.quantifier
-  deriving (Show)
-type tyarg = Types.type_arg
   deriving (Show)
 
 type name = string
@@ -50,7 +39,7 @@ type qr =
   | `Singleton of qr
   | `Concat of qr list
   | `Apply of qr * qr list
-  | `Case of qr * (Var.var * qr) name_map * (Var.var * qr) option
+  | `Case of qr * (var * qr) name_map * (var * qr) option
   | `If of qr * qr * qr option
   
   | `Computation of binding list * qr
@@ -58,7 +47,7 @@ type qr =
   | `Lambda of Var.var list * qr
 
   | `Wrong ]
-and binding = [ `Let of Var.var * qr ]
+and binding = [ `Let of var * qr ]
     deriving (Show)
 
 module ImpType :
@@ -88,9 +77,12 @@ sig
   and binding = [ `Let of Var.var * tqr ]
       deriving (Show)
 
+  val typeof_tqr : tqr -> imptype
+
   val string_of_tqr : tqr -> string
 
 end
 
-val pipeline : Value.env -> Types.datatype Env.Int.t -> Ir.computation -> ImpType.tqr
+val pipeline : Value.env -> Types.datatype Env.Int.t -> (Num.num * Num.num) option -> Ir.computation -> ImpType.tqr
+
 

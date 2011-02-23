@@ -359,15 +359,31 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
-	(*
-	Debug.print (Show.show (Show.show_list Show.show_int ) (List.sort compare (Value.domain env)));
-	Debug.print (Show.show IntSet.show_t Lib.primitive_vars);
-	*)
+	let range =
+	  match range with
+	    | None -> None
+	    | Some (limit, offset) ->
+		Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset))
+	in
 	Irtodot.output_dot e env "ir_query.dot";
 	Qr.prelude_primitives ();
 	let tyenv = val_of !tenv in
-	  ignore (Qr.pipeline env tyenv e);
-	  exit 0;
+	let tqr = Qr.pipeline env tyenv range e in
+	let result =
+	  match !Qr.used_database with
+	    | Some db -> 
+		begin
+		  Qr.used_database := None;
+		  let imptype = Qr.ImpType.typeof_tqr tqr in
+		  let planbundle = QrToAlgebra.compile tqr in
+		  match Heapresult.execute db imptype planbundle  with
+		    | Heapresult.Result value -> value
+		    | Heapresult.Error "something is wrong" -> raise Wrong
+		    | Heapresult.Error s -> eval_error "Error during query execution: %s" s
+		end;
+	    | None -> computation env cont e
+        in
+          apply_cont cont env result
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with

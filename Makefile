@@ -129,9 +129,9 @@ SOURCES = $(OPC)                		\
 	  qr.mli qr.ml				\
 	  query2.ml query2.mli			\
 	  components.ml				\
-	  expressionToAlgebraDefinitions.ml	\
-	  expressionToAlgebraHelpers.ml		\
-	  expressionToAlgebraCompile.ml		\
+	  qrToAlgebraDefinitions.ml	\
+	  qrToAlgebraHelpers.ml		\
+	  qrToAlgebra.ml		\
 	  heapresult.ml	heapresult.mli		\
           query.ml                              \
           evalir.ml                             \

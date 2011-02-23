@@ -1,8 +1,7 @@
 open Utility
 (* open ExpressionToAlgebraDefinitions *)
-module Defs = ExpressionToAlgebraDefinitions
+module Defs = QrToAlgebraDefinitions
 open Defs
-(*open ExpressionToAlgebraDefinitions.Ti *)
 open Components
 
 module A = Algebra

@@ -15,6 +15,10 @@ let prelude_primitive_names =
 let prelude_primitive_vars = ref None
 let prelude_primitive_namemap = ref None
 
+(* HACK: global variable which stores the database on which to execute
+   the query (or none) *)
+let used_database = ref None
+
 let prelude_primitives () =
   match !Lib.prelude_nenv with
     | Some nenv ->
@@ -31,22 +35,9 @@ let prelude_primitives () =
 	  prelude_primitive_namemap := Some name_map
     | None -> assert false
 
-type scope = Var.scope
-  deriving (Show)
-
 (* term variables *)
 type var = Var.var
   deriving (Show, Eq, Hash, Typeable, Pickle, Dump)
-type var_info = Var.var_info
-  deriving (Show)
-type binder = Var.binder
-  deriving (Show)
-
-(* type variables *)
-type tyvar = Types.quantifier
-  deriving (Show)
-type tyarg = Types.type_arg
-  deriving (Show)
 
 type name = string
   deriving (Show)
@@ -55,8 +46,6 @@ type name_set = Utility.stringset
   deriving (Show)
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
-
-let var_of_binder (x, _) = x
 
 type constant = Constant.constant
   deriving (Show)
@@ -73,15 +62,15 @@ type qr =
   | `Singleton of qr
   | `Concat of qr list
   | `Apply of qr * qr list
-  | `Case of qr * (Var.var * qr) name_map * (Var.var * qr) option
+  | `Case of qr * (var * qr) name_map * (var * qr) option
   | `If of qr * qr * qr option
   
   | `Computation of binding list * qr
   | `Primitive of string
-  | `Lambda of Var.var list * qr
+  | `Lambda of var list * qr
 
   | `Wrong ]
-and binding = [ `Let of Var.var * qr ]
+and binding = [ `Let of var * qr ]
     deriving (Show)
 
 let rec computation (bs, tc) : qr =
@@ -99,7 +88,6 @@ and binding (b : Ir.binding) : binding =
     | `Let (binder, (_tyvars, tc)) ->
 	`Let (Var.var_of_binder binder, tail_computation tc)
     | `Fun (binder, (_tyvars, binders, body), _loc) ->
-	(* FIXME: really have tyvars on `Fun AND binding? *)
 	`Let (Var.var_of_binder binder, `Lambda ((List.map Var.var_of_binder binders), computation body))
     | _ -> failwith "foo"
 
@@ -136,11 +124,8 @@ and tail_computation tc =
 and special s =
   match s with
     | `Wrong _ -> `Wrong
-(*    | `Database
-    | `Table
-    | `Query *)
+    | `Query (_range, q, _t) -> computation q
     | _ -> failwith "unsupported special"
-
 
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
@@ -284,7 +269,9 @@ let rec qr_of_value env : Value.t -> qr =
    | `Float f -> `Constant (`Float f)
    | `Int i -> `Constant (`Int i)
    | `String s -> `Constant (`String s)
-   | `Table t -> `Table t
+   | `Table (((db, _), _, _, _) as t) -> 
+       used_database := Some db;
+       `Table t 
    | `PrimitiveFunction (fs, _) -> `Primitive fs
        
    | `RecFunction ([(f, _)], _, _, _) when IntSet.mem f (val_of !prelude_primitive_vars) ->
@@ -318,7 +305,7 @@ let rec qr_of_value env : Value.t -> qr =
    | v -> failwith ("t_of_value: unsupported value " ^ (Show.show Value.show_t v))
 
 (* FIXME: ugly code *)
-let qr_of_query env tyenv comp =
+let qr_of_query env tyenv _range comp =
   let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in
   let restricted_env = restrict (fst3 env) freevars in
   let binding name (value, _) bindings = 
@@ -535,19 +522,32 @@ struct
   (* FIXME: differentiate between functions and other values based on type *)
   (* FIXME: differentiate between function inlining and value propagation *)
   let conservative ctx name =
-    let value = Env.Int.lookup ctx.venv name in
-    match value with
-      | `Table _ | `Constant _ | `Primitive _ | `Wrong 
-      | `Singleton _ | `Concat [] -> value
-      | `Extend _ | `Project _ | `Erase _ | `Inject _
-      | `Concat _ | `Apply _ | `Case _ | `If _
-      | `Computation _  | `Variable _ ->
+    Debug.print (Show.show IntSet.show_t (Env.Int.domain ctx.venv));
+    match Env.Int.find ctx.venv name with
+      | Some value ->
 	  begin
-	    match IntMap.lookup name ctx.census with
-	      | Some c when c < 2 -> value
-	      | _ -> `Variable name
+	    match value with
+	      | `Table _ | `Constant _ | `Primitive _ | `Wrong 
+	      | `Singleton _ | `Concat [] -> 
+		  Debug.f "inline %d (small)" name;
+		  value
+	      | `Extend _ | `Project _ | `Erase _ | `Inject _
+	      | `Concat _ | `Apply _ | `Case _ | `If _
+	      | `Computation _  | `Variable _ ->
+		  begin
+		    match IntMap.lookup name ctx.census with
+		      | Some c when c < 2 -> 
+			  Debug.f "inline %d (c = %d)" name c;
+			  value
+		      | _ -> 
+			  Debug.f "not inline %d" name;
+			  `Variable name
+		  end
+	      | `Lambda _ -> value
 	  end
-      | `Lambda _ -> value
+      | None -> 
+	  Debug.f "not inlined %d (not in env)" name;
+	  `Variable name
 
   let reduce_append vs =
     let vs' = 
@@ -562,7 +562,7 @@ struct
 	| vs -> `Concat vs
 
   let rewrite_primitive = function
-    | "asList", [t] -> t
+    | ("asList" | "AsList"), [t] -> t
     | "filter", [p; l] -> 
 	let x = Var.fresh_raw_var () in
 	  `Apply 
@@ -605,12 +605,7 @@ struct
   let rec inline test (ctx : ctx) (q : qr) =
     let inl = inline test ctx in
       match q with
-	| `Variable name ->
-	    begin
-	      match Env.Int.find ctx.venv name with
-		| Some e -> e
-		| None -> q
-	    end
+	| `Variable name -> test ctx name
 	| `Extend (extend_fields, r) ->
 	    let extend_fields = StringMap.map inl extend_fields in
 	    let r = opt_map inl r in
@@ -623,8 +618,8 @@ struct
 	    `Inject (tag, inl value)
 	| `Computation ([], tc) -> inl tc
 	| `Computation (bs, tc) ->
-	    let bs, venv = bindings test ctx bs in
-	    let tc = inline test { ctx with venv = venv } tc in
+	    let bs, ctx = bindings test ctx bs in
+	    let tc = inline test ctx tc in
 	      `Computation (bs, tc)
 	| `Concat xs -> 
 	    `Concat (List.map inl xs)
@@ -670,13 +665,13 @@ struct
 	| `Singleton v -> `Singleton (inl v)
 
   and bindings test ctx bs =
-    let binding (`Let (name, tc)) (bs, venv) =
-      let tc = inline test { ctx with venv = venv } tc in
+    let binding (bs, ctx) (`Let (name, tc))  =
+      let tc = inline test ctx tc in
       let b = `Let (name, tc) in
-      let venv = Env.Int.bind venv (name, tc) in
-	b :: bs, venv
+      let venv = Env.Int.bind ctx.venv (name, tc) in
+	b :: bs, { ctx with venv = venv }
     in
-      List.fold_right binding bs ([], ctx.venv)
+      List.fold_left binding ([], ctx) bs 
 
   and beta test ctx xs args body =
     try
@@ -772,6 +767,7 @@ module ImpType = struct
     let env' = Env.Int.bind env (var, typeof_tqr tc') in
     let b = `Let (var, tc') in
       (env', b :: bs)
+
 
   and transform env (q : qr) : tqr =
     let enforce_shape = enforce_shape env in
@@ -907,6 +903,7 @@ end
 
 let optphase q =
   let census = Census.count q in
+    Debug.print ("census " ^ (Show.show (IntMap.show_t show_int) census));
     Debug.print ">>>>> inliner";
     let ctx = { Inliner.venv = Env.Int.empty; 
 		Inliner.census = census; } 
@@ -925,10 +922,10 @@ let rec applyn f arg n =
   else
     arg
 
-let pipeline env tyenv comp =
-  let q = qr_of_query env tyenv comp in
+let pipeline env tyenv range comp =
+  let q = qr_of_query env tyenv range comp in
     Debug.print (">>>>> before\n" ^ (Show.show show_qr q));
-    let q = applyn optphase q 3 in
+    let q = applyn optphase q 1 in
     let qt = ImpType.transform Env.Int.empty q in
       Debug.print (">>>>> boxed\n" ^ (Show.show ImpType.show_tqr qt));
       qt
