@@ -35,7 +35,7 @@ struct
 
     method bindings : bindings -> bindings * 'self_type = fun bs ->
       List.fold_right
-	(fun (((x, (t, _, _)), _) as b) (bs, o) ->
+	(fun (((x, (t, _, _)), _tyvars , _q) as b) (bs, o) ->
 	   match IntMap.lookup x census with
 	     | Some c when c > 0 ->
 		 let env = Env.Int.bind tyenv (x, t) in
@@ -77,26 +77,38 @@ struct
       {< env = Env.Int.bind env (name, value) >}
 
     (* FIXME: create type abstraction if type is quantified over *)
-    method bind_if_inlineable name value =
-	match IntMap.lookup name census with
-	  | Some c when c < 2 -> {< env = Env.Int.bind env (name, value) >}
-	  | None | Some _ -> o
+    method bind_if_inlineable name value tyvars =
+      match IntMap.lookup name census with
+	| Some c when c < 2 -> 
+	    let value = 
+	      begin
+		match tyvars with
+		  | [] -> value
+		  | tyvars -> 
+		      Debug.f "introducing tabs for %d: %s" name (Show.show (Show.show_list Types.show_quantifier) tyvars);
+		      `TAbs (tyvars, value)
+	      end
+	    in
+	      {< env = Env.Int.bind env (name, value) >}
+	| None | Some _ -> o
 
     method bindings bs = 
       let bs, o = super#bindings bs in
       List.fold_right
-	(fun ((name, _) as binder, qr) (bs, o) ->
+	(fun ((name, _) as binder, tyvars, qr) (bs, o) ->
 	   let qr, _, o = o#qr qr in
-	   let o = o#bind_if_inlineable name qr in
-	     (binder, qr) :: bs, o)
+	   let o = o#bind_if_inlineable name qr tyvars in
+	     (binder, tyvars, qr) :: bs, o)
 	bs
 	([], o)
 
     method apply : qr -> qr list -> qr * Types.datatype * 'self_type = fun f args ->
       match f with
-	| `Fun (binders, body, _) ->
-	    let arg_bindings = List.combine binders args in
-	    o#qr (`Let (arg_bindings, body))
+	| `Fun (binders, _tyvars, body, _) ->
+	    (* FIXME: handle typevars for argument bindings *)
+	    Debug.print "inline function";
+	    let arg_bindings = List.map (fun (b, a) -> (b, [], a)) (List.combine binders args) in
+	      o#qr (`Let (arg_bindings, body))
 	(* FIXME: handle case/if functional expressions *)
 	| _ -> o#qr (`Apply (f, args))
 
@@ -141,9 +153,9 @@ struct
 	      `List xs, t, o
 	| `PrimitiveFun _ ->
 	    q, t, o
-	| `Fun (binders, body, ft) ->
+	| `Fun (binders, tyvars, body, ft) ->
 	    let body, _, o = o#qr body in
-	      `Fun (binders, body, ft), t, o
+	      `Fun (binders, tyvars, body, ft), t, o
 	| `Case (v, cases, default) ->
 	    let v, _, o = o#qr v in
 	    let cases =

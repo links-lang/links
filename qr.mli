@@ -53,7 +53,7 @@ type qr =
   | `Table of Value.table
   | `List of qr list
   | `PrimitiveFun of string * Var.var option
-  | `Fun of binder list * qr * Types.datatype
+  | `Fun of binder list * tyvar list * qr * Types.datatype
 
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
@@ -62,7 +62,7 @@ type qr =
   | `Let of bindings * qr
 
   | `Wrong of Types.datatype ]
-and bindings = (binder * qr) list
+and bindings = (binder * tyvar list * qr) list
 and env = qr Env.Int.t 
     deriving (Show)
 

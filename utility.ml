@@ -405,6 +405,12 @@ struct
   let push_back f list = list := !list @ [f]
   let push_front f list = list := f :: !list
 
+  let rec combine3 x y z =
+    match (x, y, z) with
+      | x :: xs, y :: ys, z :: zs -> (x, y, z) :: (combine3 xs ys zs)
+      | [], [], [] -> []
+      | _ -> []
+
   let split3 xyzs = 
     List.fold_right (fun (x, y, z) (xs, ys, zs) -> x::xs,y::ys,z::zs)
       xyzs

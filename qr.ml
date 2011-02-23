@@ -77,18 +77,16 @@ type qr =
   | `List of qr list
   | `PrimitiveFun of string * Var.var option
 (*  | `Fun of binder list * qr * Types.datatype * env *)
-  (* FIXME: add tyvar list to fun (one or per parameter?) *)
-  | `Fun of binder list * qr * Types.datatype
+  | `Fun of binder list * tyvar list * qr * Types.datatype
 
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
   | `If of qr * qr * qr
   
-  (* FIXME: add tyvars list (quantifiers) to let *)
   | `Let of bindings * qr
 
   | `Wrong of Types.datatype ]
-and bindings = (binder * qr) list
+and bindings = (binder * tyvar list * qr) list
 and env = qr Env.Int.t 
     deriving (Show)
 
@@ -101,13 +99,13 @@ and bindings bs = List.map binding bs
 
 and binding b =
   match b with
-    (* FIXME: maintain tyvar list on bindings *)
-    | `Let (binder, (_tyvars, tc)) ->
-	(binder, tail_computation tc)
-    | `Fun ((_, (t, _, _)) as binder, (_tyvars, binders, body), _loc) ->
+    | `Let (binder, (tyvars, tc)) ->
+	(binder, tyvars, tail_computation tc)
+    | `Fun ((_, (t, _, _)) as binder, (tyvars, binders, body), _loc) ->
 	let body_t = TypeUtils.return_type t in
-	let closure = `Fun (binders, computation body, body_t) in
-	  (binder, closure)
+	(* FIXME: really have tyvars on `Fun AND binding? *)
+	let closure = `Fun (binders, tyvars, computation body, body_t) in
+	  (binder, [], closure)
     | _ -> failwith "foo"
 
 and value v =
@@ -155,7 +153,6 @@ let local_freevars tyenv xs comp =
 
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
-(* FIXME: maintain tyvar lists when creating bindings (types that are quantified) *)
 let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
  function
    | `Bool b -> `Constant (`Bool b), tyenv
@@ -174,8 +171,8 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
        assert (f = f');
        (* Debug.f "qr_of_value tyenv %d" f; *)
        let t = Env.Int.lookup tyenv f in
+       let tyvars = TypeUtils.quantifiers t in
        let binders = List.map (fun (x, t) -> (x, (t, "", `Local))) (List.combine xs (TypeUtils.arg_types t)) in
-	 
        let freevars = local_freevars tyenv xs body in
        (* Debug.print ("closure freevars " ^ (Show.show IntSet.show_t freevars)); *)
        let bindings, new_names, tyenv = bindings_from_closure_env tyenv freevars env locals in
@@ -192,8 +189,12 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
 	   tyenv
 	   Env.Int.empty
        in
-       let func = `Fun (binders, body, t) in
-	 `Let (bindings, func), tyenv
+       let func = `Fun (binders, tyvars, body, t) in
+	 begin
+	   match bindings with
+	     | [] -> func, tyenv
+	     | bindings -> `Let (bindings, func), tyenv
+	 end
 	 
    | `RecFunction _ -> failwith "t_of_value: mutually recursive functions"
    | `List l -> 
@@ -246,8 +247,9 @@ and bindings_from_closure_env tyenv freevars valenv closure_env =
   let binding name qr bindings =
     (* Debug.f "bindings_from_closure_env binding tyenv %d" name; *)
     let t = Env.Int.lookup tyenv name in
+    let tyvars = TypeUtils.quantifiers t in
     let binder = (name, (t, "", `Local)) in
-      (binder, qr) :: bindings
+      (binder, tyvars, qr) :: bindings
   in
   let bindings = List.rev (Env.Int.fold binding qr_env []) in
     bindings, new_names, tyenv
@@ -352,7 +354,7 @@ struct
 
     method bindings : bindings -> bindings * 'self_type = fun bs ->
       List.fold_right
-	(fun (((x, (t, _, _)), _) as b) (bs, o) ->
+	(fun (((x, (t, _, _)), _, _) as b) (bs, o) ->
 	   (* FIXME: really need to update the tyenv? should already be complete *)
 	   let env = Env.Int.bind tyenv (x, t) in
 	     b :: bs, o#with_tyenv env)
@@ -419,7 +421,7 @@ struct
                   `TApp (v, ts), t, o
               with
                   Instantiate.ArityMismatch ->
-                    prerr_endline ("Arity mismatch in type application (Ir.Transform)");
+                    prerr_endline ("Arity mismatch in type application (Qr.Transform)");
                     prerr_endline ("expression: "^Show.show show_qr (`TApp (v, ts)));
                     prerr_endline ("type: "^Types.string_of_datatype t);
 		    prerr_endline ("raw type: "^Show.show Types.show_typ t);
@@ -451,11 +453,11 @@ struct
 	| `PrimitiveFun (f, _) ->
 	    let t = Env.String.lookup Lib.type_env f in
 	      e, t, o
-	| `Fun (binders, body, t) ->
+	| `Fun (binders, tyvars, body, t) ->
 	    (* TODO: is this the right thing to do? *)
 	    let o = o#binders binders in
 	    let body, _, o = o#qr body in
-	      `Fun (binders, body, t), t, o
+	      `Fun (binders, tyvars, body, t), t, o
 	| `Apply (f, args) ->
 	    let f, ft, o = o#qr f in
 	    let args, _, o = o#list (fun o -> o#qr) args in
@@ -500,9 +502,12 @@ let qr_of_query tyenv env comp =
   let binding name (value, _) (bindings, tyenv) =
     (* Debug.f "qr_of_query tyenv %d" name; *)
     let t = Env.Int.lookup tyenv name in
+    (* FIXME: really no tyvars on value-bindings? *)
+    (* let tyvars = TypeUtils.quantifiers t in *)
+    let tyvars = [] in
     let binder = (name, (t, "", `Local)) in
     let qr, tyenv = qr_of_value t tyenv env value in
-    let binding = (binder, qr) in
+    let binding = (binder, tyvars, qr) in
       binding :: bindings, tyenv
   in
   let free_bindings, tyenv = IntMap.fold binding restricted_env ([], tyenv) in
