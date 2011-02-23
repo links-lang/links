@@ -90,6 +90,12 @@ and binding =
 and env = qr Env.Int.t 
     deriving (Show)
 
+let var_of_binding = 
+  function
+    | `Let ((name, _), _, _) 
+    | `Fun ((name, _), _, _, _)
+    | `PFun ((name, _), _) -> name
+
 let rec computation (bs, tc) : qr =
   let bs = bindings bs in
   let e = tail_computation tc in
@@ -160,7 +166,6 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
    | `String s -> `Constant (`String s), tyenv
    | `Database (db, s) -> `Database (db, s), tyenv
    | `Table t -> `Table t, tyenv
-(* FIXME eta-expand primitive functions? *)
    | `PrimitiveFunction (fs, _) -> 
        let name = Env.String.lookup Lib.nenv fs in
        let t = Env.Int.lookup tyenv name in
@@ -168,6 +173,7 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
        (* dispatch is added after defunctionalization *)
        let binding = `PFun (binder, None) in
 	 (* FIXME: add TAbs if there are type variables *)
+	 (* better: add tyvars to `PFun if the primitive type is quantified over *)
 	 `Computation ([binding], `Variable name), tyenv
        
    | `RecFunction ([(f, _)], _, _, _) when IntSet.mem f (val_of !prelude_primitive_vars) ->
@@ -389,15 +395,14 @@ let qr_of_query tyenv env comp =
     let qr, tyenv = qr_of_value t tyenv env value in
     let bindings' = 
       match qr with
-(*
-	| `Computation (closenv_bindings :: (`Fun ((new_name, (ft, _, _)), arg_binders, body, tyvars)) :: [], `Variable new_name') when new_name = new_name' ->
-	    closenv_bindings @ [`Fun ((name, (ft, "", `Local)), arg_binders, body, tyvars)]
-*)
+	(* FIXME: this needs to be tested thoroughly *)
 	| `Computation (bindings, `Variable new_name) ->
 	    begin
 	      match List.rev bindings with
 		| `Fun ((new_name', _), arg_binders, body, tyvars) :: closenv_bindings when new_name = new_name' ->
 		    closenv_bindings @ [`Fun (binder, arg_binders, body, tyvars)]
+		| `PFun ((new_name', _), dispatch) :: closenv_bindings when new_name = new_name' ->
+		    closenv_bindings @ [`PFun (binder, dispatch)]
 		| _ -> [`Let (binder, tyvars, qr)]
 	    end
 	| _ -> [`Let (binder, tyvars, qr)]
@@ -405,13 +410,27 @@ let qr_of_query tyenv env comp =
       bindings' @ bindings, tyenv
   in
   let free_bindings, tyenv = IntMap.fold binding restricted_env ([], tyenv) in
+
+  let primitive_free_vars = IntSet.inter freevars Lib.primitive_vars in
+    
+  let primitive var bindings =
+    let t = Env.Int.lookup tyenv var in
+    let stub = Lib.primitive_stub_by_code var in
+    let qr, _tyenv = qr_of_value t tyenv env stub in
+    let binding =
+      match qr with
+	| `Computation ([`PFun ((new_name, info), dispatch)], `Variable new_name') when new_name = new_name' ->
+	    `PFun ((var, info), dispatch)
+	| _ -> failwith ("unexpected primitive value: " ^ (Show.show show_qr qr))
+    in
+      binding :: bindings
+  in
+
+  let primitive_bindings = IntSet.fold primitive primitive_free_vars [] in
+    
   let qr_comp = computation comp in
     match qr_comp with
-	(*
-      | `Let (local_bindings, comp) ->
-	  `Let (free_bindings @ local_bindings, comp), tyenv
-	*)
       | `Computation (local_bindings, tc) ->
-	  `Computation (free_bindings @ local_bindings, tc), tyenv
+	  `Computation (primitive_bindings @ free_bindings @ local_bindings, tc), tyenv
       | _ -> assert false
     

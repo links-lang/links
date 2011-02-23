@@ -67,6 +67,8 @@ and binding =
 and env = qr Env.Int.t 
     deriving (Show)
 
+val var_of_binding : binding -> var
+
 val computation : Ir.computation -> qr
 
 val qr_of_query : Types.datatype Env.Int.t -> Value.env -> Ir.computation -> (qr * Types.datatype Env.Int.t)
