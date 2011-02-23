@@ -86,9 +86,10 @@ type qr =
   | `Computation of binding list * qr
 
   | `Wrong of Types.datatype ]
+and funct = binder * binder list * qr * tyvar list
 and binding = 
   [ `Let of (binder * tyvar list * qr)
-  | `Fun of (binder * binder list * qr * tyvar list) ]
+  | `Fun of funct ]
 and env = qr Env.Int.t 
     deriving (Show)
 
