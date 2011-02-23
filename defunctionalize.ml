@@ -1,6 +1,7 @@
 open Utility
 open Qr
 
+(*
 module Census =
 struct
   let counter tyenv =
@@ -307,10 +308,14 @@ let rec applyn f arg n =
     f (applyn f arg (n-1))
   else
     arg
+*)
 
 let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
+  q
+(*
   let optphase = optphase tyenv in
   let q = applyn optphase q 1 in
     ignore (Qr.type_qr tyenv q);
     q
+*)

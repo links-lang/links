@@ -53,19 +53,20 @@ type qr =
   | `Table of Value.table
   | `List of qr list
   | `PrimitiveFun of string * Var.var option
-  | `Fun of binder list * tyvar list * qr * Types.datatype
 
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
   | `If of qr * qr * qr
+  | `Computation of binding list * qr
   
-  | `Let of bindings * qr
-
   | `Wrong of Types.datatype ]
-and bindings = (binder * tyvar list * qr) list
+and binding = 
+  [ `Let of (binder * tyvar list * qr)
+  | `Fun of (binder * binder list * qr * tyvar list) ]
 and env = qr Env.Int.t 
     deriving (Show)
 
+(*
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
@@ -108,6 +109,7 @@ sig
 end
 
 module Transform : TRANSFORM
+*)
 
 val computation : Ir.computation -> qr
 

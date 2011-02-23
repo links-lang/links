@@ -77,34 +77,35 @@ type qr =
   | `List of qr list
   | `PrimitiveFun of string * Var.var option
 (*  | `Fun of binder list * qr * Types.datatype * env *)
-  | `Fun of binder list * tyvar list * qr * Types.datatype
+(*  | `Fun of binder list * tyvar list * qr * Types.datatype *)
 
   | `Apply of qr * qr list
   | `Case of qr * (binder * qr) name_map * (binder * qr) option
   | `If of qr * qr * qr
   
-  | `Let of bindings * qr
+  | `Computation of binding list * qr
 
   | `Wrong of Types.datatype ]
-and bindings = (binder * tyvar list * qr) list
+and binding = 
+  [ `Let of (binder * tyvar list * qr)
+  | `Fun of (binder * binder list * qr * tyvar list) ]
 and env = qr Env.Int.t 
     deriving (Show)
 
-let rec computation (bs, tc) =
+let rec computation (bs, tc) : qr =
   let bs = bindings bs in
   let e = tail_computation tc in
-    `Let (bs, e)
+    `Computation (bs, e)
 
 and bindings bs = List.map binding bs
 
-and binding b =
+and binding (b : Ir.binding) : binding =
   match b with
     | `Let (binder, (tyvars, tc)) ->
-	(binder, tyvars, tail_computation tc)
-    | `Fun ((_, (t, _, _)) as binder, (tyvars, binders, body), _loc) ->
+	`Let (binder, tyvars, tail_computation tc)
+    | `Fun (binder, (tyvars, binders, body), _loc) ->
 	(* FIXME: really have tyvars on `Fun AND binding? *)
-	let closure = `Fun (binders, tyvars, computation body, t) in
-	  (binder, [], closure)
+	`Fun (binder, binders, computation body, tyvars)
     | _ -> failwith "foo"
 
 and value v =
@@ -159,9 +160,9 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
    | `Float f -> `Constant (`Float f), tyenv
    | `Int i -> `Constant (`Int i), tyenv
    | `String s -> `Constant (`String s), tyenv
-   | `Database (db, s) -> 
-       `Database (db, s), tyenv
+   | `Database (db, s) -> `Database (db, s), tyenv
    | `Table t -> `Table t, tyenv
+(* FIXME eta-expand primitive functions? *)
    | `PrimitiveFunction f -> `PrimitiveFun f, tyenv
    | `RecFunction ([(f, _)], _, _, _) when IntSet.mem f (val_of !prelude_primitive_vars) ->
        let s = IntMap.find f (val_of !prelude_primitive_namemap) in
@@ -171,7 +172,7 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
        (* Debug.f "qr_of_value tyenv %d" f; *)
        let t = Env.Int.lookup tyenv f in
        let tyvars = TypeUtils.quantifiers t in
-       let binders = List.map (fun (x, t) -> (x, (t, "", `Local))) (List.combine xs (TypeUtils.arg_types t)) in
+       let arg_binders = List.map (fun (x, t) -> (x, (t, "", `Local))) (List.combine xs (TypeUtils.arg_types t)) in
        let freevars = local_freevars tyenv xs body in
        (* Debug.print ("closure freevars " ^ (Show.show IntSet.show_t freevars)); *)
        let bindings, new_names, tyenv = bindings_from_closure_env tyenv freevars env locals in
@@ -188,12 +189,10 @@ let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
 	   tyenv
 	   Env.Int.empty
        in
-       let func = `Fun (binders, tyvars, body, t) in
-	 begin
-	   match bindings with
-	     | [] -> func, tyenv
-	     | bindings -> `Let (bindings, func), tyenv
-	 end
+       let fun_binder, fun_var = Var.fresh_var (t, "", `Local) in
+       let (fun_binding : binding) = `Fun (fun_binder, arg_binders, body, tyvars) in
+       let tyenv = Env.Int.bind tyenv (fun_var, t) in
+	 `Computation (bindings @ [fun_binding], `Variable fun_var), tyenv
 	 
    | `RecFunction _ -> failwith "t_of_value: mutually recursive functions"
    | `List l -> 
@@ -248,11 +247,12 @@ and bindings_from_closure_env tyenv freevars valenv closure_env =
     let t = Env.Int.lookup tyenv name in
     let tyvars = TypeUtils.quantifiers t in
     let binder = (name, (t, "", `Local)) in
-      (binder, tyvars, qr) :: bindings
+      (`Let (binder, tyvars, qr)) :: bindings
   in
   let bindings = List.rev (Env.Int.fold binding qr_env []) in
     bindings, new_names, tyenv
 
+(*
 module type TRANSFORM =
 sig
   type environment = Types.datatype Env.Int.t
@@ -517,6 +517,7 @@ struct
 	    e, t, o
   end
 end
+*)
 
 let type_constant c =
   match c with
@@ -526,7 +527,7 @@ let type_constant c =
     | `String _ -> Types.string_type
     | `Float _ -> Types.float_type
 
-let binder tyenv (var, (t, _, _)) = Env.Int.bind tyenv (var, t)
+let type_binder tyenv (var, (t, _, _)) = Env.Int.bind tyenv (var, t)
 
 let type_list xs type_value =
   List.map type_value xs
@@ -538,7 +539,11 @@ let type_name_map map type_value =
 
 let bindings tyenv bs =
   List.fold_left
-    (fun tyenv (b, _tyvars, _tc) -> binder tyenv b) 
+    (fun tyenv binding -> 
+       match binding with
+	 | `Let (binder, _, _)
+	 | `Fun (binder, _, _, _) -> 
+	     type_binder tyenv binder) 
     tyenv 
     bs
 
@@ -604,12 +609,11 @@ let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype =
 	    end
       | `PrimitiveFun (f, _) ->
 	  Env.String.lookup Lib.type_env f
-      | `Fun (_, _, _, t) -> t
       | `Apply (f, _args) ->
 	  let ft = type_qr tyenv f in
 	    TypeUtils.return_type ft
       | `Case (_v, cases, default) ->
-	  let type_case (b, body) = type_qr (binder tyenv b) body in
+	  let type_case (b, body) = type_qr (type_binder tyenv b) body in
 	  let case_types = type_name_map cases type_case in
 	  let default_type = opt_map type_case default in
             if not (StringMap.is_empty case_types) then
@@ -618,8 +622,8 @@ let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype =
               val_of default_type
       | `If (_, then_branch, _) ->
 	  type_qr tyenv then_branch
-      | `Let (bs, comp) ->
-	  type_qr (bindings tyenv bs) comp
+      | `Computation (bs, tc) ->
+	  type_qr (bindings tyenv bs) tc
       | `Wrong t -> t
     in
       Debug.print ("q expr " ^ (Show.show show_qr q));
@@ -639,13 +643,31 @@ let qr_of_query tyenv env comp =
     let tyvars = [] in
     let binder = (name, (t, "", `Local)) in
     let qr, tyenv = qr_of_value t tyenv env value in
-    let binding = (binder, tyvars, qr) in
-      binding :: bindings, tyenv
+    let bindings' = 
+      match qr with
+(*
+	| `Computation (closenv_bindings :: (`Fun ((new_name, (ft, _, _)), arg_binders, body, tyvars)) :: [], `Variable new_name') when new_name = new_name' ->
+	    closenv_bindings @ [`Fun ((name, (ft, "", `Local)), arg_binders, body, tyvars)]
+*)
+	| `Computation (bindings, `Variable new_name) ->
+	    begin
+	      match List.rev bindings with
+		| `Fun ((new_name', _), arg_binders, body, tyvars) :: closenv_bindings when new_name = new_name' ->
+		    closenv_bindings @ [`Fun (binder, arg_binders, body, tyvars)]
+		| _ -> [`Let (binder, tyvars, qr)]
+	    end
+	| _ -> [`Let (binder, tyvars, qr)]
+    in
+      bindings' @ bindings, tyenv
   in
   let free_bindings, tyenv = IntMap.fold binding restricted_env ([], tyenv) in
   let qr_comp = computation comp in
     match qr_comp with
+	(*
       | `Let (local_bindings, comp) ->
 	  `Let (free_bindings @ local_bindings, comp), tyenv
+	*)
+      | `Computation (local_bindings, tc) ->
+	  `Computation (free_bindings @ local_bindings, tc), tyenv
       | _ -> assert false
     
