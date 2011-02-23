@@ -220,7 +220,6 @@ struct
 	  (NotFound x) ->
 	    (*Debug.print (Show.show VarSet.show_t bound); *)
 	    raise (NotFound x)
-	    
 
   and expression_of_value env bound : Value.t -> t =
     function
