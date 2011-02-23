@@ -124,11 +124,11 @@ struct
 	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
 	let bs, o = o#bindings bs in
 	let tc, t, o = o#tail_computation tc in 
-	let (bs, tc), t, o = 
 	  Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
 	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
 	  match tc with
 	    | `Apply (f, args) ->
+		(* inline known functions (beta) *)
 		begin
 		  let f, t, o = o#value f in
 		    match f with
@@ -140,20 +140,51 @@ struct
 				  Debug.f "inline function %d" f';
 				  let args' = List.map o#value args in
 				  let arg_bs = arg_lets xs args' in
-				    o#computation ((arg_bs @ body_bs), body_tc)
+				  let (bs', tc), t, o = o#computation ((arg_bs @ body_bs), body_tc) in
+				    (bs @ bs', tc), t, o
 			      | Value _ -> 
 				  (bs, tc), t, o
 			  end
 		      | _ -> (bs, tc), t, o
 		end
+	    | `Case (c, cases, default) ->
+		(* inline case expressions over known variant values *)
+		begin
+		  let c, _ct, o = o#value c in
+		    match c with
+		      | `Inject (tag, cv, _t) ->
+			  let cv, cvt, o = o#value cv in
+			  let (binder, (case_bs, case_tc)) = 
+			    match StringMap.lookup tag cases, default with
+			      | Some (binder, (case_bs, case_tc)), _
+			      | None, Some (binder, (case_bs, case_tc)) ->
+				  binder, (case_bs, case_tc)
+			      | None, None -> assert false
+			  in
+			  let arg_bs = arg_lets [binder] [cv, cvt, o] in
+			  let (bs', tc), t, o = o#computation ((arg_bs @ case_bs), case_tc) in
+			    (bs @ bs', tc), t, o
+		      | _ -> (bs, tc), t, o
+		end
+	    | `If (c, tcomp, ecomp) ->
+		(* inline if expressions over known boolean values *)
+		begin
+		  let c, _ct, o = o#value c in
+		    match c with
+		      | `Constant (`Bool true) ->
+			  let (bs', tc), t, o = o#computation tcomp in
+			    (bs @ bs', tc), t, o
+		      | `Constant (`Bool false) ->
+			  let (bs', tc), t, o = o#computation ecomp in
+			    (bs @ bs', tc), t, o
+		      | _ -> (bs, tc), t, o
+		end
 	    | tc -> 
 		(bs, tc), t, o
-	in
-	  (bs, tc), t, o
   end
 
-  let program typing_env p census =
-    fst3 ((inliner typing_env Env.Int.empty census)#computation p)
+let program typing_env p census =
+  fst3 ((inliner typing_env Env.Int.empty census)#computation p)
 end
 
 module Census =

@@ -362,12 +362,7 @@ module Eval = struct
 	let e' = Query3.pipeline (val_of !tenv) e in
 	  Irtodot.output_dot e' env "ir_query_optimized.dot";
 	  Irtodot.output_dot e env "ir_query.dot";
-	  (* Debug.print (Show.show Ir.show_computation e);
-	  Debug.print (Show.show Ir.show_computation e'); *)
-	  Debug.print (Value.string_of_cont cont);
-	  let result = computation env cont e in
-	    Debug.print "result computed";
-            apply_cont cont env result
+	  exit 0;
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with
