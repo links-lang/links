@@ -65,150 +65,125 @@ end
 
 module Inliner =
 struct
-  let inliner tyenv env census =
-  object (o)
-    inherit Transform.visitor(tyenv) as super
 
-    val env = env
+  type ctx = { env : qr Env.Int.t; 
+	       tyenv : Types.datatype Env.Int.t; 
+	       census : int IntMap.t }
 
-    val census = census
+  (* FIXME: differentiate between functions and other values based on type *)
+  (* FIXME: differentiate between function inlining and value propagation *)
+  let is_inlineable census name =
+    match IntMap.lookup name census with
+      | Some c when c < 2 -> true
+      | _ -> false
 
-    (* FIXME: create type abstraction if type is quantified over *)
-    method bind_if_inlineable name value tyvars =
-      match IntMap.lookup name census with
-	| Some c when c < 2 -> 
-	    Debug.f "bind %d" name;
-	    let value = 
-	      begin
-		match tyvars with
-		  | [] -> value
-		  | tyvars -> 
-		      Debug.f "introducing tabs for %d: %s" name (Show.show (Show.show_list Types.show_quantifier) tyvars);
-		      `TAbs (tyvars, value)
-	      end
-	    in
-	      {< env = Env.Int.bind env (name, value) >}
-	| None ->
-	    Debug.f "don't bind %d 1" name;
-	    o
-	| Some _ -> 
-	    Debug.f "don't bind %d 2" name;
-	    o
-
-    method bindings bs = 
-      Debug.print "bindings";
-      (*let bs, o = super#bindings bs in *)
-      List.fold_right
-	(fun ((name, _) as binder, tyvars, qr) (bs, o) ->
-	   let qr, _, o = o#qr qr in
-	   let o = o#bind_if_inlineable name qr tyvars in
-	     (binder, tyvars, qr) :: bs, o)
-	bs
-	([], o)
-
-    method apply : qr -> qr list -> qr * Types.datatype * 'self_type = fun f args ->
-      match f with
-	| `Fun (binders, _tyvars, body, _) 
-	| `TApp (`Fun (binders, _tyvars, body, _), _) ->
-	    (* FIXME: handle typevars for argument bindings *)
-	    Debug.print "inline function";
-	    let arg_bindings = List.map (fun (b, a) -> (b, [], a)) (List.combine binders args) in
-	      Debug.print ("apply " ^ (Show.show show_qr body));
-	      Debug.print ("apply args " ^ (Show.show show_bindings arg_bindings));
-	      o#qr (`Let (arg_bindings, body))
-	| `Let (bindings, `Fun (binders, _tyvars, body, _)) ->
-	    Debug.print "inline function";
-	    let arg_bindings = List.map (fun (b, a) -> (b, [], a)) (List.combine binders args) in
-	      Debug.print ("apply " ^ (Show.show show_qr body));
-	      Debug.print ("apply args " ^ (Show.show show_bindings arg_bindings));
-	      o#qr (`Let (bindings @ arg_bindings, body))
-	(* FIXME: handle case/if functional expressions *)
-	| _ -> o#qr (`Apply (f, args))
-
-    method! qr q =
-      Debug.print "call super";
-      let q, t, _ = super#qr q in 
-	Debug.print "finished calling super";
-(*	let t = `Not_typed in *)
-	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_qr) env));
-	Debug.print ("o#qr " ^ (Show.show show_qr q));
-	match q with
-	  | `Apply (f, args) -> 
-	      let args, _, o = o#list (fun o -> o#qr) args in
-	      let f, _, o = o#qr f in
-		o#apply f args
-	  | `Constant _ -> q, t, o
-	  | `Variable name ->
-		begin
-		  match Env.Int.find env name with
-		    | Some e -> 
-			Debug.f "inline %d" name;
-			e, t, o
-		    | None -> q, t, o
-		end
+  let rec inline ctx q =
+    let inl = inline ctx in
+      match q with
+	| `Variable name ->
+	    begin
+	      match Env.Int.find ctx.env name with
+		| Some e -> e
+		| None -> q
+	    end
 	| `Extend (extend_fields, r) ->
-	    let extend_fields, _, o = o#name_map (fun o -> o#qr) extend_fields in
-	    let r, _, o = o#option (fun o -> o#qr) r in
-	      `Extend (extend_fields, r), t, o
+	    let extend_fields = StringMap.map inl extend_fields in
+	    let r = opt_map inl r in
+	      `Extend (extend_fields, r)
 	| `Project (label, r) ->
-	    let r, _, o = o#qr r in
-	      `Project (label, r), t, o
-	| `Erase (labels, r) ->
-	    let r, _, o = o#qr r in
-	      `Erase (labels, r), t, o
-	| `Inject (tag, v, t) ->
-	    let v, _, o = o#qr v in
-	      `Inject (tag, v, t), t, o
+	    `Project (label, inl r)
+	| `Erase (names, r) ->
+	    `Erase (names, inl r)
+	| `Inject (tag, value, t) ->
+	    `Inject (tag, inl value, t)
 	| `TApp (v, tyargs) ->
-	    let v, _, o = o#qr v in
-	      `TApp (v, tyargs), t, o
+	    (* `TApp (inl v, tyargs) *)
+	    begin
+	      match inl v with
+		| `Variable var -> `TApp (`Variable var, tyargs)
+		| e -> e
+	    end
 	| `TAbs (tyvars, v) ->
-	    let v, _, o = o#qr v in
-	    `TAbs (tyvars, v), t, o
-	| `Database _ -> q, t, o
-	| `Table _ -> q, t, o
-	| `List xs ->
-	    let xs, _, o = o#list (fun o -> o#qr) xs in
-	      `List xs, t, o
-	| `PrimitiveFun _ ->
-	    q, t, o
-	| `Fun (binders, tyvars, body, ft) ->
-	    Debug.print "fun";
-	    let body, _, o = o#qr body in
-	      `Fun (binders, tyvars, body, ft), t, o
-	| `Case (v, cases, default) ->
-	    let v, _, o = o#qr v in
-	    let cases =
-	      StringMap.map
-		(fun (binder, body) ->
-		   let body, _, _ = o#qr body in
-		     (binder, body))
-		cases
-	    in
-	    let default = opt_map (fun (binder, body) -> (binder, fst3 (o#qr body))) default in
-	      `Case (v, cases, default), t, o
-	| `If (c, tb, eb) ->
-	    let c, _, o = o#qr c in
-	    let tb, _, o = o#qr tb in
-	    let eb, _, o = o#qr eb in
-	      `If (c, tb, eb), t, o
+	    `TAbs (tyvars, inl v)
+	| `Let ([], tc) -> inl tc
 	| `Let (bs, tc) ->
-	    Debug.print "let";
-	    let bs, o = o#bindings bs in
-	      Debug.print "tailcomp";
-	    let tc, _, o = o#qr tc in
+	    let bs, env = bindings ctx bs in
+	    let tc = inline { ctx with env = env } tc in
+	      `Let (bs, tc)
+	| `List xs -> 
+	    `List (List.map inl xs)
+	| `Fun (binders, tyvars, body, t) ->
+	    let body = inl body in
+	      `Fun (binders, tyvars, body, t)
+	| `Apply (f, args) ->
+	    apply ctx (inl f) (List.map inl args)
+	| `Case (v, cases, default) ->
+	    let case (binder, body) =
+	      (binder, inl body)
+	    in
+	    let v = inl v in
+	    let cases = StringMap.map case cases in
+	    let default = opt_map case default in
 	      begin
-		match tc with
-		  | `Let (bsi, tci) ->
-		      `Let (bs @ bsi, tci), t, o
-		  | tc -> `Let (bs, tc), t, o
+		match inl v with
+		  | `Inject (tag, value, _t) ->
+		      let (binder, body) =
+			begin
+			  match StringMap.lookup tag cases, default with
+			    | Some case, _ -> case
+			    | None, Some default -> default
+			    | None, None -> failwith "Inline.inline: neither matching case nor default case"
+			end
+		      in
+			beta ctx [value] [] [binder] body
+		  | _ -> `Case (v, cases, default)
 	      end
-	| `Wrong _ -> q, t, o
+	      
+	| `If (c, t, e) ->
+	    let c = inl c in
+	    let t = inl t in
+	    let e = inl e in
+	      begin
+		match c with
+		  | `Constant (`Bool true) -> t
+		  | `Constant (`Bool false) -> e
+		  | _ -> `If (inl c, inl t, inl e)
+	      end
+	| `Constant _
+	| `Wrong _
+	| `Database _
+	| `Table _
+	| `PrimitiveFun _ -> q
 
-  end
+  and bindings ctx bs =
+    let binding ((name, _) as binder, tyvars, tc) (bs, env) =
+      let tc = inline { ctx with env = env } tc in
+      let env = 
+	if is_inlineable ctx.census name then
+	  match tyvars with
+	    | [] -> Env.Int.bind env (name, tc)
+	    | tyvars -> Env.Int.bind env (name, `TAbs (tyvars, tc))
+	else
+	  env
+      in
+	(binder, tyvars, tc) :: bs, env
+    in
+      List.fold_right binding bs ([], ctx.env)
 
-  let inline tyenv census q =
-    fst3 ((inliner tyenv Env.Int.empty census)#qr q)
+  and beta ctx args pre_bindings binders body =
+    try
+      let arg_bindings = List.map2 (fun binder arg -> (binder, [], arg)) binders args in
+	inline ctx (`Let (pre_bindings @ arg_bindings, body))
+    with Invalid_argument _ -> failwith "arity mismatch in function inlining"
+
+  and apply ctx f args =
+      match f with
+	| `Fun (binders, _tyvars, body, _t)
+	(* FIXME: maintain typability: instantiate type, if vars remain, introduce tabs *)
+	| `TApp (`Fun (binders, _tyvars, body, _t), _) -> beta ctx args [] binders body
+	| `Let (bs, `Fun (binders, _tyvars, body, _t)) -> beta ctx args bs binders body
+	| _ -> `Apply (f, args)
+
 end
 
 module Monomorphize =
@@ -231,11 +206,12 @@ end
 let optphase tyenv q =
   let census = Census.census tyenv q in
     Debug.print ">>>>> inliner";
-  let q = Inliner.inline tyenv census q in
-  let q = ElimDeadDefs.eliminate tyenv (Census.census tyenv q) q in
-    Debug.print ("inlined\n" ^ (Show.show show_qr q));
-    q
-    
+    let ctx = { Inliner.env = Env.Int.empty; Inliner.tyenv = tyenv; Inliner.census = census } in
+    let q = Inliner.inline ctx q in
+    let census = Census.census tyenv q in
+      let q = ElimDeadDefs.eliminate tyenv census q in
+	Debug.print ("inlined\n" ^ (Show.show show_qr q));
+	q
 
 let rec applyn f arg n =
   if n = 1 then
@@ -248,10 +224,4 @@ let rec applyn f arg n =
 let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
   let optphase = optphase tyenv in
-    applyn optphase q 1
-(*
-  let q = (fst3 ((new Transform.visitor tyenv)#qr q))  in
-    Debug.print (Show.show show_qr q);
-    q
-    
-*)
+    applyn optphase q 3

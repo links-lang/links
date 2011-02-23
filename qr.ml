@@ -102,9 +102,8 @@ and binding b =
     | `Let (binder, (tyvars, tc)) ->
 	(binder, tyvars, tail_computation tc)
     | `Fun ((_, (t, _, _)) as binder, (tyvars, binders, body), _loc) ->
-	let body_t = TypeUtils.return_type t in
 	(* FIXME: really have tyvars on `Fun AND binding? *)
-	let closure = `Fun (binders, tyvars, computation body, body_t) in
+	let closure = `Fun (binders, tyvars, computation body, t) in
 	  (binder, [], closure)
     | _ -> failwith "foo"
 
@@ -301,7 +300,7 @@ struct
   type environment = Types.datatype Env.Int.t
 
   class visitor (tyenv : environment) =
-  object ((o : 'self_type))
+  object (o : 'self_type)
     val tyenv = tyenv
 
     method lookup_type : var -> Types.datatype = fun var ->
@@ -353,13 +352,12 @@ struct
     method with_tyenv : environment -> 'self_type = fun tyenv -> {< tyenv = tyenv >}
 
     method bindings : bindings -> bindings * 'self_type = fun bs ->
-      Debug.print "super bindings";
       List.fold_right
-	(fun (((x, (t, _, _)), _tyvars, tc) as b) (bs, o) ->
+	(fun (((x, (t, _, _)) as binder, tyvars, tc)) (bs, o) ->
 	   (* FIXME: really need to update the tyenv? should already be complete *)
 	   let env = Env.Int.bind tyenv (x, t) in
 	   let tc, _, o = o#qr tc in
-	     b :: bs, o#with_tyenv env)
+	     (binder, tyvars, tc) :: bs, o#with_tyenv env)
 	bs
 	([], o)
 
@@ -382,7 +380,6 @@ struct
         | `Float _ -> c, Types.float_type, o
 
     method qr : qr -> (qr * Types.datatype * 'self_type) = fun e ->
-      Debug.print ("super#qr " ^ (Show.show show_qr e));
       match e with
 	| `Constant c -> 
 	    let c, t, o = o#constant c in
@@ -462,9 +459,20 @@ struct
 	    let body, _, o = o#qr body in
 	      `Fun (binders, tyvars, body, t), t, o
 	| `Apply (f, args) ->
-	    let f, ft, o = o#qr f in
-	    let args, _, o = o#list (fun o -> o#qr) args in
-	      `Apply (f, args), TypeUtils.return_type ft, o
+	    begin
+	      try
+		let f, ft, o = o#qr f in
+		let args, _, o = o#list (fun o -> o#qr) args in
+		let t = TypeUtils.return_type ft in
+		  `Apply (f, args), t, o
+	      with
+		  TypeUtils.TypeDestructionError m -> 
+		    begin
+		      Debug.print ("foo " ^ (Show.show show_qr (`Apply (f, args))));
+			failwith m
+		    end
+	    end
+
 	| `Case (v, cases, default) ->
             let v, _, o = o#qr v in
             let cases, case_types, o =
@@ -509,6 +517,11 @@ struct
 	    e, t, o
   end
 end
+
+(*
+let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype tyenv q =
+*)
+  
 
 let qr_of_query tyenv env comp =
   let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in
