@@ -61,6 +61,7 @@ struct
                 (show_k).format formatter key;
                 Format.pp_print_string formatter " => ";
                 (show_v).format formatter value;
+		Format.pp_print_string formatter " ";
                 Format.pp_close_box formatter ();
              ) map;
       Format.pp_print_string formatter "}, ";
