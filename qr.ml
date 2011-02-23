@@ -61,8 +61,6 @@ let var_of_binder (x, _) = x
 type constant = Constant.constant
   deriving (Show)
 
-type type_env = Types.datatype Env.Int.t
-
 type qr =
   [ `Constant of constant
   | `Variable of var
@@ -159,7 +157,7 @@ let local_freevars tyenv xs comp =
 
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
-let rec qr_of_value t tyenv env : Value.t -> (qr * type_env) =
+let rec qr_of_value t tyenv env : Value.t -> (qr * Types.datatype Env.Int.t) =
  function
    | `Bool b -> `Constant (`Bool b), tyenv
    | `Char c -> `Constant (`Char c), tyenv
@@ -301,22 +299,8 @@ let bindings tyenv bs =
     tyenv 
     bs
 
-let merge_tyenvs te1 te2 =
-  let merge var t1 t2 =
-    | Some t1, None -> Some t1
-    | None, Some t2 -> Some t2
-    | Some t1, Some t2 -> -> 
-	(* FIXME: assert type equal *)
-	Some t1
-    | None, None -> assert false
-  in
-    Env.Int.merge merge te1 te2
-
-let merge_tyenv_list tes =
-  List.fold_left merge_tyenvs Env.Int.empty tes
-
 (* reconstruct types of qr expressions *)
-let rec type_qr : type_env -> qr -> Types.datatype * type_env = 
+let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
   fun tyenv q ->
     let lookup_type = Env.Int.lookup tyenv in
     let t = 
@@ -340,15 +324,15 @@ let rec type_qr : type_env -> qr -> Types.datatype * type_env =
 	    end
       | `Project (label, r) ->
 	  let rt = type_qr tyenv r in
-	    TypeUtils.project_type label rt, tyenv
+	    TypeUtils.project_type label rt
       | `Erase (names, r) ->
 	  let rt = type_qr tyenv r in
-	    TypeUtils.erase_type_poly names rt, tyenv
-      | `Inject (_, _, t) -> t, tyenv
+	    TypeUtils.erase_type_poly names rt
+      | `Inject (_, _, t) -> t
       | `TApp (v, ts) ->
 	  let t = type_qr tyenv v in
             begin try
-              Instantiate.apply_type t ts, tyenv
+              Instantiate.apply_type t ts 
             with
                 Instantiate.ArityMismatch ->
                   prerr_endline ("Arity mismatch in type application (Qr.type_qr)");
@@ -359,30 +343,25 @@ let rec type_qr : type_env -> qr -> Types.datatype * type_env =
                   failwith "fatal internal error"
 	    end
       | `TAbs (tyvars, v) ->
-	  let t, tyenv = type_qr tyenv v in
-	    Types.for_all (tyvars, t), tyenv
+	  let t = type_qr tyenv v in
+	    Types.for_all (tyvars, t)
       | `Database (_db, _name) ->
-	  `Primitive `DB, tyenv
+	  `Primitive `DB
       | `Table (_, _, _, row_type) ->
-	  Types.make_table_type (`Record row_type, `Record row_type, `Record row_type), tyenv
+	  Types.make_table_type (`Record row_type, `Record row_type, `Record row_type)
       | `List xs ->
-	  let trs = type_list xs (type_qr tyenv) in
-	  let ts = List.map fs trs in
-	  let tyenv = merge_tyenv_list (tyenv :: (List.map snd trs)) in
-	  let 
+	  let ts = type_list xs (type_qr tyenv) in
 	    begin
 	      match ts with
 		| t :: ts ->
 		    assert (List.for_all (fun t' -> t = t') ts);
-		    Types.make_list_type t, tyenv
+		    Types.make_list_type t
 		| [] -> 
-		    Env.String.lookup Lib.type_env "Nil", tyenv
+		    Env.String.lookup Lib.type_env "Nil"
 	    end
-      | `Apply (f, args) ->
-	  let trs = List.map (type_qr tyenv) args in
+      | `Apply (f, _args) ->
 	  let ft = type_qr tyenv f in
-	  let tyenv = merge_tyenv_list (List.map snd (ft :: trs)) in
-	    TypeUtils.return_type ft, tyenv
+	    TypeUtils.return_type ft
       | `Case (_v, cases, default) ->
 	  let type_case (b, body) = type_qr (type_binder tyenv b) body in
 	  let case_types = type_name_map cases type_case in
@@ -391,12 +370,8 @@ let rec type_qr : type_env -> qr -> Types.datatype * type_env =
               (StringMap.to_alist ->- List.hd ->- snd) case_types
             else
               val_of default_type
-      | `If (cond, then_branch, else_branch) ->
-	  let condt, condtyenv = type_qr tyenv cond in
-	  let thent, thentyenv = type_qr tyenv then_branch in
-	  let elset, elsetyenv = type_qr tyenv else_branch in
-	  let tyenv = merge_tyenv_list [condtyenv; thentyenv; elsetyenv] in
-	    thent, tyenv
+      | `If (_, then_branch, _) ->
+	  type_qr tyenv then_branch
       | `Computation (bs, tc) ->
 	  type_qr (bindings tyenv bs) tc
       | `Wrong t -> t
