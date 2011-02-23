@@ -2,6 +2,8 @@
 open Utility
 open Qr
 
+(* TODO: instantiate every effect row var with an empty closed row (normalization of types) *)
+
 module Census =
 struct
   let merge maps = 
@@ -442,9 +444,13 @@ struct
   end
 
   type specmap = ((var * tyarg list) * var) list
+      deriving (Show)
 
   let specmap_lookup k l =
     let eq (var1, tyargs1) (var2, tyargs2) =
+(*      Debug.f "%d %d" var1 var2;
+      Debug.print (Show.show (Show.show_list Types.show_type_arg) tyargs1);
+      Debug.print (Show.show (Show.show_list Types.show_type_arg) tyargs2); *)
       var1 = var2 && InstMap.eq_tyarg_seq tyargs1 tyargs2
     in
     let rec aux m =
@@ -624,7 +630,7 @@ struct
 	if (String.length fs) = 0 then 
 	  "" 
 	else
-	  fs ^ (Types.string_of_datatype t) 
+	  fs ^ "___" ^ (Types.string_of_datatype t) 
       in
 	Var.fresh_var (t', fs', `Local)
     in
@@ -635,11 +641,11 @@ struct
 (*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
 	      let b' = `PFun (binder', dispatch) in
 		if not (eq_types_mod_effects t t') then
-		  [b'], [((f, tyargs), f')]
+		  [b; b'], [((f, tyargs), f')]
 		else
 		  begin
 		    Debug.f "not cloning at type %s (orig %s)" (Types.string_of_datatype t') (Types.string_of_datatype t);
-		    [], []
+		    [b], []
 		  end
 		  
 	  | `Fun ((f, (t, _, _)) as binder, arg_binders, body, tyvars) ->
@@ -653,11 +659,11 @@ struct
 		  (List.combine arg_binders argts)
 	      in
 		if not (eq_types_mod_effects t t') then
-		  [`Fun (binder', arg_binders', body, tyvars)], [((f, tyargs), f')]
+		  [b; `Fun (binder', arg_binders', body, [])], [((f, tyargs), f')]
 		else
 		  begin
 		    Debug.f "not cloning at type %s (orig %s)" (Types.string_of_datatype t') (Types.string_of_datatype t);
-		    [], []
+		    [b], []
 		  end
 	  | `Let _ -> failwith "Monomorphize.clone: attempto to clone non-function binding"
       with
@@ -689,14 +695,17 @@ struct
     let bindings, varmapping = List.split (List.map binding bs) in
       List.flatten bindings, List.flatten varmapping
 
-  and replace_specialized (specmap : specmap) (q : qr) : qr =
-    let rec binding b =
-      match b with
-	| `Let (binder, tyvars, tc) -> `Let (binder, tyvars, replace tc)
-	| `Fun (binder, arg_binders, body, tyvars) -> `Fun (binder, arg_binders, replace body, tyvars)
-	| `PFun _ -> b
+  let rec replace_spec_binding specmap b =
+    match b with
+      | `Let (binder, tyvars, tc) -> 
+	  (* Debug.f "replace let %d" (Var.var_of_binder binder); *)
+	  `Let (binder, tyvars, replace_spec specmap tc)
+      | `Fun (binder, arg_binders, body, tyvars) -> 
+	  `Fun (binder, arg_binders, replace_spec specmap body, tyvars)
+      | `PFun _ -> b
 
-    and replace q =
+  and replace_spec (specmap : specmap) (q : qr) : qr =
+    let rec replace q =
       match q with
 	| `Constant _ | `Database _ | `Table _ | `Wrong _ -> q
 	| `Project (label, v) -> `Project (label, replace v)
@@ -714,7 +723,8 @@ struct
 	    let default = opt_map case default in
 	      `Case (v, cases, default)
 	| `If (c, t, e) -> `If (replace c, replace t, replace e)
-	| `Computation (bs, tc) -> `Computation (List.map binding bs, replace tc)
+	| `Computation (bs, tc) -> 
+	    `Computation (List.map (replace_spec_binding specmap) bs, replace tc)
 	| `Variable var -> `Variable var
 	| `TApp (`Variable var, tyargs) -> 
 	    begin
@@ -726,12 +736,13 @@ struct
     in
       replace q
 
-  let rec specialize im q =
+  let rec specialize (im : InstMap.t) q =
     match q with
       | `Computation (bs, tc) ->
-	  let bs_spec, specmap = clone_bindings im bs in
-	  let bs' = bs @ bs_spec in
-	  let tc' = replace_specialized specmap tc in 
+	  let bs, specmap = clone_bindings im bs in
+	  let bs' = List.map (replace_spec_binding specmap) bs in
+	  let tc' = replace_spec specmap tc in 
+	    Debug.print (Show.show show_specmap specmap);
 	  (* TODO: restrict im by names which have already been handled *)
 (*	  let tc' = specialize (InstMap.restrict im cloned) tc' in *)
 	  let tc' = specialize im tc' in
