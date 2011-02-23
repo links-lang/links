@@ -85,12 +85,14 @@ struct
         | b :: bs ->
             let b, o = o#binding b in
               begin
-		let b, o = 
+		let pre_bs, b, o = 
 		  match b with
 		    | `Let (binder, (tyvars, tc)) ->
-			let tc, _, o = o#tail_computation tc in 
-			  `Let (binder, (tyvars, tc)), o
-		    | _ -> b, o
+			let (body_bs, body_tc), t, o = o#computation ([], tc) in
+			let b = `Let (binder, (tyvars, body_tc)) in
+			let body_bs', o = o#bindings body_bs in
+			  body_bs', b, o
+		    | _ -> [], b, o
 		in
 		  Debug.print ("binding " ^ (Show.show Ir.show_binding b));
                   match b with
@@ -105,16 +107,19 @@ struct
 			in
 			let env' = Env.Int.bind env (x, (Value (fst3 (o#value v)))) in
 			let bs, o = (o#with_env env')#bindings bs in
-			  b :: bs, o
+			  pre_bs @ (b :: bs), o
+
 		    | `Fun ((v, _) as f, (tyvars, xs, body), location) when is_inlineable_fun v census ->
 			Debug.f "fun %d" v;
-			let func = Fun (f, (tyvars, xs, body), location) in
+			let body', _, o = o#computation body in
+			let func = Fun (f, (tyvars, xs, body'), location) in
 			let env' = Env.Int.bind env (v, func) in
 			let bs, o = (o#with_env env')#bindings bs in
-			  b :: bs, o
+			  pre_bs @ (b :: bs), o
+
                     | _ ->
 			let bs, o = o#bindings bs in
-                          b :: bs, o
+                          pre_bs @ (b :: bs), o
               end
         | [] -> [], o
 
