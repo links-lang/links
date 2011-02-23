@@ -76,8 +76,8 @@ struct
 	| `Return v -> 
 	    let v, t, o = o#value v in
 	      `Return v, t, o
-	| `If (c, t, e) ->
-	| `Case (c, cases, default_case) ->
+(*	| `If (c, t, e) ->
+	| `Case (c, cases, default_case) -> *)
 	| tc -> super#tail_computation tc
 
     method bindings =
@@ -140,8 +140,7 @@ struct
 				  Debug.f "inline function %d" f';
 				  let args' = List.map o#value args in
 				  let arg_bs = arg_lets xs args' in
-				  let bs', o = o#bindings (bs @ arg_bs @ body_bs) in
-				    (bs', body_tc), t, o
+				    o#computation ((arg_bs @ body_bs), body_tc)
 			      | Value _ -> 
 				  (bs, tc), t, o
 			  end
@@ -150,7 +149,6 @@ struct
 	    | tc -> 
 		(bs, tc), t, o
 	in
-	let tc, t, o = o#tail_computation tc in
 	  (bs, tc), t, o
   end
 
