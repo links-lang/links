@@ -113,4 +113,6 @@ val computation : Ir.computation -> qr
 
 val qr_of_query : Types.datatype Env.Int.t -> Value.env -> Ir.computation -> (qr * Types.datatype Env.Int.t)
 
+val type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype
+
 

@@ -228,7 +228,7 @@ and bindings_from_closure_env tyenv freevars valenv closure_env =
   let env = Value.shadow valenv ~by:closure_env in
   let env = fst3 env in
   (*  Debug.print ("closure env domain " ^ (Show.show (Show.show_list Show.show_int) (IntMap.domain env))); *)
-  let env = IntMap.filter (fun k _ -> IntSet.mem k freevars) env in
+  let env = restrict env freevars in
   (*  Debug.print ("closure env domain filtered " ^ (Show.show (Show.show_list Show.show_int) (IntMap.domain env))); *)
 
   let qr name (value, _) (qr_env, new_names, tyenv) =
@@ -518,10 +518,112 @@ struct
   end
 end
 
-(*
-let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype tyenv q =
-*)
-  
+let type_constant c =
+  match c with
+    | `Bool _ -> Types.bool_type
+    | `Int _ -> Types.int_type
+    | `Char _ -> Types.char_type
+    | `String _ -> Types.string_type
+    | `Float _ -> Types.float_type
+
+let binder tyenv (var, (t, _, _)) = Env.Int.bind tyenv (var, t)
+
+let type_list xs type_value =
+  List.map type_value xs
+
+let type_name_map map type_value =
+  StringMap.map
+    (fun v -> type_value v)
+    map
+
+let bindings tyenv bs =
+  List.fold_left
+    (fun tyenv (b, _tyvars, _tc) -> binder tyenv b) 
+    tyenv 
+    bs
+
+let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
+  fun tyenv q ->
+    let lookup_type = Env.Int.lookup tyenv in
+    let t = 
+    match q with 
+      | `Constant c -> type_constant c
+      | `Variable var -> lookup_type var
+      | `Extend (fields, base) ->
+	  let (type_field : qr -> Types.datatype) = type_qr tyenv in
+	  let (field_types : Types.datatype StringMap.t) = type_name_map fields type_field in
+	  let base_type = opt_map (type_qr tyenv) base in
+	    begin
+              match base_type with
+                | None -> Types.make_record_type field_types
+                | Some t ->
+                    begin
+                      match TypeUtils.concrete_type t with
+                        | `Record row ->
+                            `Record (Types.extend_row field_types row)
+                        | _ -> assert false
+                    end
+	    end
+      | `Project (label, r) ->
+	  let rt = type_qr tyenv r in
+	    TypeUtils.project_type label rt
+      | `Erase (names, r) ->
+	  let rt = type_qr tyenv r in
+	    TypeUtils.erase_type_poly names rt
+      | `Inject (_, _, t) -> t
+      | `TApp (v, ts) ->
+	  let t = type_qr tyenv v in
+            begin try
+              Instantiate.apply_type t ts 
+            with
+                Instantiate.ArityMismatch ->
+                  prerr_endline ("Arity mismatch in type application (Qr.type_qr)");
+                  prerr_endline ("expression: "^Show.show show_qr (`TApp (v, ts)));
+                  prerr_endline ("type: "^Types.string_of_datatype t);
+		  prerr_endline ("raw type: "^Show.show Types.show_typ t);
+                  prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg ts));
+                  failwith "fatal internal error"
+	    end
+      | `TAbs (tyvars, v) ->
+	  let t = type_qr tyenv v in
+	    Types.for_all (tyvars, t)
+      | `Database (_db, _name) ->
+	  `Primitive `DB
+      | `Table (_, _, _, row_type) ->
+	  Types.make_table_type (`Record row_type, `Record row_type, `Record row_type)
+      | `List xs ->
+	  let ts = type_list xs (type_qr tyenv) in
+	    begin
+	      match ts with
+		| t :: ts ->
+		    assert (List.for_all (fun t' -> t = t') ts);
+		    Types.make_list_type t
+		| [] -> 
+		    Env.String.lookup Lib.type_env "Nil"
+	    end
+      | `PrimitiveFun (f, _) ->
+	  Env.String.lookup Lib.type_env f
+      | `Fun (_, _, _, t) -> t
+      | `Apply (f, _args) ->
+	  let ft = type_qr tyenv f in
+	    TypeUtils.return_type ft
+      | `Case (_v, cases, default) ->
+	  let type_case (b, body) = type_qr (binder tyenv b) body in
+	  let case_types = type_name_map cases type_case in
+	  let default_type = opt_map type_case default in
+            if not (StringMap.is_empty case_types) then
+              (StringMap.to_alist ->- List.hd ->- snd) case_types
+            else
+              val_of default_type
+      | `If (_, then_branch, _) ->
+	  type_qr tyenv then_branch
+      | `Let (bs, comp) ->
+	  type_qr (bindings tyenv bs) comp
+      | `Wrong t -> t
+    in
+      Debug.print ("q expr " ^ (Show.show show_qr q));
+      Debug.print ("of type " ^ (Show.show Types.show_datatype t));
+      t
 
 let qr_of_query tyenv env comp =
   let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in

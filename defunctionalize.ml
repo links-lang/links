@@ -224,4 +224,6 @@ let rec applyn f arg n =
 let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
   let optphase = optphase tyenv in
-    applyn optphase q 3
+  let q = applyn optphase q 1 in
+    ignore (Qr.type_qr tyenv q);
+    q
