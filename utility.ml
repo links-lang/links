@@ -80,6 +80,9 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
+  val domain : 'a t -> key list
+  (** domain of the map *)
+
   val show_t : 'a Show.show -> 'a t Show.show
 end
 
@@ -181,6 +184,8 @@ struct
            else
              p, add i v q)
         m (empty, empty)
+
+    let domain m = fold (fun k _ d -> k :: d) m [] 
 
     let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
   end
@@ -907,6 +912,3 @@ let apply f x ~finally y =
   let result = try f x with exn -> finally y; raise exn in
     finally y;
     result
-
-let domain m = List.map fst (IntMap.to_alist m)
-
