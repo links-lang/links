@@ -380,6 +380,7 @@ let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype =
       Debug.print ("of type " ^ (Show.show Types.show_datatype t));
       t
 
+(* FIXME: ugly code *)
 let qr_of_query tyenv env comp =
   let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in
   let restricted_env = restrict (fst3 env) freevars in

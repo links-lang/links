@@ -441,6 +441,24 @@ struct
 
   end
 
+  type specmap = ((var * tyarg list) * var) list
+
+  let specmap_lookup k l =
+    let eq (var1, tyargs1) (var2, tyargs2) =
+      var1 = var2 && InstMap.eq_tyarg_seq tyargs1 tyargs2
+    in
+    let rec aux m =
+      match m with
+	| (k', v) :: es ->
+	    if eq k' k then
+	      Some v
+	    else
+	      aux es
+	| [] -> None
+
+    in
+      aux l
+
   let rec instmap = function
     | `TApp (`Variable name, tyargs) -> 
 	InstMap.make name [tyargs]
@@ -494,15 +512,139 @@ struct
     in
       InstMap.sum_list (List.map binding bs)
 
-  and clone im b =
-    failwith "not implemented"
+  (* clone a function binding at a concrete type *)
+  (* basic assumption: type gets fully instantiated *)
+  (* FIXME: before cloning, check if the instantiated type is really different modulo effects *)
+  and clone b tyargs : binding list * specmap =
+    let clone_binder (_f, (t, fs, _)) =
+      let t' = Instantiate.apply_type t tyargs in
+      let fs' = 
+	if (String.length fs) = 0 then 
+	  "" 
+	else
+	  fs ^ (Types.string_of_datatype t) 
+      in
+	Var.fresh_var (t', fs', `Local)
+    in
+      try
+	match b with
+	  | `PFun ((f, _) as binder, dispatch) ->
+	      let binder', f' = clone_binder binder in
+(*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
+		[`PFun (binder', dispatch)], [((f, tyargs), f')]
+	  | `Fun ((f, _) as binder, arg_binders, body, tyvars) ->
+	      let (_, (t', _, _)) as binder', f' = clone_binder binder in
+(*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
+		(* FIXME: adapt type annotations in body *)
+	      let argts = TypeUtils.arg_types t' in
+	      let arg_binders' = 
+		List.map 
+		  (fun ((n, (_argt, s, l)), argt') -> (n, (argt', s, l))) 
+		  (List.combine arg_binders argts)
+	      in
+		[`Fun (binder', arg_binders', body, tyvars)], [((f, tyargs), f')]
+	  | `Let _ -> failwith "Monomorphize.clone: attempto to clone non-function binding"
+      with
+	  Instantiate.ArityMismatch ->
+            prerr_endline ("Arity mismatch in type application (Defunctionalize.Monomorphize.clone)");
+            prerr_endline ("expression: "^Show.show show_binding b);
+            (* prerr_endline ("type: "^Types.string_of_datatype t); *)
+            prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
+	    failwith "fatal internal error"
 
-  and clone_bindings im bs =
-    failwith "not implemented"
+  and clone_bindings im bs : binding list * specmap =
+    let binding : binding -> binding list * specmap =
+      fun b ->
+	let ps = 
+	match b with
+	  | `Let _ -> [[b], []]
+	  | `Fun _ 
+	  | `PFun _ ->
+	      begin
+		match IntMap.lookup (var_of_binding b) im with
+		  | Some tyarg_lists ->
+		      List.map (clone b) tyarg_lists
+		  | None -> [[b], []]
+	      end
+	in
+	let bindings, mappings = List.split ps in
+	  List.flatten bindings, List.flatten mappings
+    in
+    let bindings, varmapping = List.split (List.map binding bs) in
+      List.flatten bindings, List.flatten varmapping
 
-  and specialize _im _q =
-    failwith "not implemented"
+  and replace_specialized (specmap : specmap) (q : qr) : qr =
+    let rec binding b =
+      match b with
+	| `Let (binder, tyvars, tc) -> `Let (binder, tyvars, replace tc)
+	| `Fun (binder, arg_binders, body, tyvars) -> `Fun (binder, arg_binders, replace body, tyvars)
+	| `PFun _ -> b
 
+    and replace q =
+      match q with
+	| `Constant _ | `Database _ | `Table _ | `Wrong _ -> q
+	| `Project (label, v) -> `Project (label, replace v)
+	| `Extend (extend_fields, r) -> `
+	    Extend (StringMap.map replace extend_fields, opt_map replace r)
+	| `Erase (labels, v) -> `Erase (labels, replace v)
+	| `Inject (tag, v, t) -> `Inject (tag, replace v, t)
+	| `TAbs (tyvars, v) -> `TAbs (tyvars, replace v)
+	| `List xs -> `List (List.map replace xs)
+	| `Apply (f, args) -> `Apply (replace f, List.map replace args)
+	| `Case (v, cases, default) ->
+	    let v = replace v in
+	    let case (binder, body) = (binder, replace body) in
+	    let cases = StringMap.map case cases in
+	    let default = opt_map case default in
+	      `Case (v, cases, default)
+	| `If (c, t, e) -> `If (replace c, replace t, replace e)
+	| `Computation (bs, tc) -> `Computation (List.map binding bs, replace tc)
+	| `Variable var -> `Variable var
+	| `TApp (`Variable var, tyargs) -> 
+	    begin
+	      match specmap_lookup (var, tyargs) specmap with
+		| None -> q
+		| Some new_var -> `Variable new_var
+	    end
+	| `TApp _ -> failwith ("Monomorphize.replace: `TApp on non-variable " ^ (Show.show show_qr q));
+    in
+      replace q
+
+  let rec specialize im q =
+    match q with
+      | `Computation (bs, tc) ->
+	  let bs_spec, specmap = clone_bindings im bs in
+	  let bs' = bs @ bs_spec in
+	  let tc' = replace_specialized specmap tc in 
+	  (* TODO: restrict im by names which have already been handled *)
+(*	  let tc' = specialize (InstMap.restrict im cloned) tc' in *)
+	  let tc' = specialize im tc' in
+	    `Computation (bs', tc')
+      | `Constant _ | `Database _ | `Table _ | `Wrong _ | `Variable _ -> q
+      | `Project (label, v) -> `Project (label, specialize im v)
+      | `Extend (extend_fields, r) -> `
+	  Extend (StringMap.map (specialize im) extend_fields, opt_map (specialize im) r)
+      | `Erase (labels, v) -> `Erase (labels, specialize im v)
+      | `Inject (tag, v, t) -> `Inject (tag, specialize im v, t)
+      | `TAbs (tyvars, v) -> `TAbs (tyvars, specialize im v)
+      | `List xs -> `List (List.map (specialize im) xs)
+      | `Apply (f, args) -> `Apply (specialize im f, List.map (specialize im) args)
+      | `Case (v, cases, default) ->
+	  let v = specialize im v in
+	  let case (binder, body) = (binder, specialize im body) in
+	  let cases = StringMap.map case cases in
+	  let default = opt_map case default in
+	    `Case (v, cases, default)
+      | `If (c, t, e) -> `If (specialize im c, specialize im t, specialize im e)
+      | `TApp (v, tyargs) -> `TApp (specialize im v, tyargs)
+
+  let rec monomorphize q =
+    let im = instmap q in
+    let q = specialize im q in
+    let q = ElimDeadDefs.eliminate (Census.count q) q in
+      Debug.print (Show.show show_qr q);
+      q
+      
 end
 
 module Defunctionalize =
@@ -533,8 +675,7 @@ let rec applyn f arg n =
 
 let pipeline q tyenv =
   Debug.print ("before\n" ^ (Show.show show_qr q));
-  let optphase = optphase tyenv in
+  let _optphase = optphase tyenv in
 (*  let q = applyn optphase q 2 in *)
     (*ignore (Qr.type_qr tyenv q); *)
-    Debug.print (Show.show Monomorphize.InstMap.show_t (Monomorphize.instmap q));
-    q
+    Monomorphize.monomorphize q
