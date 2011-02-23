@@ -359,9 +359,9 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
+	Irtodot.output_dot e env "ir_query.dot";
 	let e' = Query3.pipeline (val_of !tenv) e in
 	  Irtodot.output_dot e' env "ir_query_optimized.dot";
-	  Irtodot.output_dot e env "ir_query.dot";
 	  exit 0;
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =

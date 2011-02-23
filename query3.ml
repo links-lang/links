@@ -76,6 +76,7 @@ struct
 	  match v with
 	    | `TApp (`Variable var, _)
             | `Variable var when Env.Int.has env var -> 
+		(* inline values *)
 		begin
 		  match Env.Int.lookup env var with
 		    | Value v -> 
@@ -83,34 +84,28 @@ struct
 			v, o#lookup_type var, o
 		    | Fun _ -> `Variable var, o#lookup_type var, o
 		end
-	    | `Project (field, r) ->
+	    | `Project (label, r) ->
+		(* project from known record values *)
 		begin
 		  let r, _rt, o = o#value r in
 		    match r with
 		      | `Extend (fields, _) ->
-			  begin
-			    match StringMap.lookup field fields with
-			      | Some field_v -> field_v, t, o
-			      | None -> v, t, o
-			  end
-		      | `Erase (names, r) ->
+			  let v = from_option v (StringMap.lookup label fields)  in
+			    v, t, o
+		      | `Erase (labels, r) ->
 			  begin
 			    let r, _rt, o = o#value r in
-			      begin
-				match r with
-				  | `Extend (fields, _) ->
-				      begin
-					match StringMap.lookup field (remove_fields names fields) with
-					  | Some field_v -> field_v, t, o
-					  | None -> v, t, o
-				      end
-				  | _ -> v, t, o
-			      end
-				
+			      match r with
+				| `Extend (fields, _) ->
+				    let rem_fields = (remove_fields labels fields) in
+				    let v = from_option v (StringMap.lookup label rem_fields) in
+				      v, t, o
+				| _ -> v, t, o
 			  end
 		      | _ -> v, t, o
 		end
 	    | `Extend (outer_fields, outer_r) ->
+		(* extend known record values *)
 		begin
 		  match outer_r with
 		    | Some outer_r -> 
@@ -125,6 +120,7 @@ struct
 		    | None -> v, t, o
 		end
 	    | `Erase (labels, r) ->
+		(* erase from known record values *)
 		let r, _rt, o = o#value r in
 		  begin
 		    match r with
@@ -141,17 +137,6 @@ struct
 		      | _ -> v, t, o
 		  end
 	    | _ -> v, t, o
-
-(*
-    method tail_computation =
-      function
-	| `Return v -> 
-	    let v, t, o = o#value v in
-	      `Return v, t, o
-(*	| `If (c, t, e) ->
-	| `Case (c, cases, default_case) -> *)
-	| tc -> super#tail_computation tc
-*)
 
     method bindings =
       function
@@ -183,6 +168,7 @@ struct
 			  pre_bs @ (b :: bs), o
 
 		    | `Fun ((v, _) as f, (tyvars, xs, body), location) when is_inlineable_fun v census ->
+			(* bind inlineable functions to the environment *)
 			Debug.f "fun %d" v;
 			let body', _, o = o#computation body in
 			let func = Fun (f, (tyvars, xs, body'), location) in
