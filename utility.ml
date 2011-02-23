@@ -908,3 +908,5 @@ let apply f x ~finally y =
     finally y;
     result
 
+let domain m = List.map fst (IntMap.to_alist m)
+

@@ -2,6 +2,8 @@ open Notfound
 
 open Utility
 
+let tenv = ref None
+
 module Eval = struct
   open Ir
 
@@ -357,30 +359,15 @@ module Eval = struct
 		 apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
            | _ -> eval_error "Error evaluating table handle")
     | `Query (range, e, t) ->
-	let before = Unix.gettimeofday () in
-	let range =
-	  match range with
-	    | None -> None
-	    | Some (limit, offset) ->
-		Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset))
-	in
-        let result =
-	  Debug.print ("type of query block: " ^ (Types.string_of_datatype t));
-	  let (exptree, imptype) = Query2.compile env range e in
-	  match !Query2.used_database with
-	    | Some db -> 
-		begin
-		  Query2.used_database := None;
-		  match Heapresult.execute db imptype (ExpressionToAlgebraCompile.compile exptree) with
-		    | Heapresult.Result value -> value
-		    | Heapresult.Error "something is wrong" -> raise Wrong
-		    | Heapresult.Error s -> eval_error "Error during query execution: %s" s
-		end;
-	    | None -> computation env cont e
-        in
-	let after = Unix.gettimeofday () in
-	  Printf.printf "took %f\n" (after -. before);
-          apply_cont cont env result
+	let e' = Query3.pipeline (val_of !tenv) e in
+	  Irtodot.output_dot e' env "ir_query_optimized.dot";
+	  Irtodot.output_dot e env "ir_query.dot";
+	  (* Debug.print (Show.show Ir.show_computation e);
+	  Debug.print (Show.show Ir.show_computation e'); *)
+	  Debug.print (Value.string_of_cont cont);
+	  let result = computation env cont e in
+	    Debug.print "result computed";
+            apply_cont cont env result
     | `Update ((xb, source), where, body) ->
         let db, table, read_labels =
           match value env source with

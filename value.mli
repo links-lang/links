@@ -87,6 +87,7 @@ val toplevel_cont : continuation
 val empty_env : Ir.closures -> env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
 val find : Ir.var -> env -> t
+val domain : env -> int list
 val lookup : Ir.var -> env -> t option
 val lookupS : Ir.var -> env -> (t * Ir.scope) option
 val shadow : env -> by:env -> env

@@ -180,6 +180,7 @@ let bind name (v,scope) (env, closures, globals) =
     `Local -> (IntMap.add name (v,scope) env, closures,globals)
   | `Global -> (IntMap.add name (v,scope) env, closures, IntMap.add name (v,scope) globals)
 let find name (env, _closures, _globals) = fst (IntMap.find name env)
+let domain (env, _closures, _globals) = domain env
 let lookup name (env, _closures, _globals) = opt_map fst (IntMap.lookup name env) 
 let lookupS name (env, _closures, _globals) = IntMap.lookup name env
 let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env

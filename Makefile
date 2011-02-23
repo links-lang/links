@@ -131,6 +131,7 @@ SOURCES = $(OPC)                		\
 	  expressionToAlgebraDefinitions.ml	\
 	  expressionToAlgebraHelpers.ml		\
 	  expressionToAlgebraCompile.ml		\
+	  query3.ml				\
 	  heapresult.ml	heapresult.mli		\
           query.ml                              \
           evalir.ml                             \
