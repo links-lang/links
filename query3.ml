@@ -25,6 +25,12 @@ struct
       | `Project (_, v)
       | `Erase (_, v)
       | `Inject (_, v, _) -> is_inlineable_value census v
+      | `Extend (fields, Some r) ->
+	  let p _ v  = is_inlineable_value census v in
+	    StringMap.for_all p fields && is_inlineable_value census r
+      | `Extend (fields, None) ->
+	  let p _ v  = is_inlineable_value census v in
+	    StringMap.for_all p fields 
       | _ -> false
 
   let is_inlineable_fun v census = 
@@ -47,6 +53,10 @@ struct
       | Some (Value _) -> true
       | _ -> false
 
+  let remove_fields fset m =
+    let p f _ = not (StringSet.mem f fset) in
+      StringMap.filter p m
+
   let inliner tyenv env census =
   object (o)
     inherit Transform.visitor(tyenv) as super
@@ -59,18 +69,80 @@ struct
     method get_env = env
 
     method value =
-      function
-	| `TApp (`Variable var, _)
-        | `Variable var when Env.Int.has env var -> 
-	    begin
-	      match Env.Int.lookup env var with
-		| Value v -> 
-		    Debug.f "inline value %d" var;
-		    v, o#lookup_type var, o
-		| Fun _ -> `Variable var, o#lookup_type var, o
-	    end
-        | v -> super#value v
+      fun v ->
+	Debug.print ("value " ^ (Show.show Ir.show_value v));
+	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
+	let v, t, o = super#value v in
+	  match v with
+	    | `TApp (`Variable var, _)
+            | `Variable var when Env.Int.has env var -> 
+		begin
+		  match Env.Int.lookup env var with
+		    | Value v -> 
+			Debug.f "inline value %d" var;
+			v, o#lookup_type var, o
+		    | Fun _ -> `Variable var, o#lookup_type var, o
+		end
+	    | `Project (field, r) ->
+		begin
+		  let r, _rt, o = o#value r in
+		    match r with
+		      | `Extend (fields, _) ->
+			  begin
+			    match StringMap.lookup field fields with
+			      | Some field_v -> field_v, t, o
+			      | None -> v, t, o
+			  end
+		      | `Erase (names, r) ->
+			  begin
+			    let r, _rt, o = o#value r in
+			      begin
+				match r with
+				  | `Extend (fields, _) ->
+				      begin
+					match StringMap.lookup field (remove_fields names fields) with
+					  | Some field_v -> field_v, t, o
+					  | None -> v, t, o
+				      end
+				  | _ -> v, t, o
+			      end
+				
+			  end
+		      | _ -> v, t, o
+		end
+	    | `Extend (outer_fields, outer_r) ->
+		begin
+		  match outer_r with
+		    | Some outer_r -> 
+			begin
+			  let outer_r, _rt, o = o#value outer_r in
+			    match outer_r with
+			      | `Extend (inner_fields, inner_r) ->
+				  let fields = StringMap.union_disjoint outer_fields inner_fields in
+				    `Extend (fields, inner_r), t, o
+			      | _ -> v, t, o
+			end
+		    | None -> v, t, o
+		end
+	    | `Erase (labels, r) ->
+		let r, _rt, o = o#value r in
+		  begin
+		    match r with
+		      | `Extend (fields, Some inner_r) ->
+			  let rdomain = StringSet.from_list (StringMap.domain fields) in
+			  let remaining_labels = StringSet.diff labels rdomain in
+			  let remaining_fields = remove_fields labels fields in
+			    if (StringSet.cardinal remaining_labels) > 0 then
+			      `Extend (remaining_fields, Some (`Erase (remaining_labels, inner_r))), t, o
+			    else
+			      `Extend (remaining_fields, Some inner_r), t, o
+		      | `Extend (fields, None) ->
+			  `Extend (remove_fields labels fields, None), t, o
+		      | _ -> v, t, o
+		  end
+	    | _ -> v, t, o
 
+(*
     method tail_computation =
       function
 	| `Return v -> 
@@ -79,6 +151,7 @@ struct
 (*	| `If (c, t, e) ->
 	| `Case (c, cases, default_case) -> *)
 	| tc -> super#tail_computation tc
+*)
 
     method bindings =
       function
@@ -88,7 +161,7 @@ struct
 		let pre_bs, b, o = 
 		  match b with
 		    | `Let (binder, (tyvars, tc)) ->
-			let (body_bs, body_tc), t, o = o#computation ([], tc) in
+			let (body_bs, body_tc), _t, o = o#computation ([], tc) in
 			let b = `Let (binder, (tyvars, body_tc)) in
 			let body_bs', o = o#bindings body_bs in
 			  body_bs', b, o
@@ -128,7 +201,8 @@ struct
 	Debug.print "computation";
 	Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
 	let bs, o = o#bindings bs in
-	let tc, t, o = o#tail_computation tc in 
+	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
+	let tc, t, o = o#tail_computation tc in
 	  Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
 	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
 	  match tc with
@@ -184,6 +258,9 @@ struct
 			    (bs @ bs', tc), t, o
 		      | _ -> (bs, tc), t, o
 		end
+	    | `Return v ->
+		let v, t, o = o#value v in
+		  (bs, `Return v), t, o
 	    | tc -> 
 		(bs, tc), t, o
   end
