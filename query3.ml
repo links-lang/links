@@ -25,7 +25,6 @@ struct
       | `Project (_, v)
       | `Erase (_, v)
       | `Inject (_, v, _) -> is_inlineable_value census v
-      | `TApp (`Variable var, _) -> true
       | _ -> false
 
   let is_inlineable_fun v census = 
@@ -48,7 +47,6 @@ struct
       | Some (Value _) -> true
       | _ -> false
 
-
   let inliner tyenv env census =
   object (o)
     inherit Transform.visitor(tyenv) as super
@@ -62,6 +60,7 @@ struct
 
     method value =
       function
+	| `TApp (`Variable var, _)
         | `Variable var when Env.Int.has env var -> 
 	    begin
 	      match Env.Int.lookup env var with
@@ -72,49 +71,50 @@ struct
 	    end
         | v -> super#value v
 
+    method tail_computation =
+      function
+	| `Return v -> 
+	    let v, t, o = o#value v in
+	      `Return v, t, o
+	| `If (c, t, e) ->
+	| `Case (c, cases, default_case) ->
+	| tc -> super#tail_computation tc
+
     method bindings =
       function
         | b :: bs ->
             let b, o = o#binding b in
               begin
-		Debug.print ("binding " ^ (Show.show Ir.show_binding b));
-                match b with
-(*
-		  | `Let ((x, (t, name, `Local)), (tyvars, `Return (`Variable var))) 
-		  | `Let ((x, (t, name, `Local)), (tyvars, `Return (`TApp (`Variable var, _)))) when has_value o#get_env var ->
-		      begin
-			match Env.Int.lookup o#get_env var with
-			  | Value v -> 
-			      let b' = `Let (((x, (t, name, `Local)), (tyvars, `Return v))) in
-				o#bindings (b' :: bs)
-			  | Fun _ -> 
-			      let bs, o = o#bindings bs in
-				b :: bs, o
-		      end
-*)
-
-                  | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) 
-		  | `Let ((x, (_, _, `Local)), (tyvars, `Return (`TApp (v, _)))) when is_inlineable_value census v ->
-		      Debug.f "let %d" x;
-		      (* bind inlineable values to the environment *)
-                      let v =
-                        match tyvars with
-                          | [] -> v
-                          | tyvars -> `TAbs (tyvars, v)
-                      in
-		      let env' = Env.Int.bind env (x, (Value (fst3 (o#value v)))) in
-                      let bs, o = (o#with_env env')#bindings bs in
-			b :: bs, o
-
-		  | `Fun ((v, _) as f, (tyvars, xs, body), location) when is_inlineable_fun v census ->
-		      Debug.f "fun %d" v;
-		      let func = Fun (f, (tyvars, xs, body), location) in
-		      let env' = Env.Int.bind env (v, func) in
-		      let bs, o = (o#with_env env')#bindings bs in
-			b :: bs, o
-                  | _ ->
-                      let bs, o = o#bindings bs in
-                        b :: bs, o
+		let b, o = 
+		  match b with
+		    | `Let (binder, (tyvars, tc)) ->
+			let tc, _, o = o#tail_computation tc in 
+			  `Let (binder, (tyvars, tc)), o
+		    | _ -> b, o
+		in
+		  Debug.print ("binding " ^ (Show.show Ir.show_binding b));
+                  match b with
+                    | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) 
+		    | `Let ((x, (_, _, `Local)), (tyvars, `Return (`TApp (v, _)))) when is_inlineable_value census v ->
+			Debug.f "let %d" x;
+			(* bind inlineable values to the environment *)
+			let v =
+                          match tyvars with
+                            | [] -> v
+                            | tyvars -> `TAbs (tyvars, v)
+			in
+			let env' = Env.Int.bind env (x, (Value (fst3 (o#value v)))) in
+			let bs, o = (o#with_env env')#bindings bs in
+			  b :: bs, o
+		    | `Fun ((v, _) as f, (tyvars, xs, body), location) when is_inlineable_fun v census ->
+			Debug.f "fun %d" v;
+			let func = Fun (f, (tyvars, xs, body), location) in
+			let env' = Env.Int.bind env (v, func) in
+			let bs, o = (o#with_env env')#bindings bs in
+			  b :: bs, o
+                    | _ ->
+			let bs, o = o#bindings bs in
+                          b :: bs, o
               end
         | [] -> [], o
 
@@ -128,22 +128,16 @@ struct
 	  Debug.print ("env " ^ (Show.show (Env.Int.show_t show_t) o#get_env));
 	  Debug.print ("tc " ^ (Show.show Ir.show_tail_computation tc));
 	  match tc with
-	    | `Apply (`TApp (`Variable f, _), args)
-	    | `Apply (`Variable f, args) ->
-		let inline_val var =
-		  match Env.Int.find env var with
-		    | Some (Value v) -> v
-		    | Some (Fun _) -> `Variable var
-		    | None -> `Variable var
-		in
-		  begin
-		    match inline_val f with
+	    | `Apply (f, args) ->
+		begin
+		  let f, t, o = o#value f in
+		    match f with
 		      | `Variable f'
 		      | `TApp (`Variable f', _) when Env.Int.has o#get_env f' ->
 			  begin
 			    match Env.Int.lookup o#get_env f' with
 			      | Fun (_fb, (_tyvars, xs, (body_bs, body_tc)), _location) ->
-				  Debug.f "inline function %d" f;
+				  Debug.f "inline function %d" f';
 				  let args' = List.map o#value args in
 				  let arg_bs = arg_lets xs args' in
 				  let bs', o = o#bindings (bs @ arg_bs @ body_bs) in
@@ -152,10 +146,11 @@ struct
 				  (bs, tc), t, o
 			  end
 		      | _ -> (bs, tc), t, o
-		  end
+		end
 	    | tc -> 
 		(bs, tc), t, o
 	in
+	let tc, t, o = o#tail_computation tc in
 	  (bs, tc), t, o
   end
 
@@ -209,6 +204,6 @@ let pipeline tenv program =
     Ir.ElimDeadDefs.program tenv (OptimizeQuery.program tenv p (Census.program tenv p)) 
   in
 (*  let p = Ir.ElimDeadDefs.program tenv (phase (phase (phase program))) in *)
-  let p = applyn phase program 3 in
+  let p = applyn phase program 1 in
     Debug.print "opt finished";
     p
