@@ -7,7 +7,7 @@ val prelude_primitives : unit -> unit
 val prelude_primitive_vars : Utility.IntSet.t option ref
 val prelude_primitive_namemap : string Utility.IntMap.t option ref
 
-val complete_tyenv : Types.datatype Env.Int.t -> Ir.computation -> Types.datatype Env.Int.t
+val complete_tyenv_ir : Types.datatype Env.Int.t -> Ir.computation -> Types.datatype Env.Int.t
 
 type scope = Var.scope
   deriving (Show)
@@ -75,4 +75,4 @@ val qr_of_query : Types.datatype Env.Int.t -> Value.env -> Ir.computation -> (qr
 
 val type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype
 
-
+val complete_tyenv : Types.datatype Env.Int.t -> qr -> Types.datatype * Types.datatype Env.Int.t

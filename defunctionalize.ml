@@ -43,7 +43,6 @@ let normalize_types q normalized =
   in
 *)    
 
-
 module Census =
 struct
   let merge maps = 
@@ -152,10 +151,20 @@ struct
 
   and bindings bound bs =
     List.fold_left
-      (fun (free, bound) ((var, _), tc) ->
-	 let free = IntSet.union (fv bound tc) free in
-	 let bound = IntSet.add var free in
-	   (free, bound))
+      (fun (free, bound) b ->
+	 match b with
+	   | `Let ((var, _), _, tc) ->
+	       let bound' = IntSet.add var bound in
+	       let free = IntSet.union (fv bound tc) free in
+		 (free, bound')
+	   | `Fun ((var, _), arg_binders, body, _) ->
+	       let bound' = List.fold_right IntSet.add (List.map fst arg_binders) bound in
+	       let free = IntSet.union free (fv bound' body) in
+	       let bound = IntSet.add var bound in
+		 (free, bound)
+	   | `PFun ((var, _), _) ->
+	       let bound = IntSet.add var bound in
+		 (free, bound))
       (IntSet.empty, bound)
       bs
 
@@ -166,8 +175,12 @@ struct
 	else
 	  IntSet.empty
     | `Extend (extend_fields, base) ->
-	let proj (_label, value) = value in
-	let free = name_map bound proj extend_fields in
+	let free = 
+	  StringMap.fold
+	    (fun _ v free -> IntSet.union (fv bound v) free)
+	    extend_fields
+	    IntSet.empty
+	in
 	  begin
 	    match base with
 	      | Some r -> IntSet.union (fv bound r) free
@@ -176,7 +189,7 @@ struct
     | `Project (_, value) | `Erase (_, value) | `Inject (_, value, _) 
     | `TApp (value, _) | `TAbs (_, value) -> 
 	fv bound value
-    | `Let (bs, tc) ->
+    | `Computation (bs, tc) ->
 	let free, bound = bindings bound bs in
 	  IntSet.union (fv bound tc) free
     | `Fun (binders, _, body, _) ->
@@ -200,6 +213,8 @@ struct
 	IntSet.union_all [fv bound c; fv bound t; fv bound e]
     | `Database _ | `Table _ | `PrimitiveFun _ | `Wrong _ | `Constant _ ->
 	IntSet.empty
+    | `Apply (f, args) ->
+	IntSet.union_all ((fv bound f) :: (List.map (fv bound) args))
 
   let freevars = fv
 
@@ -372,6 +387,109 @@ struct
 
 end
 
+(* a special kind of structural equality on types that doesn't look
+   inside points *)
+let rec eq_types_relaxed : (Types.datatype * Types.datatype) -> bool =
+  fun (t1, t2) ->
+    let rec unalias = function
+      | `Alias (_, x) -> unalias x
+      | x             -> x in
+      match unalias t1 with 
+	| `Not_typed -> 
+            begin match unalias t2 with
+		`Not_typed -> true
+	      | _          -> false
+            end
+	| `Primitive x ->
+            begin match unalias t2 with
+		`Primitive y -> x = y
+	      | _            -> false
+            end
+	| `MetaTypeVar lpoint ->
+            begin match unalias t2 with
+		`MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
+	      | _                   -> false
+            end
+	| `Function (lfrom, _lm, lto) ->
+            begin match unalias t2 with
+		`Function (rfrom, _rm, rto) -> eq_types_relaxed (lfrom, rfrom)
+                  && eq_types_relaxed (lto,   rto)
+                  (* && eq_rows  (lm,    rm) *)
+	      | _                          -> false
+            end
+	| `Record l ->
+            begin match unalias t2 with
+		`Record r -> eq_rows (l, r)
+	      | _         -> false
+            end
+	| `Variant l ->
+            begin match unalias t2 with
+		`Variant r -> eq_rows (l, r)
+	      | _          -> false
+            end
+	| `Application (s, ts) ->
+            begin match unalias t2 with
+		`Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
+	      | _ -> false
+            end
+	| `ForAll (qs, t) ->
+            begin match unalias t2 with
+	      | `ForAll (qs', t') ->
+                  List.for_all2 (fun q q' -> eq_quantifier (q, q'))
+                    (Types.unbox_quantifiers qs)
+                    (Types.unbox_quantifiers qs') &&
+                    eq_types_relaxed (t, t')
+	      | _ -> false
+            end
+
+	| `Alias  _ -> assert false
+	| `Table _  -> assert false
+and eq_quantifier : (Types.quantifier * Types.quantifier) -> bool =
+  function
+    | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
+    | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
+    | `PresenceVar (lvar, _), `PresenceVar (rvar, _) -> lvar = rvar
+and eq_rows : (Types.row * Types.row) -> bool =
+  fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
+    eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
+and eq_presence =
+  function
+    | `Absent, `Absent
+    | `Present, `Present -> true
+    | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
+and eq_field_envs (lfield_env, rfield_env) =
+  let eq_specs (lf, lt) (rf, rt) = eq_presence (lf, rf) && eq_types_relaxed (lt, rt) in
+    StringMap.equal eq_specs lfield_env rfield_env
+and eq_row_vars (lpoint, rpoint) =
+  (* QUESTION:
+     Do we need to deal with closed rows specially?
+  *)
+  match Unionfind.find lpoint, Unionfind.find rpoint with
+    | `Closed, `Closed -> true
+    | `Flexible (var, _), `Flexible (var', _)
+    | `Rigid (var, _), `Rigid (var', _)
+    | `Recursive (var, _), `Recursive (var', _) -> var=var'
+    | _, _ -> Unionfind.equivalent lpoint rpoint
+and eq_type_args =
+  function
+    | `Type lt, `Type rt -> eq_types_relaxed (lt, rt)
+    | `Row lr, `Row rr -> eq_rows (lr, rr)
+    | `Presence lf, `Presence rf -> eq_presence (lf, rf)
+    | _, _ -> false
+
+(* FIXME: this should be possible more elegantly *)
+let eq_types_mod_effects origt instt =
+  let strip_quantifiers = function
+    | `ForAll (_, t) -> t
+    | t -> t
+  in
+  let origt = TypeUtils.concrete_type origt in
+  let instt = TypeUtils.concrete_type instt in
+    match TypeUtils.quantifiers origt with
+      | [`RowVar _] -> 
+	  eq_types_relaxed ((strip_quantifiers origt), instt)
+      | _ -> false
+
 module Monomorphize =
 struct
 
@@ -505,109 +623,6 @@ struct
     in
       aux l
 
-  (* a special kind of structural equality on types that doesn't look
-     inside points *)
-  let rec eq_types_relaxed : (Types.datatype * Types.datatype) -> bool =
-    fun (t1, t2) ->
-      let rec unalias = function
-	| `Alias (_, x) -> unalias x
-	| x             -> x in
-	match unalias t1 with 
-	  | `Not_typed -> 
-              begin match unalias t2 with
-		  `Not_typed -> true
-		| _          -> false
-              end
-	  | `Primitive x ->
-              begin match unalias t2 with
-		  `Primitive y -> x = y
-		| _            -> false
-              end
-	  | `MetaTypeVar lpoint ->
-              begin match unalias t2 with
-		  `MetaTypeVar rpoint -> Unionfind.equivalent lpoint rpoint
-		| _                   -> false
-              end
-	  | `Function (lfrom, lm, lto) ->
-              begin match unalias t2 with
-		  `Function (rfrom, rm, rto) -> eq_types_relaxed (lfrom, rfrom)
-                    && eq_types_relaxed (lto,   rto)
-                    (* && eq_rows  (lm,    rm) *)
-		| _                          -> false
-              end
-	  | `Record l ->
-              begin match unalias t2 with
-		  `Record r -> eq_rows (l, r)
-		| _         -> false
-              end
-	  | `Variant l ->
-              begin match unalias t2 with
-		  `Variant r -> eq_rows (l, r)
-		| _          -> false
-              end
-	  | `Application (s, ts) ->
-              begin match unalias t2 with
-		  `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
-		| _ -> false
-              end
-	  | `ForAll (qs, t) ->
-              begin match unalias t2 with
-		| `ForAll (qs', t') ->
-                    List.for_all2 (fun q q' -> eq_quantifier (q, q'))
-                      (Types.unbox_quantifiers qs)
-                      (Types.unbox_quantifiers qs') &&
-                      eq_types_relaxed (t, t')
-		| _ -> false
-              end
-
-	  | `Alias  _ -> assert false
-	  | `Table _  -> assert false
-  and eq_quantifier : (Types.quantifier * Types.quantifier) -> bool =
-    function
-      | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
-      | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
-      | `PresenceVar (lvar, _), `PresenceVar (rvar, _) -> lvar = rvar
-  and eq_rows : (Types.row * Types.row) -> bool =
-    fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
-      eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
-  and eq_presence =
-    function
-      | `Absent, `Absent
-      | `Present, `Present -> true
-      | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
-  and eq_field_envs (lfield_env, rfield_env) =
-    let eq_specs (lf, lt) (rf, rt) = eq_presence (lf, rf) && eq_types_relaxed (lt, rt) in
-      StringMap.equal eq_specs lfield_env rfield_env
-  and eq_row_vars (lpoint, rpoint) =
-    (* QUESTION:
-       Do we need to deal with closed rows specially?
-    *)
-    match Unionfind.find lpoint, Unionfind.find rpoint with
-      | `Closed, `Closed -> true
-      | `Flexible (var, _), `Flexible (var', _)
-      | `Rigid (var, _), `Rigid (var', _)
-      | `Recursive (var, _), `Recursive (var', _) -> var=var'
-      | _, _ -> Unionfind.equivalent lpoint rpoint
-  and eq_type_args =
-    function
-      | `Type lt, `Type rt -> eq_types_relaxed (lt, rt)
-      | `Row lr, `Row rr -> eq_rows (lr, rr)
-      | `Presence lf, `Presence rf -> eq_presence (lf, rf)
-      | _, _ -> false
-
-  (* FIXME: this should be possible more elegantly *)
-  let eq_types_mod_effects origt instt =
-    let strip_quantifiers = function
-	| `ForAll (_, t) -> t
-	| t -> t
-    in
-    let origt = TypeUtils.concrete_type origt in
-    let instt = TypeUtils.concrete_type instt in
-      match TypeUtils.quantifiers origt with
-	| [`RowVar _] -> 
-	    eq_types_relaxed ((strip_quantifiers origt), instt)
-	| _ -> false
-
   let rec instmap = function
     | `TApp (`Variable name, tyargs) -> 
 	InstMap.make name [tyargs]
@@ -692,7 +707,7 @@ struct
 		    [b], []
 		  end
 		  
-	  | `Fun ((f, (t, _, _)) as binder, arg_binders, body, tyvars) ->
+	  | `Fun ((f, (t, _, _)) as binder, arg_binders, body, _tyvars) ->
 	      let (_, (t', _, _)) as binder', f' = clone_binder binder in
 (*	      let tyenv = Env.Int.bind tyenv (f', t') in *)
 		(* FIXME: adapt type annotations in body *)
@@ -790,7 +805,7 @@ struct
 	  let bs, specmap = clone_bindings im bs in
 	  let bs' = List.map (replace_spec_binding specmap) bs in
 	  let tc' = replace_spec specmap tc in 
-	    Debug.print (Show.show show_specmap specmap);
+	    (*Debug.print (Show.show show_specmap specmap); *)
 	  (* TODO: restrict im by names which have already been handled *)
 (*	  let tc' = specialize (InstMap.restrict im cloned) tc' in *)
 	  let tc' = specialize im tc' in
@@ -822,14 +837,254 @@ struct
       
 end
 
+module TypeMap =
+struct
+  type 'a t = (Types.datatype * 'a) list
+
+  let rec assoc k l =
+    match l with
+      | [] -> None
+      | (t, v) :: l -> 
+	  if eq_types_mod_effects k t then
+	    Some v
+	  else
+	    assoc k l
+
+  let rec update k v l =
+    match l with
+      | [] -> [(k, v)]
+      | (k', _) :: l when eq_types_mod_effects k k' -> (k, v) :: l
+      | e :: l -> e :: (update k v l)
+
+  let add k v l = (k, v) :: l
+
+  let empty = []
+end
+
 module Defunctionalize =
 struct
 
 (*
-  let lift
-
-  let convert
+  type defunctx = { 
+    cloned_funs : Var.var IntMap.t;
+    dispatchs : (Types.datatype * Var.var) list;
+    dispatch_defs : (Var.var * funct) list;
+    tagctrs : int TypeMap.t
+    (* clostypes : (Types.datatype * Types.datatype) list *)
+  }
 *)
+
+  let replace_var ms (q : qr) : qr =
+    let rec replace_binding b =
+      match b with
+	| `Let (binder, tyvars, tc) -> 
+	    (* Debug.f "replace let %d" (Var.var_of_binder binder); *)
+	    `Let (binder, tyvars, replace tc)
+	| `Fun (binder, arg_binders, body, tyvars) -> 
+	    `Fun (binder, arg_binders, replace body, tyvars)
+	| `PFun _ -> b
+    and replace q =
+      match q with
+	| `Constant _ | `Database _ | `Table _ | `Wrong _ -> q
+	| `Project (label, v) -> `Project (label, replace v)
+	| `Extend (extend_fields, r) -> `
+	    Extend (StringMap.map replace extend_fields, opt_map replace r)
+	| `Erase (labels, v) -> `Erase (labels, replace v)
+	| `Inject (tag, v, t) -> `Inject (tag, replace v, t)
+	| `TAbs (tyvars, v) -> `TAbs (tyvars, replace v)
+	| `List xs -> `List (List.map replace xs)
+	| `Apply (f, args) -> `Apply (replace f, List.map replace args)
+	| `Case (v, cases, default) ->
+	    let v = replace v in
+	    let case (binder, body) = (binder, replace body) in
+	    let cases = StringMap.map case cases in
+	    let default = opt_map case default in
+	      `Case (v, cases, default)
+	| `If (c, t, e) -> `If (replace c, replace t, replace e)
+	| `Computation (bs, tc) -> 
+	    `Computation (List.map replace_binding bs, replace tc)
+	| `Variable var -> 
+	    begin
+	      match lookup var ms with
+		| Some var' -> `Variable var'
+		| None -> `Variable var
+	    end
+	| `TApp (v, tyargs) -> `TApp (replace v, tyargs)
+    in
+      replace q
+
+  (* fold over binding list 
+     2. replace applications/variables
+     1. convert/clone current fun-binding -> new maps
+  *)
+
+  let cloned_funs = ref IntMap.empty
+      
+  (* map type to int *)
+  let tagctrs = ref TypeMap.empty
+
+  let dispatch_vars = ref TypeMap.empty
+
+  let dispatch_funs = ref IntMap.empty
+
+  let new_tag typ name =
+    let i =
+      match TypeMap.assoc typ !tagctrs with
+	| Some i -> i
+	| None -> 0
+    in
+      (* let ctx = { ctx with tagctrs = TypeMap.update typ (i + 1) tagctrs } in *)
+      tagctrs := TypeMap.update typ (i + 1) !tagctrs;
+      name ^ "+++" ^ (string_of_int i)
+
+  let update_dispatch_fun (ty : Types.datatype) origfun tag freevars : unit =
+    let (binder, arg_binders, body, _tyvars) = origfun in
+    let (dispatch_binder, dispatch_arg_binders, dispatch_body, tyvars) =
+      match TypeMap.assoc ty !dispatch_vars with
+	| Some f -> val_of (IntMap.lookup f !dispatch_funs)
+	| None ->
+	    (* create empty initial dispatch function *)
+	    let name = "dispatch_" ^ (Types.string_of_datatype ty) in
+	    let binder = Var.fresh_binder (`Not_typed, name, `Local) in
+	    let tag_binder, tag_var = Var.fresh_var (`Not_typed, "", `Local) in
+	    let arg_binders = tag_binder :: arg_binders in
+	    let body = `Case (`Variable tag_var, StringMap.empty, None) in
+	      (binder, arg_binders, body, [])
+    in
+    let case_binder, tagged_var = Var.fresh_var (`Not_typed, "", `Local) in
+    let varmappings = List.combine (List.map fst arg_binders) (List.map fst (drop 1 dispatch_arg_binders)) in
+    let body = replace_var varmappings body in
+    let freevar_binding (var, i) =
+      let binder = (var, (`Not_typed, "", `Local)) in
+      `Let (binder, [], `Project (string_of_int i, `Variable tagged_var))
+    in
+    let bindings = List.map freevar_binding freevars in
+    let body = `Computation (bindings, body) in
+    let dispatch_body =
+      match dispatch_body with
+	| `Case (v, cases, default) ->
+	    `Case (v, StringMap.add tag (case_binder, body) cases, default)
+	| _ -> failwith "non-case body in dispatch function"
+    in
+    let dispatch_fun = (binder, arg_binders, dispatch_body, tyvars) in
+      (* { ctx with dispatchs = TypeMap.update ty dispatch_fun dispatchs } *)
+      Debug.print (Show.show (Show.show_list Types.show_datatype) (List.map fst !dispatch_vars));
+      dispatch_vars := TypeMap.update ty (Var.var_of_binder dispatch_binder) !dispatch_vars;
+      dispatch_funs := IntMap.add (Var.var_of_binder dispatch_binder) dispatch_fun !dispatch_funs
+    
+  let update_dispatch_pfun _ctx (_ty : Types.datatype) (_binder, _dispatch) _tag : unit = ()
+
+  let clone_primitive ((_f, (t, fname, loc)), dispatch) =
+    (Var.fresh_binder (t, fname ^ "_orig", loc), dispatch)
+
+  let clone (f : funct) : funct * Var.var =
+    let (_f, (t, fname, loc)), arg_binders, body, tyargs = f in
+    let binder, f' = Var.fresh_var (t, fname ^ "_orig", loc) in
+      (binder, arg_binders, body, tyargs), f'
+
+  let rec convert_binding : Types.datatype Env.Int.t -> binding -> binding list -> binding list = 
+    fun tyenv b bs ->
+      match b with
+	| `Let (binder, tyvars, tc) ->
+	    (`Let (binder, tyvars, convert tyenv tc)) :: bs
+	    (* convert body with ctx *)
+	    (* refresh type? *)
+	| `Fun (((var, (t, name, _)), arg_binders, body, _tyvars) as funct) ->
+	    let body = convert tyenv body in
+	    let tag = new_tag t name in
+	    let freevars = FreeVars.freevars (IntSet.from_list (List.map fst arg_binders)) body in
+	    let freevars = List.sort compare (IntSet.elements freevars) in
+	    let freevars_numbered = mapIndex (fun v i -> (v, i)) freevars in
+	    let tag_fields = 
+	      List.fold_left 
+		(fun m (v, i) -> StringMap.add (string_of_int i) (`Variable v) m)
+		StringMap.empty
+		freevars_numbered
+	    in
+	    let tag_record = `Extend (tag_fields, None) in
+	    let variant = `Inject (tag, tag_record, `Not_typed) in
+	    let cloned_fun, cloned_var = clone funct in
+	    let defun_binding = `Let ((var, (`Not_typed, "", `Local)), [], variant) in
+	      cloned_funs := IntMap.add var cloned_var !cloned_funs;
+	      update_dispatch_fun t funct tag freevars_numbered;
+	      (`Fun cloned_fun) :: defun_binding :: bs
+	      
+	| `PFun ((var, _), _dispatch) ->
+	    cloned_funs := IntMap.add var var !cloned_funs;
+	    b :: bs
+	    (*
+	      FIXME
+	      clone primitive
+	      if primitive is higher-order, add dispatch-function
+	      add arm to case expression of dispatch-function
+	    *)
+
+  and bindings tyenv bs =
+      List.fold_right (convert_binding tyenv) bs []
+
+  and convert_application tyenv (fexp : qr) (argexps : qr list) : qr =
+    let t =
+      match fexp with
+	| `Variable f | `TApp (`Variable f, _) -> Env.Int.lookup tyenv f
+	| _ -> type_qr tyenv fexp
+    in
+    let dispatch_fun = 
+      begin
+	Debug.print ("lookup dispatch_vars " ^ (Show.show Types.show_datatype t));
+	match TypeMap.assoc t !dispatch_vars with
+	  | Some dispatch -> dispatch
+	  | None -> assert false
+      end
+    in
+      `Apply (`Variable dispatch_fun, fexp :: argexps)
+
+  and convert (tyenv : Types.datatype Env.Int.t) (q : qr) : qr = 
+    match q with
+      | `Computation (bs, tc) ->
+	  let bs = bindings tyenv bs in
+	  let tc = convert tyenv tc in
+	    `Computation (bs, tc)
+      | `Constant _ | `Database _ | `Table _ | `Wrong _ | `Variable _ -> q
+      | `Project (label, v) -> `Project (label, convert tyenv v)
+      | `Extend (extend_fields, r) -> `
+	  Extend (StringMap.map (convert tyenv) extend_fields, opt_map (convert tyenv) r)
+      | `Erase (labels, v) -> `Erase (labels, convert tyenv v)
+      | `Inject (tag, v, t) -> `Inject (tag, convert tyenv v, t)
+      | `TAbs (tyvars, v) -> `TAbs (tyvars, convert tyenv v)
+      | `List xs -> `List (List.map (convert tyenv) xs)
+      | `Apply (`Variable f, args)
+      | `Apply (`TApp (`Variable f, _), args) ->
+	  (* FIXME: convert f, args before converting the application itself *)
+	  begin
+	    match IntMap.lookup f !cloned_funs with
+	      | Some f' -> `Apply (`Variable f', args)
+	      | None -> convert_application tyenv (`Variable f) args
+	  end
+      | `Apply (f, args) ->
+	  convert_application tyenv f args
+      | `Case (v, cases, default) ->
+	  let v = convert tyenv v in
+	  let case (binder, body) = (binder, convert tyenv body) in
+	  let cases = StringMap.map case cases in
+	  let default = opt_map case default in
+	    `Case (v, cases, default)
+      | `If (c, t, e) -> `If (convert tyenv c, convert tyenv t, convert tyenv e)
+      | `TApp (v, tyargs) -> `TApp (convert tyenv v, tyargs)
+
+  let defunctionalize tyenv q : qr =
+    let _, tyenv = complete_tyenv tyenv q in
+      Debug.print (Show.show (Env.Int.show_t Types.show_datatype) tyenv);
+    let q = convert tyenv q in
+    let dispatch_bs = 
+      IntMap.fold
+	(fun _var funct bs -> (`Fun funct) :: bs)
+	!dispatch_funs
+	[]
+    in
+      match q with
+	| `Computation (bs, tc) ->
+	    `Computation (dispatch_bs @ bs, tc)
+	| _ -> `Computation (dispatch_bs, q)
 end
 
 let optphase tyenv q =
@@ -859,4 +1114,6 @@ let pipeline q tyenv =
   let _optphase = optphase tyenv in
 (*  let q = applyn optphase q 2 in *)
     (*ignore (Qr.type_qr tyenv q); *)
-    Monomorphize.monomorphize q
+  let q = optphase tyenv q in
+  let q = Monomorphize.monomorphize q in
+    Defunctionalize.defunctionalize tyenv q

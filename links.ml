@@ -42,7 +42,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     else program 
   in
 
-  let tenv = Qr.complete_tyenv tenv program in
+  let tenv = Qr.complete_tyenv_ir tenv program in
     Evalir.tenv := Some tenv;
 
   let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in

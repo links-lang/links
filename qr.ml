@@ -2,7 +2,7 @@
 
 open Utility
 
-let complete_tyenv tyenv p =
+let complete_tyenv_ir tyenv p =
     let _, _, o = (new Ir.Transform.visitor tyenv)#computation p in
         o#get_type_environment
 
@@ -278,7 +278,12 @@ let type_constant c =
     | `String _ -> Types.string_type
     | `Float _ -> Types.float_type
 
-let type_binder tyenv (var, (t, _, _)) = Env.Int.bind tyenv (var, t)
+(* HACK HACK HACK *)
+let globtyenv = ref Env.Int.empty
+
+let type_binder tyenv (var, (t, _, _)) = 
+  globtyenv := Env.Int.bind !globtyenv (var, t);
+  Env.Int.bind tyenv (var, t)
 
 let type_list xs type_value =
   List.map type_value xs
@@ -288,19 +293,31 @@ let type_name_map map type_value =
     (fun v -> type_value v)
     map
 
-let bindings tyenv bs =
+let rec bindings tyenv bs =
   List.fold_left
     (fun tyenv binding -> 
        match binding with
-	 | `PFun (binder, _)
-	 | `Let (binder, _, _)
-	 | `Fun (binder, _, _, _) -> 
-	     type_binder tyenv binder) 
+	 | `PFun (binder, _) ->
+	     type_binder tyenv binder
+	 | `Let (binder, _, tc) ->
+	     let tyenv = type_binder tyenv binder in
+	       ignore (type_qr tyenv tc);
+	       tyenv
+	 | `Fun (binder, arg_binders, body, _tyvars) -> 
+	     let tyenv = type_binder tyenv binder in
+	     let tyenv' =
+	       List.fold_left
+		 (fun tyenv b -> type_binder tyenv b)
+		 tyenv 
+		 arg_binders
+	     in
+	       ignore (type_qr tyenv' body);
+	       type_binder tyenv binder)
     tyenv 
     bs
 
 (* reconstruct types of qr expressions *)
-let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
+and type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
   fun tyenv q ->
     let lookup_type = Env.Int.lookup tyenv in
     let t = 
@@ -376,9 +393,13 @@ let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype =
 	  type_qr (bindings tyenv bs) tc
       | `Wrong t -> t
     in
-      Debug.print ("q expr " ^ (Show.show show_qr q));
-      Debug.print ("of type " ^ (Show.show Types.show_datatype t));
+      (* Debug.print ("q expr " ^ (Show.show show_qr q));
+      Debug.print ("of type " ^ (Show.show Types.show_datatype t)); *)
       t
+
+let complete_tyenv tyenv q =
+  let t = type_qr tyenv q in
+    t, !globtyenv
 
 (* FIXME: ugly code *)
 let qr_of_query tyenv env comp =
