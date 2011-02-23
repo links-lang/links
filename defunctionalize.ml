@@ -63,6 +63,93 @@ struct
     fst3 ((eliminator tyenv census)#qr q)
 end
 
+module FreeVars =
+struct
+
+  let rec name_map bound proj map =
+    StringMap.fold
+      (fun _ v free -> 
+	 let free' = fv bound (proj v) in
+	   IntSet.union free' free)
+      map
+      IntSet.empty
+
+  and bindings bound bs =
+    List.fold_left
+      (fun (free, bound) ((var, _), tc) ->
+	 let free = IntSet.union (fv bound tc) free in
+	 let bound = IntSet.add var free in
+	   (free, bound))
+      (IntSet.empty, bound)
+      bs
+
+  and fv bound = function
+    | `Variable name -> 
+	if not (IntSet.mem name bound) then
+	  IntSet.add name IntSet.empty
+	else
+	  IntSet.empty
+    | `Extend (extend_fields, base) ->
+	let proj (_label, value) = value in
+	let free = name_map bound proj extend_fields in
+	  begin
+	    match base with
+	      | Some r -> IntSet.union (fv bound r) free
+	      | None -> free
+	  end
+    | `Project (_, value) | `Erase (_, value) | `Inject (_, value, _) 
+    | `TApp (value, _) | `TAbs (_, value) -> 
+	fv bound value
+    | `Let (bs, tc) ->
+	let free, bound = bindings bound bs in
+	  IntSet.union (fv bound tc) free
+    | `Fun (binders, _, body, _) ->
+	let bound = List.fold_right IntSet.add (List.map fst binders) bound in
+	  fv bound body
+    | `Case (v, cases, default) ->
+	let case _ ((var, _), body) free =
+	  IntSet.union (fv (IntSet.add var bound) body) free
+	in
+	let v_free = fv bound v in
+	let cases_free = StringMap.fold case cases IntSet.empty in
+	let default_free = 
+	  opt_app 
+	    (fun ((var, _), body) -> fv (IntSet.add var bound) body) 
+	    IntSet.empty
+	    default 
+	in
+	  IntSet.union_all [v_free; cases_free; default_free]
+    | `List xs -> IntSet.union_all (List.map (fv bound) xs)
+    | `If (c, t, e) ->
+	IntSet.union_all [fv bound c; fv bound t; fv bound e]
+    | `Database _ | `Table _ | `PrimitiveFun _ | `Wrong _ | `Constant _ ->
+	IntSet.empty
+
+  let freevars = fv
+
+  let boundvars =
+    function
+      | `Fun (binders, _, _, _) -> 
+	  List.fold_right IntSet.add (List.map fst binders) IntSet.empty
+      | `Let (bindings, _) ->
+	  List.fold_right IntSet.add (List.map (fst -<- fst) bindings) IntSet.empty 
+      | `Case (_, cases, default) ->
+	  let case_bound = 
+	    StringMap.fold 
+	      (fun _ ((name, _), _) bound -> IntSet.add name bound)
+	      cases
+	      IntSet.empty
+	  in
+	  let default_bound = opt_app 
+	    (fun ((var, _), _) -> IntSet.singleton var) 
+	    IntSet.empty 
+	    default 
+	  in
+	    IntSet.union case_bound default_bound
+      | _ -> IntSet.empty
+	  
+end
+
 module Inliner =
 struct
 

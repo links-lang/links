@@ -542,6 +542,7 @@ let bindings tyenv bs =
     tyenv 
     bs
 
+(* reconstruct types of qr expressions *)
 let rec type_qr : Types.datatype Env.Int.t -> qr -> Types.datatype = 
   fun tyenv q ->
     let lookup_type = Env.Int.lookup tyenv in
