@@ -79,7 +79,7 @@ type t = [
 | `ClientFunction of string
 | `Continuation of continuation ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
+and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
     deriving (Show)
 
 val toplevel_cont : continuation
