@@ -6,7 +6,7 @@ module ADag = Algebra_dag
 module AEnv = Env.Int
 
 open QrToAlgebraDefinitions
-module Helpers = QrToAlgebraHelpers
+module H = QrToAlgebraHelpers
 
 (* module-global reference that stores the global error plan of the generated
    plan bundle (if there is one) *)
@@ -40,7 +40,7 @@ let rec compile_box env loop e =
     ADag.mk_attach
       (pos, A.Nat 1n)
       (ADag.mk_project 
-	 [(Helpers.prj iter); (A.Item 1, iter)]
+	 [(H.prj iter); (A.Item 1, iter)]
 	 loop)
   in
     { 
@@ -56,14 +56,14 @@ and compile_unbox env loop e =
     assert ((Cs.cardinality ti.cs) = 1);
     assert ((List.length ti.ts) = 1);
     let (offset, inner_ti) = List.hd ti.ts in
-      Helpers.do_unbox ti.q offset inner_ti
+      H.do_unbox ti.q offset inner_ti
 
 and compile_append env loop l =
   match l with
     | e :: [] ->
 	compile_expression env loop e
     | _ :: _ ->
-	  Helpers.sequence_construction (List.map (compile_expression env loop) l) ~newpos:true
+	  H.sequence_construction (List.map (compile_expression env loop) l) ~newpos:true
     | [] ->
 	{
 	  q = ADag.mk_emptytbl;
@@ -76,15 +76,15 @@ and compile_append env loop l =
 and compile_zip env loop l1 l2 =
   let ti_l1 = compile_expression env loop l1 in
   let ti_l2 = compile_expression env loop l2 in
-  let q_l1' = Helpers.abspos ti_l1.q ti_l1.cs in
-  let q_l2' = Helpers.abspos ti_l2.q ti_l2.cs in
-    Helpers.do_zip { ti_l1 with q = q_l1' } { ti_l2 with q = q_l2' }
+  let q_l1' = H.abspos ti_l1.q ti_l1.cs in
+  let q_l2' = H.abspos ti_l2.q ti_l2.cs in
+    H.do_zip { ti_l1 with q = q_l1' } { ti_l2 with q = q_l2' }
 
 and compile_unzip env loop zipped =
   let ti_zipped = compile_expression env loop zipped in
   let q = 
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist_single [A.Item 1; A.Item 2] iter))
+      ([H.prj iter; H.prj pos] @ (H.prjlist_single [A.Item 1; A.Item 2] iter))
       (ADag.mk_attach
 	 (pos, A.Nat 1n)
 	 loop)
@@ -98,13 +98,13 @@ and compile_unzip env loop zipped =
   let card = List.length cols_1 in
   let q_1 = 
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist (Helpers.io cols_1)))
+      ([H.prj iter; H.prj pos] @ (H.prjlist (H.io cols_1)))
       ti_zipped.q
   in
   let q_2 =
     ADag.mk_project
-      (let proj = Helpers.prjlist_map (Helpers.io (Helpers.decr cols_2 card)) (Helpers.io cols_2) in
-	 ([Helpers.prj iter; Helpers.prj pos] @ proj))
+      (let proj = H.prjlist_map (H.io (H.decr cols_2 card)) (H.io cols_2) in
+	 ([H.prj iter; H.prj pos] @ proj))
       ti_zipped.q
   in
   let ts_1 = Ts.keep_cols ti_zipped.ts cols_1 in
@@ -125,23 +125,23 @@ and compile_unzip env loop zipped =
 (* FIXME: unite at least compile_or/and/length *)
 and compile_or env loop l =
   let ti_l = compile_expression env loop l in
-    Helpers.do_list_or loop ti_l
+    H.do_list_or loop ti_l
 
 and compile_and env loop l =
   let ti_l = compile_expression env loop l in
-    Helpers.do_list_and loop ti_l
+    H.do_list_and loop ti_l
 
 and compile_length env loop l =
   let ti_l = compile_expression env loop l in
-    Helpers.do_length loop ti_l
+    H.do_length loop ti_l
 
 and compile_empty env loop l = 
   let ti_l = compile_expression env loop l in
-  let ti_length = Helpers.do_length loop ti_l in
+  let ti_length = H.do_length loop ti_l in
     assert (Cs.is_atomic ti_length.cs);
     let q =
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; (A.Item 1, res)]
+	[H.prj iter; H.prj pos; (A.Item 1, res)]
 	(ADag.mk_funnumeq
 	   (res, (A.Item 1, A.Item 2))
 	   (ADag.mk_attach
@@ -166,7 +166,7 @@ and compile_sum env loop l =
 	 (A.Sum, (c, c), Some iter)
 	 ti_l.q)
     in
-    let q' = Helpers.wrap_agg loop q (A.Int (Num.Int 0)) in
+    let q' = H.wrap_agg loop q (A.Int (Num.Int 0)) in
       {
 	q = q';
 	cs = Cs.Column (1, `IntType);
@@ -200,7 +200,7 @@ and compile_aggr_error env loop aggr_fun restype l =
       ADag.mk_difference
 	loop
 	(ADag.mk_project
-	   [Helpers.prj iter]
+	   [H.prj iter]
 	   ti_l.q)
     in
     let ti_inner_nothing = compile_unit empty_iterations in
@@ -212,7 +212,7 @@ and compile_aggr_error env loop aggr_fun restype l =
 	(ADag.mk_attach
 	   (A.Item 1, A.Nat just_key)
 	   (ADag.mk_project
-	      [Helpers.prj iter; (A.Item 2, iter)]
+	      [H.prj iter; (A.Item 2, iter)]
 	      q_inner_just))
     in
     let q_outer_nothing =
@@ -221,7 +221,7 @@ and compile_aggr_error env loop aggr_fun restype l =
 	(ADag.mk_attach
 	   (A.Item 1, A.Nat nothing_key)
 	   (ADag.mk_project
-	      [Helpers.prj iter; (A.Item 2, iter)]
+	      [H.prj iter; (A.Item 2, iter)]
 	      empty_iterations))
     in
     let cs_inner_just = Cs.Column (1, restype) in
@@ -249,10 +249,10 @@ and compile_aggr_error env loop aggr_fun restype l =
 and compile_select env loop l i =
   let ti_i = compile_expression env loop i in
   let ti_l = compile_expression env loop l in
-  let q_l' = Helpers.abspos ti_l.q ti_l.cs in
+  let q_l' = H.abspos ti_l.q ti_l.cs in
   let q_result =
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs)))
+      ([H.prj iter; H.prj pos] @ H.prjlist (H.io (Cs.offsets ti_l.cs)))
       (ADag.mk_select
 	 res
 	 (ADag.mk_funnumeq
@@ -268,13 +268,13 @@ and compile_select env loop l i =
   in
   let q_error =
     ADag.mk_project
-      [Helpers.prj (A.Item 1)]
+      [H.prj (A.Item 1)]
       (ADag.mk_attach
 	 (A.Item 1, A.String "select(): index too large")
 	 (ADag.mk_difference
 	    loop
 	    (ADag.mk_project
-	       [Helpers.prj iter]
+	       [H.prj iter]
 	       q_result)))
   in
     add_error_plan q_error;
@@ -294,7 +294,7 @@ and compile_comparison env loop comparison_wrapper tablefun rowfun operand_1 ope
     assert (Cs.is_atomic ti.cs);
     assert ((Ts.length ti.ts) = 1);
     let (offset, inner_ti) = List.hd ti.ts in
-      Helpers.do_unbox ti.q offset inner_ti
+      H.do_unbox ti.q offset inner_ti
   in
     match (Qr.ImpType.typeof_tqr operand_1, Qr.ImpType.typeof_tqr operand_2) with
 	(* if arguments are boxed (i.e. they have list type), we need
@@ -328,7 +328,7 @@ and do_table_greater loop wrapper l1 l2 =
     (* the comparison must be done loop-lifted so that inner tables can be unboxed and compared correctly *)
 
     (* lift zipped *)
-    let _, q_mapped, map, loop' = Helpers.lift zipped.q zipped.cs in
+    let _, q_mapped, map, loop' = H.lift zipped.q zipped.cs in
     let zipped_mapped = { zipped with q = q_mapped } in
 
     (* we need "<" on rows but have only ">" -> switch arguments *)
@@ -337,7 +337,7 @@ and do_table_greater loop wrapper l1 l2 =
     (* unlift *)
     let compared_backmapped =
       ADag.mk_project
-	[(iter, outer); (pos, pos'); Helpers.prj (A.Item 1)]
+	[(iter, outer); (pos, pos'); H.prj (A.Item 1)]
 	(ADag.mk_eqjoin
 	   (iter, inner)
 	   compared
@@ -351,7 +351,7 @@ and do_table_greater loop wrapper l1 l2 =
 	(ADag.mk_attach
 	   (pos, A.Nat 1n)
 	   (ADag.mk_project
-	      [Helpers.prj iter; (A.Item 1, res)]
+	      [H.prj iter; (A.Item 1, res)]
 	      (ADag.mk_funaggr
 		 (A.Min, (res, pos), Some iter)
 		 selected)))
@@ -362,7 +362,7 @@ and do_table_greater loop wrapper l1 l2 =
 	      (ADag.mk_difference
 		 loop
 		 (ADag.mk_project
-		    [Helpers.prj iter]
+		    [H.prj iter]
 		    selected))))
     in
       { 
@@ -377,23 +377,23 @@ and do_table_greater loop wrapper l1 l2 =
 
   (* l1 > l2 iff l2 < l1 -> swap arguments *)
   let (l1, l2) = (l2, l1) in
-  let l1_abs = Helpers.abspos_ti l1 in
-  let l2_abs = Helpers.abspos_ti l2 in
-  let zipped = Helpers.do_zip l1_abs l2_abs in
+  let l1_abs = H.abspos_ti l1 in
+  let l2_abs = H.abspos_ti l2 in
+  let zipped = H.do_zip l1_abs l2_abs in
   let zipped_reverse = switch_zipped zipped in 
-  let l1_len = Helpers.do_length loop l1_abs in
-  let l2_len = Helpers.do_length loop l2_abs in
+  let l1_len = H.do_length loop l1_abs in
+  let l2_len = H.do_length loop l2_abs in
   let minp_l1_l2 = minpos zipped in
   let minp_l2_l1 = minpos zipped_reverse in
 
-    Helpers.or_op
-      (Helpers.and_op
-	 (Helpers.smaller l1_len l2_len)
-	 (Helpers.equal minp_l1_l2 minp_l2_l1))
-      (Helpers.smaller minp_l1_l2 minp_l2_l1)
+    H.or_op
+      (H.and_op
+	 (H.smaller l1_len l2_len)
+	 (H.equal minp_l1_l2 minp_l2_l1))
+      (H.smaller minp_l1_l2 minp_l2_l1)
       
 and do_row_greater loop wrapper e1 e2 = 
-  let q = do_row_greater_real loop wrapper (Helpers.do_zip e1 e2) in
+  let q = do_row_greater_real loop wrapper (H.do_zip e1 e2) in
     { 
       q = q;
       cs = Cs.Column (1, `BoolType);
@@ -410,9 +410,9 @@ and do_row_greater_real loop wrapper zipped =
 	let col_l = List.hd (Cs.offsets cse_l) in
 	let col_r = List.hd (Cs.offsets cse_r) in
 	  ADag.mk_project
-	    [Helpers.prj iter; Helpers.prj pos; (A.Item 1, res)]
+	    [H.prj iter; H.prj pos; (A.Item 1, res)]
 	    (* no need to join since the two arguments are already zipped *)
-	    (Helpers.wrap_gt res (A.Item col_l) (A.Item col_r) ti_zipped.q)
+	    (H.wrap_gt res (A.Item col_l) (A.Item col_r) ti_zipped.q)
       else if Cs.is_variant cse_l then
 	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
@@ -424,8 +424,8 @@ and do_row_greater_real loop wrapper zipped =
 	    Ts.lookup ti_zipped.ts col_l, Ts.lookup ti_zipped.ts col_r 
 	  with _ -> assert false
 	in
-	let ti_unboxed_l = Helpers.do_unbox ti_zipped.q col_l inner_table_l in
-	let ti_unboxed_r = Helpers.do_unbox ti_zipped.q col_r inner_table_r in
+	let ti_unboxed_l = H.do_unbox ti_zipped.q col_l inner_table_l in
+	let ti_unboxed_r = H.do_unbox ti_zipped.q col_r inner_table_r in
 	  (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r).q
 	    
     in
@@ -444,9 +444,9 @@ and do_row_greater_real loop wrapper zipped =
 	let col_l = List.hd (Cs.offsets cse_l) in
 	let col_r = List.hd (Cs.offsets cse_r) in
 	  ADag.mk_project
-	    [Helpers.prj iter; Helpers.prj pos; (A.Item 1, res)]
+	    [H.prj iter; H.prj pos; (A.Item 1, res)]
 	    (* no need to join since the two arguments are already zipped *)
-	    (Helpers.wrap_eq res (A.Item col_l) (A.Item col_r) ti_zipped.q)
+	    (H.wrap_eq res (A.Item col_l) (A.Item col_r) ti_zipped.q)
       else if Cs.is_variant cse_l then
 	failwith "comparison (<, >, <=, >=) of variants is not supported"
       else
@@ -461,8 +461,8 @@ and do_row_greater_real loop wrapper zipped =
 	  with _ -> assert false
 	in
 	  (* unbox the inner tables *)
-	let ti_unboxed_l = Helpers.do_unbox ti_zipped.q col_l inner_table_l in
-	let ti_unboxed_r = Helpers.do_unbox ti_zipped.q col_r inner_table_r in
+	let ti_unboxed_l = H.do_unbox ti_zipped.q col_l inner_table_l in
+	let ti_unboxed_r = H.do_unbox ti_zipped.q col_r inner_table_r in
 	  (* compare the inner tables *)
 	  (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r).q
     in
@@ -506,29 +506,29 @@ and do_row_greater_real loop wrapper zipped =
     (* l_1 = r_1, ..., l_1 = r_1 && ... && l_n-1 = r_n-1 *)
     let combined =
       List.fold_left
-	(fun combined eq_k -> (Helpers.and_op (List.hd combined) eq_k) :: combined)
+	(fun combined eq_k -> (H.and_op (List.hd combined) eq_k) :: combined)
 	(take 1 equal_terms)
 	(drop 1 equal_terms)
     in
     let combined = List.rev combined in
 
     (* l_1 = r_1 && l_2 > r_2, ..., l_1 = r_1 && l_2 = r_2 && l_2 > r_3, l_1 = r_1 && ... && l_n-1 = r_n-1 && l_n > r_n *)
-    let and_terms = List.map2 Helpers.and_op (drop 1 greater_terms) combined in
+    let and_terms = List.map2 H.and_op (drop 1 greater_terms) combined in
 
       (* l_1 > r_1 || (l_1 = r_1 && l_2 > r_2) || ... *)
-      (List.fold_left Helpers.or_op (List.hd greater_terms) and_terms).q
+      (List.fold_left H.or_op (List.hd greater_terms) and_terms).q
 	
 and do_table_equal loop wrapper l1 l2 =
-  let all = Helpers.do_list_and loop in
+  let all = H.do_list_and loop in
 
   let map_equal source =
-    let _, q_s_mapped, map, loop = Helpers.lift source.q source.cs in
+    let _, q_s_mapped, map, loop = H.lift source.q source.cs in
     let ti_s = { source with q = q_s_mapped } in
-    let q_equal = (do_row_equal loop wrapper (Helpers.do_project "1" ti_s) (Helpers.do_project "2" ti_s)).q in
+    let q_equal = (do_row_equal loop wrapper (H.do_project "1" ti_s) (H.do_project "2" ti_s)).q in
       (* map the comparison result back into the outer iteration context *)
     let result_backmapped =
       ADag.mk_project
-	[(iter, outer); (pos, pos'); Helpers.prj (A.Item 1)]
+	[(iter, outer); (pos, pos'); H.prj (A.Item 1)]
 	(ADag.mk_eqjoin
 	   (iter, inner)
 	   q_equal
@@ -543,13 +543,13 @@ and do_table_equal loop wrapper l1 l2 =
       }
   in
 
-  let l1_abs = Helpers.abspos_ti l1 in
-  let l2_abs = Helpers.abspos_ti l2 in
-  let l1_len = Helpers.do_length loop l1_abs in
-  let l2_len = Helpers.do_length loop l2_abs in
-    Helpers.and_op 
-      (Helpers.equal l1_len l2_len)
-      (all (map_equal (Helpers.do_zip l1_abs l2_abs)))
+  let l1_abs = H.abspos_ti l1 in
+  let l2_abs = H.abspos_ti l2 in
+  let l1_len = H.do_length loop l1_abs in
+  let l2_len = H.do_length loop l2_abs in
+    H.and_op 
+      (H.equal l1_len l2_len)
+      (all (map_equal (H.do_zip l1_abs l2_abs)))
 
 and do_row_equal loop wrapper ti_l ti_r =
 
@@ -566,13 +566,13 @@ and do_row_equal loop wrapper ti_l ti_r =
   let compare_field field_cse =
     let project q col = 
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; (A.Item 1, A.Item col)]
+	[H.prj iter; H.prj pos; (A.Item 1, A.Item col)]
 	q
     in
       if Cs.is_atomic field_cse then
 	(* normal comparison of atomic values *)
 	let col = List.hd (Cs.offsets field_cse) in
-	  Helpers.do_primitive_binop wrapper (project ti_l.q col) (project ti_r.q col)
+	  H.do_primitive_binop wrapper (project ti_l.q col) (project ti_r.q col)
       else if Cs.is_variant field_cse then
 
 	let tagcol, refcol = 
@@ -587,7 +587,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 	    (ADag.mk_eqjoin
 	       (iter, iter')
 	       (ADag.mk_project
-		  [(Helpers.prj iter); (item', A.Item tagcol)]
+		  [(H.prj iter); (item', A.Item tagcol)]
 		  ti_l.q)
 	       (ADag.mk_project
 		  [(iter', iter); (item'', A.Item tagcol)]
@@ -603,7 +603,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 	    (ADag.mk_attach
 	       (pos, A.Nat 1n)
 	       (ADag.mk_project
-		  [Helpers.prj iter]
+		  [H.prj iter]
 		  (ADag.mk_select
 		     res'
 		     (ADag.mk_funboolnot
@@ -614,7 +614,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 	(* iterations in which the tag is the same *)
 	let same_tag =
 	  ADag.mk_project
-	    [Helpers.prj iter; Helpers.prj item']
+	    [H.prj iter; H.prj item']
 	    (ADag.mk_select 
 	       res 
 	       tags_compared)
@@ -647,9 +647,9 @@ and do_row_equal loop wrapper ti_l ti_r =
 	       
 	       let q_tag_l = select_tag ti_l.q tag in
 	       let q_tag_r = select_tag ti_r.q tag in
-	       let unboxed_l = Helpers.do_unbox q_tag_l refcol inner_ti_l in
-	       let unboxed_r = Helpers.do_unbox q_tag_r refcol inner_ti_r in
-	       let loop_tag = ADag.mk_project [Helpers.prj iter] q_tag_l in
+	       let unboxed_l = H.do_unbox q_tag_l refcol inner_ti_l in
+	       let unboxed_r = H.do_unbox q_tag_r refcol inner_ti_r in
+	       let loop_tag = ADag.mk_project [H.prj iter] q_tag_l in
 		 match itype_l with
 		   | `Atom ->
 		       do_row_equal loop_tag wrapper unboxed_l unboxed_r
@@ -675,8 +675,8 @@ and do_row_equal loop wrapper ti_l ti_r =
 	  with _ -> assert false
 	in
 	  (* unbox the inner tables *)
-	let ti_unboxed_l = Helpers.do_unbox (project ti_l.q col) col inner_table_l in
-	let ti_unboxed_r = Helpers.do_unbox (project ti_r.q col) col inner_table_r in
+	let ti_unboxed_l = H.do_unbox (project ti_l.q col) col inner_table_l in
+	let ti_unboxed_r = H.do_unbox (project ti_r.q col) col inner_table_r in
 	  (* compare the inner tables *)
 	  (do_table_equal loop wrapper ti_unboxed_l ti_unboxed_r).q
   in
@@ -685,7 +685,7 @@ and do_row_equal loop wrapper ti_l ti_r =
     List.fold_left
       (fun q field ->
 	 ADag.mk_project
-	   [Helpers.prj iter; Helpers.prj pos; (A.Item 1, res)]
+	   [H.prj iter; H.prj pos; (A.Item 1, res)]
 	   (ADag.mk_funbooland
 	      (res, (A.Item 1, A.Item 2))
 	      (ADag.mk_eqjoin
@@ -708,7 +708,7 @@ and do_row_equal loop wrapper ti_l ti_r =
 and compile_binop env loop wrapper restype operand_1 operand_2 =
   let ti_1 = compile_expression env loop operand_1 in
   let ti_2 = compile_expression env loop operand_2 in
-    Helpers.do_primitive_binop_ti wrapper restype ti_1 ti_2
+    H.do_primitive_binop_ti wrapper restype ti_1 ti_2
 
 and compile_unop env loop wrapper operand =
   let ti_operand = compile_expression env loop operand in
@@ -717,7 +717,7 @@ and compile_unop env loop wrapper operand =
     let res = A.Item 2 in
     let q = 
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; (c, res)]
+	[H.prj iter; H.prj pos; (c, res)]
 	(wrapper
 	   res c
 	   ti_operand.q)
@@ -737,7 +737,7 @@ and compile_concat env loop l =
     let c = A.Item 1 in
     let q =
       ADag.mk_project
-	([(iter, iter'); (pos, pos'')] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_sub.cs))))
+	([(iter, iter'); (pos, pos'')] @ (H.prjlist (H.io (Cs.offsets ti_sub.cs))))
 	(ADag.mk_rank
 	   (pos'', [(pos', A.Ascending); (pos, A.Ascending)])
 	   (ADag.mk_eqjoin
@@ -759,25 +759,25 @@ and compile_concat env loop l =
 and compile_take env loop n l =
   let ti_n = compile_expression env loop n in
   let ti_l = compile_expression env loop l in
-    Helpers.do_take ti_n ti_l
+    H.do_take ti_n ti_l
 
 and compile_drop env loop n l =
   let ti_n = compile_expression env loop n in
   let ti_l = compile_expression env loop l in
-    Helpers.do_drop ti_n ti_l
+    H.do_drop ti_n ti_l
 
 and compile_limit env loop limit offset e =
   let ti_limit = compile_expression env loop limit in
   let ti_offset = compile_expression env loop offset in
   let ti_e = compile_expression env loop e in
-    Helpers.do_take ti_limit (Helpers.do_drop ti_offset ti_e)
+    H.do_take ti_limit (H.do_drop ti_offset ti_e)
 
 and compile_hd env loop l = 
   let ti_l = compile_expression env loop l in
-  let q_l_abs = Helpers.abspos ti_l.q ti_l.cs  in
+  let q_l_abs = H.abspos ti_l.q ti_l.cs  in
   let q = 
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs))))
+      ([H.prj iter; H.prj pos] @ (H.prjlist (H.io (Cs.offsets ti_l.cs))))
       (ADag.mk_select
 	 res
 	 (ADag.mk_funnumeq
@@ -788,13 +788,13 @@ and compile_hd env loop l =
   in
   let q_error =
     ADag.mk_project
-      [Helpers.prj (A.Item 1)]
+      [H.prj (A.Item 1)]
       (ADag.mk_attach
 	 (A.Item 1, A.String "hd() of empty list")
 	 (ADag.mk_difference
 	    loop
 	    (ADag.mk_project
-	       [Helpers.prj iter]
+	       [H.prj iter]
 	       q_l_abs)))
   in
     add_error_plan q_error;
@@ -809,10 +809,10 @@ and compile_hd env loop l =
 
 and compile_tl env loop l = 
   let ti_l = compile_expression env loop l in
-  let q_l_abs = Helpers.abspos ti_l.q ti_l.cs in
+  let q_l_abs = H.abspos ti_l.q ti_l.cs in
   let q =
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs))))
+      ([H.prj iter; H.prj pos] @ (H.prjlist (H.io (Cs.offsets ti_l.cs))))
       (ADag.mk_select
 	 res
 	 (ADag.mk_funnumgt
@@ -823,13 +823,13 @@ and compile_tl env loop l =
   in
   let q_error =
     ADag.mk_project
-      [Helpers.prj (A.Item 1)]
+      [H.prj (A.Item 1)]
       (ADag.mk_attach
 	 (A.Item 1, A.String "tl() of empty list")
 	 (ADag.mk_difference
 	    loop
 	    (ADag.mk_project
-	       [Helpers.prj iter]
+	       [H.prj iter]
 	       q_l_abs)))
   in
     add_error_plan q_error;
@@ -844,32 +844,26 @@ and compile_tl env loop l =
 and compile_nubbase env loop l =
   let ti_l = compile_expression env loop l in
     assert (not (Cs.is_variant ti_l.cs || Cs.is_boxed_list ti_l.cs));
-    let items = Helpers.io (Cs.offsets ti_l.cs) in
-    let ranked = 
+    let items = H.io (Cs.offsets ti_l.cs) in
+    let q_r = 
       ADag.mk_rowrank
-	(item', ((iter, A.Ascending) :: (List.map (fun i -> (i, A.Ascending)) items)))
+	(res, ((iter, A.Ascending) :: (List.map (fun i -> (i, A.Ascending)) items)))
 	ti_l.q
     in
-    let q =
+    let q_m = 
       ADag.mk_project
-	([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist items))
-	(ADag.mk_select
-	   res
-	   (ADag.mk_funnumeq
-	      (res, (pos, pos'))
-	      (ADag.mk_eqjoin
-		 (iter, iter')
-		 ti_l.q
-		 (ADag.mk_eqjoin
-		    (item', item'')
-		    (ADag.mk_funaggr
-		       (A.Min, (iter', iter), Some item')
-		       ranked)
-		    (ADag.mk_project
-		       [Helpers.prj pos'; (item'', item')]
-		       (ADag.mk_funaggr
-			  (A.Min, (pos', pos), Some item')
-			  ranked))))))
+	[(res', res); H.prj pos']
+	(ADag.mk_funaggr
+	   (A.Min, (pos', pos), Some res)
+	   q_r)
+    in
+    let q = 
+      ADag.mk_project
+	((H.prj iter) :: (H.prj pos) :: (H.prjlist items))
+	(ADag.mk_thetajoin
+	   [(A.Eq, (res, res')); (A.Eq, (pos, pos'))]
+	   q_r
+	   q_m)
     in
       {
 	q = q;
@@ -886,8 +880,8 @@ and compile_quote env loop s =
 
 and compile_concatmap env loop f source =
   let ti_source = compile_expression env loop source in
-  let _, q_v, map, loop_v = Helpers.lift ti_source.q ti_source.cs in
-  let env = Helpers.lift_env map env inner outer in
+  let _, q_v, map, loop_v = H.lift ti_source.q ti_source.cs in
+  let env = H.lift_env map env inner outer in
   let v, body = 
     match f with 
       | `Lambda (([x], body), _) -> (x, body) 
@@ -898,14 +892,14 @@ and compile_concatmap env loop f source =
   let (sort_cols, sort_info, map') = ([], [(iter, A.Ascending); (pos, A.Ascending)], map) in
   let q = 
     ADag.mk_project
-      ([(iter, outer); (pos, pos')] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_body.cs))))
+      ([(iter, outer); (pos, pos')] @ (H.prjlist (H.io (Cs.offsets ti_body.cs))))
       (ADag.mk_rank
 	 (pos', sort_info)
 	 (ADag.mk_eqjoin
 	    (iter, inner)
 	    ti_body.q
 	    (ADag.mk_project
-	       ([Helpers.prj outer; Helpers.prj inner] @ (Helpers.prjlist sort_cols))
+	       ([H.prj outer; H.prj inner] @ (H.prjlist sort_cols))
 	       map')))
   in
     {
@@ -951,7 +945,7 @@ and extend_record env loop ext_fields r =
 	(* change column order by projecting *)
       let q' =
 	ADag.mk_project
-	  ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist_map (Helpers.io cols_new) (Helpers.io cols_sorted)))
+	  ([H.prj iter; H.prj pos] @ (H.prjlist_map (H.io cols_new) (H.io cols_sorted)))
 	  ti.q
       in
 	(* change the offsets in the ts mappings accordingly *)
@@ -990,21 +984,21 @@ and extend_record env loop ext_fields r =
 
 and merge_records ti_r1 ti_r2 =
   let r2_cols = Cs.offsets ti_r2.cs in
-  let new_names_r2 = Helpers.io (Helpers.incr r2_cols (Cs.cardinality ti_r1.cs)) in
-  let old_names_r2 = Helpers.io r2_cols in
-  let names_r1 = Helpers.io (Cs.offsets ti_r1.cs) in
+  let new_names_r2 = H.io (H.incr r2_cols (Cs.cardinality ti_r1.cs)) in
+  let old_names_r2 = H.io r2_cols in
+  let names_r1 = H.io (Cs.offsets ti_r1.cs) in
   let card_r1 = Cs.cardinality ti_r1.cs in
   let r2_ts' = Ts.incr_cols ti_r2.ts card_r1 in
   let r2_vs' = Vs.incr_cols ti_r2.vs card_r1 in
   let r2_fs' = Fs.incr_cols ti_r2.fs card_r1 in
   let q =
     ADag.mk_project
-      (Helpers.prjlist ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
+      (H.prjlist ([A.Iter 0; A.Pos 0] @ names_r1 @ new_names_r2))
       (ADag.mk_eqjoin
 	 (iter, iter')
 	 ti_r1.q
 	 ((ADag.mk_project
-	     ((iter', iter) :: (Helpers.prjlist_map new_names_r2 old_names_r2))
+	     ((iter', iter) :: (H.prjlist_map new_names_r2 old_names_r2))
 	     ti_r2.q)))
   in
   let cs = Cs.append_mappings ti_r1.cs ti_r2.cs in
@@ -1021,7 +1015,7 @@ and merge_records ti_r1 ti_r2 =
 
 and compile_project env loop field record =
   let record_ti = compile_expression env loop record in
-    Helpers.do_project field record_ti
+    H.do_project field record_ti
 
 and compile_erase env loop erase_fields r =
   let ti_r = compile_expression env loop r in
@@ -1032,7 +1026,7 @@ and compile_erase env loop erase_fields r =
   let remaining_fs = Fs.keep_cols ti_r.fs remaining_cols in
   let q =
     ADag.mk_project
-      ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist (Helpers.io remaining_cols)))
+      ([H.prj iter; H.prj pos] @ (H.prjlist (H.io remaining_cols)))
       ti_r.q
   in
     {
@@ -1070,7 +1064,7 @@ and compile_table loop ((_db, _params), tblname, keys, row) =
   (* collect the column names of the table and their types from the row type *)
   let cs_ts = 
     StringMap.fold
-      (fun colname (_, typ) cs_ts -> (colname, (Helpers.pf_type_of_typ typ)) :: cs_ts)
+      (fun colname (_, typ) cs_ts -> (colname, (H.pf_type_of_typ typ)) :: cs_ts)
       (fst (fst (Types.unwrap_row row)))
       []
   in
@@ -1145,12 +1139,12 @@ and compile_if2 env loop c t =
     assert (Cs.is_atomic ti_c.cs);
     let loop_then =
       ADag.mk_project
-	[Helpers.prj iter]
+	[H.prj iter]
 	(ADag.mk_select
 	   (A.Item 1)
 	   ti_c.q)
     in
-    let env_then = Helpers.fragment_env loop_then env in
+    let env_then = H.fragment_env loop_then env in
       compile_expression env_then loop_then t
 
 and compile_if env loop c t e =
@@ -1159,30 +1153,30 @@ and compile_if env loop c t e =
     assert (Cs.is_atomic ti_c.cs);
     let loop_then =
       ADag.mk_project
-	[Helpers.prj iter]
+	[H.prj iter]
 	(ADag.mk_select
 	   (A.Item 1)
 	   ti_c.q)
     in
     let loop_else =
       ADag.mk_project
-	[Helpers.prj iter]
+	[H.prj iter]
 	(ADag.mk_select
 	   res
 	   (ADag.mk_funboolnot
 	      (res, A.Item 1)
 	      ti_c.q))
     in
-    let env_then = Helpers.fragment_env loop_then env in
-    let env_else = Helpers.fragment_env loop_else env in 
+    let env_then = H.fragment_env loop_then env in
+    let env_else = H.fragment_env loop_else env in 
     let ti_t = compile_expression env_then loop_then t in
     let ti_e = compile_expression env_else loop_else e in
-      Helpers.sequence_construction [ti_t; ti_e] ~newpos:false
+      H.sequence_construction [ti_t; ti_e] ~newpos:false
 
 and compile_groupby env loop ge e =
   let ti_e = compile_expression env loop e in
-  let q_v, q_v', map_v, loop_v = Helpers.lift ti_e.q ti_e.cs in
-  let env_v = Helpers.lift_env map_v env inner outer in
+  let q_v, q_v', map_v, loop_v = H.lift ti_e.q ti_e.cs in
+  let env_v = H.lift_env map_v env inner outer in
   let ti_lambda = compile_expression env_v loop_v ge in
     (* compile group expression *)
   let ti_ge = do_apply_lambda ti_lambda [{ ti_e with q = q_v' }] in
@@ -1195,19 +1189,19 @@ and compile_groupby env loop ge e =
 	 (inner, iter')
 	 q_v
 	 (ADag.mk_project
-	    ((iter', iter) :: (Helpers.prjlist_map (Helpers.io (Cs.offsets cs_ge')) (Helpers.io (Cs.offsets ti_ge.cs))))
+	    ((iter', iter) :: (H.prjlist_map (H.io (Cs.offsets cs_ge')) (H.io (Cs.offsets ti_ge.cs))))
 	    ti_ge.q))
   in
   let grpkey_col = (Cs.cardinality ti_ge.cs) + 1 in
   let q_2 =
     ADag.mk_distinct
       (ADag.mk_project
-	 ([Helpers.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (Helpers.prjlist_map (Helpers.io (Cs.offsets ti_ge.cs)) (Helpers.io (Cs.offsets cs_ge'))))
+	 ([H.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (H.prjlist_map (H.io (Cs.offsets ti_ge.cs)) (H.io (Cs.offsets cs_ge'))))
 	 q_1)
   in
   let q_3 =
     ADag.mk_project
-      ([(iter, grp_key); (Helpers.prj pos)] @ (Helpers.prjlist (Helpers.io (Cs.offsets ti_e.cs))))
+      ([(iter, grp_key); (H.prj pos)] @ (H.prjlist (H.io (Cs.offsets ti_e.cs))))
       q_1
   in
     {
@@ -1244,7 +1238,7 @@ and compile_variant env loop tag value =
       (ADag.mk_attach
 	 (A.Item 1, A.Nat key)
 	 (ADag.mk_project
-	    [Helpers.prj iter; (A.Item 2, iter)]
+	    [H.prj iter; (A.Item 2, iter)]
 	    loop))
   in
     {
@@ -1267,7 +1261,7 @@ and compile_case env loop value cases =
     in
       (* all iterations which have the tag *)
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; Helpers.prj (A.Item 2)]
+	[H.prj iter; H.prj pos; H.prj (A.Item 2)]
 	(ADag.mk_select
 	   res
 	   q_compared)
@@ -1281,10 +1275,10 @@ and compile_case env loop value cases =
     let q_matching = select_key ti_v.q key in
       try 
 	let itbl = fst (Vs.lookup ti_v.vs (2, key)) in
-	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
+	let ti_unboxed = H.do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
-	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
-	let env' = Helpers.fragment_env loop' env' in
+	let loop' = ADag.mk_project [H.prj iter] q_matching in
+	let env' = H.fragment_env loop' env' in
 	let case_result = compile_expression env' loop' case_exp in
 	  (case_result :: results)
       with NotFound _ -> 
@@ -1293,7 +1287,7 @@ and compile_case env loop value cases =
 
   let results = StringMap.fold (case env) cases [] in
 
-    Helpers.sequence_construction results ~newpos:false
+    H.sequence_construction results ~newpos:false
 
 and compile_case_default env loop value cases default =
 
@@ -1308,7 +1302,7 @@ and compile_case_default env loop value cases default =
       (* all iterations which have the tag *)
     let q_matching = 	
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; Helpers.prj (A.Item 2)]
+	[H.prj iter; H.prj pos; H.prj (A.Item 2)]
 	(ADag.mk_select
 	   res
 	   q_compared)
@@ -1317,7 +1311,7 @@ and compile_case_default env loop value cases default =
     (* all iterations which do not have this tag *)
     let q_other =
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; Helpers.prj (A.Item 1); Helpers.prj (A.Item 2)]
+	[H.prj iter; H.prj pos; H.prj (A.Item 1); H.prj (A.Item 2)]
 	(ADag.mk_select
 	   res'
 	   (ADag.mk_funboolnot
@@ -1336,10 +1330,10 @@ and compile_case_default env loop value cases default =
     let q_matching, q_other' = select_key q_other key in
       try 
 	let itbl = fst (Vs.lookup ti_v.vs (2, key)) in
-	let ti_unboxed = Helpers.do_unbox q_matching 2 itbl in
+	let ti_unboxed = H.do_unbox q_matching 2 itbl in
 	let env' = AEnv.bind env (var, ti_unboxed) in
-	let loop' = ADag.mk_project [Helpers.prj iter] q_matching in
-	let env' = Helpers.fragment_env loop' env' in
+	let loop' = ADag.mk_project [H.prj iter] q_matching in
+	let env' = H.fragment_env loop' env' in
 	let case_result = compile_expression env' loop' case_exp in
 	  (case_result :: results), q_other'
       with NotFound _ -> 
@@ -1347,21 +1341,21 @@ and compile_case_default env loop value cases default =
   in
 
   let default_case q_other (default_var, default_exp) =
-    let loop' = ADag.mk_project [Helpers.prj iter] q_other in
+    let loop' = ADag.mk_project [H.prj iter] q_other in
     let env' = AEnv.bind env (default_var, (compile_unit loop')) in
-    let env' = Helpers.fragment_env loop' env' in
+    let env' = H.fragment_env loop' env' in
       compile_expression env' loop' default_exp
   in
 
   let explicit_case_results, q_other = StringMap.fold case cases ([], ti_v.q) in
 
   let all_results = (default_case q_other default) :: explicit_case_results in
-    Helpers.sequence_construction all_results ~newpos:false
+    H.sequence_construction all_results ~newpos:false
 
 and compile_wrong loop =
   let q_error = 
     ADag.mk_project
-      [Helpers.prj (A.Item 1)]
+      [H.prj (A.Item 1)]
       (ADag.mk_attach
  	 (A.Item 1, A.String "something is wrong")
  	 loop)
@@ -1384,7 +1378,7 @@ and compile_lambda env loop xs body =
     ADag.mk_attach
       (pos, A.Nat 1n)
       (ADag.mk_project
-	 [Helpers.prj iter; (A.Item 1, iter)]
+	 [H.prj iter; (A.Item 1, iter)]
 	 loop)
   in
   let map = ADag.mk_project [(outer, iter); (inner, iter)] loop in
@@ -1402,7 +1396,7 @@ and compile_conversion_op env loop arg dest_type  =
     assert (Cs.is_atomic ti_arg.cs);
     let q_conv = 
       ADag.mk_project
-	[Helpers.prj iter; Helpers.prj pos; (A.Item 1, A.Item 2)]
+	[H.prj iter; H.prj pos; (A.Item 1, A.Item 2)]
 	(ADag.mk_cast
 	   (A.Item 2, A.Item 1, dest_type)
 	   ti_arg.q)
@@ -1419,7 +1413,7 @@ and compile_reverse env loop l =
   let ti_l = compile_expression env loop l in
   let q' =
     ADag.mk_project
-      ([Helpers.prj iter; (pos, pos')] @ Helpers.prjlist (Helpers.io (Cs.offsets ti_l.cs)))
+      ([H.prj iter; (pos, pos')] @ H.prjlist (H.io (Cs.offsets ti_l.cs)))
       (ADag.mk_rank
 	 (pos', [(pos, A.Descending)])
 	 ti_l.q)
@@ -1428,18 +1422,18 @@ and compile_reverse env loop l =
 
 and apply_primitive env loop f args =
   match f, args with
-    | "+", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Add) `IntType op1 op2
-    | "+.", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Add) `FloatType op1 op2
-    | "-", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Subtract) `IntType op1 op2
-    | "-.", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Subtract) `FloatType op1 op2
-    | "*", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Multiply) `IntType op1 op2
-    | "*.", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Multiply) `FloatType op1 op2
-    | "/", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Divide) `IntType op1 op2
-    | "/.", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Divide) `FloatType op1 op2
-    | "==", [op1; op2] -> compile_comparison env loop Helpers.wrap_eq do_table_equal do_row_equal op1 op2
-    | "<>", [op1; op2] -> compile_comparison env loop Helpers.wrap_ne do_table_equal do_row_equal op1 op2
-    | ">", [op1; op2] -> compile_comparison env loop Helpers.wrap_gt do_table_greater do_row_greater op1 op2
-    | "not", [op]->  compile_unop env loop Helpers.wrap_not op
+    | "+", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Add) `IntType op1 op2
+    | "+.", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Add) `FloatType op1 op2
+    | "-", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Subtract) `IntType op1 op2
+    | "-.", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Subtract) `FloatType op1 op2
+    | "*", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Multiply) `IntType op1 op2
+    | "*.", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Multiply) `FloatType op1 op2
+    | "/", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Divide) `IntType op1 op2
+    | "/.", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Divide) `FloatType op1 op2
+    | "==", [op1; op2] -> compile_comparison env loop H.wrap_eq do_table_equal do_row_equal op1 op2
+    | "<>", [op1; op2] -> compile_comparison env loop H.wrap_ne do_table_equal do_row_equal op1 op2
+    | ">", [op1; op2] -> compile_comparison env loop H.wrap_gt do_table_greater do_row_greater op1 op2
+    | "not", [op]->  compile_unop env loop H.wrap_not op
     | "select", [i; l] -> compile_select env loop i l
     | "length", [l] -> compile_length env loop l
     | "sum", [l] -> compile_sum env loop l
@@ -1456,9 +1450,9 @@ and apply_primitive env loop f args =
     | "empty", [l] -> compile_empty env loop l
     | "hd", [l] -> compile_hd env loop l
     | "tl", [l] -> compile_tl env loop l
-    | "tilde", [s; p] -> compile_binop env loop (Helpers.wrap_1to1 A.SimilarTo) `BoolType s p
+    | "tilde", [s; p] -> compile_binop env loop (H.wrap_1to1 A.SimilarTo) `BoolType s p
     | "quote", [s] -> compile_quote env loop s
-    | "^^", [op1; op2] -> compile_binop env loop (Helpers.wrap_1to1 A.Concat) `StrType op1 op2
+    | "^^", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Concat) `StrType op1 op2
     | "nubBase", [l] -> compile_nubbase env loop l
     | "groupByBase", [f; source] -> compile_groupby env loop f source
     | "takeWhile", [p; l] -> compile_takewhile env loop p l
@@ -1488,15 +1482,15 @@ and do_apply_lambda ti_f args_tis =
     let map_lift = ADag.mk_eqjoin (outer, A.Item 1) map ti_f.q in
 
     (* new loop (2) *)
-    let loop' = ADag.mk_project [Helpers.prj iter] map_lift in
+    let loop' = ADag.mk_project [H.prj iter] map_lift in
 
     (* reduce the map to (outer, inner) again *)
-    let map_lift = ADag.mk_project [(outer, iter); Helpers.prj inner] map_lift in
+    let map_lift = ADag.mk_project [(outer, iter); H.prj inner] map_lift in
 
     let filter_arg arg = 
       let q_filtered = 
 	ADag.mk_project
-	  ([Helpers.prj iter; Helpers.prj pos] @ (Helpers.prjlist (Helpers.io (Cs.offsets arg.cs))))
+	  ([H.prj iter; H.prj pos] @ (H.prjlist (H.io (Cs.offsets arg.cs))))
 	  (ADag.mk_eqjoin 
 	     (iter, iter') 
 	     arg.q 
@@ -1510,7 +1504,7 @@ and do_apply_lambda ti_f args_tis =
     (* filter the function arguments for this function (3) *)
     let args_filtered = List.map filter_arg args_tis in
       
-    let env_lifted = Helpers.lift_env map_lift function_env outer inner in
+    let env_lifted = H.lift_env map_lift function_env outer inner in
 
     (* extend the environment with the function arguments (5) *)
     let env_args = List.fold_left AEnv.bind env_lifted (List.combine xs args_filtered) in
@@ -1519,7 +1513,7 @@ and do_apply_lambda ti_f args_tis =
       compile_expression env_args loop' body
 
   in
-    Helpers.sequence_construction (List.map fundev fundevs) ~newpos:false
+    H.sequence_construction (List.map fundev fundevs) ~newpos:false
 
 and binding loop env (`Let (name, t)) =
   let ti = compile_expression env loop t in
@@ -1558,7 +1552,7 @@ and compile_expression env loop q : tblinfo =
 let rec wrap_serialize ti = 
   let serialize q cs =
     ADag.mk_serializerel 
-      (iter, pos, Helpers.io (Cs.offsets cs))
+      (iter, pos, H.io (Cs.offsets cs))
       (ADag.mk_nil)
       q
   in
