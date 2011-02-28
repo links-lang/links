@@ -910,6 +910,34 @@ and compile_concatmap env loop f source =
       fs = ti_body.fs;
     }
 
+
+and compile_map env loop f source =
+  let ti_source = compile_expression env loop source in
+  let _, q_v, map, loop_v = H.lift ti_source.q ti_source.cs in
+  let env = H.lift_env map env inner outer in
+  let v, body = 
+    match f with 
+      | `Lambda (([x], body), _) -> (x, body) 
+      | _ -> assert false 
+  in
+  let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
+  let ti_body = compile_expression env_v loop_v body in
+  let q = 
+    ADag.mk_project
+      ([(iter, outer); (pos, pos')] @ (H.prjlist (H.io (Cs.offsets ti_body.cs))))
+	 (ADag.mk_eqjoin
+	    (iter, inner)
+	    ti_body.q
+	    map)
+  in
+    {
+      q = q;
+      cs = ti_body.cs;
+      ts = ti_body.ts;
+      vs = ti_body.vs;
+      fs = ti_body.fs;
+    }
+
 and singleton_record env loop (name, e) =
   let ti = compile_expression env loop e in
   let cs' = Cs.Mapping [(name, ti.cs)] in
@@ -1522,6 +1550,7 @@ and apply_primitive env loop f args =
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
     | "concatMap", [f; l] -> compile_concatmap env loop f l
+    | "map", [f; l] -> compile_map env loop f l
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->

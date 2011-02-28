@@ -871,7 +871,7 @@ module ImpType = struct
 		  | "select" ->
 		      (* `Atom -> `List -> `Atom *)
 		      [`List; `Atom], `Atom
-		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "orderByBase" ->
+		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "orderByBase" | "map" ->
 		      (* `Atom -> `List -> `List *)
 		      [`Atom; `List], `List
 		  | "zip" ->
