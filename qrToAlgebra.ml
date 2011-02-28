@@ -34,6 +34,44 @@ let tagkey tag =
 	  keytags := IntMap.add key tag !keytags;
 	  Nativeint.of_int key
 
+let concatmap_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
+  let q = 
+    ADag.mk_project
+      ([(iter, outer); (pos, pos')] @ (H.prjcs ti_fr.cs))
+      (ADag.mk_rank
+	 (pos', [(iter, A.Ascending); (pos, A.Ascending)])
+	 (ADag.mk_eqjoin
+	    (iter, inner)
+	    ti_fr.q
+	    (ADag.mk_project
+	       [H.prj outer; H.prj inner]
+	       map)))
+  in
+    {
+      q = q;
+      cs = ti_fr.cs;
+      ts = ti_fr.ts;
+      vs = ti_fr.vs;
+      fs = ti_fr.fs;
+    }
+
+let map_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
+  let q = 
+    ADag.mk_project
+      ([(iter, outer); (pos, pos')] @ (H.prjcs ti_fr.cs)) 
+	 (ADag.mk_eqjoin
+	    (iter, inner)
+	    ti_fr.q
+	    map)
+  in
+    {
+      q = q;
+      cs = ti_fr.cs;
+      ts = ti_fr.ts;
+      vs = ti_fr.vs;
+      fs = ti_fr.fs;
+    }
+
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
   let q_o = 
@@ -878,38 +916,18 @@ and compile_quote env loop s =
   Debug.print "Warning: quoting at runtime is not implemented (compile_quote)";
   compile_expression env loop s
 
-and compile_concatmap env loop f source =
-  let ti_source = compile_expression env loop source in
-  let _, q_v, map, loop_v = H.lift ti_source.q ti_source.cs in
+and compile_ho_primitive env loop f source work =
+  let ti_l = compile_expression env loop source in
+  let q_l', q_v, map, loop_v = H.lift ti_l.q ti_l.cs in
   let env = H.lift_env map env inner outer in
   let v, body = 
     match f with 
       | `Lambda (([x], body), _) -> (x, body) 
       | _ -> assert false 
   in
-  let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
-  let ti_body = compile_expression env_v loop_v body in
-  let (sort_cols, sort_info, map') = ([], [(iter, A.Ascending); (pos, A.Ascending)], map) in
-  let q = 
-    ADag.mk_project
-      ([(iter, outer); (pos, pos')] @ (H.prjlist (H.io (Cs.offsets ti_body.cs))))
-      (ADag.mk_rank
-	 (pos', sort_info)
-	 (ADag.mk_eqjoin
-	    (iter, inner)
-	    ti_body.q
-	    (ADag.mk_project
-	       ([H.prj outer; H.prj inner] @ (H.prjlist sort_cols))
-	       map')))
-  in
-    {
-      q = q;
-      cs = ti_body.cs;
-      ts = ti_body.ts;
-      vs = ti_body.vs;
-      fs = ti_body.fs;
-    }
-
+  let env_v = AEnv.bind env (v, { ti_l with q = q_v }) in
+  let ti_fr = compile_expression env_v loop_v body in
+    work ti_l ti_fr (q_l', q_v, map, loop_v)
 
 and compile_map env loop f source =
   let ti_source = compile_expression env loop source in
@@ -1549,8 +1567,9 @@ and apply_primitive env loop f args =
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
-    | "concatMap", [f; l] -> compile_concatmap env loop f l
-    | "map", [f; l] -> compile_map env loop f l
+(*    | "concatMap", [f; l] -> compile_concatmap env loop f l *)
+    | "concatMap", [f; l] -> compile_ho_primitive env loop f l concatmap_work
+    | "map", [f; l] -> compile_ho_primitive env loop f l map_work
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->
