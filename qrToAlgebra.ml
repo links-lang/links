@@ -1369,7 +1369,68 @@ and compile_wrong loop =
       fs = Fs.empty
     }
 
-and compile_takewhile _env _loop _p _l = failwith "compile_takewhile not implemented"
+and compile_takewhile env loop p l = 
+  let ti_l = compile_expression env loop l in
+  let q_l', q_v, map, loop_v = H.lift ti_l.q ti_l.cs in
+  let env = H.lift_env map env inner outer in
+  let v, body = 
+    match p with 
+      | `Lambda (([x], body), _) -> (x, body) 
+      | _ -> assert false 
+  in
+  let env_v = AEnv.bind env (v, { ti_l with q = q_v }) in
+  let ti_p = compile_expression env_v loop_v body in
+  let cs_l_prj = H.prjcs ti_l.cs in
+  let q' = 
+    ADag.mk_project
+      ([H.prj iter; H.prj pos; H.prj res] @ cs_l_prj)
+      (ADag.mk_eqjoin
+	 (inner, iter')
+	 q_l'
+	 (ADag.mk_project
+	    [(iter', iter); (res, A.Item 1)]
+	    ti_p.q))
+  in
+  let q_m =
+    ADag.mk_funaggr
+      (A.Min, (pos', pos), Some iter)
+      (ADag.mk_select
+	 pos'
+	 (ADag.mk_funboolnot
+	    (pos', res)
+	    q'))
+  in
+  let q_e = 
+    ADag.mk_project
+      ([H.prj iter; H.prj pos] @ cs_l_prj)
+      (ADag.mk_eqjoin
+	 (iter, iter')
+	 ti_l.q
+	 (ADag.mk_project
+	    [(iter', iter)]
+	    (ADag.mk_difference
+	       loop
+	       (ADag.mk_project
+		  [H.prj iter]
+		  q_m))))
+  in
+  let q'' =
+   ADag.mk_disjunion
+     q_e
+     (ADag.mk_project
+	([H.prj iter; H.prj pos] @ cs_l_prj)
+	(ADag.mk_select
+	   res'
+	   (ADag.mk_funnumgt
+	      (res', (pos', pos))
+	      (ADag.mk_eqjoin
+		 (iter, iter')
+		 q'
+		 (ADag.mk_project
+		    [(iter', iter); H.prj pos']
+		    q_m)))))
+  in
+    { ti_l with q = q'' }
 
 and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not implemented"
 

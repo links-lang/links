@@ -28,6 +28,8 @@ let prj col = (col, col)
 (* project every column in the list onto itself *)
 let prjlist = List.map prj
 
+let prjcs = prjlist -<- io -<- Cs.offsets
+
 (* project all columns in old_cols onto the corresponding columns in
    new_cols *)
 let prjlist_map new_cols old_cols = List.combine new_cols old_cols
