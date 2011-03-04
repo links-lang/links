@@ -606,6 +606,16 @@ struct
     | "tilde", [s; p] -> 
 	let pattern = QueryRegex.similarify p in
 	`Apply (`Primitive "tilde", [s; pattern])
+    | "<", [e1; e2] ->
+	`Apply (`Primitive ">", [e2; e1])
+    | ">=", [e1; e2] ->
+	`If (`Apply (`Primitive ">", [e1; e2]),
+	     `Constant (`Bool true),
+	     Some (`Apply (`Primitive "==", [e1; e2])))
+    | "<=", [e1; e2] ->
+	`If (`Apply (`Primitive ">", [e2; e1]),
+	     `Constant (`Bool true),
+	     Some (`Apply (`Primitive "==", [e1; e2])))
     | f, args -> `Apply (`Primitive f, args)
 	    
   let rec inline test (ctx : ctx) (q : qr) =
@@ -877,7 +887,7 @@ module ImpType = struct
 		  | "select" ->
 		      (* `Atom -> `List -> `Atom *)
 		      [`List; `Atom], `Atom
-		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "orderByBase" | "map" ->
+		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "sortByBase" | "map" ->
 		      (* `Atom -> `List -> `List *)
 		      [`Atom; `List], `List
 		  | "zip" ->

@@ -47,13 +47,7 @@ let concatmap_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
 	       [H.prj outer; H.prj inner]
 	       map)))
   in
-    {
-      q = q;
-      cs = ti_fr.cs;
-      ts = ti_fr.ts;
-      vs = ti_fr.vs;
-      fs = ti_fr.fs;
-    }
+    { ti_fr with q = q }
 
 let map_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
   let q = 
@@ -64,12 +58,62 @@ let map_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
 	    ti_fr.q
 	    map)
   in
+    { ti_fr with q = q }
+
+let sortby_work ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
+  let ordercol_offsets = Cs.offsets ti_fr.cs in
+  let ordercols = H.io ordercol_offsets in
+  let ordercols' = H.io (H.incr ordercol_offsets (Cs.cardinality ti_l.cs)) in
+  let q = 
+    ADag.mk_eqjoin
+      (inner, iter')
+      q_l'
+      (ADag.mk_project
+	 ((iter', iter) :: (H.prjlist_map ordercols' ordercols))
+	 ti_fr.q)
+  in
+  let rankinfo = List.map (fun c -> (c, A.Ascending)) (ordercols @ [pos]) in
+  let q' =
+    ADag.mk_project
+      ([H.prj iter; (pos, pos')] @ (H.prjcs ti_l.cs))
+      (ADag.mk_rank
+	 (pos', rankinfo)
+	 q)
+  in
+    { ti_l with q = q' }
+
+let groupby_work _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
+
+  let cs_fr' = Cs.shift (Cs.cardinality ti_fr.cs) ti_fr.cs in
+  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_fr') in
+  let q_1 =
+    ADag.mk_rowrank
+      (grp_key, (iter, A.Ascending) :: sortlist)
+      (ADag.mk_eqjoin
+	 (inner, iter')
+	 q_l'
+	 (ADag.mk_project
+	    ((iter', iter) :: (H.prjlist_map (H.io (Cs.offsets cs_fr')) (H.io (Cs.offsets ti_fr.cs))))
+	    ti_fr.q))
+  in
+  let grpkey_col = (Cs.cardinality ti_fr.cs) + 1 in
+  let q_2 =
+    ADag.mk_distinct
+      (ADag.mk_project
+	 ([H.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (H.prjlist_map (H.io (Cs.offsets ti_fr.cs)) (H.io (Cs.offsets cs_fr'))))
+	 q_1)
+  in
+  let q_3 =
+    ADag.mk_project
+      ([(iter, grp_key); (H.prj pos)] @ (H.prjlist (H.io (Cs.offsets ti_fr.cs))))
+      q_1
+  in
     {
-      q = q;
-      cs = ti_fr.cs;
-      ts = ti_fr.ts;
-      vs = ti_fr.vs;
-      fs = ti_fr.fs;
+      q = q_2;
+      cs = Cs.Mapping [("1", ti_fr.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
+      ts = [(grpkey_col, { ti_fr with q = q_3 })];
+      vs = Vs.empty;
+      fs = Fs.empty
     }
 
 let rec compile_box env loop e =
@@ -918,43 +962,10 @@ and compile_quote env loop s =
 
 and compile_ho_primitive env loop f source work =
   let ti_l = compile_expression env loop source in
-  let q_l', q_v, map, loop_v = H.lift ti_l.q ti_l.cs in
-  let env = H.lift_env map env inner outer in
-  let v, body = 
-    match f with 
-      | `Lambda (([x], body), _) -> (x, body) 
-      | _ -> assert false 
-  in
-  let env_v = AEnv.bind env (v, { ti_l with q = q_v }) in
-  let ti_fr = compile_expression env_v loop_v body in
-    work ti_l ti_fr (q_l', q_v, map, loop_v)
-
-and compile_map env loop f source =
-  let ti_source = compile_expression env loop source in
-  let _, q_v, map, loop_v = H.lift ti_source.q ti_source.cs in
-  let env = H.lift_env map env inner outer in
-  let v, body = 
-    match f with 
-      | `Lambda (([x], body), _) -> (x, body) 
-      | _ -> assert false 
-  in
-  let env_v = AEnv.bind env (v, { ti_source with q = q_v }) in
-  let ti_body = compile_expression env_v loop_v body in
-  let q = 
-    ADag.mk_project
-      ([(iter, outer); (pos, pos')] @ (H.prjlist (H.io (Cs.offsets ti_body.cs))))
-	 (ADag.mk_eqjoin
-	    (iter, inner)
-	    ti_body.q
-	    map)
-  in
-    {
-      q = q;
-      cs = ti_body.cs;
-      ts = ti_body.ts;
-      vs = ti_body.vs;
-      fs = ti_body.fs;
-    }
+  let q_l', q_v, map, loop_lifted = H.lift ti_l.q ti_l.cs in
+  let env_lifted = H.lift_env map env inner outer in
+  let ti_fr = apply_exp env_lifted loop_lifted f [{ ti_l with q = q_v }] in
+    work ti_l ti_fr (q_l', q_v, map, loop_lifted)
 
 and singleton_record env loop (name, e) =
   let ti = compile_expression env loop e in
@@ -1219,44 +1230,6 @@ and compile_if env loop c t e =
     let ti_e = compile_expression env_else loop_else e in
       H.sequence_construction [ti_t; ti_e] ~newpos:false
 
-and compile_groupby env loop ge e =
-  let ti_e = compile_expression env loop e in
-  let q_v, q_v', map_v, loop_v = H.lift ti_e.q ti_e.cs in
-  let env_v = H.lift_env map_v env inner outer in
-  let ti_lambda = compile_expression env_v loop_v ge in
-    (* compile group expression *)
-  let ti_ge = do_apply_lambda ti_lambda [{ ti_e with q = q_v' }] in
-  let cs_ge' = Cs.shift (Cs.cardinality ti_e.cs) ti_ge.cs in
-  let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_ge') in
-  let q_1 =
-    ADag.mk_rowrank
-      (grp_key, (iter, A.Ascending) :: sortlist)
-      (ADag.mk_eqjoin
-	 (inner, iter')
-	 q_v
-	 (ADag.mk_project
-	    ((iter', iter) :: (H.prjlist_map (H.io (Cs.offsets cs_ge')) (H.io (Cs.offsets ti_ge.cs))))
-	    ti_ge.q))
-  in
-  let grpkey_col = (Cs.cardinality ti_ge.cs) + 1 in
-  let q_2 =
-    ADag.mk_distinct
-      (ADag.mk_project
-	 ([H.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (H.prjlist_map (H.io (Cs.offsets ti_ge.cs)) (H.io (Cs.offsets cs_ge'))))
-	 q_1)
-  in
-  let q_3 =
-    ADag.mk_project
-      ([(iter, grp_key); (H.prj pos)] @ (H.prjlist (H.io (Cs.offsets ti_e.cs))))
-      q_1
-  in
-    {
-      q = q_2;
-      cs = Cs.Mapping [("1", ti_ge.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
-      ts = [(grpkey_col, { ti_e with q = q_3 })];
-      vs = Vs.empty;
-      fs = Fs.empty
-    }
 
 and compile_unit (loop : ADag.t) : tblinfo =
   let q =
@@ -1561,28 +1534,37 @@ and apply_primitive env loop f args =
     | "quote", [s] -> compile_quote env loop s
     | "^^", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Concat) `StrType op1 op2
     | "nubBase", [l] -> compile_nubbase env loop l
-    | "groupByBase", [f; source] -> compile_groupby env loop f source
+    | "groupByBase", [f; l] -> compile_ho_primitive env loop f l groupby_work
     | "takeWhile", [p; l] -> compile_takewhile env loop p l
     | "dropWhile", [p; l] -> compile_dropwhile env loop p l
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
-(*    | "concatMap", [f; l] -> compile_concatmap env loop f l *)
     | "concatMap", [f; l] -> compile_ho_primitive env loop f l concatmap_work
     | "map", [f; l] -> compile_ho_primitive env loop f l map_work
+    | "sortByBase", [f; l] -> compile_ho_primitive env loop f l sortby_work
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->
 	failwith ("CompileQuery.compile_apply: primitive " ^ s ^ " not implemented")
 
-and apply_lambda env loop lambda_exp args =
+and apply_exp env loop lambda_exp arg_tis =
   (* compile the function arguments *)
-  let args_tis = List.map (compile_expression env loop) args in
     (* compile the function expression *)
-  let ti_f = compile_expression env loop lambda_exp in
-    do_apply_lambda ti_f args_tis
+    match lambda_exp with
+      | `Lambda ((xs, body), _) ->
+	  let env' = 
+	    List.fold_left 
+	      (fun env (x, a) -> Env.Int.bind env (x, a))
+	      env
+	      (List.combine xs arg_tis)
+	  in
+	    compile_expression env' loop body
+      | _ -> 
+	  let ti_f = compile_expression env loop lambda_exp in
+	    do_apply_exp ti_f arg_tis
 
-and do_apply_lambda ti_f args_tis =
+and do_apply_exp ti_f args_tis =
     (* extract the fundev list *)
   let fundevs = Fs.lookup ti_f.fs 1 in
 
@@ -1632,7 +1614,9 @@ and compile_expression env loop q : tblinfo =
   match q with
     | `Constant (c, _) -> compile_constant loop c
     | `Apply ((`Primitive f, args), _) -> apply_primitive env loop f args 
-    | `Apply ((lambda_exp, args), _) -> apply_lambda env loop lambda_exp args
+    | `Apply ((lambda_exp, args), _) -> 
+	let arg_tis = List.map (compile_expression env loop) args in
+	apply_exp env loop lambda_exp arg_tis
     | `Variable (x, _) -> AEnv.lookup env x
     | `Project ((label, r), _) -> compile_project env loop label r
     | `Extend (empty, None, _) when (StringMap.size empty) = 0 -> compile_unit loop 

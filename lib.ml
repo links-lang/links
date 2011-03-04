@@ -1212,7 +1212,7 @@ let patch_prelude_funs tyenv =
         (fun (name, t) env -> Env.String.bind env (name, t))
         [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
          ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
-         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
+         ("sortByBase", datatype "((a) -> (|b::Base), [a]) -> [a]");
          ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]");
 	 ("max", datatype "([Int]) -> [|Just:Int|Nothing|]");
 	 ("min", datatype "([Int]) -> [|Just:Int|Nothing|]");
