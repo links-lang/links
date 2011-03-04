@@ -302,12 +302,8 @@ let rec qr_of_value env : Value.t -> qr =
    | v -> failwith ("t_of_value: unsupported value " ^ (Show.show Value.show_t v))
 
 let binding_freevars bindings =
-  let lambda_freevars freevars (_name, value) = 
-    match value with
-      | `Lambda (xs, body) -> 
-	  let bound = IntSet.from_list xs in
-	    IntSet.union freevars (FreeVars.fv bound body)
-      | _ -> freevars
+  let lambda_freevars freevars (name, value) = 
+    IntSet.union freevars (FreeVars.fv IntSet.empty value)
   in
     List.fold_left lambda_freevars IntSet.empty bindings
 
@@ -322,8 +318,11 @@ let qr_of_query env _range comp =
   let free_bindings = IntMap.fold binding restricted_env [] in
 
   let remaining_freevars = binding_freevars free_bindings in
+    Debug.print ("remaining freevars " ^ (Show.show IntSet.show_t remaining_freevars));
 
   let primitive_free_vars = IntSet.inter (IntSet.union freevars remaining_freevars) Lib.primitive_vars in
+
+    Debug.print ("primitive_free_vars " ^ (Show.show IntSet.show_t primitive_free_vars));
     
   let primitive var bindings =
     let stub = Lib.primitive_stub_by_code var in
