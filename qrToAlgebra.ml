@@ -1624,7 +1624,7 @@ and do_apply_lambda ti_f args_tis =
   in
     H.sequence_construction (List.map fundev fundevs) ~newpos:false
 
-and binding loop env (`Let (name, t)) =
+and binding loop env (name, t) =
   let ti = compile_expression env loop t in
     Env.Int.bind env (name, ti)
 
@@ -1652,7 +1652,7 @@ and compile_expression env loop q : tblinfo =
     | `Case ((v, cases, None), _) -> compile_case env loop v cases
     | `Wrong _ -> compile_wrong loop 
     | `Lambda ((xs, body), _) -> compile_lambda env loop xs body
-    | `Computation (bs, tc, _) -> 
+    | `Let (bs, tc, _) -> 
 	let env = List.fold_left (binding loop) env bs in
 	  compile_expression env loop tc
     | `Primitive _ -> failwith "compile_expression: eval error"

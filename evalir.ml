@@ -366,6 +366,7 @@ module Eval = struct
 	Irtodot.output_dot e env "ir_query.dot";
 	Qr.prelude_primitives ();
 	let tqr = Qr.pipeline env range e in
+	  Qrtodot.output_dot tqr "qr.dot";
 	let result =
 	  match !Qr.used_database with
 	    | Some db -> 

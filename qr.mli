@@ -40,12 +40,12 @@ type qr =
   | `Case of qr * (var * qr) name_map * (var * qr) option
   | `If of qr * qr * qr option
   
-  | `Computation of binding list * qr
+  | `Let of binding list * qr
   | `Primitive of string
-  | `Lambda of Var.var list * qr
+  | `Lambda of var list * qr
 
   | `Wrong ]
-and binding = [ `Let of var * qr ]
+and binding = var * qr
     deriving (Show)
 
 module ImpType :
@@ -70,9 +70,9 @@ sig
       | `Box of tqr * imptype
       | `Unbox of tqr * imptype
       | `Case of (tqr * (Var.var * tqr) name_map * (Var.var * tqr) option) * imptype
-      | `Computation of binding list * tqr * imptype
+      | `Let of binding list * tqr * imptype
       | `Wrong of imptype ]
-  and binding = [ `Let of Var.var * tqr ]
+  and binding = Var.var * tqr
       deriving (Show)
 
   val typeof_tqr : tqr -> imptype

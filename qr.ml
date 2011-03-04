@@ -61,30 +61,30 @@ type qr =
   | `Case of qr * (var * qr) name_map * (var * qr) option
   | `If of qr * qr * qr option
   
-  | `Computation of binding list * qr
+  | `Let of binding list * qr
   | `Primitive of string
   | `Lambda of var list * qr
 
   | `Wrong ]
-and binding = [ `Let of var * qr ]
+and binding = var * qr
     deriving (Show)
 
 let rec computation (bs, tc) : qr =
   let bs = bindings bs in
   let e = tail_computation tc in
     match e with
-      | `Computation (bs', e) ->
-	  `Computation (bs @ bs', e)
-      | _ -> `Computation (bs, e)
+      | `Let (bs', e) ->
+	  `Let (bs @ bs', e)
+      | _ -> `Let (bs, e)
 
 and bindings bs = List.map binding bs
 
 and binding (b : Ir.binding) : binding =
   match b with
     | `Let (binder, (_tyvars, tc)) ->
-	`Let (Var.var_of_binder binder, tail_computation tc)
+	(Var.var_of_binder binder, tail_computation tc)
     | `Fun (binder, (_tyvars, binders, body), _loc) ->
-	`Let (Var.var_of_binder binder, `Lambda ((List.map Var.var_of_binder binders), computation body))
+	(Var.var_of_binder binder, `Lambda ((List.map Var.var_of_binder binders), computation body))
     | _ -> failwith "foo"
 
 and value v =
@@ -126,9 +126,7 @@ and special s =
 let restrict m s = IntMap.filter (fun k _ -> IntSet.mem k s) m
 
 let rec inline_primitive env (q : qr) : qr =
-  let rec binding b = 
-    let `Let (name, e) = b in
-      `Let (name, replace e) 
+  let rec binding (name, e) = (name, replace e) 
   and replace q =
     match q with
       | `Constant _ | `Table _ | `Wrong -> q
@@ -146,8 +144,8 @@ let rec inline_primitive env (q : qr) : qr =
 	  let default = opt_map case default in
 	    `Case (v, cases, default)
       | `If (c, t, e) -> `If (replace c, replace t, opt_map replace e)
-      | `Computation (bs, tc) -> 
-	  `Computation (List.map binding bs, replace tc)
+      | `Let (bs, tc) -> 
+	  `Let (List.map binding bs, replace tc)
       | `Variable var ->
 	  begin
 	    match IntMap.lookup var env with
@@ -173,7 +171,7 @@ struct
 
   and bindings bound bs =
     List.fold_left
-      (fun (free, bound) (`Let (var, tc)) ->
+      (fun (free, bound) (var, tc) ->
 	 let bound' = IntSet.add var bound in
 	 let free = IntSet.union (fv bound tc) free in
 	   (free, bound'))
@@ -201,7 +199,7 @@ struct
     | `Project (_, value) | `Erase (_, value) | `Inject (_, value) 
     | `Singleton value ->
 	fv bound value
-    | `Computation (bs, tc) ->
+    | `Let (bs, tc) ->
 	let free, bound = bindings bound bs in
 	  IntSet.union (fv bound tc) free
     | `Lambda (xs, body) ->
@@ -304,7 +302,7 @@ let rec qr_of_value env : Value.t -> qr =
    | v -> failwith ("t_of_value: unsupported value " ^ (Show.show Value.show_t v))
 
 let binding_freevars bindings =
-  let lambda_freevars freevars (`Let (_name, value)) = 
+  let lambda_freevars freevars (_name, value) = 
     match value with
       | `Lambda (xs, body) -> 
 	  let bound = IntSet.from_list xs in
@@ -318,7 +316,7 @@ let qr_of_query env _range comp =
   let freevars =  FreeVars.fv IntSet.empty qr_comp in
   let restricted_env = restrict (fst3 env) freevars in
   let binding name (value, _) bindings = 
-    let b = `Let (name, qr_of_value env value) in
+    let b = (name, qr_of_value env value) in
       b :: bindings
   in
   let free_bindings = IntMap.fold binding restricted_env [] in
@@ -330,13 +328,13 @@ let qr_of_query env _range comp =
   let primitive var bindings =
     let stub = Lib.primitive_stub_by_code var in
     let qr = qr_of_value env stub in
-      (`Let (var, qr)) :: bindings
+      (var, qr) :: bindings
   in
 
   let primitive_bindings = IntSet.fold primitive primitive_free_vars [] in
     match qr_comp with
-      | `Computation (local_bindings, tc) ->
-	  `Computation (primitive_bindings @ free_bindings @ local_bindings, tc)
+      | `Let (local_bindings, tc) ->
+	  `Let (primitive_bindings @ free_bindings @ local_bindings, tc)
       | _ -> assert false
     
 module Census =
@@ -356,7 +354,7 @@ struct
 	    IntMap.empty
 
   let rec bindings (bs : binding list)=
-    let binding  (`Let (_, body)) = count body
+    let binding  (_, body) = count body
     in
       List.map binding bs
 	
@@ -387,14 +385,14 @@ struct
 	    opt_app (fun (_, body) -> merge [cm; count body]) cm default
       | `If (c, t, Some e) -> merge [count c; count t; count e]
       | `If (c, t, None) -> merge [count c; count t]
-      | `Computation (bs, tc) ->
+      | `Let (bs, tc) ->
 	  merge ((count tc) :: (bindings bs))
 end
 
 module ElimDeadDefs =
 struct
   let bindings cm bs =
-    let filter (`Let (name, _)) =
+    let filter (name, _) =
 	      match IntMap.lookup name cm with
 		| Some c when c > 0 -> true
 		| _ -> false
@@ -421,12 +419,12 @@ struct
 	  let cases = StringMap.map case cases in
 	  let default = opt_map case default in
 	    `Case (v, cases, default)
-      | `Computation (bs, tc) ->
+      | `Let (bs, tc) ->
 	  begin
 	    let tc = eliminate cm tc in
 	      match bindings cm bs with
 		| [] -> tc
-		| bs -> `Computation (bs, tc)
+		| bs -> `Let (bs, tc)
 	  end
       | `Lambda (xs, body) -> `Lambda (xs, eliminate cm body)
       | `Primitive f -> `Primitive f
@@ -542,7 +540,7 @@ struct
 		  value
 	      | `Extend _ | `Project _ | `Erase _ | `Inject _
 	      | `Concat _ | `Apply _ | `Case _ | `If _
-	      | `Computation _  | `Variable _ ->
+	      | `Let _  | `Variable _ ->
 		  begin
 		    match IntMap.lookup name ctx.census with
 		      | Some c when c < 2 -> 
@@ -625,11 +623,11 @@ struct
 	    `Erase (names, inl r)
 	| `Inject (tag, value) ->
 	    `Inject (tag, inl value)
-	| `Computation ([], tc) -> inl tc
-	| `Computation (bs, tc) ->
+	| `Let ([], tc) -> inl tc
+	| `Let (bs, tc) ->
 	    let bs, ctx = bindings test ctx bs in
 	    let tc = inline test ctx tc in
-	      `Computation (bs, tc)
+	      `Let (bs, tc)
 	| `Concat xs -> 
 	    `Concat (List.map inl xs)
 	| `Apply (f, args) ->
@@ -674,9 +672,9 @@ struct
 	| `Singleton v -> `Singleton (inl v)
 
   and bindings test ctx bs =
-    let binding (bs, ctx) (`Let (name, tc))  =
+    let binding (bs, ctx) (name, tc) =
       let tc = inline test ctx tc in
-      let b = `Let (name, tc) in
+      let b = (name, tc) in
       let venv = Env.Int.bind ctx.venv (name, tc) in
 	b :: bs, { ctx with venv = venv }
     in
@@ -684,8 +682,8 @@ struct
 
   and beta test ctx xs args body =
     try
-      let arg_bindings = List.map2 (fun x arg -> `Let (x, arg)) xs args in
-	inline test ctx (`Computation (arg_bindings, body))
+      let arg_bindings = List.map2 (fun x arg -> (x, arg)) xs args in
+	inline test ctx (`Let (arg_bindings, body))
     with Invalid_argument _ -> failwith "arity mismatch in function inlining"
 
   and apply test ctx f args =
@@ -727,9 +725,9 @@ module ImpType = struct
       | `Box of tqr * imptype
       | `Unbox of tqr * imptype
       | `Case of (tqr * (Var.var * tqr) name_map * (Var.var * tqr) option) * imptype
-      | `Computation of binding list * tqr * imptype
+      | `Let of binding list * tqr * imptype
       | `Wrong of imptype ]
-  and binding = [ `Let of Var.var * tqr ]
+  and binding = Var.var * tqr
       deriving (Show)
 
   let string_of_tqr = Show.show show_tqr
@@ -753,7 +751,7 @@ module ImpType = struct
     | `Unbox (_, t) -> t
     | `Case (_, t) -> t
     | `Wrong t -> t
-    | `Computation (_, _, t) -> t
+    | `Let (_, _, t) -> t
 
   let annotate want (q : tqr) : tqr =
     match (want, typeof_tqr q) with
@@ -771,21 +769,21 @@ module ImpType = struct
 
   and aot want env e = annotate want (transform env e)
 
-  and binding (env, bs) (`Let (var, tc)) =
+  and binding (env, bs) (var, tc) =
     let tc' = transform env tc in
     let env' = Env.Int.bind env (var, typeof_tqr tc') in
-    let b = `Let (var, tc') in
+    let b = (var, tc') in
       (env', b :: bs)
 
 
   and transform env (q : qr) : tqr =
     let enforce_shape = enforce_shape env in
       match q with
-	| `Computation (bs, tc) ->
+	| `Let (bs, tc) ->
 	    let env, bs = List.fold_left binding (env, []) bs in
 	    let bs = List.rev bs in
 	    let tc = transform env tc in
-	      `Computation (bs, tc, typeof_tqr tc)
+	      `Let (bs, tc, typeof_tqr tc)
 	| `Constant c -> `Constant (c, `Atom)
 	| `Table t -> `Table (t, `List) 
 	| `Inject (tag, t) ->
@@ -870,7 +868,7 @@ module ImpType = struct
 		  | "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
 		      (* `Atom -> `Atom -> `Atom *)
 		      [`Atom; `Atom], `Atom
-		  | "<>" | "==" | ">" ->
+		  | "<>" | "==" | ">" | "<" ->
 		      (* arguments can have any type because we can compare
 			 atomic values, records and lists. boxed lists are
 			 unboxed in compileQuery so we need no annotation

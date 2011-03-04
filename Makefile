@@ -125,9 +125,8 @@ SOURCES = $(OPC)                		\
 	  algebra_export.ml algebra_export.mli	\
 	  pf_toolchain.mli pf_toolchain.ml	\
 	  cs.ml cs.mli				\
-	  exptodot.ml				\
 	  qr.mli qr.ml				\
-	  query2.ml query2.mli			\
+	  qrtodot.ml				\
 	  components.ml				\
 	  qrToAlgebraDefinitions.ml	\
 	  qrToAlgebraHelpers.ml		\
