@@ -34,7 +34,7 @@ let tagkey tag =
 	  keytags := IntMap.add key tag !keytags;
 	  Nativeint.of_int key
 
-let concatmap_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
+let concatmap_work _loop _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
   let q = 
     ADag.mk_project
       ([(iter, outer); (pos, pos')] @ (H.prjcs ti_fr.cs))
@@ -49,7 +49,7 @@ let concatmap_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
   in
     { ti_fr with q = q }
 
-let map_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
+let map_work _loop _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
   let q = 
     ADag.mk_project
       ([(iter, outer); (pos, pos')] @ (H.prjcs ti_fr.cs)) 
@@ -60,7 +60,7 @@ let map_work _ti_l ti_fr (_q_l', _q_v, map, _loop_v) =
   in
     { ti_fr with q = q }
 
-let sortby_work ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
+let sortby_work _loop ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
   let ordercol_offsets = Cs.offsets ti_fr.cs in
   let ordercols = H.io ordercol_offsets in
   let ordercols' = H.io (H.incr ordercol_offsets (Cs.cardinality ti_l.cs)) in
@@ -82,7 +82,7 @@ let sortby_work ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
   in
     { ti_l with q = q' }
 
-let groupby_work _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
+let groupby_work _loop _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
 
   let cs_fr' = Cs.shift (Cs.cardinality ti_fr.cs) ti_fr.cs in
   let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_fr') in
@@ -115,6 +115,115 @@ let groupby_work _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
       vs = Vs.empty;
       fs = Fs.empty
     }
+
+let takewhile_work loop ti_l ti_p (q_l', q_v, map, loop_lifted) = 
+  let cs_l_prj = H.prjcs ti_l.cs in
+
+  (* join predicate result with input list *)
+  let q' = 
+    ADag.mk_project
+      ([H.prj iter; H.prj pos; H.prj res] @ cs_l_prj)
+      (ADag.mk_eqjoin
+	 (inner, iter')
+	 q_l'
+	 (ADag.mk_project
+	    [(iter', iter); (res, A.Item 1)]
+	    ti_p.q))
+  in
+
+  (* first position at which the predicate is false *)
+  let q_m =
+    ADag.mk_funaggr
+      (A.Min, (pos'', pos), Some iter)
+      (ADag.mk_select
+	 pos'
+	 (ADag.mk_funboolnot
+	    (pos', res)
+	    q'))
+  in
+
+  (* iterations in which the predicate is never false *)
+  let q_e = 
+    ADag.mk_project
+      ([H.prj iter; H.prj pos] @ cs_l_prj)
+      (ADag.mk_eqjoin
+	 (iter, iter')
+	 ti_l.q
+	 (ADag.mk_project
+	    [(iter', iter)]
+	    (ADag.mk_difference
+	       loop
+	       (ADag.mk_project
+		  [H.prj iter]
+		  q_m))))
+  in
+
+  (* select all elements before the first false position *)
+  let q'' =
+   ADag.mk_disjunion
+     q_e
+     (ADag.mk_project
+	([H.prj iter; H.prj pos] @ cs_l_prj)
+	(ADag.mk_select
+	   res'
+	   (ADag.mk_funnumgt
+	      (res', (pos'', pos))
+	      (ADag.mk_eqjoin
+		 (iter, iter')
+		 q'
+		 (ADag.mk_project
+		    [(iter', iter); H.prj pos'']
+		    q_m)))))
+  in
+
+    { ti_l with q = q'' }
+
+let dropwhile_work loop ti_l ti_p (q_l', q_v, map, loop_lifted) = 
+  let cs_l_prj = H.prjcs ti_l.cs in
+
+  (* join predicate result with input list *)
+  let q' = 
+    ADag.mk_project
+      ([H.prj iter; H.prj pos; H.prj res] @ cs_l_prj)
+      (ADag.mk_eqjoin
+	 (inner, iter')
+	 q_l'
+	 (ADag.mk_project
+	    [(iter', iter); (res, A.Item 1)]
+	    ti_p.q))
+  in
+
+  (* first position at which the predicate is false *)
+  let q_m =
+    ADag.mk_funaggr
+      (A.Min, (pos'', pos), Some iter)
+      (ADag.mk_select
+	 pos'
+	 (ADag.mk_funboolnot
+	    (pos', res)
+	    q'))
+  in
+
+  (* select all elements starting with the first false position *)
+  let q'' =
+    ADag.mk_project
+      ([H.prj iter; H.prj pos] @ cs_l_prj)
+      (ADag.mk_select
+	 res
+	 (ADag.mk_funboolor
+	    (res, (res', res''))
+	    (ADag.mk_funnumeq
+	       (res'', (pos'', pos))
+	       (ADag.mk_funnumgt
+		  (res', (pos, pos''))
+		  (ADag.mk_eqjoin
+		     (iter, iter')
+		     q'
+		     (ADag.mk_project
+			[(iter', iter); H.prj pos'']
+			q_m))))))
+  in
+    { ti_l with q = q'' }
 
 let rec compile_box env loop e =
   let ti_e = compile_expression env loop e in
@@ -509,7 +618,6 @@ and do_row_greater_real loop wrapper zipped =
 	let ti_unboxed_l = H.do_unbox ti_zipped.q col_l inner_table_l in
 	let ti_unboxed_r = H.do_unbox ti_zipped.q col_r inner_table_r in
 	  (do_table_greater loop wrapper ti_unboxed_l ti_unboxed_r).q
-	    
     in
       {
 	q = q;
@@ -965,7 +1073,7 @@ and compile_ho_primitive env loop f source work =
   let q_l', q_v, map, loop_lifted = H.lift ti_l.q ti_l.cs in
   let env_lifted = H.lift_env map env inner outer in
   let ti_fr = apply_exp env_lifted loop_lifted f [{ ti_l with q = q_v }] in
-    work ti_l ti_fr (q_l', q_v, map, loop_lifted)
+    work loop ti_l ti_fr (q_l', q_v, map, loop_lifted)
 
 and singleton_record env loop (name, e) =
   let ti = compile_expression env loop e in
@@ -1388,70 +1496,8 @@ and compile_wrong loop =
       fs = Fs.empty
     }
 
-and compile_takewhile env loop p l = 
-  let ti_l = compile_expression env loop l in
-  let q_l', q_v, map, loop_v = H.lift ti_l.q ti_l.cs in
-  let env = H.lift_env map env inner outer in
-  let v, body = 
-    match p with 
-      | `Lambda (([x], body), _) -> (x, body) 
-      | _ -> assert false 
-  in
-  let env_v = AEnv.bind env (v, { ti_l with q = q_v }) in
-  let ti_p = compile_expression env_v loop_v body in
-  let cs_l_prj = H.prjcs ti_l.cs in
-  let q' = 
-    ADag.mk_project
-      ([H.prj iter; H.prj pos; H.prj res] @ cs_l_prj)
-      (ADag.mk_eqjoin
-	 (inner, iter')
-	 q_l'
-	 (ADag.mk_project
-	    [(iter', iter); (res, A.Item 1)]
-	    ti_p.q))
-  in
-  let q_m =
-    ADag.mk_funaggr
-      (A.Min, (pos', pos), Some iter)
-      (ADag.mk_select
-	 pos'
-	 (ADag.mk_funboolnot
-	    (pos', res)
-	    q'))
-  in
-  let q_e = 
-    ADag.mk_project
-      ([H.prj iter; H.prj pos] @ cs_l_prj)
-      (ADag.mk_eqjoin
-	 (iter, iter')
-	 ti_l.q
-	 (ADag.mk_project
-	    [(iter', iter)]
-	    (ADag.mk_difference
-	       loop
-	       (ADag.mk_project
-		  [H.prj iter]
-		  q_m))))
-  in
-  let q'' =
-   ADag.mk_disjunion
-     q_e
-     (ADag.mk_project
-	([H.prj iter; H.prj pos] @ cs_l_prj)
-	(ADag.mk_select
-	   res'
-	   (ADag.mk_funnumgt
-	      (res', (pos', pos))
-	      (ADag.mk_eqjoin
-		 (iter, iter')
-		 q'
-		 (ADag.mk_project
-		    [(iter', iter); H.prj pos']
-		    q_m)))))
-  in
-    { ti_l with q = q'' }
 
-and compile_dropwhile _env _loop _p _l = failwith "compile_dropwhile not implemented"
+
 
 and compile_lambda env loop xs body =
   let q = 
@@ -1535,8 +1581,8 @@ and apply_primitive env loop f args =
     | "^^", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Concat) `StrType op1 op2
     | "nubBase", [l] -> compile_nubbase env loop l
     | "groupByBase", [f; l] -> compile_ho_primitive env loop f l groupby_work
-    | "takeWhile", [p; l] -> compile_takewhile env loop p l
-    | "dropWhile", [p; l] -> compile_dropwhile env loop p l
+    | "takeWhile", [p; l] -> compile_ho_primitive env loop p l takewhile_work
+    | "dropWhile", [p; l] -> compile_ho_primitive env loop p l dropwhile_work
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
