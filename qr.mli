@@ -7,8 +7,6 @@ val prelude_primitives : unit -> unit
 val prelude_primitive_vars : Utility.IntSet.t option ref
 val prelude_primitive_namemap : string Utility.IntMap.t option ref
 
-val complete_tyenv_ir : Types.datatype Env.Int.t -> Ir.computation -> Types.datatype Env.Int.t
-
 val used_database : Value.database option ref
 
 (* term variables *)
@@ -83,6 +81,6 @@ sig
 
 end
 
-val pipeline : Value.env -> Types.datatype Env.Int.t -> (Num.num * Num.num) option -> Ir.computation -> ImpType.tqr
+val pipeline : Value.env -> (Num.num * Num.num) option -> Ir.computation -> ImpType.tqr
 
 

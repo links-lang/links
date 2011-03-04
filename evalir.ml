@@ -2,8 +2,6 @@ open Notfound
 
 open Utility
 
-let tenv = ref None
-
 module Eval = struct
   open Ir
 
@@ -367,8 +365,7 @@ module Eval = struct
 	in
 	Irtodot.output_dot e env "ir_query.dot";
 	Qr.prelude_primitives ();
-	let tyenv = val_of !tenv in
-	let tqr = Qr.pipeline env tyenv range e in
+	let tqr = Qr.pipeline env range e in
 	let result =
 	  match !Qr.used_database with
 	    | Some db -> 

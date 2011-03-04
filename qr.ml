@@ -2,10 +2,6 @@
 
 open Utility
 
-let complete_tyenv_ir tyenv p =
-    let _, _, o = (new Ir.Transform.visitor tyenv)#computation p in
-        o#get_type_environment
-
 let prelude_primitive_names = 
     ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
      "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
@@ -259,8 +255,9 @@ end
 let local_freevars xs comp =
   let bound_vars = IntSet.from_list xs in
   let freevars = FreeVars.fv bound_vars comp in
-  let freevars = IntSet.diff freevars Lib.primitive_vars in
-    IntSet.diff freevars (val_of !prelude_primitive_vars)
+    freevars
+(*   let freevars = IntSet.diff freevars Lib.primitive_vars in
+    IntSet.diff freevars (val_of !prelude_primitive_vars) *)
 
 let rec qr_of_value env : Value.t -> qr =
  function
@@ -282,7 +279,9 @@ let rec qr_of_value env : Value.t -> qr =
        assert (f = f');
        let body = computation body in
        let freevars = local_freevars xs body in
+	 Debug.print ("closure freevars " ^ (Show.show IntSet.show_t freevars));
        let env' : (Value.t * Ir.scope) IntMap.t = restrict (fst3 (Value.shadow env ~by:locals)) freevars in
+	 Debug.print ("closure restricted env domain " ^ (Show.show (Show.show_list Show.show_int) (IntMap.domain env')));
        let env' = IntMap.map ((qr_of_value env) -<- fst) env' in
        let body = inline_primitive env' body in
 	 `Lambda (xs, body)
@@ -304,9 +303,19 @@ let rec qr_of_value env : Value.t -> qr =
 	 `Inject (tag, v)
    | v -> failwith ("t_of_value: unsupported value " ^ (Show.show Value.show_t v))
 
-(* FIXME: ugly code *)
-let qr_of_query env tyenv _range comp =
-  let freevars = Ir.FreeVars.computation tyenv IntSet.empty comp in
+let binding_freevars bindings =
+  let lambda_freevars freevars (`Let (_name, value)) = 
+    match value with
+      | `Lambda (xs, body) -> 
+	  let bound = IntSet.from_list xs in
+	    IntSet.union freevars (FreeVars.fv bound body)
+      | _ -> freevars
+  in
+    List.fold_left lambda_freevars IntSet.empty bindings
+
+let qr_of_query env _range comp =
+  let qr_comp = computation comp in
+  let freevars =  FreeVars.fv IntSet.empty qr_comp in
   let restricted_env = restrict (fst3 env) freevars in
   let binding name (value, _) bindings = 
     let b = `Let (name, qr_of_value env value) in
@@ -314,7 +323,9 @@ let qr_of_query env tyenv _range comp =
   in
   let free_bindings = IntMap.fold binding restricted_env [] in
 
-  let primitive_free_vars = IntSet.inter freevars Lib.primitive_vars in
+  let remaining_freevars = binding_freevars free_bindings in
+
+  let primitive_free_vars = IntSet.inter (IntSet.union freevars remaining_freevars) Lib.primitive_vars in
     
   let primitive var bindings =
     let stub = Lib.primitive_stub_by_code var in
@@ -323,8 +334,6 @@ let qr_of_query env tyenv _range comp =
   in
 
   let primitive_bindings = IntSet.fold primitive primitive_free_vars [] in
-    
-  let qr_comp = computation comp in
     match qr_comp with
       | `Computation (local_bindings, tc) ->
 	  `Computation (primitive_bindings @ free_bindings @ local_bindings, tc)
@@ -522,14 +531,14 @@ struct
   (* FIXME: differentiate between functions and other values based on type *)
   (* FIXME: differentiate between function inlining and value propagation *)
   let conservative ctx name =
-    Debug.print (Show.show IntSet.show_t (Env.Int.domain ctx.venv));
+    (* Debug.print (Show.show IntSet.show_t (Env.Int.domain ctx.venv)); *)
     match Env.Int.find ctx.venv name with
       | Some value ->
 	  begin
 	    match value with
 	      | `Table _ | `Constant _ | `Primitive _ | `Wrong 
 	      | `Singleton _ | `Concat [] -> 
-		  Debug.f "inline %d (small)" name;
+		  (* Debug.f "inline %d (small)" name; *)
 		  value
 	      | `Extend _ | `Project _ | `Erase _ | `Inject _
 	      | `Concat _ | `Apply _ | `Case _ | `If _
@@ -537,16 +546,16 @@ struct
 		  begin
 		    match IntMap.lookup name ctx.census with
 		      | Some c when c < 2 -> 
-			  Debug.f "inline %d (c = %d)" name c;
+			  (* Debug.f "inline %d (c = %d)" name c; *)
 			  value
 		      | _ -> 
-			  Debug.f "not inline %d" name;
+			  (* Debug.f "not inline %d" name; *)
 			  `Variable name
 		  end
 	      | `Lambda _ -> value
 	  end
       | None -> 
-	  Debug.f "not inlined %d (not in env)" name;
+	  (* Debug.f "not inlined %d (not in env)" name; *)
 	  `Variable name
 
   let reduce_append vs =
@@ -922,8 +931,8 @@ let rec applyn f arg n =
   else
     arg
 
-let pipeline env tyenv range comp =
-  let q = qr_of_query env tyenv range comp in
+let pipeline env range comp =
+  let q = qr_of_query env range comp in
     Debug.print (">>>>> before\n" ^ (Show.show show_qr q));
     let q = applyn optphase q 1 in
     let qt = ImpType.transform Env.Int.empty q in
