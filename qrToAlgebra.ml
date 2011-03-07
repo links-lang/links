@@ -116,7 +116,7 @@ let groupby_work _loop _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
       fs = Fs.empty
     }
 
-let takewhile_work loop ti_l ti_p (q_l', q_v, map, loop_lifted) = 
+let takewhile_work loop ti_l ti_p (q_l', _q_v, _map, _loop_lifted) = 
   let cs_l_prj = H.prjcs ti_l.cs in
 
   (* join predicate result with input list *)
@@ -178,7 +178,7 @@ let takewhile_work loop ti_l ti_p (q_l', q_v, map, loop_lifted) =
 
     { ti_l with q = q'' }
 
-let dropwhile_work loop ti_l ti_p (q_l', q_v, map, loop_lifted) = 
+let dropwhile_work _loop ti_l ti_p (q_l', _q_v, _map, _loop_lifted) = 
   let cs_l_prj = H.prjcs ti_l.cs in
 
   (* join predicate result with input list *)
@@ -1686,7 +1686,6 @@ and compile_expression env loop q : tblinfo =
 	let env = List.fold_left (binding loop) env bs in
 	  compile_expression env loop tc
     | `Primitive _ -> failwith "compile_expression: eval error"
-    | _ -> assert false
 
 let rec wrap_serialize ti = 
   let serialize q cs =
