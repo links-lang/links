@@ -319,7 +319,8 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
                  end
              | (`PresenceVar (var, _), `Presence f) ->
                  (tenv, renv, IntMap.add var f penv)
-             | _ -> assert false)
+             | _ -> 
+		 assert false)
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
       instantiate_datatype (tenv, renv, penv) t

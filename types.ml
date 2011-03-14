@@ -390,7 +390,6 @@ let rec querify_type : typ -> unit =
     | _ -> assert false
 
 and querify_row (fields, row_var) =
-  Debug.print "querify_row";
   begin
     match Unionfind.find row_var with
       | `Closed
@@ -425,7 +424,6 @@ let rec flatify_type : typ -> unit =
     | _ -> assert false
 
 and flatify_row (fields, row_var) =
-  Debug.print "querify_row";
   begin
     match Unionfind.find row_var with
       | `Closed

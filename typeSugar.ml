@@ -219,6 +219,7 @@ sig
   val iteration_body : griper
   val iteration_where : griper
   val iteration_base_order : griper
+  val iteration_flat_order : griper
   val iteration_base_body : griper
 
   val escape : griper
@@ -646,9 +647,14 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
     let iteration_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Where clauses" t l
 
+    let iteration_flat_order ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
+      with_but pos
+        ("An orderby clause must return flat type")
+        (expr, t)
+
     let iteration_base_order ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
       with_but pos
-        ("An orderby clause must return a list of records of base type")
+        ("An orderby clause must return lists of records of base type")
         (expr, t)
 
     let iteration_base_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
@@ -2017,8 +2023,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let () =
               opt_iter
                 (fun order ->
-                   unify ~handle:Gripers.iteration_base_order
-                     (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row `Base)))) orderby in
+                   unify ~handle:Gripers.iteration_flat_order
+		     (pos_and_typ order, no_pos (Types.fresh_type_variable `Flat))) orderby in
 (*
             let () =
               if is_query then

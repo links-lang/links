@@ -3,8 +3,8 @@
 open Utility
 
 let prelude_primitive_names = 
-    ["concatMap"; "map"; "sortByBase"; "asList"; "zip"; "unzip"; 
-     "select"; "groupByBase"; "sum"; "concat"; "and"; "or"; 
+    ["concatMap"; "map"; "sortByFlat"; "asList"; "zip"; "unzip"; 
+     "select"; "groupByFlat"; "sum"; "concat"; "and"; "or"; 
      "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";
      "reverse"; "filter"; "ignore"]
 
@@ -887,7 +887,7 @@ module ImpType = struct
 		  | "select" ->
 		      (* `Atom -> `List -> `Atom *)
 		      [`List; `Atom], `Atom
-		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByBase" | "filter" | "sortByBase" | "map" ->
+		  | "take" | "drop" | "dropWhile" | "takeWhile" | "groupByFlat" | "filter" | "sortByFlat" | "map" ->
 		      (* `Atom -> `List -> `List *)
 		      [`Atom; `List], `List
 		  | "zip" ->

@@ -184,7 +184,7 @@ object (o : 'self_type)
             | None, None -> results
             | Some sort, Some sort_type ->
                 let sort_by, sort_type_arg = 
-                  "sortByBase", `Row (TypeUtils.extract_row sort_type) in
+		  "sortByFlat", `Type sort_type in
 
                 let g : phrase =
                   `FunLit

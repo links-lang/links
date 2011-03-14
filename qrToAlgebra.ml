@@ -1580,7 +1580,7 @@ and apply_primitive env loop f args =
     | "quote", [s] -> compile_quote env loop s
     | "^^", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Concat) `StrType op1 op2
     | "nubBase", [l] -> compile_nubbase env loop l
-    | "groupByBase", [f; l] -> compile_ho_primitive env loop f l groupby_work
+    | "groupByFlat", [f; l] -> compile_ho_primitive env loop f l groupby_work
     | "takeWhile", [p; l] -> compile_ho_primitive env loop p l takewhile_work
     | "dropWhile", [p; l] -> compile_ho_primitive env loop p l dropwhile_work
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
@@ -1588,7 +1588,7 @@ and apply_primitive env loop f args =
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
     | "concatMap", [f; l] -> compile_ho_primitive env loop f l concatmap_work
     | "map", [f; l] -> compile_ho_primitive env loop f l map_work
-    | "sortByBase", [f; l] -> compile_ho_primitive env loop f l sortby_work
+    | "sortByFlat", [f; l] -> compile_ho_primitive env loop f l sortby_work
     | "<", _ | "<=", _ | ">=", _->
 	failwith ("CompileQuery.compile_apply: </<=/>= should have been rewritten in query2")
     | s, _->

@@ -37,8 +37,8 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get 
 # optimised away - it does if we eta reduce it
-sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
-fun sortByBase(f, l) {sortBy(f, l)}
+sig sortByFlat : ((a) ~b~> _::Flat, [a]) ~b~> [a]
+fun sortByFlat(f, l) {sortBy(f, l)}
 
 
 fun and(l) { 
@@ -1086,8 +1086,8 @@ fun min(ns) {
     extremum((<), ns) 
 }
 
-sig groupByBase : ((a) ~b~> c::Base, [a]) ~b~> [(c::Base, [a])]
-fun groupByBase(project, t) { groupBy(project, t) }
+sig groupByFlat : ((a) ~b~> c::Flat, [a]) ~b~> [(c::Flat, [a])]
+fun groupByFlat(project, t) { groupBy(project, t) }
 
 sig nubBase : ([a]) ~> [a::Base]
 fun nubBase(l) { nub(l) }
