@@ -17,11 +17,20 @@ type 'a point = 'a Unionfind.point deriving (Show)
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     deriving (Show)
 
-type subkind = [ `Any | `Base | `Query ]
+type subkind = [ `Any | `Base | `Query | `Flat ]
     deriving (Show)
 
-type kind = [ `Type | `BaseType | `QueryType | `Row | `BaseRow | `QueryRow | `Presence ]
-    deriving (Show, Eq)
+type kind = 
+    [ `Type 
+    | `BaseType 
+    | `QueryType 
+    | `FlatType 
+    | `Row 
+    | `BaseRow 
+    | `QueryRow 
+    | `FlatRow 
+    | `Presence ]
+      deriving (Show, Eq)
 
 type 't meta_type_var_basis =
     [ `Flexible of int * subkind
@@ -127,45 +136,6 @@ let rec is_base_type : typ -> bool =
         end
     | _ -> false
 
-let rec is_query_type : typ -> bool = 
-  function
-    | t when is_base_type t -> true
-    | `Record row -> is_query_row row
-    | `Variant row -> is_query_row row
-    | `Application (l, [`Type t]) when Abstype.eq_t.Eq.eq l list && is_query_type t -> true
-    | `Alias (_, t) -> is_query_type t
-    | `MetaTypeVar point ->
-	begin
-	  match Unionfind.find point with
-	    | `Rigid (_, (`Query | `Base))
-	    | `Flexible (_, (`Query | `Base)) -> true
-	    | `Rigid (_, `Any)
-	    | `Flexible (_, `Any) -> false
-	    | `Body t -> is_query_type t
-	    | `Recursive _ -> false
-	end
-    | _ -> false
-
-and is_query_row (fields, row_var) =
-  let query_row_var =
-    match Unionfind.find row_var with
-      | `Closed
-      | `Rigid (_, (`Base | `Query))
-      | `Flexible (_, (`Base | `Query)) -> true
-      | `Rigid (_, `Any)
-      | `Flexible (_, `Any) -> false
-      | `Body row -> is_query_row row
-      | `Recursive _ -> false
-  in
-  let query_fields =
-    FieldEnv.fold
-      (fun _ (_, t) b ->
-	 b && is_query_type t)
-      fields
-      true
-  in
-    query_row_var && query_fields
-
 let rec is_base_row (fields, row_var) =
   let base_row_var =
     match Unionfind.find row_var with
@@ -184,6 +154,80 @@ let rec is_base_row (fields, row_var) =
       true
   in
     base_row_var && base_fields
+
+let rec is_flat_type : typ -> bool =
+  function
+    | t when is_base_type t -> true
+    | `Record row -> is_flat_row row
+    | `Alias (_, t) -> is_flat_type t
+    | `MetaTypeVar point ->
+	begin
+	  match Unionfind.find point with
+	    | `Rigid (_, (`Flat | `Base))
+	    | `Flexible (_, (`Flat | `Base)) -> true
+	    | `Rigid _
+	    | `Flexible _ -> false
+	    | `Body t -> is_flat_type t
+	    | `Recursive _ -> false
+	end
+    | _ -> false
+
+and is_flat_row (fields, row_var) =
+  let flat_row_var =
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, (`Flat | `Base))
+      | `Flexible (_, (`Flat | `Base))
+      | `Rigid _
+      | `Flexible _ -> false
+      | `Body row -> is_flat_row row
+      | `Recursive _ -> false
+  in
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+	 b && is_flat_type t)
+      fields
+      flat_row_var
+
+let rec is_query_type : typ -> bool = 
+  function
+    | t when is_base_type t -> true
+    | `Record row -> is_query_row row
+    | `Variant row -> is_query_row row
+    | `Application (l, [`Type t]) when Abstype.eq_t.Eq.eq l list && is_query_type t -> true
+    | `Alias (_, t) -> is_query_type t
+    | `MetaTypeVar point ->
+	begin
+	  match Unionfind.find point with
+	    | `Rigid (_, (`Query | `Base | `Flat))
+	    | `Flexible (_, (`Query | `Base | `Flat)) -> true
+	    | `Rigid (_, `Any)
+	    | `Flexible (_, `Any) -> false
+	    | `Body t -> is_query_type t
+	    | `Recursive _ -> false
+	end
+    | _ -> false
+
+and is_query_row (fields, row_var) =
+  let query_row_var =
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, (`Base | `Query | `Flat))
+      | `Flexible (_, (`Base | `Query | `Flat)) -> true
+      | `Rigid (_, `Any)
+      | `Flexible (_, `Any) -> false
+      | `Body row -> is_query_row row
+      | `Recursive _ -> false
+  in
+  let query_fields =
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+	 b && is_query_type t)
+      fields
+      true
+  in
+    query_row_var && query_fields
+
 
 let rec is_baseable_type : typ -> bool =
   function
@@ -225,11 +269,11 @@ let rec is_querifyable_type : typ -> bool =
     | `Record row -> is_querifyable_row row
     | `Variant row -> is_querifyable_row row
     | `Application (l, [`Type t]) when Abstype.eq_t.Eq.eq l list && is_querifyable_type t -> true
-    | `Alias (_, t) -> is_query_type t
+    | `Alias (_, t) -> is_querifyable_type t
     | `MetaTypeVar point ->
 	begin
 	  match Unionfind.find point with
-	    | `Rigid (_, (`Base | `Query)) -> true
+	    | `Rigid (_, (`Base | `Query | `Flat)) -> true
 	    | `Flexible _ -> true
 	    | `Rigid (_, `Any) -> false
 	    | `Body t -> is_querifyable_type t
@@ -242,7 +286,7 @@ and is_querifyable_row (fields, row_var) =
     let querifyable_row_var =
       match Unionfind.find row_var with
 	| `Closed
-	| `Rigid (_, (`Base | `Query))
+	| `Rigid (_, (`Base | `Query | `Flat))
 	| `Flexible _ -> true
 	| `Rigid (_, `Any) -> false
 	| `Body row -> is_querifyable_row row
@@ -257,6 +301,38 @@ and is_querifyable_row (fields, row_var) =
     in
       querifyable_row_var && query_fields
 
+let rec is_flatable_type : typ -> bool =
+  function
+    | t when is_baseable_type t -> true
+    | `Record row -> is_flatable_row row
+    | `Alias (_, t) -> is_flatable_type t
+    | `MetaTypeVar point ->
+	begin
+	  match Unionfind.find point with
+	    | `Rigid (_, (`Base | `Flat)) -> true
+	    | `Flexible _ -> true
+	    | `Rigid (_, (`Any | `Query)) -> false
+	    | `Body t -> is_flatable_type t
+	    | `Recursive _ -> false
+	end
+    | _ -> false
+
+and is_flatable_row (fields, row_var) =
+  let flatable_row_var =
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, (`Base | `Flat))
+      | `Flexible _ -> true
+      | `Rigid (_, (`Any | `Query)) -> false
+      | `Body row -> is_querifyable_row row
+      | `Recursive _ -> false
+  in
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+	 b && is_flatable_type t)
+      fields
+      flatable_row_var
+
 let rec basify_type : typ -> unit =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> ()
@@ -270,9 +346,27 @@ let rec basify_type : typ -> unit =
             | `Flexible (var, `Any) -> Unionfind.change point (`Flexible (var, `Base))
             | `Body t -> basify_type t
             | `Recursive _ -> assert false
-	    | `Flexible (_, `Query) -> assert false
+	    | `Flexible (_, (`Query | `Flat)) -> assert false
         end
     | _ -> assert false
+
+let rec basify_row (fields, row_var) =
+  begin
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, `Base)
+      | `Flexible (_, `Base) -> ()
+      | `Rigid _ -> assert false
+      | `Flexible (var, `Any) -> Unionfind.change row_var (`Flexible (var, `Base))
+      | `Body row -> basify_row row
+      | `Recursive _ -> assert false
+      | `Flexible (_, (`Query | `Flat)) -> assert false
+  end;
+  FieldEnv.fold
+    (fun _ (_, t) () ->
+       basify_type t)
+    fields
+    ()
 
 let rec querify_type : typ -> unit =
   Debug.print "querify_type";
@@ -286,8 +380,8 @@ let rec querify_type : typ -> unit =
 	begin
 	  match Unionfind.find point with
 	    (* FIXME : not sure if this is the right thing to do *)
-	    | `Rigid (_, (`Base | `Query)) 
-	    | `Flexible (_, (`Base | `Query)) -> ()
+	    | `Rigid (_, (`Base | `Query | `Flat)) 
+	    | `Flexible (_, (`Base | `Query | `Flat)) -> ()
 	    | `Rigid (_, `Any) -> assert false
 	    | `Flexible (var, `Any) -> Unionfind.change point (`Flexible (var, `Query))
 	    | `Body t -> querify_type t
@@ -300,8 +394,8 @@ and querify_row (fields, row_var) =
   begin
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, (`Query | `Base))
-      | `Flexible (_, (`Query | `Base)) -> ()
+      | `Rigid (_, (`Query | `Base | `Flat))
+      | `Flexible (_, (`Query | `Base | `Flat)) -> ()
       | `Rigid (_, `Any) -> assert false
       | `Flexible (var, `Any) -> Unionfind.change row_var (`Flexible (var, `Query))
       | `Body row -> querify_row row
@@ -312,23 +406,41 @@ and querify_row (fields, row_var) =
        querify_type t)
     fields
 
-let rec basify_row (fields, row_var) =
+let rec flatify_type : typ -> unit =
+  function
+    | `Primitive (`Bool | `Int | `Char | `Float | `String) -> ()
+    | `Record row -> flatify_row row
+    | `Alias (_, t) -> flatify_type t
+    | `MetaTypeVar point ->
+	begin
+	  match Unionfind.find point with
+	    (* FIXME : not sure if this is the right thing to do *)
+	    | `Rigid (_, (`Base | `Flat)) 
+	    | `Flexible (_, (`Base | `Flat)) -> ()
+	    | `Rigid (_, (`Any | `Query)) -> assert false
+	    | `Flexible (var, (`Any | `Query)) -> Unionfind.change point (`Flexible (var, `Flat))
+	    | `Body t -> querify_type t
+	    | `Recursive _ -> assert false
+	end
+    | _ -> assert false
+
+and flatify_row (fields, row_var) =
+  Debug.print "querify_row";
   begin
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, `Base)
-      | `Flexible (_, `Base) -> ()
-      | `Rigid _ -> assert false
-      | `Flexible (var, `Any) -> Unionfind.change row_var (`Flexible (var, `Base))
-      | `Body row -> basify_row row
+      | `Rigid (_, (`Flat | `Base))
+      | `Flexible (_, (`Flat | `Base)) -> ()
+      | `Rigid (_, (`Any | `Query)) -> assert false
+      | `Flexible (var, (`Any | `Query)) -> Unionfind.change row_var (`Flexible (var, `Flat))
+      | `Body row -> querify_row row
       | `Recursive _ -> assert false
-      | `Flexible (_, `Query) -> assert false
   end;
-  FieldEnv.fold
-    (fun _ (_, t) () ->
-       basify_type t)
+  FieldEnv.iter
+    (fun _ (_, t) ->
+       querify_type t)
     fields
-    ()
+
 
 type type_variable = int * [`Rigid | `Flexible] *  [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
     deriving (Show)
@@ -347,6 +459,8 @@ let kind_of_quantifier =
     | `RowVar ((_, `Base), _) -> `BaseRow
     | `TypeVar ((_, `Query), _) -> `QueryType
     | `RowVar ((_, `Query), _) -> `QueryRow
+    | `TypeVar ((_, `Flat), _) -> `FlatType
+    | `RowVar ((_, `Flat), _) -> `FlatRow
     | `PresenceVar _ -> `Presence
 
 let type_arg_of_quantifier =
@@ -1278,6 +1392,7 @@ struct
         | `Any -> ""
         | `Base -> "::Base"
 	| `Query -> "::Query"
+	| `Flat -> "::Flat"
 
   let kind : (policy * names) -> kind -> string =
     fun (_policy, _vars) ->
@@ -1285,9 +1400,11 @@ struct
         | `Type     -> ""
         | `BaseType -> "::Base"
 	| `QueryType -> "::Query"
+	| `FlatType -> "::Flat"
         | `Row      -> "::Row"
         | `BaseRow  -> "::BaseRow"
 	| `QueryRow -> "::QueryRow"
+	| `FlatRow  -> "::FlatRow"
         | `Presence -> "::Presence"
 
   let quantifier : (policy * names) -> quantifier -> string =

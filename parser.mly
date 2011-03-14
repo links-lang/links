@@ -61,9 +61,11 @@ let attach_kind pos (t, k) =
      | `Type -> `TypeVar (t, `Any)
      | `BaseType -> `TypeVar (t, `Base)
      | `QueryType -> `TypeVar (t, `Query)
+     | `FlatType -> `TypeVar (t, `Flat)
      | `Row -> `RowVar (t, `Any)
      | `BaseRow -> `RowVar (t, `Base)
      | `QueryRow -> `RowVar (t, `Query)
+     | `FlatRow -> `RowVar (t, `Flat)
      | `Presence -> `PresenceVar t
 
 let attach_subkind pos (t, k) =
@@ -75,7 +77,8 @@ let attach_subkind pos (t, k) =
    match k with
      | `Any -> t
      | `Base 
-     | `Query -> attach t k
+     | `Query 
+     | `Flat -> attach t k
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
 
 let attach_row_subkind pos (r, k) =
@@ -87,7 +90,7 @@ let attach_row_subkind pos (r, k) =
   in
    match k with
      | `Any -> r
-     | `Base | `Query -> attach r k
+     | `Base | `Query | `Flat -> attach r k
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
 
 let row_with field (fields, row_var) = field::fields, row_var
@@ -124,7 +127,7 @@ let datatype d = d, None
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY TABLEKEYS
+%token TABLE TABLEHANDLE FROM DATABASE QUERY FLAT WITH YIELDS ORDERBY TABLEKEYS
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
 %token ESCAPE
@@ -147,7 +150,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE QUERYTYPE ROW BASEROW QUERYROW PRESENCE ANY BASE
+%token TYPE BASETYPE QUERYTYPE FLATTYPE ROW BASEROW QUERYROW FLATROW PRESENCE ANY BASE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -285,15 +288,18 @@ kind:
 | TYPE                                                         { `Type }
 | BASETYPE                                                     { `BaseType }
 | QUERYTYPE                                                    { `QueryType }
+| FLATTYPE                                                    { `FlatType }
 | ROW                                                          { `Row }
 | BASEROW                                                      { `BaseRow }
 | QUERYROW                                                     { `QueryRow }
+| FLATROW                                                     { `FlatRow }
 | PRESENCE                                                     { `Presence }
 
 subkind:
 | ANY                                                          { `Any }
 | BASE                                                         { `Base }
 | QUERY                                                        { `Query }
+| FLAT                                                         { `Flat }
 
 typearg:
 | VARIABLE                                                     { (`TypeVar ($1, `Any), None) }

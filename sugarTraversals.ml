@@ -67,6 +67,7 @@ class map =
       | `Any -> `Any
       | `Base -> `Base
       | `Query -> `Query
+      | `Flat -> `Flat
       
     method row_var : row_var -> row_var =
       function
@@ -598,6 +599,7 @@ class fold =
       | `Any -> o
       | `Base -> o
       | `Query -> o
+      | `Flat -> o
       
     method row_var : row_var -> 'self_type =
       function
@@ -1084,6 +1086,7 @@ class fold_map =
       | `Any -> (o, `Any)
       | `Base -> (o, `Base)
       | `Query -> (o, `Query)
+      | `Flat -> (o, `Flat)
 
     method row_var : row_var -> ('self_type * row_var) =
       function

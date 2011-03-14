@@ -278,13 +278,14 @@ fun rec_env ->
                                Unionfind.change rpoint (`Flexible (rvar, `Base))
 			   | `Query, `Any ->
 			       Unionfind.change rpoint (`Flexible (rvar, `Query))
-			   (* FIXME: what to do with `Query, `Base *)
+			   | `Flat, `Any ->
+			       Unionfind.change rpoint (`Flexible (rvar, `Flat))
                            | _ -> ()
                        end
                    | `Flexible (var, subkind), _ ->
                        (if var_is_free_in_type var t2 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-			  (* FIXME: what to do with `Query subtypes? *)
+			   (* FIXME: what to do with `Query/Flat subtypes? *)
                            if subkind = `Base then
                              raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                                      " with the body "^ string_of_datatype t2)));
@@ -303,6 +304,12 @@ fun rec_env ->
 			 else
                            raise (Failure (`Msg ("Cannot unify the query type variable "^ string_of_int var ^
                                                    " with the non-query type "^ string_of_datatype t2)));
+		       if subkind = `Flat then
+			 if Types.is_flatable_type t2 then
+			   Types.flatify_type t2
+			 else
+                           raise (Failure (`Msg ("Cannot unify the flat type variable "^ string_of_int var ^
+                                                   " with the non-flat type "^ string_of_datatype t2)));
                        Unionfind.union lpoint rpoint
                    | _, `Flexible (var, subkind) ->
                        (if var_is_free_in_type var t1 then
@@ -325,6 +332,12 @@ fun rec_env ->
 			 else
                            raise (Failure (`Msg ("Cannot unify the query type variable "^ string_of_int var ^
                                                    " with the non-query type "^ string_of_datatype t1)));
+		       if subkind = `Flat then
+			 if Types.is_flatable_type t1 then
+			   Types.flatify_type t1
+			 else
+                           raise (Failure (`Msg ("Cannot unify the flat type variable "^ string_of_int var ^
+                                                   " with the non-flat type "^ string_of_datatype t1)));
 			   
                        Unionfind.union rpoint lpoint
                    | `Rigid (l, _), _ ->
@@ -440,6 +453,12 @@ fun rec_env ->
 			  else
                             raise (Failure (`Msg ("Cannot unify the query type variable "^ string_of_int var ^
                                                     " with the non-query type "^ string_of_datatype t)));
+			if subkind = `Flat then
+			  if Types.is_flatable_type t then
+			    Types.flatify_type t
+			  else
+                            raise (Failure (`Msg ("Cannot unify the flat type variable "^ string_of_int var ^
+                                                    " with the non-flat type "^ string_of_datatype t)));
                         Unionfind.change point (`Body t))
                  | `Recursive (var, t') ->
                      Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
@@ -861,6 +880,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 			    else
                               raise (Failure (`Msg ("Cannot unify the query row variable "^ string_of_int var ^
                                                       " with the non-query row "^ string_of_row extension_row)));
+			  if subkind = `Flat then
+			    if Types.is_flatable_row extension_row then
+			      Types.flatify_row extension_row
+			    else
+                              raise (Failure (`Msg ("Cannot unify the flat row variable "^ string_of_int var ^
+                                                      " with the non-flat row "^ string_of_row extension_row)));
                           if StringMap.is_empty extension_field_env then
                             match extension_row_var with
                               | point' ->

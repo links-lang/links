@@ -16,11 +16,20 @@ val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
 
-type subkind = [ `Any | `Base | `Query ]
+type subkind = [ `Any | `Base | `Query | `Flat ]
     deriving (Show)
 
-type kind = [ `Type | `BaseType | `QueryType | `Row | `BaseRow | `QueryRow | `Presence ]
-    deriving (Show)
+type kind = 
+    [ `Type 
+    | `BaseType 
+    | `QueryType 
+    | `FlatType 
+    | `Row 
+    | `BaseRow 
+    | `QueryRow 
+    | `FlatRow 
+    | `Presence ]
+      deriving (Show, Eq)
 
 type 't meta_type_var_basis =
     [ `Flexible of (int * subkind)
@@ -106,6 +115,16 @@ val is_querifyable_row : row -> bool
 
 val querify_type : datatype -> unit
 val querify_row : row -> unit
+
+val is_flat_type : datatype -> bool
+val is_flat_row : row -> bool
+
+val is_flatable_type : datatype -> bool
+val is_flatable_row : row -> bool
+
+(* FIXME more sensible name that does not collide with flatten_row *)
+val flatify_type : datatype -> unit
+val flatify_row : row -> unit
 
 val type_var_number : quantifier -> int
 

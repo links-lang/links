@@ -213,9 +213,11 @@ let kinds = [
  "Type"    , TYPE;
  "BaseType", BASETYPE;
  "QueryType", QUERYTYPE;
+ "FlatType", FLATTYPE;
  "Row"     , ROW;
  "BaseRow" , BASEROW;
  "QueryRow", QUERYROW;
+ "FlatRow",  FLATROW;
  "Presence", PRESENCE;
 ]
 
@@ -223,6 +225,7 @@ let subkinds = [
  "Any"    , ANY;
  "Base"   , BASE;
  "Query"  , QUERY;
+ "Flat"   , FLAT;
 ]
 
 exception LexicalError of (string * Lexing.position)
