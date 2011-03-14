@@ -272,12 +272,16 @@ let combine_inner_tables ti_ords =
 (* use the new surrogate keys from q_outer in column surr_col in the 
    nested plan q_inner *)
 let renumber_inner_table q_outer q_inner surr_col = 
-  ADag.mk_thetajoin
-    [(A.Eq, (ord, ord')); (A.Eq, (iter, c'))]
-    q_inner
-    (ADag.mk_project
-       [(ord', ord); (item'', item'); (c', A.Item surr_col)]
-       q_outer)
+  ADag.mk_select
+    res
+    (ADag.mk_funnumeq
+       (res, (ord', ord))
+       (ADag.mk_eqjoin
+	  (iter, c')
+	  q_inner
+	  (ADag.mk_project
+	     [(ord', ord); (item'', item'); (c', A.Item surr_col)]
+	     q_outer)))
 
 (* project all columns which do _not_ contain reference values onto itself and use the fresh
    surrogate values in new_surr in all columns which _do_ contain reference values *)
