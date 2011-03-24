@@ -82,39 +82,42 @@ let sortby_work _loop ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
   in
     { ti_l with q = q' }
 
-let groupby_work _loop _ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
+let groupby_work _loop ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
 
-  let cs_fr' = Cs.shift (Cs.cardinality ti_fr.cs) ti_fr.cs in
+  let cs_fr' = Cs.shift (Cs.cardinality ti_l.cs) ti_fr.cs in
   let sortlist = List.map (fun c -> (A.Item c, A.Ascending)) (Cs.offsets cs_fr') in
   let q_1 =
     ADag.mk_rowrank
       (grp_key, (iter, A.Ascending) :: sortlist)
-      (ADag.mk_eqjoin
-	 (inner, iter')
-	 q_l'
-	 (ADag.mk_project
-	    ((iter', iter) :: (H.prjlist_map (H.io (Cs.offsets cs_fr')) (H.io (Cs.offsets ti_fr.cs))))
-	    ti_fr.q))
-  in
-  let grpkey_col = (Cs.cardinality ti_fr.cs) + 1 in
-  let q_2 =
-    ADag.mk_distinct
       (ADag.mk_project
-	 ([H.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (H.prjlist_map (H.io (Cs.offsets ti_fr.cs)) (H.io (Cs.offsets cs_fr'))))
-	 q_1)
-  in
-  let q_3 =
-    ADag.mk_project
-      ([(iter, grp_key); (H.prj pos)] @ (H.prjlist (H.io (Cs.offsets ti_fr.cs))))
-      q_1
-  in
-    {
-      q = q_2;
-      cs = Cs.Mapping [("1", ti_fr.cs); ("2", Cs.Column (grpkey_col, `Surrogate))];
-      ts = [(grpkey_col, { ti_fr with q = q_3 })];
-      vs = Vs.empty;
-      fs = Fs.empty
-    }
+	 ([H.prj iter; H.prj pos] @ (H.prjcs ti_l.cs) @ (H.prjcs cs_fr'))
+	 (ADag.mk_eqjoin
+	    (inner, iter')
+	    q_l'
+	    (ADag.mk_project
+	       ((iter', iter) :: (H.prjlist_map (H.io (Cs.offsets cs_fr')) (H.io (Cs.offsets ti_fr.cs))))
+	       ti_fr.q)))
+       in
+      let grpkey_col = (Cs.cardinality ti_fr.cs) + 1 in
+      let q_2 =
+	ADag.mk_distinct
+	  (ADag.mk_project
+	     ([H.prj iter; (pos, grp_key); (A.Item grpkey_col, grp_key)] @ (H.prjlist_map (H.io (Cs.offsets ti_fr.cs)) (H.io (Cs.offsets cs_fr'))))
+	     q_1)
+      in
+      let q_3 =
+	ADag.mk_project
+	  ([(iter, grp_key); (H.prj pos)] @ (H.prjcs ti_l.cs))
+	  q_1
+      in
+      let cs = Cs.Mapping [("1", ti_fr.cs); ("2", Cs.Column (grpkey_col, `Surrogate))] in 
+	{
+	  q = q_2;
+	  cs = cs;
+	  ts = [(grpkey_col, { ti_l with q = q_3 })];
+	  vs = Vs.empty;
+	  fs = Fs.empty
+	}
 
 let takewhile_work loop ti_l ti_p (q_l', _q_v, _map, _loop_lifted) = 
   let cs_l_prj = H.prjcs ti_l.cs in
@@ -1596,19 +1599,19 @@ and apply_primitive env loop f args =
 
 and apply_exp env loop lambda_exp arg_tis =
   (* compile the function arguments *)
-    (* compile the function expression *)
-    match lambda_exp with
-      | `Lambda ((xs, body), _) ->
-	  let env' = 
-	    List.fold_left 
-	      (fun env (x, a) -> Env.Int.bind env (x, a))
-	      env
-	      (List.combine xs arg_tis)
-	  in
-	    compile_expression env' loop body
-      | _ -> 
-	  let ti_f = compile_expression env loop lambda_exp in
-	    do_apply_exp ti_f arg_tis
+  (* compile the function expression *)
+  match lambda_exp with
+    | `Lambda ((xs, body), _) ->
+	let env' = 
+	  List.fold_left 
+	    (fun env (x, a) -> Env.Int.bind env (x, a))
+	    env
+	    (List.combine xs arg_tis)
+	in
+	  compile_expression env' loop body
+    | _ -> 
+	let ti_f = compile_expression env loop lambda_exp in
+	  do_apply_exp ti_f arg_tis
 
 and do_apply_exp ti_f args_tis =
     (* extract the fundev list *)

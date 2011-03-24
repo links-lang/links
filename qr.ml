@@ -359,7 +359,9 @@ struct
 	
   and count q =
     match q with
-      | `Variable var -> IntMap.add var 1 IntMap.empty
+      | `Variable var -> 
+	  Debug.f "encountered %d" var;
+	  IntMap.add var 1 IntMap.empty
       | `Constant _ | `Table _ | `Primitive _
       | `Wrong -> IntMap.empty
       | `Extend (extend_fields, r) ->
@@ -534,12 +536,12 @@ struct
 	  begin
 	    match value with
 	      | `Table _ | `Constant _ | `Primitive _ | `Wrong 
-	      | `Singleton _ | `Concat [] -> 
+	      | `Singleton _ | `Concat [] | `Variable _ -> 
 		  (* Debug.f "inline %d (small)" name; *)
 		  value
 	      | `Extend _ | `Project _ | `Erase _ | `Inject _
 	      | `Concat _ | `Apply _ | `Case _ | `If _
-	      | `Let _  | `Variable _ ->
+	      | `Let _ ->
 		  begin
 		    match IntMap.lookup name ctx.census with
 		      | Some c when c < 2 -> 
@@ -926,6 +928,7 @@ let optphase q =
     in
     let q = Inliner.inline Inliner.conservative ctx q in
     let census = Census.count q in
+      Debug.print ("census " ^ (Show.show (IntMap.show_t show_int) census));
       let q = ElimDeadDefs.eliminate census q in
 	Debug.print ("inlined\n" ^ (Show.show show_qr q));
 	q
