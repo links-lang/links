@@ -944,7 +944,7 @@ let rec applyn f arg n =
 let pipeline env range comp =
   let q = qr_of_query env range comp in
     Debug.print (">>>>> before\n" ^ (Show.show show_qr q));
-    let q = applyn optphase q 1 in
-    let qt = ImpType.transform Env.Int.empty q in
+    let q_opt = applyn optphase q 1 in
+    let qt = ImpType.transform Env.Int.empty q_opt in
       Debug.print (">>>>> boxed\n" ^ (Show.show ImpType.show_tqr qt));
-      qt
+      (q, qt)

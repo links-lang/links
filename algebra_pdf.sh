@@ -24,5 +24,7 @@ echo ">>> IR complete"
 dot -Tpdf -o ${BASE}_ir_complete.pdf ir_complete.dot
 echo ">>> IR query"
 dot -Tpdf -o ${BASE}_ir_query.pdf ir_query.dot
-echo ">>> Exp"
+echo ">>> Qr"
 dot -Tpdf -o ${BASE}_qr.pdf qr.dot
+echo ">>> Tqr"
+dot -Tpdf -o ${BASE}_tqr.pdf tqr.dot

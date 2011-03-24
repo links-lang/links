@@ -81,6 +81,6 @@ sig
 
 end
 
-val pipeline : Value.env -> (Num.num * Num.num) option -> Ir.computation -> ImpType.tqr
+val pipeline : Value.env -> (Num.num * Num.num) option -> Ir.computation -> (qr * ImpType.tqr)
 
 

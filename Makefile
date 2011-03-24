@@ -127,6 +127,7 @@ SOURCES = $(OPC)                		\
 	  cs.ml cs.mli				\
 	  qr.mli qr.ml				\
 	  qrtodot.ml				\
+	  tqrtodot.ml				\
 	  components.ml				\
 	  qrToAlgebraDefinitions.ml	\
 	  qrToAlgebraHelpers.ml		\
