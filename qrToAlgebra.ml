@@ -72,7 +72,7 @@ let sortby_work _loop ti_l ti_fr (q_l', _q_v, _map, _loop_lifted) =
 	 ((iter', iter) :: (H.prjlist_map ordercols' ordercols))
 	 ti_fr.q)
   in
-  let rankinfo = List.map (fun c -> (c, A.Ascending)) (ordercols @ [pos]) in
+  let rankinfo = List.map (fun c -> (c, A.Ascending)) (ordercols' @ [pos]) in
   let q' =
     ADag.mk_project
       ([H.prj iter; (pos, pos')] @ (H.prjcs ti_l.cs))
