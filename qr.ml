@@ -876,9 +876,11 @@ module ImpType = struct
 			  [`Atom; `Atom; `Any], (typeof_tqr (transform env e))
 		      end
 		  | "+" | "+." | "-" | "-." | "*" | "*." 
-		  | "/" | "/." | "^^" | "not" | "tilde" | "quote" -> 
+		  | "/" | "/." | "^^" | "tilde" | "quote" -> 
 		      (* `Atom -> `Atom -> `Atom *)
 		      [`Atom; `Atom], `Atom
+		  | "not" ->
+		      [`Atom], `Atom
 		  | "<>" | "==" | ">" | "<" ->
 		      (* arguments can have any type because we can compare
 			 atomic values, records and lists. boxed lists are
