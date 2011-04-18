@@ -1089,6 +1089,6 @@ fun min(ns) {
 sig groupByFlat : ((a) ~b~> c::Flat, [a]) ~b~> [(c::Flat, [a])]
 fun groupByFlat(project, t) { groupBy(project, t) }
 
-sig nubBase : ([a]) ~> [a::Base]
-fun nubBase(l) { nub(l) }
+sig nubFlat : ([a]) ~> [a::Flat]
+fun nubFlat(l) { nub(l) }
 

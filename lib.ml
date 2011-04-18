@@ -1226,7 +1226,7 @@ let patch_prelude_funs tyenv =
 	 ("or", datatype "([Bool]) -> Bool");
 	 ("all", datatype "((a) -> Bool, [a]) -> Bool");
 	 ("any", datatype "((a) -> Bool, [a]) -> Bool");
-	 ("nubBase", datatype "([a::Base]) -> [a::Base]");
+	 ("nubFlat", datatype "([a::Flat]) -> [a::Flat]");
 	 ("takeWhile", datatype "((a) -> Bool, [a]) -> [a]");
 	 ("dropWhile", datatype "((a) -> Bool, [a]) -> [a]");
 	 ("reverse", datatype "([a]) -> [a]")]

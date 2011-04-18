@@ -5,7 +5,7 @@ open Utility
 let prelude_primitive_names = 
     ["concatMap"; "map"; "sortByFlat"; "asList"; "zip"; "unzip"; 
      "select"; "groupByFlat"; "sum"; "concat"; "and"; "or"; 
-     "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubBase";
+     "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubFlat";
      "reverse"; "filter"; "ignore"]
 
 let prelude_primitive_vars = ref None
@@ -900,7 +900,7 @@ module ImpType = struct
 		  | "length" | "unzip" | "sum" | "and" | "or" | "empty" | "max" | "min" | "avg" | "hd" ->
 		      (* `List -> `Atom *)
 		      [`List], `Atom
-		  | "concat" | "tl" | "nubBase" | "reverse" ->
+		  | "concat" | "tl" | "nubFlat" | "reverse" ->
 		      (* `List -> `List *)
 		      [`List], `List
 		  | "floatToInt" ->

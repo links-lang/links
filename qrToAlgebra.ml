@@ -1034,7 +1034,7 @@ and compile_tl env loop l =
       fs = ti_l.fs;
     }
 
-and compile_nubbase env loop l =
+and compile_nubflat env loop l =
   let ti_l = compile_expression env loop l in
     assert (not (Cs.is_variant ti_l.cs || Cs.is_boxed_list ti_l.cs));
     let items = H.io (Cs.offsets ti_l.cs) in
@@ -1582,7 +1582,7 @@ and apply_primitive env loop f args =
     | "tilde", [s; p] -> compile_binop env loop (H.wrap_1to1 A.SimilarTo) `BoolType s p
     | "quote", [s] -> compile_quote env loop s
     | "^^", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Concat) `StrType op1 op2
-    | "nubBase", [l] -> compile_nubbase env loop l
+    | "nubFlat", [l] -> compile_nubflat env loop l
     | "groupByFlat", [f; l] -> compile_ho_primitive env loop f l groupby_work
     | "takeWhile", [p; l] -> compile_ho_primitive env loop p l takewhile_work
     | "dropWhile", [p; l] -> compile_ho_primitive env loop p l dropwhile_work
