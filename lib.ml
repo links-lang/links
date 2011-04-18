@@ -267,19 +267,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "stringToXml",
   ((p1 string_to_xml),
-   datatype "(String) -> Xml",
+   datatype "(String) ~> Xml",
   PURE);
 
   "intToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_int ~conv:(string_of_num) ~box:box_string)),
-   datatype "(Int) -> Xml",
+   datatype "(Int) ~> Xml",
   PURE);
   
   "floatToXml",
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float) ~box:box_string)),
-   datatype "(Float) -> Xml",
+   datatype "(Float) ~> Xml",
   PURE);
   
   "exit",
@@ -298,7 +298,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let attrs = List.map (fun p -> unbox_pair p) attrs in
                `List (List.map (add_attributes attrs) xmlitems)
          | _ -> failwith "Internal error: addAttributes takes an XML forest and a list of attributes"),
-   datatype "(Xml, [(String, String)]) -> Xml",
+   datatype "(Xml, [(String, String)]) ~> Xml",
    PURE);
 
   "send",
@@ -442,7 +442,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let children = filter (function (Node _) -> true | _ -> false) children in
                `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
-   datatype "(Xml) -> Xml",
+   datatype "(Xml) ~> Xml",
   IMPURE);
 
   "objectType",
@@ -463,7 +463,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                         | _ -> failwith "Internal error in `attribute'"
                       with NotFound _ -> none)
                | _ -> none),
-   datatype "(Xml,String) -> [|Some:String | None:()|]",
+   datatype "(Xml,String) ~> [|Some:String | None:()|]",
   PURE);
   
   "alertDialog",

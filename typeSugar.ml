@@ -199,6 +199,7 @@ sig
   val xml_attribute : griper
   val xml_attributes : griper
   val xml_child : griper
+  val xml_wild : griper
 
   val formlet_body : griper
   val page_body : griper
@@ -524,6 +525,13 @@ code (show_type lt) ^ ".")
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 The query block has effects" ^ nl() ^
+code (show_type rt) ^ nl() ^
+"but the currently allowed effects are" ^ nl() ^
+code (show_type lt) ^ ".")
+
+    let xml_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+A literal XML value has effects" ^ nl() ^
 code (show_type rt) ^ nl() ^
 "but the currently allowed effects are" ^ nl() ^
 code (show_type lt) ^ ".")
@@ -1928,6 +1936,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and () =
               List.iter (fun child ->
                            unify ~handle:Gripers.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
+	    let () =
+	      let effects = 
+		Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+	      in
+		unify ~handle:Gripers.xml_wild
+		  (no_pos (`Record context.effect_row), no_pos (`Record effects))
+	    in
               `Xml (tag, 
                     List.map (fun (x,p) -> (x, List.map erase p)) attrs,
                     opt_map erase attrexp,
