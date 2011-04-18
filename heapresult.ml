@@ -108,10 +108,10 @@ and tblresult = Tr of (accessor_functions * Cs.t * tsr * vsr)
 (* Create functions which encapsulate the access to one table's 
    item and iter fields. *)
 let table_access_functions (iter_schema_name, offsets_and_schema_names) dbvalue : accessor_functions = 
-  let result_fields = fromTo 0 dbvalue#nfields in
-  let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
   let nr_tuples = dbvalue#ntuples in
   let nr_fields = dbvalue#nfields in
+  let result_fields = fromTo 0 nr_fields in
+  let result_names = List.map (fun i -> (dbvalue#fname i, i)) result_fields in
   let find_field col_name = 
     try
       let startswith s1 s2 = 
