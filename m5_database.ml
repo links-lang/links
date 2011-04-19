@@ -23,28 +23,31 @@ class m5_dbresult (conn : Mapi.t) (handle : Mapi.handle) = object
       | None -> failwith ("MonetDB get_field_name failed")
 
   method get_all_lst : string list list = 
-    match Mapi.seek_row handle Int64.zero Mapi.SEEK_SET with
-      | Mapi.MOK -> 
-	  let nr_rows = Int64.to_int (Mapi.get_row_count handle) in
-	  let rec loop i l =
-	    if i = nr_rows then
-	      List.rev l
-	    else
-	      begin
-		match Mapi.fetch_row handle with
-		  | None -> failwith "MonetDB fetch_row failed"
-		  | Some _ -> 
-		      begin
-			match Mapi.fetch_field_list handle with
-			  | Some fields -> loop (i + 1) (fields :: l)
-			  | None -> failwith ("MonetDB fetch_field_list failed")
-		      end
-	      end
-	  in
-	    loop 0 []
-      | _ -> 
-	  failwith ("MonetDB seek_row failed: "^(error_str (Mapi.result_error handle)))
-	  
+    let nr_rows = Int64.to_int (Mapi.get_row_count handle) in
+      if nr_rows = 0 then
+	[]
+      else
+	match Mapi.seek_row handle Int64.zero Mapi.SEEK_SET with
+	  | Mapi.MOK -> 
+	      let rec loop i l =
+		if i = nr_rows then
+		  List.rev l
+		else
+		  begin
+		    match Mapi.fetch_row handle with
+		      | None -> failwith "MonetDB fetch_row failed"
+		      | Some _ -> 
+			  begin
+			    match Mapi.fetch_field_list handle with
+			      | Some fields -> loop (i + 1) (fields :: l)
+			      | None -> failwith ("MonetDB fetch_field_list failed")
+			  end
+		  end
+	      in
+		loop 0 []
+	  | _ -> 
+	      failwith ("MonetDB seek_row failed: "^(error_str (Mapi.result_error handle)))
+		
   method error : string = error_str (Mapi.error_str conn)
 
 end
@@ -65,11 +68,8 @@ class m5_database host port dbname user password = object(_self)
   method exec : string -> Value.dbvalue = fun query ->
     match Mapi.query connection query with
       | Some handle when Mapi.connection_ok connection -> 
-	  begin
-	    match Mapi.fetch_all_rows handle with
-	      | Some _ -> new m5_dbresult connection handle
-	      | None -> failwith ("MonetDB fetch_all_rows failed")
-	  end
+	  ignore (Mapi.fetch_all_rows handle);
+	  new m5_dbresult connection handle
       | Some _handle -> 
 	  failwith ("MonetDB query failed: "^(error_str (Mapi.error_str connection)))
       | None -> 
