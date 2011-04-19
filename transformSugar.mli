@@ -51,6 +51,27 @@ object ('self)
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
+  method quantifiers     : Types.quantifier list -> 'self * Types.quantifier list
+  method backup_quantifiers : Utility.IntSet.t
+  method restore_quantifiers : Utility.IntSet.t -> 'self
+
+  method rec_bodies :
+    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    ('self *
+       (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)    
+  method rec_activate_outer_bindings :
+    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    ('self *
+       (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)    
+  method rec_activate_inner_bindings :
+    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    'self
+
+  method sugar_datatype  : datatype -> 'self * datatype
+  method datatype        : Types.datatype -> 'self * Types.datatype
+  method datatype'       : datatype' -> 'self * datatype'
+  method row             : Types.row -> 'self * Types.row
+
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase * Types.datatype

@@ -75,3 +75,32 @@ exit : 1
 Polymorphic effects for curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
 stdout : fun : ((a) ~b~> (c) ~b~> d) -> ([a]) -> ([c]) ~b~> [d]
+
+Polymorphic function parameters (unannotated)
+fun (f) {(f(42), f(true))}
+stderr : @..*
+exit : 1
+
+Polymorphic function parameters (annotated)
+fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}
+stdout : fun : (forall a,b::Row.(a) -b-> a) -> (Int, Bool)
+
+Explicitly polymorphic signatures
+sig choose : forall a,d::Row,e::Row. (a) -d-> (a) -e-> a fun choose(x)(y) {x} choose
+stdout : fun : (a) -> (a) -> a
+
+Quantifiers in different orders
+fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
+stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
+
+Unwrap polymorphism
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; hd(ids)(3)
+stdout : 3 : Int
+
+Bad polymorphism behaviour (1)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+
+Bad polymorphism behaviour (2)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+stdout : [fun] : [(a) -> a]

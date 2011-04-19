@@ -707,6 +707,7 @@ class fold =
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
       | `TAbstr ((_x, _x_i1)) ->
+          let o = o#list (fun o -> o#tyvar) (Types.unbox_quantifiers _x) in
           let o = o#phrase _x_i1 in o
       | `TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in o
@@ -903,6 +904,8 @@ class fold =
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
         let o = o#string _x in let o = o#list (fun o -> o#string) _x_i1 in o
+
+    method tyvar : tyvar -> 'self_type = fun _ -> o
       
     method datatype : datatype -> 'self_type =
       function
@@ -965,20 +968,23 @@ class fold =
     method bindingnode : bindingnode -> 'self_type =
       function
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          let o = o#list (fun o -> o#tyvar) _x in
           let o = o#pattern _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
       | `Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#binder _x in
+          let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#funlit _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
       | `Funs _x ->
           let o =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o (_x, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let o = o#binder _x in
+                 let o = o#list (fun o -> o#tyvar) _x_i1 in
                  let o = o#funlit _x_i2 in
                  let o = o#location _x_i3 in
                  let o = o#option (fun o -> o#datatype') _x_i4 in

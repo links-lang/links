@@ -1,8 +1,12 @@
 open Utility
 open Sugartypes
 
-(*
-  
+(* Recursive functions must be used monomorphically inside their
+   function bodies (unless annotated with a polymorphic type), but
+   they may still be used polymorphically outside (after having been
+   generalised). This pass unifies the inner and outer types of
+   functions, which is necessary for converting to the IR, which
+   stores a single type for each recursive function.
 *)
 
 let dp = Sugartypes.dummy_position
@@ -47,7 +51,7 @@ object (o : 'self_type)
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
           super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))         
-    (* HACK: manage the lexical scope of extras *)
+            (* HACK: manage the lexical scope of extras *)
     | `Spawn _ as e ->
         let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
@@ -75,19 +79,8 @@ object (o : 'self_type)
 
   method bindingnode = function
     | `Funs defs as b ->
-        let bt (name, _, pos) t = (name, Some t, pos) in
-
         (* put the outer bindings in the environment *)
-        let o, defs =
-          let rec list o =
-            function
-              | [] -> o, []
-              | (f, body, location, t, pos)::defs ->
-                  let (o, f) = o#binder f in
-                  let (o, defs) = list o defs in
-                    o, (f, body, location, t, pos)::defs
-          in
-            list o defs in
+        let o, defs = o#rec_activate_outer_bindings defs in
 
         (* put the extras in the environment *)
         let o =
@@ -95,20 +88,21 @@ object (o : 'self_type)
             (fun o ((f, _, _), ((_tyvars, Some (_, extras)), _), _, _, _) ->
                o#bind f extras)
             o defs in
-          
-        (* transform the function bodies *)
+         
+        (* unify inner and outer types for each def *)
         let (o, defs) =
           let rec list o =
             function
               | [] -> (o, [])
-              | ((f, Some outer, fpos), ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
-                  let inner_eff = TransformSugar.fun_effects inner (fst lam) in
-                  let (o, lam, _) = o#funlit inner_eff lam in
+              | ((_, Some outer, _) as f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
                   let (o, defs) = list o defs in
                   let extras = List.map (fun _ -> None) extras in
-                    (o, ((f, Some outer, fpos), ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+                    (o, (f, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
           in
-            list o defs in
+            list o defs in        
+
+        (* transform the function bodies *)
+        let (o, defs) = o#rec_bodies defs in
 
         (* 
            It is important to explicitly remove the extras from the

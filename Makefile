@@ -29,6 +29,13 @@ ifdef POSTGRESQL_LIBDIR
    THREADS = yes
 endif
 
+ifdef MONETDB5_LIBDIR
+	DB_CODE    += m5_database.ml
+	DB_AUXLIBS += $(MONETDB5_LIBDIR)
+	DB_LIBS    += mapi
+	THREADS = yes
+endif
+
 DERIVING_DIR=deriving-310
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
@@ -90,19 +97,20 @@ SOURCES = $(OPC)                		\
           value.mli value.ml                    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
-	  resolvePositions.mli resolvePositions.ml	\
-          refineBindings.mli refineBindings.ml		\
-          desugarLAttributes.mli desugarLAttributes.ml	\
-          transformSugar.mli transformSugar.ml          \
-          desugarPages.mli desugarPages.ml		\
-          desugarFormlets.mli desugarFormlets.ml        \
-          desugarRegexes.mli desugarRegexes.ml		\
-          desugarFors.mli desugarFors.ml                \
-          desugarDbs.mli desugarDbs.ml                  \
-          desugarFuns.mli desugarFuns.ml                \
-          desugarProcesses.mli desugarProcesses.ml      \
-          desugarInners.mli desugarInners.ml            \
-          typeSugar.mli typeSugar.ml			\
+	  resolvePositions.mli resolvePositions.ml	 \
+          refineBindings.mli refineBindings.ml		 \
+          desugarLAttributes.mli desugarLAttributes.ml	 \
+          transformSugar.mli transformSugar.ml           \
+          fixTypeAbstractions.mli fixTypeAbstractions.ml \
+          desugarPages.mli desugarPages.ml		 \
+          desugarFormlets.mli desugarFormlets.ml         \
+          desugarRegexes.mli desugarRegexes.ml		 \
+          desugarFors.mli desugarFors.ml                 \
+          desugarDbs.mli desugarDbs.ml                   \
+          desugarFuns.mli desugarFuns.ml                 \
+          desugarProcesses.mli desugarProcesses.ml       \
+          desugarInners.mli desugarInners.ml             \
+          typeSugar.mli typeSugar.ml			 \
           frontend.ml                           \
 	  dumpTypes.ml                          \
           compilePatterns.ml                    \
