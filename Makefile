@@ -29,6 +29,13 @@ ifdef POSTGRESQL_LIBDIR
    THREADS = yes
 endif
 
+ifdef MONETDB5_LIBDIR
+	DB_CODE    += m5_database.ml
+	DB_AUXLIBS += $(MONETDB5_LIBDIR)
+	DB_LIBS    += mapi
+	THREADS = yes
+endif
+
 DERIVING_DIR=deriving-310
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
