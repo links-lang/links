@@ -43,6 +43,41 @@ platforms than the other (native-code) version.
 Now you should have an executable in the current directory called
 `links'.
 
+INSTALLING LINKS
+
+By default, Links looks for "profile.links" in the current directory,
+or at a location specified in the Links config file (which in turn
+needs to be specified from the command line).  This can be awkward when
+you are actually developing Links programs.  If you want to make Links
+easy to run from anywhere on your system, do the following:
+
+0.  Copy Makefile.sample.config to Makefile.config (if not already
+    done).
+
+1.  Edit Makefile.config to set LINKS_PREFIX, LINKS_BIN and LINKS_LIB
+    variables to appropriate values.  The default is
+    /usr/local/(bin|lib), which should work on most Unix systems.
+
+2.  Do
+
+      $ make install
+
+    If you want to install to a global directory such as /usr/local, you 
+    need to have admin privileges when you do this.
+
+3.  Finally, add an environment variable binding to set LINKS_LIB to the 
+    appropriate value chosen above.  
+
+      export LINKS_LIB=/usr/local/links/lib
+
+    to .bash_profile.  From now on, whenever you start a new shell,
+    you should be able to run Links wherever you are.
+
+4.  If you feel the need to uninstall or reinstall links, try "make
+    uninstall" (optionally followed by "make install").
+
+
+
 RUNNING LINKS
 
 Start up the interactive interpreter using:
