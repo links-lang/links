@@ -832,7 +832,7 @@ primary_datatype:
                                                                    | "Char"    -> PrimitiveType `Char
                                                                    | "Float"   -> PrimitiveType `Float
                                                                    | "XmlItem" -> PrimitiveType `XmlItem
-								   | "String"  -> PrimitiveType `String
+                                                                   | "String"  -> PrimitiveType `String
                                                                    | "Database"-> DBType
                                                                    | t         -> TypeApplication (t, [])
                                                                }
@@ -849,16 +849,15 @@ kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
 
 type_arg_list:
-| datatype                                                     { [`Type $1] }
-| datatype COMMA type_arg_list                                 { `Type $1 :: $3 }
-| TYPE LPAREN datatype RPAREN                                  { [`Type $3] }
-| ROW LPAREN fields RPAREN                                     { [`Row $3] }
-| PRESENCE LPAREN presence_flag RPAREN                         { [`Presence $3] }
-| TYPE LPAREN datatype RPAREN COMMA type_arg_list              { (`Type $3) :: $6 }
-| ROW LPAREN fields RPAREN COMMA type_arg_list                 { (`Row $3) :: $6 }
-| PRESENCE LPAREN presence_flag RPAREN COMMA type_arg_list     { (`Presence $3) :: $6 }
-| LBRACE fields RBRACE                                         { [`Row $2] }
-| LBRACE fields RBRACE COMMA type_arg_list                     { (`Row $2) :: $5 }
+| type_arg                                                     { [$1] }
+| type_arg COMMA type_arg_list                                 { $1 :: $3 }
+
+type_arg:
+| datatype                                                     { `Type $1 }
+| TYPE LPAREN datatype RPAREN                                  { `Type $3 }
+| ROW LPAREN row RPAREN                                        { `Row $3 }
+| PRESENCE LPAREN presence_flag RPAREN                         { `Presence $3 }
+| LBRACE row RBRACE                                            { `Row $2 }
 
 vrow:
 | vfields                                                      { $1 }
@@ -867,6 +866,10 @@ vrow:
 datatypes:
 | datatype                                                     { [$1] }
 | datatype COMMA datatypes                                     { $1 :: $3 }
+
+row:
+| fields                                                       { $1 }
+| /* empty */                                                  { [], `Closed }
 
 fields:
 | field                                                        { [$1], `Closed }
