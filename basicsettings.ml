@@ -11,7 +11,10 @@ let web_mode = Settings.add_bool ("web_mode", false, `System)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (** Name of the file containing the prelude code. *)
-let prelude_file = Settings.add_string ("prelude", "prelude.links", `System)
+let prelude_file = 
+    match Utility.getenv "LINKS_LIB" with 
+      None -> Settings.add_string ("prelude", "prelude.links", `System)
+    | Some path -> Settings.add_string ("prelude", path ^ "/" ^ "prelude.links", `System)
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
