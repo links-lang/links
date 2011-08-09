@@ -611,13 +611,9 @@ struct
     | "<", [e1; e2] ->
 	`Apply (`Primitive ">", [e2; e1])
     | ">=", [e1; e2] ->
-	`If (`Apply (`Primitive ">", [e1; e2]),
-	     `Constant (`Bool true),
-	     Some (`Apply (`Primitive "==", [e1; e2])))
+	`Apply (`Primitive "not", [`Apply (`Primitive ">", [e2; e1])])
     | "<=", [e1; e2] ->
-	`If (`Apply (`Primitive ">", [e2; e1]),
-	     `Constant (`Bool true),
-	     Some (`Apply (`Primitive "==", [e1; e2])))
+	`Apply (`Primitive "not", [`Apply (`Primitive ">", [e1; e2])])
     | "negate", [i] ->
 	`Apply (`Primitive "*", [i; `Constant (`Int (Num.Int (-1)))])
     | "negatef", [i] ->
