@@ -48,18 +48,18 @@ let output_plan plan fname =
     output_string o plan;
     close_out o
 
-let optimize_sql q = 
+let optimize_sql q =
   let i = string_of_int !c in
     Algebra_export.export_plan !buf q;
-    output_plan (Buffer.contents !buf) ("plan_unopt_" ^ i ^ ".xml");
+    output_plan (Buffer.contents !buf) ("/tmp/plan_unopt_" ^ i ^ ".xml");
     Debug.f ">>>> pfopt %d" !c;
     let optimized = pipe_pfopt (Buffer.contents !buf) in 
 (*    let optimized = pipe_pfopt optimized in *)
       Debug.f ">>>> pfsql %d" !c;
       let sql = pipe_pfsql optimized in
 
-	output_plan optimized ("plan_opt_" ^ i ^ ".xml");
-	output_plan sql ("plan_sql_" ^ i ^ ".xml");
+	output_plan optimized ("/tmp/plan_opt_" ^ i ^ ".xml");
+	output_plan sql ("/tmp/plan_sql_" ^ i ^ ".xml");
 
 	Buffer.clear !buf;
 	incr c;
