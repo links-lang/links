@@ -73,6 +73,11 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
+let bool_op impl pure : located_primitive * Types.datatype * pure = 
+  (`PFun (fun [x;y] -> `Bool (impl (unbox_bool x) (unbox_bool y)))),
+  datatype "(Bool, Bool) -> Bool",
+  pure
+
 let int_op impl pure : located_primitive * Types.datatype * pure = 
   (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
   datatype "(Int, Int) -> Int",
@@ -224,6 +229,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "/.", float_op (/.) PURE;
   "^.", float_op ( ** ) PURE;
   "^^", string_op ( ^ ) PURE;
+  "&&", bool_op (&&) PURE;
+  "||", bool_op (||) PURE;
 
   (** Comparisons *)
   "==",

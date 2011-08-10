@@ -1551,6 +1551,8 @@ and compile_reverse env loop l =
 
 and apply_primitive env loop f args =
   match f, args with
+    | "&&", [op1; op2] -> compile_binop env loop (H.wrap_and) `BoolType op1 op2
+    | "||", [op1; op2] -> compile_binop env loop (H.wrap_or) `BoolType op1 op2
     | "+", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Add) `IntType op1 op2
     | "+.", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Add) `FloatType op1 op2
     | "-", [op1; op2] -> compile_binop env loop (H.wrap_1to1 A.Subtract) `IntType op1 op2

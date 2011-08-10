@@ -292,7 +292,9 @@ struct
         "^",   None      ;
         "^.",  None      ;
         "/.",  Some "/"  ;
-        "mod", Some "%"  ]
+        "mod", Some "%"  ;
+        "&&",  Some "&&" ;
+        "||",  Some "||" ]
 
   let is x = StringMap.mem x builtin_ops
   let js_name op = val_of (StringMap.find op builtin_ops)

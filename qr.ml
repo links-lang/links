@@ -618,6 +618,10 @@ struct
 	`Apply (`Primitive "*", [i; `Constant (`Int (Num.Int (-1)))])
     | "negatef", [i] ->
 	`Apply (`Primitive "*.", [i; `Constant (`Float (-1.0))])
+    (* | "&&", [e1; e2] -> *)
+    (*     `Apply (`Primitive "and", [`Concat [`Singleton e1; `Singleton e2]]) *)
+    (* | "||", [e1; e2] -> *)
+    (*     `Apply (`Primitive "or", [`Concat [`Singleton e1; `Singleton e2]]) *)
     | f, args -> `Apply (`Primitive f, args)
 	    
   let rec inline test (ctx : ctx) (q : qr) =
@@ -875,7 +879,7 @@ module ImpType = struct
 			in
 			  [`Atom; `Atom; `Any], (typeof_tqr (transform env e))
 		      end
-		  | "+" | "+." | "-" | "-." | "*" | "*." 
+		  | "&&" | "||" | "+" | "+." | "-" | "-." | "*" | "*." 
 		  | "/" | "/." | "^^" | "tilde" | "quote" ->
 		      (* `Atom -> `Atom -> `Atom *)
 		      [`Atom; `Atom], `Atom
