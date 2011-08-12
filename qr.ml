@@ -6,7 +6,7 @@ let prelude_primitive_names =
     ["concatMap"; "map"; "sortByFlat"; "asList"; "zip"; "unzip"; 
      "select"; "groupByFlat"; "sum"; "concat"; "and"; "or"; 
      "max"; "min"; "avg"; "takeWhile"; "dropWhile"; "nubFlat";
-     "reverse"; "filter"; "ignore"]
+     "reverse"; "filter"; "ignore"; "empty"]
 
 let prelude_primitive_vars = ref None
 let prelude_primitive_namemap = ref None
