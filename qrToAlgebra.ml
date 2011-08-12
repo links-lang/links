@@ -329,6 +329,7 @@ and compile_length env loop l =
   let ti_l = compile_expression env loop l in
     H.do_length loop ti_l
 
+(*
 and compile_empty env loop l = 
   let ti_l = compile_expression env loop l in
   let ti_length = H.do_length loop ti_l in
@@ -341,6 +342,36 @@ and compile_empty env loop l =
 	   (ADag.mk_attach
 	      (A.Item 2, A.Int (Num.Int 0))
 	      ti_length.q))
+    in
+      {
+	q = q; 
+	cs = Cs.Column (1, `BoolType);
+	ts = Ts.empty; 
+	vs = Vs.empty;
+	fs = Fs.empty
+      }
+*)
+
+and compile_empty env loop l =
+  let ti_l = compile_expression env loop l in
+    let q_e =
+      ADag.mk_attach
+	(pos, A.Nat 1n)
+	(ADag.mk_attach
+	   (A.Item 1, A.Bool true)
+	   (ADag.mk_difference
+	      loop
+	      (ADag.mk_project [H.prj iter] ti_l.q)))
+    in
+    let q_ne =
+      ADag.mk_attach
+	(pos, A.Nat 1n)
+	(ADag.mk_attach
+	   (A.Item 1, A.Bool false)
+	   (ADag.mk_distinct
+	      (ADag.mk_project [H.prj iter] ti_l.q)))
+    in
+    let q = ADag.mk_disjunion q_e q_ne
     in
       {
 	q = q; 
