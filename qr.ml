@@ -69,6 +69,7 @@ type qr =
 and binding = var * qr
     deriving (Show)
 
+
 let rec computation (bs, tc) : qr =
   let bs = bindings bs in
   let e = tail_computation tc in
@@ -115,7 +116,10 @@ and tail_computation tc =
 	let cases = StringMap.map case cases in
 	let default = opt_map case default in
 	  `Case (v, cases, default)
-    | `If (c, t, e) -> `If (value c, computation t, Some (computation e))
+    | `If (c, t, e) -> 
+	match computation e with
+	  | `Concat [] -> `If (value c, computation t, None)
+	  | e' -> `If (value c, computation t, Some e')
 
 and special s =
   match s with
@@ -922,6 +926,12 @@ module ImpType = struct
 	    let a : tqr = `Apply ((transform env e, enforce_shape args shape), `Atom) in
 	      a
 	| e -> failwith ("Query2.Annotate.transform: " ^ (Show.show show_qr e) ^ "not implemented")
+
+  let rec replace_empty = function
+    | `Apply ((`Primitive "&&", [a1; a2]), t) -> `Apply ((`Primitive "&&", [replace_empty a1; replace_empty a2]), t)
+	(*  | `Apply (`Primitive "||", [a1; a2]) -> `Apply (`Primitive "||", [replace_empty a1; replace_empty a2]) *)
+    | `Apply ((`Primitive "empty", [a]), t) -> `Apply ((`Primitive "antijoin_empty", [a]), t)
+    | e -> e 
 	    
 end
 

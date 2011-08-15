@@ -8,6 +8,8 @@ module AEnv = Env.Int
 open QrToAlgebraDefinitions
 module H = QrToAlgebraHelpers
 
+open Qr.ImpType
+
 (* module-global reference that stores the global error plan of the generated
    plan bundle (if there is one) *)
 let errors = ref []
@@ -380,6 +382,32 @@ and compile_empty env loop l =
 	vs = Vs.empty;
 	fs = Fs.empty
       }
+
+and compile_antijoin_empty env loop l =
+  let ti_l = compile_expression env loop l in
+    (* dirty hack in the hope to make antijoin-like patterns better optimizable.
+       Idea: if empty appears as an antijoin-predicate in a where clause, it
+       appears in an if condition with an empty ([]) else-clause. In that case,
+       we are only interested in the non-empty-iterations -> don't compute the
+       non-empty ones. *)
+       
+    let q_e =
+      ADag.mk_attach
+	(pos, A.Nat 1n)
+	(ADag.mk_attach
+	   (A.Item 1, A.Bool true)
+	   (ADag.mk_difference
+	      loop
+	      (ADag.mk_project [H.prj iter] ti_l.q)))
+    in
+      {
+	q = q_e;
+	cs = Cs.Column (1, `BoolType);
+	ts = Ts.empty; 
+	vs = Vs.empty;
+	fs = Fs.empty
+      }
+
 
 (* application of sum to [] is defined as 0 *)
 and compile_sum env loop l =
@@ -1610,6 +1638,7 @@ and apply_primitive env loop f args =
     | "and", [l] -> compile_and env loop l
     | "or", [l] -> compile_or env loop l
     | "empty", [l] -> compile_empty env loop l
+    | "antijoin_empty", [l] -> compile_antijoin_empty env loop l
     | "hd", [l] -> compile_hd env loop l
     | "tl", [l] -> compile_tl env loop l
     | "tilde", [s; p] -> compile_binop env loop (H.wrap_1to1 A.SimilarTo) `BoolType s p
@@ -1622,7 +1651,14 @@ and apply_primitive env loop f args =
     | "limit", [limit; offset; e] -> compile_limit env loop limit offset e
     | "reverse", [l] -> compile_reverse env loop l
     | "floatToInt", [f] -> compile_conversion_op env loop f `IntType
-    | "concatMap", [f; l] -> compile_ho_primitive env loop f l concatmap_work
+    | "concatMap", [`Lambda ((vs, `If ((ps, e, Some (`Concat ([], _))), t1)), t2); l]
+    | "concatMap", [`Lambda ((vs, `If ((ps, e, None), t1)), t2); l] -> 
+	Debug.print "triggering antijoin rewrite";
+	let f' = `Lambda ((vs, `If ((replace_empty ps, e, None), t1)), t2) in
+	  compile_ho_primitive env loop f' l concatmap_work
+    | "concatMap", [f; l] -> 
+	Debug.print ("not triggered antijoin rewrite for " ^ (Show.show show_tqr f));
+	compile_ho_primitive env loop f l concatmap_work
     | "map", [f; l] -> compile_ho_primitive env loop f l map_work
     | "sortByFlat", [f; l] -> compile_ho_primitive env loop f l sortby_work
     | "<", _ | "<=", _ | ">=", _->
@@ -1709,6 +1745,7 @@ and compile_expression env loop q : tblinfo =
     | `Singleton (e, _) -> compile_expression env loop e
     | `Concat (l, _) -> compile_append env loop l
     | `Table (t, _) -> compile_table loop t
+    | `If ((c, t, Some (`Concat ([], _))), _) -> compile_if2 env loop c t
     | `If ((c, t, Some e), _) -> compile_if env loop c t e
     | `If ((c, t, None), _) -> compile_if2 env loop c t
     | `Box (e, _) -> compile_box env loop e

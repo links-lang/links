@@ -48,6 +48,7 @@ type qr =
 and binding = var * qr
     deriving (Show)
 
+
 module ImpType :
 sig
 
@@ -78,6 +79,8 @@ sig
   val typeof_tqr : tqr -> imptype
 
   val string_of_tqr : tqr -> string
+
+  val replace_empty : tqr -> tqr
 
 end
 
