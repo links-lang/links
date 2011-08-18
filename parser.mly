@@ -888,6 +888,7 @@ field:
 field_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
+| STRING                                                       { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 rfields:
