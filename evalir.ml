@@ -344,76 +344,80 @@ module Eval = struct
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Table (db, name, (readtype, _, _)) -> 
-        (match value env db, value env name, readtype with
-           | `Database (db, params), name, `Record row ->
-               apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
-           | _ -> eval_error "Error evaluating table handle")
+    | `Table (db, name, (readtype, _, _)) ->
+      begin
+        (* OPTIMISATION: we could arrange for concrete_type to have
+           already been applied here *)
+        match value env db, value env name, (TypeUtils.concrete_type readtype) with
+          | `Database (db, params), name, `Record row ->
+            apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+          | _ -> eval_error "Error evaluating table handle"
+      end
     | `Query (range, e, _t) ->
-        let range =
-          match range with
-            | None -> None
-            | Some (limit, offset) ->
-                Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
-        let result =
-          match Query.compile env (range, e) with
-            | None -> computation env cont e
-            | Some (db, q, t) ->
-                let (fieldMap, _), _ = 
-                  Types.unwrap_row(TypeUtils.extract_row t) in
-                let fields =
-                    StringMap.fold
-                      (fun name t fields ->
-                         match t with
-                           | `Present, t -> (name, t)::fields
-                           | `Absent, _ -> assert false
-                           | `Var _, t -> assert false)
-                      fieldMap
-                      []
-                in
-                  Database.execute_select fields q db
-        in
-          apply_cont cont env result
+      let range =
+        match range with
+          | None -> None
+          | Some (limit, offset) ->
+            Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
+      let result =
+        match Query.compile env (range, e) with
+          | None -> computation env cont e
+          | Some (db, q, t) ->
+            let (fieldMap, _), _ = 
+              Types.unwrap_row(TypeUtils.extract_row t) in
+            let fields =
+              StringMap.fold
+                (fun name t fields ->
+                  match t with
+                    | `Present, t -> (name, t)::fields
+                    | `Absent, _ -> assert false
+                    | `Var _, t -> assert false)
+                fieldMap
+                []
+            in
+              Database.execute_select fields q db
+      in
+        apply_cont cont env result
     | `Update ((xb, source), where, body) ->
-        let db, table, read_labels =
-          match value env source with
-            | `Table ((db, _), table, (fields, _)) ->
-                let read_labels =
-                  StringMap.fold
-                    (fun label _ labels -> StringSet.add label labels)
-                    fields
-                    StringSet.empty
-                in
-                  db, table, read_labels
-            | _ -> assert false in
-        let update_query =
-          Query.compile_update env ((Var.var_of_binder xb, table, read_labels), where, body) in
-        let () = ignore (Database.execute_command update_query db) in
-          apply_cont cont env (`Record [])
+      let db, table, read_labels =
+        match value env source with
+          | `Table ((db, _), table, (fields, _)) ->
+            let read_labels =
+              StringMap.fold
+                (fun label _ labels -> StringSet.add label labels)
+                fields
+                StringSet.empty
+            in
+              db, table, read_labels
+          | _ -> assert false in
+      let update_query =
+        Query.compile_update env ((Var.var_of_binder xb, table, read_labels), where, body) in
+      let () = ignore (Database.execute_command update_query db) in
+        apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
-        let db, table, read_labels =
-          match value env source with
-            | `Table ((db, _), table, (fields, _)) ->
-                let read_labels =
-                  StringMap.fold
-                    (fun label _ labels -> StringSet.add label labels)
-                    fields
-                    StringSet.empty
-                in
-                  db, table, read_labels
-            | _ -> assert false in
-        let delete_query =
-          Query.compile_delete env ((Var.var_of_binder xb, table, read_labels), where) in
-        let () = ignore (Database.execute_command delete_query db) in
-          apply_cont cont env (`Record [])
+      let db, table, read_labels =
+        match value env source with
+          | `Table ((db, _), table, (fields, _)) ->
+            let read_labels =
+              StringMap.fold
+                (fun label _ labels -> StringSet.add label labels)
+                fields
+                StringSet.empty
+            in
+              db, table, read_labels
+          | _ -> assert false in
+      let delete_query =
+        Query.compile_delete env ((Var.var_of_binder xb, table, read_labels), where) in
+      let () = ignore (Database.execute_command delete_query db) in
+        apply_cont cont env (`Record [])
     | `CallCC f                   -> 
-        apply cont env (value env f, [`Continuation cont])
+      apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 
     fun env -> computation env Value.toplevel_cont
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-                            (Value.env * Value.t) =
+  (Value.env * Value.t) =
   fun cont env program ->
     try (
       ignore 
@@ -422,7 +426,7 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
-                                  " while interpreting.")
+                                   " while interpreting.")
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
@@ -433,7 +437,7 @@ let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
-                                  " while interpreting.")
+                                   " while interpreting.")
       | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
