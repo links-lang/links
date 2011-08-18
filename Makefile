@@ -66,85 +66,85 @@ TRASH=*.tmp *.output *.cache
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml xmlm.ml xmlm.mli
 
-SOURCES = $(OPC)                		\
-          notfound.ml				\
-          utility.ml            		\
-          env.mli env.ml                        \
-          settings.mli settings.ml 		\
-          basicsettings.ml                      \
-          debug.mli debug.ml    		\
-          performance.mli performance.ml	\
-          graph.ml                              \
-          types.mli types.ml 	                \
-          constant.ml                           \
-          sourceCode.ml                         \
-          regex.ml                              \
-          sugartypes.ml                         \
-          parser.mly            		\
-          lexer.mli lexer.mll         		\
-	  typeUtils.mli typeUtils.ml            \
-          errors.mli errors.ml                  \
-          instantiate.mli instantiate.ml        \
-          generalise.mli generalise.ml          \
-          typevarcheck.mli typevarcheck.ml      \
-          unify.mli unify.ml                    \
-          var.ml                                \
-          ir.mli ir.ml                          \
-          parse.mli parse.ml    		\
-          sugarTraversals.mli  sugarTraversals.ml	\
-          desugarDatatypes.mli desugarDatatypes.ml      \
-          defaultAliases.ml                     \
-          value.mli value.ml                    \
-          xmlParser.mly xmlLexer.mll            \
-          parseXml.mli parseXml.ml              \
-	  resolvePositions.mli resolvePositions.ml	 \
-          refineBindings.mli refineBindings.ml		 \
-          desugarLAttributes.mli desugarLAttributes.ml	 \
+SOURCES = $(OPC)                                         \
+          notfound.ml                                    \
+          utility.ml                                     \
+          env.mli env.ml                                 \
+          settings.mli settings.ml                       \
+          basicsettings.ml                               \
+          debug.mli debug.ml                             \
+          performance.mli performance.ml                 \
+          graph.ml                                       \
+          types.mli types.ml                             \
+          constant.ml                                    \
+          sourceCode.ml                                  \
+          regex.ml                                       \
+          sugartypes.ml                                  \
+          parser.mly                                     \
+          lexer.mli lexer.mll                            \
+          typeUtils.mli typeUtils.ml                     \
+          errors.mli errors.ml                           \
+          instantiate.mli instantiate.ml                 \
+          generalise.mli generalise.ml                   \
+          typevarcheck.mli typevarcheck.ml               \
+          unify.mli unify.ml                             \
+          var.ml                                         \
+          ir.mli ir.ml                                   \
+          parse.mli parse.ml                             \
+          sugarTraversals.mli  sugarTraversals.ml        \
+          desugarDatatypes.mli desugarDatatypes.ml       \
+          defaultAliases.ml                              \
+          value.mli value.ml                             \
+          xmlParser.mly xmlLexer.mll                     \
+          parseXml.mli parseXml.ml                       \
+          resolvePositions.mli resolvePositions.ml       \
+          refineBindings.mli refineBindings.ml           \
+          desugarLAttributes.mli desugarLAttributes.ml   \
           transformSugar.mli transformSugar.ml           \
           fixTypeAbstractions.mli fixTypeAbstractions.ml \
-          desugarPages.mli desugarPages.ml		 \
+          desugarPages.mli desugarPages.ml               \
           desugarFormlets.mli desugarFormlets.ml         \
-          desugarRegexes.mli desugarRegexes.ml		 \
+          desugarRegexes.mli desugarRegexes.ml           \
           desugarFors.mli desugarFors.ml                 \
           desugarDbs.mli desugarDbs.ml                   \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-          typeSugar.mli typeSugar.ml			 \
-          frontend.ml                           \
-	  dumpTypes.ml                          \
-          compilePatterns.ml                    \
-          jsonparse.mly                         \
-          jsonlex.mll           		\
-          js.ml                                 \
-          json.ml                               \
-          database.mli database.ml 		\
-          linksregex.ml                         \
-          proc.mli proc.ml                      \
-          lib.mli lib.ml                        \
-          sugartoir.mli sugartoir.ml            \
-          loader.mli loader.ml                  \
-          $(DB_CODE)            		\
-          irtojs.mli irtojs.ml                  \
-	  dot.ml				\
-	  irtodot.ml				\
-	  algebra.ml algebra.mli		\
-	  algebra_dag.ml algebra_dag.mli	\
-	  algebra_export.ml algebra_export.mli	\
-	  pf_toolchain.mli pf_toolchain.ml	\
-	  cs.ml cs.mli				\
-	  qr.mli qr.ml				\
-	  qrtodot.ml				\
-	  tqrtodot.ml				\
-	  components.ml				\
-	  qrToAlgebraDefinitions.ml	\
-	  qrToAlgebraHelpers.ml		\
-	  qrToAlgebra.ml		\
-	  heapresult.ml	heapresult.mli		\
-          query.ml                              \
-          evalir.ml                             \
-          webif.mli webif.ml                    \
-          links.ml              		\
+          typeSugar.mli typeSugar.ml                     \
+          frontend.ml                                    \
+          dumpTypes.ml                                   \
+          compilePatterns.ml                             \
+          jsonparse.mly                                  \
+          jsonlex.mll                                    \
+          js.ml                                          \
+          json.ml                                        \
+          database.mli database.ml                       \
+          linksregex.ml                                  \
+          proc.mli proc.ml                               \
+          lib.mli lib.ml                                 \
+          sugartoir.mli sugartoir.ml                     \
+          loader.mli loader.ml                           \
+          $(DB_CODE)                                     \
+          irtojs.mli irtojs.ml                           \
+          dot.ml                                         \
+          irtodot.ml                                     \
+          algebra.mli algebra.ml                         \
+          algebra_dag.mli algebra_dag.ml                 \
+          algebra_export.mli algebra_export.ml           \
+          pf_toolchain.mli pf_toolchain.ml               \
+          cs.mli cs.ml                                   \
+          qr.mli qr.ml                                   \
+          qrtodot.ml                                     \
+          tqrtodot.ml                                    \
+          components.ml                                  \
+          qrToAlgebraDefinitions.ml                      \
+          qrToAlgebraHelpers.ml                          \
+          qrToAlgebra.mli qrToAlgebra.ml                 \
+          heapresult.mli heapresult.ml                   \
+          query.ml                                       \
+          evalir.ml                                      \
+          webif.mli webif.ml                             \
+          links.ml                                       \
 
 
 # TODO: get these working again
