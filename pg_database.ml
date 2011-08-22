@@ -114,7 +114,35 @@ class pg_database host port dbname user password = object(self)
 
 (* jcheney: Added quoting to avoid problems with mysql keywords. *)
   method make_insert_query (table_name, field_names, vss) =
-    let quoted_field_names = (List.map (fun x -> "\"" ^ x ^ "\"") field_names) 
+    let insert_table = "insert into " ^ table_name in
+    let quoted_field_names = (List.map (fun x -> "\"" ^ x ^ "\"") field_names) in
+    let body =
+      match field_names, vss with
+        | [],    [_] ->
+            (* HACK:
+               
+               PostgreSQL doesn't allow an empty tuple of columns to
+               be specified for an insert. *)
+            " default values"
+        | [],    _::_::_ ->
+            (* In order to handle this case we need support for the
+               standard mult-row insert syntax (Postgres version 8.2
+               and later), and we will need access to the type of the
+               table. In fact, we only really need the name of one of
+               the columns, c. Then we can do:
+
+               insert into table(c) values (c),...,(c)
+            *)
+            failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
+        | _::_,  _ ->
+            (* HACK:               
+               This translation is compatible with PostgreSQL versions
+               prior to 8.2, but perhaps we should now switch to the
+               more idiomatic multi-row insert supported by version
+               8.2 and later. *)
+            "(" ^ String.concat "," quoted_field_names ^") "^
+              String.concat " union all " (List.map (fun vs -> "select " ^ 
+                                                       String.concat "," vs) vss)
     in
     "insert into " ^ table_name ^
       "("^String.concat "," quoted_field_names ^") "^
