@@ -114,38 +114,35 @@ class pg_database host port dbname user password = object(self)
 
 (* jcheney: Added quoting to avoid problems with mysql keywords. *)
   method make_insert_query (table_name, field_names, vss) =
-    let insert_table = "insert into " ^ table_name in
-    let quoted_field_names = (List.map (fun x -> "\"" ^ x ^ "\"") field_names) in
-    let body, vss =
-      match field_names with
-        | [],    [_] ->
-            (* HACK:
-               
-               PostgreSQL doesn't allow an empty tuple of columns to
-               be specified for an insert. *)
-            " default values"
-        | [],    _::_::_ ->
-            failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
-        | _::_,  _ ->
-            (* HACK:
-               
-               This translation is compatible with PostgreSQL versions
-               prior to 8.2, but perhaps we should now switch to the
-               more idiomatic multi-row insert supported by version
-               8.2 and later. *)
-            "("^String.concat "," quoted_field_names ^") "^
-              String.concat " union all " (List.map (fun vs -> "select " ^ 
-                                                       String.concat "," vs) vss)
-        | 
+    let quoted_field_names = (List.map (fun x -> "\"" ^ x ^ "\"") field_names) 
     in
-      insert_table ^ body
-
+    "insert into " ^ table_name ^
+      "("^String.concat "," quoted_field_names ^") "^
+      String.concat " union all " (List.map (fun vs -> "select " ^ 
+                                               String.concat "," vs) vss)
+  (* 
+     TODO:
+     implement make_insert_returning for versions of postgres prior to 8.2
+  *) 
+  (* jcheney: Added implementation of make_insert_returning 
+     based on MySQL one, using lastval()
+     Also added explicit code to assign the SERIES field being returned.
+     This is fragile in that it depends on details of PostgreSQL 
+     that may change between versions; it works for version9.0
+  *)
   method make_insert_returning_query 
       : (string * string list * string list list * string) -> string list =
     fun (table_name, field_names, vss, returning) ->
-      [self#make_insert_query(table_name,
-                              field_names,
-                              vss) ^ " returning " ^ "\"" ^ returning ^ "\""]
+      let postgres_nextval_expr = 
+        "nextval('"^table_name^"_"^returning^"_seq'::regclass)"
+      in	
+      let returning_vss = 
+            List.map (fun vs -> postgres_nextval_expr::vs) vss
+      in
+      [self#make_insert_query(table_name, 
+                              returning::field_names, 
+                              returning_vss);
+       "select lastval()"]
 end
 
 let driver_name = "postgresql"
