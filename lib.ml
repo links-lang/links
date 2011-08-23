@@ -900,29 +900,39 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             match table, rows with
               | `Table _, `List [] -> `Record []
               | `Table ((db, params), table_name, _), _ ->
-                  let field_names = row_columns rows
-                  and vss = row_values db rows
-                  in
+                  let field_names = row_columns rows in
+                  let vss = row_values db rows in
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                   (Database.execute_insert (table_name, field_names, vss) db)
+                    (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s]) ~> ()",
   IMPURE);
 
+  (* FIXME:
+     
+     Choose a semantics for InsertReturning.
+     
+     Currently it is well-defined if exactly one row is inserted, but
+     is not necessarily well-defined otherwise.
+
+     Perhaps the easiest course of action is to restrict it to the
+     case of inserting a single row.
+  *)
   "InsertReturning",
   (`Server 
      (p3 (fun table rows returning -> 
             match table, rows, returning with
-              | `Table _, `List [], _ -> `Record []
+              | `Table _, `List [], _ ->
+                  failwith "InsertReturning: undefined for empty list of rows"
               | `Table ((db, params), table_name, _), _, _ ->
-                  let field_names = row_columns rows
-                  and vss = row_values db rows
-                  and returning = unbox_string returning
-                  in
+                  let field_names = row_columns rows in
+                  let vss = row_values db rows in
+                    
+                  let returning = unbox_string returning in
                     prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                   (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s], String) ~> Int",
   IMPURE);

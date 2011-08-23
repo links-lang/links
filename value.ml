@@ -28,6 +28,7 @@ class virtual database = object(self)
   method virtual driver_name : unit -> string
   method virtual escape_string : string -> string
   method virtual exec : string -> dbvalue
+  method quote_field s = "\""^s^"\""
   method make_insert_query : (string * string list * string list list) -> string =
     fun (table_name, field_names, vss) ->
       "insert into " ^ table_name ^

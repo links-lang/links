@@ -719,9 +719,9 @@ struct
     let name f = StringMap.find f funs
   end
 
-  let rec string_of_query q =
-    let sq = string_of_query in
-    let sb = string_of_base false in
+  let rec string_of_query db q =
+    let sq = string_of_query db in
+    let sb = string_of_base db false in
     let string_of_fields =
       function
         | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
@@ -753,17 +753,17 @@ struct
                 | _ ->  " where " ^ sb condition
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
-  and string_of_base one_table b =
-    let sb = string_of_base one_table in
+  and string_of_base db one_table b =
+    let sb = string_of_base db one_table in
       match b with
         | `Case (c, t, e) ->
             "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
         | `Constant c -> Constant.string_of_constant c
         | `Project (var, label) ->
             if one_table then
-              label
+              db#quote_field label
             else
-              string_of_table_var var ^ "." ^ label
+              string_of_table_var var ^ "." ^ (db#quote_field label)
         | `Apply (op, [l; r]) when Arithmetic.is op
             -> Arithmetic.gen (sb l, op, sb r)
         | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
@@ -783,31 +783,31 @@ struct
         | `Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
         | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
         | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-        | `Empty q -> "not exists (" ^ string_of_query q ^ ")"
-        | `Length q -> "select count(*) from (" ^ string_of_query q ^ ") as " ^ fresh_dummy_var ()
+        | `Empty q -> "not exists (" ^ string_of_query db q ^ ")"
+        | `Length q -> "select count(*) from (" ^ string_of_query db q ^ ") as " ^ fresh_dummy_var ()
 
-  let string_of_query range q =
+  let string_of_query db range q =
     let range =
       match range with
         | None -> ""
         | Some (limit, offset) -> " limit " ^Num.string_of_num limit^" offset "^Num.string_of_num offset
     in
-      string_of_query q ^ range
+      string_of_query db q ^ range
 
   let rec prepare_clauses : t -> t list =
     function
       | `Concat vs -> vs
       | v -> [v]
 
-  let rec query : t -> query = fun v ->
+  let rec query : Value.database -> t -> query = fun db v ->
 (*    Debug.print ("query: "^string_of_t v);*)
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
-          query body
+          query db body
       | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
-          let body = query (`For (gs, [], body)) in
-          let os = List.map base os in
+          let body = query db (`For (gs, [], body)) in
+          let os = List.map (base db) os in
             begin
               match body with
                 | `Select (fields, tables, condition, []) ->
@@ -815,8 +815,8 @@ struct
                 | _ -> assert false
             end
       | `If (c, body, `Concat []) ->
-          let c = base c in
-          let body = query body in
+          let c = base db c in
+          let body = query db body in
             begin
               match body with
                 | `Select (fields, tables, c', os) ->
@@ -847,21 +847,21 @@ struct
             List.rev
               (StringMap.fold
                  (fun name v fields ->
-                    (base v, name)::fields)
+                    (base db v, name)::fields)
                  fields
                  [])
           in
             `Select (fields, [], `Constant (`Bool true), [])
       | _ -> assert false
-  and base : t -> base =
+  and base : Value.database -> t -> base = fun db ->
     function
       | `If (c, t, e) ->
-          `Case (base c, base t, base e)
+          `Case (base db c, base db t, base db e)
       | `Apply ("tilde", [s; r]) ->
           begin
             match likeify r with
               | Some r ->
-                  `Apply ("LIKE", [base s; `Constant (`String r)])
+                  `Apply ("LIKE", [base db s; `Constant (`String r)])
               | None ->
                   let r =
                     (* HACK:
@@ -870,14 +870,14 @@ struct
                     *)
                     `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
                   in
-                    `Apply ("RLIKE", [base s; r])
+                    `Apply ("RLIKE", [base db s; r])
           end
       | `Apply ("Empty", [v]) ->
-          `Empty (query v)
+          `Empty (query db v)
       | `Apply ("length", [v]) ->
-          `Length (query v)
+          `Length (query db v)
       | `Apply (f, vs) ->
-          `Apply (f, List.map base vs)
+          `Apply (f, List.map (base db) vs)
       | `Project (`Var (x, _labels), name) ->
           `Project (x, name)
       | `Constant c -> `Constant c
@@ -955,14 +955,14 @@ struct
         | _ -> assert false
 
 
-  let query range v =
+  let query db range v =
 (*     Debug.print ("v: "^string_of_t v); *)
     dummy_counter := 0;
-    let q = `UnionAll (List.map query (prepare_clauses v)) in
-      string_of_query range q
+    let q = `UnionAll (List.map (query db) (prepare_clauses v)) in
+      string_of_query db range q
 
-  let update ((x, table), where, body) =
-    let base = base ->- (string_of_base true) in
+  let update db ((x, table), where, body) =
+    let base = (base db) ->- (string_of_base db true) in
     let where =
       match where with
         | None -> ""
@@ -973,14 +973,14 @@ struct
         | `Record fields ->
             String.concat ","
               (List.map
-                 (fun (label, v) -> label ^ " = " ^ base v)
+                 (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
                  (StringMap.to_alist fields))
         | _ -> assert false
     in
       "update "^table^" set "^fields^where
 
-  let delete ((x, table), where) =
-    let base = base ->- (string_of_base true) in
+  let delete db ((x, table), where) =
+    let base = base db ->- (string_of_base db true) in
     let where =
       match where with
         | None -> ""
@@ -997,28 +997,28 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
 (*       Debug.print ("v: "^string_of_t v); *)
       match used_database v with
         | None -> None
-        | Some db -> 
+        | Some db ->
             let t = type_of_expression v in
-            let q = Sql.query range v in
+            let q = Sql.query db range v in
               Debug.print ("Generated query: "^q);
               Some (db, q, t)
 
-let compile_update : Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option * Ir.computation) -> string =
-  fun env ((x, table, read_labels), where, body) ->
+let compile_update : Value.database -> Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option * Ir.computation) -> string =
+  fun db env ((x, table, read_labels), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, read_labels)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
     let where = opt_map (Eval.computation env) where in
 (*       Debug.print ("body: "^Ir.Show_computation.show body); *)
     let body = Eval.computation env body in
-    let q = Sql.update ((x, table), where, body) in
+    let q = Sql.update db ((x, table), where, body) in
       Debug.print ("Generated update query: "^q);
       q
 
-let compile_delete : Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option) -> string =
-  fun env ((x, table, read_labels), where) ->
+let compile_delete : Value.database -> Value.env -> ((Ir.var * string * StringSet.t) * Ir.computation option) -> string =
+  fun db env ((x, table, read_labels), where) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, read_labels)) in
     let where = opt_map (Eval.computation env) where in
-    let q = Sql.delete ((x, table), where) in
+    let q = Sql.delete db ((x, table), where) in
       Debug.print ("Generated update query: "^q);
       q
 

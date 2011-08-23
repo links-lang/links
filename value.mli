@@ -20,6 +20,7 @@ class virtual database :
     method virtual driver_name : unit -> string
     method virtual escape_string : string -> string
     method virtual exec : string -> dbvalue
+    method quote_field : string -> string
     method make_insert_query : (string * string list * string list list) -> string
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
   end

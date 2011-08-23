@@ -1425,7 +1425,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
                     let rtype = typ r in
 
-                      (* make sure rtype is a record type that doesn't match any of the existing fields *)
+                    (* make sure rtype is a record type that doesn't match any of the existing fields *)
                     let () = unify ~handle:Gripers.extend_record
                       (pos_and_typ r, no_pos (`Record (absent_field_env, Types.fresh_row_variable `Any))) in
 
@@ -1607,9 +1607,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let return_type =
               match id with
                 | None -> Types.unit_type
-                | Some id ->
-                    unify ~handle:Gripers.insert_id (pos_and_typ id, no_pos Types.string_type);
-                    Types.int_type in
+                | Some (((id : phrasenode), _), _) ->
+                    begin
+                      match id with
+                        | `Constant (`String id) ->
+                            (* HACK: The returned column is encoded as
+                               a string.  We check here that it
+                               appears as a column in the read type of
+                               the table.
+                            *)
+                            unify
+                              ~handle:Gripers.insert_id
+                              (no_pos read,
+                               no_pos (`Record (StringMap.singleton id (`Present, Types.int_type), Types.fresh_row_variable `Base)));
+                            Types.int_type
+                        | _ -> assert false
+                    end in
 
             (* insert is wild *)
             let () =
@@ -1772,32 +1785,32 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let f = tc f in
             let ps = List.map (tc) ps in
 
-            (*
-              We take advantage of this type isomorphism:
-              
+              (*
+                We take advantage of this type isomorphism:
+                
                 forall X.P -> Q == P -> forall X.Q
-                               where X is not free in P
+                where X is not free in P
 
-              What we need to do for:
- 
+                What we need to do for:
+                
                 forall XS.P -> Q
 
-                  - instantiate each quantifier in XS
-                  that is free in P
+                - instantiate each quantifier in XS
+                that is free in P
 
-                  - push the other quantifiers
-                  into the return type
+                - push the other quantifiers
+                into the return type
 
-                  - generate an appropriate term to
-                  explicitly witness the isomorphism
-                 
-              For f a we generate /\ZS.f XS a.
-            *)
+                - generate an appropriate term to
+                explicitly witness the isomorphism
+                
+                For f a we generate /\ZS.f XS a.
+              *)
               begin
                 match Types.concrete_type (typ f) with
                   | `ForAll (qs, `Function (fps, fe, rettyp)) as t ->
-(*                       Debug.print ("f: " ^ Show.show show_phrase (erase f));                      *)
-(*                       Debug.print ("t: " ^ Types.string_of_datatype t); *)
+                      (*                       Debug.print ("f: " ^ Show.show show_phrase (erase f));                      *)
+                      (*                       Debug.print ("t: " ^ Types.string_of_datatype t); *)
                       
                       (* the free type variables in the arguments (and effects) *)
                       let arg_vars =
@@ -1812,7 +1825,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                       *)
 
                       (* xs is a list of tuples of the shape:
-                           (original quantifier, (fresh quantifier, fresh type argument))
+                         (original quantifier, (fresh quantifier, fresh type argument))
                       *)
                       let xs =
                         List.map
@@ -1834,7 +1847,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                             | `Function (fps, fe, rettyp) ->
                                 let rettyp = Types.for_all (rqs, rettyp) in
                                 let ft = `Function (fps, fe, rettyp) in
-(*                                   Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
+                                  (*                                   Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                                 let fn, fpos = erase f in
                                 let e = tabstr (rqs, `FnAppl ((tappl (fn, tyargs), fpos), List.map erase ps)) in
                                   unify ~handle:Gripers.fun_apply
@@ -1847,7 +1860,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                         end
                   | ft ->
                       let rettyp = Types.fresh_type_variable `Any in                        
-                          unify ~handle:Gripers.fun_apply
+                        unify ~handle:Gripers.fun_apply
                           ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps), 
                                                                context.effect_row, rettyp)));
                         `FnAppl (erase f, List.map erase ps), rettyp
@@ -2013,7 +2026,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let t = Types.fresh_type_variable `Any in
 
             let eff = Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any in
-(*            let eff = Types.make_empty_open_row `Any in*)
+              (*            let eff = Types.make_empty_open_row `Any in*)
 
             let cont_type = `Function (Types.make_tuple_type [f], eff, t) in
             let context' = {context 
@@ -2047,19 +2060,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             Instantiate.alias "Regex" [] context.tycon_env
         | `Projection (r,l) ->
             (*
-               Take advantage of the type isomorphism:
+              Take advantage of the type isomorphism:
 
-                 forall X.(P, Q) == (forall X.P, forall X.Q)
+              forall X.(P, Q) == (forall X.P, forall X.Q)
 
-               Before doing the projection, grab any quantifiers
-               and pass them through to the result type.
+              Before doing the projection, grab any quantifiers
+              and pass them through to the result type.
 
-               If the label matches one of the existing ones
-               in the field env then we unify against a singleton
-               closed row.
+              If the label matches one of the existing ones
+              in the field env then we unify against a singleton
+              closed row.
 
-               Otherwise, we instantiate the quantifiers and unify
-               against a singleton open row.
+              Otherwise, we instantiate the quantifiers and unify
+              against a singleton open row.
 
             *)
             let r = tc r in
@@ -2082,48 +2095,48 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                           | `Record row -> fst (Types.unwrap_row row)
                           | _ -> assert false in
 
-                      begin
-                        match StringMap.lookup l field_env with
-                          | Some (presence, t) ->
-                              (* the free type variables in the projected type *)
-                              let vars = Types.free_type_vars t in
+                        begin
+                          match StringMap.lookup l field_env with
+                            | Some (presence, t) ->
+                                (* the free type variables in the projected type *)
+                                let vars = Types.free_type_vars t in
 
-                              (* return true if this quantifier appears free in the projected type *)
-                              let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
+                                (* return true if this quantifier appears free in the projected type *)
+                                let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
 
-                              (* quantifiers for the projected type *)
-                              let pqs =
-                                (fst -<- List.split -<- snd -<- List.split)
-                                  (List.filter
-                                     (fun (q, _) -> free_in_body q)
-                                     xs) in
+                                (* quantifiers for the projected type *)
+                                let pqs =
+                                  (fst -<- List.split -<- snd -<- List.split)
+                                    (List.filter
+                                       (fun (q, _) -> free_in_body q)
+                                       xs) in
 
-                              let fieldtype = Types.for_all (pqs, t) in
+                                let fieldtype = Types.for_all (pqs, t) in
 
-                              (* really we just need to unify the presence variable
-                                 with `Presence, but our griper interface doesn't currently
-                                 support that *)
-                              let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var) in
-                                unify ~handle:Gripers.projection
-                                  ((exp_pos r, rt),
-                                   no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable `Any)))));
+                                (* really we just need to unify the presence variable
+                                   with `Presence, but our griper interface doesn't currently
+                                   support that *)
+                                let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var) in
+                                  unify ~handle:Gripers.projection
+                                    ((exp_pos r, rt),
+                                     no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable `Any)))));
 
-                              let rn, rpos = erase r in
-                              let e = tabstr (pqs, `Projection ((tappl (rn, tyargs), rpos), l)) in
-                                e, fieldtype
-                          | None ->
-                              let fieldtype = Types.fresh_type_variable `Any in
-                                unify ~handle:Gripers.projection
-                                  ((exp_pos r, rt),
-                                   no_pos (`Record (Types.make_singleton_open_row 
-                                                      (l, (`Present, fieldtype))
-                                                      `Any)));
+                                  let rn, rpos = erase r in
+                                  let e = tabstr (pqs, `Projection ((tappl (rn, tyargs), rpos), l)) in
+                                    e, fieldtype
+                            | None ->
+                                let fieldtype = Types.fresh_type_variable `Any in
+                                  unify ~handle:Gripers.projection
+                                    ((exp_pos r, rt),
+                                     no_pos (`Record (Types.make_singleton_open_row 
+                                                        (l, (`Present, fieldtype))
+                                                        `Any)));
 
-                                let rn, rpos = erase r in
-                                let e = `Projection ((tappl (rn, tyargs), rpos), l) in
-                                  e, fieldtype
-                              
-                      end
+                                  let rn, rpos = erase r in
+                                  let e = `Projection ((tappl (rn, tyargs), rpos), l) in
+                                    e, fieldtype
+                                      
+                        end
                   | _ -> 
                       let fieldtype = Types.fresh_type_variable `Any in
                         unify ~handle:Gripers.projection
@@ -2174,10 +2187,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
     in (e, pos), t
 
 (** [type_binding] takes XXX YYY (FIXME)
-  The input context is the environment in which to type the bindings.
+    The input context is the environment in which to type the bindings.
 
-  The output context is the environment resulting from typing the
-  bindings.  It does not include the input context.
+    The output context is the environment resulting from typing the
+    bindings.  It does not include the input context.
 *)
 and type_binding : context -> binding -> binding * context =
   fun context (def, pos) ->
@@ -2297,12 +2310,12 @@ and type_binding : context -> binding -> binding * context =
                             following equivalence to make the curried
                             arrows polymorphic:
 
-                                fun f(x1)...(xk) {e}
-                              ==
-                                fun f(x1)...(xk) {
-                                  fun f(x1)...(xk) {e}
-                                  f(x1)...(xk)
-                                }
+                            fun f(x1)...(xk) {e}
+                            ==
+                            fun f(x1)...(xk) {
+                            fun f(x1)...(xk) {e}
+                            f(x1)...(xk)
+                            }
                          *)
                          make_ft_poly_curry pats (fresh_wild ()) (Types.fresh_type_variable `Any)
                      | Some (_, Some t) ->
@@ -2319,8 +2332,8 @@ and type_binding : context -> binding -> binding * context =
 
           (* 
              type check the function bodies using
-               - monomorphic bindings for unannotated functions
-               - potentially polymorphic bindings for annotated functions
+             - monomorphic bindings for unannotated functions
+             - potentially polymorphic bindings for annotated functions
           *)
           let defs =
             let body_env = Env.extend context.var_env inner_env in
@@ -2338,16 +2351,16 @@ and type_binding : context -> binding -> binding * context =
                            type variables in order to ensure that the
                            inferred type is consistent with any
                            annotation *)
-                        let ft =
-                          let _, ft = Instantiate.rigid context'.var_env name in
-                            if Settings.get_value Instantiate.quantified_instantiation then
-                              match ft with
-                                | `ForAll (_, ft) -> ft
-                                | ft -> ft
-                            else
-                              ft in
-                          let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
-                            ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
+                      let ft =
+                        let _, ft = Instantiate.rigid context'.var_env name in
+                          if Settings.get_value Instantiate.quantified_instantiation then
+                            match ft with
+                              | `ForAll (_, ft) -> ft
+                              | ft -> ft
+                          else
+                            ft in
+                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+                        ((name, None, name_pos), (([], None), (pats, body)), location, t, pos) :: defs) [] defs patss) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
@@ -2385,10 +2398,10 @@ and type_binding : context -> binding -> binding * context =
               List.rev defs, outer_env
           in
             `Funs defs, {empty_context with var_env = outer_env}       
-           
+              
       | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
-            (`Foreign ((name, Some datatype, pos), language, dt),
-             (bind_var empty_context (name, datatype)))
+          (`Foreign ((name, Some datatype, pos), language, dt),
+           (bind_var empty_context (name, datatype)))
       | `Type (name, vars, (_, Some dt)) as t ->
           t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt))
       | `Infix -> `Infix, empty_context
@@ -2418,7 +2431,7 @@ and type_regex typing_env : regex -> regex =
 	    let () = unify ~pos:pos ~handle:Gripers.splice_exp
 	      (no_pos (typ e), no_pos Types.string_type)
 	    in
-	    `Splice (erase e)
+	      `Splice (erase e)
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
 and type_bindings (globals : context)  bindings =

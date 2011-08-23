@@ -115,7 +115,7 @@ class pg_database host port dbname user password = object(self)
 (* jcheney: Added quoting to avoid problems with mysql keywords. *)
   method make_insert_query (table_name, field_names, vss) =
     let insert_table = "insert into " ^ table_name in
-    let quoted_field_names = (List.map (fun x -> "\"" ^ x ^ "\"") field_names) in
+    let quoted_field_names = (List.map self#quote_field field_names) in
     let body =
       match field_names, vss with
         | [],    [_] ->
@@ -144,10 +144,7 @@ class pg_database host port dbname user password = object(self)
               String.concat " union all " (List.map (fun vs -> "select " ^ 
                                                        String.concat "," vs) vss)
     in
-    "insert into " ^ table_name ^
-      "("^String.concat "," quoted_field_names ^") "^
-      String.concat " union all " (List.map (fun vs -> "select " ^ 
-                                               String.concat "," vs) vss)
+      "insert into " ^ table_name ^ body
   (* 
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
@@ -161,16 +158,9 @@ class pg_database host port dbname user password = object(self)
   method make_insert_returning_query 
       : (string * string list * string list list * string) -> string list =
     fun (table_name, field_names, vss, returning) ->
-      let postgres_nextval_expr = 
-        "nextval('"^table_name^"_"^returning^"_seq'::regclass)"
-      in	
-      let returning_vss = 
-            List.map (fun vs -> postgres_nextval_expr::vs) vss
-      in
-      [self#make_insert_query(table_name, 
-                              returning::field_names, 
-                              returning_vss);
-       "select lastval()"]
+      [self#make_insert_query(table_name,
+                              field_names,
+                              vss) ^ " returning " ^ self#quote_field returning]
 end
 
 let driver_name = "postgresql"

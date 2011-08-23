@@ -391,7 +391,7 @@ module Eval = struct
               db, table, read_labels
           | _ -> assert false in
       let update_query =
-        Query.compile_update env ((Var.var_of_binder xb, table, read_labels), where, body) in
+        Query.compile_update db env ((Var.var_of_binder xb, table, read_labels), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
@@ -407,7 +407,7 @@ module Eval = struct
               db, table, read_labels
           | _ -> assert false in
       let delete_query =
-        Query.compile_delete env ((Var.var_of_binder xb, table, read_labels), where) in
+        Query.compile_delete db env ((Var.var_of_binder xb, table, read_labels), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f                   -> 
