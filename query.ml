@@ -536,7 +536,7 @@ struct
          vs)
     in
       match vs with
-        | [`Singleton v] -> `Singleton v
+        | [v] -> v
         | vs -> `Concat vs
   and reduce_for_source env eval_body (x, source, body) =
     let rs = reduce_for_source env eval_body in
@@ -544,41 +544,41 @@ struct
       match source with
         | `Singleton v -> eval_body env (x, v, body)
         | `Concat vs ->
-            reduce_concat (List.map (fun v -> rs (x, v, body)) vs)
+          reduce_concat (List.map (fun v -> rs (x, v, body)) vs)
         | `If (c, t, e) ->
-            assert (e = nil);
+          assert (e = nil);
+          reduce_for_source
+            env
+            (fun env (x, v, body) ->
+              reduce_where_condition (c, eval_body env (x, v, body)))
+            (x, t, body)
+        | `For (gs, os, v) ->
+          (* prefix each clause with (gs, os) *)
+          (* (this lifts concatenation out of the bodies of comprehensions) *)
+          let rec prefix =
+            function
+              | `Concat vs         -> `Concat (List.map prefix vs)
+              | `For (gs', os', v) -> `For (gs @ gs', os @ os', v)
+              | v                  -> `For (gs, os, v)
+          in
             reduce_for_source
               env
-              (fun env (x, v, body) ->
-                reduce_where_condition (c, eval_body env (x, v, body)))
-              (x, t, body)
-        | `For (gs, os, v) ->
-          let k, w =
-            match rs (x, v, body) with
-              | `For (gs', os', w) ->
-                (fun v -> `For (gs @ gs', os @ os', v)), w
-              | w ->
-                (fun v -> `For (gs, os, v)), w
-          in
-            begin
-              match w with
-                | `Concat vs -> `Concat (List.map k vs)
-                | w -> k w
-            end
+              (fun env r -> prefix (eval_body env r))
+              (x, v, body)
         | `Table table ->
-            let labels = table_labels table in
-              (* we need to freshen x in order to correctly handle self joins *)
-            let x' = Var.fresh_raw_var () in
-              rb (x', source, eval_body env (x, `Var (x', labels), body))
+          let labels = table_labels table in
+          (* we need to freshen x in order to correctly handle self joins *)
+          let x' = Var.fresh_raw_var () in
+            rb (x', source, eval_body env (x, `Var (x', labels), body))
         | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
   and reduce_for_body (x, source, body) =
     match body with
       | `Concat vs ->
-          reduce_concat (List.map (fun v -> reduce_for_body (x, source, v)) vs)
+        reduce_concat (List.map (fun v -> reduce_for_body (x, source, v)) vs)
       | `For (gs, os, body) ->
-          `For ((x, source)::gs, os, body)
+        `For ((x, source)::gs, os, body)
       | _ ->
-          `For ([x, source], [], body)
+        `For ([x, source], [], body)
   and reduce_where_condition (c, t) =
     assert (is_list t);
     if t = nil then nil
