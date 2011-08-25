@@ -553,10 +553,17 @@ struct
                 reduce_where_condition (c, eval_body env (x, v, body)))
               (x, t, body)
         | `For (gs, os, v) ->
+          let k, w =
+            match rs (x, v, body) with
+              | `For (gs', os', w) ->
+                (fun v -> `For (gs @ gs', os @ os', v)), w
+              | w ->
+                (fun v -> `For (gs, os, v)), w
+          in
             begin
-              match rs (x, v, body) with
-                | `For (gs', os', w) -> `For (gs @ gs', os @ os', w)
-                | w -> `For (gs, os, w)
+              match w with
+                | `Concat vs -> `Concat (List.map k vs)
+                | w -> k w
             end
         | `Table table ->
             let labels = table_labels table in
