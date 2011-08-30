@@ -553,11 +553,11 @@ struct
               reduce_where_condition (c, eval_body env (x, v, body)))
             (x, t, body)
         | `For (gs, os, v) ->
-          (* prefix each clause with (gs, os) *)
+          (* prefix the continuation with (gs, os) *)
           (* (this lifts concatenation out of the bodies of comprehensions) *)
           let rec prefix =
             function
-              | `Concat vs         -> `Concat (List.map prefix vs)
+              (* | `Concat vs         -> `Concat (List.map prefix vs) *)
               | `For (gs', os', v) -> `For (gs @ gs', os @ os', v)
               | v                  -> `For (gs, os, v)
           in
@@ -593,7 +593,8 @@ struct
             else
               reduce_if_then (c, t, e)
           else
-            reduce_concat [reduce_if_condition (c, t, nil); reduce_if_condition (`Apply ("not", [c]), e, nil)]
+            reduce_concat [reduce_if_condition (c, t, nil);
+                           reduce_if_condition (`Apply ("not", [c]), e, nil)]
       | `If (c', t', `Constant (`Bool false)) ->
           reduce_if_then (`Apply ("&&", [c'; t']), t, e)
       | _ ->
@@ -663,6 +664,7 @@ struct
      table variables. These have the prefix "dummy" and have their own
      name source. *)
   let dummy_counter = ref 0
+  let reset_dummy_counter () = dummy_counter := 0
   let fresh_dummy_var () =
     incr dummy_counter;     
     "dummy" ^ string_of_int (!dummy_counter)
@@ -806,14 +808,14 @@ struct
       | `Concat vs -> vs
       | v -> [v]
 
-  let rec query : Value.database -> t -> query = fun db v ->
-(*    Debug.print ("query: "^string_of_t v);*)
+  let rec subquery : Value.database -> t -> query = fun db v ->
+(*    Debug.print ("subquery: "^string_of_t v);*)
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
-          query db body
+          subquery db body
       | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
-          let body = query db (`For (gs, [], body)) in
+          let body = subquery db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
               match body with
@@ -822,55 +824,60 @@ struct
                 | _ -> assert false
             end
       | `If (c, body, `Concat []) ->
-          let c = base db c in
-          let body = query db body in
-            begin
-              match body with
-                | `Select (fields, tables, c', os) ->
-                    let c =
-                      match c, c' with
-                        | `Constant (`Bool true), c
-                        | c, `Constant (`Bool true) -> c
-                        | `Constant (`Bool false), _
-                        | _, `Constant (`Bool false) -> `Constant (`Bool false)
-                        | c, c' -> `Apply ("&&", [c; c'])
-                    in
-                      `Select (fields, tables, c, os)
-                | _ -> assert false
-            end
+        (* Turn conditionals into where clauses. We might want to do
+           this earlier on.  *)
+        let c = base db c in
+        let body = subquery db body in
+          begin
+            match body with
+              | `Select (fields, tables, c', os) ->
+                let c =
+                  match c, c' with
+                    (* optimisations *)
+                    | `Constant (`Bool true), c
+                    | c, `Constant (`Bool true) -> c
+                    | `Constant (`Bool false), _
+                    | _, `Constant (`Bool false) -> `Constant (`Bool false)
+                    (* default case *)
+                    | c, c' -> `Apply ("&&", [c; c'])
+                in
+                  `Select (fields, tables, c, os)
+              | _ -> assert false
+          end
       | `Table (_db, table, (fields, _)) ->
-          let var = fresh_table_var () in
-          let fields =
-            List.rev
-              (StringMap.fold
-                 (fun name _ fields ->
-                    (`Project (var, name), name)::fields)
-                 fields
-                 [])
-          in
-            `Select (fields, [(table, var)], `Constant (`Bool true), [])
+        (* eta expand tables. We might want to do this earlier on.  *)
+        let var = fresh_table_var () in
+        let fields =
+          List.rev
+            (StringMap.fold
+               (fun name _ fields ->
+                 (`Project (var, name), name)::fields)
+               fields
+               [])
+        in
+          `Select (fields, [(table, var)], `Constant (`Bool true), [])
       | `Singleton (`Record fields) ->
-          let fields =
-            List.rev
-              (StringMap.fold
-                 (fun name v fields ->
-                    (base db v, name)::fields)
-                 fields
-                 [])
-          in
-            `Select (fields, [], `Constant (`Bool true), [])
+        let fields =
+          List.rev
+            (StringMap.fold
+               (fun name v fields ->
+                 (base db v, name)::fields)
+               fields
+               [])
+        in
+          `Select (fields, [], `Constant (`Bool true), [])
       | _ -> assert false
   and base : Value.database -> t -> base = fun db ->
     function
       | `If (c, t, e) ->
-          `Case (base db c, base db t, base db e)
+        `Case (base db c, base db t, base db e)
       | `Apply ("tilde", [s; r]) ->
-          begin
-            match likeify r with
-              | Some r ->
-                  `Apply ("LIKE", [base db s; `Constant (`String r)])
-              | None ->
-                  let r =
+        begin
+          match likeify r with
+            | Some r ->
+              `Apply ("LIKE", [base db s; `Constant (`String r)])
+            | None ->
+              let r =
                     (* HACK:
                        
                        this only works if the regexp doesn't include any variables bound by the query
@@ -880,9 +887,9 @@ struct
                     `Apply ("RLIKE", [base db s; r])
           end
       | `Apply ("Empty", [v]) ->
-          `Empty (query db v)
+          `Empty (outer_query db v)
       | `Apply ("length", [v]) ->
-          `Length (query db v)
+          `Length (outer_query db v)
       | `Apply (f, vs) ->
           `Apply (f, List.map (base db) vs)
       | `Project (`Var (x, _labels), name) ->
@@ -960,15 +967,17 @@ struct
         | `Variant ("StartAnchor", _) -> Some ""
         | `Variant ("EndAnchor", _) -> Some ""
         | _ -> assert false
-
+  and outer_query db v =
+    `UnionAll (List.map (subquery db) (prepare_clauses v))      
 
   let query db range v =
 (*     Debug.print ("v: "^string_of_t v); *)
-    dummy_counter := 0;
-    let q = `UnionAll (List.map (query db) (prepare_clauses v)) in
+    reset_dummy_counter ();
+    let q = outer_query db v in
       string_of_query db range q
 
   let update db ((x, table), where, body) =
+    reset_dummy_counter ();
     let base = (base db) ->- (string_of_base db true) in
     let where =
       match where with
@@ -987,6 +996,7 @@ struct
       "update "^table^" set "^fields^where
 
   let delete db ((x, table), where) =
+    reset_dummy_counter ();
     let base = base db ->- (string_of_base db true) in
     let where =
       match where with
