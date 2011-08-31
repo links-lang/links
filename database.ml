@@ -69,41 +69,48 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
 let execute_select
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
+
+  let result_signature result =
+    let n = result#nfields in
+    let rec rs i =
+      if i >= n then
+        []
+      else
+        let name = result#fname i in
+          if start_of ~is:"order_" name then
+            (* ignore ordering fields, which are all presumed to be at
+               the end of the row *)
+            []
+          else if List.mem_assoc name field_types then
+            (name, List.assoc name field_types) :: rs (i+1)
+          else
+            failwith("Column " ^ name ^
+                        " had no type info in query's type spec: " ^
+                        mapstrcat ", " (fun (name, t) -> name ^ ":" ^
+                          Types.string_of_datatype t)
+                        field_types)
+    in
+      rs 0 in
+
   let result = db#exec query in
     match result#status with
       | `QueryError msg -> 
-          raise(Runtime_error("An error occurred executing the query " ^ query ^
-                                ": " ^ msg))
+        raise(Runtime_error("An error occurred executing the query " ^ query ^
+                               ": " ^ msg))
       | `QueryOk -> 
-          match field_types with
-            | [] ->
+        match field_types with
+          | [] ->
                 (* Ignore any dummy fields introduced to work around
                    SQL's inability to handle empty column lists *)
                 `List (map (fun _ -> `Record []) result#get_all_lst)
             | _ ->
-                let row_fields =
-	          (let temp_fields = ref [] in
-                     (* TBD: factor this out as 
-                        result_sig : dbresult -> (string * dbtype * datatype) list *)
-                     for count = result#nfields - 1 downto 0 do 
-                       try 
-                         temp_fields := 
-                           (result#fname count,
-                            (List.assoc (result#fname count) field_types))
-                         :: !temp_fields
-                       with NotFound _ -> (* Could probably remove this. *)
-                         failwith("Column " ^ (result#fname count) ^
-                                    " had no type info in query's type spec: " ^
-                                    mapstrcat ", " (fun (fld, typ) -> fld ^ ":" ^
-                                                      Types.string_of_datatype typ)
-                                    field_types)
-                     done;
-                     !temp_fields) in
+                let row_fields = result_signature result in
+                let used_fields = List.length row_fields in
+
                 let is_null (name, _) =
                   if name = "null" then true
                   else if mem_assoc name field_types then false
-                  else assert false
-                in
+                  else assert false in
                 let null_query = exists is_null row_fields in
                   if null_query then
                     `List (map (fun _ -> `Record []) result#get_all_lst)
@@ -111,7 +118,7 @@ let execute_select
                     `List (map (fun rowvalue ->
                                   `Record (map2 (fun (name, t) fldvalue -> 
 			                           name, value_of_db_string fldvalue t)
-                                             row_fields rowvalue))
+                                             row_fields (take used_fields rowvalue)))
                              result#get_all_lst)
 
 let execute_untyped_select (query:string) (db: database) : Value.t =

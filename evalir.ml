@@ -379,35 +379,23 @@ module Eval = struct
       in
         apply_cont cont env result
     | `Update ((xb, source), where, body) ->
-      let db, table, read_labels =
+      let db, table, field_types =
         match value env source with
           | `Table ((db, _), table, (fields, _)) ->
-            let read_labels =
-              StringMap.fold
-                (fun label _ labels -> StringSet.add label labels)
-                fields
-                StringSet.empty
-            in
-              db, table, read_labels
+            db, table, (StringMap.map snd fields)
           | _ -> assert false in
       let update_query =
-        Query.compile_update db env ((Var.var_of_binder xb, table, read_labels), where, body) in
+        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
-      let db, table, read_labels =
+      let db, table, field_types =
         match value env source with
           | `Table ((db, _), table, (fields, _)) ->
-            let read_labels =
-              StringMap.fold
-                (fun label _ labels -> StringSet.add label labels)
-                fields
-                StringSet.empty
-            in
-              db, table, read_labels
+            db, table, (StringMap.map snd fields)
           | _ -> assert false in
       let delete_query =
-        Query.compile_delete db env ((Var.var_of_binder xb, table, read_labels), where) in
+        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f                   -> 
