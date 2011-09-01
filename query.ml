@@ -696,22 +696,81 @@ struct
     computation (env_of_value_env env) e
 end
 
-
+(* Introducing ordering indexes in order to support a list
+   semantics. *)
 module Order =
 struct
   type gen = Var.var * t
   type context = gen list
 
-  (* Fhe following abstraction should allow us to customise the
+  (* The following abstraction should allow us to customise the
      concrete choice of order indexes.
 
-     In particular, we might use primary keys for generators. *)
-  type order_index = [ `Gen of gen | `Val of t
-                     | `DefGen of gen | `DefVal of Types.primitive
+     In particular, we might use primary keys for generators.
+
+     Including tail generators gives:
+
+     table t
+
+     a deterministic semantics, in the sense that asList (table t)
+     will return the same list of rows throughout a query.
+
+     In general this is unlikely to be necessary, as the programmer
+     can supply an orderby clause when needed.
+     
+     If we ignore tail generators, then this corresponds to
+     interpretting asList (table t) non-deterministically, that is,
+     each invocation of asList (table t) may return a different
+     permutation of the rows. (In practice, it's not clear whether
+     real databases actually take advantage of the freedom to
+     reorganise rows within a single query, but I believe it is
+     allowed.)
+
+     Given the non-deterministic interpration of asList, the
+     normalisation procedure becomes technically unsound as it may
+     duplicate instances of asList. If we wanted to restore soundness
+     then we could do so by keeping track of which tables get
+     duplicated and ensuring that we order by all occurences of them -
+     e.g. by converting tail generators to non-tail generators. *)
+  type order_index = [ `Val of t | `Gen of gen | `TailGen of gen
+                     | `DefVal of Types.primitive | `DefGen of gen | `DefTailGen of gen
                      | `Branch of int ]
+
+  (* TODO:
+
+     We should probably represent 'defaultness' using a boolean flag
+     rather than wiring it into a single polymorphic variant type. *)
+
+  (* We might implement an optimisation to remove duplicate
+     expressions from the output - in particular, the expressions we
+     order by will often already be present in the output. Perhaps,
+     though, it would make sense to apply such an optimisation more
+     generally on any query. For instance:
+
+     for (x <-- t) [(x.a, x.a)]
+
+     might be translated as:
+
+     select x.a from t as a
+
+     followed by a post-processing phase that creates two copies of
+     x.a.
+
+     Another optimisation would be to remove duplicate expressions
+     from the output order by clause. More ambitiously, this could be
+     further generalised to handle examples such as the following:
+
+     for (x <-- t) orderby (x.a, -x.a) [x]
+
+     which is equivalent to:
+     
+     for (x <-- t) orderby (x.a) [x] *)
 
   type orders = order_index list
 
+  (* FIXME:
+     
+     This datatype probably doesn't need to be polymorphic. *)
   type 'a query_tree = [ `Node of orders * (int * 'a query_tree) list
                        | `Leaf of 'a * orders ]
 
@@ -733,7 +792,6 @@ struct
 
   let gens : (Var.var * t) list -> t list = concat_map gen
 
-
   let base_type_of_expression t =
     match type_of_expression t with
       | `Primitive p -> p
@@ -741,19 +799,46 @@ struct
 
   let default_of_base_value = default_of_base_type -<- base_type_of_expression
 
+  (* convert orders to a list of expressions
+
+     - represent generators by projecting all fields
+     - ignore tail generators
+  *)
   let long_orders : orders -> t list =
     let long =
       function
-        | `Gen g    -> gen g
-        | `Val t    -> [t]
-        | `DefGen g -> List.map default_of_base_value (gen g)
-        | `DefVal t -> [default_of_base_type t]
-        | `Branch i -> [`Constant (`Int (Num.num_of_int i))]
+        | `Val t        -> [t]
+        | `Gen g        -> gen g
+        | `TailGen g    -> []
+        | `DefVal t     -> [default_of_base_type t]
+        | `DefGen g     -> List.map default_of_base_value (gen g)
+        | `DefTailGen g -> []
+        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
     in
       concat_map long
 
+  (* convert orders to a list of expressions
+
+       - represent generators by projecting all fields
+       - include tail generators
+
+     This gives us a completely deterministic list semantics.  *)
+  let strict_long_orders : orders -> t list =
+    let strict_long =
+      function
+        | `Val t        -> [t]
+        | `Gen g
+        | `TailGen g    -> gen g
+        | `DefVal t     -> [default_of_base_type t]
+        | `DefGen g
+        | `DefTailGen g -> List.map default_of_base_value (gen g)
+        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
+    in
+      concat_map strict_long
+
   let lift_vals = List.map (fun o -> `Val o)
   let lift_gens = List.map (fun g -> `Gen g)
+  let lift_tail_gens = List.map (fun g -> `TailGen g)
 
   let rec query : context -> t -> (context * t) query_tree =
     fun gs ->
@@ -768,7 +853,7 @@ struct
           let cs = queries (gs @ gs') vs in
             `Node (os', cs)
         | `For (gs', os, body) ->
-          `Leaf ((gs @ gs', body), lift_vals os @ lift_gens gs)
+          `Leaf ((gs @ gs', body), lift_vals os @ lift_gens gs @ lift_tail_gens gs')
         | `Singleton r ->
           `Leaf ((gs, `Singleton r), [])
         | _ -> assert false
@@ -784,13 +869,14 @@ struct
       in
         List.rev cs
 
-  (* convert all order order indexes to default values *)
+  (* convert all order indexes to default values *)
   let rec mask : (context * t) query_tree -> unit query_tree =
     let dv =
       List.map
         (function
-          | `Gen g -> `DefGen g
           | `Val t -> `DefVal (base_type_of_expression t)
+          | `Gen g -> `DefGen g
+          | `TailGen g -> `DefTailGen g
           | _ -> assert false)
     in
       function
