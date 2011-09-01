@@ -75,17 +75,6 @@ let unbox_string =
              (unbox_list v))
     | _ -> failwith ("failed to unbox string")
 
-(* let labels_of_fields fields =  *)
-(*   StringMap.fold (fun name _ labels -> StringSet.add name labels) *)
-(*     fields StringSet.empty *)
-(* let table_labels (_, _, (fields, _)) = labels_of_fields fields *)
-(* let rec labels_of_list = *)
-(*   function *)
-(*     | `Concat (v::vs) -> labels_of_list v *)
-(*     | `Singleton (`Record fields) -> labels_of_fields fields *)
-(*     | `Table table -> table_labels table *)
-(*     | _ -> assert false *)
-
 (** Returns which database was used if any.
 
    Currently this assumes that at most one database is used.
@@ -169,43 +158,9 @@ let rec tail_of_t : t -> t = fun v ->
       | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-(** Return the type of rows associated with a top-level non-empty expression *)
-(* let rec type_of_expression : t -> Types.datatype = fun v -> *)
-(*   let rec generators env : _ -> Types.datatype Env.Int.t = *)
-(*     function *)
-(*       | [] -> env *)
-(*       | (x, `Table (_, _, row))::gs -> *)
-(*           generators (Env.Int.bind env (x, `Record row)) gs *)
-(*       | _ -> assert false in *)
-(*   let rec base env : t -> Types.datatype = *)
-(*     function *)
-(*       | `Constant (`Bool b) -> Types.bool_type *)
-(*       | `Constant (`Int i) -> Types.int_type *)
-(*       | `Constant (`Char c) -> Types.char_type *)
-(*       | `Constant (`Float f) -> Types.float_type *)
-(*       | `Constant (`String s) -> Types.string_type *)
-(*       | `Project (`Var (x, _), name) -> *)
-(*           TypeUtils.project_type name (Env.Int.lookup env x) *)
-(*       | `If (_, t, _) -> base env t *)
-(*       | `Apply ("Empty", _) -> Types.bool_type (\* HACK *\) *)
-(*       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f) *)
-(*       | e -> Debug.print(Show.show show_t e); assert false in *)
-(*   let record env fields : Types.datatype = *)
-(*     Types.make_record_type (StringMap.map (base env) fields) in *)
-(*   let rec tail env : t -> Types.datatype = *)
-(*     function *)
-(*       | `Singleton (`Record fields) -> record env fields *)
-(*       | `If (_c, t, `Concat []) -> tail env t *)
-(*       | `Table (_, _, row) -> `Record row *)
-(*       | `Concat (e :: es) -> tail env e *)
-(*       | _ -> assert false *)
-(*   in *)
-(*     match v with *)
-(*       | `Concat (v::vs) -> type_of_expression v *)
-(*       | `For (gens, _os, body) -> tail (generators Env.Int.empty gens) body *)
-(*       | _ -> tail Env.Int.empty v *)
-
-
+(** Return the type associated with an expression *)
+(* Inferring the type of an expression is straightforward because all
+   variables are annotated with their types. *)
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let te = type_of_expression in
   let record fields : Types.datatype =
@@ -259,9 +214,6 @@ let rec value_of_expression : t -> Value.t = fun v ->
                                fields []))
       | _ -> assert false
 
-
-
-
 let labels_of_field_types field_types =
   StringMap.fold
     (fun name _ labels' ->
@@ -276,7 +228,6 @@ let rec field_types_of_list =
     | `Singleton (`Record fields) -> StringMap.map type_of_expression fields
     | `Table table -> table_field_types table
     | _ -> assert false
-
 
 module Eval =
 struct
@@ -373,61 +324,79 @@ struct
                 (* eta-expand record variables *)
                 eta_expand_var (x, field_types)
             | `Primitive "Nil" -> nil
-            | v -> v
+            (* We could consider detecting and eta-expand tables here.
+               The only other possible sources of table values would
+               be `Special or built-in functions that return table
+               values. (Currently there are no pure built-in functions
+               that return table values.)
+
+               Currently eta-expansion happens later, in the SQL
+               module.
+
+               On second thoughts, we *never* need to explicitly
+               eta-expand tables, as it is not possible to call
+               "AsList" directly. The "asList" function in the prelude
+               is defined as:
+
+               fun asList(t) server {for (x <-- t) [x]}
+            *)
+            | v ->
+              (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
+              v
         end
     | `Extend (ext_fields, r) -> 
-        begin
-          match opt_app (value env) (`Record StringMap.empty) r with
-            | `Record fields ->
-                `Record (StringMap.fold 
-                           (fun label v fields ->
-                              if StringMap.mem label fields then 
-                                eval_error
-                                  "Error adding fields: label %s already present"
-                                  label
-                              else
-                                StringMap.add label (value env v) fields)
-                           ext_fields
-                           fields)
-            | _ -> eval_error "Error adding fields: non-record"
-        end
+      begin
+        match opt_app (value env) (`Record StringMap.empty) r with
+          | `Record fields ->
+            `Record (StringMap.fold 
+                       (fun label v fields ->
+                         if StringMap.mem label fields then 
+                           eval_error
+                             "Error adding fields: label %s already present"
+                             label
+                         else
+                           StringMap.add label (value env v) fields)
+                       ext_fields
+                       fields)
+          | _ -> eval_error "Error adding fields: non-record"
+      end
     | `Project (label, r) ->
-        let rec project (r, label) =
-          match r with
-            | `Record fields ->
-                assert (StringMap.mem label fields);
-                StringMap.find label fields
-            | `If (c, t, e) ->
-                `If (c, project (t, label), project (e, label))
-            | `Var (x, field_types) ->
-                assert (StringMap.mem label field_types);
-                `Project (`Var (x, field_types), label)
-            | _ -> eval_error "Error projecting from record"
-        in
-          project (value env r, label)
+      let rec project (r, label) =
+        match r with
+          | `Record fields ->
+            assert (StringMap.mem label fields);
+            StringMap.find label fields
+          | `If (c, t, e) ->
+            `If (c, project (t, label), project (e, label))
+          | `Var (x, field_types) ->
+            assert (StringMap.mem label field_types);
+            `Project (`Var (x, field_types), label)
+          | _ -> eval_error "Error projecting from record"
+      in
+        project (value env r, label)
     | `Erase (labels, r) ->
-        let rec erase (r, labels) =
-          match r with
-            | `Record fields ->
-                assert (StringSet.for_all
-                          (fun label -> StringMap.mem label fields) labels);
-                `Record
-                  (StringMap.fold
-                     (fun label v fields ->
-                        if StringSet.mem label labels then
-                          fields
-                        else
-                          StringMap.add label v fields)
+      let rec erase (r, labels) =
+        match r with
+          | `Record fields ->
+            assert (StringSet.for_all
+                      (fun label -> StringMap.mem label fields) labels);
+            `Record
+              (StringMap.fold
+                 (fun label v fields ->
+                   if StringSet.mem label labels then
                      fields
-                     StringMap.empty)
-            | `If (c, t, e) ->
-                `If (c, erase (t, labels), erase (e, labels))
-            | `Var (x, field_types) ->
-              assert (StringSet.subset labels (labels_of_field_types field_types));
-              `Erase (`Var (x, field_types), labels)
-            | _ -> eval_error "Error erasing from record"
-        in
-          erase (value env r, labels)
+                   else
+                     StringMap.add label v fields)
+                 fields
+                 StringMap.empty)
+          | `If (c, t, e) ->
+            `If (c, erase (t, labels), erase (e, labels))
+          | `Var (x, field_types) ->
+            assert (StringSet.subset labels (labels_of_field_types field_types));
+            `Erase (`Var (x, field_types), labels)
+          | _ -> eval_error "Error erasing from record"
+      in
+        erase (value env r, labels)
     | `Inject (label, v, t) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
@@ -470,9 +439,7 @@ struct
             | `Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
                   reduce_for_source
-                    env
-                    (fun env (x, v, body) -> computation (bind env (x, v)) body)
-                    (x, xs, body)
+                    (xs, fun v -> computation (bind env (x, v)) body)
             | _ -> assert false
         end
     | `Primitive "Map", [f; xs] ->
@@ -481,9 +448,7 @@ struct
             | `Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
                   reduce_for_source
-                    env
-                    (fun env (x, v, body) -> `Singleton (computation (bind env (x, v)) body)) 
-                    (x, xs, body)
+                    (xs, fun v -> `Singleton (computation (bind env (x, v)) body))
             | _ -> assert false
         end
     | `Primitive "SortBy", [f; xs] ->
@@ -497,7 +462,9 @@ struct
                     | `Concat (_::_)
                     | `Singleton _
                     | `Table _ ->
-                        (* eta-expand the list *)
+                        (* I think we can omit the `Table case as it
+                           can never occur *)
+                        (* eta-expand *)
                         eta_expand_list xs
                     | _ -> assert false in
                 let xs = `For (gs, os', body) in
@@ -550,145 +517,126 @@ struct
     | `Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
     | `Special (`Query (None, e, _)) -> computation env e
-    | `Special _s -> failwith "special not allowed in query block"
+    | `Special _s ->
+      (* FIXME:
+
+         There's no particular reason why we can't allow
+         table declarations in query blocks.
+
+         Same goes for database declarations. (However, we do still
+         have the problem that we currently have no way of enforcing
+         that only one database be used inside a query block - see
+         SML#.)  *)
+      failwith "special not allowed in query block"
     | `Case (v, cases, default) ->
-        let rec reduce_case (v, cases, default) =
-          match v with
-            | `Variant (label, v) as w ->
-                begin
-                  match StringMap.lookup label cases, default with
-                    | Some ((x, _), c), _ ->
-                        computation (bind env (x, v)) c
-                    | None, Some ((z, _), c) ->
-                        computation (bind env (z, w)) c
-                    | None, None -> eval_error "Pattern matching failed"
-                end
-            | `If (c, t, e) ->
-                `If
-                  (c,
-                   reduce_case (t, cases, default),
-                   reduce_case (e, cases, default))
-            |  _ -> assert false
-        in
-          reduce_case (value env v, cases, default)
+      let rec reduce_case (v, cases, default) =
+        match v with
+          | `Variant (label, v) as w ->
+            begin
+              match StringMap.lookup label cases, default with
+                | Some ((x, _), c), _ ->
+                  computation (bind env (x, v)) c
+                | None, Some ((z, _), c) ->
+                  computation (bind env (z, w)) c
+                | None, None -> eval_error "Pattern matching failed"
+            end
+          | `If (c, t, e) ->
+            `If
+              (c,
+               reduce_case (t, cases, default),
+               reduce_case (e, cases, default))
+          |  _ -> assert false
+      in
+        reduce_case (value env v, cases, default)
     | `If (c, t, e) ->
-        let c = value env c in
-        let t = computation env t in
-        let e = computation env e in
-          reduce_if_condition (c, t, e)
-            (*     | `Special (`For (x, source, body)) -> *)
-            (*         reduce_for_source env computation (Var.var_of_binder x, value env source, body) *)
+      let c = value env c in
+      let t = computation env t in
+      let e = computation env e in
+        reduce_if_condition (c, t, e)
   and reduce_concat vs =
     let vs =
-      (concat_map
-         (function
-            | `Concat vs -> vs
-            | v -> [v])
-         vs)
+      concat_map
+        (function
+          | `Concat vs -> vs
+          | v -> [v])
+        vs
     in
       match vs with
         | [v] -> v
         | vs -> `Concat vs
-  and reduce_for_source env eval_body (x, source, body) =
-    let prefix (gs, os) =
-      function
-        | `For (gs', os', body) -> `For (gs @ gs', os @ os', body)
-        | body                  -> `For (gs, os, body) in
-    let rs = reduce_for_source env eval_body in
-    let rb = reduce_for_body in
-      match source with
-        | `Singleton v -> eval_body env (x, v, body)
-        | `Concat vs ->
-          reduce_concat (List.map (fun v -> rs (x, v, body)) vs)
-        | `If (c, t, e) ->
-          assert (e = nil);
-          reduce_for_source
-            env
-            (fun env (x, v, body) ->
-              reduce_where_condition (c, eval_body env (x, v, body)))
-            (x, t, body)
-        | `For (gs, os, v) ->
-          prefix (gs, os) (reduce_for_source env eval_body (x, v, body))
-          (* (\* prefix the continuation with (gs, os) *\) *)
-          (* (\* (this lifts concatenation out of the bodies of comprehensions) *\) *)
-          (* let rec prefix = *)
-          (*   function *)
-          (*     | `Concat vs         -> `Concat (List.map prefix vs) *)
-          (*     | `For (gs', os', v) -> `For (gs @ gs', os @ os', v) *)
-          (*     | v                  -> `For (gs, os, v) *)
-          (* in *)
-          (*   reduce_for_source *)
-          (*     env *)
-          (*     (fun env r -> prefix (eval_body env r)) *)
-          (*     (x, v, body) *)
-        | `Table table ->
-          let field_types = table_field_types table in
-          (* we need to freshen x in order to correctly handle self joins *)
-          let x' = Var.fresh_raw_var () in
-            prefix ([(x', source)], []) (eval_body env (x, `Var (x', field_types), body))
-          (* let labels = table_labels table in *)
-          (* (\* we need to freshen x in order to correctly handle self joins *\) *)
-          (* let x' = Var.fresh_raw_var () in *)
-          (*   rb (x', source, eval_body env (x, `Var (x', labels), body)) *)
-        | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
-  and reduce_for_body (x, source, body) =
+  and reduce_for_source : t * (t -> t) -> t =
+    fun (source, body) ->
+      let rs = fun source -> reduce_for_source (source, body) in
+        match source with
+          | `Singleton v -> body v
+          | `Concat vs ->
+            reduce_concat (List.map rs vs)
+          | `If (c, t, `Concat []) ->
+            reduce_for_source
+              (t, fun v -> reduce_where_then (c, body v))
+          | `For (gs, os, v) ->
+            reduce_for_body (gs, os, rs v)
+          | `Table table ->
+            let field_types = table_field_types table in
+            (* we need to generate a fresh variable in order to
+               correctly handle self joins *)
+            let x = Var.fresh_raw_var () in
+              reduce_for_body ([(x, source)], [], body (`Var (x, field_types)))
+          | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
+  and reduce_for_body (gs, os, body) =
     match body with
-      | `Concat vs ->
-        reduce_concat (List.map (fun v -> reduce_for_body (x, source, v)) vs)
-      | `For (gs, os, body) ->
-        `For ((x, source)::gs, os, body)
-      | _ ->
-        `For ([x, source], [], body)
-  and reduce_where_condition (c, t) =
-    assert (is_list t);
-    if t = nil then nil
-    else reduce_if_then (c, t, nil)
+      | `For (gs', os', body') -> `For (gs @ gs', os @ os', body')
+      | _                      -> `For (gs, os, body)
   and reduce_if_condition (c, t, e) =
     match c with
       | `Constant (`Bool true) -> t
       | `Constant (`Bool false) -> e
-      | c when is_list t ->
-          if e = nil then
-            if t = nil then nil
-            else
-              reduce_if_then (c, t, e)
-          else
-            reduce_concat [reduce_if_condition (c, t, nil);
-                           reduce_if_condition (reduce_not c, e, nil)]
       | `If (c', t', `Constant (`Bool false)) ->
-          reduce_if_then (reduce_and (c', t'), t, e)
+        reduce_if_then (reduce_and (c', t'), t, e)
       | _ ->
+        if is_list t then
+          if e = nil then
+            reduce_where_then (c, t)
+          else
+            reduce_concat [reduce_where_then (c, t);
+                           reduce_where_then (reduce_not c, e)]
+        else
           reduce_if_then (c, t, e)
+  and reduce_where_then (c, t) =
+    match t with
+      | `Concat vs ->
+        reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
+      | `For (gs, os, body) ->
+        `For (gs, os, reduce_where_then (c, body))
+      | `If (c', t', `Concat []) ->
+        reduce_where_then (reduce_and (c, c'), t')
+      | _ ->
+        `If (c, t, `Concat [])
   and reduce_if_then (c, t, e) =
-    let rt = reduce_if_then in
-      match t with
-        | `Concat vs ->
-            reduce_concat (List.map (fun v -> rt (c, v, e)) vs)
-        | `For (gs, os, body) ->
-            `For (gs, os, rt (c, body, e))
-        | `Record then_fields ->
-            begin match e with
-              | `Record else_fields ->
-                  assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
-                  `Record
-                    (StringMap.fold
-                       (fun name t fields ->
-                          let e = StringMap.find name else_fields in
-                            StringMap.add name (rt (c, t, e)) fields)
-                       then_fields
-                       StringMap.empty)
-              | _ -> eval_error "Mismatched fields"
-            end
-        | _ ->
-            begin
-              match t, e with
-                | `Constant (`Bool true), _ ->
-                  reduce_or (c, e)
-                | _, `Constant (`Bool false) ->
-                  reduce_and (c, t)
-                | _ ->
-                  `If (c, t, e)
-            end
+    match t with
+      | `Record then_fields ->
+        begin match e with
+          | `Record else_fields ->
+            assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
+            `Record
+              (StringMap.fold
+                 (fun name t fields ->
+                   let e = StringMap.find name else_fields in
+                     StringMap.add name (reduce_if_then (c, t, e)) fields)
+                 then_fields
+                 StringMap.empty)
+          | _ -> eval_error "Mismatched fields"
+        end
+      | _ ->
+        begin
+          match t, e with
+            | `Constant (`Bool true), _ ->
+              reduce_or (c, e)
+            | _, `Constant (`Bool false) ->
+              reduce_and (c, t)
+            | _ ->
+              `If (c, t, e)
+        end
   (* simple optimisations *)
   and reduce_and (a, b) =
     match a, b with
@@ -1223,6 +1171,8 @@ struct
           end
       | `Table (_db, table, (fields, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
+        (* In fact this should never be necessary as it is impossible
+           to produce non-eta expanded tables. *)
         let var = fresh_table_var () in
         let fields =
           List.rev
@@ -1394,7 +1344,7 @@ end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
-(*     Debug.print ("e: "^Show.show Ir.show_computation e); *)
+    (* Debug.print ("e: "^Show.show Ir.show_computation e); *)
     let v = Eval.eval env e in
 (*       Debug.print ("v: "^string_of_t v); *)
       match used_database v with
