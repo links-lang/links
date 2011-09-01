@@ -78,11 +78,10 @@ let execute_select
       else
         let name = result#fname i in
           if start_of ~is:"order_" name then
-            (* ignore ordering fields, which are all presumed to be at
-               the end of the row *)
-            []
+            (* ignore ordering fields *)
+            rs (i+1)
           else if List.mem_assoc name field_types then
-            (name, List.assoc name field_types) :: rs (i+1)
+            (name, (List.assoc name field_types, i)) :: rs (i+1)
           else
             failwith("Column " ^ name ^
                         " had no type info in query's type spec: " ^
@@ -104,22 +103,25 @@ let execute_select
                    SQL's inability to handle empty column lists *)
                 `List (map (fun _ -> `Record []) result#get_all_lst)
             | _ ->
-                let row_fields = result_signature result in
-                let used_fields = List.length row_fields in
+                let fields = result_signature result in
 
                 let is_null (name, _) =
                   if name = "null" then true
-                  else if mem_assoc name field_types then false
+                  else if mem_assoc name fields then false
                   else assert false in
-                let null_query = exists is_null row_fields in
+                let null_query = exists is_null fields in
                   if null_query then
                     `List (map (fun _ -> `Record []) result#get_all_lst)
                   else
-                    `List (map (fun rowvalue ->
-                                  `Record (map2 (fun (name, t) fldvalue -> 
-			                           name, value_of_db_string fldvalue t)
-                                             row_fields (take used_fields rowvalue)))
-                             result#get_all_lst)
+                    `List (map
+                             (fun row ->
+                               `Record (
+                                 List.fold_right
+                                   (fun (name, (t, i)) fields ->
+                                     (name, value_of_db_string (List.nth row i) t)::fields)
+                                   fields
+                                   []))
+                      result#get_all_lst)
 
 let execute_untyped_select (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
