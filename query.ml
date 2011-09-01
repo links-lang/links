@@ -654,9 +654,9 @@ struct
               reduce_if_then (c, t, e)
           else
             reduce_concat [reduce_if_condition (c, t, nil);
-                           reduce_if_condition (`Apply ("not", [c]), e, nil)]
+                           reduce_if_condition (reduce_not c, e, nil)]
       | `If (c', t', `Constant (`Bool false)) ->
-          reduce_if_then (`Apply ("&&", [c'; t']), t, e)
+          reduce_if_then (reduce_and (c', t'), t, e)
       | _ ->
           reduce_if_then (c, t, e)
   and reduce_if_then (c, t, e) =
@@ -683,13 +683,32 @@ struct
             begin
               match t, e with
                 | `Constant (`Bool true), _ ->
-                    `Apply ("||", [c; e])
+                  reduce_or (c, e)
                 | _, `Constant (`Bool false) ->
-                    `Apply ("&&", [c; t])
+                  reduce_and (c, t)
                 | _ ->
-                    `If (c, t, e)
+                  `If (c, t, e)
             end
-
+  (* simple optimisations *)
+  and reduce_and (a, b) =
+    match a, b with
+      | `Constant (`Bool true), x
+      | x, `Constant (`Bool true)
+      | (`Constant (`Bool false) as x), _
+      | _, (`Constant (`Bool false) as x) -> x
+      | _ -> `Apply ("&&", [a; b])
+  and reduce_or (a, b) =
+    match a, b with
+      | (`Constant (`Bool true) as x), _
+      | _, (`Constant (`Bool true) as x)
+      | `Constant (`Bool false), x
+      | x, `Constant (`Bool false) -> x
+      | _ -> `Apply ("||", [a; b])
+  and reduce_not a =
+    match a with
+      | `Constant (`Bool false) -> `Constant (`Bool true)
+      | `Constant (`Bool true) -> `Constant (`Bool false)
+      | _ -> `Apply ("not", [a])
 
   let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e);*)
@@ -947,6 +966,10 @@ struct
       let ss = flatten_tree q in
         ss
 
+  (* FIXME:
+
+     Be more careful about ensuring that the order index field names
+     do not clash with existing field names *)
   let query_of_clause (gs, body, os) =
     let rec add_indexes fields i =
       function
