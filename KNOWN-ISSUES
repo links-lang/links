@@ -23,27 +23,12 @@ complexity of sorting becomes O(n^2 log n) instead of O(n log n)).
    convertible to a query fails to detect recursion that sneaks in via
    recursive types.  For example,
 
-     query { (fun (x) { x.unroll(x)})
-             ((unroll = (fun (x) { x.unroll(x) }))) }
+     sig f : mu a . (((unroll:a)) -> b)
+     fun f(x) {x.unroll(x)}
+     
+     query {f((unroll=f))}
 
-   is accepted and loops for ever when infer_recursive_types is set to
-   "guarded" (the default) or "all".
-
- * Because strings are represented as character lists, some operations
-that cannot be compiled to the database are not caught by the type
-checker. For example, the program
-
-     var items = table "items" with (name : String)
-                 from database "draggable";
-     query {
-       for (r <-- items)
-        [(l=for (c <- r.name)
-             if (c <> 'a') {[c] : String}
-             else {""})]
-     };
-
-fails at run-time because the query-compiler doesn't know how to
-compile the inner for comprehension to the database.
+   is accepted and loops for ever.
 
  * Pattern-matching is always typed as being compileable to the
 database, but pattern matching on lists compiles to functions hd and

@@ -72,3 +72,7 @@ Duplicate fields
 (x=3,x=3)
 stderr : @.
 exit : 1
+
+Uninhabited recursive rows (questionable)
+(fun (x : (|(mu b . b))) {x})(())
+stdout : () : ()
