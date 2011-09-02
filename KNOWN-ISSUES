@@ -23,10 +23,10 @@ complexity of sorting becomes O(n^2 log n) instead of O(n log n)).
    convertible to a query fails to detect recursion that sneaks in via
    recursive types.  For example,
 
-     sig f : mu a . (((unroll:a)) -> b)
-     fun f(x) {x.unroll(x)}
+     sig f : mu a . ((a) -> b)
+     fun f(x) {x(x)}
      
-     query {f((unroll=f))}
+     query {f(f)}
 
    is accepted and loops for ever.
 
