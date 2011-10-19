@@ -110,7 +110,11 @@ class pg_database host port dbname user password = object(self)
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
-  method escape_string s = connection#escape_string s
+  method escape_string s =
+    connection#escape_string s
+  method quote_field f =
+    "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" f ^ "\""
+
 
 (* jcheney: Added quoting to avoid problems with mysql keywords. *)
   method make_insert_query (table_name, field_names, vss) =

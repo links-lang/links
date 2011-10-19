@@ -575,6 +575,18 @@ struct
             reduce_for_source
               (t, fun v -> reduce_where_then (c, body v))
           | `For (gs, os, v) ->
+            (* NOTE:
+               
+               We are relying on peculiarities of the way we manage
+               the environment in order to avoid having to
+               augment it with the generator bindings here.
+
+               In particular, we rely on the fact that if a variable
+               is not found on a lookup then we return the eta
+               expansion of that variable rather than complaining that
+               it isn't bound in the environment.
+
+            *)
             reduce_for_body (gs, os, rs v)
           | `Table table ->
             let field_types = table_field_types table in
@@ -591,8 +603,12 @@ struct
     match c with
       | `Constant (`Bool true) -> t
       | `Constant (`Bool false) -> e
-      | `If (c', t', `Constant (`Bool false)) ->
-        reduce_if_then (reduce_and (c', t'), t, e)
+      | `If (c', t', e') ->
+        reduce_if_body
+          (reduce_or (reduce_and (c', t'),
+                      reduce_and (reduce_not c', t')),
+           t,
+           e)
       | _ ->
         if is_list t then
           if e = nil then
@@ -601,7 +617,7 @@ struct
             reduce_concat [reduce_where_then (c, t);
                            reduce_where_then (reduce_not c, e)]
         else
-          reduce_if_then (c, t, e)
+          reduce_if_body (c, t, e)
   and reduce_where_then (c, t) =
     match t with
       | `Concat vs ->
@@ -612,7 +628,7 @@ struct
         reduce_where_then (reduce_and (c, c'), t')
       | _ ->
         `If (c, t, `Concat [])
-  and reduce_if_then (c, t, e) =
+  and reduce_if_body (c, t, e) =
     match t with
       | `Record then_fields ->
         begin match e with
@@ -622,9 +638,11 @@ struct
               (StringMap.fold
                  (fun name t fields ->
                    let e = StringMap.find name else_fields in
-                     StringMap.add name (reduce_if_then (c, t, e)) fields)
+                     StringMap.add name (reduce_if_body (c, t, e)) fields)
                  then_fields
                  StringMap.empty)
+          (* NOTE: this relies on any record variables having
+             been eta-expanded by this point *)
           | _ -> eval_error "Mismatched fields"
         end
       | _ ->
@@ -659,7 +677,7 @@ struct
       | _ -> `Apply ("not", [a])
 
   let eval env e =
-(*    Debug.print ("e: "^Ir.Show_computation.show e);*)
+(*    Debug.print ("e: "^Ir.Show_computation.show e); *)
     computation (env_of_value_env env) e
 end
 
@@ -1053,15 +1071,24 @@ struct
       in
         " order by " ^ String.concat "," (order 1 n)
 
-  let rec string_of_query db q =
-    let sq = string_of_query db in
+  (* For `Empty and `Length we don't care about the actual data
+     returned. This allows these operators to take lists that have any
+     element type at all. *)
+
+  let rec string_of_query db ignore_fields q =
+    let sq = string_of_query db ignore_fields in
     let sb = string_of_base db false in
-    let string_of_fields =
-      function
-        | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
-        | fields -> mapstrcat ","
-                      (fun (b, l) -> "(" ^ sb b ^ ") as "^ string_of_label l) 
-                      fields
+    let string_of_fields fields =
+      if ignore_fields then
+        "0 as dummy" (* SQL doesn't support empty records! *)
+      else
+        match fields with
+          | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
+          | fields ->
+            mapstrcat ","
+              (fun (b, l) ->
+                "(" ^ sb b ^ ") as "^ db#quote_field l) (* string_of_label l) *)
+              fields
     in
       match q with
         | `UnionAll ([], _) -> assert false
@@ -1103,6 +1130,10 @@ struct
         | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
                   | "stringToFloat"), [v]) -> sb v
         | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
+
+        (* optimisation *)
+        | `Apply ("not", [`Empty q]) -> "exists (" ^ string_of_query db true q ^ ")"
+
         | `Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
         | `Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
         | `Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
@@ -1117,8 +1148,8 @@ struct
         | `Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
         | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
         | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-        | `Empty q -> "not exists (" ^ string_of_query db q ^ ")"
-        | `Length q -> "select count(*) from (" ^ string_of_query db q ^ ") as " ^ fresh_dummy_var ()
+        | `Empty q -> "not exists (" ^ string_of_query db true q ^ ")"
+        | `Length q -> "select count(*) from (" ^ string_of_query db true q ^ ") as " ^ fresh_dummy_var ()
 
   let string_of_query db range q =
     let range =
@@ -1126,7 +1157,7 @@ struct
         | None -> ""
         | Some (limit, offset) -> " limit " ^Num.string_of_num limit^" offset "^Num.string_of_num offset
     in
-      string_of_query db q ^ range
+      string_of_query db false q ^ range
 
   let rec prepare_clauses : t -> t list =
     function
@@ -1134,7 +1165,7 @@ struct
       | v -> [v]
 
   let rec clause : Value.database -> t -> query = fun db v ->
-(*    Debug.print ("clause: "^string_of_t v);*)
+(*    Debug.print ("clause: "^string_of_t v); *)
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
@@ -1193,6 +1224,12 @@ struct
                [])
         in
           `Select (fields, [], `Constant (`Bool true), [])
+
+      | `Singleton _ ->
+        (* If we're inside an `Empty or a `Length it's safe to
+           ignore any fields here. Otherwise this line should be
+           unreachable. *)
+        `Select ([], [], `Constant (`Bool true), [])
       | _ -> assert false
   and base : Value.database -> t -> base = fun db ->
     function

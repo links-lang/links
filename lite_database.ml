@@ -63,6 +63,7 @@ class lite_database file = object(self)
       new lite_result vm
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
+  method quote_field = self#escape_string
 end
 
 let driver_name = "sqlite"

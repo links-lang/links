@@ -245,7 +245,8 @@ class mysql_database spec = object(self)
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
   method escape_string = Mysql.escape
-  method quote_field f = "`"^self#escape_string f^"`"
+  method quote_field f =
+    "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
   method make_insert_returning_query : (string * string list * string list list * string) -> string list =
     fun (table_name, field_names, vss, returning) ->
       [self#make_insert_query(table_name, field_names, vss);

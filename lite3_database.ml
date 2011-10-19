@@ -81,6 +81,7 @@ class lite3_database file = object(self)
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
+  method quote_field = self#escape_string
   method driver_name () = "sqlite3"
 end
 
