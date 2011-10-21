@@ -483,6 +483,14 @@ struct
                       | _ -> assert false
                   end
         end
+    | `Primitive "not", [v] ->
+      reduce_not (v)
+    | `Primitive "&&", [v; w] ->
+      reduce_and (v, w)
+    | `Primitive "||", [v; w] ->
+      reduce_or (v, w)
+    | `Primitive "==", [v; w] ->
+      reduce_eq (v, w)
     | `Primitive f, args ->
         `Apply (f, args)
     | `If (c, t, e), args ->
@@ -620,6 +628,10 @@ struct
           reduce_if_body (c, t, e)
   and reduce_where_then (c, t) =
     match t with
+      (* optimisation *)
+      | `Constant (`Bool true) -> t
+      | `Constant (`Bool false) -> `Concat []
+
       | `Concat vs ->
         reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
       | `For (gs, os, body) ->
@@ -673,9 +685,35 @@ struct
   and reduce_not a =
     match a with
       | `Constant (`Bool false) -> `Constant (`Bool true)
-      | `Constant (`Bool true) -> `Constant (`Bool false)
-      | _ -> `Apply ("not", [a])
-
+      | `Constant (`Bool true)  -> `Constant (`Bool false)
+      | _                       -> `Apply ("not", [a])
+  and reduce_eq (a, b) =
+    let bool x = `Constant (`Bool x) in
+    let eq_constant =
+      function
+        | (`Bool a  , `Bool b)   -> bool (a = b)
+        | (`Int a   , `Int b)    -> bool (Num.eq_num a b)
+        | (`Float a , `Float b)  -> bool (a = b)
+        | (`Char a  , `Char b)   -> bool (a = b)
+        | (`String a, `String b) -> bool (a = b)
+        | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b])
+    in
+      match a, b with
+        | (`Constant a, `Constant b) -> eq_constant (a, b)
+        | (`Variant (s1, a), `Variant (s2, b)) ->
+          if s1 <> s2 then
+            `Constant (`Bool false)
+          else
+            reduce_eq (a, b)              
+        | (`Record lfields, `Record rfields) -> 
+          List.fold_right2
+            (fun (s1, v1) (s2, v2) e ->
+              reduce_and (reduce_eq (v1, v2), e))
+            (StringMap.to_alist lfields)
+            (StringMap.to_alist rfields)
+            (`Constant (`Bool true))
+        | (a, b) -> `Apply ("==", [a; b])
+        
   let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e); *)
     computation (env_of_value_env env) e
@@ -687,6 +725,16 @@ module Order =
 struct
   type gen = Var.var * t
   type context = gen list
+
+(* TODO:
+     
+      - add a setting for selecting unordered queries
+      - more refined generation of ordered queries
+        - make use of unique keys to
+          cut down on the number of order indexes
+        - share order indexes when possible
+        - remove duplicate fields from the output
+  *)
 
   (* The following abstraction should allow us to customise the
      concrete choice of order indexes.
@@ -753,15 +801,12 @@ struct
 
   type orders = order_index list
 
-  (* FIXME:
-     
-     This datatype probably doesn't need to be polymorphic. *)
-  type 'a query_tree = [ `Node of orders * (int * 'a query_tree) list
-                       | `Leaf of 'a * orders ]
+  type query_tree = [ `Node of orders * (int * query_tree) list
+                    | `Leaf of (context * t) * orders ]
 
   type path = int list
 
-  type preclause = (path * (context * t)) * unit query_tree
+  type preclause = (path * (context * t)) * query_tree
   type clause = context * t * orders
 
   let gen : (Var.var * t) -> t list =
@@ -821,33 +866,38 @@ struct
     in
       concat_map strict_long
 
+  let no_orders : orders -> t list =
+    fun _ -> []
+
   let lift_vals = List.map (fun o -> `Val o)
   let lift_gens = List.map (fun g -> `Gen g)
   let lift_tail_gens = List.map (fun g -> `TailGen g)
 
-  let rec query : context -> t -> (context * t) query_tree =
-    fun gs ->
+  let rec query : context -> t -> t -> query_tree =
+    fun gs cond ->
       function
         | `Concat vs ->
-          let cs = queries gs vs in
+          let cs = queries gs cond vs in
             `Node ([], cs)
-        | `If (_, v, `Concat []) ->
-          query gs v
+        | `If (cond', v, `Concat []) ->
+          query gs (Eval.reduce_and (cond, cond')) v
         | `For (gs', os, `Concat vs) ->
           let os' = lift_vals os @ lift_gens gs' in
-          let cs = queries (gs @ gs') vs in
+          let cs = queries (gs @ gs') cond vs in
             `Node (os', cs)
         | `For (gs', os, body) ->
-          `Leaf ((gs @ gs', body), lift_vals os @ lift_gens gs @ lift_tail_gens gs')
+          `Leaf ((gs @ gs',
+                  Eval.reduce_where_then (cond, body)),
+                 lift_vals os @ lift_gens gs @ lift_tail_gens gs')
         | `Singleton r ->
-          `Leaf ((gs, `Singleton r), [])
+          `Leaf ((gs, Eval.reduce_where_then (cond, `Singleton r)), [])
         | _ -> assert false
-  and queries : context -> t list -> (int * (context * t) query_tree) list =
-    fun gs vs ->
+  and queries : context -> t -> t list -> (int * query_tree) list =
+    fun gs cond vs ->
       let i, cs =
         List.fold_left
           (fun (i, cs) v ->
-            let c = query gs v in
+            let c = query gs cond v in
               (i+1, (i, c)::cs))
           (1, [])
           vs
@@ -855,7 +905,7 @@ struct
         List.rev cs
 
   (* convert all order indexes to default values *)
-  let rec mask : (context * t) query_tree -> unit query_tree =
+  let rec mask : query_tree -> query_tree =
     let dv =
       List.map
         (function
@@ -866,23 +916,23 @@ struct
     in
       function
         | `Node (os, cs) -> `Node (dv os, mask_children cs)
-        | `Leaf (_, os)  -> `Leaf ((), dv os)
-  and mask_children : (int * (context * t) query_tree) list -> (int * unit query_tree) list =
+        | `Leaf (x, os)  -> `Leaf (x, dv os)
+  and mask_children : (int * query_tree) list -> (int * query_tree) list =
     fun cs ->
       List.map (fun (branch, tree) -> (branch, mask tree)) cs
 
   (* decompose a query tree into a list of preclauses
      (path, query, tree) *)
-  let rec decompose : (context * t) query_tree -> preclause list =
+  let rec decompose : query_tree -> preclause list =
     function
-      | `Leaf (q, os) -> [(([], q), `Leaf ((), os))]
+      | `Leaf (q, os) -> [(([], q), `Leaf (q, os))]
       | `Node (os, cs) ->
         List.map
           (fun ((path, q), cs) ->
             ((path, q), `Node (os, cs)))
           (decompose_children [] cs)
-  and decompose_children prefix : (int * (context * t) query_tree) list
-      -> ((int list * (context * t)) * (int * unit query_tree) list) list =
+  and decompose_children prefix : (int * query_tree) list
+      -> ((int list * (context * t)) * (int * query_tree) list) list =
     function
       | [] -> []
       | (branch, tree) :: cs ->
@@ -897,7 +947,7 @@ struct
 
   (* compute the order indexes for the specified query tree along a
      path *)
-  let rec flatten_at path active : unit query_tree -> orders =
+  let rec flatten_at path active : query_tree -> orders =
     let box branch = `Constant (`Int (Num.num_of_int branch)) in
       function
         | `Leaf (_, os) -> os
@@ -928,7 +978,7 @@ struct
 
   let query : t -> clause list =
     fun v ->
-      let q = query [] v in
+      let q = query [] (`Constant (`Bool true)) v in
       let ss = flatten_tree q in
         ss
 
@@ -936,7 +986,8 @@ struct
 
      Be more careful about ensuring that the order index field names
      do not clash with existing field names *)
-  let query_of_clause (gs, body, os) =
+  let query_of_clause pick_orders (gs, body, os) =
+    let orders = pick_orders os in
     let rec add_indexes fields i =
       function
         | []      -> fields
@@ -948,7 +999,7 @@ struct
     let rec order =
       function
         | `Singleton (`Record fields) ->
-          `Singleton (`Record (add_indexes fields 1 (long_orders os)))
+          `Singleton (`Record (add_indexes fields 1 orders))
         | `If (c, body, `Concat []) ->
           `If (c, order body, `Concat [])
         | _ -> assert false in
@@ -957,15 +1008,24 @@ struct
         | [] -> body'
         | _  -> `For (gs, [], body')
 
-  let index_length : clause list -> int =
-    function
-      | (_, _, os) :: _ -> List.length (long_orders os)
+  let index_length : (orders -> t list) -> clause list -> int =
+    fun pick_orders ->
+      function
+        | (_, _, os) :: _ -> List.length (pick_orders os)
 
   let ordered_query v =
     let ss = query v in
-    let n = index_length ss in
-    let vs = List.map query_of_clause ss in
+    let n = index_length long_orders ss in
+    let vs = List.map (query_of_clause long_orders) ss in
       vs, n
+
+  let unordered_query_of_clause (gs, body, os) =
+    match gs with
+      | [] -> body
+      | _  -> `For (gs, [], body)
+
+  let unordered_query v =
+    List.map unordered_query_of_clause (query v)
 end
 
 module Sql =
@@ -1259,15 +1319,6 @@ struct
       | `Project (`Var (x, _field_types), name) ->
           `Project (x, name)
       | `Constant c -> `Constant c
-      | `Concat cs ->
-          (* HACK: assume it's a string *)
-          `Constant
-            (`String
-               (Value.unbox_string
-                  (`List
-                     (List.map (function
-                                  | `Singleton (`Constant (`Char c)) -> `Char c
-                                  | _ -> assert false) cs))))
       | _ -> assert false
 
   (* convert a regexp to a like if possible *)
@@ -1342,6 +1393,14 @@ struct
     let q = `UnionAll (List.map (clause db) vs, n) in
       string_of_query db range q
 
+  let unordered_query db range v =
+    (* Debug.print ("v: "^string_of_t v); *)
+    reset_dummy_counter ();
+    let vs = Order.unordered_query v in
+    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
+    let q = `UnionAll (List.map (clause db) vs, 0) in
+      string_of_query db range q
+
   let wonky_query db range v =
 (*     Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
@@ -1383,7 +1442,7 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
   fun env (range, e) ->
     (* Debug.print ("e: "^Show.show Ir.show_computation e); *)
     let v = Eval.eval env e in
-(*       Debug.print ("v: "^string_of_t v); *)
+      (* Debug.print ("v: "^string_of_t v); *)
       match used_database v with
         | None -> None
         | Some db ->
