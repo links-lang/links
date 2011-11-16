@@ -723,32 +723,61 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       in
         is_unguarded IntSet.empty row in
 
-    (* extend_field_env traversal_env extending_env
-       extends traversal_env with all the fields in extending_env
+    (* extend_field_env env0 env1
 
-       Matching `Present fields are unified.
+       For every label l in env0:
+         if l is in env1 then unify env0(l) with env1(l)
+         else add l |-> env0(l) to the extension environment
 
-       Any fields in extending_env, but not in traversal_env are
-       added to an extension environment which is returned.
+       Return the extension environment
     *)
-    let extend_field_env
-        (rec_env : unify_env)
-        (traversal_env : field_spec_map)
-        (extending_env : field_spec_map) =
-      StringMap.fold
-        (fun label field_spec extension ->
-           if StringMap.mem label extending_env then
-             let f, t = field_spec in
-             let f', t' = StringMap.find label extending_env in
-               unify_presence' rec_env (f, f');
-               unify' rec_env (t, t');
-               extension
-           else
-             StringMap.add label field_spec extension
-        ) traversal_env (StringMap.empty) in
+    let extend_field_env : unify_env -> field_spec_map -> field_spec_map -> field_spec_map =
+      fun rec_env env0 env1 ->
+        StringMap.fold
+          (fun label field_spec extension ->
+            if StringMap.mem label env1 then
+              let f, t = field_spec in
+              let f', t' = StringMap.find label env1 in
+                unify_presence' rec_env (f, f');
+                unify' rec_env (t, t');
+                extension
+            else
+              StringMap.add label field_spec extension
+          ) env0 (StringMap.empty) in
 
-    let unify_compatible_field_environments rec_env (field_env1, field_env2) =
-      ignore (extend_field_env rec_env field_env1 field_env2) in
+    (* unify_field_envs closed rec_env (lenv, renv)
+
+       unify lenv with renv
+       
+       The closed argument should be set to true when both
+       environments arise from closed rows. In this case missing
+       labels may be treated as absent *)
+    let unify_field_envs : bool -> unify_env -> (field_spec_map * field_spec_map) -> unit =
+      fun closed rec_env (lenv, renv) ->
+        let aux env1 env2 =
+          StringMap.iter
+            (fun label (f, t) ->
+              if StringMap.mem label env2 then
+                let f', t' = StringMap.find label env2 in
+                  unify_presence' rec_env (f, f');
+                  unify' rec_env (t, t')
+              else
+                match f with
+                  | (`Absent | `Var _) when closed ->
+                    (* closed rows don't need to explicitly mention absent *)
+                    unify_presence' rec_env (f, `Absent)
+                  | _ ->
+                    raise (Failure (`Msg ("Field environments\n "^ string_of_row (lenv, closed_row_var)
+                                          ^"\nand\n "^ string_of_row (renv, closed_row_var)
+                                          ^"\n could not be unified because they have different fields")))
+            ) env1
+        in
+          aux lenv renv;
+          aux renv lenv in
+
+    (* NONSENSE *)
+    (* let unify_compatible_field_environments rec_env (field_env1, field_env2) = *)
+    (*   ignore (extend_field_env rec_env field_env1 field_env2) in *)
 
     (* introduce a recursive row
        give an error if it is non-well-founded and
@@ -785,63 +814,63 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | _ -> assert false in
 
         (* unify row_var with `RigidRowVar var *)
-        let rigidify_empty_row_var (var, subkind) : row_var -> unit = fun point ->
-          match Unionfind.find point with
+        let rigidify_empty_row_var (point, (var, subkind)) : row_var -> unit = fun point' ->
+          match Unionfind.find point' with
             | `Closed ->
                 raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
             | `Flexible (_, subkind') ->
                 if subkind = `Any && subkind' = `Base then
                   raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
-                Unionfind.change point (`Rigid (var, subkind))
+                Unionfind.change point' (`Rigid (var, subkind))
             | `Rigid (var', _) when var=var' -> ()
+            | `Rigid (var', subkind') when subkind=subkind' && compatible_quantifiers (var, var') rec_env.qs ->
+              Unionfind.union point point'
             | `Rigid (var', _) ->
                 raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
             | _ -> assert false in
 
-        let rec extend = function
-          | point ->
-              (* point should be a row variable *)
-              let row_var = Unionfind.find point in
-                match row_var with
-                  | `Closed ->
-                      if is_empty_row extension_row then
-                        close_empty_row_var extension_row_var
-                      else
-                        raise (Failure (`Msg ("Closed row cannot be extended with non-empty row\n"
+        let rec extend = fun point ->
+          (* point should be a row variable *)
+          match Unionfind.find point with
+            | `Closed ->
+              if is_empty_row extension_row then
+                close_empty_row_var extension_row_var
+              else
+                raise (Failure (`Msg ("Closed row cannot be extended with non-empty row\n"
+                                      ^string_of_row extension_row)))
+            | `Rigid (var, subkind) ->
+              if is_empty_row extension_row then
+                rigidify_empty_row_var (point, (var, subkind)) extension_row_var
+              else
+                raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                               ^string_of_row extension_row)))
-                  | `Rigid (var, subkind) ->
-                      if is_empty_row extension_row then
-                        rigidify_empty_row_var (var, subkind) extension_row_var
-                      else
-                        raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
-                                              ^string_of_row extension_row)))
-                  | `Flexible (var, subkind) ->
-                      if TypeVarSet.mem var (free_row_type_vars extension_row) then
-                        begin
-                          if subkind = `Base then
-                            raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
-                                                    " with the body "^ string_of_row extension_row)));
-                          rec_row_intro point (var, extension_row)
-                        end
-                      else
-                        begin
-                          if subkind = `Base then
-                            if Types.is_baseable_row extension_row then
-                              Types.basify_row extension_row
-                            else
-                              raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
-                                                      " with the non-base row "^ string_of_row extension_row)));
-                          if StringMap.is_empty extension_field_env then
-                            match extension_row_var with
-                              | point' ->
-                                  Unionfind.union point point'
-                          else
-                            Unionfind.change point (`Body extension_row)
-                        end
-                  | `Recursive _ ->
-                      unify_rows' rec_env ((StringMap.empty, point), extension_row)
-                  | `Body row ->
-                      unify_rows' rec_env (row, extension_row)
+            | `Flexible (var, subkind) ->
+              if TypeVarSet.mem var (free_row_type_vars extension_row) then
+                begin
+                  if subkind = `Base then
+                    raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
+                                             " with the body "^ string_of_row extension_row)));
+                  rec_row_intro point (var, extension_row)
+                end
+              else
+                begin
+                  if subkind = `Base then
+                    if Types.is_baseable_row extension_row then
+                      Types.basify_row extension_row
+                    else
+                      raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
+                                               " with the non-base row "^ string_of_row extension_row)));
+                  if StringMap.is_empty extension_field_env then
+                    match extension_row_var with
+                      | point' ->
+                        Unionfind.union point point'
+                  else
+                    Unionfind.change point (`Body extension_row)
+                end
+            | `Recursive _ ->
+              unify_rows' rec_env ((StringMap.empty, point), extension_row)
+            | `Body row ->
+              unify_rows' rec_env (row, extension_row)
         in
           extend row_var in
 
@@ -910,38 +939,41 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           | Some rec_env -> register_rec_row p2 rec_env in
 
     let unify_both_rigid_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
-      (* return the present labels from an unwrapped row *)
-      let get_present_labels (field_env, _row_var) =
-        StringMap.fold
-          (fun label (flag, _) labels ->
-             match flag with
-               | `Present -> StringSet.add label labels
-               | `Absent
-               | `Var _ -> labels)
-          field_env
-          StringSet.empty in
+      (* NONSENSE *)
 
-      (* return the present / flexible labels from an unwrapped row *)
-      let get_possibly_present_labels (field_env, _row_var) =
-        StringMap.fold
-          (fun label (flag, _) labels ->
-             match flag with
-               | `Present -> StringSet.add label labels
-               | `Absent -> labels
-               | `Var point ->
-                   begin
-                     match Unionfind.find point with
-                       | `Flexible _ -> StringSet.add label labels
-                       | `Rigid _ -> labels
-                       | `Body _ -> assert false
-                   end)
-          field_env
-          StringSet.empty in
+      (* (\* return the present labels from an unwrapped row *\) *)
+      (* let get_present_labels (field_env, _row_var) = *)
+      (*   StringMap.fold *)
+      (*     (fun label (flag, _) labels -> *)
+      (*        match flag with *)
+      (*          | `Present -> StringSet.add label labels *)
+      (*          | `Absent *)
+      (*          | `Var _ -> labels) *)
+      (*     field_env *)
+      (*     StringSet.empty in *)
 
-      (* check that the field labels can possibly match up *)
-      let fields_are_compatible (lrow, rrow) =
-        (StringSet.subset (get_present_labels lrow) (get_possibly_present_labels rrow)) &&
-        (StringSet.subset (get_present_labels rrow) (get_possibly_present_labels lrow)) in
+      (* (\* return the present / flexible labels from an unwrapped row *\) *)
+      (* let get_possibly_present_labels (field_env, _row_var) = *)
+      (*   StringMap.fold *)
+      (*     (fun label (flag, _) labels -> *)
+      (*        match flag with *)
+      (*          | `Present -> StringSet.add label labels *)
+      (*          | `Absent -> labels *)
+      (*          | `Var point -> *)
+      (*              begin *)
+      (*                match Unionfind.find point with *)
+      (*                  | `Flexible _ -> StringSet.add label labels *)
+      (*                  | `Rigid _ -> labels *)
+      (*                  | `Body _ -> assert false *)
+      (*              end) *)
+      (*     field_env *)
+      (*     StringSet.empty in *)
+
+      (* NONSENSE *)
+      (* (\* check that the field labels can possibly match up *\) *)
+      (* let fields_are_compatible (lrow, rrow) = *)
+      (*   (StringSet.subset (get_present_labels lrow) (get_possibly_present_labels rrow)) && *)
+      (*   (StringSet.subset (get_present_labels rrow) (get_possibly_present_labels lrow)) in *)
 
       let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
       let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
@@ -949,41 +981,66 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           fail_on_absent_fields lfield_env;
           fail_on_absent_fields rfield_env;
         *)
-        match Unionfind.find lrow_var', Unionfind.find rrow_var' with
-          | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind && compatible_quantifiers (lvar, rvar) rec_env.qs ->
-              Unionfind.union lrow_var' rrow_var'
-          | `Rigid (rigid_var, rigid_kind), `Flexible (flexible_var, flexible_kind)
-          | `Flexible (flexible_var, flexible_kind), `Rigid (rigid_var, rigid_kind)
-              when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
-              if rigid_kind=flexible_kind || (rigid_kind=`Base && flexible_kind=`Any) then
-                Unionfind.union lrow_var' rrow_var'
-              else
-                raise (Failure (`Msg ("Incompatible type variable kinds")))
-          | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
+      let closed = 
+        begin
+          match Unionfind.find lrow_var', Unionfind.find rrow_var' with
+            | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind && 
+                                                           (lvar=rvar ||
+                                                               compatible_quantifiers (lvar, rvar) rec_env.qs) ->
+            (* FIXME:
+               
+               why is the lvar=rvar test sometimes necessary?
+            *)
+              Unionfind.union lrow_var' rrow_var'; false
+            | `Flexible _, _ | _, `Flexible _ ->
+              assert false
+            (* 
+               Both rows are rigid!
+            *)               
+            (* | `Rigid (rigid_var, rigid_kind), `Flexible (flexible_var, flexible_kind) *)
+            (* | `Flexible (flexible_var, flexible_kind), `Rigid (rigid_var, rigid_kind) *)
+            (*   when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs -> *)
+            (*   if rigid_kind=flexible_kind || (rigid_kind=`Base && flexible_kind=`Any) then *)
+            (*     Unionfind.union lrow_var' rrow_var' *)
+            (*   else *)
+            (*     raise (Failure (`Msg ("Incompatible type variable kinds"))) *)
+            | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
               raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
                                     ^"\nand\n "^ string_of_row lrow
                                     ^"\n could not be unified because they have distinct rigid row variables")))
-          | _, _ ->
-              if fields_are_compatible (lrow', rrow') then
-                let rec_env' =
-                  (register_rec_rows
-                     (lfield_env, lfield_env', lrec_row, rrow')
-                     (rfield_env, rfield_env', rrec_row, lrow')
-                     rec_env)
-                in
-                  match rec_env' with
-                    | None -> ()
-                    | Some rec_env ->
-                        unify_compatible_field_environments rec_env (lfield_env', rfield_env')
-              else
-                raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
-                                      ^"\nand\n "^ string_of_row rrow
-                                      ^"\n could not be unified because they have different fields"))) in
+            | `Rigid _, _
+            | _, `Rigid _ ->
+              raise (Failure (`Msg ("Rows\n "^ string_of_row lrow
+                                    ^"\nand\n "^ string_of_row lrow
+                                    ^"\n could not be unified because one is closed and the other has a rigid row variable")))
+            | _, _ -> true
+        end in
+(*        if fields_are_compatible (lrow', rrow') then *)
+      let rec_env' =
+        (register_rec_rows
+           (lfield_env, lfield_env', lrec_row, rrow')
+           (rfield_env, rfield_env', rrec_row, lrow')
+           rec_env)
+      in
+        match rec_env' with
+          | None -> ()
+          | Some rec_env ->
+            unify_field_envs closed rec_env (lfield_env', rfield_env') in
+(*                unify_compatible_field_environments rec_env (lfield_env', rfield_env') *)
+(*
+        else
+          raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
+                                ^"\nand\n "^ string_of_row rrow
+                                ^"\n could not be unified because they have different fields"))) in *)
 
-    let unify_both_rigid = unify_both_rigid_with_rec_env rec_env in
+    let unify_both_rigid (lrow, rrow) =
+      Debug.if_set (show_row_unification)
+        (fun () -> "(both rigid rows)");
+      unify_both_rigid_with_rec_env rec_env (lrow, rrow) in
 
     let unify_one_rigid ((rigid_field_env, _ as rigid_row), (open_field_env, _ as open_row)) =
       let (rigid_field_env', rigid_row_var') as rigid_row', rigid_rec_row = unwrap_row rigid_row in
+      let closed = is_closed_row rigid_row' in
       let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in 
         (* check that the open row contains no extra fields *)
         StringMap.iter
@@ -992,19 +1049,17 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                ()
              else
                match flag with
-                 | `Present ->
+                 | (`Absent | `Var _) when closed ->
+                   (* closed rows don't need to explicitly mention absent *)
+                   unify_presence' rec_env (flag, `Absent)
+                 | _ ->
                      raise (Failure
                               (`Msg 
                                  ("Rows\n "^ string_of_row rigid_row
                                   ^"\nand\n "^ string_of_row open_row
                                   ^"\n could not be unified because the former is rigid"
                                   ^" and the latter contains fields not present in the former")))
-                 | `Absent -> ()
-                 | `Var _ -> () (* TODO *)
           ) open_field_env';
-        
-        (* check that the closed row contains no absent fields *)
-        (*          fail_on_absent_fields closed_field_env; *)
         
         let rec_env' =
           (register_rec_rows
