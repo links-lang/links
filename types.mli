@@ -110,6 +110,7 @@ type environment        = datatype Env.String.t
     deriving (Show)
 
 val concrete_type : datatype -> datatype
+val concrete_presence_flag : presence_flag -> presence_flag
 
 val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
