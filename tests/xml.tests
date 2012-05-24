@@ -1,0 +1,97 @@
+Braced XML
+<f>{for (i <- []) <br/>}</f>
+stdout : <f/> : Xml
+
+Escaped braces
+<p>A left: {{ and a right: }}</p>
+stdout : <p>A left: { and a right: }</p> : Xml
+
+Escaped braces (not doubled)
+<p>A left: {{ and a right: }</p>
+stderr : @..*
+exit : 1
+
+Backslashes
+<p>A backslash \ </p>
+stdout : <p>A backslash \ </p> : Xml
+
+Top-level-bound XML object
+fun main() { var x = for (i <- []) <br/>; <f>{x}</f> } main()
+stdout : <f/> : Xml
+
+Let-bound XML object
+{var x = for (i <- []) <br/>; <f>{x}</f>}
+stdout : <f/> : Xml
+
+Whitespace preservation
+<a b="c"> <d/> </a>
+stdout : <a b="c"> <d/> </a> : Xml
+
+Element splicing [1]
+{var x = "three"; <a b="c">{stringToXml(x)}</a>}
+stdout : <a b="c">three</a> : Xml
+
+Element splicing [2]
+{var x = "hre"; <a b="c">t{stringToXml(x)}e</a>}
+stdout : <a b="c">three</a> : Xml
+
+Attribute splicing [1]
+{var x = "three"; <a b="{x}"><c/></a>}
+stdout : <a b="three"><c/></a> : Xml
+
+Attribute splicing [2]
+{var x = "three"; <a b="a{x}b"><c/></a>}
+stdout : <a b="athreeb"><c/></a> : Xml
+
+Rejection of incorrectly nested elements
+<a><b></a></b>
+stderr : @.*
+exit : 1
+
+Rejection of incorrectly typed attributes
+{var x = 3; <a b="{x}"><c/></a>}
+stderr : @.*
+exit : 1
+
+Rejection of incorrectly typed l:attributes
+{var x = 3; <a l:href="{x}"><c/></a>}
+stderr : @.*
+exit : 1
+
+Reject nonsense l:name attributes
+<form><input l:name="{1+1}" /></form>
+stderr : @.*
+exit : 1
+
+Accept okay l:name attributes
+<form l:action="{page <html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
+stdout : @<form action="#">.*</form> : Xml
+
+Looping in XML quasis
+var things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
+stdout : <ul><br/><br/></ul> : Xml
+
+Amp-encoding (OK)
+<xml>&lt;</xml>
+stdout : <xml>&lt;</xml> : Xml
+
+Amp-encoding (ill-formed XML)
+<xml>this & that</xml>
+stderr : @..*
+exit : 1
+
+Amp-encoding (converting from string)
+var x = "this & that"; <xml>{stringToXml(x)}</xml>
+stdout : <xml>this &amp; that</xml> : Xml
+
+Looping in XML quasis, with multiple content elements.
+var things = [1, 2];<ul>{for (x <- things) <#><li>{stringToXml(intToString(x))}</li><li>1</li></#>}</ul>
+stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : Xml
+
+XML forest
+<#>foo<a/><b>bar</b>fubar</#>
+stdout : foo<a/><b>bar</b>fubar : Xml
+
+Labelization bug
+(escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
+stdout : @.* : \[XmlItem\]

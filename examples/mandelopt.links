@@ -1,0 +1,124 @@
+var precision = 10;
+var realUnit = precision;
+
+var minPixSize = 16;
+
+fun zmagsq(c) {
+  var r = c.1; var i = c.2;
+  (r*r + i*i) / precision
+}
+
+fun zsquare(c) {
+  var r = c.1; var i = c.2;
+  ((r * r - i * i)/precision, (2 * r * i)/precision)
+}
+
+fun zplus(z1, z2) {
+  (z1.1 + z2.1, z1.2 + z2.2)
+}
+
+var the_limit = 16;
+
+fun mandelloop(z, c, i) {
+  if (zmagsq(z) > 4 * precision) {
+    i
+  } else if (i >= the_limit) {
+    i
+  } else {
+    # z <- c + z^2
+    mandelloop(zplus(c, zsquare(z)), c, i+1)
+  }
+}
+
+fun hexdigit(i) {
+  switch (i) {
+   case 0 -> "0"
+   case 1 -> "1"
+   case 2 -> "2"
+   case 3 -> "3"
+   case 4 -> "4"
+   case 5 -> "5"
+   case 6 -> "6"
+   case 7 -> "7"
+   case 8 -> "8"
+   case 9 -> "9"
+   case 10 -> "a"
+   case 11 -> "a"
+   case 12 -> "b"
+   case 13 -> "c"
+   case 14 -> "d"
+   case 15 -> "e"
+   case _ ->  "f"
+  }
+}
+
+fun redshade(i, max) {
+  if (i == max) "#000"
+  else
+    "#" ^^ hexdigit(16*i/max) ^^ "33"
+}
+
+fun pixeldiv(x, y, size, color) {
+  var s = intToString(size);
+  var sx = intToString(x);
+  var sy = intToString(y);
+  <div style="width:{s}px;height:{s}px;position:absolute;left:{sx}px;top:{sy}px;background-color:{redshade(color, the_limit)}"/>
+}
+
+fun mandelBlock(pixSize, x, y, regionSize, r, i) {
+  pixeldiv(x, y, pixSize, mandelloop((0,0),(r,i),0)) ++
+  pixeldiv(x+pixSize, y, pixSize, mandelloop((0,0),(r+regionSize,i),0)) ++
+  pixeldiv(x, y+pixSize, pixSize, mandelloop((0,0),(r,i+regionSize),0)) ++
+  pixeldiv(x+pixSize, y+pixSize, pixSize, mandelloop((0,0),(r+regionSize,i+regionSize),0))
+}
+
+fun mandelMadness(x, y, r, i, pixSize,
+                  maxx, maxy,
+                  mini, minr, maxi, maxr)
+{
+  var docElt = getDocumentNode();
+  var xdil = (maxi - mini) / (maxx - 0);
+  var regionSize = pixSize * xdil;
+
+  fun mm(x,y,r,i,pixSize) {
+
+  if (x+pixSize >= maxx) {
+      mm(0, y+pixSize, minr, i+regionSize, pixSize)
+  } else {
+    if (y+pixSize >= maxy) {
+      if (pixSize <= minPixSize) {
+        ()
+      } else {
+        mm(0, 0, minr, mini, pixSize/2)
+      }
+    } else {
+#      debug("x is " ^^ intToString(x));
+      appendChildren(mandelBlock(pixSize, x, y,
+                                 regionSize, r, i), docElt);
+      mandelMadness(x+pixSize, y, r+regionSize, i, pixSize,
+                    maxx, maxy,
+                    mini, minr, maxi, maxr)
+
+    }
+  }
+
+} mm(x,y,r,i,pixSize)
+}
+
+fun main() client {
+  replaceDocument(<body>
+    <div id="p0x0" />
+  </body>);
+
+  var minr = -20;
+  var mini = -15;
+  var maxr = 10;
+  var maxi = 15;
+  var pixelWidth = 256;
+  var aspect = (maxr-minr)/(maxi-mini);
+  mandelMadness(0, 0, minr, mini, pixelWidth/4,
+                pixelWidth * aspect, pixelWidth,
+                mini, minr, maxi, maxr)
+}
+
+{ main(); page <html></html>}

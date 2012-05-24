@@ -1,0 +1,4 @@
+Orderby clause (not a semantic test, just syntax)
+for (x <- [1, 2, 3]) orderby (x) [x]
+stdout : [1, 2, 3] : [Int]
+exit : 0

@@ -1,0 +1,19 @@
+head and tail
+(charAt("string", 0), strsub("string", 1, 5)) == ('s', "tring")
+stdout : true : Bool
+
+octal literals
+"L\151nks"
+stdout : "Links" : String
+
+hex literals
+"L\x69nks"
+stdout : "Links" : String
+
+concatenation
+"abc" ^^ "def"
+stdout : @"abcdef" : (\[Char\]|String)
+
+comparision
+"a" < "z"
+stdout : true : Bool

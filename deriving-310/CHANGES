@@ -1,0 +1,22 @@
+------------------------------------------------------------------------------
+0.1.1
+
+Changes from 0.1:
+
+  * Renamed serialisation classes:
+
+    Pickle -> Dump
+    Shelve -> Pickle
+
+  * Made Dump and Pickle interface compatible with each other and more
+    compatible with Marshal.
+
+  * Bugfix in the tag hash function on 64-bit platforms.
+
+  * Fixed a bug with a functor application quotation that used revised
+    syntax.
+
+------------------------------------------------------------------------------
+0.1
+
+Initial release

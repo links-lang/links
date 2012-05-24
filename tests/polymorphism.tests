@@ -1,0 +1,106 @@
+Let polymorphism [1]
+fun pair(x) { (x, x) } (pair('a'), pair(13))
+stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
+
+Let polymorphism [2]
+{fun pair(x) { (x, x) } (pair('a'), pair(13))}
+stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
+
+Monomorphic lambda bindings
+(fun (p) { (p('a'), p(13))})(fun (x) { (x,x) })
+stderr : @..*
+exit : 1
+
+No polymorphic recursion without signatures
+fun f(x) { ignore(f("a")); ignore(f(1)); 1}
+stderr : @..*
+exit : 1
+
+Polymorphic recursion with signatures
+sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f
+stdout : @fun : \(_\) ~> Int
+
+Invalid "polymorphic recursion"
+sig f : (_) ~> Int fun f(x) { x == 1; f("a"); f(1); 1 }
+stderr : @..*
+exit : 1
+
+Polymorphic mutual recursion [1]
+sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } f
+stdout : @fun : \(_\) ~> Int
+
+Polymorphic mutual recursion [2]
+sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } f
+stdout : @fun : \(_\) ~> Int
+
+Polymorphic mutual recursion [3]
+sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } f
+stdout : @fun : \(_\) ~> Int
+
+Polymorphic mutual recursion [4]
+sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } f
+stderr : @..*
+exit : 1
+
+Polymorphic row recursion
+sig h : ((| _)) ~> Int fun h(x) {h((x,x))} h
+stdout : @fun : \(|_\) ~> Int
+
+Polymorphic functions
+fun cons(x,l) {[x] ++ l} (cons(5, [6]), cons("a", ["b"]))
+stdout : @\(\[5, 6\], \["a", "b"\]\) : \(\[Int\], \[String\]\)
+
+Polymorphic functions in different function bodies
+fun cons(x,l) {[x] ++ l} fun f() { cons(5, [6]) } fun g() { cons("a", ["b"]) } (f(), g())
+stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
+
+Polymorphic functions in different function bodies (not in call order)
+fun f() { cons(5, [6]) } fun cons(x,l) {[x] ++ l} fun g() { cons("a", ["b"]) } (f(), g())
+stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
+
+Signatures on top-level variables
+sig x : Int var x = 3; x
+stdout : 3 : Int
+
+Value restriction
+sig f : (a) -> a var f = id(id); f
+stderr : @..*
+exit : 1
+
+Overly general signatures
+sig id : (a) -> b fun id(x) {x}
+stderr : @..*
+exit : 1
+
+Polymorphic effects for curried recursive functions
+fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
+stdout : fun : ((a) ~b~> (c) ~b~> d) -> ([a]) -> ([c]) ~b~> [d]
+
+Polymorphic function parameters (unannotated)
+fun (f) {(f(42), f(true))}
+stderr : @..*
+exit : 1
+
+Polymorphic function parameters (annotated)
+fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}
+stdout : fun : (forall a,b::Row.(a) -b-> a) -> (Int, Bool)
+
+Explicitly polymorphic signatures
+sig choose : forall a,d::Row,e::Row. (a) -d-> (a) -e-> a fun choose(x)(y) {x} choose
+stdout : fun : (a) -> (a) -> a
+
+Quantifiers in different orders
+fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
+stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
+
+Unwrap polymorphism
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; hd(ids)(3)
+stdout : 3 : Int
+
+Bad polymorphism behaviour (1)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+
+Bad polymorphism behaviour (2)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+stdout : [fun] : [(a) -> a]

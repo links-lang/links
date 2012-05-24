@@ -1,0 +1,32 @@
+Changes
+
+Version 0.3
+-----------
+
+New features
+
+ * Deep pattern matching
+ * Type signatures
+ * Rigid type variables
+ * Polymorphic recursion
+ * Refinement of polymorphic variant typing to make use of absence
+information
+ * User defineable operators, precedence and associativity
+ * Partial support for Internet Explorer
+ * Configuration files
+ * Database operations: insert, update and delete
+
+Syntax
+
+ * Tables are now handles rather than lists
+ * Tables and databases are first class
+ * Changes to DOM API
+  * get and set attributes
+
+Miscellaneous bug fixes in
+
+ * mysql driver
+ * SQLite driver
+ * JavaScript generation
+ * type inference
+ * database optimisation
