@@ -94,7 +94,7 @@ module Eval = struct
     | `Constant `Char c -> `Char c
     | `Constant `String s -> Value.box_string s
     | `Constant `Float f -> `Float f
-    | `Variable var -> lookup_var var env
+    | `Variable var | `SplicedVariable var -> lookup_var var env
 (*
         begin
           match lookup_var var env with
@@ -272,7 +272,8 @@ module Eval = struct
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), _) -> 
+          | `Fun ((f, _) as fb, (_, args, body), _) 
+			 | `FunQ ((f, _) as fb, (_, args, body), _) -> 
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
               let env' = 
@@ -321,7 +322,7 @@ module Eval = struct
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
     | `Return v      -> apply_cont cont env (value env v)
-    | `Apply (f, ps) ->
+    | `Apply (f, ps) | `ApplyPL (f, ps) | `ApplyDB (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont s
     | `Case (v, cases, default) ->

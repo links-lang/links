@@ -46,6 +46,8 @@ type location = Sugartypes.location
 type value =
   [ `Constant of constant
   | `Variable of var
+(* An argument variable had to be spliced when entering a query function *)
+  | `SplicedVariable of var
   | `Extend of (value name_map * value option)
   | `Project of (name * value)
   | `Erase of (name_set * value)
@@ -63,6 +65,10 @@ and tail_computation =
   [ `Return of (value)
   | `Apply of (value * value list)
 
+(* We need those in the IR -> IRq transformation. You can see them as two projection from any functions to pl or db functions *)
+  | `ApplyPL of (value * value list)
+  | `ApplyDB of (value * value list)
+
   | `Special of special
 
   | `Case of (value * (binder * computation) name_map * (binder * computation) option)
@@ -71,6 +77,8 @@ and tail_computation =
 and binding =
   [ `Let of binder * (tyvar list * tail_computation)
   | `Fun of (binder * (tyvar list * binder list * computation) * location)
+(* This can only be a query function *)
+  | `FunQ of (binder * (tyvar list * binder list * computation) * location)
   | `Rec of (binder * (tyvar list * binder list * computation) * location) list
   | `Alien of (binder * language)
   | `Module of (string * binding list option) ]
@@ -211,6 +219,14 @@ object (o : 'self_type)
             if Str.string_match (Str.regexp "__[0-9]*" ) name 0 then
 				  text name
 				else text (name ^ "/" ^ (string_of_int v))
+      | `SplicedVariable v ->
+          let name = match Env.Int.find venv v with
+            | Some n -> n
+            | None -> "NOT_FOUND"
+          in
+            if Str.string_match (Str.regexp "__[0-9]*" ) name 0 then
+				  text ( "#(" ^ name ^ ")" )
+				else text ( "#(" ^ name ^ "/" ^ (string_of_int v) ^ ")" )
 
       | `Extend (r, v) ->
           (let r_doc = doc_concat (text "," ^^ break)
@@ -244,7 +260,7 @@ object (o : 'self_type)
     match tc with
         `Return v -> o#value v
 
-      | `Apply (v, vl) -> 
+      | `Apply (v, vl) | `ApplyDB (v,vl) | `ApplyPL (v,vl) -> 
           group (nest 2 (o#value v ^| (doc_join o#value vl)))
 
       | `Case (v, names, opt) ->
@@ -311,7 +327,8 @@ object (o : 'self_type)
                 group(text "val" ^| o#binder x ^| text "=") ^| 
                     o#tail_computation tc))
                      
-      | `Fun (binder, (_, f_binders, comp), loc) ->
+      | `Fun (binder, (_, f_binders, comp), loc) 
+      | `FunQ (binder, (_, f_binders, comp), loc) ->
           let o = o#add_bindings (binder::f_binders) in
             o, group (
               nest 2 (
@@ -433,6 +450,7 @@ struct
       function
         | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
         | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o
+        | `SplicedVariable x -> let (x, t, o) = o#var x in `SplicedVariable x, t, o
         | `Extend (fields, base) ->
             let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
             let (base, base_type, o) = o#option (fun o -> o#value) base in
@@ -507,6 +525,16 @@ struct
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `Apply (f, args), deconstruct return_type ft, o
+        | `ApplyPL (f, args) ->
+            let f, ft, o = o#value f in
+            let args, arg_types, o = o#list (fun o -> o#value) args in
+              (* TODO: check arg types match *)
+              `ApplyPL (f, args), deconstruct return_type ft, o
+        | `ApplyDB (f, args) ->
+            let f, ft, o = o#value f in
+            let args, arg_types, o = o#list (fun o -> o#value) args in
+              (* TODO: check arg types match *)
+              `ApplyDB (f, args), deconstruct return_type ft, o
         | `Special special ->
             let special, t, o = o#special special in
               `Special special, t, o
@@ -610,6 +638,20 @@ struct
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
               `Fun (f, (tyvars, xs, body), location), o
+        | `FunQ (f, (tyvars, xs, body), location) ->
+            let xs, body, o =
+              let (xs, o) =
+                List.fold_right
+                  (fun x (xs, o) ->
+                     let x, o = o#binder x in
+                       (x::xs, o))
+                  xs
+                  ([], o) in
+              let body, _, o = o#computation body in
+                xs, body, o in
+            let f, o = o#binder f in
+              (* TODO: check that xs and body match up with f *)
+              `FunQ (f, (tyvars, xs, body), location), o
         | `Rec defs ->
             let _, o =
               List.fold_right
@@ -709,6 +751,61 @@ struct
   let program typing_env p =
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
+
+(** Duplicate every function whitout wild effect in a pair of a PL function and a DB function **)
+module FunctionDuplication = 
+struct
+
+  let is_wild f =
+	 true
+
+  let duplication tyenv =
+  object(o)
+	 inherit Transform.visitor(tyenv) as super
+		
+(* A flag to know if we are in a query *)
+	 val in_query = false
+(* All the duplicated function and their associated record *)
+	 val duplicated_function = IntSet.empty
+	 val arguments = IntSet.empty
+
+
+	 method enter_query () = {< in_query = true >}
+	 method exit_query () = {< in_query = false >}
+
+	 method add_argument var = {< arguments = IntSet.add var arguments >}
+	 method exit_fun () = {< arguments = IntSet.empty >}
+
+	 method value v = match v with
+		| `Variable x when IntSet.mem x arguments -> 
+			 super#value (`SplicedVariable x)
+		| _ -> super#value v
+
+	 method special sp = match sp with
+		| `Query _ when not in_query -> 
+			 let s,t,o = (o#enter_query())#special sp in
+			 s,t,o#exit_query()
+		| _ -> super#special sp
+			 
+	 method binding b = match b with
+		| `Fun f as constr when in_query && not (is_wild f) -> super#binding (constr)
+		| _ -> super#binding b
+
+	 method tail_computation tc = match tc with
+		| `Apply f when in_query -> 
+			 o#tail_computation (`ApplyDB f)
+		| `Apply f when is_wild f ->
+			 o#tail_computation(`ApplyPL f)
+		| _ -> super#tail_computation tc
+
+
+  end
+	 
+let duplicate_function tyenv program = 
+  ( duplication tyenv )#program program
+end
+
+  
 
 module RemoveApplyPure =
 struct
@@ -1106,7 +1203,8 @@ struct
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
             let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
               (o#close x fvs)#close_cont (IntSet.union fvs fvs') bs
-        | `Fun (f, (_tyvars, xs, body), _)::bs ->
+        | `Fun (f, (_tyvars, xs, body), _)::bs
+        | `FunQ (f, (_tyvars, xs, body), _)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
             let bound_vars =
               List.fold_right
@@ -1234,7 +1332,8 @@ let var_appln env name args =
   
 let rec funcmap_of_binding = function
   | `Let (b, (_, tc)) -> funcmap_of_tailcomp tc
-  | (`Fun (b, (_,_,body), _) as f) -> 
+  | `Fun (b, (_,_,body), _)
+  | `FunQ (b, (_,_,body), _) as f -> 
       (Var.var_of_binder b, f) :: funcmap_of_computation body
   | `Rec defs -> concat_map (fun ((b, (_,_,body), _) as def) -> 
                                (Var.var_of_binder b, `Rec defs) :: 
@@ -1242,7 +1341,7 @@ let rec funcmap_of_binding = function
   | `Alien (b, _lang) -> []
   | `Module _ -> failwith "Not implemented."
 and funcmap_of_tailcomp = function
-  | `Return _ | `Apply _ | `Special _ -> []
+  | `Return _ | `Apply _ | `ApplyDB _ | `ApplyPL _ | `Special _ -> []
   | `Case (_, branches, default) ->
       List.concat(StringMap.to_list
                     (fun _ (_, comp) -> funcmap_of_computation comp)

@@ -317,7 +317,7 @@ struct
 
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
-    | `Variable var ->
+    | `Variable var | `SplicedVariable var ->
         begin
           match lookup env var with
             | `Var (x, field_types) ->
@@ -507,9 +507,11 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
+              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native))
+              | `FunQ ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _) ->
+              | `Fun ((f, _) as fb, (_, args, body), _)
+              | `FunQ ((f, _) as fb, (_, args, body), _) ->
                   computation
                     (bind env (f, `Closure ((List.map fst args, body), env)))
                     (bs, tailcomp)
@@ -522,7 +524,9 @@ struct
           end
   and tail_computation env : Ir.tail_computation -> t = function
     | `Return v -> value env v
-    | `Apply (f, args) ->
+    | `Apply (f, args)
+    | `ApplyPL (f, args)
+    | `ApplyDB (f, args) ->
         apply env (value env f, List.map (value env) args)
     | `Special (`Query (None, e, _)) -> computation env e
     | `Special _s ->

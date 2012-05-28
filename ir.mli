@@ -39,6 +39,8 @@ type location = Sugartypes.location
 type value =
   [ `Constant of constant
   | `Variable of var
+(* An argument variable had to be spliced when entering a query function *)
+  | `SplicedVariable of var
   | `Extend of value name_map * value option
   | `Project of name * value
   | `Erase of name_set * value
@@ -55,6 +57,9 @@ type value =
 and tail_computation =
   [ `Return of value
   | `Apply of value * value list
+(* We need those in the IR -> IRq transformation. You can see them as two projection from any functions to pl or db functions *)
+  | `ApplyPL of (value * value list)
+  | `ApplyDB of (value * value list)
   | `Special of special
   | `Case of value * (binder * computation) name_map * (binder * computation) option
   | `If of value * computation * computation
@@ -62,6 +67,8 @@ and tail_computation =
 and binding =
   [ `Let of binder * (tyvar list * tail_computation)
   | `Fun of binder * (tyvar list * binder list * computation) * location
+(* This can only be a query function *)
+  | `FunQ of (binder * (tyvar list * binder list * computation) * location)
   | `Rec of (binder * (tyvar list * binder list * computation) * location) list
   | `Alien of binder * language
   | `Module of (string * binding list option) ]

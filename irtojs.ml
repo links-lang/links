@@ -433,7 +433,8 @@ struct
 
     method binding b =
       match b with
-        | `Fun (f, lam, _location) ->
+        | `Fun (f, lam, _location)
+        | `FunQ (f, lam, _location) ->
             let o = o#bind_fun (Var.var_of_binder f) lam in
               o#super_binding b
         | `Rec defs ->
@@ -458,11 +459,11 @@ struct
               let f = strip_poly f in
                 begin
                   match f with
-                    | `Variable v when VEnv.lookup venv v = "pickleCont" ->
+                    | `Variable v | `SplicedVariable v when VEnv.lookup venv v = "pickleCont" ->
                         (* an instance of [pickleCont(cont)] *)
                         let f =
                           match strip_poly cont with
-                            | `Variable f -> f
+                            | `Variable f | `SplicedVariable f -> f
                             | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
                           
                         (* hereafter [cont] is a variable, [`Variable f] *)
@@ -563,7 +564,7 @@ let rec generate_value env : Ir.value -> code =
               | `Char v     -> chrlit v
               | `String v   -> chrlistlit v
           end
-      | `Variable var ->
+      | `Variable var | `SplicedVariable var ->
           (* HACK *)
           let name = VEnv.lookup env var in
             if Arithmetic.is name then
@@ -612,7 +613,7 @@ let rec generate_value env : Ir.value -> code =
           let f = strip_poly f in
             begin
               match f with
-                | `Variable f ->
+                | `Variable f | `SplicedVariable f as constr ->
                     let f_name = VEnv.lookup env f in
                       begin
                         match vs with
@@ -631,7 +632,7 @@ let rec generate_value env : Ir.value -> code =
                               then
                                 Call (Var ("_" ^ f_name), List.map gv vs)
                               else
-                                Call (gv (`Variable f), List.map gv vs)
+                                Call (gv (constr), List.map gv vs)
                       end
                 | _ ->
                     Call (gv f, List.map gv vs)                      
@@ -692,7 +693,7 @@ let rec lambdalift_function
     in f_lifted -<- body_fs
 and lambdalift_binding =
   function
-  | `Fun def -> lambdalift_function def
+  | `Fun def | `FunQ def -> lambdalift_function def
   | `Rec defs -> List.fold_right (-<-) 
       (List.map (lambdalift_function) defs) 
         identity
@@ -702,7 +703,7 @@ and lambdalift_binding =
   | _ -> failwith "Not implemented"
 and lambdalift_tailcomp : Ir.tail_computation -> (code->code) = 
   function
-  | `Apply _
+  | `Apply _ | `ApplyPL _ | `ApplyDB _
   | `Special _
   | `Return _ -> identity
   | `Case (_, branches, default) -> 
@@ -732,11 +733,11 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
     match tc with
       | `Return v ->           
           callk_yielding kappa (gv v)
-      | `Apply (f, vs) ->
+      | `Apply (f, vs) | `ApplyPL (f, vs) | `ApplyDB (f, vs)  ->
           let f = strip_poly f in
             begin
               match f with
-                | `Variable f ->
+                | `Variable f | `SplicedVariable f as constr ->
                     let f_name = VEnv.lookup env f in
                       begin
                         match vs with
@@ -755,7 +756,7 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                               then
                                 Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
                               else
-                                apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
+                                apply_yielding (gv (constr), [Lst (List.map gv vs); kappa])
                       end
                 | _ ->
                     apply_yielding (gv f, [Lst (List.map gv vs); kappa])
@@ -855,7 +856,8 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let env' = VEnv.bind env (x, x_name) in
           (env', fun code ->
                    generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun ((fb, _, location) as def) ->
+    | `Fun ((fb, _, location) as def)
+    | `FunQ ((fb, _, location) as def) ->
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
         let (f_name, args, _, _) as def_header = generate_function env [] def in
@@ -894,7 +896,7 @@ and generate_definition env
           (fun code ->
              generate_tail_computation env tc
                (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
-    | `Fun _
+    | `Fun _ | `FunQ _
     | `Rec _
     | `Module _
     | `Alien _

@@ -323,7 +323,7 @@ struct
       match v with 
         | `Constant c -> o#constant c
 
-        | `Variable v -> Var (get_var_name (Env.Int.lookup env v))
+        | `Variable v | `SplicedVariable v -> Var (get_var_name (Env.Int.lookup env v))
 
         | `Extend (r, v) ->
             let record = B.box_record (
@@ -391,7 +391,7 @@ struct
       match tc with
           `Return v -> o#value v
 
-        | `Apply (v, vl) -> 
+        | `Apply (v, vl) | `ApplyPL (v, vl)  | `ApplyDB (v, vl) -> 
             B.box_call (Call (o#value v, List.map o#value vl))
 
         | `Case (v, cases, default) ->
@@ -437,7 +437,7 @@ struct
             let o' = o#add_bindings [x] in
               Let (o#binder x, o#tail_computation tc, rest_f o')
                 
-        | `Fun  f ->
+        | `Fun  f | `FunQ f ->
             o#binding (`Rec [f]) rest_f
               
         | `Rec funs -> B.box_rec (
@@ -474,7 +474,7 @@ struct
       match tc with
           `Return v -> B.box_call (Call (k, [o#value v]))
 
-        | `Apply (v, vl) -> 
+        | `Apply (v, vl) | `ApplyDB (v, vl) | `ApplyPL (v, vl)-> 
             B.box_call (Call (o#value v, k::(List.map o#value vl)))
 
         | `Case (v, cases, default) ->
@@ -528,7 +528,7 @@ struct
             let o' = o#add_bindings [x] in
               o#tail_computation tc (B.box_fun (Fun ([o#binder x], rest_f o')))
 
-        | `Fun  f ->
+        | `Fun  f | `FunQ f ->
             o#binding (`Rec [f]) rest_f
               
         | `Rec funs ->
