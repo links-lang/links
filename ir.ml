@@ -756,8 +756,8 @@ end
 module FunctionDuplication = 
 struct
 
-  let is_wild f =
-	 true
+
+  type func_record = { db : int ; pl : int }
 
   let duplication tyenv =
   object(o)
@@ -766,14 +766,21 @@ struct
 (* A flag to know if we are in a query *)
 	 val in_query = false
 (* All the duplicated function and their associated record *)
-	 val duplicated_function = IntSet.empty
+	 val duplicated_function = IntMap.empty
+(* Arguments of function, used to Splice variable argument *)
 	 val arguments = IntSet.empty
 
+	 method is_wild f =
+		let fields,__ = TypeUtils.effect_row (Env.Int.lookup tyenv f) in
+		Utility.StringMap.mem "wild" fields
 
 	 method enter_query () = {< in_query = true >}
 	 method exit_query () = {< in_query = false >}
 
-	 method add_argument var = {< arguments = IntSet.add var arguments >}
+	 method add_arguments vars = match vars with
+		| [] -> {< >}
+		| (var,_)::vars -> {< arguments = IntSet.add var arguments >}#add_arguments vars
+
 	 method exit_fun () = {< arguments = IntSet.empty >}
 
 	 method value v = match v with
@@ -787,22 +794,48 @@ struct
 			 s,t,o#exit_query()
 		| _ -> super#special sp
 			 
+	 method rec_binding = 
+		super#binding
+
 	 method binding b = match b with
-		| `Fun f as constr when in_query && not (is_wild f) -> super#binding (constr)
+		| `FunQ (_,(_,bindings,_),_) -> 
+			 let b,o = (o#add_arguments bindings)#rec_binding b in
+			 b,o#exit_fun()
 		| _ -> super#binding b
+
+	 method duplicate_bindings bs = match bs with
+		| [] -> []
+		| ((`Fun ((v,vi),((tyvar,_,_) as c),l)) as t)::q ->
+			 let funpl_id = Var.fresh_raw_var ()
+			 and fundb_id = Var.fresh_raw_var ()
+			 in
+			 let funpl = `Fun ((funpl_id,vi),c,l)
+			 and fundb = `FunQ ((fundb_id,vi),c,l)
+			 in 
+			 let record = 
+				let values = StringMap.add "pl" (`Variable funpl_id)
+				  (StringMap.add "db" (`Variable fundb_id) StringMap.empty)
+				in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
+			 in
+			 funpl::fundb::record::(o#duplicate_bindings q)
+
+		| t::q -> t::(o#duplicate_bindings q)
 
 	 method tail_computation tc = match tc with
 		| `Apply f when in_query -> 
 			 o#tail_computation (`ApplyDB f)
-		| `Apply f when is_wild f ->
+		| `Apply ((`Variable id,_) as f) when o#is_wild id ->
 			 o#tail_computation(`ApplyPL f)
 		| _ -> super#tail_computation tc
+
+	 method computation (bs,tc) = 
+		super#computation (o#duplicate_bindings bs,tc)
 
 
   end
 	 
 let duplicate_function tyenv program = 
-  ( duplication tyenv )#program program
+  (duplication tyenv)#program program
 end
 
   
