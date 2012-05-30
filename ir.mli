@@ -152,6 +152,11 @@ end
 
 module Transform : TRANSFORM
 
+module  FunctionDuplication :
+sig
+  val program : Types.datatype Env.Int.t -> program -> program
+end
+
 module Inline :
 sig
   val program : Types.datatype Env.Int.t -> program -> program

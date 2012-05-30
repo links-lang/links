@@ -244,8 +244,8 @@ object (o : 'self_type)
                                            StringSet.fold (fun n ns -> ns ^^ text n) ns empty ^^
                                            text "}"))
       | `Inject (n, v, _) -> group (text n ^^ parens(o#value v))
-      | `TAbs _ -> text "TABS"
-      | `TApp (v, ts) -> o#value v
+      | `TAbs (_,v) -> o#value v
+      | `TApp (v, _) -> o#value v
       | `XmlNode _ -> text "XMLNODE"
       | `ApplyPure (v, vl) ->
           group (nest 2 (parens (o#value v ^| (doc_join o#value vl))))
@@ -254,14 +254,17 @@ object (o : 'self_type)
 (*           group ( *)
 (*             nest 2 ( *)
 (*               group (o#value v1 ^| o#comparison cmp) ^| o#value v2)) *)
-      | `Coerce _ -> text "COERCE"
+      | `Coerce (v,_) -> o#value v
           
   method tail_computation : tail_computation -> doc = fun tc ->
     match tc with
         `Return v -> o#value v
 
-      | `Apply (v, vl) | `ApplyDB (v,vl) | `ApplyPL (v,vl) -> 
+      | `Apply (v, vl) | `ApplyPL (v,vl) -> 
           group (nest 2 (o#value v ^| (doc_join o#value vl)))
+	   | `ApplyDB (v,vl) ->
+          group (nest 2 ((text "▶") ^^ o#value v ^| (doc_join o#value vl)))
+
 
       | `Case (v, names, opt) ->
           let cases = 
@@ -298,7 +301,7 @@ object (o : 'self_type)
               `CallCC v -> group (parens (text "call/cc" ^| o#value v))
             | `Database _ -> text "DATABASE"
             | `Table _ -> text "TABLE"
-            | `Query _ -> text "QUERY"
+            | `Query (_,c,_) -> text "QUERY" ^| o#computation c
             | `Wrong _ -> text "WRONG"
 				| `Delete _ -> text "DELETE"
 				| `Update _ -> text "UPDATE"
@@ -327,12 +330,18 @@ object (o : 'self_type)
                 group(text "val" ^| o#binder x ^| text "=") ^| 
                     o#tail_computation tc))
                      
-      | `Fun (binder, (_, f_binders, comp), loc) 
-      | `FunQ (binder, (_, f_binders, comp), loc) ->
+      | `Fun (binder, (_, f_binders, comp), loc) ->
           let o = o#add_bindings (binder::f_binders) in
             o, group (
               nest 2 (
                 group (text "fun" ^| o#binder binder ^| 
+                           doc_join o#binder f_binders ^| text "=") ^| 
+                    o#computation comp))
+      | `FunQ (binder, (_, f_binders, comp), loc) ->
+          let o = o#add_bindings (binder::f_binders) in
+            o, group (
+              nest 2 (
+                group (text "funq" ^| o#binder binder ^| 
                            doc_join o#binder f_binders ^| text "=") ^| 
                     o#computation comp))
               
@@ -756,23 +765,18 @@ end
 module FunctionDuplication = 
 struct
 
-
-  type func_record = { db : int ; pl : int }
-
   let duplication tyenv =
   object(o)
 	 inherit Transform.visitor(tyenv) as super
 		
 (* A flag to know if we are in a query *)
 	 val in_query = false
-(* All the duplicated function and their associated record *)
-	 val duplicated_function = IntMap.empty
 (* Arguments of function, used to Splice variable argument *)
 	 val arguments = IntSet.empty
 
-	 method is_wild f =
-		let fields,__ = TypeUtils.effect_row (Env.Int.lookup tyenv f) in
-		Utility.StringMap.mem "wild" fields
+	 method is_wild fun_type =
+		let fields,_ = TypeUtils.effect_row fun_type in
+		StringMap.mem "wild" fields && fst (StringMap.find "wild" fields) = `Present
 
 	 method enter_query () = {< in_query = true >}
 	 method exit_query () = {< in_query = false >}
@@ -805,10 +809,14 @@ struct
 
 	 method duplicate_bindings bs = match bs with
 		| [] -> []
-		| ((`Fun ((v,vi),((tyvar,_,_) as c),l)) as t)::q ->
+		| ((`Fun ((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l)) as t)::q when not (o#is_wild ftype) ->
+			 (* Get new var ID for the pl and db function *)
 			 let funpl_id = Var.fresh_raw_var ()
 			 and fundb_id = Var.fresh_raw_var ()
 			 in
+			 (* Add the new function to the type env *)
+			 let o = {< tyenv= Env.Int.bind (Env.Int.bind tyenv (fundb_id,ftype)) (funpl_id,ftype) >} in
+			 (* Generate functions and record *)
 			 let funpl = `Fun ((funpl_id,vi),c,l)
 			 and fundb = `FunQ ((fundb_id,vi),c,l)
 			 in 
@@ -824,7 +832,7 @@ struct
 	 method tail_computation tc = match tc with
 		| `Apply f when in_query -> 
 			 o#tail_computation (`ApplyDB f)
-		| `Apply ((`Variable id,_) as f) when o#is_wild id ->
+		| `Apply ((`Variable id,_) as f) (*when not (o#is_wild (Env.Int.lookup tyenv id))*) ->
 			 o#tail_computation(`ApplyPL f)
 		| _ -> super#tail_computation tc
 
@@ -834,8 +842,9 @@ struct
 
   end
 	 
-let duplicate_function tyenv program = 
-  (duplication tyenv)#program program
+let program tyenv program = 
+  let program,_,_ = (duplication tyenv)#program program in
+  program
 end
 
   
