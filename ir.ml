@@ -260,10 +260,12 @@ object (o : 'self_type)
     match tc with
         `Return v -> o#value v
 
-      | `Apply (v, vl) | `ApplyPL (v,vl) -> 
+      | `Apply (v, vl) -> 
           group (nest 2 (o#value v ^| (doc_join o#value vl)))
+		| `ApplyPL (v,vl) -> 
+          group (nest 2 (o#value v ^^ text "[pl]" ^| (doc_join o#value vl)))
 	   | `ApplyDB (v,vl) ->
-          group (nest 2 ((text "▶") ^^ o#value v ^| (doc_join o#value vl)))
+          group (nest 2 (o#value v ^^ text "[db]"  ^| (doc_join o#value vl)))
 
 
       | `Case (v, names, opt) ->
@@ -769,10 +771,12 @@ struct
   object(o)
 	 inherit Transform.visitor(tyenv) as super
 		
-(* A flag to know if we are in a query *)
+	 (* A flag to know if we are in a query *)
 	 val in_query = false
-(* Arguments of function, used to Splice variable argument *)
+	 (* Arguments of function, used to Splice variable argument *)
 	 val arguments = IntSet.empty
+	 (* *)
+	 val duplicated_function = IntSet.empty
 
 	 method is_wild fun_type =
 		let fields,_ = TypeUtils.effect_row fun_type in
@@ -808,14 +812,14 @@ struct
 		| _ -> super#binding b
 
 	 method duplicate_bindings bs = match bs with
-		| [] -> []
+		| [] -> o, []
 		| ((`Fun ((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l)) as t)::q when not (o#is_wild ftype) ->
 			 (* Get new var ID for the pl and db function *)
 			 let funpl_id = Var.fresh_raw_var ()
 			 and fundb_id = Var.fresh_raw_var ()
 			 in
-			 (* Add the new function to the type env *)
-			 let o = {< tyenv= Env.Int.bind (Env.Int.bind tyenv (fundb_id,ftype)) (funpl_id,ftype) >} in
+			 (* record this function has been duplicated *)
+			 let o = {< duplicated_function = IntSet.add v duplicated_function >} in
 			 (* Generate functions and record *)
 			 let funpl = `Fun ((funpl_id,vi),c,l)
 			 and fundb = `FunQ ((fundb_id,vi),c,l)
@@ -825,19 +829,31 @@ struct
 				  (StringMap.add "db" (`Variable fundb_id) StringMap.empty)
 				in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
 			 in
-			 funpl::fundb::record::(o#duplicate_bindings q)
+			 let o,tail = o#duplicate_bindings q in
+			 o, funpl::fundb::record::tail
 
-		| t::q -> t::(o#duplicate_bindings q)
+		| t::q -> 
+			 let o,tail = o#duplicate_bindings q in
+			 o, t::tail
+
+	 method get_var_id v = match v with
+		| `Variable id -> id 
+		| `Coerce (var,_) | `TAbs (_,var) | `TApp (var,_) -> o#get_var_id var
+		| _ -> failwith "This value isn't a variable"
 
 	 method tail_computation tc = match tc with
-		| `Apply f when in_query -> 
+		| `Apply ((v,_) as f) when in_query && IntSet.mem (o#get_var_id v) duplicated_function -> 
 			 o#tail_computation (`ApplyDB f)
-		| `Apply ((`Variable id,_) as f) (*when not (o#is_wild (Env.Int.lookup tyenv id))*) ->
+		| `Apply ((v,_) as f) when IntSet.mem (o#get_var_id v) duplicated_function ->
 			 o#tail_computation(`ApplyPL f)
 		| _ -> super#tail_computation tc
 
+	 method computation_rec = super#computation
+
 	 method computation (bs,tc) = 
-		super#computation (o#duplicate_bindings bs,tc)
+		let o,bs = o#duplicate_bindings bs in
+		o#computation_rec (bs,tc)
+		  
 
 
   end
