@@ -1447,32 +1447,32 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
     (* Debug.print ("e: "^Show.show Ir.show_computation e); *)
     let v = Eval.eval env e in
       (* Debug.print ("v: "^string_of_t v); *)
-      match used_database v with
-        | None -> None
-        | Some db ->
-            let t = type_of_expression v in
-            let q = Sql.ordered_query db range v in
-              Debug.print ("Generated query: "^q);
-              Some (db, q, t)
-
+    match used_database v with
+      | None -> None
+      | Some db ->
+          let t = type_of_expression v in
+          let q = Sql.ordered_query db range v in
+          Debug.print ("Generated query: "^q);
+          Some (db, q, t)
+				
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
   fun db env ((x, table, field_types), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
+	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
     let where = opt_map (Eval.computation env) where in
-(*       Debug.print ("body: "^Ir.Show_computation.show body); *)
+	 (*Debug.print ("body: "^Ir.Show_computation.show body); *)
     let body = Eval.computation env body in
     let q = Sql.update db ((x, table), where, body) in
-      Debug.print ("Generated update query: "^q);
-      q
-
+    Debug.print ("Generated update query: "^q);
+    q
+		
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
   fun db env ((x, table, field_types), where) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
     let where = opt_map (Eval.computation env) where in
     let q = Sql.delete db ((x, table), where) in
-      Debug.print ("Generated update query: "^q);
-      q
+    Debug.print ("Generated update query: "^q);
+    q
 

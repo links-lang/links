@@ -763,13 +763,40 @@ struct
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 
+(** Rename all variable in the given IR piece **)
+module RenameVariable =
+struct
+
+  let remove tyenv = 
+  object(o) 
+	 inherit Transform.visitor(tyenv) as super
+
+	 val new_names = IntMap.empty
+
+	 method binder_rec = super#binder
+		
+	 method binder (var,vari) = 
+		let new_var = Var.fresh_raw_var () in
+		let o = {< new_names = IntMap.add var new_var new_names >} in
+		o#binder_rec (new_var,vari)
+
+	 method var v =
+		super#var ( match IntMap.lookup v new_names with None -> v | Some var -> var )
+  end
+
+let computation tyenv c = let c,_,_ = ((remove tyenv)#computation c) in c
+let binding tyenv b = fst ((remove tyenv)#binding b)
+
+end
+
+
 (** Duplicate every function whitout wild effect in a pair of a PL function and a DB function **)
 module FunctionDuplication = 
 struct
 
-  let duplication tyenv =
+  let duplication tenv =
   object(o)
-	 inherit Transform.visitor(tyenv) as super
+	 inherit Transform.visitor(tenv) as super
 		
 	 (* A flag to know if we are in a query *)
 	 val in_query = false
@@ -790,6 +817,8 @@ struct
 		| (var,_)::vars -> {< arguments = IntSet.add var arguments >}#add_arguments vars
 
 	 method exit_fun () = {< arguments = IntSet.empty >}
+
+	 method add_duplicated v = {< duplicated_function = IntSet.add v duplicated_function >}
 
 	 method value v = match v with
 		| `Variable x when IntSet.mem x arguments -> 
@@ -812,29 +841,29 @@ struct
 		| _ -> super#binding b
 
 	 method duplicate_bindings bs = match bs with
-		| [] -> o, []
-		| ((`Fun ((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l)) as t)::q when not (o#is_wild ftype) ->
-			 (* Get new var ID for the pl and db function *)
-			 let funpl_id = Var.fresh_raw_var ()
-			 and fundb_id = Var.fresh_raw_var ()
+		| [] -> [], o
+		| ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q when not (o#is_wild ftype) ->
+			 (* Generate functions *)
+			 let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
+			 and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
 			 in
+			 let o = {< tyenv = remove#get_type_environment >} in
 			 (* record this function has been duplicated *)
-			 let o = {< duplicated_function = IntSet.add v duplicated_function >} in
-			 (* Generate functions and record *)
-			 let funpl = `Fun ((funpl_id,vi),c,l)
-			 and fundb = `FunQ ((fundb_id,vi),c,l)
-			 in 
+			 let o = o#add_duplicated v in
+			 (* Generate the record *)
 			 let record = 
-				let values = StringMap.add "pl" (`Variable funpl_id)
-				  (StringMap.add "db" (`Variable fundb_id) StringMap.empty)
+				let get_id = function `Fun (b,_,_) | `FunQ (b,_,_) -> fst b | _ -> v  in 
+				let values = 
+				  StringMap.add "pl" (`Variable (get_id funpl)) 
+					 (StringMap.add "db" (`Variable (get_id fundb)) 
+						 StringMap.empty)
 				in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
 			 in
-			 let o,tail = o#duplicate_bindings q in
-			 o, funpl::fundb::record::tail
-
+			 let tail, o = o#duplicate_bindings q in
+			 funpl::fundb::record::tail, o
 		| t::q -> 
-			 let o,tail = o#duplicate_bindings q in
-			 o, t::tail
+			 let tail,o = o#duplicate_bindings q in
+			 t::tail, o
 
 	 method get_var_id v = match v with
 		| `Variable id -> id 
@@ -851,7 +880,8 @@ struct
 	 method computation_rec = super#computation
 
 	 method computation (bs,tc) = 
-		let o,bs = o#duplicate_bindings bs in
+		let bs,o = super#bindings bs in
+		let bs,o = o#duplicate_bindings bs in
 		o#computation_rec (bs,tc)
 		  
 
@@ -861,7 +891,9 @@ struct
 let program tyenv program = 
   let program,_,_ = (duplication tyenv)#program program in
   program
+
 end
+
 
   
 
