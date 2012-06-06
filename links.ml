@@ -289,7 +289,7 @@ let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
 			(Ir.ClosureTable.program tenv Lib.primitive_vars program))
 	 ;
 	 print_newline() ;
-	 let program = Ir.FunctionDuplication.program tenv program in
+	 let program = Ir.Doubleling.program tenv program in
 (*    let program = Ir.ElimDeadDefs.program tenv program in
     let program = Ir.Inline.program tenv program in *)
     print_endline (Ir.string_of_ir nenv program) ;

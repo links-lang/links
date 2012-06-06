@@ -682,7 +682,7 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
         if box then
           new BoxingCamlTranslater.cps env
         else
-          new BoxingCamlTranslater.cps env
+          new NonBoxingCamlTranslater.cps env
       in 
         t#program comp
     else
@@ -690,7 +690,7 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
         if box then 
           new BoxingCamlTranslater.direct env
         else
-          new BoxingCamlTranslater.direct env
+          new NonBoxingCamlTranslater.direct env
       in 
         t#program comp
   in

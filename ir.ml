@@ -46,17 +46,24 @@ type location = Sugartypes.location
 type value =
   [ `Constant of constant
   | `Variable of var
-(* An argument variable had to be spliced when entering a query function *)
+  (* An argument variable had to be spliced when entering a query function *)
   | `SplicedVariable of var
+  (* Extend a (possibly empty) record *)
   | `Extend of (value name_map * value option)
+  (* Project one of the fields of a record *)
   | `Project of (name * value)
+  (* Remove a field from a record *)
   | `Erase of (name_set * value)
+  (* Create a new variant *)
   | `Inject of (name * value * Types.datatype)
 
+  (* Type abstraction and Type application, to handle polymorphism *)
   | `TAbs of tyvar list * value
   | `TApp of value * tyarg list
 
   | `XmlNode of (name * value name_map * value list)
+
+  (* Apply "pure" fonction in the meaning of ANF *)
   | `ApplyPure of (value * value list)
 
   | `Coerce of (value * Types.datatype)
@@ -791,7 +798,7 @@ end
 
 
 (** Duplicate every function whitout wild effect in a pair of a PL function and a DB function **)
-module FunctionDuplication = 
+module Doubleling = 
 struct
 
   let duplication tenv =
@@ -800,9 +807,6 @@ struct
 		
 	 (* A flag to know if we are in a query *)
 	 val in_query = false
-	 (* Arguments of function, used to Splice variable argument *)
-	 val arguments = IntSet.empty
-	 (* *)
 	 val duplicated_function = IntSet.empty
 
 	 method is_wild fun_type =
@@ -812,36 +816,25 @@ struct
 	 method enter_query () = {< in_query = true >}
 	 method exit_query () = {< in_query = false >}
 
-	 method add_arguments vars = match vars with
-		| [] -> {< >}
-		| (var,_)::vars -> {< arguments = IntSet.add var arguments >}#add_arguments vars
-
-	 method exit_fun () = {< arguments = IntSet.empty >}
-
 	 method add_duplicated v = {< duplicated_function = IntSet.add v duplicated_function >}
-
-	 method value v = match v with
-		| `Variable x when IntSet.mem x arguments -> 
-			 super#value (`SplicedVariable x)
-		| _ -> super#value v
 
 	 method special sp = match sp with
 		| `Query _ when not in_query -> 
 			 let s,t,o = (o#enter_query())#special sp in
 			 s,t,o#exit_query()
 		| _ -> super#special sp
-			 
-	 method rec_binding = 
-		super#binding
 
 	 method binding b = match b with
-		| `FunQ (_,(_,bindings,_),_) -> 
-			 let b,o = (o#add_arguments bindings)#rec_binding b in
-			 b,o#exit_fun()
+		| `FunQ _ when not in_query -> 
+			 let b,o = (o#enter_query())#binding b in
+			 b,o#exit_query()
 		| _ -> super#binding b
 
 	 method duplicate_bindings bs = match bs with
 		| [] -> [], o
+		| (`Fun f)::q when in_query && not (o#is_wild (fst3 (snd (fst3 f)))) -> 
+			 let tail, o = o#duplicate_bindings q in
+			 (`FunQ f)::tail, o
 		| ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q when not (o#is_wild ftype) ->
 			 (* Generate functions *)
 			 let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
@@ -884,18 +877,61 @@ struct
 		let bs,o = o#duplicate_bindings bs in
 		o#computation_rec (bs,tc)
 		  
-
-
   end
 	 
 let program tyenv program = 
-  let program,_,_ = (duplication tyenv)#program program in
-  program
+  fst3 ((duplication tyenv)#program program)
 
 end
 
+module Splicing =
+struct
 
-  
+  let splice tyenv = 
+  object(o)
+	 inherit Transform.visitor(tyenv) as super
+
+	 (* A flag to know if we are in a query *)
+	 val in_query = false
+
+	 method enter_query () = {< in_query = true >}
+	 method exit_query () = {< in_query = false >}
+
+	 (* Register variable inside querys *)
+	 val query_var_env = IntSet.empty
+
+	 method add_query_var v = {< query_var_env = IntSet.add v query_var_env>}
+	 method is_query_var v = IntSet.mem v query_var_env  
+
+	 method value v = match v with
+		| `Variable x when in_query && (not (o#is_query_var x)) -> 
+			 super#value (`SplicedVariable x)
+		| _ -> super#value v
+
+	 method special sp = match sp with
+		| `Query _ when not in_query -> 
+			 let s,t,o = (o#enter_query())#special sp in
+			 s,t,o#exit_query()
+		| _ -> super#special sp
+			 
+	 method rec_binding = 
+		super#binding
+
+	 method binding b = match b with
+		| `Let ((x,_),_) when in_query ->
+			 (o#add_query_var x)#rec_binding(b)
+		| `FunQ _ when not in_query -> 
+			 let b,o = (o#enter_query())#binding b in
+			 b,o#exit_query()
+		| _ -> super#binding b
+
+  end
+
+let program tyenv program = 
+  fst3 ((splice tyenv)#program program)
+
+end
+
 
 module RemoveApplyPure =
 struct

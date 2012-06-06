@@ -254,6 +254,7 @@ let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 
 rule lex ctxt nl = parse
   | '#' ([^ '\n'] *)                    { lex ctxt nl lexbuf }
+  | "/*" ([^ '*'] | '*'[^'/'])* "*/"    { lex ctxt nl lexbuf }
   | eof                                 { END }
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}

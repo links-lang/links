@@ -315,6 +315,7 @@ struct
     let field_types = field_types_of_list xs in
       ([x, xs], [], `Singleton (eta_expand_var (x, field_types)))
 
+  (** Those three functions visit the IR **)
   let rec value env : Ir.value -> t = function
     | `Constant c -> `Constant c
     | `Variable var | `SplicedVariable var ->
@@ -421,6 +422,57 @@ struct
         apply env (value env f, List.map (value env) ps)
     | `Coerce (v, _) -> value env v
 
+  and computation env (binders, tailcomp) : t =
+    match binders with
+      | [] -> tail_computation env tailcomp
+      | b::bs ->
+          begin
+            match b with
+              | `Let (xb, (_, tc)) ->
+                  let x = Var.var_of_binder xb in
+                    computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
+              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native))
+              | `FunQ ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
+                  eval_error "Client function"
+              | `Fun ((f, _) as fb, (_, args, body), _)
+              | `FunQ ((f, _) as fb, (_, args, body), _) ->
+                  computation
+                    (bind env (f, `Closure ((List.map fst args, body), env)))
+                    (bs, tailcomp)
+              | `Rec defs ->
+                  eval_error "Recursive function"
+              | `Alien _ 
+              | `Alias _ -> (* just skip it *)
+                  computation env (bs, tailcomp)
+              | `Module _ -> failwith "Not implemented modules yet"
+          end
+
+  and tail_computation env : Ir.tail_computation -> t = function
+    | `Return v -> value env v
+    | `Apply (f, args)
+    | `ApplyPL (f, args)
+    | `ApplyDB (f, args) ->
+        apply env (value env f, List.map (value env) args)
+    | `Special (`Query (None, e, _)) -> computation env e
+    | `Special _s ->
+      (* FIXME:
+
+         There's no particular reason why we can't allow
+         table declarations in query blocks.
+
+         Same goes for database declarations. (However, we do still
+         have the problem that we currently have no way of enforcing
+         that only one database be used inside a query block - see
+         SML#.)  *)
+      failwith "special not allowed in query block"
+    | `Case (v, cases, default) -> reduce_case env (value env v, cases, default)
+    | `If (c, t, e) ->
+      let c = value env c in
+      let t = computation env t in
+      let e = computation env e in
+        reduce_if_condition (c, t, e)
+
+  (** β-reduction inside the type t **)
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
         let env = env ++ closure_env in
@@ -498,73 +550,26 @@ struct
     | `Apply (f, args), args' ->
         `Apply (f, args @ args')
     | _ -> eval_error "Application of non-function"
-  and computation env (binders, tailcomp) : t =
-    match binders with
-      | [] -> tail_computation env tailcomp
-      | b::bs ->
+
+
+  (** Bunch of optimizing function **)
+  and reduce_case env (v, cases, default) =
+    match v with
+      | `Variant (label, v) as w ->
           begin
-            match b with
-              | `Let (xb, (_, tc)) ->
-                  let x = Var.var_of_binder xb in
-                    computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native))
-              | `FunQ ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
-                  eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _)
-              | `FunQ ((f, _) as fb, (_, args, body), _) ->
-                  computation
-                    (bind env (f, `Closure ((List.map fst args, body), env)))
-                    (bs, tailcomp)
-              | `Rec defs ->
-                  eval_error "Recursive function"
-              | `Alien _ 
-              | `Alias _ -> (* just skip it *)
-                  computation env (bs, tailcomp)
-              | `Module _ -> failwith "Not implemented modules yet"
-          end
-  and tail_computation env : Ir.tail_computation -> t = function
-    | `Return v -> value env v
-    | `Apply (f, args)
-    | `ApplyPL (f, args)
-    | `ApplyDB (f, args) ->
-        apply env (value env f, List.map (value env) args)
-    | `Special (`Query (None, e, _)) -> computation env e
-    | `Special _s ->
-      (* FIXME:
-
-         There's no particular reason why we can't allow
-         table declarations in query blocks.
-
-         Same goes for database declarations. (However, we do still
-         have the problem that we currently have no way of enforcing
-         that only one database be used inside a query block - see
-         SML#.)  *)
-      failwith "special not allowed in query block"
-    | `Case (v, cases, default) ->
-      let rec reduce_case (v, cases, default) =
-        match v with
-          | `Variant (label, v) as w ->
-            begin
-              match StringMap.lookup label cases, default with
-                | Some ((x, _), c), _ ->
+            match StringMap.lookup label cases, default with
+              | Some ((x, _), c), _ ->
                   computation (bind env (x, v)) c
-                | None, Some ((z, _), c) ->
+              | None, Some ((z, _), c) ->
                   computation (bind env (z, w)) c
-                | None, None -> eval_error "Pattern matching failed"
-            end
-          | `If (c, t, e) ->
-            `If
-              (c,
-               reduce_case (t, cases, default),
-               reduce_case (e, cases, default))
-          |  _ -> assert false
-      in
-        reduce_case (value env v, cases, default)
-    | `If (c, t, e) ->
-      let c = value env c in
-      let t = computation env t in
-      let e = computation env e in
-        reduce_if_condition (c, t, e)
+              | None, None -> eval_error "Pattern matching failed"
+          end
+      | `If (c, t, e) ->
+          `If
+            (c,
+             reduce_case env (t, cases, default),
+             reduce_case env (e, cases, default))
+      |  _ -> assert false
   and reduce_concat vs =
     let vs =
       concat_map
