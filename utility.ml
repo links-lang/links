@@ -52,6 +52,9 @@ sig
   val to_alist : 'a t -> (key * 'a) list
   (** convert the map to an association list *)
 
+  val extract_keys : 'a t -> key list
+  (** Extract the list of the keys **)
+
   val from_alist : (key * 'a) list -> 'a t
   (** construct a map from an association list *)
 
@@ -137,6 +140,9 @@ struct
         
     let to_alist map =
       List.rev (fold (fun x y l -> (x, y) :: l) map [])
+
+	 let extract_keys map = 
+		List.rev (fold (fun x _ l -> x :: l) map [] )
         
     let from_alist l =
       List.fold_right (uncurry add) l empty 
