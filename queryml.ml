@@ -38,29 +38,35 @@ type 'a name_map = 'a Utility.stringmap
 (** Simplified IR to be puted in the runtime **)
 module IRquery =
 struct
+  type constant = 
+	 | Float of float
+	 | Int of int
+	 | String of string
+	 | Bool of bool
+	 | Char of char
+
   type value =
-	 [ `Constant of Constant.constant 
-	 | `Variable of var
-	 | `SplicedVariable of var
-	 | `Extend of value name_map * value option
-	 | `Project of name * value
-	 | `Erase of name_set * value
-	 | `Inject of name * value
-	 | `ApplyPure of value * value list
-	 | `Table of value * name_set
-	 ]
+	 | Constant of constant 
+	 | Variable of var
+	 | Extend of value name_map * value option
+	 | Project of name * value
+	 | Erase of name_set * value
+	 | Inject of name * value
+	 | ApplyPure of value * value list
+	 | Table of value * name_set
+	 
   and tail_computation =
-	 [ `Return of value
-	 | `Apply of value * value list
-	 | `ApplyDB of value * value list
-	 | `Case of value * (var * computation) name_map * (var * computation) option
-	 | `If of value * computation * computation
-	 ]
+	 | Return of value
+	 | Apply of value * value list
+	 | ApplyDB of value * value list
+	 | Case of value * (var * computation) name_map * (var * computation) option
+	 | If of value * computation * computation
+
   and binding = 
-	 [ `Let of var * tail_computation
-	 | `Fun of var * var list * computation
-	 | `FunQ of var * var list * computation
-	 ]
+	 | Let of var * tail_computation
+	 | Fun of var * var list * computation
+	 | FunQ of var * var list * computation
+	 
   and computation = binding list * tail_computation
 end
 
@@ -191,12 +197,6 @@ let query_error fmt =
 module IRquery2query =
 struct
 
-  (* Some usefull functions *)
-  let bind env (x,v) =
-    Env.Int.bind env (x, v)
-
-  let lookup env x =
-	 Env.Int.lookup env x
 
 
   let nil = `Concat []
@@ -225,6 +225,16 @@ struct
     let x = Var.fresh_raw_var () in
     let field_types = field_types_of_list xs in
       ([x, xs], [], `Singleton (eta_expand_var (x, field_types)))
+
+
+  (* Some usefull functions *)
+  let bind env (x,v) =
+    Env.Int.bind env (x, v)
+
+  let lookup env x =
+	 match Env.Int.find env x with
+		| Some v -> v
+		| None -> failwith "unkonwn variable" (* TODO *)
 
 
   (** Those three functions visit the IR **)
@@ -512,7 +522,7 @@ struct
         | (`Char a  , `Char b)   -> bool (a = b)
         | (`String a, `String b) -> bool (a = b)
         | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b])
-    in
+    in begin
       match a, b with
         | (`Constant a, `Constant b) -> eq_constant (a, b)
         | (`Variant (s1, a), `Variant (s2, b)) ->
@@ -528,9 +538,7 @@ struct
             (StringMap.to_alist rfields)
             (`Constant (`Bool true))
         | (a, b) -> `Apply ("==", [a; b])
-				
-				
-				
+	 end
 
   let eval env e =
 	 (*    Debug.print ("e: "^IRquery.Show_computation.show e); *)
@@ -1266,7 +1274,7 @@ let compile : Value.env -> (Num.num * Num.num) option * IRquery.computation -> (
       | None -> None
       | Some db ->
           let t = type_of_expression v in
-          let q = Sql.ordered_query db range v in
+          let q = Sql.unordered_query db range v in
           Debug.print ("Generated query: "^q);
           Some (db, q, t)
 				

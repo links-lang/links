@@ -132,6 +132,9 @@ let brackets doc =
 let arglist xs =
   parens (hsep (punctuate "," xs))
 
+let list xs = 
+  brackets (vsep (punctuate ";" xs))
+
 let formal_list xs =
   parens (hsep (punctuate "," (List.map text xs)))
 

@@ -157,6 +157,16 @@ sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
 
+module Splicing :
+sig
+  val program : Types.datatype Env.Int.t -> program -> program
+end
+(*
+module Ir2Irquery :
+sig
+  val program : program -> Queryml.IRquery.computation
+end
+*)
 module Inline :
 sig
   val program : Types.datatype Env.Int.t -> program -> program

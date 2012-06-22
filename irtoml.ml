@@ -6,6 +6,12 @@ open PP
 
 exception Unsupported of string;;
 
+type var = int
+type name = string
+
+type name_set = Utility.stringset
+type 'a name_map = 'a Utility.stringmap
+
 type code =
   | Bool of bool
   | Int of num
@@ -23,7 +29,35 @@ type code =
   | Lst of code list
   | Case of code * ((code * code) list) * ((code * code) option)
   | Die of code
+  | Query of query_computation
   | Empty
+
+and query_value =
+  [ `Constant of Constant.constant 
+  | `Variable of var
+  | `SplicedVariable of code
+  | `Extend of query_value name_map * query_value option
+  | `Project of name * query_value
+  | `Erase of name_set * query_value
+  | `Inject of name * query_value
+  | `ApplyPure of query_value * query_value list
+  | `Table of query_value * name_set
+  | `Database of query_value
+  ]	
+and query_tail_computation =
+  [ `Return of query_value
+  | `Apply of query_value * query_value list
+  | `ApplyDB of query_value * query_value list
+  | `Case of query_value * (var * query_computation) name_map * (var * query_computation) option
+  | `If of query_value * query_computation * query_computation
+  ]	
+and query_binding = 
+  [ `Let of var * query_computation
+  | `Fun of var * var list * query_computation
+  | `FunQ of var * var list * query_computation
+  ]	
+and query_computation = query_binding list * query_tail_computation
+		  
 
 module type Boxer =
 sig
@@ -279,15 +313,15 @@ let subst_primitive n =
 
 let make_var_name v n = 
   let name = 
-    if n = "" then 
-      "v_"^(string_of_int v)
+    (if n = "" then 
+      "v"
     else 
-      "_"^n
+      "_"^n) ^ "_" ^ (string_of_int v)
   in 
     (Symbols.wordify -<- subst_primitive -<- subst_ident) name
 
-let get_var_name n =
-  (Symbols.wordify -<- subst_primitive -<- subst_ident) n
+let get_var_name v n =
+  (Symbols.wordify -<- subst_primitive -<- subst_ident) n 
 
 let bind_continuation k body =
   match k with 
@@ -296,10 +330,62 @@ let bind_continuation k body =
 
 module Translater (B : Boxer) =
 struct
+
+  class translateQuery translateCode =
+  object (o : 'self_type)
+	 
+	 method value : Ir.value -> query_value = function
+		| `Inject (n,v,_) -> `Inject (n,o#value v)
+		| `TAbs (_,v)
+		| `TApp (v,_)
+		| `Coerce (v,_) -> o#value v
+		| `ApplyPure (v,vl) -> `ApplyPure (o#value v, List.map o#value vl)
+		| `Extend (vm,vo) ->
+			 `Extend (StringMap.map o#value vm,opt_map o#value vo)
+		| `Project (name, v) -> `Project (name, o#value v)
+		| `Erase (ns,v) -> `Erase (ns,o#value v)
+		| `Constant c -> `Constant c
+		| `Variable var -> `Variable var 
+		| `SplicedVariable var -> `SplicedVariable (translateCode#value (`Variable var))
+		| `XmlNode _ -> failwith "XmlNode inside query"
+			 
+	 method tail_computation : Ir.tail_computation -> query_tail_computation = function
+		| `Return v -> `Return (o#value v)
+		| `Apply (v,vl) -> `Apply (o#value v, List.map o#value vl)
+		| `ApplyDB (v,vl) -> `Apply (o#value v, List.map o#value vl)
+		| `ApplyPL _ -> failwith "Apply PL function inside a query"
+		| `If (v,c1,c2) -> `If (o#value v, o#computation c1, o#computation c2)
+		| `Case (v,m,vo) ->
+			 let aux ((var,_),c) = (var,o#computation c) in
+			 `Case (o#value v, StringMap.map aux m,opt_map aux vo)
+		| `Special (`Table (db,t,(t_type,_,_))) ->
+			 (* TODO *)
+			 `Return (`Table (o#value t,StringSet.empty))
+		| `Special (`Database db) ->
+			 `Return (`Database (o#value db))
+		| `Special (`Query _) -> failwith "Query"
+		| `Special _ -> failwith "No special except Table, Database or Query inside a query"
+			 
+	 method bindings : Ir.binding list -> query_binding list = function
+		| [] -> []
+		| b::bl -> begin match b with
+			 | `Let ((var,_),(_,tc)) -> `Let (var,o#computation ([],tc))::(o#bindings bl)
+			 | `Fun ((var,_),(_,bll,c),_) -> `Fun (var,List.map fst bll, o#computation c)::(o#bindings bl)
+			 | `FunQ ((var,_),(_,bll,c),_) -> `FunQ (var,List.map fst bll, o#computation c)::(o#bindings bl)
+			 | `Rec _ | `Alien _ | `Module _ -> o#bindings bl
+		end
+		  
+	 method computation (bl,tc) : query_computation =  match tc with 
+		| `Special(`Query (_,(bl2,tc),_)) -> o#computation (bl@bl2,tc)
+		| _ -> (o#bindings bl, o#tail_computation tc)
+	  
+		
+  end
+
   class virtual codeIR env = 
   object (o : 'self_type)
     val env = env
-
+		
     method wrap_func = B.wrap_func false
 
     method wrap_lib rest =
@@ -323,7 +409,8 @@ struct
       match v with 
         | `Constant c -> o#constant c
 
-        | `Variable v | `SplicedVariable v -> Var (get_var_name (Env.Int.lookup env v))
+        | `Variable v | `SplicedVariable v -> 
+				Var (get_var_name v (Env.Int.lookup env v) )
 
         | `Extend (r, v) ->
             let record = B.box_record (
@@ -391,8 +478,14 @@ struct
       match tc with
           `Return v -> o#value v
 
-        | `Apply (v, vl) | `ApplyPL (v, vl)  | `ApplyDB (v, vl) -> 
+        | `Apply (v, vl) -> 
             B.box_call (Call (o#value v, List.map o#value vl))
+
+		  | `ApplyPL (v, vl) ->
+				B.box_call (Call (Call (Var "call_pl",[o#value v]),List.map o#value vl))
+
+		  | `ApplyDB (v, vl) ->
+				B.box_call (Call (Call (Var "call_db",[o#value v]),List.map o#value vl))
 
         | `Case (v, cases, default) ->
             let gen_case n (b, c) =
@@ -415,14 +508,13 @@ struct
               
         | `Special s ->
             match s with
-                `CallCC v -> 
+              | `CallCC v -> 
                   Die (NativeString "CallCC not supported in direct style.")
-
-              | `Database _
-              | `Table _
-              | `Query _ 
-				  | `Delete _ 
-				  | `Update _ -> Die (NativeString "Database operations not supported.")
+              | `Database v -> Call (Var "database",[o#value v])
+              | `Table (db,t,_) -> Call (Var "table",[o#value db;o#value t])
+              | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
+				  | `Delete _
+				  | `Update _ -> Die (NativeString "Delete and Update operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
     method program : program -> code = fun prog ->
@@ -437,21 +529,30 @@ struct
             let o' = o#add_bindings [x] in
               Let (o#binder x, o#tail_computation tc, rest_f o')
                 
-        | `Fun  f | `FunQ f ->
+        | `Fun f ->
             o#binding (`Rec [f]) rest_f
+
+		  | `FunQ (binder, (_, f_binders, comp), _) -> 
+				let o' = o#add_bindings [binder] in
+				let args = List.map o'#binder f_binders in
+				let o'' = o'#add_bindings f_binders in
+				B.box_rec ( Rec (
+				  [(o''#binder binder, args, (Query ((new translateQuery o'')#computation comp)))] , 
+				  rest_f o'))
               
-        | `Rec funs -> B.box_rec (
-            let names = List.map fst3 funs in
-            let o' = o#add_bindings (List.map fst3 funs) in
-              Rec (
-                List.map (
-                  fun (binder, (_, f_binders, comp), _) ->
-                    let args = List.map o'#binder f_binders in
+        | `Rec funs -> 
+				B.box_rec (
+				  let names = List.map fst3 funs in
+				  let o' = o#add_bindings (List.map fst3 funs) in
+				  Rec (
+					 List.map (
+						fun (binder, (_, f_binders, comp), _) ->
+						  let args = List.map o'#binder f_binders in
                     let o'' = o'#add_bindings f_binders in
-                      (o''#binder binder, 
-                       args, 
-                       o''#computation comp)) funs,
-                rest_f o'))
+                    (o''#binder binder, 
+                     args, 
+                     o''#computation comp)) funs,
+					 rest_f o'))
             
         | `Alien _ -> assert false
             
@@ -474,8 +575,14 @@ struct
       match tc with
           `Return v -> B.box_call (Call (k, [o#value v]))
 
-        | `Apply (v, vl) | `ApplyDB (v, vl) | `ApplyPL (v, vl)-> 
+        | `Apply (v, vl) -> 
             B.box_call (Call (o#value v, k::(List.map o#value vl)))
+
+		  | `ApplyPL (v, vl) ->
+				B.box_call (Call (Call (Var "call_pl",[o#value v]),k::(List.map o#value vl)))
+
+		  | `ApplyDB (v, vl) ->
+				B.box_call (Call (Call (Var "call_db",[o#value v]),List.map o#value vl))
 
         | `Case (v, cases, default) ->
             bind_continuation k
@@ -509,9 +616,9 @@ struct
                      Let ("call_k", 
                           B.box_fun (Fun (["_"; "arg"], B.box_call (Call (k, [Var "arg"])))),
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
-              | `Database _
-              | `Table _
-              | `Query _ 
+              | `Database v -> Call (Var "database",[o#value v])
+              | `Table (db,t,_) -> Call (Var "table",[o#value db;o#value t])
+              | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _ 
 				  | `Update _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
@@ -528,8 +635,16 @@ struct
             let o' = o#add_bindings [x] in
               o#tail_computation tc (B.box_fun (Fun ([o#binder x], rest_f o')))
 
-        | `Fun  f | `FunQ f ->
+        | `Fun  f ->
             o#binding (`Rec [f]) rest_f
+
+		  | `FunQ (binder, (_, f_binders, comp), _) -> 
+				let o' = o#add_bindings [binder] in
+				let args = List.map o'#binder f_binders in
+				let o'' = o'#add_bindings f_binders in
+				B.box_rec ( Rec (
+				  [(o''#binder binder,args, (Query ((new translateQuery o'')#computation comp)))] , 
+				  rest_f o'))
               
         | `Rec funs ->
             B.box_rec (
@@ -562,104 +677,166 @@ let args_doc args =
   else
     doc_join text args
 
-let rec ml_of_code c = 
-  match c with
-    | Bool x -> text (string_of_bool x)
-    (* Represent integer literals as strings so we don't hit range problems. *)
-    | Int x -> parens (text "num_of_string" ^| ml_of_code (NativeString (Num.string_of_num x)))
-    | Char x -> text ("'" ^ Char.escaped x ^ "'")
-    | NativeString x -> text ("\"" ^ String.escaped x ^ "\"")
-    | Float x -> text (string_of_float x)
-          
-    | Var name -> text name
+module MLof =
+struct 
 
-    | Rec (fs, rest) ->
-        group (
-          group (
-            text "let rec" ^|
-                doc_concat (break^^text "and"^^break)
-              (List.map 
-                 (fun (name, args, body) ->
-                    let args = if args = [] then text "_" else args_doc args in
-                      nest 2 (
-                        group (text name ^| args ^| text "=") 
-                        ^| ml_of_code body)) fs)) ^|
-              if rest = Empty then
-                text ";;"
+  let variant t l = 
+	 text t ^^ parens (hsep (punctuate "," l))
+
+  let option f o = match o with
+		Some x -> text "Some" ^^ f x
+	 | None -> text "None"
+
+  let name_map f n = 
+	 StringMap.fold (fun k v t -> text ("StringMap.add " ^ k) ^^ (f v) ^| parens t) n
+		(text "StringMap.empty") 
+
+  let name_set ns = 
+	 StringSet.fold (fun v t -> text ("StringSet.add ") ^^ (text v) ^| parens t) ns
+		(text "StringSet.empty")
+		
+  let constant const = match const with
+	 | `Float f -> text ("Float " ^ string_of_float f)
+	 | `Int i -> text ("Int " ^ Num.string_of_num i)
+	 | `Bool b -> text ("Bool " ^ string_of_bool b)
+	 | `Char c -> text ("Char " ^ string_of_char c)
+	 | `String s -> text s
+  
+	 
+  let rec value v = match v with
+	 | `Constant c -> variant "Constant" [constant c]
+	 | `Variable var -> variant "Variable" [text (string_of_int var)]
+	 | `Extend (vn,vo) -> variant "Extend" [name_map value vn; option value vo]
+	 | `Project (n,v) -> variant "Project" [text n; value v]
+	 | `Erase (ns,v) -> variant "Erase" [name_set ns; value v]
+	 | `Inject (n,v) -> variant "Inject" [text n; value v]
+	 | `ApplyPure (v,vl) -> variant "ApplyPure" [value v; list (List.map value vl)]
+	 | `Table (v, ns) -> variant "Table" [value v; name_set ns]
+	 | `Database v -> variant "Database" [value v]
+	 | `SplicedVariable c -> code (Call (Var "splice",[c]))
+		  
+  and tail_computation tc = match tc with
+	 | `Return v -> variant "Return" [value v]
+	 | `Apply (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
+	 | `ApplyDB (v,vl) -> variant "ApplyDB" [value v; list (List.map value vl)]
+	 | `Case (v, nm, o) -> 
+		  let aux (v,c) = parens (text (string_of_int v) ^^ (text ", ") ^^ (computation c))
+		  in variant "Case" [ value v ; name_map aux nm ; option aux o ]
+	 | `If (v, c1, c2) -> variant "If" [ value v ; computation c1 ; computation c2 ]
+		  
+  and binding b = match b with
+	 | `Let (v,c) -> variant "Let" [text (string_of_int v) ; computation c]
+	 | `Fun (v, vl, c) -> 
+		  variant "Fun" 
+			 [text (string_of_int v) ; list (List.map (fun i -> text (string_of_int i)) vl) ; computation c]
+	 | `FunQ (v, vl, c) -> 
+			 variant "FunQ" 
+				[text (string_of_int v) ; list (List.map (fun i -> text (string_of_int i)) vl) ; computation c]
+				
+  and computation (b,tc) =
+	 parens (list (List.map binding b) ^^ (text ", ") ^^ tail_computation tc)
+			 
+  and code c = 
+	 match c with
+		| Bool x -> text (string_of_bool x)
+		(* Represent integer literals as strings so we don't hit range problems. *)
+		| Int x -> parens (text "num_of_string" ^| code (NativeString (Num.string_of_num x)))
+		| Char x -> text ("'" ^ Char.escaped x ^ "'")
+		| NativeString x -> text ("\"" ^ String.escaped x ^ "\"")
+		| Float x -> text (string_of_float x)
+			 
+		| Var name -> text name
+			 
+		| Rec (fs, rest) ->
+			 group (
+				group (
+              text "let rec" ^|
+						doc_concat (break^^text "and"^^break)
+						  (List.map 
+							  (fun (name, args, body) ->
+								 let args = if args = [] then text "_" else args_doc args in
+								 nest 2 (
+									group (text name ^| args ^| text "=") 
+									^| code body)) fs)) ^|
+					 if rest = Empty then
+						text ";;"
               else
-                text "in"
-                ^| ml_of_code rest)
-
-    | Fun (args, body) ->
-        parens (
-          group (          
-            nest 2 (
-              group (text "fun" ^| args_doc args ^| text "->") 
-              ^|  ml_of_code body)))
-              
-    | Let (name, body, rest) ->
-        group (
-          group (
-            text "let" ^|
-                nest 2 (
-                  group (text name ^| text "=") 
-                  ^| ml_of_code body)) ^|
-            text "in"
-          ^| ml_of_code rest)
-
-    | If (b, t, f) ->
-        group (
-          nest 2 (text "if" ^| ml_of_code b) ^|
-              nest 2 (text "then" ^| ml_of_code t) ^|
-                  nest 2 (text "else" ^| ml_of_code f))
-
-    | Case (v, cases, default) ->
-        let pp_case (b, c) =
-          group (text "|" ^| ml_of_code b ^| text "->" ^| ml_of_code c)
-        in        
-        group (
-          text "begin" ^|
+						text "in"
+						^| code rest)
+				
+		| Fun (args, body) ->
+			 parens (
+				group (          
               nest 2 (
-                group (text "match" ^| ml_of_code v ^| text "with") ^|
-                  doc_join pp_case cases ^|
-                      begin 
-                        match default with
-                          | None -> empty
-                          | Some c -> pp_case c
-                      end ^|
-                          text "| _ -> assert false") ^|
-                  text "end")
-
-    | Pair (v1, v2) ->
-        group (
-          parens (ml_of_code v1 ^^ text "," ^| ml_of_code v2))
-
-    | Triple (v1, v2, v3) ->
-        group (
-          nest 2 (
-            parens (
-              group (ml_of_code v1 ^^ text "," ^| ml_of_code v2 ^^ text ",") ^| 
-                  ml_of_code v3)))
-
-    | Lst vs ->
-        group (
-          text "[" ^^ 
-            doc_concat (text "; ") 
-            (List.map (group -<- ml_of_code) vs) ^^ 
-            text "]")
-
-    | Call (f, args) -> 
-          let args = if args = [] then text "l_unit" else doc_join ml_of_code args in
-            parens (group (
-                      nest 2 ((ml_of_code f) ^| args)))
-
-    | Die s ->
-        group (text "raise (InternalError" ^| ml_of_code s ^| text ")")
-
-    | Empty -> empty
+					 group (text "fun" ^| args_doc args ^| text "->") 
+					 ^|  code body)))
+            
+		| Let (name, body, rest) ->
+			 group (
+				group (
+              text "let" ^|
+						nest 2 (
+                    group (text name ^| text "=") 
+                    ^| code body)) ^|
+					 text "in"
+				  ^| code rest)
+				
+		| If (b, t, f) ->
+			 group (
+				nest 2 (text "if" ^| code b) ^|
+					 nest 2 (text "then" ^| code t) ^|
+                    nest 2 (text "else" ^| code f))
+				
+		| Case (v, cases, default) ->
+			 let pp_case (b, c) =
+				group (text "|" ^| code b ^| text "->" ^| code c)
+			 in        
+			 group (
+				text "begin" ^|
+					 nest 2 (
+						group (text "match" ^| code v ^| text "with") ^|
+							 doc_join pp_case cases ^|
+								  begin 
+									 match default with
+										| None -> empty
+										| Some c -> pp_case c
+								  end ^|
+										text "| _ -> assert false") ^|
+                    text "end")
+				
+		| Pair (v1, v2) ->
+			 group (
+				parens (code v1 ^^ text "," ^| code v2))
+				
+		| Triple (v1, v2, v3) ->
+			 group (
+				nest 2 (
+              parens (
+					 group (code v1 ^^ text "," ^| code v2 ^^ text ",") ^| 
+                    code v3)))
+				
+		| Lst vs ->
+			 group (
+				text "[" ^^ 
+              doc_concat (text "; ") 
+              (List.map (group -<- code) vs) ^^ 
+              text "]")
+				
+		| Call (f, args) -> 
+          let args = if args = [] then text "l_unit" else doc_join code args in
+          parens (group (
+            nest 2 ((code f) ^| args)))
+				
+		| Die s ->
+			 group (text "raise (InternalError" ^| code s ^| text ")")
+				
+		| Empty -> empty
+			 
+		| Query q -> parens (group (nest 2 ( text "query" ^| computation q)))
+end
 
 let postamble = "\n\nlet _ = run entry"
-
+  
 module BoxingCamlTranslater = Translater (CamlBoxer)
 module NonBoxingCamlTranslater = Translater (FakeBoxer)
 
@@ -697,5 +874,5 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
     (* Hack: this needs to be fixed so top-level bindings are
        properly exposed. *)
     preamble ^
-      "let entry () = begin\n" ^ (pretty 110 (ml_of_code c)) ^ "\nend" ^ 
+      "let entry () = begin\n" ^ (pretty 110 (MLof.code c)) ^ "\nend" ^ 
       postamble

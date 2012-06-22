@@ -720,6 +720,7 @@ struct
   end
 end
 
+
 module Inline =
 struct
   let rec is_inlineable_value =
@@ -900,7 +901,9 @@ struct
 	 (* Register variable inside querys *)
 	 val query_var_env = IntSet.empty
 
-	 method add_query_var v = {< query_var_env = IntSet.add v query_var_env>}
+	 method add_query_vars vl = 
+		let aux s v = IntSet.add v s in
+		{< query_var_env = List.fold_left aux query_var_env vl>}
 	 method is_query_var v = IntSet.mem v query_var_env  
 
 	 method value v = match v with
@@ -919,7 +922,9 @@ struct
 
 	 method binding b = match b with
 		| `Let ((x,_),_) when in_query ->
-			 (o#add_query_var x)#rec_binding(b)
+			 (o#add_query_vars [x])#rec_binding(b)
+		| `Fun ((x,_),(_,arg,_),_) | `FunQ ((x,_),(_,arg,_),_)  when in_query ->
+			 (o#add_query_vars (x::(List.map fst arg)))#rec_binding(b)
 		| `FunQ _ when not in_query -> 
 			 let b,o = (o#enter_query())#binding b in
 			 b,o#exit_query()
