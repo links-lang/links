@@ -1,4 +1,5 @@
 open Num
+open Queryml
 
 module StringMap = Map.Make (String);;
 
@@ -7,20 +8,21 @@ exception InternalError of string
 let cgi_parameters = ref []
 
 type xml = value list
+
 and xmlitem = 
   | Text of string
   | Node of string * (string * string) list * xml
+
 and value = 
   | Unit
-  | Bool of bool
-  | Char of char
-  | Int of Num.num
-  | Float of float
+  | Constant of constant
   | Function of (value -> value)
+  | FunctionQ of (IRquery.computation -> IRquery.computation)
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
   | Xmlitem of xmlitem
+  | Query of IRquery.computation
   
 (* Stolen from Utility.ml *)
 let identity x = x
@@ -66,19 +68,19 @@ let getenv : string -> string option =
     with Not_found -> None
 
 (* Boxing functions *)
-let box_bool x = Bool x
+let box_bool x = Constant (Bool x)
 let unbox_bool = function
-  | Bool x -> x
+  | Constant (Bool x) -> x
   | _ -> assert false
 
-let box_int x = Int x
+let box_int x = Constant (Int x)
 let unbox_int = function
-  | Int x -> x
+  | Constant (Int x) -> x
   | _ -> assert false
 
-let box_char x = Char x
+let box_char x = Constant (Char x)
 let unbox_char = function
-  | Char x -> x
+  | Constant (Char x) -> x
   | _ -> assert false
 
 let box_list l = Lst l
@@ -93,12 +95,17 @@ let unbox_string = function
   
 let box_float x = Float x
 let unbox_float = function
-  | Float x -> x
+  | Constant (Float x) -> x
   | _ -> assert false
 
 let box_func f = Function f
 let unbox_func = function
   | Function x -> x
+  | _ -> assert false
+
+let box_funQ f = FunctionQ f
+let unbox_func = function
+  | FunctionQ x -> x
   | _ -> assert false
 
 let box_variant (n, v)  = Variant (n, v)
@@ -116,16 +123,22 @@ let unbox_xmlitem = function
   | Xmlitem x -> x
   | _ -> assert false
 
+let box_query q = Query q
+let unbox_query = function
+  | Query q -> q
+  | _ -> assert false
+
 (* Stolen from value.ml *)
 let attr_escape =
    Str.global_replace (Str.regexp "\"") "\\\""
 
 (* This is quickly cobbled together so I can play with things. *)
 let rec string_of_value = function
-  | Bool x -> string_of_bool x
-  | Int x -> Num.string_of_num x
-  | Char x -> "'" ^ Char.escaped x ^ "'"
-  | Float x -> string_of_float x
+  | Constant c -> (match c with 
+		| Bool x -> string_of_bool x
+		| Int x -> Num.string_of_num x
+		| Char x -> "'" ^ Char.escaped x ^ "'"
+		| Float x -> string_of_float x )
   | Function x -> "Fun"
   | Lst l -> string_of_list l
   | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
@@ -138,7 +151,7 @@ and
       | [] -> "[]"
       | (x::xs) as l ->
           match x with
-            | Char _ -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
+            | Constant (Char _) -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
             | Xmlitem _ -> mapstrcat "" string_of_value l
             | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
 and
@@ -279,6 +292,15 @@ let u__error = failwith
 let u__redirect s = assert false
 
 let u__exit k v = v
+
+(* Integration of query stuff *)
+
+let splice : value -> IRquery.value = function
+  | Constant c -> Constant c
+  | Variant (n,v) -> Inject (n,v)
+  | Record nm -> Extend (StringMap.map splice nm, None)
+  | _ -> failwith "this value can't be converted"
+
 
 (* Main stuff--bits stolen from webif.ml *)
 

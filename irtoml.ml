@@ -21,6 +21,7 @@ type code =
   | Var of string
   | Rec of (string * string list * code) list * code
   | Fun of string list * code 
+  | LetFunQ of string * query_value * code
   | Let of string * code * code
   | If of (code * code * code)
   | Call of (code * code list)
@@ -43,6 +44,7 @@ and query_value =
   | `ApplyPure of query_value * query_value list
   | `Table of query_value * name_set
   | `Database of query_value
+  | `Lambda of var list * query_computation
   ]	
 and query_tail_computation =
   [ `Return of query_value
@@ -70,6 +72,7 @@ sig
   val box_float : code -> code
   val box_variant : code -> code
   val box_string : code -> code
+  val box_letfunq : code -> code
   val box_rec : code -> code
   val box_fun : code -> code
   val box_call : code -> code
@@ -108,6 +111,7 @@ struct
   let box_variant = identity
   let box_record = identity
   let box_rec = identity
+  let box_letfunq = identity
   let box_fun = identity
   let box_call = identity
   let box_if = identity
@@ -160,6 +164,10 @@ struct
   let box_fun = function
     | Fun (a, b) -> curry_box a b
     | _ -> assert false
+
+  let box_letfunq = function
+	 | LetFunQ (n,funcQ,rest) -> LetFunQ (n,funcQ,rest)
+	 | _ -> assert false
 
   let box_rec = function
     | Rec (funcs, rest) ->
@@ -333,6 +341,8 @@ struct
 
   class translateQuery translateCode =
   object (o : 'self_type)
+
+	 val translateCode = translateCode
 	 
 	 method value : Ir.value -> query_value = function
 		| `Inject (n,v,_) -> `Inject (n,o#value v)
@@ -369,9 +379,17 @@ struct
 	 method bindings : Ir.binding list -> query_binding list = function
 		| [] -> []
 		| b::bl -> begin match b with
-			 | `Let ((var,_),(_,tc)) -> `Let (var,o#computation ([],tc))::(o#bindings bl)
-			 | `Fun ((var,_),(_,bll,c),_) -> `Fun (var,List.map fst bll, o#computation c)::(o#bindings bl)
-			 | `FunQ ((var,_),(_,bll,c),_) -> `FunQ (var,List.map fst bll, o#computation c)::(o#bindings bl)
+			 | `Let ((var,_) as b,(_,tc)) -> 
+				  let o = {< translateCode = translateCode#add_bindings [b] >} in
+				  `Let (var,o#computation ([],tc))::(o#bindings bl)
+			 | `Fun ((var,_) as b,(_,bll,c),_) -> 
+				  let o = {< translateCode = translateCode#add_bindings (b::bll) >} in
+				  let arg_names = List.map fst bll in
+				  `Fun (var,arg_names, o#computation c)::(o#bindings bl)
+			 | `FunQ ((var,_) as b,(_,bll,c),_) -> 
+				  let o = {< translateCode = translateCode#add_bindings (b::bll) >} in
+				  let arg_names = List.map fst bll in
+				  `FunQ (var,arg_names, o#computation c)::(o#bindings bl)
 			 | `Rec _ | `Alien _ | `Module _ -> o#bindings bl
 		end
 		  
@@ -410,7 +428,10 @@ struct
         | `Constant c -> o#constant c
 
         | `Variable v | `SplicedVariable v -> 
-				Var (get_var_name v (Env.Int.lookup env v) )
+				(match Env.Int.find env v with
+					 None -> failwith ("can't find variable number :" ^ string_of_int v)
+				  | Some n -> Var (get_var_name v n )
+				)
 
         | `Extend (r, v) ->
             let record = B.box_record (
@@ -482,10 +503,10 @@ struct
             B.box_call (Call (o#value v, List.map o#value vl))
 
 		  | `ApplyPL (v, vl) ->
-				B.box_call (Call (Call (Var "call_pl",[o#value v]),List.map o#value vl))
+				o#tail_computation (`Apply (`Project ("pl",v),vl))
 
 		  | `ApplyDB (v, vl) ->
-				B.box_call (Call (Call (Var "call_db",[o#value v]),List.map o#value vl))
+				failwith "ApplyDB inside pl"
 
         | `Case (v, cases, default) ->
             let gen_case n (b, c) =
@@ -534,10 +555,9 @@ struct
 
 		  | `FunQ (binder, (_, f_binders, comp), _) -> 
 				let o' = o#add_bindings [binder] in
-				let args = List.map o'#binder f_binders in
-				let o'' = o'#add_bindings f_binders in
-				B.box_rec ( Rec (
-				  [(o''#binder binder, args, (Query ((new translateQuery o'')#computation comp)))] , 
+				let args = List.map fst f_binders in
+				B.box_letfunq ( LetFunQ (
+				  o'#binder binder, `Lambda (args,(new translateQuery o')#computation comp) , 
 				  rest_f o'))
               
         | `Rec funs -> 
@@ -579,7 +599,7 @@ struct
             B.box_call (Call (o#value v, k::(List.map o#value vl)))
 
 		  | `ApplyPL (v, vl) ->
-				B.box_call (Call (Call (Var "call_pl",[o#value v]),k::(List.map o#value vl)))
+				o#tail_computation (`Apply (`Project ("pl",v),vl)) k
 
 		  | `ApplyDB (v, vl) ->
 				B.box_call (Call (Call (Var "call_db",[o#value v]),List.map o#value vl))
@@ -640,10 +660,9 @@ struct
 
 		  | `FunQ (binder, (_, f_binders, comp), _) -> 
 				let o' = o#add_bindings [binder] in
-				let args = List.map o'#binder f_binders in
-				let o'' = o'#add_bindings f_binders in
-				B.box_rec ( Rec (
-				  [(o''#binder binder,args, (Query ((new translateQuery o'')#computation comp)))] , 
+				let args = List.map fst f_binders in
+				B.box_letfunq ( LetFunQ (
+				  o'#binder binder, `Lambda (args,(new translateQuery o')#computation comp) , 
 				  rest_f o'))
               
         | `Rec funs ->
@@ -684,18 +703,21 @@ struct
 	 text t ^^ parens (hsep (punctuate "," l))
 
   let option f o = match o with
-		Some x -> text "Some" ^^ f x
+		Some x -> text "Some" ^+^ f x
 	 | None -> text "None"
 
+  let string t = 
+	 text ("\"" ^ t ^ "\"")
+
   let name_map f n = 
-	 StringMap.fold (fun k v t -> text ("StringMap.add " ^ k) ^^ (f v) ^| parens t) n
+	 StringMap.fold (fun k v t -> text "StringMap.add" ^+^ string k ^+^ (f v) ^| parens t) n
 		(text "StringMap.empty") 
 
   let name_set ns = 
-	 StringSet.fold (fun v t -> text ("StringSet.add ") ^^ (text v) ^| parens t) ns
+	 StringSet.fold (fun v t -> text "StringSet.add" ^+^ text v ^| parens t) ns
 		(text "StringSet.empty")
 		
-  let constant const = match const with
+  let constant (const : Constant.constant) = match const with
 	 | `Float f -> text ("Float " ^ string_of_float f)
 	 | `Int i -> text ("Int " ^ Num.string_of_num i)
 	 | `Bool b -> text ("Bool " ^ string_of_bool b)
@@ -703,7 +725,7 @@ struct
 	 | `String s -> text s
   
 	 
-  let rec value v = match v with
+  let rec value (v : query_value) = match v with
 	 | `Constant c -> variant "Constant" [constant c]
 	 | `Variable var -> variant "Variable" [text (string_of_int var)]
 	 | `Extend (vn,vo) -> variant "Extend" [name_map value vn; option value vo]
@@ -714,8 +736,9 @@ struct
 	 | `Table (v, ns) -> variant "Table" [value v; name_set ns]
 	 | `Database v -> variant "Database" [value v]
 	 | `SplicedVariable c -> code (Call (Var "splice",[c]))
+	 | `Lambda (vl,c) -> variant "Lambda" [list (List.map (fun x -> text (string_of_int x)) vl); computation c]
 		  
-  and tail_computation tc = match tc with
+  and tail_computation (tc : query_tail_computation) = match tc with
 	 | `Return v -> variant "Return" [value v]
 	 | `Apply (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
 	 | `ApplyDB (v,vl) -> variant "ApplyDB" [value v; list (List.map value vl)]
@@ -724,7 +747,7 @@ struct
 		  in variant "Case" [ value v ; name_map aux nm ; option aux o ]
 	 | `If (v, c1, c2) -> variant "If" [ value v ; computation c1 ; computation c2 ]
 		  
-  and binding b = match b with
+  and binding (b : query_binding) = match b with
 	 | `Let (v,c) -> variant "Let" [text (string_of_int v) ; computation c]
 	 | `Fun (v, vl, c) -> 
 		  variant "Fun" 
@@ -763,6 +786,18 @@ struct
               else
 						text "in"
 						^| code rest)
+
+		| LetFunQ (name, body, rest) -> 
+			 let rest = if rest = Empty then text ";;" else text "in" ^| code rest in
+
+			 group ( 
+				group ( text "let" ^| 
+					 nest 2 (
+						group (text name ^| text "=") 
+						^| value body
+					 ) 
+				) ^| rest 
+			 )
 				
 		| Fun (args, body) ->
 			 parens (

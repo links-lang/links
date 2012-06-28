@@ -924,7 +924,8 @@ struct
 		| `Let ((x,_),_) when in_query ->
 			 (o#add_query_vars [x])#rec_binding(b)
 		| `Fun ((x,_),(_,arg,_),_) | `FunQ ((x,_),(_,arg,_),_)  when in_query ->
-			 (o#add_query_vars (x::(List.map fst arg)))#rec_binding(b)
+			 (* (o#add_query_vars (x::(List.map fst arg)))#rec_bindin b *)
+			 (o#add_query_vars [x])#rec_binding b
 		| `FunQ _ when not in_query -> 
 			 let b,o = (o#enter_query())#binding b in
 			 b,o#exit_query()
