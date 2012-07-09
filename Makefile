@@ -127,10 +127,12 @@ SOURCES = $(OPC)                						\
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
 	  		 irtoml.mli irtoml.ml                  \
-	  		 lib/compiler/queryml.ml					\
-	  		 lib/compiler/mllib.ml						\
           $(DB_CODE)            						\
           irtojs.mli irtojs.ml                  \
+			 lib/compiler/irquery.ml					\
+	  		 lib/compiler/lregex.ml						\
+	  		 lib/compiler/queryml.ml					\
+	  		 lib/compiler/mllib.ml						\
           query.ml                              \
           evalir.ml                             \
           webif.mli webif.ml                    \

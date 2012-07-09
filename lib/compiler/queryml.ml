@@ -1,102 +1,6 @@
 open Utility
+open Irquery
 
-module NormalForms =
-struct
-  (* 
-     This module gives the datatype of normal forms for query
-     expressions.
-
-     Instead of using normal forms we use a single datatype t as it
-     makes the implementation considerably simpler.
-     
-     At some point it might be interesting to try to target the normal
-     form directly.
-  *)
-
-  type base =
-      [ `If of base * base * base
-      | `Project of (Var.var * StringSet.t) * string | `Erase of (Var.var * StringSet.t) * string
-      | `Apply of string * base list
-      | `Constant of Constant.constant ]
-
-  type tail =
-      [ `Where of base * tail
-      | `SingletonRecord of base StringMap.t ]
-
-  type generator = Var.var * Value.table
-  type comprehension = generator list * base list * tail
-  type query = comprehension list
-end
-
-type var = int
-type name = string
-
-type name_set = Utility.stringset
-type 'a name_map = 'a Utility.stringmap
-
-
-type constant = 
-  | Float of float
-  | Int of Num.num
-  | String of string
-  | Bool of bool
-  | Char of char
-
-let escape_string s = (* SQL standard for escaping single quotes in a string *)
-  Str.global_replace (Str.regexp "'") "''" s
-
-let string_of_constant = function
-    | Bool value -> string_of_bool value
-    | Int value -> Num.string_of_num value
-    | Char c -> "'"^ Char.escaped c ^"'" 
-    | String s -> "'" ^ escape_string s ^ "'"
-    | Float value   -> string_of_float value
-
-
-(** Simplified IR to be puted in the runtime **)
-module IRquery =
-struct
-
-  type value =
-	 [ `Constant of constant
-	 | `Variable of var
-	 | `Extend of value name_map * value option
-	 | `Project of name * value
-	 | `Erase of name_set * value
-	 | `Inject of name * value
-	 | `ApplyPure of value * value list
-	 | `Table of value * name_set
-	 ]
-  and tail_computation =
-	 [ `Return of value
-	 | `Apply of value * value list
-	 | `ApplyDB of value * value list
-	 | `Case of value * (var * computation) name_map * (var * computation) option
-	 | `If of value * computation * computation
-	 ]
-  and binding = 
-	 [ `Let of var * tail_computation
-	 | `Fun of var * var list * computation
-	 | `FunQ of var * var list * computation
-	 ]
-  and computation = binding list * tail_computation
-end
-
-type query =
-    [ `For of (var * query) list * query list * query
-    | `If of query * query * query
-    | `Table of string * name_set
-    | `Singleton of query | `Concat of query list
-    | `Record of query name_map | `Project of query * name | `Erase of name_set * query
-    | `Variant of string * query
-    | `XML of Value.xmlitem
-    | `Apply of string * query list
-    | `Closure of (var list * IRquery.computation) * env
-    | `Primitive of string
-    | `Var of var * name_set
-	 | `Constant of constant
-	 ]
-and env = query Env.Int.t
 let (++) = Env.Int.extend
 
 let unbox_xml =
@@ -147,7 +51,7 @@ let used_database v : Value.database option =
   and used =
     function
       | `For (gs, os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
+      | `Table (_, db, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -159,9 +63,13 @@ let used_database v : Value.database option =
               | Some db -> Some db
           end
   in
-    match v with
-      | `Concat vs -> comprehensions vs
-      | v -> used v
+  match (match v with
+    | `Concat vs -> comprehensions vs
+    | v -> used v
+  ) with
+	 | Some s ->
+		  let driver, params = Value.parse_db_string s in Some (fst (Value.db_connect driver params))
+	 | None -> None
 
 
 let rec tail_of_t : query -> query = fun v ->
@@ -178,7 +86,7 @@ let labels_of_field_types field_types =
     field_types
     StringSet.empty
 
-let table_field_types = snd
+let table_field_types (_t, _db, fields) = fields
 
 let rec field_types_of_list =
   function
@@ -250,7 +158,7 @@ struct
 
 
   (** Those three functions visit the IR **)
-  let rec value env : IRquery.value -> query = function
+  let rec value env : Irquery.value -> query = function
     | `Constant c -> `Constant c
     | `Variable var ->
 		  lookup env var
@@ -274,8 +182,12 @@ struct
     | `Erase (labels, r) -> `Erase (labels, value env r)
     | `Inject (label, v) -> `Variant (label, value env v)
     | `ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
-	 | `Table (t,fields) -> begin match value env t with
-		  | `Constant (String s) -> `Table (s,fields)
+	 | `Table (db,t,fields) -> begin match (value env t),(value env db) with
+		  | `Constant (String t), `Database db -> `Table (t,db,fields)
+		  | _ -> assert false
+	 end
+	 | `Database db -> begin match value env db with
+		  | `Constant (String s) -> `Database s
 		  | _ -> assert false
 	 end
 
@@ -285,14 +197,14 @@ struct
       | b::bs ->
           begin match b with
             | `Let (x, tc) ->
-                computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
+                computation (bind env (x, computation env tc)) (bs, tailcomp)
             | `Fun (f, args, body) | `FunQ (f,args,body) ->
                 computation
                   (bind env (f, `Closure ((args, body), env)))
                     (bs, tailcomp)
           end
 
-  and tail_computation env : IRquery.tail_computation -> query = function
+  and tail_computation env : Irquery.tail_computation -> query = function
     | `Return v -> value env v
     | `Apply (f, args)
     | `ApplyDB (f, args) ->
@@ -548,9 +460,9 @@ struct
         | (a, b) -> `Apply ("==", [a; b])
 	 end
 
-  let eval env e =
-	 (*    Debug.print ("e: "^IRquery.Show_computation.show e); *)
-    computation env e
+  let eval e =
+	 (*    Debug.print ("e: "^Irquery.Show_computation.show e); *)
+    computation Env.Int.empty e
 
 end
 
@@ -686,15 +598,15 @@ end
 module Sql =
 struct
   type sql_query =
-    [ `UnionAll of query list * int
+    [ `UnionAll of sql_query list * int
     | `Select of (base * string) list * (string * Var.var) list * base * base list ]
   and base =
     [ `Case of (base * base * base)
     | `Constant of constant
     | `Project of Var.var * string
     | `Apply of string * base list
-    | `Empty of query
-    | `Length of query ]
+    | `Empty of sql_query
+    | `Length of sql_query ]
 
   (* Table variables that are actually used are always bound in a for
      comprehension. In this case the IR variable from the for
@@ -884,7 +796,7 @@ struct
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           clause db body
-      | `For ((x, `Table (table, _fields))::gs, os, body) ->
+      | `For ((x, `Table (table, _db, _fields))::gs, os, body) ->
           let body = clause db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -914,7 +826,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (table, fields ) ->
+      | `Table (table, db, fields ) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
@@ -960,7 +872,7 @@ struct
                        
                        this only works if the regexp doesn't include any variables bound by the query
                     *)
-                    `Constant (String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                    `Constant (String (Regex.string_of_regex (Lregex.Regex.ofLinks  r)))
                   in
                     `Apply ("RLIKE", [base db s; r])
           end
@@ -1039,14 +951,6 @@ struct
   and outer_query db v =
     `UnionAll (List.map (clause db) (prepare_clauses v), 0)
 
-  let ordered_query db range v =
-    (* Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    let vs, n = Order.ordered_query v in
-    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
-    let q = `UnionAll (List.map (clause db) vs, n) in
-      string_of_query db range q
-
   let unordered_query db range v =
     (* Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
@@ -1092,37 +996,37 @@ struct
       "delete from "^table^where
 end
 
-let compile : Value.env -> (Num.num * Num.num) option * IRquery.computation -> (Value.database * string * Types.datatype) option =
-  fun env (range, e) ->
-    (* Debug.print ("e: "^Show.show IRquery.show_computation e); *)
-    let v = IRquery2query.eval env e in
+let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.database * string) option =
+  fun (range, e) ->
+    (* Debug.print ("e: "^Show.show Irquery.show_computation e); *)
+    let v = IRquery2query.eval e in
       (* Debug.print ("v: "^string_of_t v); *)
     match used_database v with
       | None -> None
       | Some db ->
-          let t = type_of_expression v in
           let q = Sql.unordered_query db range v in
           Debug.print ("Generated query: "^q);
-          Some (db, q, t)
-				
-let compile_update : Value.database -> Value.env ->
-  ((IRquery.var * string * Types.datatype StringMap.t) * IRquery.computation option * IRquery.computation) -> string =
-  fun db env ((x, table, field_types), where, body) ->
+          Some (db, q)
+
+(*		
+let compile_update : Value.database -> 
+  ((Irquery.var * string * Types.datatype StringMap.t) * Irquery.computation option * Irquery.computation) -> string =
+  fun db ((x, table, field_types), where, body) ->
     let env = IRquery2query.bind (IRquery2query.env_of_value_env env) (x, `Var (x, field_types)) in
-	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^IRquery.Show_computation.show where)) where in*)
+	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^Irquery.Show_computation.show where)) where in*)
     let where = opt_map (IRquery2query.computation env) where in
-	 (*Debug.print ("body: "^IRquery.Show_computation.show body); *)
+	 (*Debug.print ("body: "^Irquery.Show_computation.show body); *)
     let body = IRquery2query.computation env body in
     let q = Sql.update db ((x, table), where, body) in
     Debug.print ("Generated update query: "^q);
     q
 		
-let compile_delete : Value.database -> Value.env ->
-  ((IRquery.var * string * Types.datatype StringMap.t) * IRquery.computation option) -> string =
-  fun db env ((x, table, field_types), where) ->
+let compile_delete : Value.database ->
+  ((Irquery.var * string * Types.datatype StringMap.t) * Irquery.computation option) -> string =
+  fun db ((x, table, field_types), where) ->
     let env = IRquery2query.bind (IRquery2query.env_of_value_env env) (x, `Var (x, field_types)) in
     let where = opt_map (IRquery2query.computation env) where in
     let q = Sql.delete db ((x, table), where) in
     Debug.print ("Generated update query: "^q);
     q
-
+*)

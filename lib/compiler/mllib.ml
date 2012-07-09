@@ -1,7 +1,8 @@
 open Num
+open Irquery
 open Queryml
 
-module StringMap = Map.Make (String);;
+module StringMap = Utility.StringMap ;;
 
 exception InternalError of string
 
@@ -17,12 +18,12 @@ and value =
   | Unit
   | Constant of constant
   | Function of (value -> value)
-  | FunctionQ of (IRquery.computation -> IRquery.computation)
+  | FunctionQ of (computation -> computation)
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
   | Xmlitem of xmlitem
-  | Query of IRquery.computation
+  | Query of computation
   
 (* Stolen from Utility.ml *)
 let identity x = x
@@ -93,7 +94,7 @@ let unbox_string = function
   | Lst x -> implode (List.map unbox_char x)
   | _ -> assert false
   
-let box_float x = Float x
+let box_float x = Constant (Float x)
 let unbox_float = function
   | Constant (Float x) -> x
   | _ -> assert false
@@ -104,7 +105,7 @@ let unbox_func = function
   | _ -> assert false
 
 let box_funQ f = FunctionQ f
-let unbox_func = function
+let unbox_funQ = function
   | FunctionQ x -> x
   | _ -> assert false
 
@@ -128,6 +129,11 @@ let unbox_query = function
   | Query q -> q
   | _ -> assert false
 
+let box_unit _ = Unit
+let unbox_unit = function
+  | Unit -> ()
+  | _ -> assert false
+
 (* Stolen from value.ml *)
 let attr_escape =
    Str.global_replace (Str.regexp "\"") "\\\""
@@ -135,11 +141,15 @@ let attr_escape =
 (* This is quickly cobbled together so I can play with things. *)
 let rec string_of_value = function
   | Constant c -> (match c with 
+		| String s -> "\"" ^ s ^ "\""
 		| Bool x -> string_of_bool x
 		| Int x -> Num.string_of_num x
 		| Char x -> "'" ^ Char.escaped x ^ "'"
 		| Float x -> string_of_float x )
-  | Function x -> "Fun"
+  | Function _ -> "Fun"
+  | FunctionQ _ -> "FunQ"
+  | Unit -> "Unit"
+  | Query _ -> "Query"
   | Lst l -> string_of_list l
   | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
   | Record r -> "(" ^ String.concat ", "
@@ -270,6 +280,8 @@ let add_attribute (s, v) = function
 
 let add_attributes = List.fold_right add_attribute
 
+let u__debug = print_string ;;
+
 let u__addAttributes x attrs =
   let attrs = List.map unwrap_pair attrs in
     List.map (add_attributes attrs) x
@@ -293,13 +305,17 @@ let u__redirect s = assert false
 
 let u__exit k v = v
 
+let u_s___caret_caret = ( ^ )
+
 (* Integration of query stuff *)
 
-let splice : value -> IRquery.value = function
-  | Constant c -> Constant c
-  | Variant (n,v) -> Inject (n,v)
-  | Record nm -> Extend (StringMap.map splice nm, None)
+let rec splice : value -> Irquery.value = function
+  | Constant c -> `Constant c
+  | Variant (n,v) -> `Inject (n, splice v)
+  | Record nm -> `Extend (StringMap.map splice nm, None)
   | _ -> failwith "this value can't be converted"
+
+let query : Irquery.computation -> value = fun _ -> Unit
 
 
 (* Main stuff--bits stolen from webif.ml *)

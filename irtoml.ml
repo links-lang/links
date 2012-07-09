@@ -80,6 +80,7 @@ sig
   val box_case : code -> code
   val box_xmlitem : code -> code
   val box_list : code -> code
+  val box_unit : code -> code
 end
 
 let arg_names = mapIndex (fun _ i -> "arg_" ^ (string_of_int i))
@@ -118,6 +119,7 @@ struct
   let box_case = identity
   let box_xmlitem = identity
   let box_list = identity
+  let box_unit = identity
 end
 
 module CamlBoxer : Boxer =
@@ -131,6 +133,7 @@ struct
   let box_record = wrap_with "box_record"
   let box_xmlitem = wrap_with "box_xmlitem"
   let box_list = wrap_with "box_list"
+  let box_unit = wrap_with "box_unit"
 
   let curry_box args body =
     List.fold_right
@@ -289,6 +292,9 @@ let lib_funcs = [
   "_error", ["unbox_string"], "id", false;
   "_unsafePickleCont", ["id"], "box_string", false;
   "_reifyK", ["id"], "box_string", false;
+  "_debug", ["unbox_string"], "box_unit", false;
+
+  "s___caret_caret", ["unbox_string"; "unbox_string"], "box_string",false;
 ]
 
 (* TODO: Most of this can be handled generically *)
@@ -556,8 +562,9 @@ struct
 		  | `FunQ (binder, (_, f_binders, comp), _) -> 
 				let o' = o#add_bindings [binder] in
 				let args = List.map fst f_binders in
+				let o'' = o'#add_bindings f_binders in
 				B.box_letfunq ( LetFunQ (
-				  o'#binder binder, `Lambda (args,(new translateQuery o')#computation comp) , 
+				  o'#binder binder, `Lambda (args,(new translateQuery o'')#computation comp) , 
 				  rest_f o'))
               
         | `Rec funs -> 
@@ -700,10 +707,10 @@ module MLof =
 struct 
 
   let variant t l = 
-	 text t ^^ parens (hsep (punctuate "," l))
+	 text ("`" ^ t) ^^ parens (hsep (punctuate "," l))
 
   let option f o = match o with
-		Some x -> text "Some" ^+^ f x
+		Some x -> text "Some" ^+^ (parens (f x))
 	 | None -> text "None"
 
   let string t = 
@@ -882,11 +889,11 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
     if box then "open Mllib;;\n\n" else "open Unboxed_mllib;;\n\n"
   in
 
-  let comp = 
-    if box && not no_prelude then 
+  let comp = if box && not no_prelude then 
       prelude @ bs, tc
-    else 
-      bs, tc in
+	 else 
+      bs, tc
+  in
 
   let c =
     if cps then 
