@@ -159,10 +159,11 @@ struct
 
   (** Those three functions visit the IR **)
   let rec value env : Irquery.value -> query = function
-    | `Constant c -> `Constant c
-    | `Variable var ->
+    | Constant c -> `Constant c
+    | Variable var ->
 		  lookup env var
-    | `Extend (ext_fields, r) -> 
+	 | Primitive f -> `Primitive f
+    | Extend (ext_fields, r) -> 
       begin
         match opt_app (value env) (`Record StringMap.empty) r with
           | `Record fields ->
@@ -178,15 +179,15 @@ struct
                        fields)
           | _ -> query_error "Error adding fields: non-record"
       end
-    | `Project (label,r) -> `Project (value env r,label)
-    | `Erase (labels, r) -> `Erase (labels, value env r)
-    | `Inject (label, v) -> `Variant (label, value env v)
-    | `ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
-	 | `Table (db,t,fields) -> begin match (value env t),(value env db) with
+    | Project (label,r) -> `Project (value env r,label)
+    | Erase (labels, r) -> `Erase (labels, value env r)
+    | Inject (label, v) -> `Variant (label, value env v)
+    | ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
+	 | Table (t,db,fields) -> begin match (value env t),(value env db) with
 		  | `Constant (String t), `Database db -> `Table (t,db,fields)
 		  | _ -> assert false
 	 end
-	 | `Database db -> begin match value env db with
+	 | Database db -> begin match value env db with
 		  | `Constant (String s) -> `Database s
 		  | _ -> assert false
 	 end
@@ -196,21 +197,21 @@ struct
       | [] -> tail_computation env tailcomp
       | b::bs ->
           begin match b with
-            | `Let (x, tc) ->
+            | Let (x, tc) ->
                 computation (bind env (x, computation env tc)) (bs, tailcomp)
-            | `Fun (f, args, body) | `FunQ (f,args,body) ->
+            | Fun (f, args, body) | FunQ (f,args,body) ->
                 computation
                   (bind env (f, `Closure ((args, body), env)))
                     (bs, tailcomp)
           end
 
   and tail_computation env : Irquery.tail_computation -> query = function
-    | `Return v -> value env v
-    | `Apply (f, args)
-    | `ApplyDB (f, args) ->
+    | Return v -> value env v
+    | Apply (f, args)
+    | ApplyDB (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | `Case (v, cases, default) -> reduce_case env (value env v, cases, default)
-    | `If (c, t, e) ->
+    | Case (v, cases, default) -> reduce_case env (value env v, cases, default)
+    | If (c, t, e) ->
       let c = value env c in
       let t = computation env t in
       let e = computation env e in

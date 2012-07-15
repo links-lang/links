@@ -268,11 +268,14 @@ object (o : 'self_type)
         `Return v -> o#value v
 
       | `Apply (v, vl) -> 
-          group (nest 2 (o#value v ^| (doc_join o#value vl)))
+          group (nest 2 (o#value v ^^ text "[any]" ^| 
+				  (if vl = [] then text "()" else doc_join o#value vl)))
 		| `ApplyPL (v,vl) -> 
-          group (nest 2 (o#value v ^^ text "[pl]" ^| (doc_join o#value vl)))
+          group (nest 2 (o#value v ^^ text "[pl]" ^|  
+				  (if vl = [] then text "()" else doc_join o#value vl)))
 	   | `ApplyDB (v,vl) ->
-          group (nest 2 (o#value v ^^ text "[db]"  ^| (doc_join o#value vl)))
+          group (nest 2 (o#value v ^^ text "[db]"  ^|  
+				  (if vl = [] then text "()" else doc_join o#value vl)))
 
 
       | `Case (v, names, opt) ->
@@ -924,8 +927,7 @@ struct
 		| `Let ((x,_),_) when in_query ->
 			 (o#add_query_vars [x])#rec_binding(b)
 		| `Fun ((x,_),(_,arg,_),_) | `FunQ ((x,_),(_,arg,_),_)  when in_query ->
-			 (* (o#add_query_vars (x::(List.map fst arg)))#rec_bindin b *)
-			 (o#add_query_vars [x])#rec_binding b
+			 (o#add_query_vars (x::(List.map fst arg)))#rec_binding b 
 		| `FunQ _ when not in_query -> 
 			 let b,o = (o#enter_query())#binding b in
 			 b,o#exit_query()

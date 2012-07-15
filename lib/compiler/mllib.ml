@@ -2,8 +2,6 @@ open Num
 open Irquery
 open Queryml
 
-module StringMap = Utility.StringMap ;;
-
 exception InternalError of string
 
 let cgi_parameters = ref []
@@ -16,14 +14,15 @@ and xmlitem =
 
 and value = 
   | Unit
-  | Constant of constant
+  | Const of constant
   | Function of (value -> value)
-  | FunctionQ of (computation -> computation)
+  | FunctionQ of Irquery.value
   | Variant of string * value
   | Record of value StringMap.t
   | Lst of value list
   | Xmlitem of xmlitem
-  | Query of computation
+  | Tbl of string * string * name_set
+  | DB of string
   
 (* Stolen from Utility.ml *)
 let identity x = x
@@ -69,19 +68,19 @@ let getenv : string -> string option =
     with Not_found -> None
 
 (* Boxing functions *)
-let box_bool x = Constant (Bool x)
+let box_bool x = Const (Bool x)
 let unbox_bool = function
-  | Constant (Bool x) -> x
+  | Const (Bool x) -> x
   | _ -> assert false
 
-let box_int x = Constant (Int x)
+let box_int x = Const (Int x)
 let unbox_int = function
-  | Constant (Int x) -> x
+  | Const (Int x) -> x
   | _ -> assert false
 
-let box_char x = Constant (Char x)
+let box_char x = Const (Char x)
 let unbox_char = function
-  | Constant (Char x) -> x
+  | Const (Char x) -> x
   | _ -> assert false
 
 let box_list l = Lst l
@@ -94,9 +93,9 @@ let unbox_string = function
   | Lst x -> implode (List.map unbox_char x)
   | _ -> assert false
   
-let box_float x = Constant (Float x)
+let box_float x = Const (Float x)
 let unbox_float = function
-  | Constant (Float x) -> x
+  | Const (Float x) -> x
   | _ -> assert false
 
 let box_func f = Function f
@@ -124,11 +123,6 @@ let unbox_xmlitem = function
   | Xmlitem x -> x
   | _ -> assert false
 
-let box_query q = Query q
-let unbox_query = function
-  | Query q -> q
-  | _ -> assert false
-
 let box_unit _ = Unit
 let unbox_unit = function
   | Unit -> ()
@@ -140,28 +134,29 @@ let attr_escape =
 
 (* This is quickly cobbled together so I can play with things. *)
 let rec string_of_value = function
-  | Constant c -> (match c with 
+  | Const c -> (match c with 
 		| String s -> "\"" ^ s ^ "\""
 		| Bool x -> string_of_bool x
 		| Int x -> Num.string_of_num x
 		| Char x -> "'" ^ Char.escaped x ^ "'"
 		| Float x -> string_of_float x )
   | Function _ -> "Fun"
-  | FunctionQ _ -> "FunQ"
+  | FunctionQ _ -> "FunctionQ"
   | Unit -> "Unit"
-  | Query _ -> "Query"
   | Lst l -> string_of_list l
   | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
   | Record r -> "(" ^ String.concat ", "
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
   | Xmlitem x -> string_of_xmlitem x
+  | Tbl (s,db,_) -> "Table (\"^db^\",\"^s^\")"
+  | DB _ -> "Database"
 and
     string_of_list = function
       | [] -> "[]"
       | (x::xs) as l ->
           match x with
-            | Constant (Char _) -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
+            | Const (Char _) -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
             | Xmlitem _ -> mapstrcat "" string_of_value l
             | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
 and
@@ -309,13 +304,27 @@ let u_s___caret_caret = ( ^ )
 
 (* Integration of query stuff *)
 
-let rec splice : value -> Irquery.value = function
-  | Constant c -> `Constant c
-  | Variant (n,v) -> `Inject (n, splice v)
-  | Record nm -> `Extend (StringMap.map splice nm, None)
+let u__getDatabaseConfig _ = StringMap.empty
+
+let _database s = DB (unbox_string s)
+
+(* Make the union of two Records *)
+let _union r1 r2 = 
+  let ur1 = unbox_record r1 and ur2 = unbox_record r2 in
+  box_record (StringMap.union_disjoint ur1 ur2)
+
+let _table db t row = Tbl (unbox_string db,unbox_string t, row)
+
+let rec _splice : value -> Irquery.value = function
+  | Const c -> Constant c
+  | Variant (n,v) -> Inject (n, _splice v)
+  | Record nm -> Extend (StringMap.map _splice nm, None)
+  | Tbl (db,t,row) -> Table (Constant (String t), Constant (String db),row)
   | _ -> failwith "this value can't be converted"
 
-let query : Irquery.computation -> value = fun _ -> Unit
+let _funq : Irquery.value -> value = fun c -> FunctionQ c
+
+let _query : Irquery.computation -> value = fun _ -> Unit
 
 
 (* Main stuff--bits stolen from webif.ml *)

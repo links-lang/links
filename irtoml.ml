@@ -31,18 +31,20 @@ type code =
   | Case of code * ((code * code) list) * ((code * code) option)
   | Die of code
   | Query of query_computation
+  | Table of code * code * name_set
   | Empty
 
 and query_value =
   [ `Constant of Constant.constant 
   | `Variable of var
   | `SplicedVariable of code
+  | `Primitive of string
   | `Extend of query_value name_map * query_value option
   | `Project of name * query_value
   | `Erase of name_set * query_value
   | `Inject of name * query_value
   | `ApplyPure of query_value * query_value list
-  | `Table of query_value * name_set
+  | `Table of query_value * query_value * name_set
   | `Database of query_value
   | `Lambda of var list * query_computation
   ]	
@@ -72,7 +74,6 @@ sig
   val box_float : code -> code
   val box_variant : code -> code
   val box_string : code -> code
-  val box_letfunq : code -> code
   val box_rec : code -> code
   val box_fun : code -> code
   val box_call : code -> code
@@ -112,7 +113,6 @@ struct
   let box_variant = identity
   let box_record = identity
   let box_rec = identity
-  let box_letfunq = identity
   let box_fun = identity
   let box_call = identity
   let box_if = identity
@@ -168,10 +168,6 @@ struct
     | Fun (a, b) -> curry_box a b
     | _ -> assert false
 
-  let box_letfunq = function
-	 | LetFunQ (n,funcQ,rest) -> LetFunQ (n,funcQ,rest)
-	 | _ -> assert false
-
   let box_rec = function
     | Rec (funcs, rest) ->
         let rec box_funcs fs rest =
@@ -191,6 +187,7 @@ struct
     | _ -> assert false
 
   let box_call = function
+	 | Call (f, []) -> Call (Call (Var "unbox_func",[f]), [])
     | Call (f, args) ->
         List.fold_left 
           (fun c arg -> Call(Call (Var "unbox_func", [c]), [arg])) f args
@@ -295,6 +292,9 @@ let lib_funcs = [
   "_debug", ["unbox_string"], "box_unit", false;
 
   "s___caret_caret", ["unbox_string"; "unbox_string"], "box_string",false;
+
+  "_getDatabaseConfig",["unbox_unit"], "box_record", false;
+
 ]
 
 (* TODO: Most of this can be handled generically *)
@@ -312,6 +312,23 @@ let ident_substs = StringMap.from_alist
     "Cons", "l_cons";
     "Concat", "l_concat";
   ]
+
+(* Primitives that need to be reconized manualy in queries *)
+let known_primitives = 
+  [ "concatMap", "ConcatMap";
+	 "map", "Map";
+	 "empty", "Empty";
+	 "sortByBase","SortBy";
+  ]
+
+(* HACK : one could consider storing real name and not having to do this *)
+let get_primitive_name s =
+  let test s = Str.string_match (Str.regexp "_\([^_]*\)_[0-9]*") s 0 in
+  let rec aux = function 
+	 | [] -> None
+	 | (h1,h2)::t -> if test s && Str.matched_group 1 s = h1 then Some h2 else aux t
+  in aux known_primitives
+ 
 
 let subst_ident n = 
   if StringMap.mem n ident_substs then
@@ -361,8 +378,22 @@ struct
 		| `Project (name, v) -> `Project (name, o#value v)
 		| `Erase (ns,v) -> `Erase (ns,o#value v)
 		| `Constant c -> `Constant c
-		| `Variable var -> `Variable var 
-		| `SplicedVariable var -> `SplicedVariable (translateCode#value (`Variable var))
+		| `Variable var -> 
+			 if Lib.is_primitive_var var then
+				`Primitive (Lib.primitive_name var)
+			 else
+				`Variable var 
+		| `SplicedVariable var -> 
+			 if Lib.is_primitive_var var then
+				`Primitive (Lib.primitive_name var)
+			 else (
+				match translateCode#get_name var with 
+				  | Some var_name -> ( match get_primitive_name var_name with
+						| Some n -> `Primitive n
+						| None -> `SplicedVariable (translateCode#value (`Variable var))
+				  )
+				  | None -> `SplicedVariable (translateCode#value (`Variable var))
+			 ) 
 		| `XmlNode _ -> failwith "XmlNode inside query"
 			 
 	 method tail_computation : Ir.tail_computation -> query_tail_computation = function
@@ -374,9 +405,9 @@ struct
 		| `Case (v,m,vo) ->
 			 let aux ((var,_),c) = (var,o#computation c) in
 			 `Case (o#value v, StringMap.map aux m,opt_map aux vo)
-		| `Special (`Table (db,t,(t_type,_,_))) ->
+		| `Special (`Table (t,db,(t_type,_,_))) ->
 			 (* TODO *)
-			 `Return (`Table (o#value t,StringSet.empty))
+			 `Return (`Table (o#value db, o#value t, StringSet.empty))
 		| `Special (`Database db) ->
 			 `Return (`Database (o#value db))
 		| `Special (`Query _) -> failwith "Query"
@@ -409,6 +440,9 @@ struct
   class virtual codeIR env = 
   object (o : 'self_type)
     val env = env
+
+	 method get_name v =
+		Env.Int.find env v
 		
     method wrap_func = B.wrap_func false
 
@@ -434,7 +468,7 @@ struct
         | `Constant c -> o#constant c
 
         | `Variable v | `SplicedVariable v -> 
-				(match Env.Int.find env v with
+				(match o#get_name v with
 					 None -> failwith ("can't find variable number :" ^ string_of_int v)
 				  | Some n -> Var (get_var_name v n )
 				)
@@ -451,7 +485,7 @@ struct
                 match v with
                     None -> record
                   | Some v -> 
-                      Call (Var "union", [o#value v; record])
+                      Call (Var "_union", [o#value v; record])
               end
                 
         | `Project (n, v) ->
@@ -537,8 +571,10 @@ struct
             match s with
               | `CallCC v -> 
                   Die (NativeString "CallCC not supported in direct style.")
-              | `Database v -> Call (Var "database",[o#value v])
-              | `Table (db,t,_) -> Call (Var "table",[o#value db;o#value t])
+              | `Database v -> Call (Var "_database",[o#value v])
+				  | `Table (t,db,(t_type,_,_)) ->
+						(* TODO *)
+						Table (o#value db, o#value t, StringSet.empty)
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _
 				  | `Update _ -> Die (NativeString "Delete and Update operations not supported.")
@@ -563,9 +599,8 @@ struct
 				let o' = o#add_bindings [binder] in
 				let args = List.map fst f_binders in
 				let o'' = o'#add_bindings f_binders in
-				B.box_letfunq ( LetFunQ (
-				  o'#binder binder, `Lambda (args,(new translateQuery o'')#computation comp) , 
-				  rest_f o'))
+				LetFunQ ( o'#binder binder, `Lambda (args,(new translateQuery o'')#computation comp) , 
+				  rest_f o')
               
         | `Rec funs -> 
 				B.box_rec (
@@ -644,7 +679,9 @@ struct
                           B.box_fun (Fun (["_"; "arg"], B.box_call (Call (k, [Var "arg"])))),
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
               | `Database v -> Call (Var "database",[o#value v])
-              | `Table (db,t,_) -> Call (Var "table",[o#value db;o#value t])
+				  | `Table (t,db,(t_type,_,_)) ->
+						(* TODO *)
+						Table (o#value db, o#value t, StringSet.empty)
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _ 
 				  | `Update _ -> Die (NativeString "Database operations not supported.")
@@ -668,9 +705,9 @@ struct
 		  | `FunQ (binder, (_, f_binders, comp), _) -> 
 				let o' = o#add_bindings [binder] in
 				let args = List.map fst f_binders in
-				B.box_letfunq ( LetFunQ (
+				LetFunQ (
 				  o'#binder binder, `Lambda (args,(new translateQuery o')#computation comp) , 
-				  rest_f o'))
+				  rest_f o')
               
         | `Rec funs ->
             B.box_rec (
@@ -707,7 +744,7 @@ module MLof =
 struct 
 
   let variant t l = 
-	 text ("`" ^ t) ^^ parens (hsep (punctuate "," l))
+	 text t ^^ parens (hsep (punctuate "," l))
 
   let option f o = match o with
 		Some x -> text "Some" ^+^ (parens (f x))
@@ -717,7 +754,7 @@ struct
 	 text ("\"" ^ t ^ "\"")
 
   let name_map f n = 
-	 StringMap.fold (fun k v t -> text "StringMap.add" ^+^ string k ^+^ (f v) ^| parens t) n
+	 StringMap.fold (fun k v t -> text "StringMap.add" ^+^ string k ^+^ parens (f v) ^| parens t) n
 		(text "StringMap.empty") 
 
   let name_set ns = 
@@ -726,23 +763,24 @@ struct
 		
   let constant (const : Constant.constant) = match const with
 	 | `Float f -> text ("Float " ^ string_of_float f)
-	 | `Int i -> text ("Int " ^ Num.string_of_num i)
+	 | `Int i -> text ("Int (Num.num_of_string \"" ^ (Num.string_of_num i) ^ "\")")
 	 | `Bool b -> text ("Bool " ^ string_of_bool b)
 	 | `Char c -> text ("Char " ^ string_of_char c)
-	 | `String s -> text s
+	 | `String s -> text ("String \"" ^  s ^ "\"")
   
 	 
   let rec value (v : query_value) = match v with
 	 | `Constant c -> variant "Constant" [constant c]
 	 | `Variable var -> variant "Variable" [text (string_of_int var)]
+	 | `Primitive f -> variant "Primitive" [string f]
 	 | `Extend (vn,vo) -> variant "Extend" [name_map value vn; option value vo]
-	 | `Project (n,v) -> variant "Project" [text n; value v]
+	 | `Project (n,v) -> variant "Project" [string n; value v]
 	 | `Erase (ns,v) -> variant "Erase" [name_set ns; value v]
-	 | `Inject (n,v) -> variant "Inject" [text n; value v]
+	 | `Inject (n,v) -> variant "Inject" [string n; value v]
 	 | `ApplyPure (v,vl) -> variant "ApplyPure" [value v; list (List.map value vl)]
-	 | `Table (v, ns) -> variant "Table" [value v; name_set ns]
+	 | `Table (t, db, ns) -> variant "Table" [value t; value db; name_set ns]
 	 | `Database v -> variant "Database" [value v]
-	 | `SplicedVariable c -> code (Call (Var "splice",[c]))
+	 | `SplicedVariable c -> code (Call (Var "_splice",[c]))
 	 | `Lambda (vl,c) -> variant "Lambda" [list (List.map (fun x -> text (string_of_int x)) vl); computation c]
 		  
   and tail_computation (tc : query_tail_computation) = match tc with
@@ -800,10 +838,10 @@ struct
 			 group ( 
 				group ( text "let" ^| 
 					 nest 2 (
-						group (text name ^| text "=") 
-						^| value body
+						group (text name ^| text "=" ) ^| text "_funq" 
+						^| parens (value body)
 					 ) 
-				) ^| rest 
+				) ^| rest  
 			 )
 				
 		| Fun (args, body) ->
@@ -874,7 +912,10 @@ struct
 				
 		| Empty -> empty
 			 
-		| Query q -> parens (group (nest 2 ( text "query" ^| computation q)))
+		| Query q -> parens (group (nest 2 ( text "_query" ^| computation q)))
+
+		| Table (s1,s2,row) ->
+			 parens (group (nest 2 (text "_table" ^| code s1 ^| code s2 ^| name_set row)))
 end
 
 let postamble = "\n\nlet _ = run entry"
@@ -885,7 +926,7 @@ module NonBoxingCamlTranslater = Translater (FakeBoxer)
 let ml_of_ir cps box no_prelude env prelude (bs, tc) =
   let env = Env.invert_env env in
 
-  let preamble = "open Num\n" ^
+  let preamble = "open Num\nopen Irquery\n" ^
     if box then "open Mllib;;\n\n" else "open Unboxed_mllib;;\n\n"
   in
 

@@ -301,8 +301,8 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
-(*  let program = Ir.RemoveApplyPure.program tenv program in *)
-	 let program = Ir.ElimDeadDefs.program tenv program in
+(*  let program = Ir.RemoveApplyPure.program tenv program in
+	 let program = Ir.ElimDeadDefs.program tenv program in *)
 	 let program = Ir.Doubleling.program tenv program in
 	 let program = Ir.Splicing.program tenv program in
     let code = Irtoml.ml_of_ir 

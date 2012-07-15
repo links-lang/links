@@ -364,21 +364,21 @@ module Eval = struct
         match Query.compile env (range, e) with
           | None -> computation env cont e
           | Some (db, q, t) ->
-            let (fieldMap, _), _ = 
-              Types.unwrap_row(TypeUtils.extract_row t) in
-            let fields =
-              StringMap.fold
-                (fun name t fields ->
-                  match t with
-                    | `Present, t -> (name, t)::fields
-                    | `Absent, _ -> assert false
-                    | `Var _, t -> assert false)
-                fieldMap
-                []
-            in
+              let (fieldMap, _), _ = 
+					 Types.unwrap_row(TypeUtils.extract_row t) in
+              let fields =
+					 StringMap.fold
+						(fun name t fields ->
+                    match t with
+							 | `Present, t -> (name, t)::fields
+							 | `Absent, _ -> assert false
+							 | `Var _, t -> assert false)
+						fieldMap
+						[]
+              in
               Database.execute_select fields q db
       in
-        apply_cont cont env result
+      apply_cont cont env result
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
