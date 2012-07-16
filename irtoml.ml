@@ -187,6 +187,7 @@ struct
     | _ -> assert false
 
   let box_call = function
+	 | Call (Var "l_equals",_) as c -> c
 	 | Call (f, []) -> Call (Call (Var "unbox_func",[f]), [])
     | Call (f, args) ->
         List.fold_left 
@@ -263,7 +264,7 @@ let lib_funcs = [
 
   "_tilde", ["unbox_string"; "id"], "box_bool", false;
 
-  "l_equals", ["id"; "id"], "box_bool", false;
+(*  "l_equals", ["id"; "id"], "box_bool", false; *)
   "l_not_equals", ["id"; "id"], "box_bool", false;
 
   "l_cons", ["id"; "unbox_list"], "box_list", false;
@@ -804,11 +805,11 @@ struct
   and computation (b,tc) =
 	 parens (list (List.map binding b) ^^ (text ", ") ^^ tail_computation tc)
 			 
-  and code c = 
+  and code_int c top_level = 
 	 match c with
 		| Bool x -> text (string_of_bool x)
 		(* Represent integer literals as strings so we don't hit range problems. *)
-		| Int x -> parens (text "num_of_string" ^| code (NativeString (Num.string_of_num x)))
+		| Int x -> parens (text "num_of_string" ^| code_int (NativeString (Num.string_of_num x)) false )
 		| Char x -> text ("'" ^ Char.escaped x ^ "'")
 		| NativeString x -> text ("\"" ^ String.escaped x ^ "\"")
 		| Float x -> text (string_of_float x)
@@ -825,23 +826,18 @@ struct
 								 let args = if args = [] then text "_" else args_doc args in
 								 nest 2 (
 									group (text name ^| args ^| text "=") 
-									^| code body)) fs)) ^|
-					 if rest = Empty then
-						text ";;"
-              else
-						text "in"
-						^| code rest)
+									^| code_int body false)) fs)) ^|
+					 text ( if top_level then "\n" else "in")
+				^| code_int rest top_level)
 
 		| LetFunQ (name, body, rest) -> 
-			 let rest = if rest = Empty then text ";;" else text "in" ^| code rest in
-
 			 group ( 
 				group ( text "let" ^| 
 					 nest 2 (
 						group (text name ^| text "=" ) ^| text "_funq" 
-						^| parens (value body)
+						  ^| parens (value body)
 					 ) 
-				) ^| rest  
+				) ^| code_int rest top_level 
 			 )
 				
 		| Fun (args, body) ->
@@ -849,7 +845,7 @@ struct
 				group (          
               nest 2 (
 					 group (text "fun" ^| args_doc args ^| text "->") 
-					 ^|  code body)))
+					 ^|  code_int body false)))
             
 		| Let (name, body, rest) ->
 			 group (
@@ -857,24 +853,24 @@ struct
               text "let" ^|
 						nest 2 (
                     group (text name ^| text "=") 
-                    ^| code body)) ^|
-					 text "in"
-				  ^| code rest)
+                    ^| code_int body false)) ^|
+					 text ( if top_level then "\n" else "in")
+				  ^| code_int rest top_level)
 				
 		| If (b, t, f) ->
 			 group (
-				nest 2 (text "if" ^| code b) ^|
-					 nest 2 (text "then" ^| code t) ^|
-                    nest 2 (text "else" ^| code f))
+				nest 2 (text "if" ^| code_int b false) ^|
+					 nest 2 (text "then" ^| code_int t false) ^|
+                    nest 2 (text "else" ^| code_int f false))
 				
 		| Case (v, cases, default) ->
 			 let pp_case (b, c) =
-				group (text "|" ^| code b ^| text "->" ^| code c)
+				group (text "|" ^| code_int b false ^| text "->" ^| code_int c false)
 			 in        
 			 group (
 				text "begin" ^|
 					 nest 2 (
-						group (text "match" ^| code v ^| text "with") ^|
+						group (text "match" ^| code_int v false ^| text "with") ^|
 							 doc_join pp_case cases ^|
 								  begin 
 									 match default with
@@ -886,36 +882,38 @@ struct
 				
 		| Pair (v1, v2) ->
 			 group (
-				parens (code v1 ^^ text "," ^| code v2))
+				parens (code_int v1 false ^^ text "," ^| code_int v2 false))
 				
 		| Triple (v1, v2, v3) ->
 			 group (
 				nest 2 (
               parens (
-					 group (code v1 ^^ text "," ^| code v2 ^^ text ",") ^| 
-                    code v3)))
+					 group (code_int v1 false ^^ text "," ^| code_int v2 false ^^ text ",") ^| 
+                    code_int v3 false)))
 				
 		| Lst vs ->
 			 group (
 				text "[" ^^ 
               doc_concat (text "; ") 
-              (List.map (group -<- code) vs) ^^ 
+              (List.map (group -<- (fun c -> code_int c false)) vs) ^^ 
               text "]")
 				
 		| Call (f, args) -> 
-          let args = if args = [] then text "l_unit" else doc_join code args in
+          let args = if args = [] then text "l_unit" else doc_join (fun c -> code_int c false) args in
           parens (group (
-            nest 2 ((code f) ^| args)))
+            nest 2 ((code_int f false) ^| args)))
 				
 		| Die s ->
-			 group (text "raise (InternalError" ^| code s ^| text ")")
+			 group (text "raise (InternalError" ^| code_int s false ^| text ")")
 				
 		| Empty -> empty
 			 
 		| Query q -> parens (group (nest 2 ( text "_query" ^| computation q)))
 
 		| Table (s1,s2,row) ->
-			 parens (group (nest 2 (text "_table" ^| code s1 ^| code s2 ^| name_set row)))
+			 parens (group (nest 2 (text "_table" ^| code_int s1 false ^| code_int s2 false ^| name_set row)))
+				
+  and code c = code_int c true
 end
 
 let postamble = "\n\nlet _ = run entry"
@@ -927,7 +925,7 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
   let env = Env.invert_env env in
 
   let preamble = "open Num\nopen Irquery\n" ^
-    if box then "open Mllib;;\n\n" else "open Unboxed_mllib;;\n\n"
+    if box then "open Mllib\n\n" else "open Unboxed_mllib;;\n\n"
   in
 
   let comp = if box && not no_prelude then 
@@ -957,5 +955,4 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
     (* Hack: this needs to be fixed so top-level bindings are
        properly exposed. *)
     preamble ^
-      "let entry () = begin\n" ^ (pretty 110 (MLof.code c)) ^ "\nend" ^ 
-      postamble
+      (pretty 110 (MLof.code c))

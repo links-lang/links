@@ -3,10 +3,8 @@ open Irquery
 
 let (++) = Env.Int.extend
 
-let unbox_xml =
-  function
-    | `XML xmlitem -> xmlitem
-    | _ -> failwith ("failed to unbox XML")
+let unbox_xml = function
+    | #xmlitem as x -> x
 
 let unbox_pair =
   function
@@ -184,11 +182,11 @@ struct
     | Inject (label, v) -> `Variant (label, value env v)
     | ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
 	 | Table (t,db,fields) -> begin match (value env t),(value env db) with
-		  | `Constant (String t), `Database db -> `Table (t,db,fields)
+		  | `Constant (`String t), `Database db -> `Table (t,db,fields)
 		  | _ -> assert false
 	 end
 	 | Database db -> begin match value env db with
-		  | `Constant (String s) -> `Database s
+		  | `Constant (`String s) -> `Database s
 		  | _ -> assert false
 	 end
 
@@ -355,8 +353,8 @@ struct
       | _                      -> `For (gs, os, body)
   and reduce_if_condition (c, t, e) =
     match c with
-      | `Constant (Bool true) -> t
-      | `Constant (Bool false) -> e
+      | `Constant (`Bool true) -> t
+      | `Constant (`Bool false) -> e
       | `If (c', t', e') ->
         reduce_if_body
           (reduce_or (reduce_and (c', t'),
@@ -375,8 +373,8 @@ struct
   and reduce_where_then (c, t) =
     match t with
       (* optimisation *)
-      | `Constant (Bool true) -> t
-      | `Constant (Bool false) -> `Concat []
+      | `Constant (`Bool true) -> t
+      | `Constant (`Bool false) -> `Concat []
 
       | `Concat vs ->
         reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
@@ -406,9 +404,9 @@ struct
       | _ ->
         begin
           match t, e with
-            | `Constant (Bool true), _ ->
+            | `Constant (`Bool true), _ ->
               reduce_or (c, e)
-            | _, `Constant (Bool false) ->
+            | _, `Constant (`Bool false) ->
               reduce_and (c, t)
             | _ ->
               `If (c, t, e)
@@ -416,39 +414,39 @@ struct
   (* simple optimisations *)
   and reduce_and (a, b) =
     match a, b with
-      | `Constant (Bool true), x
-      | x, `Constant (Bool true)
-      | (`Constant (Bool false) as x), _
-      | _, (`Constant (Bool false) as x) -> x
+      | `Constant (`Bool true), x
+      | x, `Constant (`Bool true)
+      | (`Constant (`Bool false) as x), _
+      | _, (`Constant (`Bool false) as x) -> x
       | _ -> `Apply ("&&", [a; b])
   and reduce_or (a, b) =
     match a, b with
-      | (`Constant (Bool true) as x), _
-      | _, (`Constant (Bool true) as x)
-      | `Constant (Bool false), x
-      | x, `Constant (Bool false) -> x
+      | (`Constant (`Bool true) as x), _
+      | _, (`Constant (`Bool true) as x)
+      | `Constant (`Bool false), x
+      | x, `Constant (`Bool false) -> x
       | _ -> `Apply ("||", [a; b])
   and reduce_not a =
     match a with
-      | `Constant (Bool false) -> `Constant (Bool true)
-      | `Constant (Bool true)  -> `Constant (Bool false)
+      | `Constant (`Bool false) -> `Constant (`Bool true)
+      | `Constant (`Bool true)  -> `Constant (`Bool false)
       | _                       -> `Apply ("not", [a])
   and reduce_eq (a, b) =
-    let bool x = `Constant (Bool x) in
+    let bool x = `Constant (`Bool x) in
     let eq_constant =
       function
-        | (Bool a  , Bool b)   -> bool (a = b)
-        | (Int a   , Int b)    -> bool (Num.eq_num a b)
-        | (Float a , Float b)  -> bool (a = b)
-        | (Char a  , Char b)   -> bool (a = b)
-        | (String a, String b) -> bool (a = b)
+        | (`Bool a  , `Bool b)   -> bool (a = b)
+        | (`Int a   , `Int b)    -> bool (Num.eq_num a b)
+        | (`Float a , `Float b)  -> bool (a = b)
+        | (`Char a  , `Char b)   -> bool (a = b)
+        | (`String a, `String b) -> bool (a = b)
         | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b])
     in begin
       match a, b with
         | (`Constant a, `Constant b) -> eq_constant (a, b)
         | (`Variant (s1, a), `Variant (s2, b)) ->
           if s1 <> s2 then
-            `Constant (Bool false)
+            `Constant (`Bool false)
           else
             reduce_eq (a, b)              
         | (`Record lfields, `Record rfields) -> 
@@ -457,7 +455,7 @@ struct
               reduce_and (reduce_eq (v1, v2), e))
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
-            (`Constant (Bool true))
+            (`Constant (`Bool true))
         | (a, b) -> `Apply ("==", [a; b])
 	 end
 
@@ -578,7 +576,7 @@ struct
 
   let query =
     fun v ->
-      let q = query [] (`Constant (Bool true)) v in
+      let q = query [] (`Constant (`Bool true)) v in
       let ss = flatten_tree q in
       ss
 			 
@@ -722,7 +720,7 @@ struct
         | `UnionAll ([q], n) -> sq q ^ order_by_clause n
         | `UnionAll (qs, n) ->
           mapstrcat " union all " (fun q -> "(" ^ sq q ^ ")") qs ^ order_by_clause n
-        | `Select (fields, [], `Constant (Bool true), _os) ->
+        | `Select (fields, [], `Constant (`Bool true), _os) ->
             let fields = string_of_fields fields in
               "select " ^ fields
         | `Select (fields, [], condition, _os) ->
@@ -737,7 +735,7 @@ struct
                 | _ -> " order by " ^ mapstrcat "," sb os in
             let where =
               match condition with
-                | `Constant (Bool true) -> ""
+                | `Constant (`Bool true) -> ""
                 | _ ->  " where " ^ sb condition
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
@@ -817,10 +815,10 @@ struct
                 let c =
                   match c, c' with
                     (* optimisations *)
-                    | `Constant (Bool true), c
-                    | c, `Constant (Bool true) -> c
-                    | `Constant (Bool false), _
-                    | _, `Constant (Bool false) -> `Constant (Bool false)
+                    | `Constant (`Bool true), c
+                    | c, `Constant (`Bool true) -> c
+                    | `Constant (`Bool false), _
+                    | _, `Constant (`Bool false) -> `Constant (`Bool false)
                     (* default case *)
                     | c, c' -> `Apply ("&&", [c; c'])
                 in
@@ -840,7 +838,7 @@ struct
                fields
                [])
         in
-          `Select (fields, [(table, var)], `Constant (Bool true), [])
+          `Select (fields, [(table, var)], `Constant (`Bool true), [])
       | `Singleton (`Record fields) ->
         let fields =
           List.rev
@@ -850,13 +848,13 @@ struct
                fields
                [])
         in
-          `Select (fields, [], `Constant (Bool true), [])
+          `Select (fields, [], `Constant (`Bool true), [])
 
       | `Singleton _ ->
         (* If we're inside an `Empty or a `Length it's safe to
            ignore any fields here. Otherwise this line should be
            unreachable. *)
-        `Select ([], [], `Constant (Bool true), [])
+        `Select ([], [], `Constant (`Bool true), [])
       | _ -> assert false
   and base : Value.database -> query -> base = fun db ->
     function
@@ -866,14 +864,14 @@ struct
         begin
           match likeify r with
             | Some r ->
-              `Apply ("LIKE", [base db s; `Constant (String r)])
+              `Apply ("LIKE", [base db s; `Constant (`String r)])
             | None ->
               let r =
                     (* HACK:
                        
                        this only works if the regexp doesn't include any variables bound by the query
                     *)
-                    `Constant (String (Regex.string_of_regex (Lregex.Regex.ofLinks  r)))
+                    `Constant (`String (Regex.string_of_regex (Lregex.Regex.ofLinks  r)))
                   in
                     `Apply ("RLIKE", [base db s; r])
           end
@@ -898,7 +896,7 @@ struct
                 | `Variant ("Star", _), `Variant ("Any", _) -> Some ("%")
                 | _ -> None
             end
-        | `Variant ("Simply", `Constant (String s)) -> Some (quote s)
+        | `Variant ("Simply", `Constant (`String s)) -> Some (quote s)
         | `Variant ("Quote", `Variant ("Simply", v)) ->
             (* TODO:
                
@@ -907,8 +905,8 @@ struct
             *)
            let rec string =
               function
-                | `Constant (String s) -> Some s
-                | `Singleton (`Constant (Char c)) -> Some (string_of_char c)
+                | `Constant (`String s) -> Some s
+                | `Singleton (`Constant (`Char c)) -> Some (string_of_char c)
                 | `Concat vs ->
                     let rec concat =
                       function

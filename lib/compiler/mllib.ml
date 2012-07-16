@@ -6,23 +6,23 @@ exception InternalError of string
 
 let cgi_parameters = ref []
 
-type xml = value list
+type xmlitem = 
+  [ `XMLText of string
+  | `XMLNode of string * (string * string) list * xmlitem list
+  ]
 
-and xmlitem = 
-  | Text of string
-  | Node of string * (string * string) list * xml
-
-and value = 
-  | Unit
-  | Const of constant
-  | Function of (value -> value)
-  | FunctionQ of Irquery.value
-  | Variant of string * value
-  | Record of value StringMap.t
-  | Lst of value list
-  | Xmlitem of xmlitem
-  | Tbl of string * string * name_set
-  | DB of string
+type value = 
+  [ `Unit
+  | constant
+  | `Function of (value -> value)
+  | `FunctionQ of Irquery.value
+  | `Variant of string * value
+  | `Record of value StringMap.t
+  | `List of value list
+  | xmlitem
+  | `Table of string * string * name_set
+  | `Database of string
+  ]
   
 (* Stolen from Utility.ml *)
 let identity x = x
@@ -68,65 +68,53 @@ let getenv : string -> string option =
     with Not_found -> None
 
 (* Boxing functions *)
-let box_bool x = Const (Bool x)
+let box_bool x = `Bool x
 let unbox_bool = function
-  | Const (Bool x) -> x
-  | _ -> assert false
+  | `Bool x -> x
 
-let box_int x = Const (Int x)
+let box_int x =  `Int x
 let unbox_int = function
-  | Const (Int x) -> x
-  | _ -> assert false
+  | `Int x -> x
 
-let box_char x = Const (Char x)
+let box_char x = `Char x
 let unbox_char = function
-  | Const (Char x) -> x
-  | _ -> assert false
+  | `Char x -> x
 
-let box_list l = Lst l
+let box_list l = `List l
 let unbox_list = function
-  | Lst l -> l
-  | _ -> assert false
+  | `List l -> l
 
 let box_string x = box_list (List.map box_char (explode x))
 let unbox_string = function
-  | Lst x -> implode (List.map unbox_char x)
-  | _ -> assert false
+  | `List x -> implode (List.map unbox_char x)
   
-let box_float x = Const (Float x)
+let box_float x = `Float x
 let unbox_float = function
-  | Const (Float x) -> x
-  | _ -> assert false
+  | `Float x -> x
 
-let box_func f = Function f
-let unbox_func = function
-  | Function x -> x
-  | _ -> assert false
+let box_func f = `Function f
+let unbox_func : 'a. [`Function of 'a -> 'a ] -> 'a -> 'a = function
+  | `Function x -> x
 
-let box_funQ f = FunctionQ f
+let box_funQ f = `FunctionQ f
 let unbox_funQ = function
-  | FunctionQ x -> x
-  | _ -> assert false
+  | `FunctionQ x -> x
 
-let box_variant (n, v)  = Variant (n, v)
+let box_variant (n, v) = `Variant (n, v)
 let unbox_variant = function
-  | Variant (n, v) -> (n, v)
-  | _ -> assert false
+  | `Variant (n, v) -> (n, v)
 
-let box_record r = Record r
+let box_record r = `Record r
 let unbox_record = function
-  | Record r -> r
-  | _ -> assert false
+  | `Record r -> r
 
-let box_xmlitem x = Xmlitem x
+let box_xmlitem (x:xmlitem) = x
 let unbox_xmlitem = function 
-  | Xmlitem x -> x
-  | _ -> assert false
+  | #xmlitem as x -> x
 
-let box_unit _ = Unit
+let box_unit _ = `Unit
 let unbox_unit = function
-  | Unit -> ()
-  | _ -> assert false
+  | `Unit -> ()
 
 (* Stolen from value.ml *)
 let attr_escape =
@@ -134,31 +122,26 @@ let attr_escape =
 
 (* This is quickly cobbled together so I can play with things. *)
 let rec string_of_value = function
-  | Const c -> (match c with 
-		| String s -> "\"" ^ s ^ "\""
-		| Bool x -> string_of_bool x
-		| Int x -> Num.string_of_num x
-		| Char x -> "'" ^ Char.escaped x ^ "'"
-		| Float x -> string_of_float x )
-  | Function _ -> "Fun"
-  | FunctionQ _ -> "FunctionQ"
-  | Unit -> "Unit"
-  | Lst l -> string_of_list l
-  | Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
-  | Record r -> "(" ^ String.concat ", "
+  | `String s -> "\"" ^ s ^ "\""
+  | `Bool x -> string_of_bool x
+  | `Int x -> Num.string_of_num x
+  | `Char x -> "'" ^ Char.escaped x ^ "'"
+  | `Float x -> string_of_float x
+  | `Function _ -> "Fun"
+  | `FunctionQ _ -> "FunctionQ"
+  | `Unit -> "Unit"
+  | `List l -> string_of_list l
+  | `Variant (s, v) -> s ^ "(" ^ string_of_value v ^ ")"
+  | `Record r -> "(" ^ String.concat ", "
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
-  | Xmlitem x -> string_of_xmlitem x
-  | Tbl (s,db,_) -> "Table (\"^db^\",\"^s^\")"
-  | DB _ -> "Database"
+  | #xmlitem as x -> string_of_xmlitem x
+  | `Table (s,db,_) -> "Table (\"^db^\",\"^s^\")"
+  | `Database _ -> "Database"
 and
     string_of_list = function
       | [] -> "[]"
-      | (x::xs) as l ->
-          match x with
-            | Const (Char _) -> "\"" ^ String.escaped (unbox_string (Lst l)) ^ "\""
-            | Xmlitem _ -> mapstrcat "" string_of_value l
-            | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
+      | l ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
 and
     (* Somewhat stolen from value.ml *)
     string_of_xmlitem = let format_attr (k, v) =
@@ -170,8 +153,8 @@ and
         | a -> " " ^ a 
     in
       function
-        | Text s -> xml_escape s
-        | Node (name, attrs, children) ->
+        | `XMLText s -> xml_escape s
+        | `XMLNode (name, attrs, children) ->
             match children with
               | [] -> "<" ^ name ^ format_attrs attrs ^ " />"
               | _ -> ("<" ^ name ^ format_attrs attrs ^ ">"
@@ -184,7 +167,7 @@ let start = id
 
 let project m k = StringMap.find (unbox_string k) (unbox_record m);;
 let build_xmlitem name attrs children =
-    Node (name, List.map 
+    `XMLNode (name, List.map 
             (fun (n, v) -> (n, unbox_string v)) attrs, children)
 
 let unwrap_pair m = 
@@ -212,18 +195,33 @@ let apply_4 f a1 a2 a3 a4 =
 (* After several time-consuming attempts to nicely pull this out of
    the compiled prelude, I decided to just duplicate the functionality
    here. Bleh. *)
-let render_page page =
-  let n, k, fs = unwrap_triple page in
+
+(*
+type 'a page =
+  [ `Record of 
+		[ `Function of 
+			 (value -> [`Function of 
+				  (value -> [ `Record of 
+						[ `List of 
+							 [ `Function of value -> 'a ]
+								list ]
+						  name_map ] )]) ]
+		  name_map]
+
+let render_page (page : 'a page)=
+  let _, k, fs = unwrap_triple page in
   let ms, _ = unwrap_pair (apply_2 fs id (box_int (num_of_int 0))) in    
   let zs =
     mapIndex (fun m i zs -> apply_4 m id k zs (box_int (num_of_int i))) (unbox_list ms) in
   let b_zs = box_list (List.map box_func zs) in
     apply_2 k id (box_list  (List.map (fun z -> z b_zs) zs))
       
+*)
+
 (* Library functions *)
 
-let l_unit = Unit
-let l_nil = box_list ([])
+let l_unit = `Unit
+let l_nil = box_list []
 
 let u_l_equals = (=)
 let u_l_not_equals = (!=)
@@ -262,18 +260,18 @@ let u__stringToInt = num_of_string
 let u__stringToFloat = float_of_string
 
 let u__stringToXml s =
-  [box_xmlitem (Text s)]
+  [box_xmlitem (`XMLText s)]
 
 let u__intToXml i = 
   u__stringToXml (string_of_num i)
 
 let add_attribute (s, v) = function
-  | Xmlitem (Node (n, a, c)) ->
-      Xmlitem (Node (n, ((unbox_string s), (unbox_string v))::a, c))
-  | Xmlitem (Text s) -> Xmlitem (Text s)
-  | _ -> assert false
+  | `XMLNode (n, a, c) ->
+      `XMLNode (n, ((unbox_string s), (unbox_string v))::a, c)
+  | `XMLText _ as x -> x
 
-let add_attributes = List.fold_right add_attribute
+let add_attributes l = 
+  List.fold_right add_attribute l
 
 let u__debug = print_string ;;
 
@@ -306,25 +304,25 @@ let u_s___caret_caret = ( ^ )
 
 let u__getDatabaseConfig _ = StringMap.empty
 
-let _database s = DB (unbox_string s)
+let _database s = `Database (unbox_string s)
 
 (* Make the union of two Records *)
 let _union r1 r2 = 
   let ur1 = unbox_record r1 and ur2 = unbox_record r2 in
   box_record (StringMap.union_disjoint ur1 ur2)
 
-let _table db t row = Tbl (unbox_string db,unbox_string t, row)
+let _table db t row = `Table (unbox_string db,unbox_string t, row)
 
-let rec _splice : value -> Irquery.value = function
-  | Const c -> Constant c
-  | Variant (n,v) -> Inject (n, _splice v)
-  | Record nm -> Extend (StringMap.map _splice nm, None)
-  | Tbl (db,t,row) -> Table (Constant (String t), Constant (String db),row)
+let rec _splice = function
+  | #constant as c -> Constant c
+  | `Variant (n,v) -> Inject (n, _splice v)
+  | `Record nm -> Extend (StringMap.map _splice nm, None)
+  | `Table (db,t,row) -> Table (Constant (`String t), Constant (`String db),row)
   | _ -> failwith "this value can't be converted"
 
-let _funq : Irquery.value -> value = fun c -> FunctionQ c
+let _funq = fun c -> `FunctionQ c
 
-let _query : Irquery.computation -> value = fun _ -> Unit
+let _query = fun _ -> `Unit
 
 
 (* Main stuff--bits stolen from webif.ml *)
@@ -334,9 +332,9 @@ let is_multipart () =
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
 let resume_with_cont cont =
-  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : value) in
+  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : [ `Function of (value -> value) ]) in
     (unbox_func cont) start
-
+(*
 let handle_request entry_f =
   let cgi_args =
     if is_multipart () then
@@ -354,11 +352,12 @@ let handle_request entry_f =
         entry_f ()
     in
       "Content-type: text/html\n\n" ^ (string_of_value (render_page value))
-          
+*)
+        
 let run entry_f  =  
   let s = 
     match getenv "REQUEST_METHOD" with
-      | Some _ -> handle_request entry_f
+      | Some _ -> failwith "request" (*handle_request entry_f*)
       | None -> string_of_value (entry_f ())
   in
     print_endline s
