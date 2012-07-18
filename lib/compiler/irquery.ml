@@ -30,7 +30,7 @@ let string_of_constant = function
 
 
 
-(** Simplified IR to be puted in the runtime **)
+(** Simplified IR to be put in the runtime **)
 
 type value =
   | Constant of constant
