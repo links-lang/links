@@ -1,0 +1,15 @@
+
+fun predicat(n) {
+	 n < 5
+}
+
+
+fun execute_query(p) server {
+	 var db = database "people";
+	 var people = table "people" with (i : Int, n : String) from db;
+	 for (row <-- people)
+     [(name=row.n)]
+ 
+}
+
+execute_query(predicat)
