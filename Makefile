@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-TYPE_REX:=$(shell if which ocp-wizard &> /dev/null; then echo "ocp-"; fi)
+TYPE_REX:=$(sh if which ocp-wizard &> /dev/null; then echo "ocp-"; fi)
 
 ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
