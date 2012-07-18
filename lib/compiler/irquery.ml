@@ -48,7 +48,6 @@ type value =
 and tail_computation =
   | Return of value
   | Apply of value * value list
-  | ApplyDB of value * value list
   | Case of value * (var * computation) name_map * (var * computation) option
   | If of value * computation * computation
   
@@ -60,9 +59,9 @@ and binding =
 and computation = binding list * tail_computation
 
 type xmlitem =   
-  [ `XMLText of string
-  | `XMLAttr of (string * string)
-  | `XMLNode of (string * xmlitem list)
+  [ `Text of string
+  | `Attr of (string * string)
+  | `Node of (string * xmlitem list)
   ]
 
 type query =
@@ -78,7 +77,7 @@ type query =
   | `Primitive of string
   | `Var of var * name_set
   | `Constant of constant
-  | xmlitem
+  | `XML of xmlitem
   ]
 	 
 and env = query Env.Int.t

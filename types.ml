@@ -1346,7 +1346,7 @@ struct
           | `Record r ->
               let r = unwrap r in
                 (if is_tuple r then string_of_tuple r
-                 else "(" ^ row "," bound_vars p r ^ ")")
+                 else "(|" ^ row "," bound_vars p r ^ "|)")
           | `Variant r -> "[|" ^ row "|" bound_vars p r ^ "|]"
           | `ForAll (tyvars, body) ->
               let tyvars = unbox_quantifiers tyvars in

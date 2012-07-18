@@ -177,4 +177,6 @@ let get_pg_database_by_string args =
     | _ ->
         failwith "Insufficient arguments when establishing postgresql connection"
 
-let _ = Value.register_driver (driver_name, get_pg_database_by_string)
+let register () = Value.register_driver (driver_name, get_pg_database_by_string)
+
+let _ = register ()

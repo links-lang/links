@@ -186,9 +186,16 @@ struct
 		  | _ -> assert false
 	 end
 	 | Database db -> begin match value env db with
-		  | `Constant (`String s) -> `Database s
+		  | `Record f -> 
+				let driver = unbox_string (StringMap.find "driver" f)
+				and name = unbox_string (StringMap.find "name" f)
+				and args = unbox_string (StringMap.find "args" f)
+				in 
+				if args = "" then `Database (driver ^ ":" ^ name)
+				else  `Database (driver ^ ":" ^ args ^ ":" ^ name)
 		  | _ -> assert false
 	 end
+	 | Lambda _ -> assert false
 
   and computation env (binders, tailcomp) : query =
     match binders with
@@ -205,8 +212,11 @@ struct
 
   and tail_computation env : Irquery.tail_computation -> query = function
     | Return v -> value env v
-    | Apply (f, args)
-    | ApplyDB (f, args) ->
+	 | Apply (Lambda (vl, c), args) ->
+		  assert (List.length vl = List.length args) ;
+		  let env = List.fold_left2 (fun f_env i v -> bind f_env (i,(value env v)) ) env vl args in
+		  computation env c
+    | Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
     | Case (v, cases, default) -> reduce_case env (value env v, cases, default)
     | If (c, t, e) ->
@@ -1004,7 +1014,6 @@ let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.databas
       | None -> None
       | Some db ->
           let q = Sql.unordered_query db range v in
-          Debug.print ("Generated query: "^q);
           Some (db, q)
 
 (*		

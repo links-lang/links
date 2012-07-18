@@ -31,7 +31,8 @@ type code =
   | Case of code * ((code * code) list) * ((code * code) option)
   | Die of code
   | Query of query_computation
-  | Table of code * code * name_set
+  | Table of code * code * Types.primitive list
+  | Tail of code
   | Empty
 
 and query_value =
@@ -44,7 +45,7 @@ and query_value =
   | `Erase of name_set * query_value
   | `Inject of name * query_value
   | `ApplyPure of query_value * query_value list
-  | `Table of query_value * query_value * name_set
+  | `Table of query_value * query_value * Types.primitive list
   | `Database of query_value
   | `Lambda of var list * query_computation
   ]	
@@ -187,7 +188,6 @@ struct
     | _ -> assert false
 
   let box_call = function
-	 | Call (Var "l_equals",_) as c -> c
 	 | Call (f, []) -> Call (Call (Var "unbox_func",[f]), [])
     | Call (f, args) ->
         List.fold_left 
@@ -264,7 +264,7 @@ let lib_funcs = [
 
   "_tilde", ["unbox_string"; "id"], "box_bool", false;
 
-(*  "l_equals", ["id"; "id"], "box_bool", false; *)
+  "l_equals", ["id"; "id"], "box_bool", false;
   "l_not_equals", ["id"; "id"], "box_bool", false;
 
   "l_cons", ["id"; "unbox_list"], "box_list", false;
@@ -284,7 +284,7 @@ let lib_funcs = [
   "_stringToInt", ["unbox_string"], "box_int", false;
   "_stringToFloat", ["unbox_string"], "box_float", false;
 
-  "_environment", [], "box_list", false;
+  "_environment", ["unbox_unit"], "box_list", false;
   "_redirect", ["unbox_string"], "id", true;
   "_exit", ["id"], "id", true;
   "_error", ["unbox_string"], "id", false;
@@ -360,6 +360,16 @@ let bind_continuation k body =
     | Var _ -> body k
     | _ -> Let ("kappa", k, body (Var "kappa"))
 
+(* We need to unpack table type *)
+let unpack_table_type t_type =
+  
+  (* HACK : I'm not sure at all this is the right way to do it ... *)
+  let table_fields = match t_type with
+		`Record row -> Types.extract_tuple row | _ -> failwith "Wrong table type"
+  in
+  List.map (function `Primitive p -> p | _ -> failwith "Wrong table type") table_fields
+
+
 module Translater (B : Boxer) =
 struct
 
@@ -400,15 +410,15 @@ struct
 	 method tail_computation : Ir.tail_computation -> query_tail_computation = function
 		| `Return v -> `Return (o#value v)
 		| `Apply (v,vl) -> `Apply (o#value v, List.map o#value vl)
-		| `ApplyDB (v,vl) -> `Apply (o#value v, List.map o#value vl)
+		| `ApplyDB (v,vl) -> `Apply (`Project ("db", o#value v), List.map o#value vl)
 		| `ApplyPL _ -> failwith "Apply PL function inside a query"
 		| `If (v,c1,c2) -> `If (o#value v, o#computation c1, o#computation c2)
 		| `Case (v,m,vo) ->
 			 let aux ((var,_),c) = (var,o#computation c) in
 			 `Case (o#value v, StringMap.map aux m,opt_map aux vo)
 		| `Special (`Table (t,db,(t_type,_,_))) ->
-			 (* TODO *)
-			 `Return (`Table (o#value db, o#value t, StringSet.empty))
+			 Debug.print (Types.string_of_datatype t_type) ;
+			 `Return (`Table (o#value db, o#value t, unpack_table_type t_type ))
 		| `Special (`Database db) ->
 			 `Return (`Database (o#value db))
 		| `Special (`Query _) -> failwith "Query"
@@ -574,8 +584,7 @@ struct
                   Die (NativeString "CallCC not supported in direct style.")
               | `Database v -> Call (Var "_database",[o#value v])
 				  | `Table (t,db,(t_type,_,_)) ->
-						(* TODO *)
-						Table (o#value db, o#value t, StringSet.empty)
+						Table (o#value db, o#value t, unpack_table_type t_type)
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _
 				  | `Update _ -> Die (NativeString "Delete and Update operations not supported.")
@@ -585,7 +594,7 @@ struct
       o#wrap_lib (o#computation prog)
 
     method computation : computation -> code = fun (bs, tc) ->
-      o#bindings bs (fun o' -> o'#tail_computation tc)
+      o#bindings bs (fun o' -> Tail (o'#tail_computation tc))
         
     method binding : binding -> ('self_type -> code) -> code = fun b rest_f ->
       match b with
@@ -681,15 +690,14 @@ struct
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
               | `Database v -> Call (Var "database",[o#value v])
 				  | `Table (t,db,(t_type,_,_)) ->
-						(* TODO *)
-						Table (o#value db, o#value t, StringSet.empty)
+						Table (o#value db, o#value t, unpack_table_type t_type )
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _ 
 				  | `Update _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
 
     method computation : computation -> code -> code = fun (bs, tc) k ->
-      o#bindings bs (fun o' -> o'#tail_computation tc k)
+      o#bindings bs (fun o' -> Tail (o'#tail_computation tc k))
 
     method program : program -> code = fun prog -> 
       o#wrap_lib (o#computation prog (Var "start"))
@@ -763,11 +771,11 @@ struct
 		(text "StringSet.empty")
 		
   let constant (const : Constant.constant) = match const with
-	 | `Float f -> text ("Float " ^ string_of_float f)
-	 | `Int i -> text ("Int (Num.num_of_string \"" ^ (Num.string_of_num i) ^ "\")")
-	 | `Bool b -> text ("Bool " ^ string_of_bool b)
-	 | `Char c -> text ("Char " ^ string_of_char c)
-	 | `String s -> text ("String \"" ^  s ^ "\"")
+	 | `Float f -> text ("`Float " ^ string_of_float f)
+	 | `Int i -> text ("`Int (Num.num_of_string \"" ^ (Num.string_of_num i) ^ "\")")
+	 | `Bool b -> text ("`Bool " ^ string_of_bool b)
+	 | `Char c -> text ("`Char " ^ string_of_char c)
+	 | `String s -> text ("`String \"" ^  s ^ "\"")
   
 	 
   let rec value (v : query_value) = match v with
@@ -779,7 +787,7 @@ struct
 	 | `Erase (ns,v) -> variant "Erase" [name_set ns; value v]
 	 | `Inject (n,v) -> variant "Inject" [string n; value v]
 	 | `ApplyPure (v,vl) -> variant "ApplyPure" [value v; list (List.map value vl)]
-	 | `Table (t, db, ns) -> variant "Table" [value t; value db; name_set ns]
+	 | `Table (t, db, _ns) -> variant "Table" [value t; value db; name_set StringSet.empty]
 	 | `Database v -> variant "Database" [value v]
 	 | `SplicedVariable c -> code (Call (Var "_splice",[c]))
 	 | `Lambda (vl,c) -> variant "Lambda" [list (List.map (fun x -> text (string_of_int x)) vl); computation c]
@@ -907,11 +915,16 @@ struct
 			 group (text "raise (InternalError" ^| code_int s false ^| text ")")
 				
 		| Empty -> empty
+
+		| Tail c -> 
+			 group (
+				(if top_level then text "let _ =\n" else text "" ) ^|
+					 code_int c false)
 			 
 		| Query q -> parens (group (nest 2 ( text "_query" ^| computation q)))
 
-		| Table (s1,s2,row) ->
-			 parens (group (nest 2 (text "_table" ^| code_int s1 false ^| code_int s2 false ^| name_set row)))
+		| Table (s1,s2,_row) ->
+			 parens (group (nest 2 (text "_table" ^| code_int s1 false ^| code_int s2 false ^| name_set StringSet.empty)))
 				
   and code c = code_int c true
 end

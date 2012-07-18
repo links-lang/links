@@ -123,9 +123,16 @@ let execute_select
                                []))
 								 result#get_all_lst)
 						
-let execute_untyped_select (query:string) (db: database) : Value.t =
+let execute_untyped_select (query:string) (db: database) =
   let result = (db#exec query) in
     (match result#status with
        | `QueryOk -> 
            `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
+       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+
+let execute_untyped_unvalued_select (query:string) (db: database) =
+  let result = (db#exec query) in
+    (match result#status with
+       | `QueryOk -> 
+           result#get_all_lst
        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

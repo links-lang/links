@@ -6,10 +6,11 @@ exception InternalError of string
 
 let cgi_parameters = ref []
 
-type xmlitem = 
-  [ `XMLText of string
-  | `XMLNode of string * (string * string) list * xmlitem list
-  ]
+(* Default database driver and args *)
+let database_driver = "postgresql"
+let database_args = "people:localhost:5432:gabriel:"
+
+let _ = Pg_database.register () ;
 
 type value = 
   [ `Unit
@@ -19,9 +20,15 @@ type value =
   | `Variant of string * value
   | `Record of value StringMap.t
   | `List of value list
-  | xmlitem
-  | `Table of string * string * name_set
-  | `Database of string
+  | `XMLText of string
+  | `XMLNode of string * (string * string) list * value list
+  | `Table of value * value * name_set
+  | `Database of value
+  ]
+
+type xmlitem = 
+  [ `XMLText of string
+  | `XMLNode of string * (string * string) list * value list
   ]
   
 (* Stolen from Utility.ml *)
@@ -71,50 +78,62 @@ let getenv : string -> string option =
 let box_bool x = `Bool x
 let unbox_bool = function
   | `Bool x -> x
+  | _ -> assert false
 
-let box_int x =  `Int x
+let box_int x = `Int x
 let unbox_int = function
   | `Int x -> x
+  | _ -> assert false
 
 let box_char x = `Char x
 let unbox_char = function
   | `Char x -> x
+  | _ -> assert false
 
 let box_list l = `List l
 let unbox_list = function
   | `List l -> l
+  | _ -> assert false
 
 let box_string x = box_list (List.map box_char (explode x))
 let unbox_string = function
   | `List x -> implode (List.map unbox_char x)
+  | _ -> assert false
   
 let box_float x = `Float x
 let unbox_float = function
   | `Float x -> x
+  | _ -> assert false
 
-let box_func f = `Function f
-let unbox_func : 'a. [`Function of 'a -> 'a ] -> 'a -> 'a = function
-  | `Function x -> x
+let box_func f : value = `Function f
+let unbox_func = function
+  | `Function f -> f
+  | _ -> assert false
 
 let box_funQ f = `FunctionQ f
 let unbox_funQ = function
-  | `FunctionQ x -> x
+  | `FunctionQ f -> f
+  | _ -> assert false
 
 let box_variant (n, v) = `Variant (n, v)
 let unbox_variant = function
   | `Variant (n, v) -> (n, v)
+  | _ -> assert false
 
 let box_record r = `Record r
 let unbox_record = function
   | `Record r -> r
+  | _ -> assert false
 
-let box_xmlitem (x:xmlitem) = x
+let box_xmlitem (x:xmlitem) = (x :> value)
 let unbox_xmlitem = function 
   | #xmlitem as x -> x
+  | _ -> assert false
 
-let box_unit _ = `Unit
+let box_unit () = `Unit
 let unbox_unit = function
   | `Unit -> ()
+  | _ -> assert false
 
 (* Stolen from value.ml *)
 let attr_escape =
@@ -196,19 +215,7 @@ let apply_4 f a1 a2 a3 a4 =
    the compiled prelude, I decided to just duplicate the functionality
    here. Bleh. *)
 
-(*
-type 'a page =
-  [ `Record of 
-		[ `Function of 
-			 (value -> [`Function of 
-				  (value -> [ `Record of 
-						[ `List of 
-							 [ `Function of value -> 'a ]
-								list ]
-						  name_map ] )]) ]
-		  name_map]
-
-let render_page (page : 'a page)=
+let render_page page=
   let _, k, fs = unwrap_triple page in
   let ms, _ = unwrap_pair (apply_2 fs id (box_int (num_of_int 0))) in    
   let zs =
@@ -216,7 +223,7 @@ let render_page (page : 'a page)=
   let b_zs = box_list (List.map box_func zs) in
     apply_2 k id (box_list  (List.map (fun z -> z b_zs) zs))
       
-*)
+
 
 (* Library functions *)
 
@@ -269,6 +276,7 @@ let add_attribute (s, v) = function
   | `XMLNode (n, a, c) ->
       `XMLNode (n, ((unbox_string s), (unbox_string v))::a, c)
   | `XMLText _ as x -> x
+  | _ -> assert false
 
 let add_attributes l = 
   List.fold_right add_attribute l
@@ -279,7 +287,7 @@ let u__addAttributes x attrs =
   let attrs = List.map unwrap_pair attrs in
     List.map (add_attributes attrs) x
 
-let u__environment _ = 
+let u__environment () = 
   let is_internal s = Str.first_chars s 1 = "_" in
   let mkpair (x1, x2) = box_record (
     StringMap.add "1" (box_string x1)
@@ -292,7 +300,7 @@ let u__unsafePickleCont = marshal_value
 
 let u__reifyK = marshal_value
 
-let u__error = failwith
+let u__error s = failwith s
 
 let u__redirect s = assert false
 
@@ -302,27 +310,68 @@ let u_s___caret_caret = ( ^ )
 
 (* Integration of query stuff *)
 
-let u__getDatabaseConfig _ = StringMap.empty
+let u__getDatabaseConfig () : value name_map =
+  if database_driver = "" then
+	 failwith "Internal error: default database driver not defined"
+  else
+	 StringMap.from_alist (
+		["driver", (box_string database_driver :> value ); 
+		 "args", (box_string database_args :> value )])
 
-let _database s = `Database (unbox_string s)
+let _database s = `Database s
 
 (* Make the union of two Records *)
 let _union r1 r2 = 
   let ur1 = unbox_record r1 and ur2 = unbox_record r2 in
   box_record (StringMap.union_disjoint ur1 ur2)
 
-let _table db t row = `Table (unbox_string db,unbox_string t, row)
+let _table db t row = `Table (db,t,row)
 
-let rec _splice = function
+let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
+  | `Database s -> Database (_splice s)
   | `Variant (n,v) -> Inject (n, _splice v)
+  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)
-  | `Table (db,t,row) -> Table (Constant (`String t), Constant (`String db),row)
-  | _ -> failwith "this value can't be converted"
+  | `Table (db,t,row) -> Table (_splice db, _splice t,row)
+  | `FunctionQ f -> f
+  | `List [] -> Primitive("Nil")
+  | `List l as list -> begin match List.hd l with 
+		| `Char c -> Constant (`String (unbox_string list))
+		| _ -> failwith "this is a list !"
+  end
+  | `Unit -> failwith "Unit value can't be spliced"
+  | `Function _ -> failwith "Function can't be spliced"
+  | `XMLText _ | `XMLNode _ -> failwith "XML inside queries not yet suported"
+
 
 let _funq = fun c -> `FunctionQ c
 
-let _query = fun _ -> `Unit
+(*
+let _query_typed computation = match Query.compile (None, computation) with
+  | None -> "Unspecified database"
+  | Some (db, q, t) ->
+      let (fieldMap, _), _ = 
+		  Types.unwrap_row(TypeUtils.extract_row t) in
+      let fields =
+		  StringMap.fold
+			 (fun name t fields ->
+            match t with
+				  | `Present, t -> (name, t)::fields
+				  | `Absent, _ -> assert false
+				  | `Var _, t -> assert false)
+			 fieldMap
+			 []
+      in
+      Database.execute_select fields q db
+		*)
+				
+let _query computation = match Queryml.compile (None,computation) with
+  | None -> failwith "Unspecified database"
+  | Some (db, q) ->
+      List.iter (List.iter (Printf.printf "%s ")) (Database.execute_untyped_unvalued_select q db) ;
+		`Record StringMap.empty
+		
 
 
 (* Main stuff--bits stolen from webif.ml *)
@@ -334,7 +383,7 @@ let is_multipart () =
 let resume_with_cont cont =
   let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : [ `Function of (value -> value) ]) in
     (unbox_func cont) start
-(*
+
 let handle_request entry_f =
   let cgi_args =
     if is_multipart () then
@@ -352,12 +401,12 @@ let handle_request entry_f =
         entry_f ()
     in
       "Content-type: text/html\n\n" ^ (string_of_value (render_page value))
-*)
+
         
 let run entry_f  =  
   let s = 
     match getenv "REQUEST_METHOD" with
-      | Some _ -> failwith "request" (*handle_request entry_f*)
+      | Some _ -> handle_request entry_f
       | None -> string_of_value (entry_f ())
   in
     print_endline s
