@@ -294,6 +294,8 @@ let lib_funcs = [
 
   "s___caret_caret", ["unbox_string"; "unbox_string"], "box_string",false;
 
+  "_print", ["unbox_string"], "box_unit", false;
+
   "_getDatabaseConfig",["unbox_unit"], "box_record", false;
 
 ]
@@ -370,6 +372,44 @@ let unpack_table_type t_type =
   List.map (function `Primitive p -> p | _ -> failwith "Wrong table type") table_fields
 
 
+(*
+module QueryType =
+struct
+(*
+  let rec of_query : query -> Types.datatype = fun v ->
+	 let record fields : Types.datatype =
+		Types.make_record_type (StringMap.map of_query fields)
+	 in
+    match v with
+      | `Concat (v::_vs) -> of_query v
+      | `For (gens, _os, body) -> of_query body
+      | `Singleton (`Record fields) -> record fields
+      | `If (_, t, _) -> of_query t
+      | `Table (_, _, row) -> `Record row
+      | `Constant (`Bool b) -> Types.bool_type
+      | `Constant (`Int i) -> Types.int_type
+      | `Constant (`Char c) -> Types.char_type
+      | `Constant (`Float f) -> Types.float_type
+      | `Constant (`String s) -> Types.string_type
+      | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
+      | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
+      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+      | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
+*)
+  let get_row t = 
+    let (fieldMap, _), _ = 
+		Types.unwrap_row(TypeUtils.extract_row t) in
+    let fields =
+		StringMap.fold
+		  (fun name t fields ->
+          match t with
+				| `Present, t -> (name, t)::fields
+				| `Absent, _ -> assert false
+				| `Var _, t -> assert false)
+		  fieldMap
+		  []
+
+*)
 module Translater (B : Boxer) =
 struct
 
@@ -417,7 +457,7 @@ struct
 			 let aux ((var,_),c) = (var,o#computation c) in
 			 `Case (o#value v, StringMap.map aux m,opt_map aux vo)
 		| `Special (`Table (t,db,(t_type,_,_))) ->
-			 Debug.print (Types.string_of_datatype t_type) ;
+			 (*Debug.print (Types.string_of_datatype t_type) ;*)
 			 `Return (`Table (o#value db, o#value t, unpack_table_type t_type ))
 		| `Special (`Database db) ->
 			 `Return (`Database (o#value db))
@@ -442,7 +482,11 @@ struct
 		end
 		  
 	 method computation (bl,tc) : query_computation =  match tc with 
-		| `Special(`Query (_,(bl2,tc),_)) -> o#computation (bl@bl2,tc)
+		| `Special(`Query (_,(bl2,tc),types)) -> 
+			 Debug.print (
+				(Types.string_of_datatype -<- Types.concrete_type ) 
+				  types) ; 
+			 o#computation (bl@bl2,tc)
 		| _ -> (o#bindings bl, o#tail_computation tc)
 	  
 		

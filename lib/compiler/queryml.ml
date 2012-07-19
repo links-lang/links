@@ -32,6 +32,33 @@ let unbox_string =
              (unbox_list v))
     | _ -> failwith ("failed to unbox string")
 
+
+module S =
+struct
+  let rec print : Irquery.query -> string = function
+    | `For (gs, so, b) -> 
+		  "for " ^ String.concat ", " 
+			 (List.map (fun (x,source) -> "(" ^ string_of_int x ^ "<-" ^ print source) gs) ^
+			 " when " ^ String.concat ", " (List.map print so) ^ "do " ^ print b
+    | `If (c, t, e) -> "if "^ print c ^" then "^ print t ^" else "^ print e
+    | `Table (t,db,_fields) -> "Table " ^ t ^ ":" ^ db
+    | `Singleton v -> "[" ^ print v ^ "]"
+    | `Concat vs -> "[|" ^ String.concat ", " (List.map print vs) ^ "|]"
+    | `Record fields -> "{" ^ String.concat ", " (StringMap.to_list (fun _ s -> print s) fields) ^ "}"
+    | `Variant (name, v) -> name ^ " of (" ^ print v ^ ")"
+    | `XML xmlitem -> "XML"
+    | `Project (v, name) -> "(" ^ print v ^ ")." ^ name
+    | `Erase (names, v) -> 
+		  "rm ("  ^ print v ^ ").(" ^ String.concat ", " (StringSet.elements names) ^ ")"
+    | `Apply (f, vs) -> f ^ "(" ^ String.concat ", " (List.map print vs) ^ ")"
+    | `Closure ((xs, e), _) -> "Closure"
+    | `Primitive f -> "Primtive "^f
+    | `Var v -> "%" ^ string_of_int (fst v)
+    | `Constant c -> "Constant"
+	 | `Database s -> "Database"
+end
+let string_of_t = S.print
+
 (** Returns which database was used if any.
 
    Currently this assumes that at most one database is used.
@@ -109,8 +136,46 @@ exception DbEvaluationError of string
 let query_error fmt = 
   let error msg = raise (DbEvaluationError msg) in
   Printf.kprintf error fmt
-	
 
+(*
+module Type =
+struct
+
+  let rec of_query : query -> Types.datatype = fun v ->
+	 let record fields : Types.datatype =
+		Types.make_record_type (StringMap.map of_query fields)
+	 in
+    match v with
+      | `Concat (v::_vs) -> of_query v
+      | `For (gens, _os, body) -> of_query body
+      | `Singleton (`Record fields) -> record fields
+      | `If (_, t, _) -> of_query t
+      | `Table (_, _, row) -> `Record row
+      | `Constant (`Bool b) -> Types.bool_type
+      | `Constant (`Int i) -> Types.int_type
+      | `Constant (`Char c) -> Types.char_type
+      | `Constant (`Float f) -> Types.float_type
+      | `Constant (`String s) -> Types.string_type
+      | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
+      | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
+      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+      | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
+
+  let get_row t = 
+    let (fieldMap, _), _ = 
+		Types.unwrap_row(TypeUtils.extract_row t) in
+    StringMap.fold
+		(fun name t fields ->
+        match t with
+			 | `Present, t -> (name, t)::fields
+			 | `Absent, _ -> assert false
+			 | `Var _, t -> assert false)
+		fieldMap
+		[]
+
+end
+	
+*)
 
 module IRquery2query =
 struct
@@ -478,6 +543,7 @@ end
 
 (* Introducing ordering indexes in order to support a list
    semantics. *)
+(*
 module Order =
 struct
   type gen = Var.var * query
@@ -603,7 +669,7 @@ struct
   let unordered_query v =
     List.map unordered_query_of_clause (query v)
 end
-
+*)
 module Sql =
 struct
   type sql_query =
@@ -800,7 +866,7 @@ struct
       | v -> [v]
 
   let rec clause : Value.database -> query -> sql_query = fun db v ->
-(*    Debug.print ("clause: "^string_of_t v); *)
+    print_endline ("clause: "^string_of_t v);
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
@@ -959,7 +1025,7 @@ struct
         | _ -> assert false
   and outer_query db v =
     `UnionAll (List.map (clause db) (prepare_clauses v), 0)
-
+(*
   let unordered_query db range v =
     (* Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
@@ -967,9 +1033,9 @@ struct
     (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
     let q = `UnionAll (List.map (clause db) vs, 0) in
       string_of_query db range q
-
+*)
   let wonky_query db range v =
-(*     Debug.print ("v: "^string_of_t v); *)
+     print_endline ("v: "^string_of_t v); 
     reset_dummy_counter ();
     let q = outer_query db v in
       string_of_query db range q
@@ -1013,7 +1079,8 @@ let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.databas
     match used_database v with
       | None -> None
       | Some db ->
-          let q = Sql.unordered_query db range v in
+          (*let t = Type.of_query v in*)
+          let q = Sql.wonky_query db range v in
           Some (db, q)
 
 (*		

@@ -308,6 +308,8 @@ let u__exit k v = v
 
 let u_s___caret_caret = ( ^ )
 
+let u__print = print_string
+
 (* Integration of query stuff *)
 
 let u__getDatabaseConfig () : value name_map =
@@ -365,14 +367,14 @@ let _query_typed computation = match Query.compile (None, computation) with
       in
       Database.execute_select fields q db
 		*)
-				
+
 let _query computation = match Queryml.compile (None,computation) with
   | None -> failwith "Unspecified database"
   | Some (db, q) ->
       List.iter (List.iter (Printf.printf "%s ")) (Database.execute_untyped_unvalued_select q db) ;
 		`Record StringMap.empty
 		
-
+	
 
 (* Main stuff--bits stolen from webif.ml *)
 
