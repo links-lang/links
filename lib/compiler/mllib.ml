@@ -22,7 +22,7 @@ type value =
   | `List of value list
   | `XMLText of string
   | `XMLNode of string * (string * string) list * value list
-  | `Table of value * value * name_set
+  | `Table of value * value * (string * base_type) list
   | `Database of value
   ]
 
@@ -337,7 +337,7 @@ let rec _splice : value -> Irquery.value = function
   | `Record nm -> Extend (StringMap.map _splice nm, None)
   | `Table (db,t,row) -> Table (_splice db, _splice t,row)
   | `FunctionQ f -> f
-  | `List [] -> Primitive("Nil")
+  | `List [] -> Primitive("Nil", `Record [])
   | `List l as list -> begin match List.hd l with 
 		| `Char c -> Constant (`String (unbox_string list))
 		| _ -> failwith "this is a list !"
@@ -367,13 +367,34 @@ let _query_typed computation = match Query.compile (None, computation) with
       in
       Database.execute_select fields q db
 		*)
-
-let _query computation = match Queryml.compile (None,computation) with
+let execute_query computation = match Queryml.compile (None,computation) with
   | None -> failwith "Unspecified database"
-  | Some (db, q) ->
-      List.iter (List.iter (Printf.printf "%s ")) (Database.execute_untyped_unvalued_select q db) ;
-		`Record StringMap.empty
-		
+  | Some (db, q, t) -> match t with
+		| `Record t -> Database.execute_standalone_select t q db
+		| _ -> failwith ("this query his not typed as a record list : " ^ q ^ " with type " ^ string_of_type t)
+
+let box_query_result (t:base_type) (value:string) : value = match t with
+  | `Bool ->
+        (* HACK: see database.ml
+        *)
+        box_bool (value = "1" || value = "t" || value = "true")
+    | `Char -> box_char (String.get value 0)
+    | `String -> box_string value
+    | `Int  -> box_int (num_of_string value)
+    | `Float -> (if value = "" then box_float 0.00      (* HACK HACK *)
+                            else box_float (float_of_string value))
+    | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ string_of_type t ^"'")
+			 
+let _query computation : value = 
+  let raw_result = execute_query computation in
+  let to_record l = 
+	 `Record ( List.fold_left (
+		fun r (name,v,t) -> StringMap.add name (box_query_result t v) r) StringMap.empty l)
+  in
+  `List (List.map (fun l -> to_record l) raw_result)
+  
+
+
 	
 
 (* Main stuff--bits stolen from webif.ml *)

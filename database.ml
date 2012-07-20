@@ -123,6 +123,62 @@ let execute_select
                                []))
 								 result#get_all_lst)
 						
+
+let execute_standalone_select
+    (field_types:(string * Irquery.base_type) list) (query:string) (db : database) 
+	 : (string * string * Irquery.base_type ) list list =
+  
+  let result_signature result =
+    let n = result#nfields in
+    let rec rs i =
+      if i >= n then
+        []
+      else
+        let name = result#fname i in
+        if start_of ~is:"order_" name then
+            (* ignore ordering fields *)
+          rs (i+1)
+        else if List.mem_assoc name field_types then
+          (name, (List.assoc name field_types, i)) :: rs (i+1)
+        else
+          failwith("Column " ^ name ^
+                      " had no type info in query's type spec: " ^
+                      mapstrcat ", " (fun (name, t) -> name ^ ":" ^
+                        Irquery.string_of_type t)
+                      field_types)
+    in
+    rs 0 in
+  
+  let result = db#exec query in
+  match result#status with
+    | `QueryError msg -> 
+        raise(Runtime_error("An error occurred executing the query " ^ query ^
+                               ": " ^ msg))
+    | `QueryOk -> 
+        match field_types with
+          | [] ->
+                (* Ignore any dummy fields introduced to work around
+                   SQL's inability to handle empty column lists *)
+              map (fun _ -> []) result#get_all_lst
+          | _ ->
+              let fields = result_signature result in
+
+              let is_null (name, _) =
+                if name = "null" then true
+                else if mem_assoc name fields then false
+                else assert false in
+              let null_query = exists is_null fields in
+              if null_query then
+                map (fun _ -> []) result#get_all_lst
+              else
+                map (fun row ->
+                    List.fold_right
+                      (fun (name, (t, i)) fields ->
+                        (name,List.nth row i,t)::fields)
+                    fields
+                    [])
+						result#get_all_lst
+
 let execute_untyped_select (query:string) (db: database) =
   let result = (db#exec query) in
     (match result#status with

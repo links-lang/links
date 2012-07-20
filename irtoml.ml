@@ -12,6 +12,11 @@ type name = string
 type name_set = Utility.stringset
 type 'a name_map = 'a Utility.stringmap
 
+
+type base_type = 
+  [ `Bool | `Int | `Char | `Float | `XmlItem | `String | `Dummy
+  | `Record of (string * base_type) list ]
+
 type code =
   | Bool of bool
   | Int of num
@@ -31,7 +36,7 @@ type code =
   | Case of code * ((code * code) list) * ((code * code) option)
   | Die of code
   | Query of query_computation
-  | Table of code * code * Types.primitive list
+  | Table of code * code * (string * base_type) list
   | Tail of code
   | Empty
 
@@ -39,13 +44,13 @@ and query_value =
   [ `Constant of Constant.constant 
   | `Variable of var
   | `SplicedVariable of code
-  | `Primitive of string
+  | `Primitive of string * base_type
   | `Extend of query_value name_map * query_value option
   | `Project of name * query_value
   | `Erase of name_set * query_value
   | `Inject of name * query_value
   | `ApplyPure of query_value * query_value list
-  | `Table of query_value * query_value * Types.primitive list
+  | `Table of query_value * query_value * (string * base_type) list
   | `Database of query_value
   | `Lambda of var list * query_computation
   ]	
@@ -363,16 +368,6 @@ let bind_continuation k body =
     | _ -> Let ("kappa", k, body (Var "kappa"))
 
 (* We need to unpack table type *)
-let unpack_table_type t_type =
-  
-  (* HACK : I'm not sure at all this is the right way to do it ... *)
-  let table_fields = match t_type with
-		`Record row -> Types.extract_tuple row | _ -> failwith "Wrong table type"
-  in
-  List.map (function `Primitive p -> p | _ -> failwith "Wrong table type") table_fields
-
-
-(*
 module QueryType =
 struct
 (*
@@ -396,20 +391,29 @@ struct
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
 *)
-  let get_row t = 
-    let (fieldMap, _), _ = 
-		Types.unwrap_row(TypeUtils.extract_row t) in
-    let fields =
-		StringMap.fold
-		  (fun name t fields ->
-          match t with
-				| `Present, t -> (name, t)::fields
-				| `Absent, _ -> assert false
-				| `Var _, t -> assert false)
-		  fieldMap
-		  []
 
-*)
+  let get_prim_type f = 
+	 try TypeUtils.return_type (Env.String.lookup Lib.type_env f) with _ -> `Not_typed
+
+  let rec get_row t = 
+    let (fieldMap, _), _ = Types.unwrap_row(TypeUtils.extract_row t) in
+    StringMap.fold
+		(fun name t fields ->
+        match t with
+			 | `Present, t -> (name, basify_type t)::fields
+			 | `Absent, _ -> assert false
+			 | `Var _, t -> assert false)
+		fieldMap
+		[]
+
+  and basify_type t = match TypeUtils.concrete_type t with
+	 | `Primitive (( `Bool | `Int | `Char | `Float | `XmlItem | `String ) as t) -> (t :> base_type)
+	 | `Record _ as r -> `Record (get_row r)
+	 | _ -> `Dummy
+
+
+end
+
 module Translater (B : Boxer) =
 struct
 
@@ -431,16 +435,18 @@ struct
 		| `Constant c -> `Constant c
 		| `Variable var -> 
 			 if Lib.is_primitive_var var then
-				`Primitive (Lib.primitive_name var)
+				let name = Lib.primitive_name var in
+				`Primitive (name, QueryType.basify_type (QueryType.get_prim_type name))
 			 else
 				`Variable var 
 		| `SplicedVariable var -> 
 			 if Lib.is_primitive_var var then
-				`Primitive (Lib.primitive_name var)
+				let name = Lib.primitive_name var in
+				`Primitive (name, QueryType.basify_type (QueryType.get_prim_type name))
 			 else (
 				match translateCode#get_name var with 
 				  | Some var_name -> ( match get_primitive_name var_name with
-						| Some n -> `Primitive n
+						| Some n -> `Primitive (n,`Dummy)
 						| None -> `SplicedVariable (translateCode#value (`Variable var))
 				  )
 				  | None -> `SplicedVariable (translateCode#value (`Variable var))
@@ -458,7 +464,7 @@ struct
 			 `Case (o#value v, StringMap.map aux m,opt_map aux vo)
 		| `Special (`Table (t,db,(t_type,_,_))) ->
 			 (*Debug.print (Types.string_of_datatype t_type) ;*)
-			 `Return (`Table (o#value db, o#value t, unpack_table_type t_type ))
+			 `Return (`Table (o#value db, o#value t, QueryType.get_row t_type ))
 		| `Special (`Database db) ->
 			 `Return (`Database (o#value db))
 		| `Special (`Query _) -> failwith "Query"
@@ -628,7 +634,7 @@ struct
                   Die (NativeString "CallCC not supported in direct style.")
               | `Database v -> Call (Var "_database",[o#value v])
 				  | `Table (t,db,(t_type,_,_)) ->
-						Table (o#value db, o#value t, unpack_table_type t_type)
+						Table (o#value db, o#value t, QueryType.get_row t_type)
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _
 				  | `Update _ -> Die (NativeString "Delete and Update operations not supported.")
@@ -734,7 +740,7 @@ struct
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
               | `Database v -> Call (Var "database",[o#value v])
 				  | `Table (t,db,(t_type,_,_)) ->
-						Table (o#value db, o#value t, unpack_table_type t_type )
+						Table (o#value db, o#value t, QueryType.get_row t_type )
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 				  | `Delete _ 
 				  | `Update _ -> Die (NativeString "Database operations not supported.")
@@ -820,18 +826,29 @@ struct
 	 | `Bool b -> text ("`Bool " ^ string_of_bool b)
 	 | `Char c -> text ("`Char " ^ string_of_char c)
 	 | `String s -> text ("`String \"" ^  s ^ "\"")
+
+  let rec base_type = function 
+	 | `Bool -> text "`Bool" 
+	 | `String -> text "`String"
+	 | `Float -> text "`Float"
+	 | `Int -> text "`Int"
+	 | `Char -> text "`Char"
+	 | `XmlItem -> text "`XmlItem"
+	 | `Dummy -> text "`Dummy"
+	 | `Record l -> variant "`Record" [list (List.map (fun (s,l) -> arglist [ string s; base_type l]) l)]
   
 	 
   let rec value (v : query_value) = match v with
 	 | `Constant c -> variant "Constant" [constant c]
 	 | `Variable var -> variant "Variable" [text (string_of_int var)]
-	 | `Primitive f -> variant "Primitive" [string f]
+	 | `Primitive (f,t) -> variant "Primitive" [string f; base_type t]
 	 | `Extend (vn,vo) -> variant "Extend" [name_map value vn; option value vo]
 	 | `Project (n,v) -> variant "Project" [string n; value v]
 	 | `Erase (ns,v) -> variant "Erase" [name_set ns; value v]
 	 | `Inject (n,v) -> variant "Inject" [string n; value v]
 	 | `ApplyPure (v,vl) -> variant "ApplyPure" [value v; list (List.map value vl)]
-	 | `Table (t, db, _ns) -> variant "Table" [value t; value db; name_set StringSet.empty]
+	 | `Table (t, db, ns) -> variant "Table" 
+		  [value t; value db; list (List.map (fun (s,l) -> arglist [ string s; base_type l]) ns)]
 	 | `Database v -> variant "Database" [value v]
 	 | `SplicedVariable c -> code (Call (Var "_splice",[c]))
 	 | `Lambda (vl,c) -> variant "Lambda" [list (List.map (fun x -> text (string_of_int x)) vl); computation c]
@@ -967,8 +984,8 @@ struct
 			 
 		| Query q -> parens (group (nest 2 ( text "_query" ^| computation q)))
 
-		| Table (s1,s2,_row) ->
-			 parens (group (nest 2 (text "_table" ^| code_int s1 false ^| code_int s2 false ^| name_set StringSet.empty)))
+		| Table (s1, s2, row) ->
+			 parens (group (nest 2 (text "_table" ^| code_int s1 false ^| code_int s2 false ^|  list (List.map (fun (s,l) -> arglist [ string s; base_type l]) row))))
 				
   and code c = code_int c true
 end

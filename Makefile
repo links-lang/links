@@ -120,6 +120,7 @@ SOURCES = $(OPC)                						\
           jsonlex.mll           						\
           js.ml                                 \
           json.ml                               \
+			 lib/compiler/irquery.ml					\
           database.mli database.ml 					\
           linksregex.ml                         \
           proc.mli proc.ml                      \
@@ -129,7 +130,6 @@ SOURCES = $(OPC)                						\
 	  		 irtoml.mli irtoml.ml                  \
           $(DB_CODE)            						\
           irtojs.mli irtojs.ml                  \
-			 lib/compiler/irquery.ml					\
 	  		 lib/compiler/lregex.ml						\
 	  		 lib/compiler/queryml.ml					\
 	  		 lib/compiler/mllib.ml						\

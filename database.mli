@@ -20,3 +20,5 @@ val execute_untyped_unvalued_select : string -> Value.database -> string list li
 val execute_insert : (string * string list * string list list) ->  Value.database -> Value.t
 
 val execute_insert_returning : (string * string list * string list list * string) ->  Value.database -> Value.t 
+val execute_standalone_select : 
+  (string * Irquery.base_type) list -> string -> Value.database -> (string * string * Irquery.base_type ) list list

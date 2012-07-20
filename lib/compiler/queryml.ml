@@ -50,9 +50,9 @@ struct
     | `Project (v, name) -> "(" ^ print v ^ ")." ^ name
     | `Erase (names, v) -> 
 		  "rm ("  ^ print v ^ ").(" ^ String.concat ", " (StringSet.elements names) ^ ")"
-    | `Apply (f, vs) -> f ^ "(" ^ String.concat ", " (List.map print vs) ^ ")"
+    | `Apply (f, vs, _) -> f ^ "(" ^ String.concat ", " (List.map print vs) ^ ")"
     | `Closure ((xs, e), _) -> "Closure"
-    | `Primitive f -> "Primtive "^f
+    | `Primitive (f, _) -> "Primtive "^f
     | `Var v -> "%" ^ string_of_int (fst v)
     | `Constant c -> "Constant"
 	 | `Database s -> "Database"
@@ -97,6 +97,32 @@ let used_database v : Value.database option =
 	 | None -> None
 
 
+
+module Type =
+struct
+
+  let rec of_query (v : Irquery.query ) :Irquery.base_type =
+	 let record fields =
+		`Record (StringMap.to_list (fun k v -> (k,of_query v)) fields)
+	 in
+    match v with
+      | `Concat (v::_vs) -> of_query v
+      | `For (gens, _os, body) -> of_query body
+      | `Singleton (`Record fields) -> record fields
+      | `If (_, t, _) -> of_query t
+      | `Table (_, _, row) -> `Record row
+      | `Constant (`Bool b) -> `Bool
+      | `Constant (`Int i) -> `Int
+      | `Constant (`Char c) -> `Char
+      | `Constant (`Float f) -> `Float
+      | `Constant (`String s) -> `String
+      | `Project (`Var (x, field_types), name) -> List.assoc name field_types
+      | `Apply ("Empty", _, _) -> `Bool (* HACK *)
+      | `Apply (_f, _, t) -> t
+      | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
+
+end
+
 let rec tail_of_t : query -> query = fun v ->
   let tt = tail_of_t in
     match v with
@@ -116,7 +142,8 @@ let table_field_types (_t, _db, fields) = fields
 let rec field_types_of_list =
   function
     | `Concat (v::vs) -> field_types_of_list v
-    | `Singleton (`Record fields) -> StringMap.fold (fun k _ s -> StringSet.add k s) fields StringSet.empty
+    | `Singleton (`Record fields) -> 
+		  StringMap.to_list (fun k v -> (k,Type.of_query v)) fields
     | `Table table -> table_field_types table
     | _ -> assert false
 
@@ -137,45 +164,6 @@ let query_error fmt =
   let error msg = raise (DbEvaluationError msg) in
   Printf.kprintf error fmt
 
-(*
-module Type =
-struct
-
-  let rec of_query : query -> Types.datatype = fun v ->
-	 let record fields : Types.datatype =
-		Types.make_record_type (StringMap.map of_query fields)
-	 in
-    match v with
-      | `Concat (v::_vs) -> of_query v
-      | `For (gens, _os, body) -> of_query body
-      | `Singleton (`Record fields) -> record fields
-      | `If (_, t, _) -> of_query t
-      | `Table (_, _, row) -> `Record row
-      | `Constant (`Bool b) -> Types.bool_type
-      | `Constant (`Int i) -> Types.int_type
-      | `Constant (`Char c) -> Types.char_type
-      | `Constant (`Float f) -> Types.float_type
-      | `Constant (`String s) -> Types.string_type
-      | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
-      | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
-      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
-
-  let get_row t = 
-    let (fieldMap, _), _ = 
-		Types.unwrap_row(TypeUtils.extract_row t) in
-    StringMap.fold
-		(fun name t fields ->
-        match t with
-			 | `Present, t -> (name, t)::fields
-			 | `Absent, _ -> assert false
-			 | `Var _, t -> assert false)
-		fieldMap
-		[]
-
-end
-	
-*)
 
 module IRquery2query =
 struct
@@ -198,11 +186,11 @@ struct
   (** η-expansion for variables and lists *)
   let eta_expand_var (x, field_types) =
     `Record
-      (StringSet.fold
-         (fun name fields ->
-            StringMap.add name (`Project (`Var (x, field_types),name)) fields)
-         field_types
-         StringMap.empty)
+      (List.fold_left
+         (fun fields (name,_t) ->
+            StringMap.add name (`Project (`Var (x, field_types), name)) fields)
+         StringMap.empty
+         field_types)
 
   let eta_expand_list xs =
     let x = Var.fresh_raw_var () in
@@ -225,7 +213,7 @@ struct
     | Constant c -> `Constant c
     | Variable var ->
 		  lookup env var
-	 | Primitive f -> `Primitive f
+	 | Primitive (f,t) -> `Primitive (f,t)
     | Extend (ext_fields, r) -> 
       begin
         match opt_app (value env) (`Record StringMap.empty) r with
@@ -299,10 +287,10 @@ struct
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env -> bind env (x, arg)) xs args env in
         computation env body
-    | `Primitive "AsList", [xs] -> xs
-    | `Primitive "Cons", [x; xs] -> reduce_concat [`Singleton x; xs]
-    | `Primitive "Concat", [xs; ys] -> reduce_concat [xs; ys]
-    | `Primitive "ConcatMap", [f; xs] ->
+    | `Primitive ("AsList", _), [xs] -> xs
+    | `Primitive ("Cons", _), [x; xs] -> reduce_concat [`Singleton x; xs]
+    | `Primitive ("Concat", _), [xs; ys] -> reduce_concat [xs; ys]
+    | `Primitive ("ConcatMap", _), [f; xs] ->
         begin
           match f with
             | `Closure (([x], body), closure_env) ->
@@ -311,7 +299,7 @@ struct
                     (xs, fun v -> computation (bind env (x, v)) body)
             | _ -> assert false
         end
-    | `Primitive "Map", [f; xs] ->
+    | `Primitive ("Map", _), [f; xs] ->
         begin
           match f with
             | `Closure (([x], body), closure_env) ->
@@ -320,7 +308,7 @@ struct
                     (xs, fun v -> `Singleton (computation (bind env (x, v)) body))
             | _ -> assert false
         end
-    | `Primitive "SortBy", [f; xs] ->
+    | `Primitive ("SortBy", _), [f; xs] ->
         begin
           match xs with
             | `Concat [] -> `Concat []
@@ -352,13 +340,13 @@ struct
                       | _ -> assert false
                   end
         end
-    | `Primitive "not", [v] ->   reduce_not (v)
-    | `Primitive "&&", [v; w] -> reduce_and (v, w)
-    | `Primitive "||", [v; w] -> reduce_or (v, w)
-    | `Primitive "==", [v; w] -> reduce_eq (v, w)
-    | `Primitive f, args -> `Apply (f, args)
+    | `Primitive ("not", _), [v] ->   reduce_not (v)
+    | `Primitive ("&&", _), [v; w] -> reduce_and (v, w)
+    | `Primitive ("||", _), [v; w] -> reduce_or (v, w)
+    | `Primitive ("==", _), [v; w] -> reduce_eq (v, w)
+    | `Primitive (f,t), args -> `Apply (f, args, t)
     | `If (c, t, e), args ->  reduce_if_condition (c, apply env (t, args), apply env (e, args))
-    | `Apply (f, args), args' -> `Apply (f, args @ args')
+    | `Apply (f, args, t), args' -> `Apply (f, args @ args', t)
     | _ -> query_error "Application of non-function"
 
 
@@ -493,19 +481,19 @@ struct
       | x, `Constant (`Bool true)
       | (`Constant (`Bool false) as x), _
       | _, (`Constant (`Bool false) as x) -> x
-      | _ -> `Apply ("&&", [a; b])
+      | _ -> `Apply ("&&", [a; b], `Bool)
   and reduce_or (a, b) =
     match a, b with
       | (`Constant (`Bool true) as x), _
       | _, (`Constant (`Bool true) as x)
       | `Constant (`Bool false), x
       | x, `Constant (`Bool false) -> x
-      | _ -> `Apply ("||", [a; b])
+      | _ -> `Apply ("||", [a; b], `Bool)
   and reduce_not a =
     match a with
       | `Constant (`Bool false) -> `Constant (`Bool true)
       | `Constant (`Bool true)  -> `Constant (`Bool false)
-      | _                       -> `Apply ("not", [a])
+      | _                       -> `Apply ("not", [a], `Bool)
   and reduce_eq (a, b) =
     let bool x = `Constant (`Bool x) in
     let eq_constant =
@@ -515,7 +503,7 @@ struct
         | (`Float a , `Float b)  -> bool (a = b)
         | (`Char a  , `Char b)   -> bool (a = b)
         | (`String a, `String b) -> bool (a = b)
-        | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b])
+        | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b], `Bool)
     in begin
       match a, b with
         | (`Constant a, `Constant b) -> eq_constant (a, b)
@@ -531,7 +519,7 @@ struct
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
             (`Constant (`Bool true))
-        | (a, b) -> `Apply ("==", [a; b])
+        | (a, b) -> `Apply ("==", [a; b], `Bool)
 	 end
 
   let eval e =
@@ -907,12 +895,7 @@ struct
            to produce non-eta expanded tables. *)
         let var = fresh_table_var () in
         let fields =
-          List.rev
-            (StringSet.fold
-               (fun name fields ->
-                 (`Project (var, name), name)::fields)
-               fields
-               [])
+          List.rev_map (fun (name,_t) -> `Project (var, name), name) fields
         in
           `Select (fields, [(table, var)], `Constant (`Bool true), [])
       | `Singleton (`Record fields) ->
@@ -936,7 +919,7 @@ struct
     function
       | `If (c, t, e) ->
         `Case (base db c, base db t, base db e)
-      | `Apply ("tilde", [s; r]) ->
+      | `Apply ("tilde", [s; r], _t) ->
         begin
           match likeify r with
             | Some r ->
@@ -951,11 +934,11 @@ struct
                   in
                     `Apply ("RLIKE", [base db s; r])
           end
-      | `Apply ("Empty", [v]) ->
+      | `Apply ("Empty", [v], _) ->
           `Empty (outer_query db v)
-      | `Apply ("length", [v]) ->
+      | `Apply ("length", [v], _) ->
           `Length (outer_query db v)
-      | `Apply (f, vs) ->
+      | `Apply (f, vs, _t) ->
           `Apply (f, List.map (base db) vs)
       | `Project (`Var (x, _field_types), name) ->
           `Project (x, name)
@@ -1071,7 +1054,7 @@ struct
       "delete from "^table^where
 end
 
-let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.database * string) option =
+let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.database * string * base_type) option =
   fun (range, e) ->
     (* Debug.print ("e: "^Show.show Irquery.show_computation e); *)
     let v = IRquery2query.eval e in
@@ -1079,9 +1062,9 @@ let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.databas
     match used_database v with
       | None -> None
       | Some db ->
-          (*let t = Type.of_query v in*)
+          let t = Type.of_query v in
           let q = Sql.wonky_query db range v in
-          Some (db, q)
+          Some (db, q, t)
 
 (*		
 let compile_update : Value.database -> 
