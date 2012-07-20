@@ -456,7 +456,7 @@ struct
 	 method tail_computation : Ir.tail_computation -> query_tail_computation = function
 		| `Return v -> `Return (o#value v)
 		| `Apply (v,vl) -> `Apply (o#value v, List.map o#value vl)
-		| `ApplyDB (v,vl) -> `Apply (`Project ("db", o#value v), List.map o#value vl)
+		| `ApplyDB (v,vl) -> `ApplyDB (o#value v, List.map o#value vl)
 		| `ApplyPL _ -> failwith "Apply PL function inside a query"
 		| `If (v,c1,c2) -> `If (o#value v, o#computation c1, o#computation c2)
 		| `Case (v,m,vo) ->
@@ -856,7 +856,7 @@ struct
   and tail_computation (tc : query_tail_computation) = match tc with
 	 | `Return v -> variant "Return" [value v]
 	 | `Apply (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
-	 | `ApplyDB (v,vl) -> variant "ApplyDB" [value v; list (List.map value vl)]
+	 | `ApplyDB (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
 	 | `Case (v, nm, o) -> 
 		  let aux (v,c) = parens (text (string_of_int v) ^^ (text ", ") ^^ (computation c))
 		  in variant "Case" [ value v ; name_map aux nm ; option aux o ]

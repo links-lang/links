@@ -1,13 +1,13 @@
 
 fun predicat(n) {
-	 n < 5
+	 n >= 1
 }
 
 
 fun execute_query(p) server {
 	 var db = database "people";
 	 var people = table "people" with (i : Int, n : String) from db;
-	 for (row <-- people)
+	 for (row <-- people) where (predicat(row.i)) orderby (-row.i)
      [(name=row.n)]
  
 }
