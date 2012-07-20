@@ -327,7 +327,7 @@ let _union r1 r2 =
   let ur1 = unbox_record r1 and ur2 = unbox_record r2 in
   box_record (StringMap.union_disjoint ur1 ur2)
 
-let _table db t row = `Table (db,t,row)
+let _table s1 s2 row = `Table (s1,s2,row)
 
 let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
@@ -335,7 +335,7 @@ let rec _splice : value -> Irquery.value = function
   | `Variant (n,v) -> Inject (n, _splice v)
   | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)
-  | `Table (db,t,row) -> Table (_splice db, _splice t,row)
+  | `Table (s1,s2,row) -> Table (_splice s1, _splice s2,row)
   | `FunctionQ f -> f
   | `List [] -> Primitive("Nil", `Record [])
   | `List l as list -> begin match List.hd l with 

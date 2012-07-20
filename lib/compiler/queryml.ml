@@ -52,7 +52,7 @@ struct
 		  "rm ("  ^ print v ^ ").(" ^ String.concat ", " (StringSet.elements names) ^ ")"
     | `Apply (f, vs, _) -> f ^ "(" ^ String.concat ", " (List.map print vs) ^ ")"
     | `Closure ((xs, e), _) -> "Closure"
-    | `Primitive (f, _) -> "Primtive "^f
+    | `Primitive (f, _) -> "Primitive "^f
     | `Var v -> "%" ^ string_of_int (fst v)
     | `Constant c -> "Constant"
 	 | `Database s -> "Database"
@@ -119,7 +119,15 @@ struct
       | `Project (`Var (x, field_types), name) -> List.assoc name field_types
       | `Apply ("Empty", _, _) -> `Bool (* HACK *)
       | `Apply (_f, _, t) -> t
-      | e -> Debug.print("Can't deduce type for: " ^ string_of_t e); assert false
+      | e -> print_endline ("Can't deduce type for: " ^ string_of_t e); assert false
+
+  let default = function
+    | `Bool   -> `Constant (`Bool false)
+    | `Int    -> `Constant (`Int (Num.num_of_int 42))
+    | `Char   -> `Constant (`Char '?')
+    | `Float  -> `Constant (`Float 0.0)
+    | `String -> `Constant (`String "")
+    | _       -> assert false
 
 end
 
@@ -131,11 +139,11 @@ let rec tail_of_t : query -> query = fun v ->
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
 let labels_of_field_types field_types =
-  StringMap.fold
-    (fun name _ labels' ->
+  List.fold_left
+    (fun labels' (name,_)  ->
       StringSet.add name labels')
-    field_types
-    StringSet.empty
+    StringSet.empty field_types
+    
 
 let table_field_types (_t, _db, fields) = fields
 
@@ -211,27 +219,65 @@ struct
   (** Those three functions visit the IR **)
   let rec value env : Irquery.value -> query = function
     | Constant c -> `Constant c
-    | Variable var ->
-		  lookup env var
+    | Variable var -> begin match lookup env var with
+        | `Var (x, field_types) -> eta_expand_var (x, field_types)
+        | `Primitive ("Nil",_) -> nil
+        | v -> (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
+            v
+    end
+	 | Primitive ("Nil",_) -> nil
 	 | Primitive (f,t) -> `Primitive (f,t)
     | Extend (ext_fields, r) -> 
       begin
         match opt_app (value env) (`Record StringMap.empty) r with
           | `Record fields ->
-            `Record (StringMap.fold 
-                       (fun label v fields ->
-                         if StringMap.mem label fields then 
-                           query_error
-                             "Error adding fields: label %s already present"
-                             label
-                         else
-                           StringMap.add label (value env v) fields)
+              `Record (StringMap.fold 
+								 (fun label v fields ->
+									if StringMap.mem label fields then 
+                             query_error
+										 "Error adding fields: label %s already present"
+										 label
+									else
+                             StringMap.add label (value env v) fields)
                        ext_fields
-                       fields)
+								 fields)
           | _ -> query_error "Error adding fields: non-record"
       end
-    | Project (label,r) -> `Project (value env r,label)
-    | Erase (labels, r) -> `Erase (labels, value env r)
+    | Project (label,r) -> 
+        let rec project (r, label) = match r with
+          | `Record fields ->
+              assert (StringMap.mem label fields);
+              StringMap.find label fields
+          | `If (c, t, e) ->
+              `If (c, project (t, label), project (e, label))
+          | `Var (x, field_types) ->
+              assert (List.mem_assoc label field_types);
+              `Project (`Var (x, field_types), label)
+          | _ -> failwith "Error projecting from record"
+        in
+        project (value env r, label)
+    | Erase (labels, r) -> 
+        let rec erase (r, labels) = match r with
+			 | `Record fields ->
+              assert (StringSet.for_all
+								(fun label -> StringMap.mem label fields) labels);
+              `Record
+					 (StringMap.fold
+						 (fun label v fields ->
+							if StringSet.mem label labels then
+                       fields
+							else
+                       StringMap.add label v fields)
+						 fields
+						 StringMap.empty)
+			 | `If (c, t, e) ->
+              `If (c, erase (t, labels), erase (e, labels))
+			 | `Var (x, field_types) ->
+              assert (StringSet.subset labels (labels_of_field_types field_types));
+              `Erase (labels,`Var (x, field_types))
+			 | _ -> failwith "Error erasing from record"
+        in
+        erase (value env r, labels)
     | Inject (label, v) -> `Variant (label, value env v)
     | ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
 	 | Table (t,db,fields) -> begin match (value env t),(value env db) with
@@ -531,50 +577,175 @@ end
 
 (* Introducing ordering indexes in order to support a list
    semantics. *)
-(*
 module Order =
 struct
   type gen = Var.var * query
   type context = gen list
 
+(* TODO:
+     
+      - add a setting for selecting unordered queries
+      - more refined generation of ordered queries
+        - make use of unique keys to
+          cut down on the number of order indexes
+        - share order indexes when possible
+        - remove duplicate fields from the output
+  *)
 
-  type query_tree = [ `Node of (int * query_tree) list
-                    | `Leaf of (context * query) ]
+  (* The following abstraction should allow us to customise the
+     concrete choice of order indexes.
+
+     In particular, we might use primary keys for generators.
+
+     Including tail generators gives:
+
+     table t
+
+     a deterministic semantics, in the sense that asList (table t)
+     will return the same list of rows throughout a query.
+
+     In general this is unlikely to be necessary, as the programmer
+     can supply an orderby clause when needed.
+     
+     If we ignore tail generators, then this corresponds to
+     interpretting asList (table t) non-deterministically, that is,
+     each invocation of asList (table t) may return a different
+     permutation of the rows. (In practice, it's not clear whether
+     real databases actually take advantage of the freedom to
+     reorganise rows within a single query, but I believe it is
+     allowed.)
+
+     Given the non-deterministic interpration of asList, the
+     normalisation procedure becomes technically unsound as it may
+     duplicate instances of asList. If we wanted to restore soundness
+     then we could do so by keeping track of which tables get
+     duplicated and ensuring that we order by all occurences of them -
+     e.g. by converting tail generators to non-tail generators. *)
+  type order_index = [ `Val of query | `Gen of gen | `TailGen of gen
+                     | `DefVal of base_type | `DefGen of gen | `DefTailGen of gen
+                     | `Branch of int ]
+
+  (* TODO:
+
+     We should probably represent 'defaultness' using a boolean flag
+     rather than wiring it into a single polymorphic variant type. *)
+
+  (* We might implement an optimisation to remove duplicate
+     expressions from the output - in particular, the expressions we
+     order by will often already be present in the output. Perhaps,
+     though, it would make sense to apply such an optimisation more
+     generally on any query. For instance:
+
+     for (x <-- t) [(x.a, x.a)]
+
+     might be translated as:
+
+     select x.a from t as a
+
+     followed by a post-processing phase that creates two copies of
+     x.a.
+
+     Another optimisation would be to remove duplicate expressions
+     from the output order by clause. More ambitiously, this could be
+     further generalised to handle examples such as the following:
+
+     for (x <-- t) orderby (x.a, -x.a) [x]
+
+     which is equivalent to:
+     
+     for (x <-- t) orderby (x.a) [x] *)
+
+  type orders = order_index list
+
+  type query_tree = [ `Node of orders * (int * query_tree) list
+                    | `Leaf of (context * query) * orders ]
 
   type path = int list
 
   type preclause = (path * (context * query)) * query_tree
-  type clause = context * query
+  type clause = context * query * orders
 
   let gen : (Var.var * query) -> query list =
     function
       | (x, `Table t) ->
         let field_types = table_field_types t in 
           List.rev
-            (StringSet.fold
-               (fun name es ->
+            (List.fold_left
+               (fun es (name,_t)->
                  `Project (`Var (x, field_types), name) :: es
-               ) field_types [])
+               ) [] field_types)
       | _ -> assert false
 
   let gens : (Var.var * query) list -> query list = concat_map gen
 
-  let rec query : context -> query -> query -> query_tree =
-    fun gs cond ->
+  let base_type_of_expression t =
+    match Type.of_query t with
+		| `Record _ | `Dummy -> assert false
+      | t -> t
+
+  let default_of_base_value = Type.default -<- base_type_of_expression
+
+  (* convert orders to a list of expressions
+
+     - represent generators by projecting all fields
+     - ignore tail generators
+  *)
+  let long_orders : orders -> query list =
+    let long =
       function
+        | `Val t        -> [t]
+        | `Gen g        -> gen g
+        | `TailGen g    -> []
+        | `DefVal t     -> [Type.default t]
+        | `DefGen g     -> List.map default_of_base_value (gen g)
+        | `DefTailGen g -> []
+        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
+    in
+      concat_map long
+
+  (* convert orders to a list of expressions
+
+       - represent generators by projecting all fields
+       - include tail generators
+
+     This gives us a completely deterministic list semantics.  *)
+  let strict_long_orders : orders -> query list =
+    let strict_long =
+      function
+        | `Val t        -> [t]
+        | `Gen g
+        | `TailGen g    -> gen g
+        | `DefVal t     -> [Type.default t]
+        | `DefGen g
+        | `DefTailGen g -> List.map default_of_base_value (gen g)
+        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
+    in
+      concat_map strict_long
+
+  let no_orders : orders -> query list =
+    fun _ -> []
+
+  let lift_vals = List.map (fun o -> `Val o)
+  let lift_gens = List.map (fun g -> `Gen g)
+  let lift_tail_gens = List.map (fun g -> `TailGen g)
+
+  let rec query : context -> query -> query -> query_tree =
+    fun gs cond q -> match q with
         | `Concat vs ->
           let cs = queries gs cond vs in
-            `Node []
+            `Node ([], cs)
         | `If (cond', v, `Concat []) ->
           query gs (IRquery2query.reduce_and (cond, cond')) v
         | `For (gs', os, `Concat vs) ->
+          let os' = lift_vals os @ lift_gens gs' in
           let cs = queries (gs @ gs') cond vs in
-            `Node cs
+            `Node (os', cs)
         | `For (gs', os, body) ->
-          `Leaf (gs @ gs',
-                  IRquery2query.reduce_where_then (cond, body))
+          `Leaf ((gs @ gs',
+                  IRquery2query.reduce_where_then (cond, body)),
+                 lift_vals os @ lift_gens gs @ lift_tail_gens gs')
         | `Singleton r ->
-          `Leaf (gs, IRquery2query.reduce_where_then (cond, `Singleton r))
+          `Leaf ((gs, IRquery2query.reduce_where_then (cond, `Singleton r)), [])
         | _ -> assert false
   and queries : context -> query -> query list -> (int * query_tree) list =
     fun gs cond vs ->
@@ -593,13 +764,14 @@ struct
     let dv =
       List.map
         (function
+          | `Val t -> `DefVal (base_type_of_expression t)
           | `Gen g -> `DefGen g
           | `TailGen g -> `DefTailGen g
           | _ -> assert false)
     in
       function
-        | `Node cs -> `Node (mask_children cs)
-        | `Leaf x  -> `Leaf x
+        | `Node (os, cs) -> `Node (dv os, mask_children cs)
+        | `Leaf (x, os)  -> `Leaf (x, dv os)
   and mask_children : (int * query_tree) list -> (int * query_tree) list =
     fun cs ->
       List.map (fun (branch, tree) -> (branch, mask tree)) cs
@@ -608,11 +780,11 @@ struct
      (path, query, tree) *)
   let rec decompose : query_tree -> preclause list =
     function
-      | `Leaf q -> [(([], q), `Leaf q)]
-      | `Node cs ->
+      | `Leaf (q, os) -> [(([], q), `Leaf (q, os))]
+      | `Node (os, cs) ->
         List.map
           (fun ((path, q), cs) ->
-            ((path, q), `Node cs))
+            ((path, q), `Node (os, cs)))
           (decompose_children [] cs)
   and decompose_children prefix : (int * query_tree) list
       -> ((int list * (context * query)) * (int * query_tree) list) list =
@@ -630,26 +802,79 @@ struct
 
   (* compute the order indexes for the specified query tree along a
      path *)
+  let rec flatten_at path active : query_tree -> orders =
+    let box branch = `Constant (`Int (Num.num_of_int branch)) in
+      function
+        | `Leaf (_, os) -> os
+        | `Node (os, cs) ->
+          if active then
+            let (branch :: path) = path in
+              os @ `Branch branch :: flatten_at_children branch path active cs
+          else
+            os @ `Branch 0 :: flatten_at_children 0 [] active cs          
+  and flatten_at_children branch path active =
+    function
+      | [] -> []
+      | ((branch', tree) :: cs) ->
+        if active then
+          if branch == branch' then
+            (flatten_at path true tree) @ (flatten_at_children branch path false cs)
+          else
+            (flatten_at path false tree) @ (flatten_at_children branch path true cs)
+        else
+          (flatten_at path false tree) @ (flatten_at_children branch path false cs)
 
   (* flatten a query tree as a list of subqueries *)
   let flatten_tree q =
     List.map
       (fun ((path, (gs, body)), tree) ->
-        (gs, body))
-      (decompose q)
+        (gs, body, flatten_at path true tree))
+      (decompose q)   
 
-  let query =
+  let query :query-> clause list =
     fun v ->
       let q = query [] (`Constant (`Bool true)) v in
       let ss = flatten_tree q in
-      ss
-			 
+        ss
+
   (* FIXME:
 
      Be more careful about ensuring that the order index field names
      do not clash with existing field names *)
-  
-  let unordered_query_of_clause (gs, body) =
+  let query_of_clause pick_orders (gs, body, os) =
+    let orders = pick_orders os in
+    let rec add_indexes fields i =
+      function
+        | []      -> fields
+        | o :: os ->
+          add_indexes
+            (StringMap.add ("order_" ^ string_of_int i) o fields)
+            (i+1)
+            os in
+    let rec order =
+      function
+        | `Singleton (`Record fields) ->
+          `Singleton (`Record (add_indexes fields 1 orders))
+        | `If (c, body, `Concat []) ->
+          `If (c, order body, `Concat [])
+        | _ -> assert false in
+    let body' = order body in
+      match gs with
+        | [] -> body'
+        | _  -> `For (gs, [], body')
+
+  let index_length : (orders ->query list) -> clause list -> int =
+    fun pick_orders ->
+      function
+        | (_, _, os) :: _ -> List.length (pick_orders os)
+
+  let ordered_query v =
+    let ss = query v in
+    let n = index_length long_orders ss in
+    let vs = List.map (query_of_clause long_orders) ss in
+      vs, n
+
+  let unordered_query_of_clause (gs, body, os) =
     match gs with
       | [] -> body
       | _  -> `For (gs, [], body)
@@ -657,7 +882,7 @@ struct
   let unordered_query v =
     List.map unordered_query_of_clause (query v)
 end
-*)
+
 module Sql =
 struct
   type sql_query =
@@ -665,7 +890,7 @@ struct
     | `Select of (base * string) list * (string * Var.var) list * base * base list ]
   and base =
     [ `Case of (base * base * base)
-    | `Constant of constant
+    | `Constant of Constant.constant
     | `Project of Var.var * string
     | `Apply of string * base list
     | `Empty of sql_query
@@ -808,7 +1033,7 @@ struct
       match b with
         | `Case (c, t, e) ->
             "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
-        | `Constant c -> string_of_constant c
+        | `Constant c -> Constant.string_of_constant c
         | `Project (var, label) ->
             if one_table then
               db#quote_field label
@@ -854,12 +1079,12 @@ struct
       | v -> [v]
 
   let rec clause : Value.database -> query -> sql_query = fun db v ->
-    print_endline ("clause: "^string_of_t v);
+(*    Debug.print ("clause: "^string_of_t v); *)
     match v with
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           clause db body
-      | `For ((x, `Table (table, _db, _fields))::gs, os, body) ->
+      | `For ((x, `Table (table, _db, _row))::gs, os, body) ->
           let body = clause db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -889,13 +1114,13 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (table, db, fields ) ->
+      | `Table (table, _db, fields) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
         let var = fresh_table_var () in
         let fields =
-          List.rev_map (fun (name,_t) -> `Project (var, name), name) fields
+          List.rev_map (fun (name,_) -> `Project (var, name), name) fields
         in
           `Select (fields, [(table, var)], `Constant (`Bool true), [])
       | `Singleton (`Record fields) ->
@@ -919,7 +1144,7 @@ struct
     function
       | `If (c, t, e) ->
         `Case (base db c, base db t, base db e)
-      | `Apply ("tilde", [s; r], _t) ->
+      | `Apply ("tilde", [s; r],_) ->
         begin
           match likeify r with
             | Some r ->
@@ -934,16 +1159,16 @@ struct
                   in
                     `Apply ("RLIKE", [base db s; r])
           end
-      | `Apply ("Empty", [v], _) ->
+      | `Apply ("Empty", [v],_) ->
           `Empty (outer_query db v)
-      | `Apply ("length", [v], _) ->
+      | `Apply ("length", [v],_) ->
           `Length (outer_query db v)
-      | `Apply (f, vs, _t) ->
+      | `Apply (f, vs,_) ->
           `Apply (f, List.map (base db) vs)
       | `Project (`Var (x, _field_types), name) ->
           `Project (x, name)
       | `Constant c -> `Constant c
-      | _ -> assert false
+      | _q -> print_endline (string_of_t _q) ; assert false
 
   (* convert a regexp to a like if possible *)
   and likeify v =
@@ -1008,7 +1233,15 @@ struct
         | _ -> assert false
   and outer_query db v =
     `UnionAll (List.map (clause db) (prepare_clauses v), 0)
-(*
+
+  let ordered_query db range v =
+    (* Debug.print ("v: "^string_of_t v); *)
+    reset_dummy_counter ();
+    let vs, n = Order.ordered_query v in
+    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
+    let q = `UnionAll (List.map (clause db) vs, n) in
+      string_of_query db range q
+
   let unordered_query db range v =
     (* Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
@@ -1016,9 +1249,9 @@ struct
     (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
     let q = `UnionAll (List.map (clause db) vs, 0) in
       string_of_query db range q
-*)
+
   let wonky_query db range v =
-     print_endline ("v: "^string_of_t v); 
+(*     Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
     let q = outer_query db v in
       string_of_query db range q
@@ -1054,37 +1287,40 @@ struct
       "delete from "^table^where
 end
 
-let compile : (Num.num * Num.num) option * Irquery.computation -> (Value.database * string * base_type) option =
+let compile : (Num.num * Num.num) option * computation -> (Value.database * string * base_type) option =
   fun (range, e) ->
-    (* Debug.print ("e: "^Show.show Irquery.show_computation e); *)
+    (* Debug.print ("e: "^Show.show Ir.show_computation e); *)
     let v = IRquery2query.eval e in
+	 print_endline ("executing_query : " ^ (string_of_t v)) ;
       (* Debug.print ("v: "^string_of_t v); *)
     match used_database v with
       | None -> None
       | Some db ->
           let t = Type.of_query v in
-          let q = Sql.wonky_query db range v in
+          let q = Sql.ordered_query db range v in
+          Debug.print ("Generated query: "^q);
           Some (db, q, t)
-
+		
 (*		
-let compile_update : Value.database -> 
-  ((Irquery.var * string * Types.datatype StringMap.t) * Irquery.computation option * Irquery.computation) -> string =
-  fun db ((x, table, field_types), where, body) ->
+let compile_update : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
+  fun db env ((x, table, field_types), where, body) ->
     let env = IRquery2query.bind (IRquery2query.env_of_value_env env) (x, `Var (x, field_types)) in
-	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^Irquery.Show_computation.show where)) where in*)
+	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
     let where = opt_map (IRquery2query.computation env) where in
-	 (*Debug.print ("body: "^Irquery.Show_computation.show body); *)
+	 (*Debug.print ("body: "^Ir.Show_computation.show body); *)
     let body = IRquery2query.computation env body in
     let q = Sql.update db ((x, table), where, body) in
     Debug.print ("Generated update query: "^q);
     q
 		
-let compile_delete : Value.database ->
-  ((Irquery.var * string * Types.datatype StringMap.t) * Irquery.computation option) -> string =
-  fun db ((x, table, field_types), where) ->
+let compile_delete : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
+  fun db env ((x, table, field_types), where) ->
     let env = IRquery2query.bind (IRquery2query.env_of_value_env env) (x, `Var (x, field_types)) in
     let where = opt_map (IRquery2query.computation env) where in
     let q = Sql.delete db ((x, table), where) in
     Debug.print ("Generated update query: "^q);
     q
+
 *)

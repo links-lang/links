@@ -12,4 +12,4 @@ fun execute_query(p) server {
  
 }
 
-execute_query(predicat)
+print(hd(execute_query(predicat)).name)
