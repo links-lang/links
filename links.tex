@@ -1,0 +1,99 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[colorlinks=true]{hyperref}
+\usepackage{mathrsfs}
+\usepackage{geometry}
+%\usepackage{fullpage}
+\usepackage{listings}
+\usepackage{xcolor,graphicx}
+\usepackage{xspace}
+\usepackage{verbatim}
+\usepackage{textcomp}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{syntax}
+\usepackage{amssymb}
+
+\title{Compiling queries in \links}
+\author{Gabriel \textsc{Radanne}}
+\date{\today}
+
+\newcommand\mysc[1]{{\rmfamily\textsc{#1}}\xspace}
+\newcommand\links{\mysc{Links}}
+\newcommand\sql{\mysc{SQL}}
+\newcommand\js{\mysc{Javascript}}
+
+\newcommand\sig[1]{\tt\bf #1}
+\newcommand\linkslst[1]{\tt #1}
+
+\begin{document}
+\maketitle
+\newpage
+
+\section{A quick introduction to Links}
+
+\subsection{What is Links ?}
+In a nutshell, Links is a web functional programming language. We can define Links by two goals.
+
+\links aim to avoid code separation between the client, the server and the database. In usual web programming, you keep those three component separated : for example, the client is written in \js, the client in \mysc{PHP} and queries are in \sql. 
+These separation lead to what's called {\it the independence mismatch} problem : How to be sure than the type of data get by the \sql query fit what the server expect ? 
+
+One of the first \links' related article \cite{links:tiers} was called ``web programming without tiers'' : In \links, there is only one language for the client, the server and the queries. 
+The strong type system ensure that data traveling between those three parts will properly work together. 
+The language itself will decide if the function should be on the server or the client side, ensuring data availability.\\
+
+Another goal of \links is to use the functional paradigm and a strong type system to ease web programming with usefull abstractions. \cite{links:formlets} and \cite{links:effect} introduce news concepts to manipulate form components and queries in a strongly typed way.
+
+In this report, we will mostly be interested by \links query system.
+
+\subsection{The Query system}
+
+Queries in \links are integrated as an element of the language. As opposed to most server-side language, you don't write sql strings : you just write usual code and it will be translated into an \sql query at runtime.
+This have two consequences :
+\begin{itemize}
+\item The language must ensure than every functions that appear inside a query can actually be translated. For example you can't translate recursive functions to \sql.
+\item Each function can have up to two meanings : a {\em query} meaning and a {\em language} meaning.
+\end{itemize}
+
+Effects, as described in \ref{links:effect}, allow \links' type system to handle those specificity nicely.
+
+
+
+\section{Links's insides}
+
+\subsection{Query normalization}
+
+\subsection{The internal representation}
+
+\subsection{The Irtoml module}
+
+
+\section{Query compilation in Links}
+
+\subsection{Motivations}
+
+\subsection{Issues raised by query compilation}
+
+\subsection{Doubleling and splicing}
+
+\subsection{Implementation}
+
+
+\section{Test \& benchmarks}
+
+\subsection{Working exemple}
+
+\subsection{Benchmarks}
+
+\section{Conclusion}
+
+\begin{thebibliography}{99}
+\bibitem{links:tiers} \href{http://groups.inf.ed.ac.uk/links/papers/links-fmco06.pdf}{Links: web programming without tiers} Ezra Cooper, Sam Lindley, Philip Wadler \and Jeremy Yallop
+\bibitem{links:formlets} \href{http://groups.inf.ed.ac.uk/links/papers/formlets-essence.pdf}{The essence of form abstraction} Ezra Cooper, Sam Lindley, Philip Wadler \and Jeremy Yallop
+\bibitem{links:effect} \href{http://homepages.inf.ed.ac.uk/slindley/papers/corelinks.pdf}{Row-based effect types for database integration} Sam Lindley \and James Cheney
+\end{thebibliography}
+
+
+\end{document}
