@@ -765,6 +765,7 @@ struct
      then we could do so by keeping track of which tables get
      duplicated and ensuring that we order by all occurences of them -
      e.g. by converting tail generators to non-tail generators. *)
+
   type order_index = [ `Val of t | `Gen of gen | `TailGen of gen
                      | `DefVal of Types.primitive | `DefGen of gen | `DefTailGen of gen
                      | `Branch of int ]
@@ -1027,6 +1028,38 @@ struct
   let unordered_query v =
     List.map unordered_query_of_clause (query v)
 end
+
+(* Hoist concatenation to the top-level and lower conditionals to the
+   tails of comprehensions, yielding a collection of canonical
+   comprehensions.
+   
+   This process doesn't necessarily respect list ordering. The order
+   module generalises it in order to support various degrees of
+   list-ordering.
+
+   The intention is that Split.query == Order.unordered_query.
+*)
+module Split =
+struct
+  type gen = Var.var * t
+
+  let rec query : gen list -> t list -> t -> t -> t list =
+    fun gs os cond ->
+      function
+        | `Singleton r ->
+          [`For (gs, os, Eval.reduce_where_then (cond, `Singleton r))]
+        | `Concat vs ->
+          concat_map (query gs os cond) vs
+        | `If (cond', v, `Concat []) ->
+          query gs os (Eval.reduce_and (cond, cond')) v
+        | `For (gs', os', body) ->
+          query (gs @ gs') (os @ os') cond body
+        | _ -> assert false
+
+  let query : t -> t list =
+    query [] [] (`Constant (`Bool true))
+end
+
 
 module Sql =
 struct
@@ -1396,7 +1429,8 @@ struct
   let unordered_query db range v =
     (* Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
-    let vs = Order.unordered_query v in
+    (*let vs = Order.unordered_query v in*)
+    let vs = Split.query v in
     (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
     let q = `UnionAll (List.map (clause db) vs, 0) in
       string_of_query db range q
