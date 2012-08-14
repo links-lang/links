@@ -1,7 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[french]{babel}
+%\usepackage[french]{babel}
 \usepackage[colorlinks=true]{hyperref}
 \usepackage{mathrsfs}
 \usepackage{geometry}
@@ -24,13 +24,48 @@
 \newcommand\links{\mysc{Links}}
 \newcommand\sql{\mysc{SQL}}
 \newcommand\js{\mysc{Javascript}}
+\newcommand\ocaml{\mysc{Ocaml}}
 
-\newcommand\sig[1]{\tt\bf #1}
-\newcommand\linkslst[1]{\tt #1}
+\newcommand\refsec[1]{\hyperref[#1]{section \ref*{#1}}}
+
+\lstset{
+  tabsize=4,
+  basicstyle=\scriptsize,
+  % upquote=true,
+  aboveskip={0.5\baselineskip},
+  columns=fixed,
+  showstringspaces=false,
+  extendedchars=true,
+  breaklines=true,
+  prebreak = \raisebox{0ex}[0ex][0ex]{\ensuremath{\hookleftarrow}},
+  showtabs=false,
+  showspaces=false,
+  showstringspaces=false,
+  identifierstyle=\ttfamily,
+  keywordstyle=\color[rgb]{0,0,1},
+  commentstyle=\color[rgb]{0.133,0.545,0.133},
+  stringstyle=\color[rgb]{0.627,0.126,0.941},
+}
+
+\newcommand\sig[1]{{\tt\bf #1}}
+\newcommand\code[1]{{\tt #1}}
+\newcommand\linkslst[1]{{\tt #1}}
+\newcommand\effect[1]{{\em #1}}
+
+\newcommand\ocamlc[1]{\lstinline[language=ML]{#1}}
+
+\newcommand\module[1]{{\bf #1}}
+
 
 \begin{document}
-\maketitle
-\newpage
+
+\begin{titlepage}
+  \maketitle
+  \thispagestyle{empty} % remove page number
+  
+\end{titlepage}
+
+
 
 \section{A quick introduction to Links}
 
@@ -42,58 +77,218 @@ These separation lead to what's called {\it the independence mismatch} problem :
 
 One of the first \links' related article \cite{links:tiers} was called ``web programming without tiers'' : In \links, there is only one language for the client, the server and the queries. 
 The strong type system ensure that data traveling between those three parts will properly work together. 
-The language itself will decide if the function should be on the server or the client side, ensuring data availability.\\
+The language itself will decide if the function should be on the server or the client side, ensuring data availability.
 
-Another goal of \links is to use the functional paradigm and a strong type system to ease web programming with usefull abstractions. \cite{links:formlets} and \cite{links:effect} introduce news concepts to manipulate form components and queries in a strongly typed way.
+In \links, the client part is compiled in \js and the server part is evaluated.
+\\
 
-In this report, we will mostly be interested by \links query system.
+Another goal of \links is to use the functional paradigm and a strong type system to ease web programming with usefull abstractions. \cite{links:formlets} and \cite{links:effect} introduce new concepts to manipulate form components and queries in a strongly typed way.\\
 
-\subsection{The Query system}
+During a previous project \cite{links:comp}, a compiler for the server part as been done, but this compiler is incomplete since it don't handle queries. The goal of this internship is to allow queries in \links to be compiled.\\
+
+The next section will present the query system of \links in more details.
+
+\subsection{The Query system\label{intro:query}}
 
 Queries in \links are integrated as an element of the language. As opposed to most server-side language, you don't write sql strings : you just write usual code and it will be translated into an \sql query at runtime.
-This have two consequences :
+For example, here is a simple query: \linkslst{simplequery.links}
+You can also, make a function which take a predicate and construct a query with it, like in the following example : \linkslst{query_predicat.links}
+
+
+This tight integration between queries and the programming language has two consequences :
 \begin{itemize}
 \item The language must ensure than every functions that appear inside a query can actually be translated. For example you can't translate recursive functions to \sql.
-\item Each function can have up to two meanings : a {\em query} meaning and a {\em language} meaning.
+\item Each function can have up to two meanings : a \effect{query} meaning and a \effect{language} meaning.
 \end{itemize}
 
-Effects, as described in \ref{links:effect}, allow \links' type system to handle those specificity nicely.
+Effects, as described in \cite{links:effect}, allow \links' type system to handle those specificity nicely.\\
+
+Effects can be described as a way to characterize what a function is doing during its computation. 
+
+For exemple, let's loot at the \code{print(s)} function. Its type is \sig{(String) -\{wild\}-> ()}. \sig{wild} is an effect which indicate that this function cannot be run in a query. This make sens since \sql don't have any printing function.
+
+Let's now look at the \code{map(f,l)} function with the type \sig{((a) -b-> c, [a]) -b-> [c]}. If the function \code{f} passed to \code{map} have an effect \sig{b}, the application of the map will also get this effect.\\
+
+This will allow us to know if a function can be used inside a query or not.
+
+\section{\links' insides}
+
+\links' compiler and evaluater are implemented in \ocaml. 
+The code can be separate into two parts. 
+The front-end takes care of various static analysis including type inference and removing any syntactic sugar. 
+At the end of this first stage, the code is in an internal representation defined in the \module{Ir} module and which will be presented in \refsec{ir}. 
+
+Then, the backend will transform this internal representation into different forms.\\
+The client side code will be extracted from it and compile to \js by the \module{Irtojs} module.\\
+The server side will be evaluated by the \module{Evalir} module or compiled to \ocaml by the \module{Irtoml} module that will be presented \refsec{irtoml}.\\
+In case the server side is evaluated, the \module{Query} module handle the query normalization that will be explained \refsec{querynorm}.
+
+\subsection{The internal representation \label{ir}}
+
+The internal representation of \links is in ANF\footnote{A normal form}. This a representation of a program where every argument is trivial and don't need any computation to be evaluated. 
+
+For exemple this program :
+\begin{lstlisting}[language=ML]
+f(g(x),h(y))
+\end{lstlisting}
+Can be converted in ANF :
+\begin{lstlisting}[language=ML]
+let x'=g(x) in
+let y'=h(y) in
+f(x',y')
+\end{lstlisting}
+
+ANF is a very simple representation that transform usually complex transformations to very simple ones. It is also isomorphic to CPS\footnote{Continuation Passing Style} (see \hyperref[cps]{the annex} for details).\\
+
+Here is a simplified representation of the internal representation :
+\begin{lstlisting}[language=ML]
+type value =
+  | Constant of constant
+  | Variable of var
+  | Extend of (value name_map * value option)
+  | Project of (name * value)
+  | Erase of (name_set * value)
+  | Inject of (name * value)
+\end{lstlisting}
+
+\begin{lstlisting}[language=ML]
+and tail_computation =
+  | Return of (value)
+  | Apply of (value * value list)
+  | Special of special
+  | Case of (value * (binder * computation) name_map * (binder * computation) option)
+  | If of (value * computation * computation)
+
+and binding =
+  | Let of  binder * (tyvar list * tail_computation)
+  | Fun of (binder * (tyvar list * binder list * computation))
+  | Rec of (binder * (tyvar list * binder list * computation)) list
+
+and special =
+  | Database of value 
+  | Table of (value * value)
+  | Query of computation
+
+and computation = binding list * tail_computation
+\end{lstlisting}
+
+A program is of the type \sig{computation} with is formed by a list of \sig{binding} followed by a \sig{tail\_computation}.\\
+Each binding contains a left-hand side with variable name and a right-and side with the possible arguments and the value of the variable. \\
+The type \sig{value} contains usual values like constant and variable, but also record and algebraic type construction.\\
+Finally \sig{special} mostly contains query related values like database, tables and queries.\\
+
+At this point, the type inference is done, so the type of every variable can be easily reconstruct. Every variable also get a unique name. In combination with the ANF, it makes the control flow of the whole program completely explicit.\\
+
+It's also inside the \module{Ir} module that's some classic program transformation are defined, such as dead variables elimination or inlining.
+
+\subsection{Query normalization \label{querynorm}}
 
 
+\subsection{The Irtoml module and the runtime library \label{irtoml}}
 
-\section{Links's insides}
+A previous internship \cite{links:comp} has been done by Steven Holmes several years ago on compiling the server-side of \links. The target choose was \ocaml which make the compilation of some high level features of \links far easier than if the target was a lower level language. 
 
-\subsection{Query normalization}
+In fact, the target of the compiler is a subset of the \ocaml language described in \hyperref[ocamlsubset]{the annex}. You notice that this is not in ANF anymore. Keeping the code in ANF may be possible but would involve extra work and is not needed to output valid ocaml code.
 
-\subsection{The internal representation}
+The compilation itself is done it two steps : first, the internal representation is translated into this subset, then this subset is printed as \ocaml code. The first is also when others smaller tasks are done such as handle boxing.
 
-\subsection{The Irtoml module}
+As opposed to \ocaml, \links handle first-class continuation. This mean that the continuation of the program can be manipulate as a regular function. This is not possible in usual programming style in \ocaml, but it is possible in CPS. 
+As said \refsec{ir}, ANF is isomorphic to CPS, so transforming one to another is very easy. This task is also done during the first step.\\
+There is still an option to output code in direct style, first-class continuation and some client-server communication features will not be available, but the debugging is far easier due to the increased readability of the output code for human eyes.
+
+\subsection{The runtime library\label{runtime}}
+
 
 
 \section{Query compilation in Links}
 
-\subsection{Motivations}
+As said in the introduction, the goal of this project is to compiler queries. We will first explain why this is difficult and wasn't handle in the first place. We will then show the theoretical solutions and finally the implementation of those solutions.
 
 \subsection{Issues raised by query compilation}
 
+To correctly understand the issues raised by query during the compilation, we first need to emphasize the differences between evaluation and compilation. \\
+
+To evaluate some code, you construct a program that will do some actions according to this code. If you want to change the meaning of the code, you can simply change the actions triggered by the code. 
+
+This is how is evaluated \links' code : A first evaluator, in the \module{Eval} module, is evaluating the internal representation, and when a query is involved, the \module{Eval} module transmit the concerned part of the code to the \module{Query} module presented \refsec{querynom} which is basically another evaluator.
+
+This allow to have multiple meaning for the same piece of code without actually modifying the code.\\
+
+A compiler translate the code from a language to another language. This other language have a known fixed meaning and will be later evaluated or compiled to a third language. This mean we can't change the meaning of the code without modifying the code. However, as said \refsec{intro:query}, every non-wild function in \links have two meanings.
+
+Therefor, the compilation of query in \links can't be done in a straightforward way.
+
 \subsection{Doubleling and splicing}
+
+To handle those two meanings, the adopted solution is in fact very simple : duplicate every non-wild function. This solution is explained in great details in \cite{links:querycomp} which is not yet published. The involved transformations are formalized in great details in this paper. Here, we will only explain the global principle of these in two steps : 
+
+\subsubsection{Duplication of functions}
+
+For every function, we create a database-only function and a programming language-only function. This transformation, called Doubleling, can be done in a typesafe way inside \links by using the effect system : 
+\begin{itemize}
+\item A programming language-only function is a function with the \effect{wild} effect, also called \effect{pl} effect. Only \effect{pl} functions can be called outside a query.
+\item A database-only function is a function with a new effect : the \effect{db} effect. Only \effect{db} functions can be called inside a query.
+\item A non wild function from the \links' code before applying the transformation is considered to have both \effect{pl} and \effect{db} effect : that's the \effect{any} effect.
+\end{itemize}
+
+However, a \effect{any} function can be passed as an argument of another function. We can't know in advance if that's the \effect{pl} or the \effect{db} aspect of the function that will be used. There is multiple way to solve this problem, here we will just pass the couple with both functions and before applying the function, we will select the correct aspect depending on the context.
+
+\subsubsection{Converting values}
+
+Now that functions have been duplicated, we have two worlds inside our to-be-compiled program : the programming-language world and the database one. The representation of values in this two worlds are different and the typesystem in the database world is much more simple since it his limited by SQL's typesytem. However they may need to communicate. In order to do that, we need a way to convert value from the programming-language to the database. 
+
+The only value going from the \effect{db} world to the \effect{pl} are the output of a query. This is handled easily as output of a query is a list of record whom type is known.
+
+The other way, transforming \effect{pl} value to be used by \effect{db} functions, is much more common and can involve many types of values.
 
 \subsection{Implementation}
 
 
 \section{Test \& benchmarks}
 
-\subsection{Working exemple}
+\subsection{Examples}
 
 \subsection{Benchmarks}
 
 \section{Conclusion}
 
 \begin{thebibliography}{99}
-\bibitem{links:tiers} \href{http://groups.inf.ed.ac.uk/links/papers/links-fmco06.pdf}{Links: web programming without tiers} Ezra Cooper, Sam Lindley, Philip Wadler \and Jeremy Yallop
-\bibitem{links:formlets} \href{http://groups.inf.ed.ac.uk/links/papers/formlets-essence.pdf}{The essence of form abstraction} Ezra Cooper, Sam Lindley, Philip Wadler \and Jeremy Yallop
-\bibitem{links:effect} \href{http://homepages.inf.ed.ac.uk/slindley/papers/corelinks.pdf}{Row-based effect types for database integration} Sam Lindley \and James Cheney
+\bibitem{links:tiers} \href{http://groups.inf.ed.ac.uk/links/papers/links-fmco06.pdf}{Links: web programming without tiers} Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop
+\bibitem{links:formlets} \href{http://groups.inf.ed.ac.uk/links/papers/formlets-essence.pdf}{The essence of form abstraction} Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop
+\bibitem{links:effect} \href{http://homepages.inf.ed.ac.uk/slindley/papers/corelinks.pdf}{Row-based effect types for database integration} Sam Lindley and James Cheney
+\bibitem{links:comp} \href{http://groups.inf.ed.ac.uk/links/papers/undergrads/steven.pdf}{Compiling Links server-side code}. Steven Holmes
+\bibitem{links:querycomp}
 \end{thebibliography}
 
+\section*{Annex}
+
+\subsection*{Continuation Passing Style\label{cps}}
+
+\subsection*{The targeted \ocaml subset\label{ocamlsubset}}
+\begin{lstlisting}[language=ML]
+type code =
+  | Unit
+  | Bool of bool
+  | Int of num
+  | Char of char
+  | NativeString of string
+  | Float of float
+  | Var of string
+  | Rec of (string * string list * code) list * code
+  | Fun of string list * code 
+  | LetFunQ of string * query_value * code
+  | Let of string * code * code
+  | If of (code * code * code)
+  | Call of (code * code list)
+  | Pair of code * code
+  | Triple of code * code * code
+  | Lst of code list
+  | Case of code * ((code * code) list) * ((code * code) option)
+  | Die of code
+  | Query of query_computation
+  | Table of code * code * (string * base_type) list
+  | Tail of code
+  | Empty
+\end{lstlisting}
 
 \end{document}
