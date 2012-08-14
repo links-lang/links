@@ -1949,9 +1949,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (`Any, `Base), false)) in
-            let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
-              `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
+            let () = if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then ()
+                     else let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (`Any, `Base), false)) in
+                          unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
+            `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
         | `Spawn (`Wait, location, p, _) ->
             (* (() -{b}-> d) -> d *)
