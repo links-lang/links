@@ -433,22 +433,43 @@ module Eval = struct
        end
       (* TODO: Is this refactoring valid?
       let result =
-        match Query.compile env (range, e) with
-          | None -> computation env cont e
-          | Some (db, q, t) ->
-            let (fieldMap, _, _), _ =
-              Types.unwrap_row(TypeUtils.extract_row t) in
-            let fields =
-              StringMap.fold
-                (fun name t fields ->
-                  match t with
-                    | `Present t -> (name, t)::fields
-                    | `Absent -> assert false
-                    | `Var _ -> assert false)
-                fieldMap
-                []
-            in
-              Database.execute_select fields q db
+        if Settings.get_value Basicsettings.Shredding.shredding then
+          match Query.compile_shredded env (range, e) with
+            | None -> computation env cont e
+            | Some (db, p) ->
+              let execute_shredded (q, t) =
+                match t with
+                  | `Record fields ->
+                    let fields =
+                      StringMap.to_list
+                        (fun name p -> (name, `Primitive p))
+                        fields
+                    in
+                      Debug.print ("Generated query: "^q);
+                      Database.execute_select fields q db
+                  | _ -> assert false in
+              let flat_results = Query.Shred.pmap execute_shredded p in
+              let unflattened_results =               
+                Query.Shred.pmap Query.FlattenRecords.unflatten_value flat_results
+              in
+                Query.Shred.stitch_query unflattened_results
+        else
+          match Query.compile env (range, e) with
+            | None -> computation env cont e
+            | Some (db, q, t) ->
+              let (fieldMap, _), _ = 
+                Types.unwrap_row(TypeUtils.extract_row t) in
+              let fields =
+                StringMap.fold
+                  (fun name t fields ->
+                    match t with
+                      | `Present, t -> (name, t)::fields
+                      | `Absent, _ -> assert false
+                      | `Var _, t -> assert false)
+                  fieldMap
+                  []
+              in
+                Database.execute_select fields q db
       in
         apply_cont cont env result
        *)

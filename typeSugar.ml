@@ -2297,7 +2297,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row (`Any, `Base))))) orderby in
             let () =
-              if is_query then
+              if is_query && not (Settings.get_value Basicsettings.Shredding.relax_query_type_constraint) then
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (`Any, `Base))))) in
             let e = `Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
