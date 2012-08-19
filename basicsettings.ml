@@ -42,6 +42,7 @@ end
 
 module Shredding = struct
   let relax_query_type_constraint = Settings.add_bool("relax_query_type_constraint", false, `User)
+  let shredding = Settings.add_bool("shredding", false, `User)
 end
 
 
