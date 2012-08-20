@@ -108,9 +108,11 @@ struct
     | `List of nested_type ]
       deriving (Show)
 
-  type shredded_type =
-    [ `Primitive of Types.primitive
-    | `Record of shredded_type StringMap.t ]
+  type 'a shredded = [`Primitive of 'a | `Record of ('a shredded) StringMap.t]
+      deriving (Show)
+  type shredded_type = Types.primitive shredded
+      deriving (Show)
+  type shredded_value = Value.t shredded
       deriving (Show)
 
   type flat_type =
@@ -1176,6 +1178,8 @@ end
 
 module FlattenRecords =
 struct
+  open Shred
+
   type let_clause = LetInsertion.let_clause
   type query = LetInsertion.query
 
@@ -1239,7 +1243,7 @@ struct
 (*        Debug.print ("flattened query: " ^ Show.show LetInsertion.show_query q');*)
         q'
 
-  let rec flatten_type : Shred.shredded_type -> Shred.flat_type =
+  let rec flatten_type : shredded_type -> flat_type =
     function
       | `Primitive p -> `Primitive p
       | `Record fields ->
@@ -1259,47 +1263,79 @@ struct
              StringMap.empty)
       | _ -> assert false
 
-  let flatten_query_type : Shred.shredded_type -> Shred.flat_type = flatten_type
+  let flatten_query_type : shredded_type -> flat_type = flatten_type
 
-  type nested_value = [`Val of Value.t | `Record of nested_value StringMap.t]
+  (* add a flattened field to an unflattened record (type or value) *)
+  let rec unflatten_field : string list -> 'a -> ('a shredded) StringMap.t -> ('a shredded) StringMap.t =
+    fun names v fields ->
+      match names with
+        | [name] -> StringMap.add name (`Primitive v) fields
+        | name::name'::names ->
+          let fields' =
+            if StringMap.mem name fields then
+              let w = StringMap.find name fields in
+                match w with
+                  | `Record fields' -> fields'
+                  | _ -> assert false
+            else
+              StringMap.empty in
+          let fields' = unflatten_field (name'::names) v fields' in
+            StringMap.add name (`Record fields') fields   
 
-  let rec add_nested_field fields v =
-    function
-      | [s] -> StringMap.add s (`Val v) fields
-      | s::s'::ss ->
-        let fields' =
-          if StringMap.mem s fields then
-            let w = StringMap.find s fields in
-              match w with
-                | `Record fields' -> fields'
-                | _ -> assert false
-          else
-            StringMap.empty in
-        let fields' = add_nested_field fields' v (s'::ss) in
-          StringMap.add s (`Record fields') fields   
+  (* fill in any unit fields that are apparent from the type but not
+     present in the flattened value *)
+  let rec fill : shredded_type -> shredded_value -> shredded_value =
+    fun t v ->
+      match t, v with
+        | `Primitive p, `Primitive v -> `Primitive v
+        | `Record fts, `Record fs ->
+          `Record
+            (StringMap.fold
+               (fun name t fields ->
+                 let v =
+                   if StringMap.mem name fs then
+                     StringMap.find name fs
+                   else
+                     `Record (StringMap.empty)
+                 in
+                   StringMap.add name (fill t v) fields)
+               fts
+               StringMap.empty)
+        | _ -> assert false
 
-  let rec unflatten_record : nested_value StringMap.t -> (string * Value.t) list -> Value.t =
-    let rec listify_records : nested_value -> Value.t =
+  let rec unflatten_record : shredded_value StringMap.t -> shredded_type -> (string * Value.t) list -> Value.t =
+    let rec listify_records : shredded_value -> Value.t =
       function
         | `Record fields -> `Record (StringMap.to_alist (StringMap.map listify_records fields))
-        | `Val v -> v
+        | `Primitive v -> v
     in
-      fun fields' ->
+      fun output_fields t ->
         function
-          | [] -> listify_records (`Record fields')
+          | [] -> listify_records (fill t (`Record output_fields))
           | [("_", v)] -> v            
           | (name, v) :: fields ->
-            let ss = split_string name '_' in
-              unflatten_record (add_nested_field fields' v ss) fields
+            let names = split_string name '_' in
+              unflatten_record (unflatten_field names v output_fields) t fields
 
-  let rec unflatten_value : Value.t -> Value.t =
+  let unflatten_type : flat_type -> shredded_type =
     function
+      | `Primitive p -> `Primitive p
       | `Record fields ->
-        unflatten_record StringMap.empty fields
-      | `List vs ->
-        `List (List.map unflatten_value vs)
-      | v -> v
-    
+        `Record
+          (StringMap.fold
+             (fun name p fields ->
+               let names = split_string name '_' in
+                 unflatten_field names p fields)
+             fields
+             StringMap.empty)
+
+  let unflatten_list : (Value.t * flat_type) -> Value.t =
+    fun (v, t) ->
+      match v with
+        | `List vs ->
+          let t' = unflatten_type t in
+            `List (List.map (unflatten_record StringMap.empty t' -<- Value.unbox_record) vs)
+        | _ -> assert false    
 end
 
 module Sql =

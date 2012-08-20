@@ -111,6 +111,8 @@ val box_string : string -> t
 val unbox_string : t -> string
 val box_list : t list -> t
 val unbox_list : t -> t list
+val box_record : (string * t) list -> t
+val unbox_record : t -> (string * t) list
 val box_unit : unit -> t 
 val unbox_unit : t -> unit
 val unbox_pair : t -> (t * t)
