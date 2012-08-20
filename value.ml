@@ -482,7 +482,10 @@ and unbox_string : t -> string = function
 and box_list l = `List l
 and unbox_list : t -> t list = function
   | `List l -> l | _ -> failwith "Type error unboxing list"
-and box_unit : unit -> t
+and box_record fields = `Record fields
+and unbox_record : t -> (string * t) list = function
+  | `Record fields -> fields | _ -> failwith "Type error unboxing record"
+and box_unit : unit -> t 
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"

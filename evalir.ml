@@ -428,11 +428,11 @@ module Eval = struct
                        fields
                    in
                    Debug.print ("Generated query: "^q);
-                   Database.execute_select fields q db
+                   (Database.execute_select fields q db, t)
                 | _ -> assert false in
               let flat_results = Query.Shred.pmap execute_shredded p in
-              let unflattened_results =
-                Query.Shred.pmap Query.FlattenRecords.unflatten_value flat_results
+              let unflattened_results =               
+                Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results
               in
               apply_cont cont env (Query.Shred.stitch_query unflattened_results)
          end
