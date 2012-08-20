@@ -1,0 +1,48 @@
+typename Task         = String;
+typename Employee     = (name:String, tasks:[Task], salary:Int);
+typename Contact      = (name:String, "client":Bool);
+typename Department   = (name:String, employees:[Employee], contacts:[Contact]);
+typename Organisation = [Department];
+
+var db = database "organisation";
+
+var keytasks    = table "keytasks"    with (dpt : String)                from db;
+var tasks       = table "tasks"       with (emp : String, tsk : String)  from db;
+var employees   = table "employees"  
+                  with (dpt : String, emp : String, salary : Int)        from db;
+var contacts    = table "contacts"
+                  with (dpt : String, contact : String, "client" : Bool) from db;
+var departments = table "departments" with (dpt : String)                from db;
+
+# construct a nested representation of the organisation
+sig organisation : () -> Organisation
+fun organisation() {
+  for (x <-- departments)
+    [(name=x.dpt,
+      employees=
+        for (y <-- employees) where (x.dpt == y.dpt)
+          [(name=y.emp,
+            tasks=
+              for (z <-- tasks)
+              where (y.emp == z.emp)
+                [z.tsk],
+            salary=y.salary)],
+      contacts=
+       for (y <-- contacts) where (x.dpt == y.dpt)
+         [(name=y.contact, "client"=y."client")])]
+}
+
+
+sig departmentPeople : (() {}-> (Organisation)) -> [(name:String, people:[String])]
+fun departmentPeople(org) {
+  query {
+  for (x <- org()) 
+    [(name = x.name,
+      people = (for (y <- x.employees)
+                [y.name]) ++ 
+              (for (z <- x.contacts)
+                [z.name]))]
+  }
+}
+departmentPeople(organisation)
+
