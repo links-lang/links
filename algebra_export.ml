@@ -38,7 +38,7 @@ let string_of_join_comparison = function
 let string_of_pf_type = function
   | `IntType -> "int"
   | `StrType -> "str"
-  | `BoolType -> "bln"
+  | `BoolType -> "bool"
   | `CharType -> "str"
   | `FloatType -> "dbl"
   | `NatType -> "nat"
