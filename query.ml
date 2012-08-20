@@ -1969,7 +1969,6 @@ struct
   let inner_index z gs_in =
     (* it's just a dynamic index! *)
     (z, "2") :: gens_index gs_in
-(*    (z, "2_1") :: (z, "2_2") :: gens_index gs_in *)
 
   let extract_gens =
     function
@@ -2169,39 +2168,35 @@ struct
     let typed_query_package = Shred.pzip query_package query_type_package in
       typed_query_package
 
-    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
-    (* let q = `UnionAll (List.map (let_clause db) vs, 0) in *)
-    (*   string_of_query db range q *)
+  let update db ((x, table), where, body) =
+    reset_dummy_counter ();
+    let base = base db [] ->- (string_of_base db true) in
+    let where =
+      match where with
+        | None -> ""
+        | Some where ->
+            " where (" ^ base where ^ ")" in
+    let fields =
+      match body with
+        | `Record fields ->
+            String.concat ","
+              (List.map
+                 (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
+                 (StringMap.to_alist fields))
+        | _ -> assert false
+    in
+      "update "^table^" set "^fields^where
 
-  (* let update db ((x, table), where, body) = *)
-  (*   reset_dummy_counter (); *)
-  (*   let base = (base db) ->- (string_of_base db true) in *)
-  (*   let where = *)
-  (*     match where with *)
-  (*       | None -> "" *)
-  (*       | Some where -> *)
-  (*           " where (" ^ base where ^ ")" in *)
-  (*   let fields = *)
-  (*     match body with *)
-  (*       | `Record fields -> *)
-  (*           String.concat "," *)
-  (*             (List.map *)
-  (*                (fun (label, v) -> db#quote_field label ^ " = " ^ base v) *)
-  (*                (StringMap.to_alist fields)) *)
-  (*       | _ -> assert false *)
-  (*   in *)
-  (*     "update "^table^" set "^fields^where *)
-
-  (* let delete db ((x, table), where) = *)
-  (*   reset_dummy_counter (); *)
-  (*   let base = base db ->- (string_of_base db true) in *)
-  (*   let where = *)
-  (*     match where with *)
-  (*       | None -> "" *)
-  (*       | Some where -> *)
-  (*           " where (" ^ base where ^ ")" *)
-  (*   in *)
-  (*     "delete from "^table^where *)
+  let delete db ((x, table), where) =
+    reset_dummy_counter ();
+    let base = base db [] ->- (string_of_base db true) in
+    let where =
+      match where with
+        | None -> ""
+        | Some where ->
+            " where (" ^ base where ^ ")"
+    in
+      "delete from "^table^where
 end
    
 
