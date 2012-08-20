@@ -1421,6 +1421,18 @@ struct
                StringMap.empty)
         | _ -> assert false
 
+  let unflatten_type : flat_type -> shredded_type =
+    function
+      | `Primitive p -> `Primitive p
+      | `Record fields ->
+        `Record
+          (StringMap.fold
+             (fun name p fields ->
+               let names = split_string name '_' in
+                 unflatten_field names p fields)
+             fields
+             StringMap.empty)
+
   let rec unflatten_record : shredded_value StringMap.t -> shredded_type -> (string * Value.t) list -> Value.t =
     let rec listify_records : shredded_value -> Value.t =
       function
@@ -1434,18 +1446,6 @@ struct
           | (name, v) :: fields ->
             let names = split_string name '_' in
               unflatten_record (unflatten_field names v output_fields) t fields
-
-  let unflatten_type : flat_type -> shredded_type =
-    function
-      | `Primitive p -> `Primitive p
-      | `Record fields ->
-        `Record
-          (StringMap.fold
-             (fun name p fields ->
-               let names = split_string name '_' in
-                 unflatten_field names p fields)
-             fields
-             StringMap.empty)
 
   let unflatten_list : (Value.t * flat_type) -> Value.t =
     fun (v, t) ->
