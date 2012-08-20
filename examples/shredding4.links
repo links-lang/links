@@ -14,12 +14,6 @@ var contacts    = table "contacts"
                   with (dpt : String, contact : String, "client" : Bool) from db;
 var departments = table "departments" with (dpt : String)                from db;
 
-fun isPoor(x) {x.salary < 1000}
-fun isRich(x) {x.salary > 1000000}
-fun outliers(xs) {filter (fun (x) {isRich(x) || isPoor(x)}, xs)}
-fun clients(xs) {filter (fun (x) {x."client"}, xs)}
-fun get(xs, f) {for (x <- xs) [(name=x.name, tasks = f(x))]}
-
 # construct a nested representation of the organisation
 sig organisation : () -> Organisation
 fun organisation() {
@@ -39,15 +33,17 @@ fun organisation() {
 }
 
 
-sig departmentTasks : (() {}-> (Organisation)) -> [(name:String, tasks:[String])]
-fun departmentTasks(org) {
+
+
+sig emptyDepartments : (() {}-> (Organisation)) -> [(name:String)]
+fun emptyDepartments(org) {
   query {
   for (x <- org()) 
-    [(name = x.name,
-      tasks = for (y <- x.employees)
-              for (z <- y.tasks)
-                [(z)])]
+  where (empty(x.employees))
+    [(name = x.name)]
   }
 }
-departmentTasks(organisation)
+
+
+emptyDepartments(organisation)
 
