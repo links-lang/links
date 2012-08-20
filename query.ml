@@ -129,20 +129,23 @@ struct
   type step = [ `List | `Record of string ]
   type path = step list
 
-  (* this seems a bit dodgey...  what if we have a polymorphic type,
+  (* This seems a bit dodgey...  what if we have a polymorphic type,
      for instance?
 
-     maybe we're ok if we always infer the type from a normalised
-     expression *)
-  let rec nested_type_of_type : Types.typ -> nested_type =
-    function
-      | `Primitive t -> `Primitive t
-      | `Record (fields, _, _) -> `Record (StringMap.map (function
-                                                           | `Present t -> nested_type_of_type t
-                                                           | _ -> assert false) fields)
-      | `Application (l, [`Type t]) when l = Types.list ->
-        `List (nested_type_of_type t)
-      | _ -> assert false
+     We should be OK, as we always infer the type from a normalised
+     expression. *)
+  let rec nested_type_of_type : Types.datatype -> nested_type =
+    fun t ->
+    match TypeUtils.concrete_type t with
+    | `Primitive t -> `Primitive t
+    | `Record (fields, _, _) -> `Record (StringMap.map (function
+                                                         | `Present t -> nested_type_of_type t
+                                                         | _ -> assert false) fields)
+    | `Application (l, [`Type t]) when l = Types.list ->
+       `List (nested_type_of_type t)
+    | t ->
+       Debug.print ("Can't convert to nested_type: " ^ Types.string_of_datatype t);
+       assert false
 
   (* erase annotations from a package to obtain the underlying type *)
   let rec erase : 'a package -> nested_type =
