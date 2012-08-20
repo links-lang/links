@@ -1224,6 +1224,11 @@ struct
                 (`Project
                     (`Project (`Var (z, z_fields), "1"), string_of_int i), l)
         end
+      (* For Empty and length we don't care what results the query
+         returns, but just how many results it returns, so we leave
+         the translation of the body until SQL generation. *)
+      | `Apply ("Empty", [e]) -> `Apply ("Empty", [e])
+      | `Apply ("length", [e]) -> `Apply ("length", [e])
       | `Apply (f, es) ->
         `Apply (f, List.map (lins_inner (z, z_fields) ys) es)
       | `Record fields ->
@@ -1233,7 +1238,9 @@ struct
         `Project (`Var (z, z_fields), "2")
       | `Primitive "in"  -> `Primitive "index"
       | `Constant c      -> `Constant c
-      | _                -> assert false
+      | e ->
+        Debug.print ("Can't apply lins_inner to: " ^ Show_t.show e);
+        assert false
 
   let lins c : let_clause =
     let gs_out = List.concat (init (gens c)) in
@@ -1258,15 +1265,15 @@ struct
                      Eval.eta_expand_var (x, table_field_types t)
                    | _ -> assert false)
                gs_out) in
-   let r_out_type =
-    Types.make_tuple_type
-      (List.map
-         (fun (x, source) ->
-           match source with
-             | `Table (_, _, row) ->
-               `Record row
-             | _ -> assert false)
-         gs_out) in
+    let r_out_type =
+      Types.make_tuple_type
+        (List.map
+           (fun (x, source) ->
+             match source with
+               | `Table (_, _, row) ->
+                 `Record row
+               | _ -> assert false)
+           gs_out) in
 
     let gs_in = last (gens c) in
     let x_in = last (conds c) in
@@ -1284,7 +1291,7 @@ struct
                 where
                   (opt_map (lins_inner (z, z_fields) ys) x_in)
                   (`Singleton (lins_inner (z, z_fields) ys (body c)))))
-   
+        
   let lins_query : t -> query =
     function
       | `Concat cs -> List.map lins cs
@@ -1304,6 +1311,11 @@ struct
     function
       | `Constant c    -> `Constant c
       | `Primitive p   -> `Primitive p
+      (* For Empty and length we don't care what results the query
+         returns, but just how many results it returns, so we leave
+         the translation of the body until SQL generation. *)
+      | `Apply ("Empty", [e]) -> `Apply ("Empty", [e])
+      | `Apply ("length", [e]) -> `Apply ("length", [e])
       | `Apply (f, es) -> `Apply (f, List.map flatten_inner es) 
       | `If (c, t, e)  ->
         `If (flatten_inner c, flatten_inner t, flatten_inner e)
