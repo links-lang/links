@@ -899,6 +899,7 @@ field:
 field_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
+| STRING                                                       { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
 
 rfields:
@@ -964,6 +965,10 @@ nonrec_row_var:
 | UNDERSCORE                                                   { fresh_rigid_row_variable `Any }
 | QUESTION                                                     { fresh_row_variable `Any }
 
+/* FIXME:
+ * 
+ * recursive row vars shouldn't be restricted to vfields.
+ */
 row_var:
 | nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }

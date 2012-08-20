@@ -273,24 +273,28 @@ struct
   let tableLit alias_env constraints dt =
     try
       let (_, Some read_type) = datatype' empty_env alias_env (dt, None) in
-      let write_row, needed_row = 
-        match read_type with
-          | `Record (fields, _) -> 
-              (StringMap.fold
-                 (fun label t (write, needed) ->
-                    match lookup label constraints with 
-                      | Some cs ->
-                          if List.exists ((=) `Readonly) cs then
-                            (write, needed)
-                          else (* if List.exists ((=) `Default) cs then *)
-                            (Types.row_with (label, t) write, needed)
-                      | _  ->
-                          let add = Types.row_with (label, t) in
-                            (add write, add needed))
-                 fields
-                 (Types.make_empty_closed_row (), Types.make_empty_closed_row ()))
+      let write_row, needed_row =
+        match TypeUtils.concrete_type read_type with
+          | `Record (fields, _) ->            
+            StringMap.fold
+              (fun label t (write, needed) ->
+                match lookup label constraints with 
+                  | Some cs ->
+                    if List.exists ((=) `Readonly) cs then
+                      (write, needed)
+                    else (* if List.exists ((=) `Default) cs then *)
+                      (Types.row_with (label, t) write, needed)
+                  | _  ->
+                    let add = Types.row_with (label, t) in
+                      (add write, add needed))
+              fields
+              (Types.make_empty_closed_row (), Types.make_empty_closed_row ())
           | _ -> failwith "Table types must be record types"
-      in read_type, `Record write_row, `Record needed_row
+      in
+        (* We deliberately don't concretise the returned read_type in
+           the hope of improving error messages during type
+           inference. *)
+        read_type, `Record write_row, `Record needed_row
     with UnexpectedFreeVar x ->
       failwith ("Free variable ("^ x ^") in table literal")
 end

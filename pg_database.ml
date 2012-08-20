@@ -112,16 +112,61 @@ class pg_database host port dbname user password = object(self)
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
-  method escape_string s = connection#escape_string s
+  method escape_string s =
+    connection#escape_string s
+  method quote_field f =
+    "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" f ^ "\""
+
+
+(* jcheney: Added quoting to avoid problems with mysql keywords. *)
   method make_insert_query (table_name, field_names, vss) =
-    "insert into " ^ table_name ^
-      "("^String.concat "," field_names ^") "^
-      String.concat " union all " (List.map (fun vs -> "select " ^ 
-                                               String.concat "," vs) vss)
+    let insert_table = "insert into " ^ table_name in
+    let quoted_field_names = (List.map self#quote_field field_names) in
+    let body =
+      match field_names, vss with
+        | [],    [_] ->
+            (* HACK:
+               
+               PostgreSQL doesn't allow an empty tuple of columns to
+               be specified for an insert. *)
+            " default values"
+        | [],    _::_::_ ->
+            (* In order to handle this case we need support for the
+               standard mult-row insert syntax (Postgres version 8.2
+               and later), and we will need access to the type of the
+               table. In fact, we only really need the name of one of
+               the columns, c. Then we can do:
+
+               insert into table(c) values (c),...,(c)
+            *)
+            failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
+        | _::_,  _ ->
+            (* HACK:               
+               This translation is compatible with PostgreSQL versions
+               prior to 8.2, but perhaps we should now switch to the
+               more idiomatic multi-row insert supported by version
+               8.2 and later. *)
+            "(" ^ String.concat "," quoted_field_names ^") "^
+              String.concat " union all " (List.map (fun vs -> "select " ^ 
+                                                       String.concat "," vs) vss)
+    in
+      "insert into " ^ table_name ^ body
   (* 
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
+  *) 
+  (* jcheney: Added implementation of make_insert_returning 
+     based on MySQL one, using lastval()
+     Also added explicit code to assign the SERIES field being returned.
+     This is fragile in that it depends on details of PostgreSQL 
+     that may change between versions; it works for version9.0
   *)
+  method make_insert_returning_query 
+      : (string * string list * string list list * string) -> string list =
+    fun (table_name, field_names, vss, returning) ->
+      [self#make_insert_query(table_name,
+                              field_names,
+                              vss) ^ " returning " ^ self#quote_field returning]
 end
 
 let driver_name = "postgresql"

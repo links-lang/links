@@ -725,12 +725,13 @@ struct
               cofv (I.apply_pure (instantiate "-." tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Minus), e1, e2) ->
               cofv (I.apply_pure (instantiate "-" tyargs, [ev e1; ev e2]))
-          | `InfixAppl ((tyargs, `And), e1, e2) ->
-              cofv (I.apply_pure (instantiate "&&" tyargs, [ev e1; ev e2]))
-(*              I.condition (ev e1, ec e2, cofv (I.constant (`Bool false))) *)
-          | `InfixAppl ((tyargs, `Or), e1, e2) ->
-              cofv (I.apply_pure (instantiate "||" tyargs, [ev e1; ev e2]))
-(*              I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2) *)
+          | `InfixAppl ((_tyargs, `And), e1, e2) ->
+              (* IMPORTANT: we compile boolean expressions to
+                 conditionals in order to faithfully capture
+                 short-circuit evaluation *)
+              I.condition (ev e1, ec e2, cofv (I.constant (`Bool false)))
+          | `InfixAppl ((_tyargs, `Or), e1, e2) ->
+              I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2)
           | `UnaryAppl ((_tyargs, `Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | `UnaryAppl ((_tyargs, `FloatMinus), e) ->

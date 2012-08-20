@@ -29,6 +29,7 @@ end
 class virtual database = object(self)
   method virtual driver_name : unit -> string
   method virtual escape_string : string -> string
+  method virtual quote_field : string -> string
   method virtual exec : string -> dbvalue
   method make_insert_query : (string * string list * string list list) -> string =
     fun (table_name, field_names, vss) ->
@@ -97,6 +98,7 @@ object
   method driver_name () = "null"
   method exec query : dbvalue = assert false
   method escape_string = assert false
+  method quote_field = assert false
 end
 
 let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))

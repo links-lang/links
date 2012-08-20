@@ -80,3 +80,8 @@ var f = add_A(add_B(add_C(nocases)));
 #    }
 #
 
+###
+# ((|r) -> c) -> c
+# 
+# sig subtract_l : ((((l:a|r)) -> c) -> c) -> ((((|r)) -> c) -> c)
+# fun subtract_l(h)(k) {h(fun (x) {k(x : (|r) <- (l:a|r))})}

@@ -1665,6 +1665,11 @@ struct
           end
 
   and row sep bound_vars ((policy, vars) as p) (field_env, rv) =
+    (* FIXME:
+       
+       should quote labels when necessary, i.e., when they
+       contain non alpha-numeric characters
+    *)
     let field_strings =
       FieldEnv.fold
         (fun label (f, t) field_strings ->

@@ -346,7 +346,9 @@ module Eval = struct
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) -> 
-        (match value env db, value env name, value env keys, readtype with
+        (* OPTIMISATION: we could arrange for concrete_type to have
+           already been applied here *)
+        (match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
            | `Database (db, params), name, keys, `Record row ->
 	       let unboxed_keys = 
 		 List.map 
@@ -416,13 +418,13 @@ module Eval = struct
         let () = ignore (Database.execute_command delete_query db) in
           apply_cont cont env (`Record [])
     | `CallCC f                   -> 
-        apply cont env (value env f, [`Continuation cont])
+      apply cont env (value env f, [`Continuation cont])
   let eval : Value.env -> program -> Value.t = 
     fun env -> computation env Value.toplevel_cont
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-                            (Value.env * Value.t) =
+  (Value.env * Value.t) =
   fun cont env program ->
     try (
       ignore 
@@ -431,7 +433,7 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
-                                  " while interpreting.")
+                                   " while interpreting.")
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
@@ -444,7 +446,7 @@ let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
       | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
-                                  " while interpreting.")
+                                   " while interpreting.")
       | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
