@@ -6,29 +6,29 @@ typename Organisation = [Department];
 
 var db = database "organisation";
 
-var keytasks    = table "keytasks"    with (dpt : String)                from db;
-var tasks       = table "tasks"       with (emp : String, tsk : String)  from db;
+var keytasks    = table "keytasks"    with (dept : String)                from db;
+var tasks       = table "tasks"       with (employee : String, task : String)  from db;
 var employees   = table "employees"  
-                  with (dpt : String, emp : String, salary : Int)        from db;
+                  with (dept : String, employee : String, salary : Int)        from db;
 var contacts    = table "contacts"
-                  with (dpt : String, contact : String, "client" : Bool) from db;
-var departments = table "departments" with (dpt : String)                from db;
+                  with (dept : String, contact : String, "client" : Bool) from db;
+var departments = table "departments" with (dept : String)                from db;
 
 # construct a nested representation of the organisation
 sig organisation : () -> Organisation
 fun organisation() {
   for (x <-- departments)
-    [(name=x.dpt,
+    [(name=x.dept,
       employees=
-        for (y <-- employees) where (x.dpt == y.dpt)
-          [(name=y.emp,
+        for (y <-- employees) where (x.dept == y.dept)
+          [(name=y.employee,
             tasks=
               for (z <-- tasks)
-              where (y.emp == z.emp)
-                [z.tsk],
+              where (y.employee == z.employee)
+                [z.task],
             salary=y.salary)],
       contacts=
-       for (y <-- contacts) where (x.dpt == y.dpt)
+       for (y <-- contacts) where (x.dept == y.dept)
          [(name=y.contact, "client"=y."client")])]
 }
 
