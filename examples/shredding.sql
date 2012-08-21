@@ -3,7 +3,7 @@
 --
 
 CREATE TABLE contacts (
-    dpt text,
+    dept text,
     contact text,
     client boolean
 );
@@ -13,7 +13,7 @@ CREATE TABLE contacts (
 --
 
 CREATE TABLE departments (
-    dpt text
+    dept text
 );
 
 --
@@ -21,8 +21,8 @@ CREATE TABLE departments (
 --
 
 CREATE TABLE employees (
-    dpt text,
-    emp text,
+    dept text,
+    employee text,
     salary integer
 );
 
@@ -31,7 +31,7 @@ CREATE TABLE employees (
 --
 
 CREATE TABLE keytasks (
-    tsk text
+    task text
 );
 
 --
@@ -39,8 +39,8 @@ CREATE TABLE keytasks (
 --
 
 CREATE TABLE tasks (
-    emp text,
-    tsk text
+    employee text,
+    task text
 );
 
 --
