@@ -375,8 +375,9 @@ object (o : 'self_type)
 
 end
 
-let string_of_ir env comp =
-  pretty 70 ((new stringIR (Env.invert_env env))#computation comp)
+let string_of_ir env (bs,tc) prelude =
+  
+  pretty 70 ((new stringIR (Env.invert_env env))#computation (prelude@bs,tc))
 
 (* Traversal with type reconstruction *)
 (*
@@ -774,7 +775,7 @@ struct
     fst3 ((inliner typing_env IntMap.empty)#computation p)
 end
 
-(** Rename all variable in the given IR piece **)
+(** Rename all variables in the given IR piece **)
 module RenameVariable =
 struct
 
@@ -817,10 +818,15 @@ struct
 		let fields,_ = TypeUtils.effect_row fun_type in
 		StringMap.mem "wild" fields && fst (StringMap.find "wild" fields) = `Present
 
+	 method is_any t = 
+		(* kinda hacky, but handle polymorphism *)
+		try not (o#is_wild t) with _ -> false 
+
 	 method enter_query () = {< in_query = true >}
 	 method exit_query () = {< in_query = false >}
 
 	 method add_duplicated v = {< duplicated_function = IntSet.add v duplicated_function >}
+	 method replace_dup d = {< duplicated_function = d >}
 
 	 method special sp = match sp with
 		| `Query _ when not in_query -> 
@@ -828,10 +834,18 @@ struct
 			 s,t,o#exit_query()
 		| _ -> super#special sp
 
+	 method rec_binding b = super#binding b
+
 	 method binding b = match b with
 		| `FunQ _ when not in_query -> 
 			 let b,o = (o#enter_query())#binding b in
 			 b,o#exit_query()
+		| `Fun (_,(_,bind_list,_),_) -> 
+			 let dup = duplicated_function in
+			 let b,o = {< duplicated_function = List.fold_left (fun set x -> IntSet.add (fst x) set) 
+				  duplicated_function (List.filter (fun x -> o#is_any (fst3 (snd x))) bind_list) 
+				  >}#rec_binding b in
+			 b,o#replace_dup dup
 		| _ -> super#binding b
 
 	 method duplicate_bindings bs = match bs with
@@ -877,8 +891,11 @@ struct
 	 method computation_rec = super#computation
 
 	 method computation (bs,tc) = 
-		let bs,o = super#bindings bs in
+		let _,trans = (new Transform.visitor o#get_type_environment)#bindings bs in
+		let o = {< tyenv = trans#get_type_environment >} in
 		let bs,o = o#duplicate_bindings bs in
+		let _,trans = (new Transform.visitor o#get_type_environment)#bindings bs in
+		let o = {< tyenv = trans#get_type_environment >} in
 		o#computation_rec (bs,tc)
 		  
   end
@@ -919,15 +936,19 @@ struct
 			 let s,t,o = (o#enter_query())#special sp in
 			 s,t,o#exit_query()
 		| _ -> super#special sp
-			 
+
+	 method binder b =
+		let b,o = super#binder b in
+		b, if in_query then o#add_query_vars [fst b] else o
+
 	 method rec_binding = 
 		super#binding
 
-	 method binding b = match b with
+	 method binding b = match b with(*
 		| `Let ((x,_),_) when in_query ->
 			 (o#add_query_vars [x])#rec_binding(b)
 		| `Fun ((x,_),(_,arg,_),_) | `FunQ ((x,_),(_,arg,_),_)  when in_query ->
-			 (o#add_query_vars (x::(List.map fst arg)))#rec_binding b 
+			 (o#add_query_vars (x::(List.map fst arg)))#rec_binding b *)
 		| `FunQ _ when not in_query -> 
 			 let b,o = (o#enter_query())#binding b in
 			 b,o#exit_query()

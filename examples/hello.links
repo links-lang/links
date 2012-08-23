@@ -1,2 +1,4 @@
-print("Hello, world!")
+var s = "Hello, world!" ;
 
+page 
+ <#>{<h1>{stringToXml(s)}</h1>}</#>

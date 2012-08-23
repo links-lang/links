@@ -5,6 +5,7 @@ let (++) = Env.Int.extend
 
 let unbox_xml = function
     | #xmlitem as x -> x
+	 | _ -> failwith ("fail to unbox xml")
 
 let unbox_pair =
   function
@@ -39,14 +40,14 @@ struct
     | `For (gs, so, b) -> 
 		  "for " ^ String.concat ", " 
 			 (List.map (fun (x,source) -> "(" ^ string_of_int x ^ "<-" ^ print source) gs) ^
-			 " when " ^ String.concat ", " (List.map print so) ^ "do " ^ print b
+			 " order by " ^ String.concat ", " (List.map print so) ^ "do " ^ print b
     | `If (c, t, e) -> "if "^ print c ^" then "^ print t ^" else "^ print e
     | `Table (t,db,_fields) -> "Table " ^ t ^ ":" ^ db
     | `Singleton v -> "[" ^ print v ^ "]"
     | `Concat vs -> "[|" ^ String.concat ", " (List.map print vs) ^ "|]"
     | `Record fields -> "{" ^ String.concat ", " (StringMap.to_list (fun _ s -> print s) fields) ^ "}"
     | `Variant (name, v) -> name ^ " of (" ^ print v ^ ")"
-    | `XML xmlitem -> "XML"
+    | #xmlitem -> "XML"
     | `Project (v, name) -> "(" ^ print v ^ ")." ^ name
     | `Erase (names, v) -> 
 		  "rm ("  ^ print v ^ ").(" ^ String.concat ", " (StringSet.elements names) ^ ")"
@@ -284,6 +285,21 @@ struct
 		  | `Constant (`String t), `Database db -> `Table (t,db,fields)
 		  | _ -> assert false
 	 end
+    | XmlNode (tag, attrs, children) ->
+        (* TODO: deal with variables in XML *)
+        let children =
+          List.fold_right
+            (fun v children ->
+               let v = value env v in
+                 List.map unbox_xml (unbox_list v) @ children)
+            children [] in
+        let children =
+          StringMap.fold
+            (fun name v attrs ->
+               `Attr (name, unbox_string (value env v)) :: attrs)
+            attrs children
+        in
+          `Singleton (`Node (tag, children))
 	 | Database db -> begin match value env db with
 		  | `Record f -> 
 				let driver = unbox_string (StringMap.find "driver" f)
@@ -393,7 +409,7 @@ struct
     | `Primitive (f,t), args -> `Apply (f, args, t)
     | `If (c, t, e), args ->  reduce_if_condition (c, apply env (t, args), apply env (e, args))
     | `Apply (f, args, t), args' -> `Apply (f, args @ args', t)
-    | _ -> query_error "Application of non-function"
+    | _f,_ -> query_error "Application of non-function : %s" (string_of_t _f)
 
 
   (** Bunch of optimizing function **)

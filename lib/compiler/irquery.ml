@@ -57,6 +57,7 @@ type value =
   | Table of value * value * (name * base_type) list
   | Database of value
   | Lambda of var list * computation
+  | XmlNode of (name * value name_map * value list)
   
 and tail_computation =
   | Return of value
@@ -90,7 +91,7 @@ type query =
   | `Primitive of string * base_type
   | `Var of var * (string * base_type) list 
   | `Constant of constant
-  | `XML of xmlitem
+  | xmlitem
   ]
 	 
 and env = query Env.Int.t

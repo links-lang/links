@@ -278,22 +278,15 @@ let interact envs =
     interact envs
 
 (* Read Links source code and pretty-print the IR *)
-let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-	 print_endline (Ir.string_of_ir nenv program) ;
-	 print_newline() ;
-	 print_endline 
-		(Show.show Ir.show_closures 
-			(Ir.ClosureTable.program tenv Lib.primitive_vars program))
-	 ;
-	 print_newline() ;
 	 let program = Ir.Doubleling.program tenv program in
 	 let program = Ir.Splicing.program tenv program in
 (*    let program = Ir.ElimDeadDefs.program tenv program in
     let program = Ir.Inline.program tenv program in *)
-    print_endline (Ir.string_of_ir nenv program) ;
+    print_endline (Ir.string_of_ir nenv program prelude) ;
   in
   handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
@@ -329,7 +322,7 @@ let run_file prelude envs filename =
        Webif.serve_request envs prelude filename
     else 
        if Settings.get_value pretty_print_ir then
-         print_ir parse_and_desugar envs filename
+         print_ir parse_and_desugar envs prelude filename
        else if Settings.get_value compile then
          ignore (compile_ir parse_and_desugar envs prelude filename)
        else
@@ -351,7 +344,7 @@ let evaluate_string_in envs v =
   in
     (Settings.set_value interacting false;
      if Settings.get_value pretty_print_ir then
-       print_ir parse_and_desugar envs v
+       print_ir parse_and_desugar envs [] v
      else
      ignore (evaluate parse_and_desugar envs v))
 

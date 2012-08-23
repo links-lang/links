@@ -1,15 +1,22 @@
 
 fun predicat(n) {
-	 n >= 1
+	 n > 1
 }
-
 
 fun execute_query(p) server {
 	 var db = database "people";
 	 var people = table "people" with (i : Int, n : String) from db;
-	 for (row <-- people) where (predicat(row.i)) orderby (-row.i)
+	 for (row <-- people) 
+	  where (predicat(row.i)) 
+	  orderby (-row.i)
      [(name=row.n)]
- 
 }
 
-print(hd(execute_query(predicat)).name)
+fun mapToXml (f,l) {
+	 fold_right(fun (x,p) {<#>{f(x)}{p}</#>},<#></#>,l)
+}
+
+page <ul>{mapToXml (
+	  			  fun (x) {<li>{stringToXml(x.name)}</li>},
+				  execute_query(predicat))
+}</ul>

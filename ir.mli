@@ -105,7 +105,7 @@ val string_of_special : special -> string
 val string_of_computation : computation -> string
 val string_of_program : program -> string
 
-val string_of_ir : int Env.String.t -> program -> string
+val string_of_ir : int Env.String.t -> program -> binding list -> string
 
 module type TRANSFORM =
 sig

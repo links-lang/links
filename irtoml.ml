@@ -18,6 +18,7 @@ type base_type =
   | `Record of (string * base_type) list ]
 
 type code =
+  | Unit
   | Bool of bool
   | Int of num
   | Char of char
@@ -53,6 +54,7 @@ and query_value =
   | `Table of query_value * query_value * (string * base_type) list
   | `Database of query_value
   | `Lambda of var list * query_computation
+  | `XmlNode of (name * query_value name_map * query_value list)
   ]	
 and query_tail_computation =
   [ `Return of query_value
@@ -284,6 +286,7 @@ let lib_funcs = [
   "_addAttributes", ["unbox_list"; "unbox_list"], "box_list", false;
 
   "_intToXml", ["unbox_int"], "box_list", false;
+  "_floatToXml", ["unbox_float"], "box_list", false;
   "_stringToXml", ["unbox_string"], "box_list", false;
   "_intToString", ["unbox_int"], "box_string", false;
   "_stringToInt", ["unbox_string"], "box_int", false;
@@ -451,13 +454,18 @@ struct
 				  )
 				  | None -> `SplicedVariable (translateCode#value (`Variable var))
 			 ) 
-		| `XmlNode _ -> failwith "XmlNode inside query"
+		| `XmlNode (n,nm,l) -> `XmlNode (n,StringMap.map o#value nm,List.map o#value l)
 			 
 	 method tail_computation : Ir.tail_computation -> query_tail_computation = function
 		| `Return v -> `Return (o#value v)
 		| `Apply (v,vl) -> `Apply (o#value v, List.map o#value vl)
 		| `ApplyDB (v,vl) -> `ApplyDB (o#value v, List.map o#value vl)
-		| `ApplyPL _ -> failwith "Apply PL function inside a query"
+		| `ApplyPL (v,_vl) -> 
+			 let rec name = function
+				  `Variable v | `SplicedVariable v ->  Debug.f "var : %i" v 
+				| `TAbs (_,v) | `TApp (v,_) | `Coerce (v,_) -> name v
+				| _ -> ()
+			 in name v ;  assert false
 		| `If (v,c1,c2) -> `If (o#value v, o#computation c1, o#computation c2)
 		| `Case (v,m,vo) ->
 			 let aux ((var,_),c) = (var,o#computation c) in
@@ -467,7 +475,7 @@ struct
 			 `Return (`Table (o#value db, o#value t, QueryType.get_row t_type ))
 		| `Special (`Database db) ->
 			 `Return (`Database (o#value db))
-		| `Special (`Query _) -> failwith "Query"
+		| `Special (`Query _) -> assert false
 		| `Special _ -> failwith "No special except Table, Database or Query inside a query"
 			 
 	 method bindings : Ir.binding list -> query_binding list = function
@@ -489,9 +497,9 @@ struct
 		  
 	 method computation (bl,tc) : query_computation =  match tc with 
 		| `Special(`Query (_,(bl2,tc),types)) -> 
-			 Debug.print (
+		(*	 Debug.print (
 				(Types.string_of_datatype -<- Types.concrete_type ) 
-				  types) ; 
+				  types) ; *)
 			 o#computation (bl@bl2,tc)
 		| _ -> (o#bindings bl, o#tail_computation tc)
 	  
@@ -601,7 +609,10 @@ struct
           `Return v -> o#value v
 
         | `Apply (v, vl) -> 
-            B.box_call (Call (o#value v, List.map o#value vl))
+				if vl = [] then 
+				  B.box_call (Call (o#value v, [Unit]))
+				else
+              B.box_call (Call (o#value v, List.map o#value vl))
 
 		  | `ApplyPL (v, vl) ->
 				o#tail_computation (`Apply (`Project ("pl",v),vl))
@@ -694,17 +705,20 @@ struct
       | v -> super#value v
 
     method tail_computation : tail_computation -> code -> code = fun tc k ->
-      match tc with
+      Tail begin match tc with
           `Return v -> B.box_call (Call (k, [o#value v]))
 
         | `Apply (v, vl) -> 
-            B.box_call (Call (o#value v, k::(List.map o#value vl)))
+				if vl = [] then 
+				  B.box_call (Call (o#value v, [k; Unit]))
+				else
+              B.box_call (Call (o#value v, k::(List.map o#value vl)))
 
 		  | `ApplyPL (v, vl) ->
 				o#tail_computation (`Apply (`Project ("pl",v),vl)) k
 
 		  | `ApplyDB (v, vl) ->
-				B.box_call (Call (Call (Var "call_db",[o#value v]),List.map o#value vl))
+				failwith "ApplyDB inside pl"
 
         | `Case (v, cases, default) ->
             bind_continuation k
@@ -738,13 +752,16 @@ struct
                      Let ("call_k", 
                           B.box_fun (Fun (["_"; "arg"], B.box_call (Call (k, [Var "arg"])))),
                           B.box_call (Call (o#value v, [k; Var "call_k"]))))
-              | `Database v -> Call (Var "database",[o#value v])
+              | `Database v ->  B.box_call (Call (k, [Call (Var "_database",[o#value v])] ))
 				  | `Table (t,db,(t_type,_,_)) ->
-						Table (o#value db, o#value t, QueryType.get_row t_type )
-              | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
+						B.box_call (Call (k, [
+						  Table (o#value db, o#value t, QueryType.get_row t_type )
+						]))
+              | `Query (_,c,_) ->  B.box_call (Call (k, [Query ((new translateQuery o)#computation c)]))
 				  | `Delete _ 
 				  | `Update _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
+		end
 
     method computation : computation -> code -> code = fun (bs, tc) k ->
       o#bindings bs (fun o' -> Tail (o'#tail_computation tc k))
@@ -764,8 +781,8 @@ struct
 		  | `FunQ (binder, (_, f_binders, comp), _) -> 
 				let o' = o#add_bindings [binder] in
 				let args = List.map fst f_binders in
-				LetFunQ (
-				  o'#binder binder, `Lambda (args,(new translateQuery o')#computation comp) , 
+				let o'' = o'#add_bindings f_binders in
+				LetFunQ ( o'#binder binder, `Lambda (args,(new translateQuery o'')#computation comp) , 
 				  rest_f o')
               
         | `Rec funs ->
@@ -852,6 +869,7 @@ struct
 	 | `Database v -> variant "Database" [value v]
 	 | `SplicedVariable c -> code (Call (Var "_splice",[c]))
 	 | `Lambda (vl,c) -> variant "Lambda" [list (List.map (fun x -> text (string_of_int x)) vl); computation c]
+	 | `XmlNode (n,nm,l) -> variant "XmlNode" [string n; name_map value nm; list (List.map value l)]
 		  
   and tail_computation (tc : query_tail_computation) = match tc with
 	 | `Return v -> variant "Return" [value v]
@@ -876,6 +894,7 @@ struct
 			 
   and code_int c top_level = 
 	 match c with
+		| Unit ->  text "l_unit"
 		| Bool x -> text (string_of_bool x)
 		(* Represent integer literals as strings so we don't hit range problems. *)
 		| Int x -> parens (text "num_of_string" ^| code_int (NativeString (Num.string_of_num x)) false )
@@ -901,12 +920,14 @@ struct
 
 		| LetFunQ (name, body, rest) -> 
 			 group ( 
-				group ( text "let" ^| 
-					 nest 2 (
-						group (text name ^| text "=" ) ^| text "_funq" 
-						  ^| parens (value body)
-					 ) 
-				) ^| code_int rest top_level 
+				group ( 
+				  text "let" ^| 
+						nest 2 (
+						  group (text name ^| text "=" ) ^| text "_funq" 
+							 ^| parens (value body)
+						) ) ^|
+					 text ( if top_level then "\n" else "in")
+				^| code_int rest top_level 
 			 )
 				
 		| Fun (args, body) ->
@@ -979,8 +1000,9 @@ struct
 
 		| Tail c -> 
 			 group (
-				(if top_level then text "let _ =\n" else text "" ) ^|
-					 code_int c false)
+				if top_level then 
+				  text "let entry () = begin\n"  ^| code_int c false ^| text "end"
+				else code_int c false )
 			 
 		| Query q -> parens (group (nest 2 ( text "_query" ^| computation q)))
 
@@ -1029,4 +1051,5 @@ let ml_of_ir cps box no_prelude env prelude (bs, tc) =
     (* Hack: this needs to be fixed so top-level bindings are
        properly exposed. *)
     preamble ^
-      (pretty 110 (MLof.code c))
+      (pretty 110 (MLof.code c)) ^
+      postamble

@@ -106,8 +106,9 @@ let unbox_float = function
   | _ -> assert false
 
 let box_func f : value = `Function f
-let unbox_func = function
+let rec unbox_func = function
   | `Function f -> f
+  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> unbox_func (StringMap.find "pl" f)
   | _ -> assert false
 
 let box_funQ f = `FunctionQ f
@@ -155,31 +156,34 @@ let rec string_of_value = function
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
   | #xmlitem as x -> string_of_xmlitem x
-  | `Table (s,db,_) -> "Table (\"^db^\",\"^s^\")"
+  | `Table (s,db,_) -> "Table (" ^ string_of_value db ^ "," ^ string_of_value s ^")"
   | `Database _ -> "Database"
-and
-    string_of_list = function
-      | [] -> "[]"
-      | l ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
-and
-    (* Somewhat stolen from value.ml *)
-    string_of_xmlitem = let format_attr (k, v) =
-      k ^ "=\"" ^ attr_escape v ^ "\""
-    in
-    let format_attrs attrs =
-      match mapstrcat " " format_attr attrs with
-        | "" -> ""
-        | a -> " " ^ a 
-    in
-      function
-        | `XMLText s -> xml_escape s
-        | `XMLNode (name, attrs, children) ->
-            match children with
-              | [] -> "<" ^ name ^ format_attrs attrs ^ " />"
-              | _ -> ("<" ^ name ^ format_attrs attrs ^ ">"
-                         ^ mapstrcat "" string_of_value children
-                         ^ "</" ^ name ^ ">")
-          
+and string_of_list = function
+  | [] -> "[]"
+  | (x::xs) as l -> match x with
+      | `Char _ -> "\"" ^ String.escaped (unbox_string (`List l)) ^ "\""
+      | #xmlitem -> mapstrcat "" string_of_value l
+      | _ ->  "[" ^ mapstrcat ", " string_of_value l ^ "]"
+
+(* Somewhat stolen from value.ml *)
+and string_of_xmlitem = 
+  let format_attr (k, v) =
+    k ^ "=\"" ^ attr_escape v ^ "\""
+  in
+  let format_attrs attrs =
+    match mapstrcat " " format_attr attrs with
+      | "" -> ""
+      | a -> " " ^ a 
+  in
+  function
+    | `XMLText s -> xml_escape s
+    | `XMLNode (name, attrs, children) ->
+        match children with
+          | [] -> "<" ^ name ^ format_attrs attrs ^ " />"
+          | _ -> ("<" ^ name ^ format_attrs attrs ^ ">"
+                  ^ mapstrcat "" string_of_value children
+                  ^ "</" ^ name ^ ">")
+				  
 (* Internal functions used by compiler *)
 let id = box_func identity
 let start = id
@@ -222,7 +226,6 @@ let render_page page=
     mapIndex (fun m i zs -> apply_4 m id k zs (box_int (num_of_int i))) (unbox_list ms) in
   let b_zs = box_list (List.map box_func zs) in
     apply_2 k id (box_list  (List.map (fun z -> z b_zs) zs))
-      
 
 
 (* Library functions *)
@@ -271,6 +274,9 @@ let u__stringToXml s =
 
 let u__intToXml i = 
   u__stringToXml (string_of_num i)
+
+let u__floatToXml i = 
+  u__stringToXml (string_of_float i)
 
 let add_attribute (s, v) = function
   | `XMLNode (n, a, c) ->
@@ -340,33 +346,19 @@ let rec _splice : value -> Irquery.value = function
   | `List [] -> Primitive("Nil", `Record [])
   | `List l as list -> begin match List.hd l with 
 		| `Char c -> Constant (`String (unbox_string list))
-		| _ -> failwith "this is a list !"
+		| _ -> 
+			 List.fold_right 
+				(fun x xl -> ApplyPure(Primitive("Cons",`Dummy),[_splice x; xl]))
+				l (Primitive("Nil",`Dummy))
   end
-  | `Unit -> failwith "Unit value can't be spliced"
-  | `Function _ -> failwith "Function can't be spliced"
-  | `XMLText _ | `XMLNode _ -> failwith "XML inside queries not yet suported"
+  | `XMLText _ 
+  | `XMLNode _ -> failwith "XML inside queries not yet suported"
+  | `Unit -> Extend (StringMap.empty, None)
+  | `Function _ -> assert false
 
 
 let _funq = fun c -> `FunctionQ c
 
-(*
-let _query_typed computation = match Query.compile (None, computation) with
-  | None -> "Unspecified database"
-  | Some (db, q, t) ->
-      let (fieldMap, _), _ = 
-		  Types.unwrap_row(TypeUtils.extract_row t) in
-      let fields =
-		  StringMap.fold
-			 (fun name t fields ->
-            match t with
-				  | `Present, t -> (name, t)::fields
-				  | `Absent, _ -> assert false
-				  | `Var _, t -> assert false)
-			 fieldMap
-			 []
-      in
-      Database.execute_select fields q db
-		*)
 let execute_query computation = match Queryml.compile (None,computation) with
   | None -> failwith "Unspecified database"
   | Some (db, q, t) -> match t with
@@ -393,9 +385,11 @@ let _query computation : value =
   in
   `List (List.map (fun l -> to_record l) raw_result)
   
+let imp = `Function (fun _ -> assert false)
 
-
-	
+let _replaceDocument = imp
+let _getInputValue = imp
+let _registerEventHandlers = imp
 
 (* Main stuff--bits stolen from webif.ml *)
 
@@ -404,7 +398,7 @@ let is_multipart () =
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
 let resume_with_cont cont =
-  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : [ `Function of (value -> value) ]) in
+  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : [> `Function of (value -> value) ]) in
     (unbox_func cont) start
 
 let handle_request entry_f =
