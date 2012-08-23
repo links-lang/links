@@ -1,7 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-%\usepackage[french]{babel}
+\usepackage[english]{babel}
 \usepackage[colorlinks=true]{hyperref}
 \usepackage{mathrsfs}
 \usepackage{geometry}
@@ -56,6 +56,8 @@
 
 \newcommand\module[1]{{\bf #1}}
 
+%comment inside bnf
+\renewcommand\comment[1]{{\color{gray} $//$ #1}}
 
 \begin{document}
 
@@ -90,10 +92,12 @@ The next section will present the query system of \links in more details.
 
 \subsection{The Query system\label{intro:query}}
 
-Queries in \links are integrated as an element of the language. As opposed to most server-side language, you don't write sql strings : you just write usual code and it will be translated into an \sql query at runtime.
+Queries in \links are integrated as an element of the language. As opposed to most server-side languages, you don't write sql strings : you just write usual code and it will be translated into an \sql query at runtime.
 For example, here is a simple query: \linkslst{simplequery.links}
-You can also, make a function which take a predicate and construct a query with it, like in the following example : \linkslst{query_predicat.links}
+You can also make a function which take a predicate and construct a query with it, like in the following example : \linkslst{query_predicat.links}
 
+In usual \sql, the output of a query is a table, that is a list of rows where each row is made of named fields : the columns. Each field can only be a simple type like string, float, integer or boolean.\\
+The natural translation in \links' typesystem is a list of records.\\
 
 This tight integration between queries and the programming language has two consequences :
 \begin{itemize}
@@ -107,13 +111,13 @@ Effects can be described as a way to characterize what a function is doing durin
 
 For exemple, let's loot at the \code{print(s)} function. Its type is \sig{(String) -\{wild\}-> ()}. \sig{wild} is an effect which indicate that this function cannot be run in a query. This make sens since \sql don't have any printing function.
 
-Let's now look at the \code{map(f,l)} function with the type \sig{((a) -b-> c, [a]) -b-> [c]}. If the function \code{f} passed to \code{map} have an effect \sig{b}, the application of the map will also get this effect.\\
+Let's now look at the \code{curry(f)} function with the type \sig{((a, b) -c-> d) -> ((a) -> (b) -c-> d)}. If the function \code{f} passed to \code{curry} have an effect \sig{c}, the application of the curryfied will also get this effect.\\
 
 This will allow us to know if a function can be used inside a query or not.
 
 \section{\links' insides}
 
-\links' compiler and evaluater are implemented in \ocaml. 
+\links' compiler and evaluator are implemented in \ocaml. 
 The code can be separate into two parts. 
 The front-end takes care of various static analysis including type inference and removing any syntactic sugar. 
 At the end of this first stage, the code is in an internal representation defined in the \module{Ir} module and which will be presented in \refsec{ir}. 
@@ -141,40 +145,39 @@ f(x',y')
 ANF is a very simple representation that transform usually complex transformations to very simple ones. It is also isomorphic to CPS\footnote{Continuation Passing Style} (see \hyperref[cps]{the annex} for details).\\
 
 Here is a simplified representation of the internal representation :
-\begin{lstlisting}[language=ML]
-type value =
-  | Constant of constant
-  | Variable of var
-  | Extend of (value name_map * value option)
-  | Project of (name * value)
-  | Erase of (name_set * value)
-  | Inject of (name * value)
-\end{lstlisting}
 
-\begin{lstlisting}[language=ML]
-and tail_computation =
-  | Return of (value)
-  | Apply of (value * value list)
-  | Special of special
-  | Case of (value * (binder * computation) name_map * (binder * computation) option)
-  | If of (value * computation * computation)
+\begin{grammar}
+<computation> ::= <binding>* <tail_computation>
 
-and binding =
-  | Let of  binder * (tyvar list * tail_computation)
-  | Fun of (binder * (tyvar list * binder list * computation))
-  | Rec of (binder * (tyvar list * binder list * computation)) list
+<binding> ::= \
+\alt "let" <binder> "=" <tail_computation>
+\alt "fun" <binder> "(" <binder>* ")" "=" <computation>
+\alt "rec" (<binder> "(" <binder>* ")" "=" <computation>)* \comment{mutually recursive functions}
 
-and special =
-  | Database of value 
-  | Table of (value * value)
-  | Query of computation
+<tail_computation> ::= \ 
+\alt "return" <value>
+\alt <value>"(" <value>* ")" \comment{function application}
+\alt "match" <value> "with" \ 
+  ("case" <binder> "->" <computation>)+ \ 
+  ("case" "default" "->" <computation>)?
+\alt "if" <value> "then" <computation> "else" <computation>
+\alt <special>
 
-and computation = binding list * tail_computation
-\end{lstlisting}
+<special> ::= <database> | <table>
+\alt "query" <computation>
+
+<value> ::= <constant> | <variable>
+\alt "{" (<string> "=" <value>)* ("with" <value>)? "}" \comment{record extension}
+\alt <value>"."<string> \comment{record projection}
+\alt "erase" <value>"."<string> \comment{record suppression}
+\alt <string> <value> \comment{Constructor for sum datatype}
+\end{grammar}
+
 
 A program is of the type \sig{computation} with is formed by a list of \sig{binding} followed by a \sig{tail\_computation}.\\
 Each binding contains a left-hand side with variable name and a right-and side with the possible arguments and the value of the variable. \\
 The type \sig{value} contains usual values like constant and variable, but also record and algebraic type construction.\\
+A \sig{binder} contains information about a variable like it name, it unique Id, the location in the source file and so on.\\
 Finally \sig{special} mostly contains query related values like database, tables and queries.\\
 
 At this point, the type inference is done, so the type of every variable can be easily reconstruct. Every variable also get a unique name. In combination with the ANF, it makes the control flow of the whole program completely explicit.\\
@@ -183,6 +186,28 @@ It's also inside the \module{Ir} module that's some classic program transformati
 
 \subsection{Query normalization \label{querynorm}}
 
+As explained in the introduction, query are composed with functions and values of the language. This mean we need a way to translate it into actual sql. This is done in the \module{Query} module in two steps.
+
+During the first step, we transform the internal representation of the query into another representation. Then we transform this query representation into an \sql subset ready to be printed as an \sql string.
+
+Here is a simple form of the query representation :
+
+\begin{grammar}
+<query> ::= "for" (<ident> "<-\--" <table>)+ ("where" <body>)* "return" <tail>
+
+<body> ::= \ 
+\alt <constant> | <variable>
+\alt "if" <base> "then" <base> "else" <base>
+\alt "{" (<string>"="<body>)* "}" \comment{record declaration}
+\alt <body>"."<string> \comment{record projection}
+\alt <string>"(" <body>* ")" \comment{function application}
+
+<tail> ::= "[" <body> "]"
+\end{grammar}
+
+During the first step, the expression is simplified, mostly by $\beta$-reduction. Only primitives functions present in \sql ( like ``and'' for exemple) are left. Then for comprehension and where clauses are gather to be put together as specified in the \synt{query} rule.
+
+The details of the query normalisation procedure are a bit too complex to be explained in details here but they are avaible in \cite{links:querycomp}.
 
 \subsection{The Irtoml module and the runtime library \label{irtoml}}
 
@@ -198,7 +223,11 @@ There is still an option to output code in direct style, first-class continuatio
 
 \subsection{The runtime library\label{runtime}}
 
+The runtime library is presented in \cite{links:comp}. It's mostly composed by standard functions and by the boxing system. 
 
+Since \links' typesystem is more complex than standard \ocaml's one, values need to be boxed and then unboxed. This also allow to create a polymorphic printint function, used to print the value returned by the program.
+
+Standard functions are composeded by built-in operators (like $+$, $-$, ...), conversion functions and web interaction.
 
 \section{Query compilation in Links}
 
@@ -220,31 +249,102 @@ Therefor, the compilation of query in \links can't be done in a straightforward 
 
 \subsection{Doubleling and splicing}
 
-To handle those two meanings, the adopted solution is in fact very simple : duplicate every non-wild function. This solution is explained in great details in \cite{links:querycomp} which is not yet published. The involved transformations are formalized in great details in this paper. Here, we will only explain the global principle of these in two steps : 
+To handle those two meanings, the adopted solution is in fact very simple : duplicate every non-wild function. We will then deal with the interface between those two worlds.
+
+We will explain the global principle of these in two steps : \emph{doubleling} and \emph{splicing}.
 
 \subsubsection{Duplication of functions}
 
-For every function, we create a database-only function and a programming language-only function. This transformation, called Doubleling, can be done in a typesafe way inside \links by using the effect system : 
+For every function, we create a database-only function and a programming language-only function. This transformation, called \emph{doubleling}, can be done in a typesafe way inside \links by using the effect system : 
 \begin{itemize}
 \item A programming language-only function is a function with the \effect{wild} effect, also called \effect{pl} effect. Only \effect{pl} functions can be called outside a query.
 \item A database-only function is a function with a new effect : the \effect{db} effect. Only \effect{db} functions can be called inside a query.
 \item A non wild function from the \links' code before applying the transformation is considered to have both \effect{pl} and \effect{db} effect : that's the \effect{any} effect.
 \end{itemize}
 
-However, a \effect{any} function can be passed as an argument of another function. We can't know in advance if that's the \effect{pl} or the \effect{db} aspect of the function that will be used. There is multiple way to solve this problem, here we will just pass the couple with both functions and before applying the function, we will select the correct aspect depending on the context.
+However, a \effect{any} function can be passed as an argument of another function. We can't know in advance if that's the \effect{pl} or the \effect{db} aspect of the function that will be used. There is multiple way to solve this problem, here we will just pass the couple with both functions.
+
+So, after this transformation, every non-wild function is, in fact, a couple of function : a \effect{db} one and a \effect{pl} one. We just need to project the right member of the couple when applying the function, according to the context.
 
 \subsubsection{Converting values}
 
-Now that functions have been duplicated, we have two worlds inside our to-be-compiled program : the programming-language world and the database one. The representation of values in this two worlds are different and the typesystem in the database world is much more simple since it his limited by SQL's typesytem. However they may need to communicate. In order to do that, we need a way to convert value from the programming-language to the database. 
+Now that functions have been duplicated, we have two worlds inside our to-be-compiled program : the programming-language world and the database one. The representation of values in this two worlds are different and the typesystem in the database world is much more simple since it's limited by \sql's typesytem. 
 
-The only value going from the \effect{db} world to the \effect{pl} are the output of a query. This is handled easily as output of a query is a list of record whom type is known.
+Database values can only involve the following types :
+\begin{itemize}
+\item Base types, that's integer, float, string, boolean;
+\item Lists;
+\item Records;
+\item Variants.
+\end{itemize}
 
-The other way, transforming \effect{pl} value to be used by \effect{db} functions, is much more common and can involve many types of values.
+However this two worlds will coexist in the compiled program. More specifically, piece of the \effect{db} worlds will exist into the \effect{pl} program and some \effect{pl} variables will be used inside \effect{db} queries. 
 
-\subsection{Implementation}
+The only \effect{db} element inside a \effect{pl} program is a whole query. This query is introduced using a \emph{quotation}. This quotation emphasis the fact the inside of a query is in the \effect{db} world. This will also translate back the output of the query. As said earlier, a query is a list of records of base type so the translation to the \effect{pl} world is easy.\\
+
+The other way, using \effect{pl} variables inside \effect{db} functions, is much more common and can involve many types of values. 
+The operation converting \effect{pl} value to \effect{db} is called \emph{splicing}. For most values, the transformation is trivial.\\
+ The real corner case here is when splicing a \effect{pl} function. A \effect{pl} function can never be used inside a query. We know since the program is correctly typed that this function will never be used. Hence we can simply replace it by the empty record.
+
+\subsubsection{From effects to quotations}
+
+After applying this two transformation, we don't need effects information anymore :
+\begin{itemize}
+\item There is no \effect{any} functions anymore, only \effect{pl} and \effect{db} functions.
+\item In the \effect{pl} world, all elements of the \effect{db} world are introduced by an explicit \emph{quotation}.
+\item In the \effect{db} world, all variables from the \effect{pl} world are introduced by the \emph{splicing} operator.
+\end{itemize}
+
+This new way of representing query inside a regular program is called a quotation-based language as opposed to \links which is an effect-based language. 
+This is for example the case of {\tt LINQ}, a Microsoft language to use queries in a .NET environment (like F\# or C\#). 
+
+This translation from an effect-based language to a quotation-based language is introduced and formalized in \cite{links:querycomp} by using two very simple languages, an effect-based one and a quotation-based one, and by showing a translation from the first to the later.
+
+\section{Implementation}
+
+The implementation has been done in four steps :
+\begin{itemize}
+\item Implement the \emph{doubleling} and the \emph{splicing} as transformation over the internal representation;
+\item Make a new representation based on the IR to be put inside the runtime and make the normalisation procedure to work on this new representation;
+\item Modify the \module{Irtoml} module to also print quoted code;
+\item Modify the runtime library accordingly. 
+\end{itemize}
+
+\subsection{\emph{Doubleling} and \emph{Splicing}}
+
+\subsubsection{New constructors in the IR}
+
+Before actualy implementing those two tranformations, we need to modify the internal representation. We only need four new constructors : Three to handle doubleling and one for splicing. The \emph{quotation} operator is allready in the IR, it's the \ocamlc{Query} constructor from the type \sig{special}.\\
+
+The query function constructor \ocamlc{FunQ} is exactly the same as the \ocamlc{Fun}. We will use native \links records to create the couple of functions so we don't need a constructor for these, but we do need two other constructors : \ocamlc{ApplyPL} and \ocamlc{ApplyDB}. They will replace the \ocamlc{Apply} constructor for duplicated function in \effect{pl} and \effect{db} context.
+
+Thanks to the ANF of the internal representation, splicing we only occurs on variable. This way, we can simply add the constructor \ocamlc{SplicedVariable} with the same signature as \ocamlc{Variable}.\\
+
+Now, we got all the tool we need to actually implement those transformations.
+
+\subsubsection{Implementation of those transformation}
+
+In \links' back-end, visiting the IR is a recurrent job. In order to avoid too much boiler plate, we use a functional version of the so-called ``visitor'' pattern from object-oriented programming. It has been implemented as the \ocamlc{visitor} class.
+
+This class only visit the IR without modifying it. It also recheck type consistency and variable declarations. This is very easy since the IR is mostly annotated.
+
+The implementation of \emph{Doubleling} and \emph{Splicing} are only objects that inherit from the \ocamlc{visitor} class. This reduce the code needed by the implementation to only the useful part.
+
+Two modules, \module{Doubleling} and \module{Splicing}, have been created that deliver only the meaningful functions, the actual visitor is not accessible.\\
+In order to preserve the property of the IR of variable identifiers unicity during doubleling, another module, \module{RenameVariable}, has been implemented that get trough the given element of the IR and rename all the variables.
+
+\subsection{A new runtime representation}
 
 
-\section{Test \& benchmarks}
+
+\subsection{Extension of \module{Irtoml}}
+
+
+\subsection{The new runtime}
+
+
+
+\section{Tests \& benchmarks}
 
 \subsection{Examples}
 
