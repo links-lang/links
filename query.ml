@@ -1361,22 +1361,9 @@ struct
         Debug.print ("Can't apply flatten_inner to: " ^ Show_t.show e);
         assert false
 
-  and flatten_inner_query : t -> t =
-    fun e ->
-      let fi = flatten_inner in
-      let fiq = flatten_inner_query in
-        match e with
-          | `Concat es -> `Concat (List.map fiq es)
-          | `For (tag, gs, os, body) ->
-            `For (tag, gs, List.map fi os, fiq body)
-          | `If (c, t, `Concat []) -> `If (fi c, fiq t, `Concat [])
-          | `Singleton e -> `Singleton (fi e)
-          | e -> 
-            Debug.print ("Can't apply flatten_inner_query to: " ^ Show_t.show e);
-            assert false
+  and flatten_inner_query : t -> t = fun e -> flatten_comprehension e
 
-
-  let rec flatten_comprehension : t -> t =
+  and flatten_comprehension : t -> t =
     function
       | `For (tag, gs, os, body) ->
         `For (tag, gs, os, flatten_comprehension body)
