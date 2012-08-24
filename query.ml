@@ -212,6 +212,10 @@ struct
   (* inner shredding function *)
   let rec shinner a =
     function
+      | `Project p -> `Project p
+      | `Apply ("Empty", [e]) -> `Apply ("Empty", [shred_outer e []])
+      | `Apply ("length", [e]) -> `Apply ("length", [shred_outer e []])
+      | `Apply (f, vs) -> `Apply (f, List.map (shinner a) vs)
       | `Record fields ->
         `Record (StringMap.map (shinner a) fields)
       | e when is_list e ->
@@ -219,7 +223,7 @@ struct
       | e -> e
 
   (* outer shredding function *)
-  let rec shouter a p : t -> t list =
+  and shouter a p : t -> t list =
     function
       | `Concat cs ->
         concat_map (shouter a p) cs
@@ -246,7 +250,7 @@ struct
          Debug.print ("Can't apply shouter to: " ^ Show_t.show e);
          assert false
 
-  let shred_outer q p = `Concat (shouter top p q)
+  and shred_outer q p = `Concat (shouter top p q)
 
   let shred_query : t -> nested_type -> t package =
     fun q t -> package (shred_outer q) t
@@ -1224,11 +1228,8 @@ struct
                 (`Project
                     (`Project (`Var (z, z_fields), "1"), string_of_int i), l)
         end
-      (* For Empty and length we don't care what results the query
-         returns, but just how many results it returns, so we leave
-         the translation of the body until SQL generation. *)
-      | `Apply ("Empty", [e]) -> `Apply ("Empty", [e])
-      | `Apply ("length", [e]) -> `Apply ("length", [e])
+      | `Apply ("Empty", [e]) -> `Apply ("Empty", [lins_inner_query (z, z_fields) ys e])
+      | `Apply ("length", [e]) -> `Apply ("length", [lins_inner_query (z, z_fields) ys e])
       | `Apply (f, es) ->
         `Apply (f, List.map (lins_inner (z, z_fields) ys) es)
       | `Record fields ->
@@ -1242,7 +1243,27 @@ struct
         Debug.print ("Can't apply lins_inner to: " ^ Show_t.show e);
         assert false
 
-  let lins c : let_clause =
+  and lins_inner_query (z, z_fields) ys : t -> t =
+    fun e ->
+      let li = lins_inner (z, z_fields) ys in
+      let liq = lins_inner_query (z, z_fields) ys in
+        match e with
+          | `Concat es -> `Concat (List.map liq es)
+          | `For (tag, gs, os, body) ->
+            `For (tag, gs, List.map li os, liq body)
+          | `If (c, t, `Concat []) -> `If (li c, liq t, `Concat [])
+          (* OPTIMISATION:
+
+             For Empty and length we don't care about what the body
+             returns.
+          *)
+          | `Singleton e -> `Singleton (`Record StringMap.empty)
+          (* | `Singleton e -> `Singleton (li e) *)
+          | e -> 
+            Debug.print ("Can't apply lins_inner_query to: " ^ Show_t.show e);
+            assert false
+
+  let rec lins c : let_clause =
     let gs_out = List.concat (init (gens c)) in
 
     let ys = List.map fst gs_out in
@@ -1291,8 +1312,8 @@ struct
                 where
                   (opt_map (lins_inner (z, z_fields) ys) x_in)
                   (`Singleton (lins_inner (z, z_fields) ys (body c)))))
-        
-  let lins_query : t -> query =
+
+  and lins_query : t -> query =
     function
       | `Concat cs -> List.map lins cs
       | _          -> assert false
@@ -1311,11 +1332,8 @@ struct
     function
       | `Constant c    -> `Constant c
       | `Primitive p   -> `Primitive p
-      (* For Empty and length we don't care what results the query
-         returns, but just how many results it returns, so we leave
-         the translation of the body until SQL generation. *)
-      | `Apply ("Empty", [e]) -> `Apply ("Empty", [e])
-      | `Apply ("length", [e]) -> `Apply ("length", [e])
+      | `Apply ("Empty", [e]) -> `Apply ("Empty", [flatten_inner_query e])
+      | `Apply ("length", [e]) -> `Apply ("length", [flatten_inner_query e])
       | `Apply (f, es) -> `Apply (f, List.map flatten_inner es) 
       | `If (c, t, e)  ->
         `If (flatten_inner c, flatten_inner t, flatten_inner e)
@@ -1342,6 +1360,21 @@ struct
       | e ->
         Debug.print ("Can't apply flatten_inner to: " ^ Show_t.show e);
         assert false
+
+  and flatten_inner_query : t -> t =
+    fun e ->
+      let fi = flatten_inner in
+      let fiq = flatten_inner_query in
+        match e with
+          | `Concat es -> `Concat (List.map fiq es)
+          | `For (tag, gs, os, body) ->
+            `For (tag, gs, List.map fi os, fiq body)
+          | `If (c, t, `Concat []) -> `If (fi c, fiq t, `Concat [])
+          | `Singleton e -> `Singleton (fi e)
+          | e -> 
+            Debug.print ("Can't apply flatten_inner_query to: " ^ Show_t.show e);
+            assert false
+
 
   let rec flatten_comprehension : t -> t =
     function
@@ -2162,6 +2195,8 @@ struct
       | `Singleton _ when unit_query ->
         (* If we're inside an `Empty or a `Length it's safe to ignore
            any fields here. *)
+        (* We currently detect this earlier, so the unit_query stuff here
+           is redundant. *)
         `Select ([], [], `Constant (`Bool true), [])
       | `Singleton (`Record fields) ->
         let fields =
@@ -2203,7 +2238,9 @@ struct
           `Project (x, name)
       | `Constant c -> `Constant c
       | `Primitive "index" -> `RowNumber index
-      | _ -> assert false
+      | e ->
+        Debug.print ("Not a base expression: " ^ Show_t.show e);
+        assert false
 
   (* convert a regexp to a like if possible *)
   and likeify v =
@@ -2276,6 +2313,10 @@ struct
     fun db cs ->
       `UnionAll (List.map (let_clause db) cs, 0)
 
+  (* FIXME:
+     
+     either deal with the range argument properly or get rid of it
+  *)
   let unordered_query_package db (range: (int * int) option) t v =
     let t = Shred.nested_type_of_type t in
     (* Debug.print ("v: "^string_of_t v); *)
