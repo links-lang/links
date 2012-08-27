@@ -868,3 +868,6 @@ let num_of_float f =
           let i = String.index s '.' in
           let s = String.sub s 0 i in
             Num.num_of_string s
+
+let time_seconds() = int_of_float (Unix.time())
+let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
