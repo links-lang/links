@@ -869,3 +869,6 @@ let string_of_float' : float -> string =
       s ^ "0"
     else
       s
+
+let time_seconds() = int_of_float (Unix.time())
+let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
