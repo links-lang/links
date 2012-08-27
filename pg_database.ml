@@ -105,7 +105,9 @@ class pg_database host port dbname user password = object(self)
   method driver_name () = "postgresql"
   method exec : string -> Value.dbvalue = fun query ->
     try
+      let start_time = time_milliseconds() in
       let raw_result = connection#exec query in
+        Debug.print ("query execution time: " ^ string_of_int (time_milliseconds() - start_time));
         new pg_dbresult raw_result
     with
         Postgresql.Error msg ->

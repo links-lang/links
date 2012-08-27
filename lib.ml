@@ -910,6 +910,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+  "serverTimeMilliseconds",
+  (`Server
+     (`PFun (fun _ ->
+               box_int(time_milliseconds()))),
+   datatype "() ~> Int",
+   IMPURE);
+
   "dateToInt",
   (p1 (fun r ->
          match r with
