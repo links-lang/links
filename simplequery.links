@@ -1,0 +1,8 @@
+var my_db = database "my_database" ;
+
+var my_table = table "hello" 
+	 with (word : String) from my_db ;
+
+var results = for (x <-- my_table) [x] ;
+
+for (r <- result) [r.word]
