@@ -28,9 +28,19 @@
 
 \newcommand\refsec[1]{\hyperref[#1]{section \ref*{#1}}}
 
+
+\lstdefinelanguage{links}{
+  morekeywords={var,for},
+  otherkeywords={<-,<--,=},
+  morekeywords=[2]{table,database,with,from},
+  classoffset=0,
+  morestring=[b]"
+}
+
+
 \lstset{
   tabsize=4,
-  basicstyle=\scriptsize,
+  basicstyle=\ttfamily\scriptsize,
   % upquote=true,
   aboveskip={0.5\baselineskip},
   columns=fixed,
@@ -41,18 +51,19 @@
   showtabs=false,
   showspaces=false,
   showstringspaces=false,
-  identifierstyle=\ttfamily,
-  keywordstyle=\color[rgb]{0,0,1},
+  identifierstyle=,
+  keywordstyle=\color[rgb]{0.1,0.1,0.7},
+  keywordstyle=[2]\color[rgb]{0.1,0.6,0.1},
   commentstyle=\color[rgb]{0.133,0.545,0.133},
-  stringstyle=\color[rgb]{0.627,0.126,0.941},
+  stringstyle=\color[rgb]{0.727,0.326,0.2},
 }
 
 \newcommand\sig[1]{{\tt\bf #1}}
 \newcommand\code[1]{{\tt #1}}
-\newcommand\linkslst[1]{{\tt #1}}
+\newcommand\linkslst[1]{\lstinputlisting[language=links]{#1}}
 \newcommand\effect[1]{{\em #1}}
 
-\newcommand\ocamlc[1]{\lstinline[language=ML]{#1}}
+\newcommand\ocamlc[1]{\lstinline[language={[Objective]Caml},basicstyle=\ttfamily\normalsize]{#1}}
 
 \newcommand\module[1]{{\bf #1}}
 
@@ -74,42 +85,54 @@
 \subsection{What is Links ?}
 In a nutshell, Links is a web functional programming language. We can define Links by two goals.
 
-\links aim to avoid code separation between the client, the server and the database. In usual web programming, you keep those three component separated : for example, the client is written in \js, the client in \mysc{PHP} and queries are in \sql. 
-These separation lead to what's called {\it the independence mismatch} problem : How to be sure than the type of data get by the \sql query fit what the server expect ? 
+\links aim to avoid code separation between the client, the server and the database. In usual web programming, you keep these three components separated, for example: the client is written in \js, the client in \mysc{PHP} and queries are in \sql. 
+This separation leads to what is called {\it the independence mismatch} problem : How to be sure that the type of data received by the SQL Query, fits the server expectations?
 
 One of the first \links' related article \cite{links:tiers} was called ``web programming without tiers'' : In \links, there is only one language for the client, the server and the queries. 
-The strong type system ensure that data traveling between those three parts will properly work together. 
-The language itself will decide if the function should be on the server or the client side, ensuring data availability.
+The strong type system ensures that data traveling between these three parts will properly work together. 
+The language itself will decide if the function should be on the server or on the client side, ensuring data availability.
 
-In \links, the client part is compiled in \js and the server part is evaluated.
-\\
+In \links, the client part is compiled in \js and the server part is interpreted.
 
-Another goal of \links is to use the functional paradigm and a strong type system to ease web programming with usefull abstractions. \cite{links:formlets} and \cite{links:effect} introduce new concepts to manipulate form components and queries in a strongly typed way.\\
+Another goal of \links is to use the functional paradigm and a strong type system to ease web programming with useful abstractions. \cite{links:formlets} and \cite{links:effect} introduce new concepts such as the manipulation of form components and queries in a strongly typed way.\\
 
-During a previous project \cite{links:comp}, a compiler for the server part as been done, but this compiler is incomplete since it don't handle queries. The goal of this internship is to allow queries in \links to be compiled.\\
+Apart from theses web functionality, \links is a fully featured strongly typed functional language with algebraic datatype, pattern matching, lambda abstraction and so on.\\
+
+During a previous project \cite{links:comp}, a compiler for the server part as been done, but this compiler is incomplete since it does not handle queries. The goal of this internship is to allow queries in \links to be compiled.\\
 
 The next section will present the query system of \links in more details.
 
 \subsection{The Query system\label{intro:query}}
 
-Queries in \links are integrated as an element of the language. As opposed to most server-side languages, you don't write sql strings : you just write usual code and it will be translated into an \sql query at runtime.
-For example, here is a simple query: \linkslst{simplequery.links}
-You can also make a function which take a predicate and construct a query with it, like in the following example : \linkslst{query_predicat.links}
+Queries in \links are integrated as an element of the language. As opposed to most server side languages, you does not write sql strings : you just write the usual code and it will be translated into an \sql query during runtime.
 
-In usual \sql, the output of a query is a table, that is a list of rows where each row is made of named fields : the columns. Each field can only be a simple type like string, float, integer or boolean.\\
+As an example, here is a simple piece of \links code with a query: 
+\linkslst{simplequery.links}
+The first line is a database declaration. The details on how to connect to this database through the network is given by a configuration file.\\
+Then a table is declared, with its type which must be some fields of basic types. Here it's only one field \code{``word''} of type \sig{String}.\\
+After this declaration, a query is done, using a for comprehension with the long arrow \code{<-\--}. This query fetch everything from the table. This is exactly equivalent to the \sql code :\\ \verb+select * from hello+.\\
+ Finally a proper for comprehension, with a short arrow \code{<-}, project the field \code{word} of every element of the result.\\
+The output of our small program is a list of strings. With the proper table :
+\begin{lstlisting}
+["hello", "world", "!"] : [String]
+\end{lstlisting}\ 
+
+You can of course make more complex queries by using a where clause, an orderby clause or by applying treatment to the output.\\
+
+Usually in \sql, the output of a query is a table, which is a list of rows where each row is made of named fields : the columns. Each field can only be a simple type like string, float, integer or boolean.\\
 The natural translation in \links' typesystem is a list of records.\\
 
-This tight integration between queries and the programming language has two consequences :
+This tight integration between queries and the programming language has two consequences:
 \begin{itemize}
-\item The language must ensure than every functions that appear inside a query can actually be translated. For example you can't translate recursive functions to \sql.
-\item Each function can have up to two meanings : a \effect{query} meaning and a \effect{language} meaning.
+\item The language must ensure than every functions that appears inside a query can actually be translated. For example you cannot translate recursive functions to \sql.
+\item Each function can have up to two meanings: a \effect{query} meaning and a \effect{language} meaning.
 \end{itemize}
 
-Effects, as described in \cite{links:effect}, allow \links' type system to handle those specificity nicely.\\
+Effects, as described in \cite{links:effect}, allow \links' type system to handle that specificity nicely.\\
 
 Effects can be described as a way to characterize what a function is doing during its computation. 
 
-For exemple, let's loot at the \code{print(s)} function. Its type is \sig{(String) -\{wild\}-> ()}. \sig{wild} is an effect which indicate that this function cannot be run in a query. This make sens since \sql don't have any printing function.
+For example, let's look at the \code{print(s)} function. Its type is \sig{(String) -\{wild\}-> ()}. \sig{wild} is an effect which indicate that this function cannot be run in a query. This makes sense since \sql does not have a printing function.
 
 Let's now look at the \code{curry(f)} function with the type \sig{((a, b) -c-> d) -> ((a) -> (b) -c-> d)}. If the function \code{f} passed to \code{curry} have an effect \sig{c}, the application of the curryfied will also get this effect.\\
 
@@ -122,29 +145,29 @@ The code can be separate into two parts.
 The front-end takes care of various static analysis including type inference and removing any syntactic sugar. 
 At the end of this first stage, the code is in an internal representation defined in the \module{Ir} module and which will be presented in \refsec{ir}. 
 
-Then, the backend will transform this internal representation into different forms.\\
+Then the backend will transform this internal representation into different forms.\\
 The client side code will be extracted from it and compile to \js by the \module{Irtojs} module.\\
 The server side will be evaluated by the \module{Evalir} module or compiled to \ocaml by the \module{Irtoml} module that will be presented \refsec{irtoml}.\\
 In case the server side is evaluated, the \module{Query} module handle the query normalization that will be explained \refsec{querynorm}.
 
 \subsection{The internal representation \label{ir}}
 
-The internal representation of \links is in ANF\footnote{A normal form}. This a representation of a program where every argument is trivial and don't need any computation to be evaluated. 
+The internal representation of \links is in ANF\footnote{A normal form}. This a representation of a program where every argument is trivial and does not need any computation to be evaluated. 
 
-For exemple this program :
-\begin{lstlisting}[language=ML]
+For example this program:
+\begin{lstlisting}[language={[Objective]Caml}]
 f(g(x),h(y))
 \end{lstlisting}
-Can be converted in ANF :
-\begin{lstlisting}[language=ML]
+Can be converted in ANF:
+\begin{lstlisting}[language={[Objective]Caml}]
 let x'=g(x) in
 let y'=h(y) in
 f(x',y')
 \end{lstlisting}
 
-ANF is a very simple representation that transform usually complex transformations to very simple ones. It is also isomorphic to CPS\footnote{Continuation Passing Style} (see \hyperref[cps]{the annex} for details).\\
+ANF is a very simple representation that transforms usual complex transformations to very simple ones. It is also isomorphic to CPS\footnote{Continuation Passing Style} (see \hyperref[cps]{the annex} for details).\\
 
-Here is a simplified representation of the internal representation :
+Here is a simplified representation of the internal representation:
 
 \begin{grammar}
 <computation> ::= <binding>* <tail_computation>
@@ -176,21 +199,21 @@ Here is a simplified representation of the internal representation :
 
 A program is of the type \sig{computation} with is formed by a list of \sig{binding} followed by a \sig{tail\_computation}.\\
 Each binding contains a left-hand side with variable name and a right-and side with the possible arguments and the value of the variable. \\
-The type \sig{value} contains usual values like constant and variable, but also record and algebraic type construction.\\
+The type \sig{value} contains ordinary values like constant and variable, but also records and algebraic type construction.\\
 A \sig{binder} contains information about a variable like it name, it unique Id, the location in the source file and so on.\\
 Finally \sig{special} mostly contains query related values like database, tables and queries.\\
 
-At this point, the type inference is done, so the type of every variable can be easily reconstruct. Every variable also get a unique name. In combination with the ANF, it makes the control flow of the whole program completely explicit.\\
+At this point, the type inference is done, so the type of every variable can be easily reconstructed. Every variable also get a unique name. In combination with the ANF, it makes the control flow of the whole program completely explicit.\\
 
 It's also inside the \module{Ir} module that's some classic program transformation are defined, such as dead variables elimination or inlining.
 
 \subsection{Query normalization \label{querynorm}}
 
-As explained in the introduction, query are composed with functions and values of the language. This mean we need a way to translate it into actual sql. This is done in the \module{Query} module in two steps.
+As explained in the introduction, query are composed with functions and values of the language. This means we need a way to translate it into actual sql. This is done in the \module{Query} module in two steps.
 
 During the first step, we transform the internal representation of the query into another representation. Then we transform this query representation into an \sql subset ready to be printed as an \sql string.
 
-Here is a simple form of the query representation :
+Here is a simple form of the query representation:
 
 \begin{grammar}
 <query> ::= "for" (<ident> "<-\--" <table>)+ ("where" <body>)* "return" <tail>
@@ -205,19 +228,19 @@ Here is a simple form of the query representation :
 <tail> ::= "[" <body> "]"
 \end{grammar}
 
-During the first step, the expression is simplified, mostly by $\beta$-reduction. Only primitives functions present in \sql ( like ``and'' for exemple) are left. Then for comprehension and where clauses are gather to be put together as specified in the \synt{query} rule.
+During the first step, the expression is simplified, mostly by $\beta$-reduction. Only primitives functions already present in \sql ( like ``and'' for example) are left. Then for comprehension and where clauses are gathered to be put together as specified in the \synt{query} rule.
 
-The details of the query normalisation procedure are a bit too complex to be explained in details here but they are avaible in \cite{links:querycomp}.
+The details of the query normalisation procedure are a bit too complex to be explained in details here but they are available in \cite{links:querycomp}.
 
 \subsection{The Irtoml module and the runtime library \label{irtoml}}
 
 A previous internship \cite{links:comp} has been done by Steven Holmes several years ago on compiling the server-side of \links. The target choose was \ocaml which make the compilation of some high level features of \links far easier than if the target was a lower level language. 
 
-In fact, the target of the compiler is a subset of the \ocaml language described in \hyperref[ocamlsubset]{the annex}. You notice that this is not in ANF anymore. Keeping the code in ANF may be possible but would involve extra work and is not needed to output valid ocaml code.
+In fact, the target of the compiler is a subset of the \ocaml language described in \hyperref[ocamlsubset]{the annex}. You can notice that this is not in ANF anymore. Keeping the code in ANF may be possible but would involve extra work and is not needed to output valid ocaml code. The compiler is not translating only the asked code but is also a prelude with some standard functions written in links.
 
-The compilation itself is done it two steps : first, the internal representation is translated into this subset, then this subset is printed as \ocaml code. The first is also when others smaller tasks are done such as handle boxing.
+The compilation itself is done it two steps: first, the internal representation is translated into this subset, then this subset is printed as \ocaml code. The first is also when others smaller tasks are done such as handle boxing.
 
-As opposed to \ocaml, \links handle first-class continuation. This mean that the continuation of the program can be manipulate as a regular function. This is not possible in usual programming style in \ocaml, but it is possible in CPS. 
+As opposed to \ocaml, \links handles first-class continuation. This mean that the continuation of the program can be manipulated as a regular function. This is not possible in usual programming style in \ocaml, but it is possible in CPS. 
 As said \refsec{ir}, ANF is isomorphic to CPS, so transforming one to another is very easy. This task is also done during the first step.\\
 There is still an option to output code in direct style, first-class continuation and some client-server communication features will not be available, but the debugging is far easier due to the increased readability of the output code for human eyes.
 
@@ -225,13 +248,13 @@ There is still an option to output code in direct style, first-class continuatio
 
 The runtime library is presented in \cite{links:comp}. It's mostly composed by standard functions and by the boxing system. 
 
-Since \links' typesystem is more complex than standard \ocaml's one, values need to be boxed and then unboxed. This also allow to create a polymorphic printint function, used to print the value returned by the program.
+Since \links' typesystem is more complex than standard \ocaml's ones, values need to be boxed and then unboxed. This also allow to create a polymorphic printint function, used to print the value returned by the program.
 
-Standard functions are composeded by built-in operators (like $+$, $-$, ...), conversion functions and web interaction.
+Standard functions are composed by built-in operators (like $+$, $-$, ...), conversion functions and web interaction. Every standard function have a name starting by \ocamlc{\_}
 
 \section{Query compilation in Links}
 
-As said in the introduction, the goal of this project is to compiler queries. We will first explain why this is difficult and wasn't handle in the first place. We will then show the theoretical solutions and finally the implementation of those solutions.
+As said in the introduction, the goal of this project is to compiler queries. We will first explain why this is difficult and was not handled in the first place. We will then show the theoretical solutions and finally the implementation of those solutions.
 
 \subsection{Issues raised by query compilation}
 
@@ -239,46 +262,48 @@ To correctly understand the issues raised by query during the compilation, we fi
 
 To evaluate some code, you construct a program that will do some actions according to this code. If you want to change the meaning of the code, you can simply change the actions triggered by the code. 
 
-This is how is evaluated \links' code : A first evaluator, in the \module{Eval} module, is evaluating the internal representation, and when a query is involved, the \module{Eval} module transmit the concerned part of the code to the \module{Query} module presented \refsec{querynom} which is basically another evaluator.
+This is how is evaluated \links' code: A first evaluator, in the \module{Eval} module, is evaluating the internal representation, and when a query is involved, the \module{Eval} module transmit the concerned part of the code to the \module{Query} module presented \refsec{querynom} which is basically a JIT compiler to sql.
 
-This allow to have multiple meaning for the same piece of code without actually modifying the code.\\
+This allow to have multiple meanings for the same piece of code without actually modifying the code.\\
 
-A compiler translate the code from a language to another language. This other language have a known fixed meaning and will be later evaluated or compiled to a third language. This mean we can't change the meaning of the code without modifying the code. However, as said \refsec{intro:query}, every non-wild function in \links have two meanings.
+A compiler translate the code from a language to another language. This other language has a known fixed meaning and will be later evaluated or compiled to a third language. This means we can't change the meaning of the code without modifying the code. However, as said in \refsec{intro:query}, every non-wild function in \links has two meanings.
 
-Therefor, the compilation of query in \links can't be done in a straightforward way.
+Therefore, the compilation of query in \links can't be done in a straightforward way.
+
+Of course, we can't compile queries in advance because queries are dynamically construct during the execution of the program and most of the normalization is a global transformation over the query.  
 
 \subsection{Doubleling and splicing}
 
-To handle those two meanings, the adopted solution is in fact very simple : duplicate every non-wild function. We will then deal with the interface between those two worlds.
+To handle those two meanings, the adopted solution is in fact very simple: duplicate every non-wild function. We will then deal with the interface between those two worlds.
 
-We will explain the global principle of these in two steps : \emph{doubleling} and \emph{splicing}.
+We will explain the global principle of these in two steps: \emph{doubleling} and \emph{splicing}.
 
 \subsubsection{Duplication of functions}
 
-For every function, we create a database-only function and a programming language-only function. This transformation, called \emph{doubleling}, can be done in a typesafe way inside \links by using the effect system : 
+For every function, we create a database-only function and a programming language-only function. This transformation, called \emph{doubleling}, can be done in a typesafe way inside \links by using the effect system: 
 \begin{itemize}
 \item A programming language-only function is a function with the \effect{wild} effect, also called \effect{pl} effect. Only \effect{pl} functions can be called outside a query.
-\item A database-only function is a function with a new effect : the \effect{db} effect. Only \effect{db} functions can be called inside a query.
-\item A non wild function from the \links' code before applying the transformation is considered to have both \effect{pl} and \effect{db} effect : that's the \effect{any} effect.
+\item A database-only function is a function with a new effect: the \effect{db} effect. Only \effect{db} functions can be called inside a query.
+\item A non wild function from the \links' code before applying the transformation is considered to have both \effect{pl} and \effect{db} effect: that is the \effect{any} effect.
 \end{itemize}
 
-However, a \effect{any} function can be passed as an argument of another function. We can't know in advance if that's the \effect{pl} or the \effect{db} aspect of the function that will be used. There is multiple way to solve this problem, here we will just pass the couple with both functions.
+However, an \effect{any} function can be passed as an argument of another function. We can't know in advance if that's the \effect{pl} or the \effect{db} aspect of the function that will be used. There is multiple ways to solve this problem, here we will just pass the couple with both functions.
 
-So, after this transformation, every non-wild function is, in fact, a couple of function : a \effect{db} one and a \effect{pl} one. We just need to project the right member of the couple when applying the function, according to the context.
+So, after this transformation, every non-wild function is, in fact, a couple of functions: a \effect{db} one and a \effect{pl} one. We just need to project the right member of the couple when applying the function, according to the context.
 
 \subsubsection{Converting values}
 
-Now that functions have been duplicated, we have two worlds inside our to-be-compiled program : the programming-language world and the database one. The representation of values in this two worlds are different and the typesystem in the database world is much more simple since it's limited by \sql's typesytem. 
+Now that functions have been duplicated, we have two worlds inside our to-be-compiled program: the programming-language world and the database one. The representation of values in this two worlds are different and the typesystem in the database world is much more simple since it is limited by \sql's typesytem. 
 
-Database values can only involve the following types :
+Values inside a query can only involve the following types:
 \begin{itemize}
-\item Base types, that's integer, float, string, boolean;
+\item Base types, that is integer, float, string, boolean;
 \item Lists;
 \item Records;
 \item Variants.
 \end{itemize}
 
-However this two worlds will coexist in the compiled program. More specifically, piece of the \effect{db} worlds will exist into the \effect{pl} program and some \effect{pl} variables will be used inside \effect{db} queries. 
+However these two worlds will coexist in the compiled program. More specifically, piece of the \effect{db} world will exist into the \effect{pl} program and some \effect{pl} variables will be used inside \effect{db} queries. 
 
 The only \effect{db} element inside a \effect{pl} program is a whole query. This query is introduced using a \emph{quotation}. This quotation emphasis the fact the inside of a query is in the \effect{db} world. This will also translate back the output of the query. As said earlier, a query is a list of records of base type so the translation to the \effect{pl} world is easy.\\
 
@@ -288,7 +313,7 @@ The operation converting \effect{pl} value to \effect{db} is called \emph{splici
 
 \subsubsection{From effects to quotations}
 
-After applying this two transformation, we don't need effects information anymore :
+After applying this two transformations, we do not need effects information anymore:
 \begin{itemize}
 \item There is no \effect{any} functions anymore, only \effect{pl} and \effect{db} functions.
 \item In the \effect{pl} world, all elements of the \effect{db} world are introduced by an explicit \emph{quotation}.
@@ -302,10 +327,10 @@ This translation from an effect-based language to a quotation-based language is 
 
 \section{Implementation}
 
-The implementation has been done in four steps :
+The implementation has been done in four steps:
 \begin{itemize}
 \item Implement the \emph{doubleling} and the \emph{splicing} as transformation over the internal representation;
-\item Make a new representation based on the IR to be put inside the runtime and make the normalisation procedure to work on this new representation;
+\item Make a new representation based on the IR to be put inside the runtime and make the normalization procedure to work on this new representation;
 \item Modify the \module{Irtoml} module to also print quoted code;
 \item Modify the runtime library accordingly. 
 \end{itemize}
@@ -314,50 +339,69 @@ The implementation has been done in four steps :
 
 \subsubsection{New constructors in the IR}
 
-Before actualy implementing those two tranformations, we need to modify the internal representation. We only need four new constructors : Three to handle doubleling and one for splicing. The \emph{quotation} operator is allready in the IR, it's the \ocamlc{Query} constructor from the type \sig{special}.\\
+Before actually implementing those two transformations, we need to modify the internal representation presented in \refsec{ir}. We only need four new constructors: Three to handle doubleling and one for splicing. The \emph{quotation} operator is already in the IR, it's the \ocamlc{Query} constructor from the type \sig{special}.\\
 
-The query function constructor \ocamlc{FunQ} is exactly the same as the \ocamlc{Fun}. We will use native \links records to create the couple of functions so we don't need a constructor for these, but we do need two other constructors : \ocamlc{ApplyPL} and \ocamlc{ApplyDB}. They will replace the \ocamlc{Apply} constructor for duplicated function in \effect{pl} and \effect{db} context.
+The query function constructor \ocamlc{FunQ} is exactly the same as the \ocamlc{Fun}. We will use native \links records to create the couple of functions so we does not need a constructor for these, but we do need two other constructors: \ocamlc{ApplyPL} and \ocamlc{ApplyDB}. They will replace the \ocamlc{Apply} constructor for duplicated functions in \effect{pl} and \effect{db} context.
 
 Thanks to the ANF of the internal representation, splicing we only occurs on variable. This way, we can simply add the constructor \ocamlc{SplicedVariable} with the same signature as \ocamlc{Variable}.\\
 
-Now, we got all the tool we need to actually implement those transformations.
+Now, we have got all the tools we need to actually implement these transformations.
 
 \subsubsection{Implementation of those transformation}
 
 In \links' back-end, visiting the IR is a recurrent job. In order to avoid too much boiler plate, we use a functional version of the so-called ``visitor'' pattern from object-oriented programming. It has been implemented as the \ocamlc{visitor} class.
 
-This class only visit the IR without modifying it. It also recheck type consistency and variable declarations. This is very easy since the IR is mostly annotated.
+This class only visits the IR without modifying it. It also rechecks type consistency and variable declarations. This is very easy since the IR is mostly annotated.
 
-The implementation of \emph{Doubleling} and \emph{Splicing} are only objects that inherit from the \ocamlc{visitor} class. This reduce the code needed by the implementation to only the useful part.
+The implementation of \emph{Doubleling} and \emph{Splicing} are only objects that inherit from the \ocamlc{visitor} class. This reduces the code needed by the implementation to only the useful part.
 
-Two modules, \module{Doubleling} and \module{Splicing}, have been created that deliver only the meaningful functions, the actual visitor is not accessible.\\
-In order to preserve the property of the IR of variable identifiers unicity during doubleling, another module, \module{RenameVariable}, has been implemented that get trough the given element of the IR and rename all the variables.
+Two modules, \module{Doubleling} and \module{Splicing}, have been created to deliver only the meaningful functions, the actual visitor is not accessible.\\
+In order to preserve the property of the IR of variable identifiers unicity during doubleling, another module, \module{RenameVariable}, has been implemented that get through the given element of the IR and rename all the variables.
 
-\subsection{A new runtime representation}
+\subsection{A new internal representation}
 
+The query normalization procedure take the IR as argument, so we need to embed the IR in our compile file. Since we only need IR to represent queries, we can simplify it. Since we're inside query, we can get rid of the following constructors.
+\begin{itemize}
+\item Impossible constructors: \ocamlc{Rec} to introduce recursive functions can never appear inside a query.
+\item Redundant constructors: Inside a query, only one \ocamlc{Apply} is needed. Element that needs it are already spliced so we do not need a constructor for that. Also, there is no \ocamlc{Special} constructor anymore since most of them are no use inside query. Tables and Databases are treated as values.
+\end{itemize}
 
+We also use a \ocamlc{Lambda} constructor for \effect{pl} functions outside queries. We know by construction that, inside a query, this lambda will always be applied since queries have a flat type.
+
+For the sake of modularity, this new representation has been put in a new module, \module{IrQuery} that is used by the runtime library. We also need to adapt the query normalization procedure to this new IR. This modification is mostly straight forward since we only removed elements incompatible with queries.
 
 \subsection{Extension of \module{Irtoml}}
 
+Previously, the compiler was raising an error when getting some query code. Of course we need to change that.
 
-\subsection{The new runtime}
+As explained \refsec{irtoml}, there is two steps : translate IR to a subset of \ocaml then printing this subset. Our \effect{pl} code will still be translated to this subset but we need to translate \effect{db} code to something much like the runtime IR for queries presented in the previous section.
 
+This IR is a slight variation from the runtime IR, we only need to get the spliced operator back. We also need quotation operators inside our \ocaml subset : one for queries and another one for \effect{db} functions. Respectively \ocamlc{Query} and \ocamlc{LetFunQ}.\\
+\ocamlc{Query} introduces a \sig{computation} from the IR and \ocamlc{LetFunQ} is exactly like a \ocamlc{Let} but introducing a \sig{value} from the IR. This value will always be a \ocamlc{Lambda}.\\
 
+We now have two mutually recursive translators from the IR to the \ocaml subset. The previous work was using an object to code the translator so the translator for queries was implemented the same way. When encountering a quotation, the \effect{db} translator is called and takes the \effect{pl} translator as argument. This is need in order to properly translate spliced variables with the correct \effect{pl} environment.
+Spliced variables are translated into a call to a runtime function, \ocamlc{\_splice}, with the variable as argument. Hence we don't need the \ocamlc{SplicedVariable} constructor on the runtime IR anymore.\\
 
-\section{Tests \& benchmarks}
+After this translation, the result need to be printed. The previous printer has been extended to work on the IR. IR printing is very simple since everything is printed as a variant following the runtime IR datatype.
 
-\subsection{Examples}
+\subsection{The new runtime library}
 
-\subsection{Benchmarks}
+After all theses modification, we need to extend the runtime library to support queries, this has been done in two ways. 
+
+The boxed values type has been extended to support query-specific values like tables, databases and \effect{db} functions. A query do not need to some specific boxing, since from the point of view of the \effect{pl} world, the output is a regular list of records.
+
+Some new functions has been added to the library, mainly concerning connections to databases and quotation/splicing operators. Bindings for various databases are already done in \links' evaluator but they involve using values from the \module{Evalir} module. For the ProstgreSQL binding, this part has been rewritten to be used inside the runtime. Only this binding is available for now.
+
+\section{Benchmarks}
 
 \section{Conclusion}
 
 \begin{thebibliography}{99}
-\bibitem{links:tiers} \href{http://groups.inf.ed.ac.uk/links/papers/links-fmco06.pdf}{Links: web programming without tiers} Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop
-\bibitem{links:formlets} \href{http://groups.inf.ed.ac.uk/links/papers/formlets-essence.pdf}{The essence of form abstraction} Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop
-\bibitem{links:effect} \href{http://homepages.inf.ed.ac.uk/slindley/papers/corelinks.pdf}{Row-based effect types for database integration} Sam Lindley and James Cheney
-\bibitem{links:comp} \href{http://groups.inf.ed.ac.uk/links/papers/undergrads/steven.pdf}{Compiling Links server-side code}. Steven Holmes
-\bibitem{links:querycomp}
+\bibitem{links:tiers} \href{http://groups.inf.ed.ac.uk/links/papers/links-fmco06.pdf}{Links: web programming without tiers}: Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop.
+\bibitem{links:formlets} \href{http://groups.inf.ed.ac.uk/links/papers/formlets-essence.pdf}{The essence of form abstraction}: Ezra Cooper, Sam Lindley, Philip Wadler and Jeremy Yallop.
+\bibitem{links:effect} \href{http://homepages.inf.ed.ac.uk/slindley/papers/corelinks.pdf}{Row-based effect types for database integration}: Sam Lindley and James Cheney.
+\bibitem{links:comp} \href{http://groups.inf.ed.ac.uk/links/papers/undergrads/steven.pdf}{Compiling Links server-side code}: Steven Holmes.
+\bibitem{links:querycomp} Effective Quotation: James Cheney, Sam Lindley and Philip Wadler
 \end{thebibliography}
 
 \section*{Annex}
@@ -365,18 +409,12 @@ In order to preserve the property of the IR of variable identifiers unicity duri
 \subsection*{Continuation Passing Style\label{cps}}
 
 \subsection*{The targeted \ocaml subset\label{ocamlsubset}}
-\begin{lstlisting}[language=ML]
+\begin{lstlisting}[language={[Objective]Caml}]
 type code =
-  | Unit
-  | Bool of bool
-  | Int of num
-  | Char of char
-  | NativeString of string
-  | Float of float
+  | Unit | Bool of bool | Int of num | Char of char | NativeString of string | Float of float
   | Var of string
   | Rec of (string * string list * code) list * code
   | Fun of string list * code 
-  | LetFunQ of string * query_value * code
   | Let of string * code * code
   | If of (code * code * code)
   | Call of (code * code list)
@@ -384,11 +422,8 @@ type code =
   | Triple of code * code * code
   | Lst of code list
   | Case of code * ((code * code) list) * ((code * code) option)
-  | Die of code
-  | Query of query_computation
   | Table of code * code * (string * base_type) list
   | Tail of code
-  | Empty
 \end{lstlisting}
 
 \end{document}
