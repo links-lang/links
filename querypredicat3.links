@@ -1,0 +1,1 @@
+fun pred (x) {x > 3}

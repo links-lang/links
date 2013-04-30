@@ -1,0 +1,14 @@
+var my_db = database "my_database" ;
+var my_table = table "people" with (i : Int, n : String) from my_db ;
+
+fun do_query (p) {
+  var resultQuery = for (x <-- my_table) where (p(x.i)) [x] ; /* query and filter by p */
+	 
+  var fetchTable = for (t <-- my_table) [t] ; /* fetch all of my_table */
+  var resultList = for (x <- fetchTable) where (p(x.i)) [x] ; /* list filtering by p */
+  (resultQuery == resultList)
+}
+
+fun pred (x) {x > 3}
+
+do_query(pred)

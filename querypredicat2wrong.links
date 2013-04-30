@@ -1,0 +1,11 @@
+var my_db = database "my_database" ;
+var my_table = table "people" 
+	 with (i : Int, n : String) from my_db ;
+
+fun do_query (p) {
+  for (x <-- my_table) where (p(x.i)) [x]
+}
+
+fun pred (x) {fact(x) > 3}
+
+do_query(pred)
