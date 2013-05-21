@@ -6,7 +6,8 @@ exception InternalError of string
 
 let cgi_parameters = ref []
 
-(* Default database driver and args *)
+(* TODO: Generalize this to allow db config to be configured at run time *)
+(* Hardwired default database driver and args *)
 let database_driver = "postgresql"
 let database_args = "people:localhost:5432:gabriel:"
 
@@ -108,7 +109,8 @@ let unbox_float = function
 let box_func f : value = `Function f
 let rec unbox_func = function
   | `Function f -> f
-  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> unbox_func (StringMap.find "pl" f)
+  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> 
+      unbox_func (StringMap.find "pl" f)
   | _ -> assert false
 
 let box_funQ f = `FunctionQ f
@@ -156,7 +158,8 @@ let rec string_of_value = function
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
   | #xmlitem as x -> string_of_xmlitem x
-  | `Table (s,db,_) -> "Table (" ^ string_of_value db ^ "," ^ string_of_value s ^")"
+  | `Table (s,db,_) -> "Table (" ^ string_of_value db ^ "," 
+                                 ^ string_of_value s ^")"
   | `Database _ -> "Database"
 and string_of_list = function
   | [] -> "[]"
@@ -183,7 +186,7 @@ and string_of_xmlitem =
           | _ -> ("<" ^ name ^ format_attrs attrs ^ ">"
                   ^ mapstrcat "" string_of_value children
                   ^ "</" ^ name ^ ">")
-				  
+                                  
 (* Internal functions used by compiler *)
 let id = box_func identity
 let start = id
@@ -219,7 +222,7 @@ let apply_4 f a1 a2 a3 a4 =
    the compiled prelude, I decided to just duplicate the functionality
    here. Bleh. *)
 
-let render_page page=
+let render_page page =
   let _, k, fs = unwrap_triple page in
   let ms, _ = unwrap_pair (apply_2 fs id (box_int (num_of_int 0))) in    
   let zs =
@@ -320,11 +323,11 @@ let u__print = print_string
 
 let u__getDatabaseConfig () : value name_map =
   if database_driver = "" then
-	 failwith "Internal error: default database driver not defined"
+         failwith "Internal error: default database driver not defined"
   else
-	 StringMap.from_alist (
-		["driver", (box_string database_driver :> value ); 
-		 "args", (box_string database_args :> value )])
+         StringMap.from_alist (
+                ["driver", (box_string database_driver :> value ); 
+                 "args", (box_string database_args :> value )])
 
 let _database s = `Database s
 
@@ -339,18 +342,21 @@ let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
   | `Database s -> Database (_splice s)
   | `Variant (n,v) -> Inject (n, _splice v)
-  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> _splice (StringMap.find "db" f)
+  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f ->
+      _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)
   | `Table (s1,s2,row) -> Table (_splice s1, _splice s2,row)
   | `FunctionQ f -> f
   | `List [] -> Primitive("Nil", `Record [])
-  | `List l as list -> begin match List.hd l with 
-		| `Char c -> Constant (`String (unbox_string list))
-		| _ -> 
-			 List.fold_right 
-				(fun x xl -> ApplyPure(Primitive("Cons",`Dummy),[_splice x; xl]))
-				l (Primitive("Nil",`Dummy))
-  end
+  | `List l as list -> 
+      begin 
+	match List.hd l with 
+	| `Char c -> Constant (`String (unbox_string list))
+        | _ -> 
+            List.fold_right 
+              (fun x xl -> ApplyPure(Primitive("Cons",`Dummy),[_splice x; xl]))
+              l (Primitive("Nil",`Dummy))
+      end
   | `XMLText _ 
   | `XMLNode _ -> failwith "XML inside queries not yet suported"
   | `Unit -> Extend (StringMap.empty, None)
@@ -361,9 +367,11 @@ let _funq = fun c -> `FunctionQ c
 
 let execute_query computation = match Queryml.compile (None,computation) with
   | None -> failwith "Unspecified database"
-  | Some (db, q, t) -> match t with
-		| `Record t -> Database.execute_standalone_select t q db
-		| _ -> failwith ("this query his not typed as a record list : " ^ q ^ " with type " ^ string_of_type t)
+  | Some (db, q, t) -> 
+      match t with
+      | `Record t -> Database.execute_standalone_select t q db
+      | _ -> failwith ("this query his not typed as a record list : " ^ q 
+		       ^ " with type " ^ string_of_type t)
 
 let box_query_result (t:base_type) (value:string) : value = match t with
   | `Bool ->
@@ -373,24 +381,27 @@ let box_query_result (t:base_type) (value:string) : value = match t with
     | `Char -> box_char (String.get value 0)
     | `String -> box_string value
     | `Int  -> box_int (num_of_string value)
-    | `Float -> (if value = "" then box_float 0.00      (* HACK HACK *)
-                            else box_float (float_of_string value))
+    | `Float -> (
+	if value = "" 
+	then box_float 0.00      (* HACK HACK *)
+        else box_float (float_of_string value))
     | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ string_of_type t ^"'")
-			 
+                         
 let _query computation : value = 
   let raw_result = execute_query computation in
   let to_record l = 
-	 `Record ( List.fold_left (
-		fun r (name,v,t) -> StringMap.add name (box_query_result t v) r) StringMap.empty l)
+    `Record ( List.fold_left (
+               fun r (name,v,t) -> 
+	         StringMap.add name (box_query_result t v) r) StringMap.empty l)
   in
   `List (List.map (fun l -> to_record l) raw_result)
-  
+    
 let imp = `Function (fun _ -> assert false)
-
+    
 let _replaceDocument = imp
 let _getInputValue = imp
 let _registerEventHandlers = imp
-
+    
 (* Main stuff--bits stolen from webif.ml *)
 
 let is_multipart () =
@@ -398,32 +409,35 @@ let is_multipart () =
       Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
 let resume_with_cont cont =
-  let cont = (Marshal.from_string (Netencoding.Base64.decode cont) 0 : [> `Function of (value -> value) ]) in
-    (unbox_func cont) start
-
+  let cont = 
+    (Marshal.from_string (Netencoding.Base64.decode cont) 0 
+       : [> `Function of (value -> value) ]) in
+  (unbox_func cont) start
+    
 let handle_request entry_f =
   let cgi_args =
     if is_multipart () then
       List.map (fun (name, {Cgi.value=value}) ->
-                  (name, value)) (Cgi.parse_multipart_args ())
+        (name, value)) (Cgi.parse_multipart_args ())
     else
       Cgi.parse_args () in
-
-    cgi_parameters := cgi_args;
-
-    let value =
-      if List.mem_assoc "_k" cgi_args then
-        resume_with_cont (List.assoc "_k" cgi_args)
-      else
-        entry_f ()
-    in
-      "Content-type: text/html\n\n" ^ (string_of_value (render_page value))
-
-        
+  
+  cgi_parameters := cgi_args;
+  
+  let value =
+    if List.mem_assoc "_k" cgi_args then
+      resume_with_cont (List.assoc "_k" cgi_args)
+    else
+      entry_f ()
+  in
+  "Content-type: text/html\n\n" ^ (string_of_value (render_page value))
+				    
+				    
 let run entry_f  =  
   let s = 
     match getenv "REQUEST_METHOD" with
-      | Some _ -> handle_request entry_f
-      | None -> string_of_value (entry_f ())
+    | Some _ -> handle_request entry_f
+    | None -> string_of_value (entry_f ())
   in
-    print_endline s
+  print_endline s
+    

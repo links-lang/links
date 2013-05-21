@@ -28,7 +28,7 @@ struct
   type comprehension = generator list * base list * tail
   type query = comprehension list
 end
-
+    
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
@@ -42,27 +42,27 @@ type t =
     | `Primitive of string
     | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
-    deriving (Show)
-
+      deriving (Show)
+      
 let unbox_xml =
   function
     | `XML xmlitem -> xmlitem
     | _ -> failwith ("failed to unbox XML")
-
+	  
 let unbox_pair =
   function
     | `Record fields ->
         let x = StringMap.find "1" fields in
         let y = StringMap.find "2" fields in
-          x, y
+        x, y
     | _ -> failwith ("failed to unbox pair")
-
+	  
 let rec unbox_list =
   function
     | `Concat vs -> concat_map unbox_list vs
     | `Singleton v -> [v]
     | _ -> failwith ("failed to unbox list")
-
+	  
 let unbox_string =
   function
     | `Constant (`String s) -> s
@@ -70,13 +70,13 @@ let unbox_string =
         implode
           (List.map
              (function
-                | `Constant (`Char c) -> c
-                | _ -> failwith ("failed to unbox string"))
+               | `Constant (`Char c) -> c
+               | _ -> failwith ("failed to unbox string"))
              (unbox_list v))
     | _ -> failwith ("failed to unbox string")
-
+	  
 (** Returns which database was used if any.
-
+   
    Currently this assumes that at most one database is used.
 *)
 let used_database v : Value.database option =
@@ -86,8 +86,8 @@ let used_database v : Value.database option =
       | (_x, source)::gs ->
           begin
             match used source with
-              | None -> generators gs
-              | Some db -> Some db
+            | None -> generators gs
+            | Some db -> Some db
           end
   and used =
     function
@@ -100,13 +100,13 @@ let used_database v : Value.database option =
       | v::vs ->
           begin
             match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
+            | None -> comprehensions vs
+            | Some db -> Some db
           end
   in
     match v with
-      | `Concat vs -> comprehensions vs
-      | v -> used v
+    | `Concat vs -> comprehensions vs
+    | v -> used v
 
 module S =
 struct
@@ -351,7 +351,8 @@ struct
           | `Record fields ->
             `Record (StringMap.fold 
                        (fun label v fields ->
-                         if StringMap.mem label fields then 
+                         if StringMap.mem label fields 
+			 then 
                            eval_error
                              "Error adding fields: label %s already present"
                              label
@@ -384,7 +385,8 @@ struct
             `Record
               (StringMap.fold
                  (fun label v fields ->
-                   if StringSet.mem label labels then
+                   if StringSet.mem label labels 
+		   then
                      fields
                    else
                      StringMap.add label v fields)
@@ -627,14 +629,14 @@ struct
            t,
            e)
       | _ ->
-        if is_list t then
-          if e = nil then
-            reduce_where_then (c, t)
+          if is_list t 
+	  then
+            if e = nil 
+	    then reduce_where_then (c, t)
+            else reduce_concat [ reduce_where_then (c, t);
+				 reduce_where_then (reduce_not c, e)]
           else
-            reduce_concat [reduce_where_then (c, t);
-                           reduce_where_then (reduce_not c, e)]
-        else
-          reduce_if_body (c, t, e)
+            reduce_if_body (c, t, e)
   and reduce_where_then (c, t) =
     match t with
       (* optimisation *)
@@ -961,7 +963,8 @@ struct
       function
         | `Leaf (_, os) -> os
         | `Node (os, cs) ->
-          if active then
+          if active 
+	  then
             let (branch :: path) = path in
               os @ `Branch branch :: flatten_at_children branch path active cs
           else
@@ -970,14 +973,16 @@ struct
     function
       | [] -> []
       | ((branch', tree) :: cs) ->
-        if active then
-          if branch == branch' then
-            (flatten_at path true tree) @ (flatten_at_children branch path false cs)
-          else
-            (flatten_at path false tree) @ (flatten_at_children branch path true cs)
+          if active 
+	  then
+            if branch == branch' 
+	    then
+              (flatten_at path true tree) @ (flatten_at_children branch path false cs)
+            else
+              (flatten_at path false tree) @ (flatten_at_children branch path true cs)
         else
-          (flatten_at path false tree) @ (flatten_at_children branch path false cs)
-
+            (flatten_at path false tree) @ (flatten_at_children branch path false cs)
+					     
   (* flatten a query tree as a list of subqueries *)
   let flatten_tree q =
     List.map
@@ -1095,10 +1100,10 @@ struct
           "^.",  None      ;
           "/.",  Some "/"  ;
           "mod", Some "%"  ;
-	  (* FIXME: The SQL99 || operator is supported in PostgreSQL and
-	     SQLite but not in MySQL, where it denotes the logical or
-	     operator *)
-	  "^^",  Some "||" ]
+   (* FIXME: The SQL99 || operator is supported in PostgreSQL and
+      SQLite but not in MySQL, where it denotes the logical or
+      operator *)
+   "^^",  Some "||" ]
 
     let is x = StringMap.mem x builtin_ops
     let sql_name op = val_of (StringMap.find op builtin_ops)
@@ -1453,25 +1458,25 @@ let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value
     let v = Eval.eval env e in
       (* Debug.print ("v: "^string_of_t v); *)
     match used_database v with
-      | None -> None
-      | Some db ->
-          let t = type_of_expression v in
-          let q = Sql.ordered_query db range v in
-          Debug.print ("Generated query: "^q);
-          Some (db, q, t)
-				
+    | None -> None
+    | Some db ->
+        let t = type_of_expression v in
+        let q = Sql.ordered_query db range v in
+        Debug.print ("Generated query: "^q);
+        Some (db, q, t)
+	    
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
-  fun db env ((x, table, field_types), where, body) ->
+    fun db env ((x, table, field_types), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-	 (*let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
+  (*let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
     let where = opt_map (Eval.computation env) where in
-	 (*Debug.print ("body: "^Ir.Show_computation.show body); *)
+  (*Debug.print ("body: "^Ir.Show_computation.show body); *)
     let body = Eval.computation env body in
     let q = Sql.update db ((x, table), where, body) in
     Debug.print ("Generated update query: "^q);
     q
-		
+  
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
   fun db env ((x, table, field_types), where) ->

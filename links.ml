@@ -280,11 +280,11 @@ let interact envs =
 (* Read Links source code and pretty-print the IR *)
 let print_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) prelude =
   let printer (valenv, nenv, typingenv) ((program, t), _) =
-    (* print_endline (Ir.Show_program.show program ^ "\n"); *)
+    (*    print_endline (Ir.Show_program.show program ^ "\n"); *)
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-	 let program = Ir.Doubleling.program tenv program in
-	 let program = Ir.Splicing.program tenv program in
-(*    let program = Ir.ElimDeadDefs.program tenv program in
+    let program = Ir.Doubling.program tenv program in
+    let program = Ir.Splicing.program tenv program in
+    (*    let program = Ir.ElimDeadDefs.program tenv program in
     let program = Ir.Inline.program tenv program in *)
     print_endline (Ir.string_of_ir nenv program prelude) ;
   in
@@ -294,10 +294,10 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
-(*  let program = Ir.RemoveApplyPure.program tenv program in
-	 let program = Ir.ElimDeadDefs.program tenv program in *)
-	 let program = Ir.Doubleling.program tenv program in
-	 let program = Ir.Splicing.program tenv program in
+    (*  let program = Ir.RemoveApplyPure.program tenv program in
+	let program = Ir.ElimDeadDefs.program tenv program in *)
+    let program = Ir.Doubling.program tenv program in
+    let program = Ir.Splicing.program tenv program in
     let code = Irtoml.ml_of_ir 
       (not (Settings.get_value nocps)) 
       (not (Settings.get_value nobox))

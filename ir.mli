@@ -152,7 +152,7 @@ end
 
 module Transform : TRANSFORM
 
-module Doubleling :
+module Doubling :
 sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
