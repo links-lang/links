@@ -315,9 +315,9 @@ object (o : 'self_type)
             | `Table _ -> text "TABLE"
             | `Query (_,c,_) -> text "QUERY" ^| o#computation c
             | `Wrong _ -> text "WRONG"
-                                | `Delete _ -> text "DELETE"
-                                | `Update _ -> text "UPDATE"
-                                         
+            | `Delete _ -> text "DELETE"
+            | `Update _ -> text "UPDATE"
+                  
   method bindings : binding list -> 'self_type * doc = fun bs ->
     let (o, d) = List.fold_left
       (fun (o, accum_d) b -> let (o, d) = o#binding b in o, accum_d ^| d)
@@ -803,7 +803,8 @@ let binding tyenv b = fst ((remove tyenv)#binding b)
 end
 
 
-(** Duplicate every function whitout wild effect in a pair of a PL function and a DB function **)
+(** Duplicate every function without wild effect in a pair of 
+   a PL function and a DB function **)
 module Doubling = 
 struct
 
@@ -817,7 +818,8 @@ struct
 
          method is_wild fun_type =
                 let fields,_ = TypeUtils.effect_row fun_type in
-                StringMap.mem "wild" fields && fst (StringMap.find "wild" fields) = `Present
+                StringMap.mem "wild" fields 
+		  && fst (StringMap.find "wild" fields) = `Present
 
          method is_any t = 
                 (* kinda hacky, but handle polymorphism *)
@@ -1517,3 +1519,4 @@ and funcmap_of_computation =
     concat_map funcmap_of_binding bs @ funcmap_of_tailcomp tc
 
 let funcmap = funcmap_of_computation
+
