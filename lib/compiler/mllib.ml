@@ -9,7 +9,7 @@ let cgi_parameters = ref []
 (* TODO: Generalize this to allow db config to be configured at run time *)
 (* Hardwired default database driver and args *)
 let database_driver = "postgresql"
-let database_args = "people:localhost:5432:gabriel:"
+let database_args = "localhost:5432:links:12345"
 
 let _ = Pg_database.register () ;
 
@@ -158,7 +158,7 @@ let rec string_of_value = function
       (StringMap.fold
          (fun n v l -> l @ [(n ^ "=" ^ string_of_value v)]) r []) ^ ")"
   | #xmlitem as x -> string_of_xmlitem x
-  | `Table (s,db,_) -> "Table (" ^ string_of_value db ^ "," 
+  | `Table (db,s,_) -> "Table (" ^ string_of_value db ^ "," 
                                  ^ string_of_value s ^")"
   | `Database _ -> "Database"
 and string_of_list = function
@@ -336,7 +336,7 @@ let _union r1 r2 =
   let ur1 = unbox_record r1 and ur2 = unbox_record r2 in
   box_record (StringMap.union_disjoint ur1 ur2)
 
-let _table s1 s2 row = `Table (s1,s2,row)
+let _table db s row = `Table (db, s, row)
 
 let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
@@ -345,7 +345,7 @@ let rec _splice : value -> Irquery.value = function
   | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f ->
       _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)
-  | `Table (s1,s2,row) -> Table (_splice s1, _splice s2,row)
+  | `Table (db,s,row) -> Table (_splice db, _splice s,row)
   | `FunctionQ f -> f
   | `List [] -> Primitive("Nil", `Record [])
   | `List l as list -> 

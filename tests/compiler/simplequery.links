@@ -1,0 +1,4 @@
+var my_db = database "my_database" "postgresql" "localhost:5432:links:12345";
+var my_table = table "hello" 
+	 with (word : String) from my_db ;
+for (r <-- my_table) [r]

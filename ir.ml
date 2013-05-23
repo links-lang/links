@@ -224,7 +224,7 @@ object (o : 'self_type)
             | None -> "NOT_FOUND"
           in
             if Str.string_match (Str.regexp "__[0-9]*" ) name 0 
-	    then text name
+            then text name
             else text (name ^ "/" ^ (string_of_int v))
       | `SplicedVariable v ->
           let name = match Env.Int.find venv v with
@@ -232,7 +232,7 @@ object (o : 'self_type)
             | None -> "NOT_FOUND"
           in
             if Str.string_match (Str.regexp "__[0-9]*" ) name 0 
-	    then text ( "#(" ^ name ^ ")" )
+            then text ( "#(" ^ name ^ ")" )
             else text ( "#(" ^ name ^ "/" ^ (string_of_int v) ^ ")" )
 
       | `Extend (r, v) ->
@@ -372,7 +372,7 @@ object (o : 'self_type)
     if Str.string_match (Str.regexp "__[0-9]*" ) name 0 
     then text name
     else text (name ^ "/" ^ (string_of_int v))
-	
+        
 end
 
 let string_of_ir env (bs,tc) prelude =
@@ -576,7 +576,7 @@ struct
                             (b, c), t, o) default in
             let t =
               if not (StringMap.is_empty case_types) 
-	      then
+              then
                 (StringMap.to_alist ->- List.hd ->- snd) case_types
               else
                 val_of default_type
@@ -806,157 +806,197 @@ end
 (** Duplicate every function without wild effect in a pair of 
    a PL function and a DB function **)
 module Doubling = 
-struct
-
-  let duplication tenv =
-  object(o)
-         inherit Transform.visitor(tenv) as super
-                
+  struct
+    
+    let duplication tenv =
+      object(o)
+        inherit Transform.visitor(tenv) as super
+            
          (* A flag to know if we are in a query *)
-         val in_query = false
-         val duplicated_function = IntSet.empty
-
-         method is_wild fun_type =
-                let fields,_ = TypeUtils.effect_row fun_type in
-                StringMap.mem "wild" fields 
-		  && fst (StringMap.find "wild" fields) = `Present
-
-         method is_any t = 
+        val in_query = false
+        val duplicated_function = IntSet.empty
+            
+        method is_wild fun_type =
+          let fields,_ = TypeUtils.effect_row fun_type in
+          StringMap.mem "wild" fields 
+            && fst (StringMap.find "wild" fields) = `Present
+            
+        method is_any t = 
                 (* kinda hacky, but handle polymorphism *)
-                try not (o#is_wild t) with _ -> false 
-
-         method enter_query () = {< in_query = true >}
-         method exit_query () = {< in_query = false >}
-
-         method add_duplicated v = {< duplicated_function = IntSet.add v duplicated_function >}
-         method replace_dup d = {< duplicated_function = d >}
-
-         method special sp = match sp with
-                | `Query _ when not in_query -> 
-                         let s,t,o = (o#enter_query())#special sp in
-                         s,t,o#exit_query()
-                | _ -> super#special sp
-
-         method rec_binding b = super#binding b
-
-         method binding b = match b with
-                | `FunQ _ when not in_query -> 
-                         let b,o = (o#enter_query())#binding b in
-                         b,o#exit_query()
-                | `Fun (_,(_,bind_list,_),_) -> 
-                         let dup = duplicated_function in
-                         let b,o = {< duplicated_function = List.fold_left (fun set x -> IntSet.add (fst x) set) 
-                                  duplicated_function (List.filter (fun x -> o#is_any (fst3 (snd x))) bind_list) 
-                                  >}#rec_binding b in
-                         b,o#replace_dup dup
-                | _ -> super#binding b
-
-         method duplicate_bindings bs = match bs with
-                | [] -> [], o
-                | (`Fun f)::q when in_query && not (o#is_wild (fst3 (snd (fst3 f)))) -> 
-                         let tail, o = o#duplicate_bindings q in
-                         (`FunQ f)::tail, o
-                | ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q when not (o#is_wild ftype) ->
-                         (* Generate functions *)
-                         let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
-                         and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
-                         in
-                         let o = {< tyenv = remove#get_type_environment >} in
+          try not (o#is_wild t) with _ -> false 
+              
+        method enter_query () = {< in_query = true >}
+        method exit_query () = {< in_query = false >}
+            
+        method add_duplicated v = 
+          {< duplicated_function = IntSet.add v duplicated_function >}
+        method replace_dup d = 
+          {< duplicated_function = d >}
+            
+        method special sp = 
+          match sp with
+          | `Query _ when not in_query -> 
+              let o = o#enter_query() in
+              let s,t,o = o#special sp in
+              s,t,o#exit_query()
+          | _ -> super#special sp
+		
+        method binding b = 
+          match b with
+          | `FunQ _ when not in_query -> 
+              let o = o#enter_query() in 
+              let b,o = o#binding b in
+              b,o#exit_query()
+          | `Fun (_,(_,bind_list,_),_) -> 
+              (* Remember old dup environment *)
+              let dup = duplicated_function in
+              (* Compute new dup environment consisting of declared functions that have "any" effect *)
+              let any_bindings = 
+                List.filter (fun (_,(ftype,_,_)) -> o#is_any ftype) bind_list in
+              let dup' = 
+                List.fold_left (fun set x -> IntSet.add (fst x) set) 
+                  duplicated_function any_bindings in
+              let o = {< duplicated_function = dup' >} in
+              (* Translate body using dup' *)
+              let b,o = super#binding b in
+              b,o#replace_dup dup
+          | _ -> super#binding b  
+		
+(* Duplicate one list of bindings, replacing any-functions   
+   with declarations of pl, db functions and defining 
+   the original function name as a record containing pl and db fields.
+   The bodies of the functions are not translated in this pass.
+*)
+	method duplicate_bindings bs = 
+          match bs with
+          | [] -> [], o
+          | (`Fun (((_,(ftype,_,_)),_,_) as f))::q 
+            when in_query && not (o#is_wild ftype) -> 
+              let tail, o = o#duplicate_bindings q in
+              (`FunQ f)::tail, o
+          | ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q
+            when not (o#is_wild ftype) ->
+              (* Generate fresh copies of functions *)
+              let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
+              and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
+              in
+              let o = {< tyenv = remove#get_type_environment >} in
                          (* record this function has been duplicated *)
-                         let o = o#add_duplicated v in
+              let o = o#add_duplicated v in
                          (* Generate the record *)
-                         let record = 
-                                let get_id = function `Fun (b,_,_) | `FunQ (b,_,_) -> fst b | _ -> v  in 
-                                let values = 
-                                  StringMap.add "pl" (`Variable (get_id funpl)) 
-                                         (StringMap.add "db" (`Variable (get_id fundb)) 
-                                                 StringMap.empty)
-                                in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
-                         in
-                         let tail, o = o#duplicate_bindings q in
-                         funpl::fundb::record::tail, o
-                | t::q -> 
-                         let tail,o = o#duplicate_bindings q in
-                         t::tail, o
-
-         method get_var_id v = match v with
-                | `Variable id -> id 
-                | `Coerce (var,_) | `TAbs (_,var) | `TApp (var,_) -> o#get_var_id var
-                | _ -> failwith "This value isn't a variable"
-
-         method tail_computation tc = match tc with
-                | `Apply ((v,_) as f) when in_query && IntSet.mem (o#get_var_id v) duplicated_function -> 
-                         o#tail_computation (`ApplyDB f)
-                | `Apply ((v,_) as f) when IntSet.mem (o#get_var_id v) duplicated_function ->
-                         o#tail_computation(`ApplyPL f)
-                | _ -> super#tail_computation tc
-
-         method computation_rec = super#computation
-
-         method computation (bs,tc) = 
-                let _,trans = (new Transform.visitor o#get_type_environment)#bindings bs in
-                let o = {< tyenv = trans#get_type_environment >} in
-                let bs,o = o#duplicate_bindings bs in
-                let _,trans = (new Transform.visitor o#get_type_environment)#bindings bs in
-                let o = {< tyenv = trans#get_type_environment >} in
-                o#computation_rec (bs,tc)
-                  
+              let record = 
+                let get_id = function 
+                    `Fun (b,_,_) 
+                  | `FunQ (b,_,_) -> fst b 
+                  | _ -> v  in 
+                let values = 
+                  StringMap.add "pl" (`Variable (get_id funpl)) 
+                    (StringMap.add "db" (`Variable (get_id fundb)) 
+                       StringMap.empty)
+                in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
+              in
+              let tail, o = o#duplicate_bindings q in
+              funpl::fundb::record::tail, o
+          | t::q ->             (* Wild Fun, Rec, Let handled normally *)
+              let tail,o = o#duplicate_bindings q in
+              t::tail, o
+                
+        method get_var_id v = 
+          match v with
+          | `Variable id -> id 
+          | `Coerce (var,_) 
+          | `TAbs (_,var) 
+          | `TApp (var,_) -> o#get_var_id var
+          | _ -> failwith "This value isn't a variable"
+                
+        (* In an IR expression, there are no lambda abstraction values, 
+           so all functions are named and so it is safe to assume that 
+           a called function is essentially a variable. *)
+        method tail_computation tc =
+          match tc with 
+          | `Apply ((v,_) as f) 
+            when IntSet.mem (o#get_var_id v) duplicated_function -> 
+              (* Translate calls of duplicated functions appropriately based 
+                 on context *)
+              if in_query 
+              then o#tail_computation (`ApplyDB f)
+              else o#tail_computation(`ApplyPL f)
+          | _ -> super#tail_computation tc
+		
+		
+	method computation (bs,tc) = 
+          (* Compute the type information in the original term. *)
+          let _,trans = 
+            (new Transform.visitor o#get_type_environment)#bindings bs in
+          (* Update this object with the resulting type info. *)
+          let o = {< tyenv = trans#get_type_environment >} in
+          (* Duplicate the bindings in the current binding list *)
+          let bs,o = o#duplicate_bindings bs in
+          (* Re-typecheck the translated term to get translated environment *)
+          let _,trans = 
+            (new Transform.visitor o#get_type_environment)#bindings bs in
+	  let o = {< tyenv = trans#get_type_environment >} in
+          (* Recursively translate the computation; this should 
+             translate the bodies of the functions and the tail computation *)
+	  super#computation (bs,tc)
+	    
+      end
+	
+    let program tyenv program = 
+      fst3 ((duplication tyenv)#program program)
+	
   end
-         
-let program tyenv program = 
-  fst3 ((duplication tyenv)#program program)
-
-end
-
+    
 module Splicing =
-struct
-
-  let splice tyenv = 
-  object(o)
-         inherit Transform.visitor(tyenv) as super
-
+  struct
+    
+    let splice tyenv = 
+      object(o)
+	inherit Transform.visitor(tyenv) as super
+	    
          (* A flag to know if we are in a query *)
-         val in_query = false
-
-         method enter_query () = {< in_query = true >}
-         method exit_query () = {< in_query = false >}
-
+	val in_query = false
+	    
+	method enter_query () = {< in_query = true >}
+	method exit_query () = {< in_query = false >}
+	    
          (* Register variable inside querys *)
-         val query_var_env = IntSet.empty
-
-         method add_query_vars vl = 
-                let aux s v = IntSet.add v s in
-                {< query_var_env = List.fold_left aux query_var_env vl>}
-         method is_query_var v = IntSet.mem v query_var_env  
-
-         method value v = match v with
-                | `Variable x when in_query && (not (o#is_query_var x)) -> 
-                         super#value (`SplicedVariable x)
-                | _ -> super#value v
-
-         method special sp = match sp with
-                | `Query _ when not in_query -> 
-                         let s,t,o = (o#enter_query())#special sp in
-                         s,t,o#exit_query()
-                | _ -> super#special sp
-
-         method binder b =
-                let b,o = super#binder b in
-                b, if in_query then o#add_query_vars [fst b] else o
-
-         method rec_binding = 
-                super#binding
-
-         method binding b = match b with(*
-                | `Let ((x,_),_) when in_query ->
-                         (o#add_query_vars [x])#rec_binding(b)
-                | `Fun ((x,_),(_,arg,_),_) | `FunQ ((x,_),(_,arg,_),_)  when in_query ->
-                         (o#add_query_vars (x::(List.map fst arg)))#rec_binding b *)
-                | `FunQ _ when not in_query -> 
-                         let b,o = (o#enter_query())#binding b in
-                         b,o#exit_query()
-                | _ -> super#binding b
-
+        val query_var_env = IntSet.empty
+	    
+        method add_query_vars vl = 
+          let aux s v = IntSet.add v s in
+          {< query_var_env = List.fold_left aux query_var_env vl>}
+        method is_query_var v = IntSet.mem v query_var_env  
+	    
+        method value v = 
+	  match v with
+          | `Variable x when in_query && (not (o#is_query_var x)) -> 
+              super#value (`SplicedVariable x)
+          | _ -> super#value v
+		
+        method special sp =
+	  match sp with
+          | `Query _ when not in_query -> 
+	      let o = o#enter_query() in
+              let s,t,o = o#special sp in
+              s,t,o#exit_query()
+          | _ -> super#special sp
+		
+        method binder b =
+          let b,o = super#binder b in
+          b, if in_query then o#add_query_vars [fst b] else o
+	    
+        method rec_binding = 
+          super#binding
+	    
+        method binding b = 
+	  match b with
+          | `FunQ _ when not in_query -> 
+	      let o = o#enter_query() in
+              let b,o = o#binding b in
+              b,o#exit_query()
+          | _ -> super#binding b
+	      
   end
 
 let program tyenv program = 
@@ -1139,7 +1179,7 @@ struct
     method var =
       fun x ->         
         if IntMap.mem x env 
-	then
+        then
           x, o#lookup_type x, o#inc x
         else
           super#var x
@@ -1233,7 +1273,7 @@ struct
                       *)
                       let defs =
                         if IntSet.for_all o#is_dead fs 
-			then []
+                        then []
                         else
                           List.rev defs
                       in
@@ -1345,7 +1385,7 @@ struct
     method binder b =
       let b, o = super#binder b in
         if Var.scope_of_binder b = `Global 
-	then
+        then
           b, o#global (Var.var_of_binder b)
         else
           b, o

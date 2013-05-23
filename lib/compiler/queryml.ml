@@ -42,7 +42,7 @@ module S =
 		     (List.map (fun (x,source) -> "(" ^ string_of_int x ^ "<-" ^ print source) gs) ^
 	  " order by " ^ String.concat ", " (List.map print so) ^ "do " ^ print b
       | `If (c, t, e) -> "if "^ print c ^" then "^ print t ^" else "^ print e
-      | `Table (t,db,_fields) -> "Table " ^ t ^ ":" ^ db
+      | `Table (db,t,_fields) -> "Table (" ^ db ^ "," ^ t ^")"
       | `Singleton v -> "[" ^ print v ^ "]"
       | `Concat vs -> "[|" ^ String.concat ", " (List.map print vs) ^ "|]"
       | `Record fields -> "{" ^ String.concat ", " (StringMap.to_list (fun _ s -> print s) fields) ^ "}"
@@ -77,7 +77,7 @@ let used_database v : Value.database option =
   and used =
     function
       | `For (gs, os, _body) -> generators gs
-      | `Table (_, db, _) -> Some db
+      | `Table (db, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -149,7 +149,7 @@ let labels_of_field_types field_types =
     StringSet.empty field_types
     
 
-let table_field_types (_t, _db, fields) = fields
+let table_field_types (_db, _t, fields) = fields
     
 let rec field_types_of_list =
   function
@@ -284,8 +284,8 @@ module IRquery2query =
           erase (value env r, labels)
       | Inject (label, v) -> `Variant (label, value env v)
       | ApplyPure (f, ps) -> apply env ((value env f), List.map (value env) ps)
-      | Table (t,db,fields) -> begin match (value env t),(value env db) with
-	| `Constant (`String t), `Database db -> `Table (t,db,fields)
+      | Table (db,t,fields) -> begin match (value env db), (value env t) with
+	| `Database db, `Constant (`String t) -> `Table (db,t,fields)
 	| _ -> assert false
       end
       | XmlNode (tag, attrs, children) ->
@@ -310,7 +310,7 @@ module IRquery2query =
 	    and args = unbox_string (StringMap.find "args" f)
 	    in 
 	    if args = "" then `Database (driver ^ ":" ^ name)
-	    else  `Database (driver ^ ":" ^ args ^ ":" ^ name)
+	    else  `Database (driver ^ ":" ^ name ^ ":" ^ args)
 	| _ -> assert false
       end
       | Lambda _ -> assert false
@@ -1106,7 +1106,7 @@ module Sql =
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           clause db body
-      | `For ((x, `Table (table, _db, _row))::gs, os, body) ->
+      | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
           let body = clause db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -1136,7 +1136,7 @@ module Sql =
                 `Select (fields, tables, c, os)
             | _ -> assert false
           end
-      | `Table (table, _db, fields) ->
+      | `Table ( _db, table, fields) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)

@@ -474,7 +474,7 @@ module Translator (B : Boxer) =
 	  | `Case (v,m,vo) ->
 	      let aux ((var,_),c) = (var,o#computation c) in
 	      `Case (o#value v, StringMap.map aux m,opt_map aux vo)
-	  | `Special (`Table (t,db,(t_type,_,_))) ->
+	  | `Special (`Table (db,t,(t_type,_,_))) ->
     (*Debug.print (Types.string_of_datatype t_type) ;*)
 	      `Return (`Table (o#value db, o#value t, QueryType.get_row t_type ))
 	  | `Special (`Database db) ->
@@ -649,7 +649,7 @@ module Translator (B : Boxer) =
               | `CallCC v -> 
                   Die (NativeString "CallCC not supported in direct style.")
               | `Database v -> Call (Var "_database",[o#value v])
-	      | `Table (t,db,(t_type,_,_)) ->
+	      | `Table (db,t,(t_type,_,_)) ->
 		  Table (o#value db, o#value t, QueryType.get_row t_type)
               | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
 	      | `Delete _
@@ -760,7 +760,7 @@ module Translator (B : Boxer) =
                            B.box_fun (Fun (["_"; "arg"], B.box_call (Call (k, [Var "arg"])))),
                            B.box_call (Call (o#value v, [k; Var "call_k"]))))
               | `Database v ->  B.box_call (Call (k, [Call (Var "_database",[o#value v])] ))
-	      | `Table (t,db,(t_type,_,_)) ->
+	      | `Table (db,t,(t_type,_,_)) ->
 		  B.box_call (Call (k, [
 				    Table (o#value db, o#value t, QueryType.get_row t_type )
 				  ]))
@@ -873,9 +873,9 @@ module MLof =
     | `Erase (ns,v) -> variant "Erase" [name_set ns; value v]
     | `Inject (n,v) -> variant "Inject" [string n; value v]
     | `ApplyPure (v,vl) -> variant "ApplyPure" [value v; list (List.map value vl)]
-    | `Table (t, db, ns) -> variant "Table" 
-	  [ value t;
-	    value db; 
+    | `Table (db, t, ns) -> variant "Table" 
+	  [ value db; 
+	    value t;
 	    list (List.map (fun (s,l) -> arglist [ string s; base_type l]) ns)]
     | `Database v -> variant "Database" [value v]
     | `SplicedVariable c -> code (Call (Var "_splice",[c]))
