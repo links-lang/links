@@ -1,4 +1,8 @@
-var s = "Hello, world!" ;
+var my_db = database "people" ;
 
-page 
- <#>{<h1>{stringToXml(s)}</h1>}</#>
+var my_table = table "hello" 
+	 with (word : String) from my_db ;
+
+var result = for (x <-- my_table) [x] ;
+
+for (r <- result) [r.word]

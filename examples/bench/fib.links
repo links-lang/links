@@ -1,0 +1,8 @@
+fun fib(n) { 
+	 switch(n) {
+	 case 0 -> 1
+	 case 1 -> 1
+ 	 case n -> fib(n-1) + fib(n-2) 
+	 } }
+
+fib(10)

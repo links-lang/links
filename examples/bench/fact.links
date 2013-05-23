@@ -1,0 +1,2 @@
+
+ignore(product([1..100000]))

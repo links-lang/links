@@ -7,7 +7,7 @@ fun execute_query(p) server {
 	 var db = database "people";
 	 var people = table "people" with (i : Int, n : String) from db;
 	 for (row <-- people) 
-	  where (predicat(row.i)) 
+	  where (p(row.i)) 
 	  orderby (-row.i)
      [(name=row.n)]
 }

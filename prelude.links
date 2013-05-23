@@ -18,6 +18,7 @@ fun map(f, l) {
   }
 }
 
+
 fun filter(p, l) {
   concatMap (fun (x) {if(p(x)) [x] else []}, l)
 }
@@ -395,6 +396,22 @@ fun empty(l) {
   switch (l) {
     case [] -> true
     case _ -> false
+  }
+}
+
+
+fun iter(f,l) {
+  switch(l) {
+    case [] -> ()
+    case h::t -> f(h) ; iter(f,t)
+  }
+}
+
+fun stringJoin(glue,list) {
+  switch (list) {
+    case [] -> ""
+    case [x] -> x
+    case (x::xs) -> x ^^ glue ^^ stringJoin(glue,xs)
   }
 }
 
