@@ -16,7 +16,7 @@ fun execute_query(p,b)  {
   } else {
     var result = for (row <-- people) [row];
     for (row <- result) 
-    where (p(row.i > 1))
+    where (p(row.i))
     orderby(-row.i)
     [(name=row.n)]
   } 

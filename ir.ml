@@ -265,17 +265,17 @@ object (o : 'self_type)
           
   method tail_computation : tail_computation -> doc = fun tc ->
     match tc with
-        `Return v -> o#value v
-
-      | `Apply (v, vl) -> 
-          group (nest 2 (o#value v ^^ text "[any]" ^| 
-                                  (if vl = [] then text "()" else doc_join o#value vl)))
-                | `ApplyPL (v,vl) -> 
-          group (nest 2 (o#value v ^^ text "[pl]" ^|  
-                                  (if vl = [] then text "()" else doc_join o#value vl)))
-           | `ApplyDB (v,vl) ->
-          group (nest 2 (o#value v ^^ text "[db]"  ^|  
-                                  (if vl = [] then text "()" else doc_join o#value vl)))
+      `Return v -> o#value v
+	  
+    | `Apply (v, vl) -> 
+        group (nest 2 (o#value v ^^ text "[any]" ^| 
+          (if vl = [] then text "()" else doc_join o#value vl)))
+    | `ApplyPL (v,vl) -> 
+        group (nest 2 (o#value v ^^ text "[pl]" ^|  
+          (if vl = [] then text "()" else doc_join o#value vl)))
+    | `ApplyDB (v,vl) ->
+        group (nest 2 (o#value v ^^ text "[db]"  ^|  
+          (if vl = [] then text "()" else doc_join o#value vl)))
 
 
       | `Case (v, names, opt) ->
