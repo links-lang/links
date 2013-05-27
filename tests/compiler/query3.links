@@ -1,0 +1,26 @@
+# more complex example involving function used as both pl and db
+
+var db = database "my_database" "postgresql" "localhost:5432:links:12345";
+var people = table "people" with (i : Int, n : String) from db;
+
+fun predicat(n) {
+	 n > 1
+}
+
+fun execute_query(p,b)  {
+  if (b) {
+    for (row <-- people) 
+    where (p(row.i)) 
+    orderby (-row.i)
+    [(name=row.n)] 
+  } else {
+    var result = for (row <-- people) [row];
+    for (row <- result) 
+    where (p(row.i))
+    orderby(-row.i)
+    [(name=row.n)]
+  } 
+}
+
+
+execute_query(predicat,false)

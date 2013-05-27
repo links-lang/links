@@ -1,3 +1,3 @@
 #!/bin/sh
 
-./links tests/compiler/$1.links
+/usr/bin/time ./links tests/compiler/$1.links
