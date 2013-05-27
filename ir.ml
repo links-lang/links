@@ -829,6 +829,7 @@ module Doubling =
         method exit_query () = {< in_query = false >}
             
         method add_duplicated v = 
+(*	  print_endline ("duplicating "^string_of_int v);*)
           {< duplicated_function = IntSet.add v duplicated_function >}
         method replace_dup d = 
           {< duplicated_function = d >}
@@ -844,24 +845,36 @@ module Doubling =
         method binding b = 
           match b with
           | `FunQ _ when not in_query -> 
-              let o = o#enter_query() in 
-              let b,o = o#binding b in
-              b,o#exit_query()
-          | `Fun (_,(_,bind_list,_),_) -> 
+	      let o = o#enter_query() in 
+	      let b,o = o#binding b in
+	      b,o#exit_query()
+ (*         | `Fun (_,(_,bind_list,_),_) -> 
               (* Remember old dup environment *)
               let dup = duplicated_function in
               (* Compute new dup environment consisting of declared functions that have "any" effect *)
               let any_bindings = 
                 List.filter (fun (_,(ftype,_,_)) -> o#is_any ftype) bind_list in
-              let dup' = 
-                List.fold_left (fun set x -> IntSet.add (fst x) set) 
+              let o = List.fold_left (fun o x -> o#add_duplicated (fst x)) o any_bindings in
+(*                List.fold_left (fun set x -> IntSet.add (fst x) set) 
                   duplicated_function any_bindings in
-              let o = {< duplicated_function = dup' >} in
+              let o = {< duplicated_function = dup' >} in*)
               (* Translate body using dup' *)
               let b,o = super#binding b in
               b,o#replace_dup dup
+*)
           | _ -> super#binding b  
 		
+(* Attempt to fix problem with duplicated function parameters being missed *)
+	method binder = 
+	  fun (var, ((ftype,_,_) as info)) -> 
+	    let (var,info),o = super#binder (var,info) in
+	    if o#is_any ftype 
+	    then (var,info), o#add_duplicated var
+	    else (var,info), o
+		
+	    
+	    
+
 (* Duplicate one list of bindings, replacing any-functions   
    with declarations of pl, db functions and defining 
    the original function name as a record containing pl and db fields.
@@ -897,7 +910,8 @@ module Doubling =
               in
               let tail, o = o#duplicate_bindings q in
               funpl::fundb::record::tail, o
-          | t::q ->             (* Wild Fun, Rec, Let handled normally *)
+          | t::q ->             (* Wild Fun, Rec, Let handled normally
+				Are they handled correctly? *)
               let tail,o = o#duplicate_bindings q in
               t::tail, o
                 
@@ -921,6 +935,10 @@ module Doubling =
               if in_query 
               then o#tail_computation (`ApplyDB f)
               else o#tail_computation(`ApplyPL f)
+(*	  | `Apply ((v,_) as f) 
+            when not(IntSet.mem (o#get_var_id v) duplicated_function) && in_query -> 
+	      failwith ("Call to a non-duplicated function "^string_of_int(o#get_var_id v)^" within query!");
+	      super#tail_computation tc*)
           | _ -> super#tail_computation tc
 		
 		

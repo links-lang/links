@@ -59,7 +59,7 @@ and query_value =
 and query_tail_computation =
   [ `Return of query_value
   | `Apply of query_value * query_value list
-  | `ApplyDB of query_value * query_value list
+(*  | `ApplyDB of query_value * query_value list*)
   | `Case of query_value * (var * query_computation) name_map * (var * query_computation) option
   | `If of query_value * query_computation * query_computation
   ] 
@@ -108,6 +108,7 @@ module FakeBoxer : Boxer =
 	then
           let args = arg_names unboxers in
           let v_args = List.map (fun a -> Var a) args in
+	  (* TODO: Should really be a fresh var name *)
           Fun("k"::args, Call (Var "k", [Call (Var unboxed_name,  v_args)]))
 	else
           Var unboxed_name
@@ -369,7 +370,10 @@ let get_var_name v n =
 let bind_continuation k body =
   match k with 
   | Var _ -> body k
+(* TODO: Should really be a fresh var name *)
   | _ -> Let ("kappa", k, body (Var "kappa"))
+
+let make_constructor n v = Pair(NativeString n, v)
 	
 (* We need to unpack table type *)
 module QueryType =
@@ -417,10 +421,9 @@ module QueryType =
 	  
 	  
   end
-    
-module Translator (B : Boxer) =
+
+module TranslateQuery = 
   struct
-    
     class translateQuery translateCode =
       object (o : 'self_type)
 	  
@@ -462,14 +465,18 @@ module Translator (B : Boxer) =
 		
 	method tail_computation : Ir.tail_computation -> query_tail_computation = function
 	  | `Return v -> `Return (o#value v)
-	  | `Apply (v,vl) -> `Apply (o#value v, List.map o#value vl)
-	  | `ApplyDB (v,vl) -> `ApplyDB (o#value v, List.map o#value vl)
+          | `Apply(v,vl) -> `Apply (o#value v, List.map o#value vl) 
+	  (*| `Apply (v,vl) -> failwith "Unexpected Apply in DB context"*)
+(*	  | `ApplyDB (v,vl) -> `ApplyDB (o#value v, List.map o#value vl)*)
+	  | `ApplyDB (v,vl) -> o#tail_computation (`Apply (`Project ("db",v),vl))
+
 	  | `ApplyPL (v,_vl) -> 
 	      let rec name = function
 		  `Variable v | `SplicedVariable v ->  Debug.f "var : %i" v 
 		| `TAbs (_,v) | `TApp (v,_) | `Coerce (v,_) -> name v
 		| _ -> ()
-	      in name v ;  assert false
+	      in name v ;  
+	         failwith "ApplyPL in DB context"
 	  | `If (v,c1,c2) -> `If (o#value v, o#computation c1, o#computation c2)
 	  | `Case (v,m,vo) ->
 	      let aux ((var,_),c) = (var,o#computation c) in
@@ -480,7 +487,7 @@ module Translator (B : Boxer) =
 	  | `Special (`Database db) ->
 	      `Return (`Database (o#value db))
 	  | `Special (`Query _) -> assert false
-	  | `Special _ -> failwith "No special except Table, Database or Query inside a query"
+	  | `Special _ -> failwith "No special except Table or Database inside a query"
 		
 	method bindings : Ir.binding list -> query_binding list = function
 	  | [] -> []
@@ -509,7 +516,15 @@ module Translator (B : Boxer) =
 	      
 	      
       end
-	
+   
+end
+    
+
+
+module Translator (B : Boxer) =
+  struct
+    
+
     class virtual codeIR env = 
       object (o : 'self_type)
 	val env = env
@@ -540,12 +555,12 @@ module Translator (B : Boxer) =
 	  match v with 
           | `Constant c -> o#constant c
 		
-          | `Variable v | `SplicedVariable v -> 
+          | `Variable v ->
 	      (match o#get_name v with
 		None -> failwith ("can't find variable number :" ^ string_of_int v)
 	      | Some n -> Var (get_var_name v n )
 		    )
-		
+	  | `SplicedVariable v -> failwith "unexpected spliced variable in pl context"
           | `Extend (r, v) ->
               let record = B.box_record (
 		StringMap.fold 
@@ -568,7 +583,7 @@ module Translator (B : Boxer) =
               Call (Var "erase", [o#value v; Lst (List.map (fun n -> o#constant (`String n)) (StringSet.elements ns))])
 		
           | `Inject (n, v, _) ->
-              B.box_variant (Pair (NativeString n, o#value v))
+              B.box_variant (make_constructor n (o#value v))
 		
           | `TAbs (_, v) -> o#value v
 		
@@ -582,7 +597,7 @@ module Translator (B : Boxer) =
                     NativeString name;
                     Lst (
                     StringMap.fold
-                      (fun n v a -> Pair(NativeString n, o#value v)::a) attrs []);
+                      (fun n v a -> make_constructor n (o#value v)::a) attrs []);
                     Lst (List.map o#value children)]))])
                 
           | `ApplyPure (v, vl) -> 
@@ -628,17 +643,17 @@ module Translator (B : Boxer) =
           | `Case (v, cases, default) ->
               let gen_case n (b, c) =
 		let o = o#add_bindings [b] in
-                Pair (n, Var (o#binder b)),
+                make_constructor n (Var (o#binder b)),
 		o#computation c
               in              
               B.box_case (
               Case (
               o#value v,
-              StringMap.fold (fun n c l -> (gen_case (NativeString n) c)::l) cases [],
+              StringMap.fold (fun n c l -> (gen_case n c)::l) cases [],
               match default with 
                 None -> None
               | Some c ->
-                  Some (gen_case (Var "_") c)))
+                  Some (gen_case "_" c)))
 		
           | `If (v, t, f) ->
               B.box_if (
@@ -651,7 +666,8 @@ module Translator (B : Boxer) =
               | `Database v -> Call (Var "_database",[o#value v])
 	      | `Table (db,t,(t_type,_,_)) ->
 		  Table (o#value db, o#value t, QueryType.get_row t_type)
-              | `Query (_,c,_) -> Query ((new translateQuery o)#computation c)
+              | `Query (_,c,_) -> 
+		  Query ((new TranslateQuery.translateQuery o)#computation c)
 	      | `Delete _
 	      | `Update _ -> Die (NativeString "Delete and Update operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
@@ -676,7 +692,7 @@ module Translator (B : Boxer) =
 	      let args = List.map fst f_binders in
 	      let o'' = o'#add_bindings f_binders in
 	      LetFunQ ( o'#binder binder, 
-		       `Lambda (args,(new translateQuery o'')#computation comp) , 
+		       `Lambda (args,(new TranslateQuery.translateQuery o'')#computation comp) , 
 		       rest_f o')
 		
           | `Rec funs -> 
@@ -732,17 +748,17 @@ module Translator (B : Boxer) =
 		(fun k ->
                   let gen_case n (b, c) =
                     let o = o#add_bindings [b] in
-                    Pair (n, Var (o#binder b)),
+                    make_constructor n (Var (o#binder b)),
                     o#computation c k 
                   in
                   B.box_case (
                   Case (
                   o#value v,
-                  StringMap.fold (fun n c l -> (gen_case (NativeString n) c)::l) cases [],
+                  StringMap.fold (fun n c l -> (gen_case n c)::l) cases [],
                   match default with 
                     None -> None
                   | Some c ->
-                      Some (gen_case (Var "_") c))))
+                      Some (gen_case "_" c))))
 		
 		
           | `If (v, t, f) ->
@@ -764,7 +780,7 @@ module Translator (B : Boxer) =
 		  B.box_call (Call (k, [
 				    Table (o#value db, o#value t, QueryType.get_row t_type )
 				  ]))
-              | `Query (_,c,_) ->  B.box_call (Call (k, [Query ((new translateQuery o)#computation c)]))
+              | `Query (_,c,_) ->  B.box_call (Call (k, [Query ((new TranslateQuery.translateQuery o)#computation c)]))
 	      | `Delete _ 
 	      | `Update _ -> Die (NativeString "Database operations not supported.")
               | `Wrong _ -> Die (NativeString "Internal Error: Pattern matching failed")
@@ -790,7 +806,7 @@ module Translator (B : Boxer) =
 	      let args = List.map fst f_binders in
 	      let o'' = o'#add_bindings f_binders in
 	      LetFunQ ( o'#binder binder, 
-		       `Lambda (args,(new translateQuery o'')#computation comp) , 
+		       `Lambda (args,(new TranslateQuery.translateQuery o'')#computation comp) , 
 		       rest_f o')
 		
           | `Rec funs ->

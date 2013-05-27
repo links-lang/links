@@ -342,9 +342,6 @@ let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
   | `Database s -> Database (_splice s)
   | `Variant (n,v) -> Inject (n, _splice v)
-(* this implicitly projects a boxed db function instead of translating ApplyDB *)
-  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f ->
-      _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)
   | `Table (db,s,row) -> Table (_splice db, _splice s,row)
   | `FunctionQ f -> f
@@ -361,7 +358,7 @@ let rec _splice : value -> Irquery.value = function
   | `XMLText _ 
   | `XMLNode _ -> failwith "XML inside queries not yet suported"
   | `Unit -> Extend (StringMap.empty, None)
-  | `Function _ -> assert false
+  | `Function _ -> Extend (StringMap.empty, None)
 
 
 let _funq = fun c -> `FunctionQ c

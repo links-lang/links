@@ -85,16 +85,16 @@ let used_database v : Value.database option =
       | v::vs ->
           begin
             match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
+            | None -> comprehensions vs
+            | Some db -> Some db
           end
   in
-  let rename_me  =     
+  let dbstring  =     
     match v with
     | `Concat vs -> comprehensions vs
     | v -> used v
   in
-  match rename_me with
+  match dbstring with
   | Some s ->
       let driver, params = Value.parse_db_string s 
       in Some (fst (Value.db_connect driver params))
@@ -313,7 +313,7 @@ module IRquery2query =
 	    else  `Database (driver ^ ":" ^ name ^ ":" ^ args)
 	| _ -> assert false
       end
-      | Lambda _ -> assert false
+      | Lambda (xs,e) -> `Closure((xs,e),env)
 	    
     and computation env (binders, tailcomp) : query =
       match binders with
