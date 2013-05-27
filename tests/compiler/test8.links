@@ -1,0 +1,27 @@
+
+fun f(m) {fun (n) { n + m } }
+
+
+fun p(m) {fun (n) { n > m } }
+
+fun maplist(f) {
+  fun map0 (l) {
+    switch (l) {
+      case [] -> []
+      case (x::xs) -> (f(x))::(map0(xs))
+    }
+  }
+  map0
+}
+
+fun filter(p) { 
+  fun filter0 (l) {
+    switch (l) {
+      case [] -> []
+      case (x::xs) -> if (p(x))  {x::(filter0(xs))} else {filter0(xs)}
+    }
+  }
+  filter0
+}
+
+filter(p(100000)) (maplist(f(2))([1..100000]))
