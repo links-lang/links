@@ -317,7 +317,7 @@ let u__exit k v = v
 
 let u_s___caret_caret = ( ^ )
 
-let u__print = print_string
+let u__print = print_endline
 
 (* Integration of query stuff *)
 
@@ -342,6 +342,7 @@ let rec _splice : value -> Irquery.value = function
   | #constant as c -> Constant c
   | `Database s -> Database (_splice s)
   | `Variant (n,v) -> Inject (n, _splice v)
+(* this implicitly projects a boxed db function instead of translating ApplyDB *)
   | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f ->
       _splice (StringMap.find "db" f)
   | `Record nm -> Extend (StringMap.map _splice nm, None)

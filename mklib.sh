@@ -1,0 +1,5 @@
+#/bin/sh
+
+# This should really be made into a makefile rule somehow
+
+ocamlopt -a cgi.cmx netencoding.cmx unionfind.cmx getopt.cmx PP.cmx notfound.cmx utility.cmx env.cmx settings.cmx basicsettings.cmx debug.cmx performance.cmx graph.cmx types.cmx constant.cmx sourceCode.cmx regex.cmx sugartypes.cmx parser.cmx lexer.cmx typeUtils.cmx errors.cmx instantiate.cmx generalise.cmx typevarcheck.cmx unify.cmx var.cmx ir.cmx parse.cmx sugarTraversals.cmx desugarDatatypes.cmx defaultAliases.cmx value.cmx xmlParser.cmx xmlLexer.cmx parseXml.cmx resolvePositions.cmx refineBindings.cmx desugarLAttributes.cmx transformSugar.cmx fixTypeAbstractions.cmx desugarPages.cmx desugarFormlets.cmx desugarRegexes.cmx desugarFors.cmx desugarDbs.cmx desugarFuns.cmx desugarProcesses.cmx desugarInners.cmx typeSugar.cmx frontend.cmx dumpTypes.cmx compilePatterns.cmx jsonparse.cmx jsonlex.cmx js.cmx json.cmx lib/compiler/irquery.cmx database.cmx linksregex.cmx proc.cmx lib.cmx sugartoir.cmx loader.cmx irtoml.cmx pg_database.cmx irtojs.cmx lib/compiler/lregex.cmx lib/compiler/queryml.cmx lib/compiler/mllib.cmx query.cmx evalir.cmx webif.cmx links.cmx -o links.cmxa

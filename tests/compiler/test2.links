@@ -1,0 +1,6 @@
+fun f(x) {
+  x + 1
+}
+
+var x = print(intToString(f(f(42))));
+print("\n")

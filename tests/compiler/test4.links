@@ -1,0 +1,19 @@
+fun f(x) {
+  x+1
+}
+
+fun rec(n,f) {
+  if (n > 0) {
+    print(intToString(n));
+    rec(n-1,fun (x) {f(x) * 2})
+  } else {
+    var result = for (x <- [1,2,3,4])
+                 where (f(x) > 10*x)
+                 [(a=f(x))];
+
+    var output = if (result == []) {"empty"} else {"nonempty"};
+    print(output)
+  }
+}
+
+rec(5,f)

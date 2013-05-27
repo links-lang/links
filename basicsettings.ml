@@ -65,9 +65,9 @@ let pretty_print_ir = Settings.add_bool("pretty_print_ir", false, `User)
 
 (* Whether to compile the IR rather than run it *)
 let compile = Settings.add_bool("compile", false, `User)
+let noquery = Settings.add_bool("noquery", false, `User)
 let nocps = Settings.add_bool("nocps", false, `User)
 let nobox = Settings.add_bool("nobox", false, `User)
-let nodouble = Settings.add_bool("nodouble", false, `User)
 let noprelude = Settings.add_bool("noprelude", false, `User)
 
 (* default database settings *)

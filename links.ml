@@ -294,21 +294,26 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
   let printer (valenv, nenv, typingenv) ((program, t), _) =
     (* print_endline (Ir.Show_program.show program ^ "\n"); *)
     let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
-    (*  let program = Ir.RemoveApplyPure.program tenv program in
-	let program = Ir.ElimDeadDefs.program tenv program in *)
-    let program = Ir.Doubling.program tenv program in
-    let program = Ir.Splicing.program tenv program in
+    (*  let program = Ir.ElimDeadDefs.program tenv program in *)
+    let program = 
+      if (Settings.get_value noquery)
+      then program 
+      else 
+	let program = Ir.Doubling.program tenv program in
+	let program = Ir.Splicing.program tenv program in
+	program in
+    let program = Ir.RemoveApplyPure.program tenv program in
     let code = Irtoml.ml_of_ir 
-      (not (Settings.get_value nocps)) 
-      (not (Settings.get_value nobox))
-      (Settings.get_value noprelude)
-      nenv
-      prelude
-      program 
+	(not (Settings.get_value nocps)) 
+	(not (Settings.get_value nobox))
+	(Settings.get_value noprelude)
+	nenv
+	prelude
+	program 
     in
-      print_endline code
+    print_endline code
   in
-    handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
+  handle_errors (measure "parse" parse (nenv, tyenv) ->- printer envs)
 
 let run_file prelude envs filename =
   Settings.set_value interacting false;
@@ -427,6 +432,7 @@ let options : opt list =
     ('n',     "no-types",            set printing_types false,         None);
     ('p',     "print-ir",            set pretty_print_ir true,         None);
     ('c',     "compile-ir",          set compile true,                 None);
+    (noshort, "noquery",             set noquery true,                 None);
     (noshort, "nocps",               set nocps true,                   None);
     (noshort, "nobox",               set nobox true,                   None);
     (noshort, "noprelude",           set noprelude true,               None);
