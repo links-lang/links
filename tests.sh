@@ -9,6 +9,8 @@ sh $1 test5
 sh $1 test6
 sh $1 test7
 sh $1 test8
+sh $1 test9
+sh $1 test10
 
 sh $1 fact
 sh $1 fib

@@ -59,7 +59,6 @@ and query_value =
 and query_tail_computation =
   [ `Return of query_value
   | `Apply of query_value * query_value list
-(*  | `ApplyDB of query_value * query_value list*)
   | `Case of query_value * (var * query_computation) name_map * (var * query_computation) option
   | `If of query_value * query_computation * query_computation
   ] 
@@ -466,7 +465,7 @@ module TranslateQuery =
 	method tail_computation : Ir.tail_computation -> query_tail_computation = function
 	  | `Return v -> `Return (o#value v)
           | `Apply(v,vl) -> `Apply (o#value v, List.map o#value vl) 
-	  (*| `Apply (v,vl) -> failwith "Unexpected Apply in DB context"*)
+(*	  | `Apply (v,vl) -> failwith "Unexpected Apply in DB context"*)
 (*	  | `ApplyDB (v,vl) -> `ApplyDB (o#value v, List.map o#value vl)*)
 	  | `ApplyDB (v,vl) -> o#tail_computation (`Apply (`Project ("db",v),vl))
 
@@ -626,16 +625,17 @@ module Translator (B : Boxer) =
 	method tail_computation : tail_computation -> code = fun tc ->
 	  match tc with
             `Return v -> o#value v
-		
+
           | `Apply (v, vl) -> 
 	      if vl = [] 
 	      then 
 		B.box_call (Call (o#value v, [Unit]))
 	      else
 		B.box_call (Call (o#value v, List.map o#value vl))
+
+	  | `ApplyPL (v,vl) ->
+	      o#tail_computation (`Apply (`Project ("pl",v),vl)) 
 		  
-	  | `ApplyPL (v, vl) ->
-	      o#tail_computation (`Apply (`Project ("pl",v),vl))
 		
 	  | `ApplyDB (v, vl) ->
 	      failwith "ApplyDB inside pl"
@@ -730,12 +730,15 @@ module Translator (B : Boxer) =
 	  Tail begin match tc with
             `Return v -> B.box_call (Call (k, [o#value v]))
 		
+(* In CPS, we don't need to pass the explicit unit arg since we have k. *)
           | `Apply (v, vl) -> 
-	      if vl = [] 
+		B.box_call (Call (o#value v, k::(List.map o#value vl)))
+(* OLD	      if vl = [] 
 	      then 
 		B.box_call (Call (o#value v, [k; Unit]))
 	      else
 		B.box_call (Call (o#value v, k::(List.map o#value vl)))
+*)
 		  
 	  | `ApplyPL (v, vl) ->
 	      o#tail_computation (`Apply (`Project ("pl",v),vl)) k
@@ -901,7 +904,6 @@ module MLof =
     and tail_computation (tc : query_tail_computation) = match tc with
     | `Return v -> variant "Return" [value v]
     | `Apply (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
-    | `ApplyDB (v,vl) -> variant "Apply" [value v; list (List.map value vl)]
     | `Case (v, nm, o) -> 
 	let aux (v,c) = parens (text (string_of_int v) ^^ (text ", ") ^^ (computation c))
 	in variant "Case" [ value v ; name_map aux nm ; option aux o ]

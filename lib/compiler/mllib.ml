@@ -109,8 +109,8 @@ let unbox_float = function
 let box_func f : value = `Function f
 let rec unbox_func = function
   | `Function f -> f
-  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> 
-      unbox_func (StringMap.find "pl" f)
+(*  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> 
+      unbox_func (StringMap.find "pl" f)*)
   | _ -> assert false
 
 let box_funQ f = `FunctionQ f

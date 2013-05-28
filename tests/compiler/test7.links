@@ -4,12 +4,16 @@ fun f(m,n) { n + m }
 
 fun p(m,n) { n > m }
 
+sig maplist : ((a) ~c~> b, [a]) ~c~> [b]
+
 fun maplist(f,l) {
   switch (l) {
     case [] -> []
     case (x::xs) -> (f(x))::(maplist(f, xs))
   }
 }
+
+sig filter : ((a) ~c~> Bool, [a]) ~c~> [a]
 
 fun filter(p,l) {
   switch (l) {

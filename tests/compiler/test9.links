@@ -1,0 +1,16 @@
+
+
+fun f(n) {
+  n + 1
+}
+
+# This should be inferred to be wild because of the missing switch case.
+
+sig maplist : ((a) ~c~> b, [a]) ~c~> b
+fun maplist(f,l) {
+  switch (l) {
+    case (x::xs) -> f(x)
+  }
+}
+
+maplist(f,[1..100000])

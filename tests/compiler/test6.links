@@ -7,6 +7,7 @@ fun p(m) {
   fun (n) { n > m }
 }
 
+sig maplist : ((a) ~c~> b, [a]) ~c~> [b]
 fun maplist(f,l) {
   switch (l) {
     case [] -> []
@@ -14,6 +15,7 @@ fun maplist(f,l) {
   }
 }
 
+sig filter : ((a) ~c~> Bool, [a]) ~c~> [a]
 fun filter(p,l) {
   switch (l) {
     case [] -> []

@@ -1,0 +1,15 @@
+
+
+fun f(n) {
+  n + 1
+}
+sig maplist : ((a) ~c~> b, [a]) ~c~> [b]
+
+fun maplist(f,l) {
+  switch (l) {
+    case [] -> []
+    case (x::xs) -> f(x)::(maplist(f,xs))
+  }
+}
+
+maplist(f,[1])

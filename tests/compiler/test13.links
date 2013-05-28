@@ -1,0 +1,14 @@
+
+fun f(n) {
+  n + 1
+}
+
+fun applyn(f,n,x) {
+  if (n == 0) {
+    x
+  } else {
+    applyn(f,n-1,f(x))
+  }
+}
+
+applyn(f,5,42)

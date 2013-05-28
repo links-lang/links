@@ -829,7 +829,7 @@ module Doubling =
         method exit_query () = {< in_query = false >}
             
         method add_duplicated v = 
-(*	  print_endline ("duplicating "^string_of_int v);*)
+	  (*Printf.fprintf stderr "Duplicating %i \n" v;*)
           {< duplicated_function = IntSet.add v duplicated_function >}
         method replace_dup d = 
           {< duplicated_function = d >}
@@ -848,25 +848,12 @@ module Doubling =
 	      let o = o#enter_query() in 
 	      let b,o = o#binding b in
 	      b,o#exit_query()
- (*         | `Fun (_,(_,bind_list,_),_) -> 
-              (* Remember old dup environment *)
-              let dup = duplicated_function in
-              (* Compute new dup environment consisting of declared functions that have "any" effect *)
-              let any_bindings = 
-                List.filter (fun (_,(ftype,_,_)) -> o#is_any ftype) bind_list in
-              let o = List.fold_left (fun o x -> o#add_duplicated (fst x)) o any_bindings in
-(*                List.fold_left (fun set x -> IntSet.add (fst x) set) 
-                  duplicated_function any_bindings in
-              let o = {< duplicated_function = dup' >} in*)
-              (* Translate body using dup' *)
-              let b,o = super#binding b in
-              b,o#replace_dup dup
-*)
           | _ -> super#binding b  
 		
 (* Attempt to fix problem with duplicated function parameters being missed *)
 	method binder = 
-	  fun (var, ((ftype,_,_) as info)) -> 
+	  fun (var, ((ftype,name,scope) as info)) -> 
+	   (* Printf.fprintf stderr "Considering %s %i %s \n" name var (Types.string_of_datatype ftype);*)
 	    let (var,info),o = super#binder (var,info) in
 	    if o#is_any ftype 
 	    then (var,info), o#add_duplicated var
@@ -884,11 +871,11 @@ module Doubling =
           match bs with
           | [] -> [], o
           | (`Fun (((_,(ftype,_,_)),_,_) as f))::q 
-            when in_query && not (o#is_wild ftype) -> 
+            when in_query && (* test not (o#is_wild ftype)*) o#is_any ftype -> 
               let tail, o = o#duplicate_bindings q in
               (`FunQ f)::tail, o
           | ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q
-            when not (o#is_wild ftype) ->
+            when (* test not (o#is_wild ftype)*) o#is_any ftype ->
               (* Generate fresh copies of functions *)
               let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
               and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
@@ -928,17 +915,14 @@ module Doubling =
            a called function is essentially a variable. *)
         method tail_computation tc =
           match tc with 
-          | `Apply ((v,_) as f) 
+          | `Apply ((v,vl) as f) 
             when IntSet.mem (o#get_var_id v) duplicated_function -> 
               (* Translate calls of duplicated functions appropriately based 
                  on context *)
               if in_query 
-              then o#tail_computation (`ApplyDB f)
-              else o#tail_computation(`ApplyPL f)
-(*	  | `Apply ((v,_) as f) 
-            when not(IntSet.mem (o#get_var_id v) duplicated_function) && in_query -> 
-	      failwith ("Call to a non-duplicated function "^string_of_int(o#get_var_id v)^" within query!");
-	      super#tail_computation tc*)
+              then o#tail_computation(`ApplyDB f)
+              else o#tail_computation(`ApplyPL f)          
+
           | _ -> super#tail_computation tc
 		
 		
