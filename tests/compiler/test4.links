@@ -1,7 +1,9 @@
+sig f : (Int) -> Int
 fun f(x) {
   x+1
 }
 
+sig rec : (Int, (Int) ~a~> Int) ~a~> ()
 fun rec(n,f) {
   if (n > 0) {
     print(intToString(n));

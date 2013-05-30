@@ -53,6 +53,8 @@ type value =
   | `ApplyPure of value * value list
 
   | `Coerce of value * Types.datatype
+  | `CoerceDB of value
+  | `CoercePL of value
   ]
 and tail_computation =
   [ `Return of value

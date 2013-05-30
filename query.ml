@@ -422,7 +422,7 @@ struct
 
     | `ApplyPure (f, ps) -> 
         apply env (value env f, List.map (value env) ps)
-    | `Coerce (v, _) -> value env v
+    | `Coerce (v, _) | `CoerceDB v | `CoercePL v -> value env v
 
   and computation env (binders, tailcomp) : t =
     match binders with

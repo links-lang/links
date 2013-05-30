@@ -4,7 +4,7 @@ fun f(m) {fun (n) { n + m } }
 
 fun p(m) {fun (n) { n > m } }
 
-sig maplist : ((a) ~c~> b, [a]) ~c~> [b]
+sig maplist : ((a) ~c~> b) ~c~> ([a]) ~c~> [b]
 
 fun maplist(f) {
   fun map0 (l) {
@@ -15,7 +15,7 @@ fun maplist(f) {
   }
   map0
 }
-sig filter : ((a) ~c~> Bool, [a]) ~c~> [a]
+sig filter : ((a)~c~> Bool) ~c~> ([a]) ~c~> [a]
 
 fun filter(p) { 
   fun filter0 (l) {

@@ -637,7 +637,7 @@ let rec generate_value env : Ir.value -> code =
                 | _ ->
                     Call (gv f, List.map gv vs)                      
             end
-      | `Coerce (v, _) ->     
+      | `Coerce (v, _) | `CoerceDB v | `CoercePL v ->     
           gv v
 
 and generate_xml env tag attrs children =

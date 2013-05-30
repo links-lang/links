@@ -67,6 +67,8 @@ type value =
   | `ApplyPure of (value * value list)
 
   | `Coerce of (value * Types.datatype)
+  | `CoerceDB of value
+  | `CoercePL of value
   ]
 and tail_computation =
   [ `Return of (value)
@@ -262,6 +264,8 @@ object (o : 'self_type)
 (*             nest 2 ( *)
 (*               group (o#value v1 ^| o#comparison cmp) ^| o#value v2)) *)
       | `Coerce (v,_) -> o#value v
+      |	`CoerceDB v -> o#value v
+      |	`CoercePL v -> o#value v
           
   method tail_computation : tail_computation -> doc = fun tc ->
     match tc with
@@ -394,7 +398,6 @@ struct
 
   let info_type (t, _, _) = t
 
-  let deconstruct f t = f t
 
   module Env = Env.Int
 
@@ -491,10 +494,10 @@ struct
               `Extend (fields, base), t, o
         | `Project (name, v) ->
             let (v, vt, o) = o#value v in
-              `Project (name, v), deconstruct (project_type name) vt, o
+              `Project (name, v), project_type name vt, o
         | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type_poly names) vt in
+            let t = erase_type_poly names vt in
               `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
@@ -529,12 +532,21 @@ struct
             let (f, ft, o) = o#value f in
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct return_type ft, o
+              `ApplyPure (f, args), return_type ft, o
         | `Coerce (v, t) ->
             let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
-              `Coerce (v, t), t, o
-
+(*	    Printf.fprintf stderr "Coercion %s <: %s\n" 
+	      (Types.string_of_datatype vt) (Types.string_of_datatype t);*)
+            `Coerce (v, t), t, o
+(* TEST *)
+	| `CoerceDB v -> 
+	    let v,vt,o = o#value v in 
+	    `CoerceDB(v),vt,o
+	| `CoercePL v -> 
+	    let v,vt,o = o#value v in 
+	    `CoercePL(v),vt,o
+	      
     method tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) =
       function
@@ -546,17 +558,17 @@ struct
             let f, ft, o = o#value f in
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `Apply (f, args), deconstruct return_type ft, o
+            `Apply (f, args),  return_type ft, o
         | `ApplyPL (f, args) ->
             let f, ft, o = o#value f in
-            let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPL (f, args), deconstruct return_type ft, o
+            let args, arg_types, o = o#list (fun o -> o#value) args in
+              `ApplyPL (f, args),  return_type ft, o
         | `ApplyDB (f, args) ->
             let f, ft, o = o#value f in
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyDB (f, args), deconstruct return_type ft, o
+              `ApplyDB (f, args),  return_type ft, o
         | `Special special ->
             let special, t, o = o#special special in
               `Special special, t, o
@@ -621,7 +633,7 @@ struct
               `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct return_type t, o
+              `CallCC v,  return_type t, o
       
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -816,15 +828,40 @@ module Doubling =
         val in_query = false
         val duplicated_function = IntSet.empty
             
-        method is_wild fun_type =
-          let fields,_ = TypeUtils.effect_row fun_type in
+       (* method is_wild fun_type =
+          let fields,_ = TypeUtils.effect_row fun_type in 
           StringMap.mem "wild" fields 
-            && fst (StringMap.find "wild" fields) = `Present
-            
+	    && fst (StringMap.find "wild" fields) = `Present
+	
         method is_any t = 
-                (* kinda hacky, but handle polymorphism *)
-          try not (o#is_wild t) with _ -> false 
-              
+                (* kinda hacky, but handles polymorphism *)
+	  try not (o#is_wild t) with _ -> false 
+	      *)
+        method is_fun typ = 
+          match  typ with
+    	  | `ForAll(_,t) -> o#is_fun t
+	  | `Function(_,_,_) -> true
+          | _ -> false 
+	
+
+        method is_wild fun_type =
+          match  fun_type with
+    	  | `ForAll(_,t) -> o#is_wild t
+	  | `Function(_,(fields,_),_) -> 
+              StringMap.mem "wild" fields 
+		&& fst (StringMap.find "wild" fields) = `Present
+	   | _ -> false	
+
+	method is_tame fun_type = 
+	  match fun_type with
+	  | `ForAll(_,t) -> o#is_tame t
+	  |  `Function(_,(fields,_),_) -> 
+	      StringMap.mem "wild" fields 
+		&& fst (StringMap.find "wild" fields) = `Absent
+	  | _ -> false
+     
+        method is_any t = o# is_fun t && not(o#is_wild t) && not (o#is_tame t)
+            
         method enter_query () = {< in_query = true >}
         method exit_query () = {< in_query = false >}
             
@@ -853,7 +890,7 @@ module Doubling =
 (* Attempt to fix problem with duplicated function parameters being missed *)
 	method binder = 
 	  fun (var, ((ftype,name,scope) as info)) -> 
-	   (* Printf.fprintf stderr "Considering %s %i %s \n" name var (Types.string_of_datatype ftype);*)
+(*	    Printf.fprintf stderr "Considering %s %i %s \n" name var (Types.string_of_datatype ftype);*)
 	    let (var,info),o = super#binder (var,info) in
 	    if o#is_any ftype 
 	    then (var,info), o#add_duplicated var
@@ -871,11 +908,11 @@ module Doubling =
           match bs with
           | [] -> [], o
           | (`Fun (((_,(ftype,_,_)),_,_) as f))::q 
-            when in_query && (* test not (o#is_wild ftype)*) o#is_any ftype -> 
+            when in_query && o#is_any ftype -> 
               let tail, o = o#duplicate_bindings q in
               (`FunQ f)::tail, o
           | ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q
-            when (* test not (o#is_wild ftype)*) o#is_any ftype ->
+            when o#is_any ftype ->
               (* Generate fresh copies of functions *)
               let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
               and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
@@ -915,13 +952,44 @@ module Doubling =
            a called function is essentially a variable. *)
         method tail_computation tc =
           match tc with 
-          | `Apply ((v,vl) as f) 
+(*          | `Apply ((v,vl) as f) 
             when IntSet.mem (o#get_var_id v) duplicated_function -> 
               (* Translate calls of duplicated functions appropriately based 
                  on context *)
               if in_query 
               then o#tail_computation(`ApplyDB f)
               else o#tail_computation(`ApplyPL f)          
+*)
+	  | `Apply(f,args) -> 
+(* TEST CODE *)
+	      let f, ft, o = o#value f in
+              let args, arg_types, o = o#list (fun o -> o#value) args in
+              (* TODO: check arg types match *)
+ 	      let fun_arg_types = TypeUtils.arg_types ft in
+	      let type_pairs = List.combine arg_types fun_arg_types in
+(*	      Printf.fprintf stderr "Apply\n";
+	      let _ = List.iter (fun (t,ft) -> 
+		Printf.fprintf stderr "%s <: %s %b %b\n" 
+		  (Types.string_of_datatype t)
+		  (Types.string_of_datatype ft)
+		  (o#is_any t)
+		  (o#is_any ft)) type_pairs in *)
+	      let type_args = List.combine type_pairs args in
+	      let args = List.map (fun ((t,ft),arg) -> 
+		if o#is_any t && not(o#is_any(ft))
+		then if o#is_wild(ft) then `CoercePL(arg) else `CoerceDB(arg)
+		else arg)
+		  type_args  in
+	      let apply_exp = 
+		if IntSet.mem (o#get_var_id f) duplicated_function
+		then 
+		  if in_query 
+		  then `ApplyDB(f,args)
+		  else `ApplyPL(f,args)
+		else `Apply(f,args)
+	      in 
+	      apply_exp,  TypeUtils.return_type ft, o
+(* END TEST CODE *)
 
           | _ -> super#tail_computation tc
 		

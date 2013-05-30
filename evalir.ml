@@ -172,7 +172,7 @@ module Eval = struct
           ) with
             | TopLevel (_, v) -> atomic := false; v
         end
-    | `Coerce (v, t) -> value env v
+    | `Coerce (v, _) | `CoercePL v | `CoerceDB v -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
