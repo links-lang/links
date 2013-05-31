@@ -5,4 +5,4 @@ fun dbf(n) {n+1}
 
 fun cast(f) {fun (x) {f(x)} }
 
-plf(cast (dbf))
+plf(cast(dbf))

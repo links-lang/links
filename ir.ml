@@ -469,7 +469,10 @@ struct
           (StringMap.empty, StringMap.empty, o)
 
     method var : var -> (var * datatype * 'self_type) =
-      fun var -> (var, o#lookup_type var, o)
+      fun var -> 
+(*	Printf.fprintf stderr "var %i : %s\n" 
+	  var (Types.string_of_datatype (o#lookup_type var));*)
+	(var, o#lookup_type var, o)
         
     method value : value -> (value * datatype * 'self_type) =
       function
@@ -838,14 +841,15 @@ module Doubling =
 	  try not (o#is_wild t) with _ -> false 
 	      *)
         method is_fun typ = 
-          match  typ with
-    	  | `ForAll(_,t) -> o#is_fun t
-	  | `Function(_,_,_) -> true
-          | _ -> false 
+	    match  TypeUtils.concrete_type typ with
+    	    | `ForAll(_,t) -> o#is_fun t
+	    | `Function(_,_,_) -> true
+            | _ -> 
+		false 
 	
 
         method is_wild fun_type =
-          match  fun_type with
+          match TypeUtils.concrete_type fun_type with
     	  | `ForAll(_,t) -> o#is_wild t
 	  | `Function(_,(fields,_),_) -> 
               StringMap.mem "wild" fields 
@@ -853,20 +857,20 @@ module Doubling =
 	   | _ -> false	
 
 	method is_tame fun_type = 
-	  match fun_type with
+	  match TypeUtils.concrete_type fun_type with
 	  | `ForAll(_,t) -> o#is_tame t
 	  |  `Function(_,(fields,_),_) -> 
 	      StringMap.mem "wild" fields 
 		&& fst (StringMap.find "wild" fields) = `Absent
 	  | _ -> false
      
-        method is_any t = o# is_fun t && not(o#is_wild t) && not (o#is_tame t)
+        method is_any t = o#is_fun t && not(o#is_wild t) && not (o#is_tame t)
             
         method enter_query () = {< in_query = true >}
         method exit_query () = {< in_query = false >}
             
         method add_duplicated v = 
-	  (*Printf.fprintf stderr "Duplicating %i \n" v;*)
+(*	  Printf.fprintf stderr "Duplicating %i \n" v;*)
           {< duplicated_function = IntSet.add v duplicated_function >}
         method replace_dup d = 
           {< duplicated_function = d >}
@@ -889,9 +893,11 @@ module Doubling =
 		
 (* Attempt to fix problem with duplicated function parameters being missed *)
 	method binder = 
-	  fun (var, ((ftype,name,scope) as info)) -> 
-(*	    Printf.fprintf stderr "Considering %s %i %s \n" name var (Types.string_of_datatype ftype);*)
-	    let (var,info),o = super#binder (var,info) in
+	  fun (var, info) -> 
+	    let (var,((ftype,name,scope) as info)),o = super#binder (var,info) in
+(*            if o#is_fun ftype 
+            then Printf.fprintf stderr "Considering %s %i %s (f=%b w=%b t=%b a=%b)\n" name var (Types.string_of_datatype ftype) (o#is_fun ftype) (o#is_wild ftype) (o#is_tame ftype) (o#is_any ftype);*)
+ 
 	    if o#is_any ftype 
 	    then (var,info), o#add_duplicated var
 	    else (var,info), o
@@ -963,22 +969,47 @@ module Doubling =
 	  | `Apply(f,args) -> 
 (* TEST CODE *)
 	      let f, ft, o = o#value f in
+(*	      Printf.fprintf stderr "ftype = %s (f:%b w:%b t:%b a:%b)\n" (Types.string_of_datatype ft)
+		(o#is_fun ft)
+		(o#is_wild ft)
+		(o#is_tame ft)
+		(o#is_any ft);
+              Printf.fprintf stderr "BBB\n";*)
               let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
  	      let fun_arg_types = TypeUtils.arg_types ft in
 	      let type_pairs = List.combine arg_types fun_arg_types in
 (*	      Printf.fprintf stderr "Apply\n";
-	      let _ = List.iter (fun (t,ft) -> 
-		Printf.fprintf stderr "%s <: %s %b %b\n" 
-		  (Types.string_of_datatype t)
-		  (Types.string_of_datatype ft)
-		  (o#is_any t)
-		  (o#is_any ft)) type_pairs in *)
+	      let _ = List.iter (fun (x,y) -> 
+		if(o#is_fun x) 
+		then Printf.fprintf stderr "%s (f=%b w=%b t=%b a=%b) <: %s (f=%b w=%b t=%b a=%b)\n" 
+		    (Types.string_of_datatype x)
+		    (o#is_fun x)
+		    (o#is_wild x)
+		    (o#is_tame x)
+		    (o#is_any x)
+		    (Types.string_of_datatype y)
+		    (o#is_fun y)
+		    (o#is_wild y)
+		    (o#is_tame y)
+		    (o#is_any y)) type_pairs in*) 
 	      let type_args = List.combine type_pairs args in
 	      let args = List.map (fun ((t,ft),arg) -> 
-		if o#is_any t && not(o#is_any(ft))
-		then if o#is_wild(ft) then `CoercePL(arg) else `CoerceDB(arg)
-		else arg)
+		match o#is_any t, o#is_wild ft, o#is_tame ft with
+		  (* coerce ANY to PL *)
+		|  true, true, false -> `CoercePL(arg) 
+		      (* coerce ANY to DB *)
+		|  true, false, true -> `CoerceDB(arg) 
+		      (* no coercion: must both be ANY *)
+		|  true, false, false -> assert (o#is_any ft); arg
+		      (* impossible case *)
+		|  _, true, true -> failwith "Both wild and tame!"
+		      (* no coercion: must both be PL *)
+		|  false, true, false -> assert(o#is_wild t); arg
+		      (* no coercion: most both be DB *)
+		|  false, false, true -> assert(o#is_tame t); arg
+		      (* not a function*)
+		|  false, false, false -> assert (not(o#is_fun ft)); arg)
 		  type_args  in
 	      let apply_exp = 
 		if IntSet.mem (o#get_var_id f) duplicated_function

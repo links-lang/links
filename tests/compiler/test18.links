@@ -7,10 +7,12 @@ fun f(x) {
 #sig rec : (Bool, (Int) ~a~> Int) ~a~> ()
 fun rec(b,f) {
   if (b) {
+    print("1");	
     rec(false,fun (x) {f(x)*2})
   } else {
+    print("2");
     var result = f(1);
-    ()
+    print("3")
   }
 }
 

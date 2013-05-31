@@ -6,11 +6,14 @@ fun f(x) {
 
 sig rec : (Bool, (Int) ~a~> Int) ~a~> ()
 fun rec(b,f) {
+  fun g(x) {fun (x) {print("3"); f(2)}
   if (b) {
-    rec(false,fun (x) {f(x)*2})
+    print("1");	
+    rec(false,g)
   } else {
+    print("2");
     var result = f(1);
-    ()
+    print("4")
   }
 }
 
