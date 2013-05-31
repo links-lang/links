@@ -1,0 +1,8 @@
+sig plf :  ((Int) ~e~> Int) ~e~> Int
+fun plf(f) { f(1) }
+
+sig dbf : (Int) -> Int
+fun dbf(n) {n+1}
+
+
+plf(dbf )

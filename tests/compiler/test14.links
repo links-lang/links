@@ -1,0 +1,6 @@
+sig plf :  (forall p::Presence.(Int) {wild{p}|e}-> Int) ~e~> Int
+fun plf(f) { f(1) }
+
+fun dbf(n) {n+1}
+
+plf(dbf )

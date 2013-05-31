@@ -1,0 +1,8 @@
+sig plf :  ((Int) ~e~> Int) ~e~> Int
+fun plf(f) { f(1) }
+
+fun dbf(n) {n+1}
+
+fun cast(f) {fun (x) {f(x)} }
+
+plf(cast (dbf))

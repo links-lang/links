@@ -1,0 +1,17 @@
+#sig f : (Int) -> Int
+fun f(x) {
+  x+1
+}
+
+
+#sig rec : (Bool, (Int) ~a~> Int) ~a~> ()
+fun rec(b,f) {
+  if (b) {
+    rec(false,fun (x) {f(x)*2})
+  } else {
+    var result = f(1);
+    ()
+  }
+}
+
+rec(true,f)

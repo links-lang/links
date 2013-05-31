@@ -1,0 +1,4 @@
+sig plf : ((Int) ~a~> Int) ~a~> Int
+fun plf (f) { f(1) }
+
+plf(fun (x) {x+1})
