@@ -1,0 +1,20 @@
+# more complex example involving function used as both pl and db
+
+var db = database "my_database" "postgresql" "localhost:5432:links:12345";
+var people = table "people" with (i : Int, n : String) from db;
+
+#sig f : (Int) -> Int
+fun f(n) {
+	 n + 1
+}
+
+sig execute_query : ((Int) -a-> Int) -a-> [(a:Int)]
+fun execute_query(f)  {
+ 
+    var result = query{for (row <-- people) [row]};
+    for (row <- result) 
+    [(a=f(row.i))]
+}
+
+
+execute_query(f)

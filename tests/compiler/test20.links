@@ -1,0 +1,15 @@
+fun id (x) {x}
+
+sig damagedSort : ((a) ~b~> c, [a]) ~b~> [a]
+fun damagedSort (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var ge = for (y <- xs) where (f(y) >= f(x)) [y];
+      damagedSort(f,ge)
+    }
+  }
+}
+
+
+damagedSort(id,[1..100])

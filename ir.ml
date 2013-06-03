@@ -851,7 +851,8 @@ module Doubling =
         method is_wild fun_type =
           match TypeUtils.concrete_type fun_type with
     	  | `ForAll(_,t) -> o#is_wild t
-	  | `Function(_,(fields,_),_) -> 
+	  | `Function(_,effect,_) -> 
+	      let (fields,row_var) = effect in
               StringMap.mem "wild" fields 
 		&& fst (StringMap.find "wild" fields) = `Present
 	   | _ -> false	
@@ -859,12 +860,28 @@ module Doubling =
 	method is_tame fun_type = 
 	  match TypeUtils.concrete_type fun_type with
 	  | `ForAll(_,t) -> o#is_tame t
-	  |  `Function(_,(fields,_),_) -> 
+	  |  `Function(_,effect,_) -> 
+	      let (fields,row_var) =  effect in
 	      StringMap.mem "wild" fields 
 		&& fst (StringMap.find "wild" fields) = `Absent
 	  | _ -> false
-     
-        method is_any t = o#is_fun t && not(o#is_wild t) && not (o#is_tame t)
+
+	method is_absent fun_type = 
+	  match TypeUtils.concrete_type fun_type with
+	  | `ForAll(_,t) -> o#is_tame t
+	  | `Function(_,effect,_) -> 
+	      Types.is_absent_from_row "wild" effect
+	  | _ -> false
+          
+        method is_any t = 
+	  if o#is_fun t 
+	  then 
+	    let wild = o#is_wild t in
+	    let tame = o#is_tame t in 
+(*	    let absent = o#is_absent t in
+	    Printf.fprintf stderr  "%s %b %b %b\n" (Types.string_of_datatype t) wild tame absent;*)
+	    not(wild) && not(tame)
+	  else false 
             
         method enter_query () = {< in_query = true >}
         method exit_query () = {< in_query = false >}
@@ -914,11 +931,15 @@ module Doubling =
           match bs with
           | [] -> [], o
           | (`Fun (((_,(ftype,_,_)),_,_) as f))::q 
+(* TODO: Specialize type to DB effect *)
             when in_query && o#is_any ftype -> 
               let tail, o = o#duplicate_bindings q in
               (`FunQ f)::tail, o
-          | ((`Fun (((v,((ftype,_,_) as  vi)),((tyvar,_,_) as c),l) as f)))::q
+          | ((`Fun (((v,((ftype,str,scope) as  vi)),((tyvar,_,_) as c),l) as f)))::q
             when o#is_any ftype ->
+(* TODO: Translate type information *)
+	      let typl = ftype in
+	      let tydb = ftype in 
               (* Generate fresh copies of functions *)
               let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
               and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
@@ -935,7 +956,14 @@ module Doubling =
                 let values = 
                   StringMap.add "pl" (`Variable (get_id funpl)) 
                     (StringMap.add "db" (`Variable (get_id fundb)) 
-                       StringMap.empty)
+                       StringMap.empty) in 
+(* TODO: Define record type *)
+(* Using this record type this screws up other parts of the translation that expect
+to see the original function's type here. *)
+		let rvi = (`Record (Types.make_closed_row 
+				      (StringMap.add "pl" typl 
+					 (StringMap.add "db" tydb 
+					    StringMap.empty))), str,scope)
                 in `Let ((v,vi),(tyvar,`Return (`Extend (values,None))))
               in
               let tail, o = o#duplicate_bindings q in

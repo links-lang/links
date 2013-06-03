@@ -45,7 +45,7 @@ module S =
       | `Table (db,t,_fields) -> "Table (" ^ db ^ "," ^ t ^")"
       | `Singleton v -> "[" ^ print v ^ "]"
       | `Concat vs -> "[|" ^ String.concat ", " (List.map print vs) ^ "|]"
-      | `Record fields -> "{" ^ String.concat ", " (StringMap.to_list (fun _ s -> print s) fields) ^ "}"
+      | `Record fields -> "{" ^ String.concat ", " (StringMap.to_list (fun f s -> f ^ "="^ print s) fields) ^ "}"
       | `Variant (name, v) -> name ^ " of (" ^ print v ^ ")"
       | #xmlitem -> "XML"
       | `Project (v, name) -> "(" ^ print v ^ ")." ^ name

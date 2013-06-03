@@ -7,6 +7,8 @@ fun predicat(n) {
 	 n > 1
 }
 
+
+#sig execute_query :  (forall p::Presence.(Int) {wild{p}}-> Bool,Bool) ~> [(name:String)]
 fun execute_query(p,b)  {
   if (b) {
     for (row <-- people) 

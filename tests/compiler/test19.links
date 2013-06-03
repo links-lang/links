@@ -6,9 +6,9 @@ fun f(x) {
 
 sig rec : (Bool, (Int) ~a~> Int) ~a~> ()
 fun rec(b,f) {
-  fun g(x) {fun (x) {print("3"); f(2)}
   if (b) {
     print("1");	
+    fun g(x) {print("3"); f(2)}  
     rec(false,g)
   } else {
     print("2");

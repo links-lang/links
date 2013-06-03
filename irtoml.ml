@@ -461,7 +461,8 @@ module TranslateQuery =
 		| None -> `SplicedVariable (translateCode#value (`Variable var))
 		      ) 
 	  | `XmlNode (n,nm,l) -> `XmlNode (n,StringMap.map o#value nm,List.map o#value l)
-	  | `CoerceDB v | `CoercePL v -> o#value v
+	  | `CoerceDB v -> o#value (`Project("db", v))
+	  | `CoercePL v -> o#value (`Project("pl", v))
 
 	method tail_computation : Ir.tail_computation -> query_tail_computation = function
 	  | `Return v -> `Return (o#value v)

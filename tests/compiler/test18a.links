@@ -9,7 +9,7 @@ fun id(x) {
 
 #sig rec : (Bool, (Int) ~a~> Int) ~a~> ()
 fun rec(b,h) {
-  var _ = h(42);
+  var _ = id(42);
   if (b) {
     print("1");	
     fun g(x) {print("3"); h(2)}
