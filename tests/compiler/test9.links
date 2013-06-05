@@ -4,9 +4,10 @@ fun f(n) {
   n + 1
 }
 
-# This should be inferred to be wild because of the missing switch case.
+# This typechecks but should not.  
+# The function should be inferred to be wild because of the missing switch case.
 
-sig maplist : ((a) ~c~> b, [a]) ~c~> b
+sig maplist : ((a) {}-> b, [a]) {}-> b
 fun maplist(f,l) {
   switch (l) {
     case (x::xs) -> f(x)

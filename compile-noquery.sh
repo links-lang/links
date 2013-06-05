@@ -1,6 +1,6 @@
 #!/bin/sh
 
-./links --debug --noquery -c $1 > /tmp/tmp.ml
+./links --debug --noquery --nocps -c $1 > /tmp/tmp.ml
 ocamlfind ocamlopt \
 	-I lib/compiler \
 	-thread bigarray.cmxa unix.cmxa  \

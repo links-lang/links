@@ -4,10 +4,10 @@ var my_table = table "hello"
 
 fun p(r) {true}
 
-fun main() {
+fun main(p) {
   for (r <-- my_table) 
   where (p(r))
   [r]
 }
 
-main()
+main(p)

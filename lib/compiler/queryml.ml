@@ -257,6 +257,10 @@ module IRquery2query =
           | `Var (x, field_types) ->
               assert (List.mem_assoc label field_types);
               `Project (`Var (x, field_types), label)
+	  (* HACK: Projecting db from primitive *)
+	  | `Primitive f when label = "db" -> 
+(*	      Printf.fprintf stderr "hack project(db)\n";*)
+	      `Primitive f
           | _ -> failwith "Error projecting from record"
           in
           project (value env r, label)
@@ -347,7 +351,18 @@ module IRquery2query =
 	    
 	    
   (** β-reduction inside the type query **)
-    and apply env : query * query list -> query = function
+    and apply env : query * query list -> query = 
+      (* HACK *)
+      let squash_closure : string -> query -> query = 
+	fun s q -> 
+	  match q with 
+	  `Closure x -> `Closure x
+	| `Record r -> 
+(*	    Printf.fprintf stderr "hack squash_closure(%s)\n" s;*)
+	    (match StringMap.lookup "db" r with Some x -> x | None -> `Record r) 
+	|  x -> x
+      in 
+      function
       | `Closure ((xs, body), closure_env), args ->
           let env = env ++ closure_env in
           let env = List.fold_right2 (fun x arg env -> bind env (x, arg)) xs args env in
@@ -357,7 +372,7 @@ module IRquery2query =
       | `Primitive ("Concat", _), [xs; ys] -> reduce_concat [xs; ys]
       | `Primitive ("ConcatMap", _), [f; xs] ->
           begin
-            match f with
+            match squash_closure "ConcatMap" f with
             | `Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
                 reduce_for_source
@@ -366,7 +381,7 @@ module IRquery2query =
           end
       | `Primitive ("Map", _), [f; xs] ->
           begin
-            match f with
+            match squash_closure "Map" f with
             | `Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
                 reduce_for_source
@@ -391,7 +406,7 @@ module IRquery2query =
                   | _ -> assert false in
                 let xs = `For (gs, os', body) in
                 begin
-                  match f with
+                  match squash_closure "SortBy" f with
                   | `Closure (([x], os), closure_env) ->                
                       let os =
                         let env = env ++ closure_env in

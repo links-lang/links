@@ -109,8 +109,10 @@ let unbox_float = function
 let box_func f : value = `Function f
 let rec unbox_func = function
   | `Function f -> f
-(*  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> 
-      unbox_func (StringMap.find "pl" f)*)
+(* HACK: Unboxes calls to doubled functions *)
+  | `Record f when StringMap.mem "pl" f && StringMap.mem "db" f -> 
+(*      Printf.fprintf stderr "hack unbox_func\n";*)
+      unbox_func (StringMap.find "pl" f)
   | _ -> assert false
 
 let box_funQ f = `FunctionQ f
@@ -126,6 +128,10 @@ let unbox_variant = function
 let box_record r = `Record r
 let unbox_record = function
   | `Record r -> r
+(* HACK to test universal doubling *)
+  |  `Function f -> 
+(*      Printf.fprintf stderr "hack unbox_record\n";*)
+      StringMap.add "pl" (`Function f) (StringMap.add "db" `Unit StringMap.empty)
   | _ -> assert false
 
 let box_xmlitem (x:xmlitem) = (x :> value)
@@ -251,10 +257,10 @@ let u__negate = minus_num
 
 let u__tilde s r = assert false
 
-let u_l_int_gt = (>)
-let u_l_int_lt = (<)
-let u_l_int_gte = (>=)
-let u_l_int_lte = (<=)
+let u_l_gt = (>)
+let u_l_lt = (<)
+let u_l_gte = (>=)
+let u_l_lte = (<=)
 
 let u__mod = mod_num
 

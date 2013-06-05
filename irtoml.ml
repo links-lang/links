@@ -268,10 +268,10 @@ let lib_funcs = [
   "_mod", ["unbox_int"; "unbox_int"], "box_int", false;
   "_negate", ["unbox_int"], "box_int", false;
   
-  "l_int_gt", ["unbox_int"; "unbox_int"], "box_bool", false;
-  "l_int_gte", ["unbox_int"; "unbox_int"], "box_bool", false;
-  "l_int_lt", ["unbox_int"; "unbox_int"], "box_bool", false;
-  "l_int_lte", ["unbox_int"; "unbox_int"], "box_bool", false;
+  "l_gt", ["id"; "id"], "box_bool", false;
+  "l_gte", ["id"; "id"], "box_bool", false;
+  "l_lt", ["id"; "id"], "box_bool", false;
+  "l_lte", ["id"; "id"], "box_bool", false;
 
   "_tilde", ["unbox_string"; "id"], "box_bool", false;
 
@@ -317,10 +317,10 @@ let ident_substs = StringMap.from_alist
     [ "+", "l_int_add";
       "-", "l_int_minus";
       "*", "l_int_mult";
-      ">", "l_int_gt";
-      "<", "l_int_lt";
-      ">=", "l_int_gte";
-      "<=", "l_int_lte";
+      ">", "l_gt";
+      "<", "l_lt";
+      ">=", "l_gte";
+      "<=", "l_lte";
       "!=", "l_not_equals";
       "==", "l_equals";
       "Nil", "l_nil";

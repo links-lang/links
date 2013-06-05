@@ -1,30 +1,15 @@
 
-fun f(m) {fun (n) { n + m } }
 
 
-fun p(m) {fun (n) { n > m } }
-
-sig maplist : ((a) ~c~> b) ~c~> ([a]) ~c~> [b]
-
-fun maplist(f) {
+fun maplist() {
   fun map0 (l) {
     switch (l) {
-      case [] -> []
-      case (x::xs) -> (f(x))::(map0(xs))
+      case (x::xs) -> (map0 (xs))
+      case x -> x
     }
   }
   map0
 }
-sig filter : ((a)~c~> Bool) ~c~> ([a]) ~c~> [a]
 
-fun filter(p) { 
-  fun filter0 (l) {
-    switch (l) {
-      case [] -> []
-      case (x::xs) -> if (p(x))  {x::(filter0(xs))} else {filter0(xs)}
-    }
-  }
-  filter0
-}
 
-filter(p(100000)) (maplist(f(2))([1..100000]))
+maplist() ([1..100000])

@@ -663,39 +663,37 @@ struct
             let tc, t, o = o#tail_computation tc in
               `Let (x, (tyvars, tc)), o
         | `Fun (f, (tyvars, xs, body), location) ->
-            let xs, body, o =
-              let (xs, o) =
-                List.fold_right
-                  (fun x (xs, o) ->
-                     let x, o = o#binder x in
-                       (x::xs, o))
-                  xs
-                  ([], o) in
-              let body, _, o = o#computation body in
-                xs, body, o in
+   	    let (xs, o) =
+              List.fold_right
+                (fun x (xs, o) ->
+                  let x, o = o#binder x in
+                  (x::xs, o))
+                xs
+                ([], o) in            
+  
+            let body, _, o = o#computation body in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
               `Fun (f, (tyvars, xs, body), location), o
         | `FunQ (f, (tyvars, xs, body), location) ->
-            let xs, body, o =
-              let (xs, o) =
+             let (xs, o) =
                 List.fold_right
                   (fun x (xs, o) ->
                      let x, o = o#binder x in
                        (x::xs, o))
                   xs
                   ([], o) in
+
               let body, _, o = o#computation body in
-                xs, body, o in
-            let f, o = o#binder f in
+              let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
               `FunQ (f, (tyvars, xs, body), location), o
         | `Rec defs ->
-            let _, o =
+            let defs, o =
               List.fold_right
-                (fun (f, _, _) (fs, o) ->
+                (fun (f, c, b) (fs, o) ->
                    let f, o = o#binder f in
-                     (f::fs, o))
+                     ((f,c,b)::fs, o))
                 defs
                 ([], o) in
 
@@ -792,10 +790,12 @@ struct
 end
 
 (** Rename all variables in the given IR piece **)
+
+(* NOTE: This does not rename the bound variables in Fun, Let, etc. correctly, leading to some bugs. *)
 module RenameVariable =
 struct
 
-  let remove tyenv = 
+  let rename tyenv = 
   object(o) 
          inherit Transform.visitor(tyenv) as super
 
@@ -804,6 +804,7 @@ struct
          method binder_rec = super#binder
                 
          method binder (var,vari) = 
+
                 let new_var = Var.fresh_raw_var () in
                 let o = {< new_names = IntMap.add var new_var new_names >} in
                 o#binder_rec (new_var,vari)
@@ -812,8 +813,8 @@ struct
                 super#var ( match IntMap.lookup v new_names with None -> v | Some var -> var )
   end
 
-let computation tyenv c = let c,_,_ = ((remove tyenv)#computation c) in c
-let binding tyenv b = fst ((remove tyenv)#binding b)
+let computation tyenv c = let c,_,_ = ((rename tyenv)#computation c) in c
+let binding tyenv b = fst ((rename tyenv)#binding b)
 
 end
 
@@ -830,16 +831,7 @@ module Doubling =
          (* A flag to know if we are in a query *)
         val in_query = false
         val duplicated_function = IntSet.empty
-            
-       (* method is_wild fun_type =
-          let fields,_ = TypeUtils.effect_row fun_type in 
-          StringMap.mem "wild" fields 
-	    && fst (StringMap.find "wild" fields) = `Present
-	
-        method is_any t = 
-                (* kinda hacky, but handles polymorphism *)
-	  try not (o#is_wild t) with _ -> false 
-	      *)
+
         method is_fun typ = 
 	    match  TypeUtils.concrete_type typ with
     	    | `ForAll(_,t) -> o#is_fun t
@@ -942,9 +934,10 @@ module Doubling =
 	      let tydb = ftype in 
               (* Generate fresh copies of functions *)
               let funpl = `Fun ((Var.fresh_raw_var (),vi),c,l)
-              and fundb,remove = (RenameVariable.remove tyenv)#binding (`FunQ f)
+              and fundb,rename = (RenameVariable.rename tyenv)#binding (`FunQ f)
               in
-              let o = {< tyenv = remove#get_type_environment >} in
+	      (* Have to extend type env, not replace! *)
+              let o = {< tyenv = Env.Int.extend tyenv rename#get_type_environment >} in
                          (* record this function has been duplicated *)
               let o = o#add_duplicated v in
                          (* Generate the record *)
@@ -1075,6 +1068,210 @@ to see the original function's type here. *)
       fst3 ((duplication tyenv)#program program)
 	
   end
+
+module Doubling2 = 
+  struct
+    
+    let duplication tenv =
+      object(o)
+        inherit Transform.visitor(tenv) as super
+            
+         (* A flag to know if we are in a query *)
+        val in_query = false
+
+        method is_fun typ = 
+	    match  TypeUtils.concrete_type typ with
+    	    | `ForAll(_,t) -> o#is_fun t
+	    | `Function(_,_,_) -> true
+            | _ -> 
+		false 
+	
+
+        method is_wild fun_type =
+          match TypeUtils.concrete_type fun_type with
+    	  | `ForAll(_,t) -> o#is_wild t
+	  | `Function(_,effect,_) -> 
+	      let (fields,row_var) = effect in
+              StringMap.mem "wild" fields 
+		&& fst (StringMap.find "wild" fields) = `Present
+	   | _ -> false	
+
+	method is_tame fun_type = 
+	  match TypeUtils.concrete_type fun_type with
+	  | `ForAll(_,t) -> o#is_tame t
+	  |  `Function(_,effect,_) -> 
+	      let (fields,row_var) =  effect in
+	      StringMap.mem "wild" fields 
+		&& fst (StringMap.find "wild" fields) = `Absent
+	  | _ -> false
+
+	method is_absent fun_type = 
+	  match TypeUtils.concrete_type fun_type with
+	  | `ForAll(_,t) -> o#is_tame t
+	  | `Function(_,effect,_) -> 
+	      Types.is_absent_from_row "wild" effect
+	  | _ -> false
+          
+        method is_any t = 
+	  if o#is_fun t 
+	  then 
+	    let wild = o#is_wild t in
+	    let tame = o#is_tame t in 
+	    not(wild) && not(tame)
+	  else false 
+            
+        method enter_query () = {< in_query = true >}
+        method exit_query () = {< in_query = false >}
+            
+       
+            
+        method special sp = 
+          match sp with
+          | `Query _ when not in_query -> 
+              let o = o#enter_query() in
+              let s,t,o = o#special sp in
+              s,t,o#exit_query()
+          | _ -> super#special sp
+		
+        method binding (b) = 
+          match b with
+          | `FunQ _ when not in_query -> 
+	      let o = o#enter_query() in 
+	      let b,o = o#binding b in
+	      b,o#exit_query()
+          | _ -> super#binding b  
+		
+(* Duplicates everything *)
+	method binder = 
+	  fun (var,info) -> 
+	    super#binder (var,info)
+(*
+	  fun (var, info) -> 
+	    let (var,((ftype,name,scope) as info)),o = super#binder (var,info) in
+	    if o#is_fun ftype 
+	    then (var,info), o#add_duplicated var
+	    else (var,info), o
+		*)
+	    
+	    
+
+(* Duplicate one list of bindings, replacing any-functions   
+   with declarations of pl, db functions and defining 
+   the original function name as a record containing pl and db fields.
+   The bodies of the functions are not translated in this pass.
+*)
+	method bindings bs = 
+          let get_id = function 
+              `Fun (b,_,_) 
+            | `FunQ (b,_,_) -> fst b 
+	    | _ -> failwith "Unexpected case in get_id"
+          in 
+	  let mk_pldb_record pl db = 
+	    let values = StringMap.add "pl" pl 
+		(StringMap.add "db" db
+                   StringMap.empty) in 
+	    `Extend (values,None)
+	  in 
+	  let unit_record = 
+	    `Extend (StringMap.empty,None)
+	  in 
+	  match bs with
+          | [] -> [], o
+		(* Case: function's type is tame or function inside query.  
+		   Translate to record with void PL component.  *)
+          | ((`Fun (((v,((ftype,str,scope) as  vi)),((tyvar,_,_) as c),l) as f)))::q
+            when in_query || o#is_tame ftype ->
+                           (* Generate fresh copies of functions *)
+              let fundb,o = o#binding (`FunQ ((Var.fresh_raw_var (),vi),c,l)) in
+
+              let values = mk_pldb_record (unit_record) 
+		                          (`Variable (get_id fundb)) in 
+	      let record_decl,o = o#binding (`Let ((v,vi),(tyvar,`Return values))) in
+              let tail, o = o#bindings q in
+              fundb::record_decl::tail, o 
+
+              (* Case: function's type is wild.  
+		 Translate to pair with void DB component. *)
+         | ((`Fun (((v,((ftype,str,scope) as  vi)),((tyvar,_,_) as c),l) as f)))::q
+            when o#is_wild ftype ->
+                           (* Generate fresh copies of functions *)
+              let funpl,o = o#binding (`Fun ((Var.fresh_raw_var (),vi),c,l)) in 
+              let values = mk_pldb_record (`Variable (get_id funpl)) 
+		                          (unit_record) in 
+	      let record_decl,o = o#binding (`Let ((v,vi),(tyvar,`Return values))) in
+              let tail, o = o#bindings q in
+              funpl::record_decl::tail, o 
+
+            (* Case: Function's effect is ANY. 
+	       Translate to a pair of a PL and DB function. *)
+          | ((`Fun (((v,((ftype,str,scope) as  vi)),((tyvar,_,_) as c),l) as f)))::q
+            ->
+
+              (* Generate fresh copies of functions *)
+              let funpl,o = o#binding (`Fun ((Var.fresh_raw_var (),vi),c,l)) in 
+	      let fundb0,_ = (RenameVariable.rename tyenv)#binding 
+		                       (`FunQ ((v,vi),c,l)) in 
+	      let fundb, o = o#binding(fundb0) in
+	      let values = mk_pldb_record (`Variable (get_id funpl)) 
+		                          (`Variable (get_id fundb)) in 
+	      let record_decl,o = o#binding (`Let ((v,vi),(tyvar,`Return values))) in
+	      let tail, o = o#bindings q in
+
+              funpl::fundb::record_decl::tail, o
+
+            (* TODO: Handle Rec by translating recursively and building pairs *)
+          | t::q ->             
+              let t,o = super#binding t in 
+	      let q,o = o#bindings q in
+	      t::q,o
+                
+        method get_var_id v = 
+          match v with
+          | `Variable id -> id 
+          | `Coerce (var,_) 
+          | `TAbs (_,var) 
+          | `TApp (var,_) -> o#get_var_id var
+          | _ -> failwith "This value isn't a variable"
+                
+        (* In an IR expression, there are no lambda abstraction values, 
+           so all functions are named and so it is safe to assume that 
+           a called function is essentially a variable. *)
+        method tail_computation tc =
+          match tc with 
+          | `Apply ((v,vl) as f) ->
+              (* Translate calls appropriately based 
+                 on context *)
+              if in_query 
+              then o#tail_computation(`ApplyDB f)
+              else o#tail_computation(`ApplyPL f)          
+
+          | _ -> super#tail_computation tc
+		
+		
+(*	method computation (bs,tc) = 
+          (* Compute the type information in the original term. *)
+          let _,trans = 
+            (new Transform.visitor o#get_type_environment)#bindings bs in
+          (* Update this object with the resulting type info. *)
+          let o = {< tyenv = trans#get_type_environment >} in
+          (* Duplicate the bindings in the current binding list *)
+          let bs,o = o#duplicate_bindings bs in
+          (* Re-typecheck the translated term to get translated environment *)
+          let _,trans = 
+            (new Transform.visitor o#get_type_environment)#bindings bs in
+	  let o = {< tyenv = trans#get_type_environment >} in
+          (* Recursively translate the computation; this should 
+             translate the bodies of the functions and the tail computation *)
+	  super#computation (bs,tc)
+	    *)
+      end
+	
+    let program tyenv program = 
+      fst3 ((duplication tyenv)#program program)
+	
+  end
+    
+
     
 module Splicing =
   struct
