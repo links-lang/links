@@ -7,7 +7,7 @@ fun f(n) {
 # This typechecks but should not.  
 # The function should be inferred to be wild because of the missing switch case.
 
-sig maplist : ((a) {}-> b, [a]) {}-> b
+sig maplist : ((a) ~c~> b, [a]) ~c~> b
 fun maplist(f,l) {
   switch (l) {
     case (x::xs) -> f(x)

@@ -299,7 +299,7 @@ let compile_ir ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as en
       if (Settings.get_value noquery)
       then program 
       else (
-	let program = Ir.Doubling2.program tenv program in
+	let program = Ir.Doubling.program tenv program in
 	let program = Ir.Splicing.program tenv program in
 	program 
 	  ) in
