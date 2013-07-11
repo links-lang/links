@@ -24,3 +24,6 @@ val if_set : bool Settings.setting -> (unit -> string) -> unit
     and [setting] is on.
  *)
 val if_set_l : bool Settings.setting -> string lazy_t -> unit
+
+
+val debug_time : string -> (unit -> 'a) -> 'a

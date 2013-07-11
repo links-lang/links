@@ -1,12 +1,20 @@
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")  
+}
+
+
 var db = database "nested1";
 
 var t1 = table "t1" with (v:Int, a:Int) from db;
 var t2 = table "t2" with (a:Int, b:Int) from db;
 var t3 = table "t3" with (b:Int, v:Int) from db;
 
-fun rand(x) {
-  floatToInt(random() *. intToFloat(x))
-}
 
 fun generateData(x, y, z) {
   fun rv() {rand(1000000)}
@@ -33,11 +41,6 @@ fun generateData(x, y, z) {
   ()
 }
 
-fun time(f) {
-  var start = serverTimeMilliseconds();
-  ignore(query {f()});
-  print("Time: " ^^ intToString(serverTimeMilliseconds()-start))  
-}
 
 fun test() {
   for (x <-- t1)

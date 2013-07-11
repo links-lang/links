@@ -421,27 +421,32 @@ module Eval = struct
            | Some (db, p) ->
               let execute_shredded (q, t) =
                 match t with
-                | `Record fields ->
-                   let fields =
-                     StringMap.to_list
-                       (fun name p -> (name, `Primitive p))
-                       fields
-                   in
-                   Debug.print ("Generated query: "^q);
-                   (Database.execute_select fields q db, t)
-                | _ -> assert false in
-              let flat_results = Query.Shred.pmap execute_shredded p in
+                  | `Record fields ->
+                    let fields =
+                      StringMap.to_list
+                        (fun name p -> (name, `Primitive p))
+                        fields
+                    in
+                      Debug.print ("Generated query: "^q);
+                      (Database.execute_select fields q db, t)
+                  | _ -> assert false in
+              let flat_results =
+                Debug.debug_time "execute_shredded"
+                  (fun () -> Query.Shred.pmap execute_shredded p) in
               let unflattened_results =               
-                Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results
+                Debug.debug_time "unflatten_list" 
+		  (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
               in
-              apply_cont cont env (Query.Shred.stitch_query unflattened_results)
+              apply_cont cont env
+                         (Debug.debug_time "stitch_query" 
+	                    (fun () -> Query.Shred.stitch_query unflattened_results))
          end
        else
          begin
            match Query.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
-              let (fieldMap, _, _), _ =
+              let (fieldMap, _, _), _ = 
                 Types.unwrap_row(TypeUtils.extract_row t) in
               let fields =
                 StringMap.fold
