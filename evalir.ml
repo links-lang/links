@@ -375,11 +375,15 @@ module Eval = struct
                       Debug.print ("Generated query: "^q);
                       (Database.execute_select fields q db, t)
                   | _ -> assert false in
-              let flat_results = Query.Shred.pmap execute_shredded p in
+              let flat_results = 
+		Debug.debug_time "execute_shredded" 
+		  (fun () -> Query.Shred.pmap execute_shredded p) in
               let unflattened_results =               
-                Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results
+                Debug.debug_time "unflatten_list" 
+		  (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
               in
-                Query.Shred.stitch_query unflattened_results
+              Debug.debug_time "stitch_query" 
+		(fun () -> Query.Shred.stitch_query unflattened_results)
         else
           match Query.compile env (range, e) with
             | None -> computation env cont e
