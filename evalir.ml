@@ -367,7 +367,8 @@ module Eval = struct
 	in
 	Irtodot.output_dot e env "/tmp/ir_query.dot";
 	Qr.prelude_primitives ();
-	let (qr_unopt, tqr) = Qr.pipeline env range e in
+	let (qr_unopt, tqr) = Debug.debug_time "Qr.pipeline" 
+		                     (fun () -> Qr.pipeline env range e) in
 	  Qrtodot.output_dot qr_unopt "/tmp/qr.dot";
 	  Tqrtodot.output_dot tqr "/tmp/tqr.dot";
 	let result =
@@ -376,7 +377,8 @@ module Eval = struct
 		begin
 		  Qr.used_database := None;
 		  let imptype = Qr.ImpType.typeof_tqr tqr in
-		  let planbundle = QrToAlgebra.compile tqr in
+		  let planbundle = Debug.debug_time "QrToAlgebra.compile" 
+		                     (fun () -> QrToAlgebra.compile tqr) in
 		  match Heapresult.execute db imptype planbundle  with
 		    | Heapresult.Result value -> value
 		    | Heapresult.Error "something is wrong" -> raise Wrong

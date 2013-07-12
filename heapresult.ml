@@ -281,7 +281,11 @@ let execute db imptype (result_algebra_bundle, error_plans, keytags) =
   in
     try
       List.iter error error_plans;
-      let result_bundle = execute_queries db result_algebra_bundle in
-	Result (value_from_table result_bundle imptype keytags)
+      let result_bundle = Debug.debug_time "execute_queries" 
+	  (fun () -> execute_queries db result_algebra_bundle) in
+      let result = Debug.debug_time "value_from_table" 
+	  (fun () -> 
+	    value_from_table result_bundle imptype keytags) in
+	Result (result)
     with
 	ErrorExc s -> Error s
