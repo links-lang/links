@@ -1,0 +1,66 @@
+* This is a branch of Links developed by Alex Ulrich, that interfaces
+Links with the Pathfinder library, effectively providing an
+implementation of Ferry in Links.
+
+
+* Getting started:
+
+1. Compile and build Links as usual.  Ferry/Links has been tested
+with respect to PostgreSQL, other database backends may not work
+due to lack of support for SQL:1999 OLAP primitives that Pathfinder
+generates.
+
+
+2. Install Pathfinder.  
+
+Let <PATHFINDER> be a directory where you can install some binaries.
+
+Pathfinder is part of the MonetDB distribution and not packaged as
+a separate tool.  However, the Ferry team has helpfully made a Cabal
+package that wraps the Pathfinder source up together with a Haskell
+FFI interface.  If you have Haskell installed, you can just do
+"cabal install Pathfinder" and this will build and install the
+library; HOWEVER, it will not build the executables that Ferry/Links
+needs.
+
+Probably the right way to do this longer-term would be to create a
+similar library module that Ferry/Links could just call; however,
+for now the easiest thing to do is just download the Pathfinder
+Cabal package from
+
+http://hackage.haskell.org/packages/archive/Pathfinder/0.5.10/Pathfinder-0.5.10.tar.gz
+
+tar/gunzip it, , and then tar/gunzip the "pathfinder.tar.gz" source
+package inside that.  Finally, inside the resulting pathfinder.tar.gz
+directory, do
+
+./configure --prefix=<directory where you want pathfinder binaries>
+make
+make install
+
+With luck, this installs the tools pfopt and pfsql which Ferry/Links needs.
+
+
+3. Use a configuration file to specify database access as usual.
+
+Add the following commands:
+
+relax_query_type_constraint=on
+pf_path=<directory where pathfinder binaries were installed>/
+print_sql_queries=true
+
+Note that pf_path needs a trailing slash, otherwise things won't work.
+
+It should now be possible to evaluate nested queries, which Ferry/Links
+will handle by generating Pathfinder source query plans, using pfopt
+and pfsql to transform them to SQL, running the SQL against the
+database, and stitching the results together into a Links value.
+
+Queries with higher-order function calls are also preliminarily
+supported by defunctionalization.
+
+For more details, see Ulrich's Master's thesis:
+
+http://db.inf.uni-tuebingen.de/files/publications/ferry.links.thesis-au.pdf
+
+

@@ -11,6 +11,9 @@ fun concatMap(f, l) {
   }
 }
 
+# Workaround to bug in desugaring
+var foo = 42;
+
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -47,6 +50,8 @@ fun and(l) {
      case x::xs -> x && and(xs)
    }
 }
+
+
 
 fun all(p, xs) {
    and(for (x <- xs) [p(x)])

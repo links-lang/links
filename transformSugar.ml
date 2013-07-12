@@ -619,7 +619,7 @@ class transform (env : Types.typing_environment) =
             let (o, t) = optionu o (fun o -> o#datatype') t in
               (o, `Val (tyvars, p, e, location, t))
         | `Fun ((_, Some ft, _) as f, (tyvars, lam), location, t) ->
-            let outer_tyvars = o#backup_quantifiers in
+	    let outer_tyvars = o#backup_quantifiers in
             let (o, tyvars) = o#quantifiers tyvars in
             let inner_effects = fun_effects ft (fst lam) in
             let (o, lam, _) = o#funlit inner_effects lam in

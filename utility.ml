@@ -918,3 +918,7 @@ let apply f x ~finally y =
   let result = try f x with exn -> finally y; raise exn in
     finally y;
     result
+
+let time_seconds() = int_of_float (Unix.time())
+let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
+
