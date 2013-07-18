@@ -365,12 +365,12 @@ module Eval = struct
 	    | Some (limit, offset) ->
 		Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset))
 	in
-	Irtodot.output_dot e env "/tmp/ir_query.dot";
+	(* debugging Irtodot.output_dot e env "/tmp/ir_query.dot";*)
 	Qr.prelude_primitives ();
 	let (qr_unopt, tqr) = Debug.debug_time "Qr.pipeline" 
 		                     (fun () -> Qr.pipeline env range e) in
-	  Qrtodot.output_dot qr_unopt "/tmp/qr.dot";
-	  Tqrtodot.output_dot tqr "/tmp/tqr.dot";
+	(* debugging Qrtodot.output_dot qr_unopt "/tmp/qr.dot";
+	  Tqrtodot.output_dot tqr "/tmp/tqr.dot";*)
 	let result =
 	  match !Qr.used_database with
 	    | Some db -> 
