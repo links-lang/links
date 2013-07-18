@@ -372,8 +372,9 @@ module Eval = struct
                         (fun name p -> (name, `Primitive p))
                         fields
                     in
-                      Debug.print ("Generated query: "^q);
-                      (Database.execute_select fields q db, t)
+                    Debug.print ("Generated query: "^q);
+                    Debug.debug_time "query execution" (fun () -> 
+		      (Database.execute_select fields q db, t))
                   | _ -> assert false in
               let flat_results = 
 		Debug.debug_time "execute_shredded" 

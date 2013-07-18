@@ -79,7 +79,7 @@ var q9 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
 var x = print("\nQ10\n");
 
 var q10 = -1;
-#var q10 = time (nestedOrg);
-#var q10 = time (nestedOrg);
+var q10 = time (nestedOrg);
+var q10 = time (nestedOrg);
 
 (q8,q9,q10)
