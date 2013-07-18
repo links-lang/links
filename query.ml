@@ -285,13 +285,15 @@ struct
   let shred_query_type : nested_type -> shredded_type package =
     fun t -> package (shred_outer_type t) t               
 
-  let rec stitch : Value.t -> Value.t package -> Value.t =
+(* This is very very slow. *)
+(* The problem is we re-traverse `List vs once per a,d pair. *)
+  let rec stitch_slow : Value.t -> Value.t package -> Value.t =
     fun v t ->
       match v, t with
         | c, `Primitive t -> c
         | `Record fs, `Record fts ->
           `Record
-            (List.map (fun (l, v) -> (l, stitch v (StringMap.find l fts))) fs)
+            (List.map (fun (l, v) -> (l, stitch_slow v (StringMap.find l fts))) fs)
         | `Record [("1", `Int a); ("2", `Int d)], `List (t, `List vs) ->
           `List
             (List.fold_right
@@ -299,7 +301,7 @@ struct
                  | `Record [("1", (`Record [("1", `Int a'); ("2", `Int d')])); ("2", w)] ->
                    fun ws ->
                      if a = a' && d = d' then
-                       (stitch w t) :: ws
+                       (stitch_slow w t) :: ws
                      else
                        ws
                  | _ -> assert false)
@@ -307,9 +309,54 @@ struct
                [])
         | _, _ -> assert false
 
+  let stitch_query_slow : Value.t package -> Value.t =
+    fun p ->
+      stitch_slow (`Record [("1", `Int (Num.num_of_int top)); ("2", `Int (Num.num_of_int 1))]) p
+
+(* Alternative stitching: bottom up. *)
+(* First, we traverse Value.t package from bottom up and convert lists to value maps indexed by a,d pairs. *)
+  
+  let lookup (a,d) m = 
+    if IntPairMap.mem(a,d) m 
+    then IntPairMap.find (a,d) m 
+    else []
+
+  let insert (a,d) w m = 
+    IntPairMap.add (a,d) (w::lookup(a,d) m) m
+	  
+
+  let stitch_map : Value.t package -> Value.t list IntPairMap.t package = 
+    fun t -> 
+     let build_map (x) = 
+	match x with 
+	| `List vs -> 
+	    List.fold_right (fun v m -> 
+	    match v with 
+	    | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
+		       ("2", w)] ->
+		  insert (Num.int_of_num a,Num.int_of_num d) w m
+	    | _ -> assert false) vs IntPairMap.empty
+	| _ -> assert false
+      in pmap build_map t
+	
+ let rec stitch : Value.t -> Value.t list IntPairMap.t package -> Value.t =
+    fun v t ->
+      match v, t with
+        | c, `Primitive t -> c
+        | `Record fs, `Record fts ->
+          `Record
+            (List.map (fun (l, v) -> (l, stitch v (StringMap.find l fts))) fs)
+        | `Record [("1", `Int a); ("2", `Int d)], `List (t, m) ->
+          `List (List.map (fun w -> stitch w t) 
+		   (lookup (Num.int_of_num a, Num.int_of_num d) m))
+        | _, _ -> assert false
+
   let stitch_query : Value.t package -> Value.t =
     fun p ->
-      stitch (`Record [("1", `Int (Num.num_of_int top)); ("2", `Int (Num.num_of_int 1))]) p
+      stitch (`Record [("1", `Int (Num.num_of_int top)); 
+			("2", `Int (Num.num_of_int 1))]) 
+	(stitch_map p)
+
 end
 
 

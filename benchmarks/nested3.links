@@ -62,6 +62,6 @@ fun test() {
                        (for (z <-- t4) where (y.b2 == z.b) [z.v]))]))])
 }
 
-#generateData(10, 10, 100)
+#generateData(10, 10, 200)
 time(test)
 

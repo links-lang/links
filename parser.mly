@@ -122,7 +122,8 @@ let datatype d = d, None
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY 
+%token TABLEKEYS /* SAND */
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
 %token ESCAPE
@@ -646,6 +647,8 @@ formlet_expression:
 table_expression:
 | formlet_expression                                           { $1 }
 | TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()} 
+/* SAND */
+| TABLE exp WITH datatype perhaps_table_constraints TABLEKEYS exp FROM exp   { `TableLit ($2, datatype $4, $5, $9), pos()} 
 
 perhaps_table_constraints:
 | WHERE table_constraints                                      { $2 }

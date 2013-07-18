@@ -1175,7 +1175,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() -> Float",
    IMPURE);
 
-    "dumpTypes",
+  (** unique id *)
+  "gensym",
+  (let idx = ref 0 in 
+  `PFun (fun _ -> let i = !idx in idx := i+1; (box_int (Num.num_of_int i))),
+   datatype "() -> Int",
+   IMPURE);    
+
+  "dumpTypes",
   (`Server (p1 (fun code ->
                   try
                     let ts = DumpTypes.program (val_of (!prelude_tyenv)) (unbox_string code) in

@@ -96,6 +96,14 @@ module Int = struct
   let show_t = Show.show_int
 end
 
+module IntPair = struct
+  type t = int * int
+	deriving (Show)
+  (*let compare = Pervasives.compare*)
+  (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
+  let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
+end
+
 module Char = 
 struct
   include Char
@@ -220,6 +228,8 @@ end
 module type INTSET = Set with type elt = int
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
+
+module IntPairMap = Map.Make(IntPair)
 
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
