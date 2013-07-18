@@ -9,30 +9,37 @@ let refine_bindings : binding list -> binding list =
   fun bindings -> 
     (* Group sequences of functions together *)
     let initial_groups = 
+      let add group groups = match group with
+        | [] -> groups
+        | _  -> List.rev group::groups in
+      (* Technically it shouldn't be necessary to ensure that the
+         order of functions defined within a group is preserved (the
+         List.rev above), but it helps with debugging, and it turns
+         out to be necessary in order for desugaring of for
+         comprehensions to work properly in the prelude - which
+         defines concatMap. *)
       let group, groups = 
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) -> 
-             let add group groups = match group with
-               | [] -> groups
-               | _  -> group::groups in
-               match binding with
-                 | `Funs _ -> assert false
-                 | `Exp _
-                 | `Foreign _
-                 | `Include _
-                 | `Type _
-                 | `Val _ ->
-                     (* collapse the group we're collecting, then start a
-                        new empty group *)
-                     ([], [bind] :: add thisgroup othergroups)
-                 | `Fun _ ->
+            match binding with
+              | `Funs _ -> assert false
+              | `Exp _
+              | `Foreign _
+              | `Include _
+              | `Type _
+              | `Val _ ->
+                  (* collapse the group we're collecting, then start a
+                     new empty group *)
+                  ([], add [bind] (add thisgroup othergroups))
+                | `Fun _ ->
                      (* Add binding to group *)
-                     (bind::thisgroup, othergroups)
-                 | `Infix -> 
+                  (bind::thisgroup, othergroups)
+                | `Infix -> 
                      (* discard binding *)
-                     (thisgroup, othergroups))
-          bindings ([], []) in
-        group::groups
+                  (thisgroup, othergroups))
+            bindings ([], [])
+      in
+        add group groups
     in 
       (* build a callgraph *)
     let callgraph : _ -> (string * (string list)) list
