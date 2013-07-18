@@ -1429,6 +1429,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	(* END OF EQUALITY FUNCTIONS *)
 
+        "gensym",
+        (let idx = ref 0 in
+         `PFun (fun _ -> let i = !idx in idx := i+1; (box_int i)),
+         datatype "() -> Int",
+         IMPURE);
 
     "dumpTypes",
   (`Server (p1 (fun code ->

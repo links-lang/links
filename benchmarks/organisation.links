@@ -1,0 +1,85 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String) 
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (emp:String,tsk:String) 
+    	  tablekeys [["emp","tsk"]] from db;
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  var total = serverTimeMilliseconds()-start;
+  print("Time: " ^^ intToString(total));
+  total
+}
+
+fun expertise_prime(u) {
+  for (d <-- departments)
+  where (empty( for (e <-- employees)
+                where (d.dpt == e.dpt && 
+		       empty( for (t <-- tasks)
+		       	      where (e.emp == t.emp && t.tsk == u)
+			      [()]))
+		[()]))
+  [(dpt=d.dpt)]
+}
+
+
+typename NestedOrg = [(dpt:String, 
+                       employees: [(emp:String,tasks:[String])])];
+
+sig nestedOrg : () -> NestedOrg
+fun nestedOrg() {
+  for (d <-- departments) 
+  [(dpt=d.dpt, 
+    employees= for (e <-- employees)
+               where (d.dpt == e.dpt)
+               [(emp= e.emp, 
+	         tasks= for (t <-- tasks)
+                      	where (e.emp == t.emp)
+			[t.tsk])])]
+}
+
+sig any : ([a],(a) -a-> Bool) -a-> Bool
+fun any(xs,p) {
+  not(empty(for (x <- xs) where (p(x)) [()]))
+}
+
+sig all : ([a],(a) -a-> Bool) -a-> Bool
+fun all(xs,p) {
+  not(any(xs,fun (x) {not(p(x))}))
+}
+
+sig contains : ([a],a) -> Bool
+fun contains(xs,u) {
+  any(xs,fun (x) {x==u})
+}
+
+fun expertise(nestedOrg,u) {
+  for (d <- nestedOrg)
+  where (all(d.employees, 
+   	     fun (e) {contains(e.tasks,u)}))
+  [(dpt=d.dpt)]
+} 
+
+
+var x = print("\nQ8\n");
+
+var q8 = time (fun () {expertise_prime("abstract")});
+var q8 = time (fun () {expertise_prime("abstract")});
+
+var x = print("\nQ9\n");
+
+var q9 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
+var q9 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
+
+
+var x = print("\nQ10\n");
+
+var q10 = -1;
+#var q10 = time (nestedOrg);
+#var q10 = time (nestedOrg);
+
+(q8,q9,q10)

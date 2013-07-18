@@ -1,0 +1,139 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String) 
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (emp:String,tsk:String) 
+    	    tablekeys [["emp","tsk"]] from db;
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter (cmd,l) {
+  switch (l) {
+    case x::xs -> cmd(x); iter(cmd,xs)
+    case [] -> ()
+  }
+}
+
+
+fun dropTables() {
+  delete (x <-- departments);
+  delete (x <-- employees);
+  delete (x <-- tasks)
+}
+
+fun createTables () {
+  insert departments 
+  values (dpt) 
+  [ (dpt = "Product"), 
+    (dpt = "Quality"),
+    (dpt = "Research"), 
+    (dpt = "Sales")];
+  insert employees 
+  values (dpt,emp)
+  [ (dpt = "Product", emp = "Alex"), 
+    (dpt = "Product", emp = "Bert"), 
+    (dpt = "Research", emp = "Cora"), 
+    (dpt = "Research", emp = "Drew"), 
+    (dpt = "Research", emp = "Edna"),
+    (dpt = "Sales", emp = "Fred")];
+  insert tasks 
+  values (emp,tsk)
+  [ (emp = "Alex", tsk = "build"),
+    (emp = "Bert", tsk = "build"),
+    (emp = "Cora", tsk = "abstract"), 
+    (emp = "Cora", tsk = "build"),
+    (emp = "Cora", tsk = "design"), 
+    (emp = "Drew", tsk = "abstract"), 
+    (emp = "Drew", tsk = "design"), 
+    (emp = "Edna", tsk = "abstract"), 
+    (emp = "Edna", tsk = "call"), 
+    (emp = "Edna", tsk = "design"),
+    (emp = "Fred", tsk = "call")]
+}
+
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun addDepts(ds) {
+  iter (fun (d) {
+    insert departments
+    values (dpt)
+    [(dpt=d)]
+  }, ds)
+}
+
+fun addEmployees(es) {
+  iter (fun (e) {
+    insert employees
+    values (emp,dpt)
+    [e]
+  }, es)
+}
+
+fun addTasks(ts) {
+  iter (fun (t) {
+    insert tasks
+    values (emp,tsk)
+    [t]
+  }, ts)
+}
+
+fun nth(n,l) {
+  if (n == 0)  {hd(l)}
+  else {nth(n-1,tl(l))}
+}
+
+fun randomList(l) {
+  nth(rand(length(l)),l)
+}
+
+fun randomName() {
+  var name = randomList(["alan","bert","charlie","david","edward",
+	      "alice","betty","clara","dora","eve"]);
+  name ^^ intToString(gensym())
+}
+
+fun randomTask() {
+  randomList( ["abstract","buy","call","dissemble","enthuse"])
+}
+
+fun randomDepartment() {
+  randomList( ["Sales","Research","Quality","Product"])
+}
+
+fun tabulate(f,n) {
+  fun g(m) {
+    if (m < n) { f(m)::g(m+1) } else { [] }
+  }
+  g(0)
+}
+
+fun randomEmployees(n,depts) {
+  tabulate (fun (_) { (emp=randomName(), dpt=randomList (depts)) }, n)
+}
+
+fun randomEmployeesInDepartments(depts,n) {
+  for(d <- depts)
+  randomEmployees(n,[d])
+}
+
+fun randomTasks(emps) {
+  for (r <- emps) 
+  tabulate(fun (x) { (emp=r.emp,tsk=randomTask()) }, 1+rand(3))
+}
+
+
+fun addRandom (ds,n) {
+  var depts = tabulate (fun (x) {randomDepartment() ^^ intToString(gensym())}, 
+      	      	        ds);
+  addDepts(depts);
+  var employees = randomEmployees(n,depts);
+  addEmployees(employees);
+  var tasks = randomTasks(employees);
+  addTasks(tasks)
+}
+
+
+fun go(n) {dropTables(); addRandom(n,n*100)}

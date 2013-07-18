@@ -41,7 +41,6 @@ fun generateData(x, y, z) {
   ()
 }
 
-
 fun test() {
   for (x <-- t1)
     [for (y <-- t2) where (x.a == y.a)
@@ -49,6 +48,6 @@ fun test() {
           [z.v]]]
 }
 
-#generateData(10, 100, 100)
+#generateData(10, 10, 10)
 time(test)
 
