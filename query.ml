@@ -1426,7 +1426,13 @@ struct
             | p -> `Record (StringMap.add "_" p StringMap.empty)
         in
           `Singleton e'
-      | _ -> assert false
+      (* HACK: not sure if `Concat is supposed to appear here...
+         but it can do inside "Empty" or "Length". *)
+      | `Concat es ->
+        `Concat (List.map flatten_comprehension es)
+      | e ->
+        Debug.print ("Can't apply flatten_comprehension to: " ^ Show.show show_t e);
+        assert false
 
   let flatten_let_clause : LetInsertion.let_clause -> let_clause =
     function
