@@ -214,6 +214,42 @@ let rec value_of_expression : t -> Value.t = fun v ->
                                fields []))
       | _ -> assert false
 
+let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
+  fun env v ->
+    let ffb = freshen_for_bindings env in
+      match v with
+      | `For (gs, os, b) -> 
+        let gs', env' =
+          List.fold_left
+            (fun (gs', env') (x, source) ->
+              let y = Var.fresh_raw_var () in
+                ((y, ffb source)::gs', Env.Int.bind env (x, y)))
+            ([], env)
+            gs
+        in
+          `For (List.rev gs', List.map ffb os, freshen_for_bindings env' b)
+      | `If (c, t, e) -> `If (ffb c, ffb t, ffb e)
+      | `Table t -> `Table t
+      | `Singleton v -> `Singleton (ffb v)
+      | `Concat vs -> `Concat (List.map ffb vs)
+      | `Record fields -> `Record (StringMap.map ffb fields)
+      | `Variant (name, v) -> `Variant (name, ffb v)
+      | `XML xmlitem -> `XML xmlitem
+      | `Project (v, name) -> `Project (ffb v, name)
+      | `Erase (v, names) -> `Erase (ffb v, names)
+      | `Apply (f, vs) -> `Apply (f, List.map ffb vs)
+      | `Closure c ->
+        (* we don't attempt to freshen closure bindings *)
+        `Closure c
+      | `Primitive f -> `Primitive f
+      | `Var (x, ts) ->
+        begin
+          match Env.Int.find env x with
+          | None -> `Var (x, ts)
+          | Some y -> `Var (y, ts)
+        end
+      | `Constant c -> `Constant c
+
 let labels_of_field_types field_types =
   StringMap.fold
     (fun name _ labels' ->
@@ -341,8 +377,20 @@ struct
                fun asList(t) server {for (x <-- t) [x]}
             *)
             | v ->
+              (* In order to maintain the invariant that each
+                 bound variable is unique we freshen all for-bound
+                 variables in v here.
+
+                 This is necessary in order to ensure that each
+                 instance of a table in a self-join is given a
+                 distinct alias, as the alias is generated from the
+                 name of the variable binding the table.
+
+                 We are assuming that any closure-bound variables will
+                 be eliminated anyway.
+              *)
               (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
-              v
+              freshen_for_bindings (Env.Int.empty) v
         end
     | `Extend (ext_fields, r) -> 
       begin
@@ -601,6 +649,7 @@ struct
             (* we need to generate a fresh variable in order to
                correctly handle self joins *)
             let x = Var.fresh_raw_var () in
+              (* Debug.print ("fresh variable: " ^ string_of_int x); *)
               reduce_for_body ([(x, source)], [], body (`Var (x, field_types)))
           | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
   and reduce_for_body (gs, os, body) =
