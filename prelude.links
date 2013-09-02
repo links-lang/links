@@ -1146,3 +1146,9 @@ fun lf(f) {
     f(x)
   }
 }
+
+sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupByFlat(project, ts) {
+  for(t <- ts) 
+    [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
+}

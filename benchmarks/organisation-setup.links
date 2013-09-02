@@ -2,10 +2,12 @@ var db = database "organisation";
 
 var departments = table "departments" with (dpt:String)
     		  tablekeys [["dpt"]] from db;
-var employees = table "employees" with (emp:String, dpt:String) 
+var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
     	      	tablekeys [["emp"]] from db;
 var tasks = table "tasks" with (emp:String,tsk:String) 
-    	    tablekeys [["emp","tsk"]] from db;
+    	  tablekeys [["emp","tsk"]] from db;
+var contacts = table "contacts" with (name:String,dpt:String,"client":Bool) 
+    	  tablekeys [["name"]] from db;
 
 sig iter : ((a) ~e~> (), [a]) ~e~> ()
 fun iter (cmd,l) {
@@ -30,13 +32,14 @@ fun createTables () {
     (dpt = "Research"), 
     (dpt = "Sales")];
   insert employees 
-  values (dpt,emp)
-  [ (dpt = "Product", emp = "Alex"), 
-    (dpt = "Product", emp = "Bert"), 
-    (dpt = "Research", emp = "Cora"), 
-    (dpt = "Research", emp = "Drew"), 
-    (dpt = "Research", emp = "Edna"),
-    (dpt = "Sales", emp = "Fred")];
+  values (dpt,emp,salary)
+  [ (dpt = "Product", emp = "Alex", salary=20000), 
+    (dpt = "Product", emp = "Bert",salary=900), 
+    (dpt = "Research", emp = "Cora",salary=50000), 
+    (dpt = "Research", emp = "Drew",salary=60000), 
+    (dpt = "Research", emp = "Edna",salary=2000000),
+    (dpt = "Sales", emp = "Fred",salary=700),
+    (dpt = "Sales", emp = "Gina",salary=100000)];
   insert tasks 
   values (emp,tsk)
   [ (emp = "Alex", tsk = "build"),
@@ -49,7 +52,18 @@ fun createTables () {
     (emp = "Edna", tsk = "abstract"), 
     (emp = "Edna", tsk = "call"), 
     (emp = "Edna", tsk = "design"),
-    (emp = "Fred", tsk = "call")]
+    (emp = "Fred", tsk = "call"),
+    (emp="Gina", tsk="call"),
+    (emp="Gina",tsk="dissemble")];
+  insert contacts
+  values (name,dpt,"client")
+  [(dpt="Product",name="Pam","client"=false),
+   (dpt="Product",name="Pat","client"=true),
+   (dpt="Research",name="Rob","client"=false),
+   (dpt="Research",name="Roy","client"=false),
+   (dpt="Sales",name="Sam","client"=false),
+   (dpt="Sales",name="Sid","client"=false),
+   (dpt="Sales",name="Sue","client"=true)]
 }
 
 fun rand(x) {
@@ -67,7 +81,7 @@ fun addDepts(ds) {
 fun addEmployees(es) {
   iter (fun (e) {
     insert employees
-    values (emp,dpt)
+    values (emp,dpt,salary)
     [e]
   }, es)
 }
@@ -111,7 +125,7 @@ fun tabulate(f,n) {
 }
 
 fun randomEmployees(n,depts) {
-  tabulate (fun (_) { (emp=randomName(), dpt=randomList (depts)) }, n)
+  tabulate (fun (_) { (emp=randomName(), dpt=randomList (depts), salary = randomList([700,900,20000,50000,60000,100000,2000000])) }, n)
 }
 
 fun randomEmployeesInDepartments(depts,n) {
