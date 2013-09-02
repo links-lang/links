@@ -1,0 +1,93 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String) 
+    	  tablekeys [["id"]] from db;
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool) 
+    	  tablekeys [["id"]] from db;
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  var total = serverTimeMilliseconds()-start;
+  print("Time: " ^^ intToString(total));
+  total
+}
+
+fun throttle (f,x) {
+  if (length(asList(departments)) <= 16) {f()} else {x}
+}
+
+
+# QG1: Group by, using groupByFlat (recognized by Ferry)
+
+
+fun queryg1() {
+    for ((y,xs) <- groupByFlat(fun (x) {x.emp}, asList(tasks))) 
+    [(emp=y,num=length(xs))]
+}
+
+var x = print("\nQX1\n");
+
+var qg1 =  time (fun () {query {queryg1()}});
+var qg1 =  time (fun () {query {queryg1()}});
+
+# QG2: Group by, written out explicitly
+
+
+fun queryg2() {
+    for(t <-- tasks)
+    [(emp=t.emp,num=length(for(u <-- tasks)
+    		       where(t.emp == u.emp)
+		       [u]))]
+}
+
+var x = print("\nQG2\n");
+
+var qg2 =  time (fun () {query {queryg2()}});
+var qg2 =  time (fun () {query {queryg2()}});
+
+# QG3: Number of employees in each department that can abstract
+
+fun queryg3() {
+  for(x <-- departments) 
+  [(a=x.dpt, b= length(for (e <-- employees,t <-- tasks) 
+  	     	       where (e.dpt == x.dpt && t.emp == e.emp && t.tsk == "abstract")
+		       [()]))]
+  
+}
+
+var x = print("\nQG3\n");
+
+var qg3 =  time (fun () {query {queryg3()}});
+var qg3 =  time (fun () {query {queryg3()}});
+
+
+
+
+# QG4: Number of employees in each department and list of employees and number of tasks
+
+fun queryg4() {
+  for(x <-- departments) 
+  [(a=x.dpt, size= length(for (e <-- employees) 
+  	     	       where (e.dpt == x.dpt)
+		       [()]),
+	     emps = for(e <-- employees)
+	            where (e.dpt == x.dpt)
+		    [(emp = e.emp, tasks = length(for(t <-- tasks)
+		    	    	   	          where (e.emp == t.emp)
+						  [t]))]
+  )]
+}
+
+var x = print("\nQG4\n");
+
+var qg4 =  time (fun () {query {queryg4()}});
+var qg4 =  time (fun () {query {queryg4()}});
+
+
+
+(qg1=qg1,qg2=qg2,qg3=qg3,qg4=qg4)
