@@ -56,31 +56,31 @@ fun nestedOrg() {
               [(name=y.name,"client"=y."client")])]
 }
 
-fun tasksOfEmployee(e) {
+fun tasksFactored(e) {
   for(t <-- tasks)
   where(e.emp == t.emp)
   [t.tsk]
 }
 
-fun contactsOfDepartment(d) {
+fun contactsFactored(d) {
   for(y <-- contacts)
   where (d.dpt==y.dpt)
   [(name=y.name,"client"=y."client")]
 }
 
-fun employeesOfDepartment(d) {
+fun employeesFactored(d) {
   for (e <-- employees)
   where (d.dpt == e.dpt)
   [(emp=e.emp,
-    tasks= tasksOfEmployee(e))]
+    tasks= tasksFactored(e))]
 }
 
 fun nestedOrgFactored() {
   query {
   for (d <-- departments) 
   [(dpt=d.dpt,
-    employees=employeesOfDepartment(d),
-    contacts=contactsOfDepartment(d))]
+    employees=employeesFactored(d),
+    contacts=contactsFactored(d))]
   }
 }
 
@@ -138,82 +138,81 @@ fun outliersQFactored(organisation) {
 }
 
 
-# Q1: nestedOrg (factored)
+# QN1: nestedOrg (monolithic)
 
-var x = print("\nQ1\n");
+var x = print("\nQN1\n");
 
-var q1 = time (nestedOrgFactored);
-var q1 = time (nestedOrgFactored);
+var qn1 = time (nestedOrg);
+var qn1 = time (nestedOrg);
 
-# Q2: expertise (factored)
+# QN2: expertise (monolithic)
 
-var x = print("\nQ2\n");
+var x = print("\nQN2\n");
 
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
+var qn2 = time (fun () {expertise_prime("abstract")});
+var qn2 = time (fun () {expertise_prime("abstract")});
 
-# Q3: employees with lists of tasks
-var x = print("\nQ3\n");
 
-fun tasksByEmployee() {
+
+### Nesting
+#
+
+# QN3: employees with lists of tasks
+var x = print("\nQN3\n");
+
+fun employeeTasks() {
   query {
-    for(e <-- employees) 
-    [(emp=(e.emp),b=tasksOfEmployee(e))]
+    for(t <-- employees) 
+    [(emp=(t.emp),b=for (u <-- tasks) where ((t.emp) == (u.emp)) [(u.tsk)])]
   }
 }
 
-var q3 = time (tasksByEmployee);
-var q3 = time (tasksByEmployee);
+var qn3 = time (employeeTasks);
+var qn3 = time (employeeTasks);
 
-# Q4: departments with lists of employees
+# QN4: departments with lists of employees
 
-var x = print("\nQ4\n");
+var x = print("\nQN4\n");
 
-fun query4() {
+fun departmentEmployees() {
   query {
     for(d <-- departments) 
     [(dpt=(d.dpt),emps=for (e <-- employees) where ((d.dpt) == (e.dpt)) [(e.emp)])]
   }
 }
 
-var q4 = time (query4);
-var q4 = time (query4);
+var qn4 = time (departmentEmployees);
+var qn4 = time (departmentEmployees);
 
-# Q5: Tasks with employees and departments
+# QN5: Tasks with employees and departments
 
-fun employeesByTask(t) {
-  for(e <-- employees, d <-- departments)
-  	       where (e.emp == t.emp && e.dpt == d.dpt)
-	       [(b=e.emp, c=d.dpt)]
-}
-
-fun query5() {
+fun tasksEmployeesDepartments() {
   for(t <-- tasks)
-  [(a=t.tsk, b=employeesByTask(t))]
+  [(a=t.tsk, b=for(e <-- employees, d <-- departments)
+  	       where (e.emp == t.emp && e.dpt == d.dpt)
+	       [(b=e.emp, c=d.dpt)])]
 }
 
-var x = print("\nQ5\n");
+var x = print("\nQN5\n");
 
-var q5 =  time (fun () {query {query5()}});
-var q5 =  time (fun () {query {query5()}});
+var qn5 =  time (fun () {query {tasksEmployeesDepartments()}});
+var qn5 =  time (fun () {query {tasksEmployeesDepartments()}});
 
+# QN6: shredding paper example (monolithic)
 
-# Q6: shredding paper example (factored)
+var x = print("\nQN6\n");
 
-var x = print("\nQ6\n");
-
-var q6 =  time (fun () {query {outliersQFactored(nestedOrg())}});
-var q6 =  time (fun () {query {outliersQFactored(nestedOrg())}});
-
+var qn6 =  time (fun () {query {outliersQ()}});
+var qn6 =  time (fun () {query {outliersQ()}});
 
 
 
 
-var x = print("Q1:\t" ^^ (intToString(q1)) );
-var x = print("Q2:\t" ^^ (intToString(q2)) );
-var x = print("Q3:\t" ^^ (intToString(q3)) );
-var x = print("Q4:\t" ^^ (intToString(q4)) );
-var x = print("Q5:\t" ^^ (intToString(q5)) );
-var x = print("Q6:\t" ^^ (intToString(q6)) );
+var x = print("QN1:\t" ^^ (intToString(qn1)) );
+var x = print("QN2:\t" ^^ (intToString(qn2)) );
+var x = print("QN3:\t" ^^ (intToString(qn3)) );
+var x = print("QN4:\t" ^^ (intToString(qn4)) );
+var x = print("QN5:\t" ^^ (intToString(qn5)) );
+var x = print("QN6:\t" ^^ (intToString(qn6)) );
 ()
 
