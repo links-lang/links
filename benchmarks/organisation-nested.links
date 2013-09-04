@@ -142,15 +142,15 @@ fun outliersQFactored(organisation) {
 
 var x = print("\nQ1\n");
 
-var q1 = time (nestedOrgFactored);
-var q1 = time (nestedOrgFactored);
+var q1 = throttle(fun () {time (nestedOrgFactored)},-1);
+var q1 = throttle(fun () {time (nestedOrgFactored)},-1);
 
 # Q2: expertise (factored)
 
 var x = print("\nQ2\n");
 
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
+var q2 = throttle(fun () {time (fun () {query {expertise(nestedOrg(),"abstract")}})},-1);
+var q2 = throttle(fun () {time (fun () {query {expertise(nestedOrg(),"abstract")}})},-1);
 
 # Q3: employees with lists of tasks
 var x = print("\nQ3\n");
@@ -202,8 +202,8 @@ var q5 =  time (fun () {query {query5()}});
 
 var x = print("\nQ6\n");
 
-var q6 =  time (fun () {query {outliersQFactored(nestedOrg())}});
-var q6 =  time (fun () {query {outliersQFactored(nestedOrg())}});
+var q6 =  throttle(fun () {time (fun () {query {outliersQFactored(nestedOrg())}})},-1);
+var q6 =  throttle(fun () {time (fun () {query {outliersQFactored(nestedOrg())}})},-1);
 
 
 

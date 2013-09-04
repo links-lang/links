@@ -142,15 +142,15 @@ fun outliersQFactored(organisation) {
 
 var x = print("\nQN1\n");
 
-var qn1 = time (nestedOrg);
-var qn1 = time (nestedOrg);
+var qn1 = throttle(fun () {time (nestedOrg)},-1);
+var qn1 = throttle(fun () {time (nestedOrg)},-1);
 
 # QN2: expertise (monolithic)
 
 var x = print("\nQN2\n");
 
-var qn2 = time (fun () {expertise_prime("abstract")});
-var qn2 = time (fun () {expertise_prime("abstract")});
+var qn2 = throttle(fun () {time (fun () {expertise_prime("abstract")})},-1);
+var qn2 = throttle(fun () {time (fun () {expertise_prime("abstract")})},-1);
 
 
 
@@ -202,8 +202,8 @@ var qn5 =  time (fun () {query {tasksEmployeesDepartments()}});
 
 var x = print("\nQN6\n");
 
-var qn6 =  time (fun () {query {outliersQ()}});
-var qn6 =  time (fun () {query {outliersQ()}});
+var qn6 =  throttle(fun () {time (fun () {query {outliersQ()}})},-1);
+var qn6 =  throttle(fun () {time (fun () {query {outliersQ()}})},-1);
 
 
 
