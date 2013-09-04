@@ -94,6 +94,14 @@ fun addTasks(ts) {
   }, ts)
 }
 
+fun addContacts(cs) {
+  iter (fun (c) {
+    insert contacts
+    values (name,dpt,"client")
+    [c]
+  }, cs)
+}
+
 fun nth(n,l) {
   if (n == 0)  {hd(l)}
   else {nth(n-1,tl(l))}
@@ -128,6 +136,12 @@ fun randomEmployees(n,depts) {
   tabulate (fun (_) { (emp=randomName(), dpt=randomList (depts), salary = randomList([700,900,20000,50000,60000,100000,2000000])) }, n)
 }
 
+
+fun randomContacts(n,depts) {
+  tabulate (fun (_) { (name=randomName(), dpt=randomList (depts), "client" = randomList([true,false])) }, n)
+}
+
+
 fun randomEmployeesInDepartments(depts,n) {
   for(d <- depts)
   randomEmployees(n,[d])
@@ -146,7 +160,9 @@ fun addRandom (ds,n) {
   var employees = randomEmployees(n,depts);
   addEmployees(employees);
   var tasks = randomTasks(employees);
-  addTasks(tasks)
+  addTasks(tasks);
+  var contacts = randomContacts(n*10,depts);
+  addContacts(contacts)
 }
 
 
