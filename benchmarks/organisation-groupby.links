@@ -39,9 +39,9 @@ var qg1 =  time (fun () {query {queryg1()}});
 
 
 fun queryg2() {
-    for(t <-- tasks)
-    [(emp=t.emp,num=length(for(u <-- tasks)
-    		       where(t.emp == u.emp)
+    for(e <-- employees)
+    [(emp=e.emp,num=length(for(u <-- tasks)
+    		       where(e.emp == u.emp)
 		       [u]))]
 }
 
