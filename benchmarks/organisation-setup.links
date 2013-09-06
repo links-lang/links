@@ -21,7 +21,8 @@ fun iter (cmd,l) {
 fun dropTables() {
   delete (x <-- departments);
   delete (x <-- employees);
-  delete (x <-- tasks)
+  delete (x <-- tasks);
+  delete (x <-- contacts);
 }
 
 fun createTables () {

@@ -965,7 +965,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (p2 (fun table rows ->
             match table, rows with
               | `Table _, `List [] -> `Record []
-              | `Table ((db, params), table_name, _), _ ->
+              | `Table ((db, params), table_name, _, _), _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
                     prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
@@ -990,7 +990,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             match table, rows, returning with
               | `Table _, `List [], _ ->
                   failwith "InsertReturning: undefined for empty list of rows"
-              | `Table ((db, params), table_name, _), _, _ ->
+              | `Table ((db, params), table_name, _, _), _, _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
 

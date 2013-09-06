@@ -409,7 +409,7 @@ let used_database v : Value.database option =
   and used =
     function
       | `For (_, gs, os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
+      | `Table ((db, _), _, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -489,7 +489,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Singleton t -> Types.make_list_type (te t)
       | `Record fields -> record fields
       | `If (_, t, _) -> te t
-      | `Table (_, _, row) -> `Record row
+      | `Table (_, _, _, row) -> `Record row
       | `Constant (`Bool b) -> Types.bool_type
       | `Constant (`Int i) -> Types.int_type
       | `Constant (`Char c) -> Types.char_type
@@ -581,7 +581,7 @@ let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
                   | `Present t -> t
                   | _ -> assert false) field_spec_map
   
-let table_field_types (_, _, (fields, _, _)) =
+let table_field_types (_, _, _, (fields, _, _)) =
   StringMap.map (function
                   | `Present t -> t
                   | _ -> assert false) fields
@@ -1340,7 +1340,7 @@ struct
         (List.map
            (fun (x, source) ->
              match source with
-               | `Table (_, _, row) ->
+               | `Table (_, _, _, row) ->
                  `Record row
                | _ -> assert false)
            gs_out) in
@@ -1744,7 +1744,7 @@ struct
       | `Concat _ -> assert false
       | `For (_, [], _, body) ->
           clause db body
-      | `For (_, (x, `Table (_db, table, _row))::gs, os, body) ->
+      | `For (_, (x, `Table (_db, table, _keys, _row))::gs, os, body) ->
           let body = clause db (`For (None, gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -1774,7 +1774,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (_db, table, (fields, _, _)) ->
+      | `Table (_db, table, _, (fields, _, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
@@ -2087,7 +2087,6 @@ struct
                 | _ ->  " where " ^ sb condition
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
-(* TEST With-substitution *)
         | `With (x, q, z, q') ->
 	    if Settings.get_value Basicsettings.inline_with
 	    then 
@@ -2166,18 +2165,30 @@ struct
 
   type index = (Var.var * string) list
 
-  let gens_index gs =
-    let table_index (x, source) =
+(* TODO: Use keys if available *)
+
+  let gens_index gs  =
+    let all_fields t =
+      let field_types = table_field_types t in 
+      labels_of_field_types field_types
+    in 
+    let key_fields t =
+      match t with 
+	(_, _, (ks::_), _) -> StringSet.from_list ks
+      |	_ -> all_fields t
+    in 
+    let table_index get_fields (x, source) =
       let t = match source with `Table t -> t | _ -> assert false in
-      let field_types = table_field_types t in
-      let labels = labels_of_field_types field_types in
+      let labels = get_fields t in
         List.rev
           (StringSet.fold
              (fun name ps -> (x, name) :: ps)
              labels
              [])
-    in
-      concat_map table_index gs
+    in 
+    if Settings.get_value Basicsettings.use_keys_in_shredding
+    then concat_map (table_index key_fields) gs
+    else concat_map (table_index all_fields) gs
 
   let outer_index gs_out = gens_index gs_out
   let inner_index z gs_in =
@@ -2203,7 +2214,7 @@ struct
       | `Concat _ -> assert false
       | `For (_, [], _, body) ->
           clause db index unit_query body
-      | `For (_, (x, `Table (_db, table, _row))::gs, os, body) ->
+      | `For (_, (x, `Table (_db, table, _keys, _row))::gs, os, body) ->
           let body = clause db index unit_query (`For (None, gs, [], body)) in
           let os = List.map (base db index) os in
             begin
@@ -2233,7 +2244,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (_db, table, (fields, _, _)) ->
+      | `Table (_db, table, _keys, (fields, _, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)

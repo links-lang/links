@@ -104,12 +104,14 @@ class pg_database host port dbname user password = object(self)
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method driver_name () = "postgresql"
   method exec : string -> Value.dbvalue = fun query ->
-    try
+    Debug.debug_time "db#exec" (fun () ->
+      try
       let raw_result = connection#exec query in 
-      new pg_dbresult raw_result
+	new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
+	    )
   method escape_string s =
     connection#escape_string s
   method quote_field f =
