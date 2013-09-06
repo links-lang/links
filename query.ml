@@ -2087,15 +2087,28 @@ struct
                 | _ ->  " where " ^ sb condition
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
+(* TEST With-substitution *)
         | `With (x, q, z, q') ->
-          let q' =
+	    if Settings.get_value Basicsettings.inline_with
+	    then 
+              let q' =
+            (* Inline the query *)
+		match q' with
+		| `Select (fields, tables, condition, os) ->
+                    `Select (fields, ("(" ^ sq q ^ ")", z) :: tables, condition, os)
+		| _ -> assert false
+	      in 
+	      sq q'
+	    else
+              let q' =
             (* HACK: pretend that the subquery name x is a table name *)
-            match q' with
-              | `Select (fields, tables, condition, os) ->
-                `Select (fields, (string_of_subquery_var x, z) :: tables, condition, os)
-              | _ -> assert false
-          in
-            "with " ^ string_of_subquery_var x ^ " as (" ^ sq q ^ ") " ^ sq q'
+		match q' with
+		| `Select (fields, tables, condition, os) ->
+                    `Select (fields, (string_of_subquery_var x, z) :: tables, condition, os)
+		| _ -> assert false
+              in
+              "with " ^ string_of_subquery_var x ^ " as (" ^ sq q ^ ") " ^ sq q'
+
           
   and string_of_base db one_table b =
     let sb = string_of_base db one_table in
