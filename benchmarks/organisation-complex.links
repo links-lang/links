@@ -18,8 +18,10 @@ fun time(f) {
 }
 
 fun throttle (f,x) {
-  if (length(asList(departments)) <= 16) {f()} else {x}
+  if (length(asList(departments)) <= 1) {f()} else {x}
 }
+
+
 
 
 # QX1: Pairs of employees in same department with common task
@@ -58,8 +60,8 @@ fun queryx2() {
 }
 
 
-var qx2 = time (queryx2);
-var qx2 = time (queryx2);
+var qx2 = throttle(fun () {time (queryx2)}, -1);
+var qx2 = throttle(fun () {time (queryx2)}, -1);
 
 # QX3: employees (x,y) where x can do task y cannot do, and x earns less than y, along with lists of tasks
 
@@ -81,8 +83,8 @@ fun queryx3() {
 }
 
 
-var qx3 = time (queryx3);
-var qx3 = time (queryx3);
+var qx3 = throttle(fun () {time (queryx3)}, -1);
+var qx3 = throttle(fun () {time (queryx3)}, -1);
 
 
 # QX4: employees (x,y) where x and y do different tasks, with tagged union of tasks
