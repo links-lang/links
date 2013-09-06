@@ -1431,7 +1431,7 @@ struct
       | `Concat es ->
         `Concat (List.map flatten_comprehension es)
       | e ->
-        Debug.print ("Can't apply flatten_comprehension to: " ^ Show.show show_t e);
+        Debug.print ("Can't apply flatten_comprehension to: " ^ Show_t.show e);
         assert false
 
   let flatten_let_clause : LetInsertion.let_clause -> let_clause =
