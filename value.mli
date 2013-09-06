@@ -42,7 +42,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   deriving (Show)
 
-type table = (database * string) * string * Types.row
+type table = (database * string) * string * string list list * Types.row
   deriving (Show)
     
 type primitive_value = [

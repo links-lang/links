@@ -131,6 +131,7 @@ val for_all : quantifier list * datatype -> datatype
 (** useful types *)
 val unit_type : datatype
 val string_type : datatype
+val keys_type : datatype
 val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
