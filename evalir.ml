@@ -398,13 +398,19 @@ module Eval = struct
   and special env cont : Ir.special -> Proc.thread_result Lwt.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Table (db, name, (readtype, _, _)) ->
+    | `Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
-        match value env db, value env name, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, `Record row ->
-            apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+        match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
+          | `Database (db, params), name, keys, `Record row ->
+	      let unboxed_keys = 
+		List.map 
+		  (fun key -> 
+		    List.map Value.unbox_string (Value.unbox_list key))
+		  (Value.unbox_list keys)
+	      in
+              apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -466,7 +472,7 @@ module Eval = struct
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _, _)) ->
+          | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)
@@ -478,7 +484,7 @@ module Eval = struct
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _, _)) ->
+          | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)

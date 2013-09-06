@@ -18,7 +18,7 @@ fun time(f) {
 }
 
 fun throttle (f,x) {
-  if (length(asList(departments)) <= 16) {f()} else {x}
+  if (length(asList(departments)) <= 128) {f()} else {x}
 }
 
 # Supporting code

@@ -81,8 +81,8 @@ and binding =
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
-  | `Database of value
-  | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
+  | `Database of value 
+  | `Table of (value * value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation
   | `Delete of (binder * value) * computation option
@@ -425,10 +425,11 @@ struct
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `Table (db, table_name, tt) ->
+        | `Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
+            let keys, _, o = o#value keys in
             let table_name, _, o = o#value table_name in
-              `Table (db, table_name, tt), `Table tt, o
+              `Table (db, table_name, keys, tt), `Table tt, o
         | `Query (range, e, t) ->
             let range, o =
               o#optionu
