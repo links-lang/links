@@ -149,8 +149,8 @@ var q1 = throttle(fun () {time (nestedOrgFactored)},-1);
 
 var x = print("\nQ2\n");
 
-var q2 = throttle(fun () {time (fun () {query {expertise(nestedOrg(),"abstract")}})},-1);
-var q2 = throttle(fun () {time (fun () {query {expertise(nestedOrg(),"abstract")}})},-1);
+var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
+var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
 
 # Q3: employees with lists of tasks
 var x = print("\nQ3\n");
