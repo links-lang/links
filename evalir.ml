@@ -390,7 +390,7 @@ module Eval = struct
             | None -> computation env cont e
             | Some (db, q, t) ->
               let (fieldMap, _), _ = 
-                Types.unwrap_row(TypeUtils.extract_row t) in
+                Types.unwrap_row(TypeUtils.extract_row (TypeUtils.element_type t)) in
               let fields =
                 StringMap.fold
                   (fun name t fields ->
@@ -401,7 +401,8 @@ module Eval = struct
                   fieldMap
                   []
               in
-                Database.execute_select fields q db
+                Debug.debug_time "query execution" (fun () -> 
+		  Database.execute_select fields q db)
       in
         apply_cont cont env result
     | `Update ((xb, source), where, body) ->
