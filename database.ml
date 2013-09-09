@@ -68,8 +68,8 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
   in
     run qs
 
-(* Old code
-let execute_select_old
+(*
+let execute_select
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
 
@@ -132,8 +132,9 @@ let execute_select_old
                       	(Debug.debug_time "get_all_lst" (fun () -> result#get_all_lst))
 		      )
 )
-
 *)
+
+
 let execute_select
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
@@ -168,15 +169,16 @@ None means skip the field, Some (n,t) means build field n with type t *)
       rs 0 in
 
 (* apply result signature to a row *)
-  let rec build_record row rs = 
-    match row,rs with
-    | [],[] -> []
-    | v::row',None::rs' -> build_record row' rs'
-    | v::row',Some(name,t)::rs' -> 
-	(name,value_of_db_string v t)::(build_record row' rs')
-    | _,_ -> assert false
+  let build_record rs row = 
+    let rec build rs i = 
+      match rs with
+      | [] -> []
+      | None::rs' -> build rs' (i+1)
+      | Some(name,t)::rs' -> 
+	  (name,value_of_db_string (row i) t)::(build rs' (i+1))
+      | _ -> assert false
+    in build rs 0
   in 
-
   let result = db#exec query in
 
     match result#status with
@@ -188,18 +190,19 @@ None means skip the field, Some (n,t) means build field n with type t *)
           | [] ->
                 (* Ignore any dummy fields introduced to work around
                    SQL's inability to handle empty column lists *)
-                `List (map (fun _ -> `Record []) result#get_all_lst)
+                `List (result#map (fun _ -> `Record []))
             | _ ->
 		  let rs, null_query = result_signature result in
   		  if null_query then
-                    `List (map (fun _ -> `Record []) result#get_all_lst)
+                    `List (result#map (fun _ -> `Record []))
                   else
-                    `List (map
-                             (fun row ->
-                               `Record (build_record row rs))
-                      	     (result#get_all_lst)
-			     )
-
+		    (Debug.debug_time "map" (fun () -> 
+                      `List (result#map 
+			(fun row ->
+                        `Record (build_record rs  row))
+			))
+		       )
+		      
 
 
 

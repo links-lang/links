@@ -488,7 +488,8 @@ struct
           (split_string (String.sub source (delim_index+1) 
                            ((String.length source) - delim_index - 1)) delim)
     else source :: []
-      
+
+
   let explode : string -> char list = 
     let rec explode' list n string = 
       if n = String.length string then list
