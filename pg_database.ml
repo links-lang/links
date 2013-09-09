@@ -89,6 +89,14 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method nfields : int = original#nfields
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+(*    List.map f pgresult#get_all_lst*)
+      let max = pgresult#ntuples in
+      let rec do_map n = 
+	if n < max
+	then f (pgresult#getvalue n)::do_map (n+1)
+	else []
+      in do_map 0
   method error : string = original#error
 end
 

@@ -24,6 +24,7 @@ class virtual dbvalue = object
   method virtual nfields : int
   method virtual fname : int -> string
   method virtual get_all_lst : string list list
+  method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
   method virtual error : string
 end
 

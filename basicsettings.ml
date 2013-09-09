@@ -97,3 +97,9 @@ let inline_with = Settings.add_bool("inline_with", false, `User)
 
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", false, `User)
+
+(* faster unflattening code *)
+let fast_unflatten = Settings.add_bool("fast_unflatten", false, `User)
+
+(* faster stitching code *)
+let fast_stitch = Settings.add_bool("fast_stitch", false, `User)

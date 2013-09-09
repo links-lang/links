@@ -12,6 +12,7 @@ class virtual dbvalue :
     method virtual fname : int -> string
     method virtual get_all_lst : string list list
     method virtual nfields : int
+    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
     method virtual status : db_status
   end
 

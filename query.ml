@@ -288,13 +288,13 @@ struct
 
 (* This is very very slow. *)
 (* The problem is we re-traverse `List vs once per a,d pair. *)
-  let rec stitch_slow : Value.t -> Value.t package -> Value.t =
+  let rec stitch_old : Value.t -> Value.t package -> Value.t =
     fun v t ->
       match v, t with
         | c, `Primitive t -> c
         | `Record fs, `Record fts ->
           `Record
-            (List.map (fun (l, v) -> (l, stitch_slow v (StringMap.find l fts))) fs)
+            (List.map (fun (l, v) -> (l, stitch_old v (StringMap.find l fts))) fs)
         | `Record [("1", `Int a); ("2", `Int d)], `List (t, `List vs) ->
           `List
             (List.fold_right
@@ -302,7 +302,7 @@ struct
                  | `Record [("1", (`Record [("1", `Int a'); ("2", `Int d')])); ("2", w)] ->
                    fun ws ->
                      if a = a' && d = d' then
-                       (stitch_slow w t) :: ws
+                       (stitch_old w t) :: ws
                      else
                        ws
                  | _ -> assert false)
@@ -310,9 +310,9 @@ struct
                [])
         | _, _ -> assert false
 
-  let stitch_query_slow : Value.t package -> Value.t =
+  let stitch_query_old : Value.t package -> Value.t =
     fun p ->
-      stitch_slow (`Record [("1", `Int top); ("2", `Int 1)]) p
+      stitch_old (`Record [("1", `Int top); ("2", `Int 1)]) p
 
 (* Alternative stitching: bottom up. *)
 (* First, we traverse Value.t package from bottom up and convert lists to value maps indexed by a,d pairs. *)
@@ -340,22 +340,28 @@ struct
 	| _ -> assert false
       in pmap build_map t
 	
- let rec stitch : Value.t -> Value.t list IntPairMap.t package -> Value.t =
+ let rec stitch_new : Value.t -> Value.t list IntPairMap.t package -> Value.t =
     fun v t ->
       match v, t with
         | c, `Primitive t -> c
         | `Record fs, `Record fts ->
           `Record
-            (List.map (fun (l, v) -> (l, stitch v (StringMap.find l fts))) fs)
+            (List.map (fun (l, v) -> (l, stitch_new v (StringMap.find l fts))) fs)
         | `Record [("1", `Int a); ("2", `Int d)], `List (t, m) ->
-          `List (List.map (fun w -> stitch w t) 
+          `List (List.map (fun w -> stitch_new w t) 
 		   (lookup (a, d) m))
         | _, _ -> assert false
 
-  let stitch_query : Value.t package -> Value.t =
+  let stitch_query_new : Value.t package -> Value.t =
     fun p ->
-      stitch (`Record [("1", `Int top); ("2", `Int 1)])
+      stitch_new (`Record [("1", `Int top); ("2", `Int 1)])
         (stitch_map p)
+
+  let stitch_query vp =  
+    if Settings.get_value Basicsettings.fast_stitch
+    then stitch_query_new vp
+    else stitch_query_old vp
+
 end
 
 
@@ -1377,6 +1383,7 @@ struct
   type let_clause = LetInsertion.let_clause
   type query = LetInsertion.query
 
+
   let rec flatten_inner : t -> t =
     function
       | `Constant c    -> `Constant c
@@ -1467,6 +1474,7 @@ struct
              StringMap.empty)
       | _ -> assert false
 
+
   let flatten_query_type : shredded_type -> flat_type = flatten_type
 
   (* add a flattened field to an unflattened record (type or value) *)
@@ -1533,13 +1541,72 @@ struct
             let names = split_string name '_' in
               unflatten_record (unflatten_field names v output_fields) t fields
 
-  let unflatten_list : (Value.t * flat_type) -> Value.t =
+
+  let unflatten_list_old : (Value.t * flat_type) -> Value.t =
     fun (v, t) ->
       match v with
         | `List vs ->
           let t' = unflatten_type t in
-            `List (List.map (unflatten_record StringMap.empty t' -<- Value.unbox_record) vs)
+	  `List (List.map (unflatten_record StringMap.empty t' -<- Value.unbox_record) vs)
         | _ -> assert false    
+
+(* This appears slow.  Possibly because of repeated construction/discarding of string maps that relate the flattened and unflattened records. 
+Plan: 
+1. Following definition of unflatten_type, build a record template that shows how to construct each unflattened record by copying fields from flattened record.  (This can bake-in the "fill" operation too.)
+2. Define a function that takes a flattened record and template and constructs the corresponding unflattened record.
+3. Map across the list of records.
+*)
+
+  type template = 
+    [ `Primitive of string
+    | `Record of (string*template) list
+    ] 
+
+  let make_template : shredded_type -> template = 
+    fun ty ->
+    let rec make_tmpl_inner name t = 
+      match t with
+      `Primitive _ -> `Primitive name
+    | `Record rcd -> 
+	`Record (List.map (fun (nm,t') -> 
+	  (nm,make_tmpl_inner (name ^"_"^nm) t')) 
+		   (StringMap.to_alist rcd))
+    and make_tmpl_outer name t = 
+      match t with 
+	`Primitive _ -> `Primitive ""
+      |	`Record rcd -> `Record (List.map (fun (nm,t') -> 
+	  (nm,make_tmpl_inner nm t')) 
+		   (StringMap.to_alist rcd))
+    in make_tmpl_outer "" ty
+
+  let build_unflattened_record : template -> Value.t -> Value.t =
+      fun template v_record  ->
+	let record = 
+	  match v_record with 
+	    `Record r -> r 
+	  | _ -> assert false
+	in  
+	let rec build t = 
+	  match t with 
+	    `Record rcd -> `Record (List.map (fun (n,t') -> (n,build t')) rcd)
+	  | `Primitive field -> List.assoc field record
+		
+	in build template
+
+  let unflatten_list_new : (Value.t * flat_type) -> Value.t =
+    fun (v, t) ->
+      match v with
+        | `List vs ->
+	    let st = unflatten_type t in
+	    let tmpl = make_template st in
+	  `List (List.map (build_unflattened_record tmpl) vs)
+        | _ -> assert false    
+
+  let unflatten_list vt = 
+    if Settings.get_value Basicsettings.fast_unflatten
+    then unflatten_list_new vt
+    else unflatten_list_old vt
+
 end
 
 module Sql =
