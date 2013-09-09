@@ -79,13 +79,15 @@ let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 
 
 (* Inlining with-clauses *)
-let inline_with = Settings.add_bool("inline_with", false, `User)
+let inline_with = Settings.add_bool("inline_with", true, `User)
 
 (* Use keys in shredding *)
-let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", false, `User)
+let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
 
 (* faster unflattening code *)
-let fast_unflatten = Settings.add_bool("fast_unflatten", false, `User)
+let fast_unflatten = Settings.add_bool("fast_unflatten", true, `User)
 
 (* faster stitching code *)
-let fast_stitch = Settings.add_bool("fast_stitch", false, `User)
+let fast_stitch = Settings.add_bool("fast_stitch", true, `User)
+
+let fast_execute_select = Settings.add_bool("fast_execute_select", true, `User)

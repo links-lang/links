@@ -68,8 +68,8 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
   in
     run qs
 
-(*
-let execute_select
+
+let execute_select_old
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
 
@@ -93,6 +93,8 @@ let execute_select
                         field_types)
     in
       rs 0 in
+
+ (* BUG: Lists can be too big for List.map; need to be careful about recursion *)
 
   let result = db#exec query in
 
@@ -132,10 +134,10 @@ let execute_select
                       	(Debug.debug_time "get_all_lst" (fun () -> result#get_all_lst))
 		      )
 )
-*)
 
 
-let execute_select
+
+let execute_select_new
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
 
@@ -204,7 +206,12 @@ None means skip the field, Some (n,t) means build field n with type t *)
 		       )
 		      
 
-
+let execute_select  
+  (field_types:(string * Types.datatype) list) (query:string) (db : database)
+    : Value.t =
+  if Settings.get_value Basicsettings.fast_execute_select 
+  then execute_select_new field_types query db
+  else execute_select_old field_types query db
 
 let execute_untyped_select (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
