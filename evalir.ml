@@ -425,30 +425,52 @@ module Eval = struct
            match Query.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
-              let execute_shredded (q, t) =
+              let get_fields t =
                 match t with
-                  | `Record fields ->
-                    let fields =
-                      StringMap.to_list
-                        (fun name p -> (name, `Primitive p))
-                        fields
-                    in
+                | `Record fields ->
+                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                | _ -> assert false
+              in
+              if Settings.get_value Basicsettings.deforest_stitching
+              then
+                begin
+                  let execute_shredded_raw (q, t) =
+		    Debug.print ("Generated query: "^q);
+		    Debug.debug_time "query execution" (fun () -> 
+		                                        (Database.execute_select_result (get_fields t) q db, t))
+		  in 
+		  let raw_results = 
+		    Debug.debug_time "execute_shredded_raw" 
+		                     (fun () -> Query.Shred.pmap execute_shredded_raw p) 
+	          in
+		  let mapped_results = 
+		    Debug.debug_time "mapped_results" (fun () ->
+		                                       Query.Shred.pmap Query.FastStitching.build_stitch_map raw_results)
+		  in
+                  apply_cont cont env
+		             (Debug.debug_time "stitch_query" 
+		                               (fun () -> Query.Shred.stitch_mapped_query mapped_results))
+                end
+              else
+                begin
+                  let execute_shredded (q, t) =
                     Debug.print ("Generated query: "^q);
                     Debug.debug_time "query execution" (fun () -> 
-		      (Database.execute_select fields q db, t))
-                  | _ -> assert false in
-              let flat_results =
-                Debug.debug_time "execute_shredded"
-                  (fun () -> Query.Shred.pmap execute_shredded p) in
-              let unflattened_results =               
-                Debug.debug_time "unflatten_list" 
-		  (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
-              in
-              apply_cont cont env
-                         (Debug.debug_time "stitch_query" 
-	                    (fun () -> Query.Shred.stitch_query unflattened_results))
+		                                        (Database.execute_select (get_fields t) q db, t))
+                  in
+                  let flat_results =
+                    Debug.debug_time "execute_shredded"
+                                     (fun () -> Query.Shred.pmap execute_shredded p) in
+                      let unflattened_results =               
+                        Debug.debug_time "unflatten_list" 
+		                         (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
+                      in
+                      apply_cont cont env
+                                 (Debug.debug_time "stitch_query" 
+	                                           (fun () -> Query.Shred.stitch_query unflattened_results))
+                end
          end
-       else
+       else (* shredding disabled *)
          begin
            match Query.compile env (range, e) with
            | None -> computation env cont e
@@ -466,8 +488,10 @@ module Eval = struct
                   []
               in
               apply_cont cont env
-                         (Debug.debug_time "query execution" (fun () ->
-                            Database.execute_select fields q db))
+                         (let (raw_result,rs) =  Debug.debug_time "query execution"
+                                                                  (fun () -> Database.execute_select_result fields q db) in
+	                  Debug.debug_time "build_result"
+                                           (fun () -> Database.build_result (raw_result,rs)))
          end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
