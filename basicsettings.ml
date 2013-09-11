@@ -91,3 +91,9 @@ let fast_unflatten = Settings.add_bool("fast_unflatten", true, `User)
 let fast_stitch = Settings.add_bool("fast_stitch", true, `User)
 
 let fast_execute_select = Settings.add_bool("fast_execute_select", true, `User)
+
+(* alternative, one-pass stitching code *)
+let deforest_stitching = Settings.add_bool("deforest_stitching",false,`User)
+
+(* Generic flag for A/B testing *)
+let feature_test = Settings.add_bool("feature_test",false,`User)

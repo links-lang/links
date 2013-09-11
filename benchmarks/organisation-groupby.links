@@ -90,4 +90,9 @@ var qg4 =  time (fun () {query {queryg4()}});
 
 
 
-(qg1=qg1,qg2=qg2,qg3=qg3,qg4=qg4)
+var x = print("QG1:\t" ^^ (intToString(qg1)) );
+var x = print("QG2:\t" ^^ (intToString(qg2)) );
+var x = print("QG3:\t" ^^ (intToString(qg3)) );
+var x = print("QG4:\t" ^^ (intToString(qg4)) );
+()
+
