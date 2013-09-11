@@ -317,6 +317,8 @@ struct
 (* Alternative stitching: bottom up. *)
 (* First, we traverse Value.t package from bottom up and convert lists to value maps indexed by a,d pairs. *)
   
+(* Used in FastStitching also. *)
+
   let lookup (a,d) m = 
     if IntPairMap.mem(a,d) m 
     then IntPairMap.find (a,d) m 
@@ -325,21 +327,22 @@ struct
   let insert (a,d) w m = 
     IntPairMap.add (a,d) (w::lookup(a,d) m) m
 	  
+  let empty = IntPairMap.empty
+
+  let build_stitch_map (x) = 
+    match x with 
+    | `List vs -> 
+	List.fold_right (fun v m -> 
+	  match v with 
+	  | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
+		      ("2", w)] ->
+			insert (a, d) w m
+	  | _ -> assert false) vs empty
+    | _ -> assert false
 
   let stitch_map : Value.t package -> Value.t list IntPairMap.t package = 
-    fun t -> 
-     let build_map (x) = 
-	match x with 
-	| `List vs -> 
-	    List.fold_right (fun v m -> 
-	    match v with 
-	    | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
-		       ("2", w)] ->
-		  insert (a, d) w m
-	    | _ -> assert false) vs IntPairMap.empty
-	| _ -> assert false
-      in pmap build_map t
-	
+    pmap build_stitch_map 
+    
  let rec stitch_new : Value.t -> Value.t list IntPairMap.t package -> Value.t =
     fun v t ->
       match v, t with
@@ -352,10 +355,12 @@ struct
 		   (lookup (a, d) m))
         | _, _ -> assert false
 
+  let stitch_mapped_query : Value.t list IntPairMap.t package -> Value.t = 
+      stitch_new (`Record [("1", `Int top); ("2", `Int 1)]) 
+	
+
   let stitch_query_new : Value.t package -> Value.t =
-    fun p ->
-      stitch_new (`Record [("1", `Int top); ("2", `Int 1)])
-        (stitch_map p)
+    fun p -> stitch_mapped_query (stitch_map p)
 
   let stitch_query vp =  
     if Settings.get_value Basicsettings.fast_stitch
@@ -1550,19 +1555,25 @@ struct
 	  `List (List.map (unflatten_record StringMap.empty t' -<- Value.unbox_record) vs)
         | _ -> assert false    
 
-(* This appears slow.  Possibly because of repeated construction/discarding of string maps that relate the flattened and unflattened records. 
+(* Above appears slow.  Possibly because of repeated construction/discarding of string maps that relate the flattened and unflattened records. 
 Plan: 
 1. Following definition of unflatten_type, build a record template that shows how to construct each unflattened record by copying fields from flattened record.  (This can bake-in the "fill" operation too.)
 2. Define a function that takes a flattened record and template and constructs the corresponding unflattened record.
 3. Map across the list of records.
 *)
 
-  type template = 
-    [ `Primitive of string
-    | `Record of (string*template) list
+(* code used in fast version of unflatten_list and FastStitching *)
+  type 'a template = 
+    [ `Primitive of 'a
+    | `Record of (string * 'a template) list
     ] 
 
-  let make_template : shredded_type -> template = 
+  let rec template_map f tmpl = 
+    match tmpl with 
+      `Primitive p -> `Primitive (f p)
+    | `Record r -> `Record (List.map (fun (n,t) -> (n,template_map f t)) r)
+
+  let make_template : shredded_type -> string template = 
     fun ty ->
     let rec make_tmpl_inner name t = 
       match t with
@@ -1579,7 +1590,7 @@ Plan:
 		   (StringMap.to_alist rcd))
     in make_tmpl_outer "" ty
 
-  let build_unflattened_record : template -> Value.t -> Value.t =
+  let build_unflattened_record : string template -> Value.t -> Value.t =
       fun template v_record  ->
 	let record = 
 	  match v_record with 
@@ -1606,6 +1617,58 @@ Plan:
     if Settings.get_value Basicsettings.fast_unflatten
     then unflatten_list_new vt
     else unflatten_list_old vt
+
+
+
+end
+
+module FastStitching = 
+struct
+
+(* Experimental stuff *) 
+(* Builds maps from int.  This can be fed into the fast version of shredding above.  It may be possible to do better by having the incoming tables sorted in the database and building the maps by partitioning the tables in one pass.
+Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usually small into a single integer, would also be a good optimization but would make things less uniform.  *)
+
+  let build_unflattened_record_from_array 
+      : (Types.datatype * int) FlattenRecords.template -> string array -> Value.t =
+    fun template array -> 
+    let rec build t = 
+      match t with 
+	`Record rcd -> `Record (List.map (fun (n,t') -> (n,build t')) rcd)
+      | `Primitive (ty,idx) -> Database.value_of_db_string (Array.get array idx) ty
+	    
+    in build template
+
+(* keeing this version around since it seems slightly faster in some cases, should try to find out why*)
+  let build_stitch_map_old (((vs:Value.dbvalue),rs),t) = 
+    let st = FlattenRecords.unflatten_type t in
+    let tmpl = FlattenRecords.make_template st in
+    let tmpl' = FlattenRecords.template_map (fun x -> List.assoc x rs) tmpl in 
+    vs#fold_array (fun row (m) -> 
+      let rcd = build_unflattened_record_from_array tmpl' row in
+      match rcd with 
+      | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
+		  ("2", w)] ->
+		    Shred.insert (a, d) w m
+      | _ -> assert false) IntPairMap.empty
+
+  let build_stitch_map (((vs:Value.dbvalue),rs),t) = 
+    let st = FlattenRecords.unflatten_type t in
+    let tmpl = FlattenRecords.make_template st in
+    let tmpl' = FlattenRecords.template_map (fun x -> List.assoc x rs) tmpl in 
+    let (a_idx,d_idx,w_tmpl) = 
+       match tmpl' with 
+      | `Record [("1", (`Record [ ("1", `Primitive(_,a_idx)); 
+				  ("2", `Primitive(_,d_idx))])); 
+		  ("2", w_tmpl)] -> (a_idx,d_idx,w_tmpl)
+      |	 _ -> assert false in 
+    let add_row_to_map row m = 
+      let w = build_unflattened_record_from_array w_tmpl row in
+      let a = int_of_string(Array.get row a_idx) in 
+      let d = int_of_string(Array.get row d_idx) in
+      Shred.insert (a,d) w m
+    in vs#fold_array add_row_to_map IntPairMap.empty
+
 
 end
 
@@ -2232,13 +2295,13 @@ struct
 
   type index = (Var.var * string) list
 
-(* TODO: Use keys if available *)
 
   let gens_index gs  =
     let all_fields t =
       let field_types = table_field_types t in 
       labels_of_field_types field_types
     in 
+(* Use keys if available *)
     let key_fields t =
       match t with 
 	(_, _, (ks::_), _) -> StringSet.from_list ks
