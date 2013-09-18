@@ -92,7 +92,6 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method get_all_lst : string list list = pgresult#get_all_lst
   method getvalue : int -> int -> string = pgresult#getvalue
   method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-(*    List.map f pgresult#get_all_lst*)
       let max = pgresult#ntuples in
       let rec do_map n acc = 
 	if n < max
@@ -100,19 +99,19 @@ class pg_dbresult (pgresult:Postgresql.result) = object
 	else acc
       in do_map 0 []
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
-(*    List.map f pgresult#get_all_lst*)
+      let max = pgresult#ntuples in
       let rec do_map n acc = 
-	if n > 0
-	then do_map (n-1) (f (pgresult#get_tuple n)::acc)
+	if n < max
+	then do_map (n+1) (f (pgresult#get_tuple n)::acc)
 	else acc
-      in do_map (pgresult#ntuples-1) []
+      in do_map 0 []
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
-(*    List.map f pgresult#get_all_lst*)
+      let max = pgresult#ntuples in
       let rec do_fold n acc = 
-	if n > 0
-	then do_fold (n-1) (f (pgresult#get_tuple n) acc)
+	if n < max
+	then do_fold (n+1) (f (pgresult#get_tuple n) acc)
 	else acc
-      in do_fold (pgresult#ntuples-1) x
+      in do_fold 0 x
   method error : string = original#error
 end
 
