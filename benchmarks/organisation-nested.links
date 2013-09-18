@@ -13,13 +13,39 @@ fun time(f) {
   var start = serverTimeMilliseconds();
   ignore(query {f()});
   var total = serverTimeMilliseconds()-start;
-  print("Time: " ^^ intToString(total));
   total
 }
 
 fun throttle (f,x) {
-  if (length(asList(departments)) <= 256) {f()} else {x}
+  if (length(asList(departments)) <= 16) {f()} else {x}
 }
+
+fun repeat(n,f) {
+  if (n == 0) { [] }
+  else f()::repeat(n-1,f)
+}
+
+fun median(xs) {
+  var ys = sortBy(id, xs);
+  hd(drop(length(ys)/2,ys))
+}
+
+fun test(t) {
+  print(t.msg);
+  var ts = repeat(t.iters, fun () {time(t.q)});
+  var time = median(ts);
+  print("Time: " ^^ intToString(time));
+  (msg=t.msg,time=time)
+}
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter(f,l) {
+  switch(l) {
+    case [] -> ();
+    case (x::xs) -> f(x); iter(f,xs)
+  }
+}
+
 
 # Supporting code
 
@@ -140,20 +166,15 @@ fun outliersQFactored(organisation) {
 
 # Q1: nestedOrg (factored)
 
-var x = print("\nQ1\n");
 
-var q1 = throttle(fun () {time (nestedOrgFactored)},-1);
-var q1 = throttle(fun () {time (nestedOrgFactored)},-1);
+var q1 = nestedOrgFactored;
 
 # Q2: expertise (factored)
 
-var x = print("\nQ2\n");
+fun q2 () {expertise(nestedOrg(),"abstract")}
 
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
-var q2 = time (fun () {query {expertise(nestedOrg(),"abstract")}});
 
 # Q3: employees with lists of tasks
-var x = print("\nQ3\n");
 
 fun tasksByEmployee() {
   query {
@@ -162,22 +183,17 @@ fun tasksByEmployee() {
   }
 }
 
-var q3 = time (tasksByEmployee);
-var q3 = time (tasksByEmployee);
+var q3 = tasksByEmployee;
 
 # Q4: departments with lists of employees
 
-var x = print("\nQ4\n");
 
-fun query4() {
+fun q4() {
   query {
     for(d <-- departments) 
     [(dpt=(d.dpt),emps=for (e <-- employees) where ((d.dpt) == (e.dpt)) [(e.emp)])]
   }
 }
-
-var q4 = time (query4);
-var q4 = time (query4);
 
 # Q5: Tasks with employees and departments
 
@@ -187,33 +203,29 @@ fun employeesByTask(t) {
 	       [(b=e.emp, c=d.dpt)]
 }
 
-fun query5() {
+fun q5() {
   for(t <-- tasks)
   [(a=t.tsk, b=employeesByTask(t))]
 }
 
-var x = print("\nQ5\n");
-
-var q5 =  time (fun () {query {query5()}});
-var q5 =  time (fun () {query {query5()}});
 
 
 # Q6: shredding paper example (factored)
 
-var x = print("\nQ6\n");
-
-var q6 =  throttle(fun () {time (fun () {query {outliersQFactored(nestedOrg())}})},-1);
-var q6 =  throttle(fun () {time (fun () {query {outliersQFactored(nestedOrg())}})},-1);
+fun q6() { outliersQFactored(nestedOrg())}
 
 
 
 
 
-var x = print("Q1:\t" ^^ (intToString(q1)) );
-var x = print("Q2:\t" ^^ (intToString(q2)) );
-var x = print("Q3:\t" ^^ (intToString(q3)) );
-var x = print("Q4:\t" ^^ (intToString(q4)) );
-var x = print("Q5:\t" ^^ (intToString(q5)) );
-var x = print("Q6:\t" ^^ (intToString(q6)) );
-()
+var iters = 5;
+var tests = [test((iters=iters,msg="Q1",q=q1)),
+    	     test((iters=iters,msg="Q2",q=q2)),
+	     test((iters=iters,msg="Q3",q=q3)),
+	     test((iters=iters,msg="Q4",q=q4)),
+	     test((iters=iters,msg="Q5",q=q5)),
+	     test((iters=iters,msg="Q6",q=q6))];
 
+iter(fun (u) {
+  print(u.msg ^^ ":\t" ^^ intToString(u.time))
+},tests)
