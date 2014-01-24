@@ -596,9 +596,6 @@ struct
     val rec_env = IntMap.empty
     val mutrec_env = IntMap.empty
       
-    method with_env env =
-      {< env = env >}
-
     method private with_env env =
       {< env = env >}
 
