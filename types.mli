@@ -9,7 +9,7 @@ type 'a field_env = 'a stringmap deriving (Show)
 module TypeVarSet : Utility.INTSET
 
 (* points *)
-type 'a point = 'a Unionfind.point
+type 'a point = 'a Unionfind.point 
 
 val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 
@@ -33,7 +33,7 @@ type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Show)
 
-type 't meta_presence_var_basis =
+type 't meta_presence_var_basis = 
     [ `Flexible of int
     | `Rigid of int
     | `Body of 't ]
@@ -49,8 +49,8 @@ sig
 end
 
 val process  : Abstype.t
-val list     : Abstype.t
-val event    : Abstype.t
+val list     : Abstype.t 
+val event    : Abstype.t 
 val dom_node : Abstype.t
 
 type typ =
@@ -62,9 +62,8 @@ type typ =
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `MetaTypeVar of meta_type_var
-    | `ForAll of (quantifier list ref * typ)
-    | `Session of session_type ]
+    | `MetaTypeVar of meta_type_var 
+    | `ForAll of (quantifier list ref * typ)]
 and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec = presence_flag * typ
 and field_spec_map = field_spec field_env
@@ -77,13 +76,8 @@ and quantifier =
     [ `TypeVar of (int * subkind) * meta_type_var
     | `RowVar of (int * subkind) * meta_row_var
     | `PresenceVar of int * meta_presence_var ]
-and type_arg =
+and type_arg = 
     [ `Type of typ | `Row of row | `Presence of presence_flag ]
-and session_type =
-    [ `Input of typ * session_type
-    | `Output of typ * session_type
-    | `Select of session_type field_env
-    | `Choice of session_type field_env ]
       deriving (Show)
 
 type datatype = typ

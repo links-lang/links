@@ -46,8 +46,8 @@ let rec eq_types : (datatype * datatype) -> bool =
     let rec unalias = function
       | `Alias (_, x) -> unalias x
       | x             -> x in
-    match unalias t1 with
-      | `Not_typed ->
+    match unalias t1 with 
+      | `Not_typed -> 
           begin match unalias t2 with
               `Not_typed -> true
             | _          -> false
@@ -153,7 +153,7 @@ fun rec_env ->
   let qs = rec_env.qs in
 
   let is_unguarded_recursive t =
-    let rec is_unguarded rec_types t =
+    let rec is_unguarded rec_types t = 
       match t with
         | `MetaTypeVar point ->
             begin
@@ -166,7 +166,7 @@ fun rec_env ->
         |  _ -> false
     in
       is_unguarded IntSet.empty t in
-
+    
   let unify_rec ((var, body), t) =
     let ts =
       if IntMap.mem var rec_types then
@@ -186,7 +186,7 @@ fun rec_env ->
         IntMap.find lvar rec_types
       else
         [lbody] in
-
+      
     let rts =
       if IntMap.mem rvar rec_types then
         IntMap.find rvar rec_types
@@ -246,7 +246,6 @@ fun rec_env ->
 
       let ut = unify' rec_env in
       let ur = unify_rows' rec_env in
-      let us = unify_sessions rec_env in
       counter := !counter+1;
         let counter' = "(" ^ string_of_int !counter ^ ")" in
       Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2 ^ counter');
@@ -266,7 +265,7 @@ fun rec_env ->
                    | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind && compatible_quantifiers (lvar, rvar) qs ->
                        Unionfind.union lpoint rpoint
                    | `Rigid (l, _), `Rigid (r, _) ->
-                       if l <> r then
+                       if l <> r then 
                          raise (Failure (`Msg ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match")))
                        else
                          (* presumably this should always be a no-op *)
@@ -325,7 +324,7 @@ fun rec_env ->
                          match Types.flexible_of_type t1 with
                            | Some t1 -> unify' rec_env (t1, t2)
                            | None ->
-                               Debug.print("b");
+                               Debug.print("b");                        
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                        end
@@ -356,10 +355,10 @@ fun rec_env ->
                            raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                    string_of_datatype (`MetaTypeVar lpoint) ^
                                                    " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint))))
-                         else
+                         else                   
                            unify_rec ((var, t'), t)
                        end
-                       (*
+                       (* 
                           it is critical that the arguments to Unionfind.union are in this order
                           otherwise we might get unguarded recursion
                        *)
@@ -371,13 +370,13 @@ fun rec_env ->
                            raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                    string_of_datatype (`MetaTypeVar rpoint) ^
                                                    " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
-                         else
+                         else                   
                            unify_rec ((var, t'), t)
                        end
 (*                        Unionfind.union lpoint rpoint *)
                    | `Body t, `Body t' ->
                        ut (t, t')
-                       (*
+                       (* 
                           Apparently this isn't sound as it can lead to unguarded recursion:
 
                             Unionfind.union lpoint rpoint
@@ -387,7 +386,7 @@ fun rec_env ->
               concrete_point point;
               begin
                 match Unionfind.find point with
-                 | `Rigid (l, _) ->
+                 | `Rigid (l, _) -> 
                      begin
                        match Types.flexible_of_type t with
                          | Some t -> unify' rec_env (t, `MetaTypeVar point)
@@ -425,12 +424,12 @@ fun rec_env ->
                          raise (Failure (`Msg ("Couldn't unify the unguarded recursive type "^
                                                  string_of_datatype (`MetaTypeVar point) ^
                                                  " with the non-recursive type "^ string_of_datatype t)))
-                       else
+                       else                   
                          unify_rec ((var, t'), t)
                      end
                        (* It's tempting to try to do this, but it isn't sound
                           as point may appear inside t
-
+                          
                           Unionfind.change point t;
                        *)
                  | `Body t' -> ut (t, t')
@@ -453,7 +452,6 @@ fun rec_env ->
                                 "' with abstract type '"^string_of_datatype t2^"'")))
           | `Application (l, ls), `Application (r, rs) ->
               List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
-          | `Session s, `Session s' -> us (s, s')
           | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
               (* Check that all quantifiers that were originally rigid
                  are still distinct *)
@@ -531,10 +529,10 @@ fun rec_env ->
                   Int.compare (Types.var_of_quantifier q) (Types.var_of_quantifier q')
                 in
                   match List.sort compare ls, List.sort compare rs with
-                    | [], [] -> ()
+                    | [], [] -> ()                  
                     | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs)
                     | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) in
-
+                      
               let depth, lenv, renv = qs in
               let depth = depth+1 in
               let lenv = List.fold_right (fun q lenv -> IntMap.add (var_of_quantifier q) depth lenv) ls lenv in
@@ -548,7 +546,7 @@ fun rec_env ->
                  if we unify
 
                    forall ?a.(a) -> a
-
+                   
                  with
 
                    forall a,b.((a) -> b) -> (a) -> b
@@ -558,7 +556,7 @@ fun rec_env ->
                    forall ((a) -> b).((a) -> b) -> ((a) -> b)
 
                  which we can then convert to:
-
+                 
                    forall a,b.((a) -> b) -> ((a) -> b)
 
                  by pulling out a and b from the ?a quantifier (which
@@ -593,7 +591,7 @@ fun rec_env ->
               (* throw away any unpartnered flexible quantifiers
                  raise an error for unpartnered rigid quantifiers *)
               let ls, rs =
-                let cull vars qs =
+                let cull vars qs = 
                   List.fold_right
                     (fun q qs ->
                        if IntSet.mem (Types.var_of_quantifier q) vars then
@@ -654,7 +652,7 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
                   when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
                   Unionfind.union lpoint rpoint
               | `Rigid l, `Rigid r ->
-                  if l <> r then
+                  if l <> r then 
                     raise (Failure (`Msg ("Rigid presence variables "^
                                             string_of_int l ^" and "^
                                             string_of_int r ^" do not match")))
@@ -676,7 +674,7 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
       | `Var point, f | f, `Var point ->
           begin
             match (Unionfind.find point) with
-              | `Rigid l ->
+              | `Rigid l -> 
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
                                           string_of_int l ^" with the presence flag "^
                                           string_of_presence f)))
@@ -687,11 +685,11 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
       | _, _ ->
           raise (Failure (`Msg ("Couldn't match "^ string_of_presence l ^" against "^ string_of_presence r)))
 
-and unify_rows' : unify_env -> ((row * row) -> unit) =
+and unify_rows' : unify_env -> ((row * row) -> unit) = 
   fun rec_env (lrow, rrow) ->
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
-    (*
+    (* 
        NOTE:
 
        - All calls to fail_on_absent_fields are currently disabled,
@@ -770,10 +768,10 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                   if closed then
                     begin
                       (* if both rows are closed then absence is all we need *)
-                      unify_presence' rec_env (f, `Absent);
+                      unify_presence' rec_env (f, `Absent); 
                       unify_presence' rec_env (f', `Absent);
                       extension
-                    end
+                    end                 
                   else
                     raise e
             else
@@ -783,7 +781,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     (* unify_field_envs closed rec_env (lenv, renv)
 
        unify lenv with renv
-
+       
        The closed argument should be set to true when both
        environments arise from closed rows. In this case missing
        labels may be treated as absent *)
@@ -846,7 +844,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     (*
       unify_row_var_with_row rec_env (row_var, row)
       attempts to unify row_var with row
-
+      
       However, row_var may already have been instantiated, in which case
       it is unified with row.
     *)
@@ -923,13 +921,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         in
           extend row_var in
 
-    (*
+    (* 
        matching_labels (big_field_env, small_field_env)
        return the set of labels that appear in both big_field_env and small_field_env
 
        precondition: big_field_env contains small_field_env
     *)
-    let matching_labels : field_spec_map * field_spec_map -> StringSet.t =
+    let matching_labels : field_spec_map * field_spec_map -> StringSet.t = 
       fun (big_field_env, small_field_env) ->
         StringMap.fold (fun label _ labels ->
                           if StringMap.mem label small_field_env then
@@ -947,7 +945,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
 
     (*
       register a recursive row in the rec_env environment
-
+      
       return:
       None if the recursive row already appears in the environment
       Some rec_env, otherwise, where rec_env is the updated environment
@@ -955,7 +953,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let register_rec_row (wrapped_field_env, unwrapped_field_env, rec_row, unwrapped_row') : unify_env -> unify_env option =
       fun rec_env ->
         let rec_types = rec_env.tenv in
-        let rec_rows = rec_env.renv in
+        let rec_rows = rec_env.renv in          
           match rec_row with
             | Some row_var ->
                 begin
@@ -994,20 +992,20 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           fail_on_absent_fields lfield_env;
           fail_on_absent_fields rfield_env;
         *)
-      let closed =
+      let closed = 
         begin
           match Unionfind.find lrow_var', Unionfind.find rrow_var' with
-            | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind &&
+            | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind && 
                                                            (lvar=rvar ||
                                                                compatible_quantifiers (lvar, rvar) rec_env.qs) ->
             (* FIXME:
-
+               
                why is the lvar=rvar test sometimes necessary?
             *)
               Unionfind.union lrow_var' rrow_var'; false
-            (*
+            (* 
                Both rows are rigid!
-            *)
+            *)               
             | `Flexible _, _ | _, `Flexible _ ->
               assert false
             | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
@@ -1047,7 +1045,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     let unify_one_rigid ((rigid_field_env, _ as rigid_row), (open_field_env, _ as open_row)) =
       let (rigid_field_env', rigid_row_var') as rigid_row', rigid_rec_row = unwrap_row rigid_row in
       let closed = is_closed_row rigid_row' in
-      let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in
+      let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in 
         (* check that the open row contains no extra fields *)
         StringMap.iter
           (fun label (flag, _) ->
@@ -1060,13 +1058,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                    unify_presence' rec_env (flag, `Absent)
                  | _ ->
                      raise (Failure
-                              (`Msg
+                              (`Msg 
                                  ("Rows\n "^ string_of_row rigid_row
                                   ^"\nand\n "^ string_of_row open_row
                                   ^"\n could not be unified because the former is rigid"
                                   ^" and the latter contains fields not present in the former")))
           ) open_field_env';
-
+        
         let rec_env' =
           (register_rec_rows
              (rigid_field_env, rigid_field_env', rigid_rec_row, open_row')
@@ -1091,13 +1089,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         match rec_env' with
           | None -> ()
           | Some rec_env ->
-              if (get_row_var lrow = get_row_var rrow) then
+              if (get_row_var lrow = get_row_var rrow) then     
                 unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
                                                        (rfield_env', Unionfind.fresh `Closed))
               else
                 begin
-                  let fresh_row_var = fresh_row_variable `Any in
-                    (* each row can contain fields missing from the other;
+                  let fresh_row_var = fresh_row_variable `Any in         
+                    (* each row can contain fields missing from the other; 
                        thus we call extend_field_env once in each direction *)
                   let rextension =
                     extend_field_env false rec_env lfield_env' rfield_env' in
@@ -1109,12 +1107,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     let lextension = extend_field_env false rec_env rfield_env' lfield_env' in
                       unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
                 end in
-
+      
     (* report an error if an attempt is made to unify
        an unguarded recursive row with a row that is not
        unguarded recursive
     *)
-    let check_unguarded_recursion lrow rrow =
+    let check_unguarded_recursion lrow rrow =      
       if is_unguarded_recursive lrow then
         if not (is_unguarded_recursive rrow) then
           raise (Failure
@@ -1124,7 +1122,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           raise (Failure
                    (`Msg ("Could not unify unguarded recursive row"^ string_of_row rrow
                           ^"\nwith row "^ string_of_row lrow))) in
-
+      
     let _ =
       check_unguarded_recursion lrow rrow;
 
@@ -1134,7 +1132,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         else
           unify_one_rigid (lrow, rrow)
       else if is_rigid_row rrow then
-        unify_one_rigid (rrow, lrow)
+        unify_one_rigid (rrow, lrow)        
       else
         unify_both_open (rrow, lrow)
     in
@@ -1147,31 +1145,8 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
       | `Type lt, `Type rt -> unify' rec_env (lt, rt)
       | `Row lr, `Row rr -> unify_rows' rec_env (lr, rr)
       | `Presence lf, `Presence rf -> unify_presence' rec_env (lf, rf)
-      | l, r ->
+      | l, r -> 
           raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
-
-and unify_sessions : unify_env -> (session_type * session_type) -> unit =
-  fun rec_env ->
-  let us = unify_sessions rec_env in
-    function
-      | `Input (t, s), `Input (t', s')
-      | `Output (t, s), `Output (t', s')
-        -> unify' rec_env t t'; us s s'
-      | `Select bs as s, `Select bs' as s'
-      | `Choice bs as s, `Choice bs' as s'
-        -> StringMap.fold
-             (fun l s () ->
-              if StringMap.mem l bs'
-              then us (StringMap.find l bs') s
-              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s')))
-             bs ();
-           StringMap.fold
-             (fun l _ () ->
-              if StringMap.mem l bs
-              then ()
-              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s))))
-             bs' ()
-      | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =
   unify' {tenv=IntMap.empty; renv=IntMap.empty; qs=(0, IntMap.empty, IntMap.empty)} (t1, t2)
@@ -1182,3 +1157,4 @@ and unify_rows (row1, row2) =
 (* external interface *)
 let datatypes = unify
 let rows = unify_rows
+
