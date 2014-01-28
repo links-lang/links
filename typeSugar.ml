@@ -1760,8 +1760,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `SessionFork ((name, _, pos), body) ->
             let ty = Types.fresh_type_variable `Any in
             let context' = {context with var_env = Env.bind context.var_env (name, ty)} in
-            let body' = type_check context' body in
-            `SessionFork ((name, ty, pos), body'), dual_type ty
+            let body', body_type = type_check context' body in
+              (* TODO: check that body_type is 'end' *)
+              `SessionFork ((name, Some ty, pos), body'), TypeUtils.dual_type ty
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->
             let tyargs, opt = type_unary_op context op

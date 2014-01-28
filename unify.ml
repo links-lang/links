@@ -1156,14 +1156,14 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
     function
       | `Input (t, s), `Input (t', s')
       | `Output (t, s), `Output (t', s')
-        -> unify' rec_env t t'; us s s'
-      | `Select bs as s, `Select bs' as s'
-      | `Choice bs as s, `Choice bs' as s'
+        -> unify' rec_env (t, t'); us (s, s')
+      | (`Select bs as s), (`Select bs' as s')
+      | (`Choice bs as s), (`Choice bs' as s')
         -> StringMap.fold
              (fun l s () ->
               if StringMap.mem l bs'
-              then us (StringMap.find l bs') s
-              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s')))
+              then us (StringMap.find l bs', s)
+              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s'))))
              bs ();
            StringMap.fold
              (fun l _ () ->
