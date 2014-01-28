@@ -42,7 +42,7 @@ let string_of_binop =
     | `RegexMatch _ -> "<some regex nonsense>"
     | `And -> "&&"
     | `Or -> "||"
-    | `Cons -> "::"    
+    | `Cons -> "::"
     | `Name name -> name
 
 type position = SourceCode.pos
@@ -105,6 +105,7 @@ type datatype =
   | TypeApplication of (string * type_arg list)
   | PrimitiveType   of Types.primitive
   | DBType
+  | Session         of session_type
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
@@ -117,6 +118,11 @@ and type_arg =
     [ `Type of datatype
     | `Row of row
     | `Presence of presence_flag ]
+and session_type =
+    [ `Input of datatype * session_type
+    | `Output of datatype * session_type
+    | `Select of session_type list
+    | `Choice of session_type list ]
       deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
@@ -149,7 +155,7 @@ and pattern = patternnode * position
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
-] 
+]
 and regex = [
 | `Range     of char * char
 | `Simply    of string
@@ -162,10 +168,10 @@ and regex = [
 | `Group     of regex
 | `Repeat    of Regex.repeat * regex
 | `Splice    of phrase
-| `Replace   of regex * replace_rhs 
+| `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
-and iterpatt = [ 
+and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
 ]
@@ -180,7 +186,7 @@ and phrasenode = [
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
-    * (*where:*)   phrase option 
+    * (*where:*)   phrase option
                     * (*orderby:*) phrase option
 | `Escape           of binder * phrase
 | `Section          of sec
@@ -213,6 +219,8 @@ and phrasenode = [
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
 | `FormBinding      of phrase * pattern
+| `SessionReceive   of phrase * (pattern * phrase) list * Types.datatype option
+| `SessionFork      of binder * phrase
 ]
 and phrase = phrasenode * position
 and bindingnode = [
@@ -234,13 +242,13 @@ and bindingnode = [
 ]
 and binding = bindingnode * position
 and directive = string * string list
-and sentence = [ 
+and sentence = [
 | `Definitions of binding list
 | `Expression  of phrase
 | `Directive   of directive ]
     deriving (Show)
 
-type program = binding list * phrase option 
+type program = binding list * phrase option
   deriving (Show)
 
 
@@ -256,7 +264,7 @@ exception RedundantPatternMatch of SourceCode.pos
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _ -> 
+    | _ ->
         `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
@@ -292,7 +300,7 @@ struct
   let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
     | `Xml (_, _, _, children) -> union_map formlet_bound children
     | `FormBinding (_, pat) -> pattern pat
-    | _ -> empty 
+    | _ -> empty
 
   let rec phrase (p, _ : phrase) : StringSet.t = match p with
     | `Var v -> singleton v
@@ -340,8 +348,8 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
-    | `Xml (_, attrs, attrexp, children) -> 
+    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2)
+    | `Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;
            option_map phrase attrexp;
@@ -360,7 +368,7 @@ struct
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
-                     diff (option_map phrase orderby) pat_bound]                     
+                     diff (option_map phrase orderby) pat_bound]
             (*     | `Iteration (`List (pat, source), body, where, orderby) *)
 (*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
 (*         let pat_bound = pattern pat in *)
@@ -369,12 +377,12 @@ struct
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
     | `Switch (p, cases, _) -> union (phrase p) (union_map case cases)
-    | `Receive (cases, _) -> union_map case cases 
-    | `DBDelete (pat, p, where) -> 
-        union (phrase p) 
+    | `Receive (cases, _) -> union_map case cases
+    | `DBDelete (pat, p, where) ->
+        union (phrase p)
           (diff (option_map phrase where)
              (pattern pat))
-    | `DBUpdate (pat, from, where, fields) -> 
+    | `DBUpdate (pat, from, where, fields) ->
         let pat_bound = pattern pat in
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
@@ -384,8 +392,8 @@ struct
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
     | `Fun ((name,_,_), (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
-    | `Funs funs -> 
-        let names, rhss = 
+    | `Funs funs ->
+        let names, rhss =
           List.fold_right
             (fun ((n,_,_), (_, rhs), _, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
@@ -399,7 +407,7 @@ struct
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and block (binds, expr : binding list * phrase) : StringSet.t = 
+  and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->
             let patbound, exprfree = binding bind in
