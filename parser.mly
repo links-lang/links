@@ -5,31 +5,31 @@ open List
 open Sugartypes
 
 (* Generation of fresh type variables *)
-      
+
 let type_variable_counter = ref 0
-  
+
 let fresh_type_variable : subkind -> datatype =
-  function subkind -> 
+  function subkind ->
     incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
-  
+
 let fresh_rigid_type_variable : subkind -> datatype =
-  function subkind -> 
+  function subkind ->
     incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
 
 let fresh_row_variable : subkind -> row_var =
-  function subkind -> 
+  function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind)
 
 let fresh_rigid_row_variable : subkind -> row_var =
-  function subkind -> 
+  function subkind ->
     incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter), subkind)
 
 let fresh_presence_variable : unit -> presence_flag =
-  function () -> 
+  function () ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter))
-  
+
 let fresh_rigid_presence_variable : unit -> presence_flag =
-  function () -> 
+  function () ->
     incr type_variable_counter; `RigidVar ("_" ^ string_of_int (!type_variable_counter))
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
@@ -41,9 +41,9 @@ let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_e
 
 let default_fixity = Num.num_of_int 9
 
-let annotate (signame, datatype) : _ -> binding = 
+let annotate (signame, datatype) : _ -> binding =
   let checksig (signame, _) name =
-    if signame <> name then 
+    if signame <> name then
       raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
                 ^ signame ^ "', not `"^ name ^"'.",
@@ -99,7 +99,7 @@ let make_tuple pos =
 let labels = List.map fst
 
 let parseRegexFlags f =
-  let rec asList f i l = 
+  let rec asList f i l =
     if (i == String.length f) then
       List.rev l
     else
@@ -131,7 +131,7 @@ let datatype d = d, None
 %token TRUE FALSE
 %token BARBAR AMPAMP
 %token <Num.num> UINTEGER
-%token <float> UFLOAT 
+%token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
 %token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
@@ -198,7 +198,7 @@ file:
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
 
-args: 
+args:
 | /* empty */                                                  { [] }
 | arg args                                                     { $1 :: $2 }
 
@@ -233,7 +233,7 @@ nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
                                                                    `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3); 
+                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3);
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
@@ -268,7 +268,7 @@ tlfunbinding:
 tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
 
-signature: 
+signature:
 | SIG var COLON datatype                                       { $2, datatype $4 }
 | SIG op COLON datatype                                        { $2, datatype $4 }
 
@@ -326,9 +326,9 @@ atomic_expression:
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET RBRACKET                                            { `ListLit ([], None), pos() } 
-| LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() } 
-| LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() } 
+| LBRACKET RBRACKET                                            { `ListLit ([], None), pos() }
+| LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() }
+| LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() }
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { `FunLit (None, ($2, (`Block $3, pos ()))), pos() }
 
@@ -526,7 +526,7 @@ db_expression:
 xml:
 | xml_tree                                                     { $1 }
 
-xmlid: 
+xmlid:
 | VARIABLE                                                     { $1 }
 
 attrs:
@@ -549,12 +549,12 @@ attr_val:
 | STRING attr_val                                              { (`Constant (`String $1), pos()) :: $2}
 
 xml_tree:
-| LXML SLASHRXML                                               { `Xml ($1, [], None, []), pos() } 
-| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], None, []), pos()) } 
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], None, $3), pos()) } 
-| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (`Xml ($1, fst $2, snd $2, []), pos()) } 
-| LXML attrs SLASHRXML                                         { `Xml ($1, fst $2, snd $2, []), pos() } 
-| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (`Xml ($1, fst $2, snd $2, $4), pos()) } 
+| LXML SLASHRXML                                               { `Xml ($1, [], None, []), pos() }
+| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (`Xml ($1, [], None, []), pos()) }
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (`Xml ($1, [], None, $3), pos()) }
+| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (`Xml ($1, fst $2, snd $2, []), pos()) }
+| LXML attrs SLASHRXML                                         { `Xml ($1, fst $2, snd $2, []), pos() }
+| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (`Xml ($1, fst $2, snd $2, $4), pos()) }
 
 xml_contents_list:
 | xml_contents                                                 { [$1] }
@@ -600,6 +600,7 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
+| RECEIVE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE        { `SessionReceive ($3, $6, None) , pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -645,14 +646,14 @@ formlet_expression:
 
 table_expression:
 | formlet_expression                                           { $1 }
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()} 
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()}
 
 perhaps_table_constraints:
 | WHERE table_constraints                                      { $2 }
 | /* empty */                                                  { [] }
 
 table_constraints:
-| record_label field_constraints                               { [($1, $2)] } 
+| record_label field_constraints                               { [($1, $2)] }
 | record_label field_constraints COMMA table_constraints       { ($1, $2) :: $4 }
 
 field_constraints:
@@ -826,7 +827,7 @@ primary_datatype:
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
-| CONSTRUCTOR                                                  { match $1 with 
+| CONSTRUCTOR                                                  { match $1 with
                                                                    | "Bool"    -> PrimitiveType `Bool
                                                                    | "Int"     -> PrimitiveType `Int
                                                                    | "Char"    -> PrimitiveType `Char
@@ -955,7 +956,7 @@ nonrec_row_var:
 | QUESTION                                                     { fresh_row_variable `Any }
 
 /* FIXME:
- * 
+ *
  * recursive row vars shouldn't be restricted to vfields.
  */
 row_var:
@@ -1028,7 +1029,7 @@ constructor_pattern:
 
 constructors:
 | CONSTRUCTOR                                               { [$1] }
-| CONSTRUCTOR COMMA constructors                            { $1 :: $3 } 
+| CONSTRUCTOR COMMA constructors                            { $1 :: $3 }
 
 negative_pattern:
 | primary_pattern                                           { $1 }

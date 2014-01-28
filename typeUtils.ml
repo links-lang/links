@@ -48,7 +48,7 @@ let rec extract_row t = match concrete_type t with
   | `Variant row -> row
   | t ->
       failwith
-        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: " 
+        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
          ^ string_of_datatype t)
 
 let split_row name row =
@@ -86,7 +86,7 @@ let rec project_type name t = match concrete_type t with
   | `Record row ->
       let t, _ = split_row name row in
         t
-  | t -> 
+  | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
 (*
@@ -143,7 +143,7 @@ let rec erase_type_poly names t = match concrete_type t with
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t
   | `Function (_, _, t) -> t
-  | t -> 
+  | t ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
 
 let rec arg_types t = match concrete_type t with
@@ -212,3 +212,13 @@ let record_without t names =
                fields,
              row_var)
     | _ -> assert false
+
+let rec dual_session = function
+  | `Input (t, s)  -> `Output (t, dual_session s)
+  | `Output (t, s) -> `Input (t, dual_session s)
+  | `Select bs     -> `Choice (StringMap.map dual_session) bs
+  | `Choice bs     -> `Select (StringMap.map dual_session) bs
+
+let dual_type t = match concrete_type t with
+  | `Session s -> `Session (dual_session s)
+  | _ -> assert false
