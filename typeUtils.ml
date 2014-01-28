@@ -216,8 +216,8 @@ let record_without t names =
 let rec dual_session = function
   | `Input (t, s)  -> `Output (t, dual_session s)
   | `Output (t, s) -> `Input (t, dual_session s)
-  | `Select bs     -> `Choice (StringMap.map dual_session) bs
-  | `Choice bs     -> `Select (StringMap.map dual_session) bs
+  | `Select bs     -> `Choice (StringMap.map dual_session bs)
+  | `Choice bs     -> `Select (StringMap.map dual_session bs)
 
 let dual_type t = match concrete_type t with
   | `Session s -> `Session (dual_session s)

@@ -731,6 +731,7 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
 (* TODO: tidy up all this normalisation / concretisation code *)
 let rec normalise_datatype rec_names t =
   let nt = normalise_datatype rec_names in
+  let ns = normalise_session rec_names in
   let nr = normalise_row rec_names in
     hoist_quantifiers t;
     match t with
@@ -752,6 +753,7 @@ let rec normalise_datatype rec_names t =
               | [] -> nt body
               | _ -> `ForAll (qs, nt body)
           end
+      | `Session s -> `Session (ns s)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -785,7 +787,14 @@ and normalise_type_arg rec_names type_arg =
     | `Type t -> `Type (normalise_datatype rec_names t)
     | `Row row -> `Row (normalise_row rec_names row)
     | `Presence f -> `Presence (normalise_presence_flag f)
-
+and normalise_session rec_names s =
+  let nt = normalise_datatype rec_names in
+  let ns = normalise_session rec_names in
+    match s with
+    | `Input (t, s)  -> `Input (nt t, ns s)
+    | `Output (t, s) -> `Input (nt t, ns s)
+    | `Select bs     -> `Select (StringMap.map ns bs)
+    | `Choice bs     -> `Choice (StringMap.map ns bs)
 
 let concrete_type = concrete_type IntSet.empty
 
@@ -1056,6 +1065,7 @@ struct
                 (unbox_quantifiers tyvars)
             in
               (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
+        | `Session s -> free_bound_session_type_vars ~include_aliases bound_vars s
         | `Alias ((_,ts), d) when include_aliases ->
             List.concat
               (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts) @ (fbtv d)
@@ -1100,6 +1110,17 @@ struct
       | `Type t -> free_bound_type_vars ~include_aliases bound_vars t
       | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
       | `Presence f -> free_bound_presence_type_vars ~include_aliases bound_vars f
+  and free_bound_session_type_vars  ~include_aliases bound_vars =
+    function
+    | `Input (t, s)
+    | `Output (t, s) ->
+      free_bound_type_vars ~include_aliases bound_vars t @ free_bound_session_type_vars ~include_aliases bound_vars s
+    | `Select bs
+    | `Choice bs ->
+      StringMap.fold
+        (fun _ s tvs ->
+          free_bound_session_type_vars ~include_aliases bound_vars s @ tvs)
+        bs []
 
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
     match tycon_spec with
@@ -1112,6 +1133,8 @@ struct
           in
             (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
       | `Abstract _ -> []
+
+
 
 (*   let varset_of_vars vars = *)
 (*     V.fold (fun var _ varset -> TypeVarSet.add var varset) vars TypeVarSet.empty *)
@@ -1369,6 +1392,7 @@ struct
                           "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
                 else
                   "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
+          | `Session s -> "session (" ^ session bound_vars p s ^ ")"
           | `Table (r, w, n)   ->
               (* TODO:
 
@@ -1481,6 +1505,10 @@ struct
       | `Type t -> datatype bound_vars p t
       | `Row r -> "{ " ^ row "," bound_vars p r ^ " }"
       | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
+  and session bound_vars p =
+    function
+    (* TODO: pretty-printer for session types *)
+    | s -> "SOME SESSION TYPE"
 
   let tycon_spec bound_vars p =
     function
@@ -1538,6 +1566,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
                 (unbox_quantifiers tyvars)
           in
             flexible_type_vars bound_vars body
+      | `Session s -> session_flexible_type_vars bound_vars s
       | `Variant row -> row_flexible_type_vars bound_vars row
       | `Table (r, w, n) -> TypeVarMap.union_all [ftv r; ftv w; ftv n]
       | `Alias ((name, ts), d) ->
@@ -1586,6 +1615,16 @@ and tyarg_flexible_type_vars bound_vars =
     | `Type t -> flexible_type_vars bound_vars t
     | `Row row -> row_flexible_type_vars bound_vars row
     | `Presence f -> presence_flexible_type_vars bound_vars f
+and session_flexible_type_vars bound_vars =
+  function
+  | `Input (t, s)
+  | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; session_flexible_type_vars bound_vars s]
+  | `Select bs
+  | `Choice bs ->
+    StringMap.fold
+      (fun _ s ftvs ->
+        TypeVarMap.union_all [session_flexible_type_vars bound_vars s; ftvs])
+      bs TypeVarMap.empty
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty
@@ -1594,6 +1633,8 @@ let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyar
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
 let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
+
+let free_bound_session_type_vars ?(include_aliases=true) = Vars.free_bound_session_type_vars ~include_aliases TypeVarSet.empty
 
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) (t : datatype) =
@@ -1626,6 +1667,12 @@ let string_of_type_arg ?(policy=Print.default_policy) (arg : type_arg) =
       (policy, Vars.make_names (free_bound_type_arg_type_vars ~include_aliases:true arg))
       arg
 
+let string_of_session_type ?(policy=Print.default_policy) (s : session_type) =
+  let policy = policy () in
+    Print.session
+      TypeVarSet.empty
+      (policy, Vars.make_names (free_bound_session_type_vars ~include_aliases:true s))
+      s
 
 let string_of_row_var ?(policy=Print.default_policy) row_var =
   match
@@ -1653,6 +1700,7 @@ let string_of_datatype t = string_of_datatype t
 let string_of_row r = string_of_row r
 let string_of_presence f = string_of_presence f
 let string_of_type_arg arg = string_of_type_arg arg
+let string_of_session_type s = string_of_session_type s
 let string_of_row_var r = string_of_row_var r
 let string_of_tycon_spec s = string_of_tycon_spec s
 
@@ -1704,6 +1752,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
       | `Table (l,r,n)           -> union [make_env boundvars l; make_env boundvars r; make_env boundvars n]
       | `Alias ((name, ts), d)   -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
+      | `Session s               -> make_env_s boundvars s
       | `ForAll (qs, t)          ->
           make_env
             (List.fold_right
@@ -1768,6 +1817,12 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
       | `Type t -> make_env boundvars t
       | `Row row -> make_env_r boundvars row
       | `Presence f -> make_env_f boundvars f
+  and make_env_s boundvars =
+    function
+    | `Input (t, s)
+    | `Output (t, s) -> union [make_env boundvars t; make_env_s boundvars s]
+    | `Select bs
+    | `Choice bs     -> StringMap.fold (fun _ s envs -> union [make_env_s boundvars s; envs]) bs empties
   in make_env S.empty
 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =

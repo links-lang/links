@@ -287,6 +287,7 @@ val string_of_datatype : datatype -> string
 val string_of_row : row -> string
 val string_of_presence : presence_flag -> string
 val string_of_type_arg : type_arg -> string
+val string_of_session_type : session_type -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string
