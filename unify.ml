@@ -1151,14 +1151,14 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
           raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
 
 and unify_sessions : unify_env -> (session_type * session_type) -> unit =
-  fun rec_env ->
-  let us = unify_sessions rec_env in
-    function
+  fun rec_env (s, s') ->
+    let us = unify_sessions rec_env in
+      match (s, s') with
       | `Input (t, s), `Input (t', s')
       | `Output (t, s), `Output (t', s')
         -> unify' rec_env (t, t'); us (s, s')
-      | (`Select bs as s), (`Select bs' as s')
-      | (`Choice bs as s), (`Choice bs' as s')
+      | `Select bs, `Select bs'
+      | `Choice bs, `Choice bs'
         -> StringMap.fold
              (fun l s () ->
               if StringMap.mem l bs'
