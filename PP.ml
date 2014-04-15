@@ -85,6 +85,7 @@ let (^+^) x y = match x, y with
 (* let ($$) x y = x ^^ break ^^ y *)
 
 let rec unsnoc = function
+  | [] -> invalid_arg "unsnoc"
   | [x] -> ([], x)
   | x::xs -> let (ys, y) = unsnoc xs in
       (x::ys, y)
