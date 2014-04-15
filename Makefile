@@ -36,7 +36,7 @@ ifdef MONETDB5_LIBDIR
 	THREADS = yes
 endif
 
-DERIVING_DIR=deriving-310
+DERIVING_DIR=deriving
 
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
