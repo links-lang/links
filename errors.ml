@@ -10,20 +10,9 @@ type synerrspec = {filename : string; linespec : string;
 
 exception UndefinedVariable of string
     
-exception ASTSyntaxError = SourceCode.ASTSyntaxError
-
 exception Type_error of (SourceCode.pos * string)
 exception MultiplyDefinedToplevelNames of ((SourceCode.pos list) stringmap)
 exception RichSyntaxError of synerrspec
-
-exception WrongArgumentTypeError of (SourceCode.pos *
-				       string * Types.datatype * 
-                                       string list * Types.datatype list *
-				       Types.datatype option)
-
-exception NonfuncAppliedTypeError of (SourceCode.pos * string * Types.datatype *
-					string list * Types.datatype list *
-					Types.datatype option)
 
 exception Runtime_error of string
 
@@ -49,7 +38,7 @@ let get_mailbox_msg add_code_tags =
       | Some mbtype ->
 	  " (mailbox type "^ string_of_datatype mbtype ^ ") "
 
-let rec format_exception = function
+let format_exception = function
   | RichSyntaxError s ->
       ("*** Parse error: " ^ s.filename ^ ":"
        ^ s.linespec ^ "\n"
@@ -60,22 +49,8 @@ let rec format_exception = function
       let (pos, _, expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n" 
           pos.pos_fname pos.pos_lnum s expr
-  | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expressions `" ^ 
-        String.concat "', `" pexpr ^ "' have types\n    " ^ 
-        mapstrcat "\n" (indent 2 -<- string_of_datatype) paramtype ^ 
-        (get_mailbox_msg false mb)^
-        "\nand cannot be passed to function `"^ fexpr ^
-        "', which has type\n    "^ string_of_datatype fntype
-      in format_exception(Type_error(pos, msg))
-  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression `"^ fexpr ^"', which has type\n    "^ 
-        string_of_datatype fntype ^
-        ", cannot be applied to `"^ String.concat ", " pexpr ^"'of types\n    " ^
-        mapstrcat ", " string_of_datatype paramtype ^ (get_mailbox_msg false mb)
-      in format_exception(Type_error(pos, msg))
   | Runtime_error s -> "*** Runtime error: " ^ s
-  | ASTSyntaxError (pos, s) -> 
+  | SourceCode.ASTSyntaxError (pos, s) -> 
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n" 
           pos.pos_fname pos.pos_lnum s expr
@@ -100,7 +75,7 @@ let rec format_exception = function
   | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
-let rec format_exception_html = function
+let format_exception_html = function
   | RichSyntaxError s ->
       ("<h1>Links Syntax Error</h1>\n<p>Syntax error in <code>" ^ s.filename ^ "</code> line "
        ^ s.linespec ^ ":</p><p>"
@@ -111,28 +86,6 @@ let rec format_exception_html = function
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
-  | WrongArgumentTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression(s) <pre class=\"typeError\">" ^ 
-        mapstrcat "</pre><pre class=\"typeError\">" (indent 2 -<- xml_escape) pexpr ^ (get_mailbox_msg true mb) ^
-        "</pre> have type(s) <code class=\"typeError\">" ^ 
-        mapstrcat "</code><pre class=\"typeError\">" (indent 2 -<- xml_escape -<- string_of_datatype) paramtype ^
-        "</pre> and cannot be passed to function <pre class=\"typeError\">"^ xml_escape(fexpr) ^
-        (* TBD: report the error in terms of argument types ? *)
-        "</pre>which has type <code class=\"typeError\">"^ 
-        xml_escape(string_of_datatype fntype) ^ "</code>"
-      in
-        format_exception_html(Type_error(pos, msg))
-
-  | NonfuncAppliedTypeError(pos, fexpr, fntype, pexpr, paramtype, mb) ->
-      let msg = "The expression <pre class=\"typeError\">"^ 
-        xml_escape fexpr ^"</pre> which has type <code class=\"typeError\">"^ 
-        string_of_datatype fntype ^
-        "</code> cannot be applied to <pre class=\"typeError\">"^ 
-        xml_escape (String.concat ", " pexpr) ^"</pre>, of types <code class=\"typeError\">" ^ 
-        mapstrcat ", " string_of_datatype paramtype ^ "</code>" ^ (get_mailbox_msg true mb)
-      in
-        format_exception_html(Type_error(pos, msg))
-
   | MultiplyDefinedToplevelNames duplicates -> 
       let show_pos : SourceCode.pos -> string = fun ((pos : Lexing.position), _, _) ->
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
@@ -147,7 +100,7 @@ let rec format_exception_html = function
              duplicates "") ^ "</ul>"
           
   | Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
-  | ASTSyntaxError (pos, s) -> 
+  | SourceCode.ASTSyntaxError (pos, s) -> 
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "<h1>Links Syntax Error</h1> Syntax error at <code>%s</code> line %d. %s\nIn expression: <code>%s</code>\n" 
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
