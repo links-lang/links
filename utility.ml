@@ -788,7 +788,7 @@ let rec version_atleast a b =
   match a, b with
       _, [] -> true
     | [], _ -> false
-    | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
+    | (ah::at), (bh::bt) -> ah > bh || (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
 (** Any two calls to [gensym] return distinct strings.  The optional
