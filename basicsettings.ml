@@ -18,11 +18,11 @@ let prelude_file =
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
-"  _     _ __   _ _  __  ___
- / |   | |  \\ | | |/ / / ._\\
- | |   | | , \\| |   /  \\  \\
- | |___| | |\\ \\ | |\\ \\ _\\  \\
- |_____|_|_| \\__|_| \\_|____/
+"  _     _ __   _ _  __  ___\n\
+ / |   | |  \\ | | |/ / / ._\\\n\
+ | |   | | , \\| |   /  \\  \\\n\
+ | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
+ |_____|_|_| \\__|_| \\_|____/\n\
 Welcome to Links version 0.5 (Murrayfield)", `System)
 
 (* (* Alternative banner designs *)

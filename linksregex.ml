@@ -38,22 +38,22 @@ end
 module Regex : Links_type with type a = regex = 
 struct
   type a = regex
-  let datatype = "
-      mu regex . (
-      [|
-         Range : (Char, Char) 
-       | Simply : String
-       | Quote : regex
-       | Any
-       | StartAnchor
-       | EndAnchor
-       | Seq : [regex]
-       | Alternate : (regex, regex)
-       | Group : regex
-       | Repeat : ([| Star | Plus | Question |], regex)
-       | Replace : (regex, String)
-      |]
-      )
+  let datatype = "                                      \
+      mu regex . (                                      \
+      [|                                                \
+         Range : (Char, Char)                           \
+       | Simply : String                                \
+       | Quote : regex                                  \
+       | Any                                            \
+       | StartAnchor                                    \
+       | EndAnchor                                      \
+       | Seq : [regex]                                  \
+       | Alternate : (regex, regex)                     \
+       | Group : regex                                  \
+       | Repeat : ([| Star | Plus | Question |], regex) \
+       | Replace : (regex, String)                      \
+      |]                                                \
+      )                                                 \
       "
   let rec asLinks : regex -> Value.t = function
     | Range (f,t)        -> `Variant ("Range", `Record [("1", `Char f);

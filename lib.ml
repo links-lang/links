@@ -1318,8 +1318,8 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 let apply_pfun_by_code var args = 
   match primitive_by_code var with
   | Some (#Value.t as r) ->
-      failwith("Attempt to apply primitive non-function 
-		 (#" ^string_of_int var^ ").")
+      failwith("Attempt to apply primitive non-function "
+	       ^ "(#" ^string_of_int var^ ").")
   | Some (`PFun p) -> p args
   | None -> assert false
 
