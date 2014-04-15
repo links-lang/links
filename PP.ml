@@ -52,23 +52,23 @@ type mode =
 let rec fits w = function
   | _ when w < 0 -> false
   | [] -> true
-  | (i,m,DocNil) :: z -> fits w z
+  | (_,_,DocNil) :: z -> fits w z
   | (i,m,DocCons(x,y)) :: z -> fits w ((i,m,x)::(i,m,y)::z)
   | (i,m,DocNest(j,x)) :: z -> fits w ((i+j,m,x)::z)
-  | (i,m,DocText(s)) :: z -> fits (w - strlen s) z
-  | (i,Flat, DocBreak(s)) :: z -> fits (w - strlen s) z
-  | (i,Break,DocBreak(s)) :: z -> true
-  | (i,m,DocGroup(x)) :: z -> fits w ((i,Flat,x)::z)
+  | (_,_,DocText s) :: z -> fits (w - strlen s) z
+  | (_,Flat, DocBreak s) :: z -> fits (w - strlen s) z
+  | (_,Break,DocBreak _) :: _ -> true
+  | (i,_,DocGroup x) :: z -> fits w ((i,Flat,x)::z)
 
 let rec format w k = function
   | [] -> SNil
-  | (i,m,DocNil) :: z -> format w k z
+  | (_,_,DocNil) :: z -> format w k z
   | (i,m,DocCons(x,y)) :: z -> format w k ((i,m,x)::(i,m,y)::z)
   | (i,m,DocNest(j,x)) :: z -> format w k ((i+j,m,x)::z)
-  | (i,m,DocText(s)) :: z -> SText(s,format w (k + strlen s) z)
-  | (i,Flat, DocBreak(s)) :: z -> SText(s,format w (k + strlen s) z)
-  | (i,Break,DocBreak(s)) :: z -> SLine(i,format w i z)
-  | (i,m,DocGroup(x)) :: z -> if fits (w-k) ((i,Flat,x)::z)
+  | (_,_,DocText s) :: z -> SText(s,format w (k + strlen s) z)
+  | (_,Flat, DocBreak s) :: z -> SText(s,format w (k + strlen s) z)
+  | (i,Break,DocBreak _) :: z -> SLine(i,format w i z)
+  | (i,_,DocGroup x) :: z -> if fits (w-k) ((i,Flat,x)::z)
                               then format w k ((i,Flat ,x)::z)
                               else format w k ((i,Break,x)::z)
 
