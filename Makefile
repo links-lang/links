@@ -56,7 +56,7 @@ PATH := $(PATH):$(DERIVING_DIR)/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae
+OCAMLFLAGS=-dtypes -w Ae-44-45
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean

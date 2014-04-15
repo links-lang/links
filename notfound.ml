@@ -94,7 +94,7 @@ end
 (* MoreLabels? *)
 module MoreLabels =
 struct
-  open! MoreLabels
+  open MoreLabels
 
   module Hashtbl =
   struct
