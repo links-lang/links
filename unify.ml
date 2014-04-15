@@ -876,7 +876,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                 raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
             | _ -> assert false in
 
-        let rec extend = fun point ->
+        let extend = fun point ->
           (* point should be a row variable *)
           match Unionfind.find point with
             | `Closed ->

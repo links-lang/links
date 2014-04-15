@@ -1300,7 +1300,7 @@ struct
     in
       string_of_query db false q ^ range
 
-  let rec prepare_clauses : t -> t list =
+  let prepare_clauses : t -> t list =
     function
       | `Concat vs -> vs
       | v -> [v]

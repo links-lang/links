@@ -351,14 +351,14 @@ struct
   let condition (s, s1, s2) =
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
-  let rec concat (nil, append, ss) =
+  let concat (nil, append, ss) =
     match ss with 
       | [] -> nil
       | [s] -> s
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (append, [s; s'])) s ss
 
-  let rec string_concat (string_append, ss) =
+  let string_concat (string_append, ss) =
     match ss with
       | [] -> lift (`Constant (`String ""), Types.string_type)
       | [s] -> s

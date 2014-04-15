@@ -148,7 +148,7 @@ struct
 
   (** Pretty-print a Code value as a JavaScript string. *)
   let rec show c : PP.doc =
-    let rec show_func name (Fn (vars, body)) = 
+    let show_func name (Fn (vars, body)) = 
       PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
                 ^+^  (braces
                         (break ^^ group(nest 2 (show body)) ^^ break))) in

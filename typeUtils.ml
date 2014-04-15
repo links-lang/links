@@ -43,7 +43,7 @@ let concrete_type t =
   in
     ct (IntSet.empty) t
 
-let rec extract_row t = match concrete_type t with
+let extract_row t = match concrete_type t with
   | `Record row -> row
   | `Variant row -> row
   | t ->
