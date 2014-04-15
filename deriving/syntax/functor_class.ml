@@ -1,111 +1,192 @@
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo";;
-open Deriving
+(*pp camlp4of *)
 
-(* TODO: handle records. *)
+open Type
+open Utils
+open Base
+open Camlp4.PreCast
 
-(* recurse over the type structure.
-   
-   Every section that consists of type constructors applied to
-   type variables gets mapped to the map methods of the
-   corresponding functor instances applied to the image of the
-   mapped function.
+exception TODO
 
-   Tuples and records must be handled specially.
- *)
+let classname = "Functor"
 
-let rec contains_tvars = function
-| <:ctyp< [ $list:ctors$ ] >>  -> List.exists (fun (_,_,cs) -> (List.exists contains_tvars cs)) ctors
-| <:ctyp< $t1$ $t2$ >>         -> contains_tvars t1 || contains_tvars t2
-| <:ctyp< $lid:id$ >>          -> false
-| <:ctyp< $uid:m$ . $t2$ >>    -> false
-| <:ctyp< { $list:fields$ } >> -> List.exists (fun (_, _, _, c) -> contains_tvars c) fields
-| <:ctyp< ( $list:params$ ) >> -> List.exists contains_tvars params
-| <:ctyp< [= $list:row$ ] >>   -> List.exists (function 
-                                                  | MLast.RfTag (_, _, targs) -> List.exists contains_tvars targs
-                                                  | MLast.RfInh _ -> false)
-                                    row
-| <:ctyp< '$a$ >>              -> true
-| _                            -> failwith "Failed to generate functor instance [1]"
+(*
+   prototype: [[t]] : t -> t[b_i/a_i]
 
 
+   [[a_i]]   = f_i
 
-let rec gen_function loc = function
-| c when not (contains_tvars c) -> None
-| <:ctyp< '$_$  >>              -> Some <:expr< f >>
-| <:ctyp< $lid:tc$ $t$ >>       -> (match gen_function loc t with
-                                    | None   -> None
-                                    | Some x -> 
-                                        Some <:expr< $uid:"Functor_" ^ tc$ . map ( $x$ ) >>)
-| <:ctyp< ( $list:types$ ) >> -> 
-  let (patts, exprs) = List.split (gen_n loc types) in
-  Some (<:expr< fun [ ($list:patts$) -> ($list:exprs$) ] >>)
-| _                             -> failwith "Failed to generate functor instance [0]"
-and gen_code loc vname ctype = 
-  match gen_function loc ctype with
-    | None   -> <:expr< $lid:vname$ >>
-    | Some x -> <:expr< $x$ ( $lid:vname$) >>
+   [[C1|...CN]] = function [[C1]] ... [[CN]]               sum
+   [[`C1|...`CN]] = function [[`C1]] ... [[`CN]]           variant
+ 
+   [[{t1,...tn}]] = fun (t1,tn) -> ([[t1]],[[tn]])         tuple
+   [[{l1:t1; ... ln:tn}]] = 
+         fun {l1=t1;...ln=tn} -> {l1=[[t1]];...ln=[[tn]]}  record
 
-(* given n types, return n patterns and expressions *) 
-and gen_n loc types = 
-    let vnames = List.map (Printf.sprintf "v%d") (range 0 (List.length types - 1)) in
-      List.map2 
-        (fun vname ctype -> (<:patt< $lid:vname$ >>, gen_code loc vname ctype))
-        vnames
-        types
+   [[(t1,...tn) c]] = c_map [[t1]]...[[tn]]                constructor
 
-let gen_case (loc, name, params) = 
-match params with
-| [] -> (<:patt< $uid:name$ >>, None, <:expr< $uid:name$ >>)
-| [x] -> (<:patt< $uid:name$ x  >>, None, <:expr< $uid:name$ $gen_code loc "x" x$ >>)
-| _  -> let (patts, exprs) = List.split (gen_n loc params) in
-           (<:patt< $uid:name$ ( $list:patts$ ) >>,
-             None,
-            <:expr< $uid:name$ ( $list:exprs$ ) >>)
+   [[a -> b]] = f . [[a]] (where a_i \notin fv(b))         function
 
+   [[C0]]    = C0->C0                                      nullary constructors
+   [[C1 (t1...tn)]]  = C1 t -> C0 ([[t1]] t1...[[tn]] tn)  unary constructor
+   [[`C0]]   = `C0->`C0                                    nullary tag
+   [[`C1 t]] = `C1 t->`C0 [[t]] t                          unary tag
+*)
 
-let gen_vcase loc = function
-| MLast.RfTag (name, _, params) -> (match params with
-    | [] -> (<:patt< `$uid:name$ >>, None, <:expr< `$uid:name$ >>)
-    | [x] -> (<:patt< `$uid:name$ x  >>, None, <:expr< `$uid:name$ $gen_code loc "x" x$ >>)
-    | _  -> let (patts, exprs) = List.split (gen_n loc params) in
-              (<:patt< `$uid:name$ ( $list:patts$ ) >>,
-              None,
-              <:expr< `$uid:name$ ( $list:exprs$ ) >>))
-| MLast.RfInh (<:ctyp< $lid:tname$ >>) ->  (<:patt< (# $[tname]$ as x) >>, None, <:expr< x >>)
-| MLast.RfInh _ -> error loc ("Cannot generate functor instance")
+class functor_ ~loc =
+object (self)
+  inherit Base.deriver ~loc  ~classname ~allow_private:false ?default:None
 
+  method variant (atype : name * param list) (spec, ts : [`Eq | `Gt | `Lt] * tagspec list) : Ast.module_expr =
+    raise TODO
 
-let gen_map loc tname = function
- | <:ctyp< [ $list:ctors$ ]  >> ->  <:str_item< value map f = fun [ $list:List.map gen_case ctors$ ] >>
- | <:ctyp< [= $list:ctors$ ] >> ->  <:str_item< value map f = fun [ $list:List.map (gen_vcase loc) ctors$ ] >>
- | _ -> failwith "Failed to generate functor instance [2]"
+  method sum (atype : name * param list) ?eq:expr (ts : summand list) : Ast.module_expr  =
+    raise TODO
+      
+  method tuple (atype : name * param list) (ts : atomic list) : Ast.module_expr =
+    raise TODO
+      
+  method record (atype : name * param list) ?eq:expr (fields : field list) : Ast.module_expr =
+    raise TODO
+end
 
-    
-let gen_instance loc tname param ctype =
-    let mtype = <:module_type< Functor with type f 'a = $lid:tname$ 'a >>
-    and mbody = <:module_expr< struct
-                                 type f 'a = $lid:tname$ 'a;
-                                 $gen_map loc tname ctype$;
-                               end >> in
-<:str_item< 
-        declare
-          open Functor;
-          module rec $list:[(("Functor_" ^ tname), mtype, mbody)]$;
-        end
->>
+let () = Base.register classname (new functor_)
 
-let gen_instances loc : instantiator =  function
- | [((loc, tname),[param], ctype,_(*constraints*))] -> gen_instance loc tname param ctype
- | l when List.length l > 1 -> error loc ("Cannot currently generate functor instances for mutually recursive types")
- | _ -> error loc ("Types with functor instances must have exactly one type parameter")
-     (* Hmm. We could generate one instance for each parameter.  That
-        could be pretty neat, especially for types with a
-        parameterized fixpoint.  *)
+(*
+module InContext (C : sig val context : Base.context val loc : Camlp4.PreCast.Loc.t end) =
+struct
+  open C
+  open Type
+  open Utils
+  open Base
+  include Base.InContext(C)
 
 
-let _ = 
-  begin
-    instantiators :=   ("Functor", gen_instances):: !instantiators;
-    sig_instantiators := ("Functor", Sig_utils.gen_sigs "Functor"):: !sig_instantiators;
-  end
+  let param_map : string NameMap.t = 
+    List.fold_right
+      (fun (name,_) map -> NameMap.add name ("f_" ^ name) map)
+      context.params
+      NameMap.empty
+
+  let tdec, sigdec = 
+    let dec name = 
+      ("f", context.params, 
+       `Expr (`Constr ([name], List.map (fun p -> `Param p) context.params)), [], false)
+    in
+      (fun name -> Untranslate.decl (dec name)),
+      (fun name -> Untranslate.sigdecl (dec name))
+
+  let wrapper name expr = 
+    let patts :Ast.patt list = 
+      List.map 
+        (fun (name,_) -> <:patt< $lid:NameMap.find name param_map$ >>)
+        context.params in
+    let rhs = 
+      List.fold_right (fun p e -> <:expr< fun $p$ -> $e$ >>) patts expr in
+      <:module_expr< struct
+        open Functor
+        type $tdec name$ 
+        let map = $rhs$
+      end >>
+
+  let rec polycase = function
+    | Tag (name, None) -> <:match_case< `$name$ -> `$name$ >>
+    | Tag (name, Some e) -> <:match_case< `$name$ x -> `$name$ ($expr e$ x) >>
+    | Extends t -> 
+        let patt, guard, exp = cast_pattern context t in
+          <:match_case< $patt$ when $guard$ -> $expr t$ $exp$ >>
+
+  and expr : Type.expr -> Ast.expr = function
+    | t when not (contains_tvars t) -> <:expr< fun x -> x >>
+    | `Param (p,_) -> <:expr< $lid:NameMap.find p param_map$ >>
+    | `Function (f,t) when not (contains_tvars t) -> 
+        <:expr< fun f x -> f ($expr f$ x) >>
+    | `Constr (qname, ts) -> 
+        List.fold_left 
+          (fun fn arg -> <:expr< $fn$ $expr arg$ >>)
+          <:expr< $id:modname_from_qname ~qname ~classname$.map >>
+          ts
+    | `Tuple ts -> tup ts
+    | _ -> raise (Underivable "Functor cannot be derived for this type")
+
+  and tup = function
+    | [t] -> expr t
+    | ts ->
+        let args, exps = 
+          (List.fold_right2
+             (fun t n (p,e) -> 
+                let v = Printf.sprintf "t%d" n in
+                  Ast.PaCom (loc, <:patt< $lid:v$ >>, p),
+                  Ast.ExCom (loc, <:expr< $expr t$ $lid:v$ >>, e))
+             ts
+             (List.range 0 (List.length ts))
+             (<:patt< >>, <:expr< >>)) in
+        let pat, exp = Ast.PaTup (loc, args), Ast.ExTup (loc, exps) in
+          <:expr< fun $pat$ -> $exp$ >>
+
+  and case = function
+    | (name, []) -> <:match_case< $uid:name$ -> $uid:name$ >>
+    | (name, args) -> 
+        let f = tup args 
+        and tpatt, texp = tuple (List.length args) in
+          <:match_case< $uid:name$ $tpatt$ -> let $tpatt$ = ($f$ $texp$) in $uid:name$ ($texp$) >>
+
+  and field (name, (_,t), _) : Ast.expr =
+    <:expr< $expr t$ $lid:name$ >>
+
+  let rhs = function
+    |`Fresh (_, _, `Private) -> raise (Underivable "Functor cannot be derived for private types")
+    |`Fresh (_, Sum summands, _)  -> 
+       <:expr<  function $list:List.map case summands$ >>
+    |`Fresh (_, Record fields, _) -> 
+       <:expr< fun $record_pattern fields$ -> 
+                   $record_expr (List.map (fun ((l,_,_) as f) -> (l,field f)) fields)$ >>
+    |`Expr e                  -> expr e
+    |`Variant (_, tags) -> 
+       <:expr< function $list:List.map polycase tags$ | _ -> assert false >>
+    | `Nothing -> raise (Underivable "Cannot generate functor instance for the empty type")
+
+
+  let maptype name = 
+    let ctor_in = `Constr ([name], List.map (fun p -> `Param p) context.params) in
+    let ctor_out = substitute param_map ctor_in  (* c[f_i/a_i] *) in
+      List.fold_right (* (a_i -> f_i) -> ... -> c[a_i] -> c[f_i/a_i] *)
+        (fun (p,_) out -> 
+           (<:ctyp< ('$lid:p$ -> '$lid:NameMap.find p param_map$) -> $out$>>))
+        context.params
+        (Untranslate.expr (`Function (ctor_in, ctor_out)))
+
+   let signature name : Ast.sig_item list =  
+     [ <:sig_item< type $list:sigdec name$ >>; 
+       <:sig_item< val map : $maptype name$ >> ] 
+
+  let decl (name, _, r, _, _) : Camlp4.PreCast.Ast.module_binding =
+    if name = "f" then
+      raise (Underivable ("deriving: Functor cannot be derived for types called `f'.\n"
+                          ^"Please change the name of your type and try again."))
+    else
+      <:module_binding<
+         $uid:classname ^ "_" ^ name$
+       : sig $list:signature name$ end
+       = $wrapper name (rhs r)$ >>
+
+  let gen_sig (tname, params, _, _, generated) = 
+    if tname = "f" then
+      raise (Underivable ("deriving: Functor cannot be derived for types called `f'.\n"
+                          ^"Please change the name of your type and try again."))
+    else
+      if generated then
+        <:sig_item< >>
+      else
+        <:sig_item< module $uid:classname ^ "_" ^ tname$ :
+                    sig type $tdec tname$ val map : $maptype tname$ end >>
+
+end
+
+let _ = Base.register "Functor"
+  ((fun (loc, context, decls) ->
+     let module F = InContext(struct let loc = loc and context = context end) in
+       <:str_item< module rec $list:List.map F.decl decls$ >>),
+  (fun (loc, context, decls) ->
+     let module F = InContext(struct let loc = loc and context = context end) in
+       <:sig_item< $list:List.map F.gen_sig decls$>>))
+*)

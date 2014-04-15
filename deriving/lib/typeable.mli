@@ -1,57 +1,44 @@
-module Tag : 
+module TypeRep :
 sig
-  type tag
-  val fresh : unit -> tag
+  type t
+  type delayed = t lazy_t
+  val compare : t -> t -> int
+  val eq : t -> t -> bool
+  val mkFresh : string -> delayed list -> delayed
+  val mkTuple : delayed list -> delayed
+  val mkPolyv : (string * delayed option) list -> delayed list -> delayed
 end
 
-type typeRep = TypeRep of (Tag.tag * typeRep list)
-
-module TypeRep : Map.OrderedType with type t = typeRep
+exception CastFailure of string
 
 type dynamic
-val tagOf : dynamic -> typeRep
+val tagOf : dynamic -> TypeRep.t
 
-module type Typeable =
-sig
-  type a
-  val typeRep : unit -> typeRep
-  val hasType : dynamic -> bool
-  val cast : dynamic -> a option
-  val makeDynamic : a -> dynamic
-end
+type 'a typeable = { type_rep : TypeRep.delayed }
 
-module Typeable_defaults (T : (sig
-                                 type a
-                                 val typeRep : unit -> typeRep
-                               end))
-  : Typeable with type a = T.a
+val has_type      : 'a typeable -> dynamic -> bool
+val cast          : 'a typeable -> dynamic -> 'a option
+val throwing_cast : 'a typeable -> dynamic -> 'a
+val make_dynamic  : 'a typeable -> 'a -> dynamic
+val mk            : 'a typeable -> 'a -> dynamic
+val type_rep      : 'a typeable -> TypeRep.t
 
-module Typeable_unit : Typeable with type a = unit
-module Typeable_2 (S1:Typeable)(S2:Typeable)
-  : Typeable with type a = S1.a * S2.a
-module Typeable_3 (S1:Typeable)(S2:Typeable)(S3:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a
-module Typeable_4 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a
-module Typeable_5 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a
-module Typeable_6 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a
-module Typeable_7 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a
-module Typeable_8 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)(S8 :Typeable)
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a
-module Typeable_9 (S1:Typeable)(S2:Typeable)(S3:Typeable)(S4:Typeable)(S5:Typeable)(S6:Typeable)(S7:Typeable)(S8 :Typeable)(S9:Typeable) 
-  : Typeable with type a = S1.a * S2.a * S3.a * S4.a * S5.a * S6.a * S7.a * S8.a * S9.a
+val typeable_list   : 'a typeable -> 'a list typeable
+val typeable_option : 'a typeable -> 'a option typeable
+val typeable_ref    : 'a typeable -> 'a ref typeable
 
-module Typeable_list (A:Typeable) : Typeable with type a = A.a list
-module Typeable_option (A:Typeable) : Typeable with type a = A.a option
+val primitive_typeable : string -> 'a typeable
 
-module Primitive_typeable (T : sig type t end): Typeable with type a = T.t 
+val typeable_unit   : unit typeable
+val typeable_int    : int typeable
+val typeable_num    : Num.num typeable
+val typeable_float  : float typeable
+val typeable_bool   : bool typeable
+val typeable_string : string typeable
+val typeable_char   : char typeable
 
-module Typeable_int : Typeable with type a = int
-module Typeable_num : Typeable with type a = Num.num
-module Typeable_float : Typeable with type a = float
-module Typeable_bool : Typeable with type a = bool
-module Typeable_string : Typeable with type a = string
-module Typeable_char : Typeable with type a = char
+val typeable_6 : 'a1 typeable -> 'a2 typeable -> 'a3 typeable -> 'a4 typeable -> 'a5 typeable -> 'a6 typeable -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) typeable
+val typeable_5 : 'a1 typeable -> 'a2 typeable -> 'a3 typeable -> 'a4 typeable -> 'a5 typeable -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) typeable
+val typeable_4 : 'a1 typeable -> 'a2 typeable -> 'a3 typeable -> 'a4 typeable -> ('a1 * 'a2 * 'a3 * 'a4) typeable
+val typeable_3 : 'a1 typeable -> 'a2 typeable -> 'a3 typeable -> ('a1 * 'a2 * 'a3) typeable
+val typeable_2 : 'a1 typeable -> 'a2 typeable -> ('a1 * 'a2) typeable

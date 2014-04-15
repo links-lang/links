@@ -1,36 +1,27 @@
-OCAMLMAKEFILE = ../../OCamlMakefile
+OCAMLMAKEFILE = ../OCamlMakefile
 
-AUXLIB_DIRS = 
-OCAMLOPT := ocamlopt.opt
-OCAMLC := ocamlc.opt
-OCAMLDEP := ocamldep
+PATH       := $(PATH):../syntax
 
-PATH := $(PATH):../syntax
-OCAMLFLAGS=-w Ae
+OCAMLOPT   = ocamlopt.opt
+OCAMLC     = ocamlc.opt
+OCAMLDEP   = ocamldep.opt
+OCAMLFLAGS =-w ae -g
+LIBS       = nums str unix
 
-SOURCES = util.ml util.mli              	\
-          show.ml show.mli              	\
-          eq.ml eq.mli                  	\
-          bounded.ml bounded.mli        	\
-          enum.ml enum.mli              	\
-          monad.ml monad.mli            	\
-          pickle.ml pickle.mli          	\
-          typeable.ml typeable.mli      	\
-          dynmap.ml dynmap.mli                  \
-          primitives.ml primitives.mli  	\
-          shelvehelper.ml shelvehelper.mli      \
-          shelve.ml                            	\
-          functor.ml functor.mli        	\
-          rewriter.ml rewriter.mli      	\
-          quickcheck.ml                 	\
+SOURCES = show.ml           show.mli		\
+          interned.mli      interned.ml		\
+          eq.ml             eq.mli		\
+          hash.ml           hash.mli		\
+          bounded.ml        bounded.mli		\
+          enum.ml           enum.mli		\
+          dump.ml           dump.mli		\
+          typeable.ml       typeable.mli	\
+          dynmap.ml         dynmap.mli		\
+          pickle.ml	    pickle.mli    	\
+                                                 \
+          monad.ml          monad.mli
 
-LIBS    = nums
+
 RESULT  = deriving
-CLIBS 	= 
-
-INCDIRS = $(AUXLIB_DIRS)
-LIBDIRS = $(AUXLIB_DIRS)
-
-DOC_FILES=
 
 include $(OCAMLMAKEFILE)

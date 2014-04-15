@@ -1,23 +1,14 @@
-module type Bounded = 
-sig
-  type a
-  val minBound : a 
-  val maxBound : a 
-end
+type +'a bounded = {
+  min_bound : 'a ;
+  max_bound : 'a 
+}
 
-module Bounded_2 (B1 : Bounded) (B2 : Bounded) 
- : Bounded with type a = B1.a * B2.a
-module Bounded_3 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) 
- : Bounded with type a = B1.a * B2.a * B3.a
-module Bounded_4 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a
-module Bounded_5 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded) (B5 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a
-module Bounded_6 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded) (B5 : Bounded) (B6 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a
-module Bounded_7 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded) (B5 : Bounded) (B6 : Bounded) (B7 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a
-module Bounded_8 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded) (B5 : Bounded) (B6 : Bounded) (B7 : Bounded) (B8 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a
-module Bounded_9 (B1 : Bounded) (B2 : Bounded) (B3 : Bounded) (B4 : Bounded) (B5 : Bounded) (B6 : Bounded) (B7 : Bounded) (B8 : Bounded) (B9 : Bounded)
- : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a * B9.a
+val bounded_bool      : bool bounded
+val bounded_char      : char bounded
+val bounded_int       : int bounded
+val bounded_int32     : int32 bounded
+val bounded_int64     : int64 bounded
+val bounded_nativeint : nativeint bounded
+val bounded_unit      : unit bounded
+val bounded_open_flag : Pervasives.open_flag bounded
+val bounded_fpclass   : Pervasives.fpclass bounded

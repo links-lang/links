@@ -1,47 +1,40 @@
 (* A module for SML-style equality, i.e. where equality of mutables is
-   an identity test and equality of immutables is structural equality.
-   (Leibniz equality, I think.)
+   physical equality and equality of immutables is structural equality.
 *)
 
-module type Eq =
+type 'a eq = {
+  eq : 'a -> 'a -> bool
+}
+
+val eq : 'a eq -> 'a -> 'a -> bool
+
+val eq_immutable : 'a eq
+val eq_mutable : 'a eq
+
+val eq_int            : int eq
+val eq_num            : Num.num eq
+val eq_bool           : bool eq
+val eq_float          : float eq
+val eq_unit           : unit eq
+val eq_char           : char eq
+val eq_string         : string eq
+val eq_ref : 'a eq -> 'a ref eq
+val eq_array : 'a eq  -> 'a array eq
+val eq_list : 'a eq  -> 'a list eq
+val eq_option : 'a eq -> 'a option eq
+
+module Eq_map_s_t (M : Map.S) :
 sig
-  type a
-  val eq : a -> a -> bool
+  val eq : 'a eq -> 'a M.t eq
 end
 
-module Eq_defaults (E : Eq) : Eq with type a = E.a
-  
+module Eq_set_s_t (S : Set.S) :
+sig
+  val eq : S.t eq
+end
 
-module Eq_immutable (S : sig type a end) : Eq with type a = S.a
-module Eq_mutable (S : sig type a end) : Eq with type a = S.a
-
-module Eq_int            : Eq with type a = int
-module Eq_num            : Eq with type a = Num.num
-module Eq_bool           : Eq with type a = bool
-module Eq_float          : Eq with type a = float
-module Eq_unit           : Eq with type a = unit
-module Eq_char           : Eq with type a = char
-module Eq_string         : Eq with type a = string
-module Eq_ref (E : Eq)   : Eq with type a = E.a ref
-module Eq_array (E : Eq) : Eq with type a = E.a array
-module Eq_list (E : Eq)  : Eq with type a = E.a list
-module Eq_option (E : Eq): Eq with type a = E.a option
-module Eq_map_s_t (E : Eq) (M : Map.S) : Eq with type a = E.a M.t
-
-module Eq_2 (E1 : Eq) (E2 : Eq) :
-  Eq with type a = E1.a * E2.a
-module Eq_3 (E1 : Eq) (E2 : Eq) (E3 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a
-module Eq_4 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a
-module Eq_5 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a
-module Eq_6 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a
-module Eq_7 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) (E7 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a * E7.a
-module Eq_8 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) (E7 : Eq) (E8 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a * E7.a * E8.a
-module Eq_9 (E1 : Eq) (E2 : Eq) (E3 : Eq) (E4 : Eq) (E5 : Eq) (E6 : Eq) (E7 : Eq) (E8 : Eq) (E9 : Eq) :
-  Eq with type a = E1.a * E2.a * E3.a * E4.a * E5.a * E6.a * E7.a * E8.a * E9.a
-
+val eq_6 : 'a1 eq -> 'a2 eq -> 'a3 eq -> 'a4 eq -> 'a5 eq -> 'a6 eq -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5 * 'a6) eq
+val eq_5 : 'a1 eq -> 'a2 eq -> 'a3 eq -> 'a4 eq -> 'a5 eq -> ('a1 * 'a2 * 'a3 * 'a4 * 'a5) eq
+val eq_4 : 'a1 eq -> 'a2 eq -> 'a3 eq -> 'a4 eq -> ('a1 * 'a2 * 'a3 * 'a4) eq
+val eq_3 : 'a1 eq -> 'a2 eq -> 'a3 eq-> ('a1 * 'a2 * 'a3) eq
+val eq_2 : 'a1 eq -> 'a2 eq -> ('a1 * 'a2) eq

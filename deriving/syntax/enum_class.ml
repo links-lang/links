@@ -1,36 +1,55 @@
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo";;
+(*pp camlp4of *)
 
-open Deriving
+open Base
+open Utils
+open Type
+open Camlp4.PreCast
 
-let fill_enum_template loc tname numbering = <:str_item< 
-  declare
-    open Enum;
-    module $uid:"Enum_"^ tname$ = 
-      EnumDefaults (struct 
-                      type a = $lid:tname$; 
-                      value numbering = $numbering$; 
-                    end);
-  end>>
+let classname = "Enum"
+class enum ~loc =
+object (self)
+  inherit Base.deriver ~loc  ~classname ~allow_private:false
 
-let gen_enum_instance = function
-  | ((loc, tname), _::_, _, _) -> error loc ("Not generating enumeration for polymorphic type "^ tname)
-  | ((loc, tname), tvars, <:ctyp< [ $list:ctors$ ] >>, constraints) ->
-      let numbering = 
-        List.fold_right2 (fun n ctor list -> (match ctor with
-                                           | (loc, name, [])    -> <:expr< [($uid:name$, $int:string_of_int n$) :: $list$] >>
-                                           | (loc, name, args)  -> (error
-                                                                      loc ("Not generating Enum instance for "^ tname
-                                                                           ^" because constructor "^ name ^" is not nullary"))))
-       (range 0 (List.length ctors - 1)) ctors <:expr< [] >> in
-     fill_enum_template loc tname numbering
-  | ((loc, tname), _, _, _) -> error loc ("Not generating Enum instance for non-sum type "^ tname)
+    val methods = [ "succ";
+                    "pred";
+                    "to_enum";
+                    "from_enum";
+                    "enum_from";
+                    "enum_from_then";
+                    "enum_from_to";
+                    "enum_from_then_to"]
 
-let gen_enum_instances loc : instantiator = fun tdl ->
-  <:str_item< declare $list:List.map gen_enum_instance tdl$ end >>
+    method sum (name, params) ?eq summands =
+    let numbering = 
+      List.fold_right2
+        (fun n ctor rest -> 
+           match ctor with
+             | (name, []) -> <:expr< ($uid:name$, $`int:n$) :: $rest$ >>
+             | (name,_) -> raise (Underivable (loc, "Enum cannot be derived for the type "^
+                                               name ^" because the constructor "^
+                                  name^" is not nullary")))
+        (List.range 0 (List.length summands))
+        summands
+        <:expr< [] >> in
+      <:expr< Enum.from_numbering $numbering$ >>
 
-let _ = 
-  begin
-    instantiators := ("Enum", gen_enum_instances):: !instantiators;
-    sig_instantiators := ("Enum", Sig_utils.gen_sigs "Enum"):: !sig_instantiators;
-  end
+    method variant atype (_, tags) = 
+    let numbering = 
+      List.fold_right2
+        (fun n tagspec rest -> 
+           match tagspec with
+             | `Tag (name, None) -> <:expr< (`$name$, $`int:n$) :: $rest$ >>
+             | `Tag (name, _) -> raise (Underivable (loc, "Enum cannot be derived because the tag "^
+                                                      name^" is not nullary"))
+             | _ -> raise (Underivable (loc, "Enum cannot be derived for this "
+                                        ^"polymorphic variant type")))
+        (List.range 0 (List.length tags))
+        tags
+        <:expr< [] >> in
+      <:expr< Enum.from_numbering $numbering$ >>
+
+    method tuple _ _ = raise (Underivable (loc, "Enum cannot be derived for tuple types"))
+    method record _ ?eq = raise (Underivable (loc, "Enum cannot be derived for record types"))
+end
+
+let _ = Base.register classname (new enum)

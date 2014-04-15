@@ -1,42 +1,55 @@
-#load "pa_extend.cmo";;
-#load "q_MLast.cmo";;
-open Deriving
+(*pp camlp4of *)
 
-let rec last : 'a list -> 'a = function
-  | []    -> raise (Invalid_argument "last")
-  | [x]   -> x
-  | _::xs -> last xs
+open Base
+open Utils
+open Type
+open Camlp4.PreCast
 
-let fill_bounded_template loc tname first last = 
-<:str_item< declare
-             open Bounded;
-             module $uid:"Bounded_"^ tname$ = 
-               (struct 
-                  type a = $lid:tname$; 
-                  value minBound = $uid:first$; 
-                  value maxBound = $uid:last$; 
-               end : Bounded with type a = $lid:tname$ );
-             end >>
+let classname = "Bounded"
 
-let gen_bounded_instance = function
-  | ((loc,tname), (_::_), _, _) -> error loc ("Not generating Bounded instance for polymorphic type "^ tname)
-  | ((loc, tname), tvars, <:ctyp< [ $list:ctors$ ] >> , _) -> 
-      let ((_,first,_), (_,last,_)) = (List.hd ctors, last ctors) in 
-        begin
-          List.iter (function 
-                      | (loc, name, [])   -> ()
-                      | (loc, name, args) -> error loc ("Not generating Bounded instance for "^ tname
-                                                         ^" because constructor "^ name ^" is not nullary"))
-            ctors;
-          fill_bounded_template loc tname first last
-        end
-  | ((loc, tname), _, _, _) -> error loc ("Not generating Bounded instance for non-sum type "^ tname)
+class bounded ~loc = 
+object (self)
+  inherit Base.deriver ~allow_private:false ~loc ~classname
 
-let gen_bounded_instances loc : instantiator =
-  fun tdl -> <:str_item< declare $list:List.map gen_bounded_instance tdl$ end >>
+    val methods = [
+      "min_bound";
+      "max_bound"
+    ]
+    method tuple atype ts = 
+    let minBounds, maxBounds = 
+      List.split (List.map
+                    (fun t -> let e = self#atomic t in 
+                       <:expr< $e$.min_bound >>,
+                       <:expr< $e$.max_bound >>) ts) in
+    <:expr< { min_bound = $tuple_expr ~loc minBounds$ ;
+              max_bound = $tuple_expr ~loc maxBounds$ } >>
 
-let _ =
-  begin
-    instantiators := ("Bounded", gen_bounded_instances):: !instantiators;
-    sig_instantiators := ("Bounded", Sig_utils.gen_sigs "Bounded"):: !sig_instantiators;
-  end
+    method sum (name, params) ?eq summands = 
+    let names = ListLabels.map summands
+        ~f:(function
+              | (name,[]) -> name
+              | (name,_) -> raise (Underivable (loc, "Bounded cannot be derived for the type "^
+                                                  name ^" because the constructor "^
+                                                  name^" is not nullary"))) in
+        <:expr< { min_bound = $uid:List.hd names$ ;
+                  max_bound = $uid:List.last names$ } >>
+
+    method variant atype (_, tags) = 
+    let names = ListLabels.map tags
+        ~f:(function
+              | `Tag (name, None) -> name
+              | `Tag (name, _) -> raise (Underivable (loc, "Bounded cannot be derived because the tag "^
+                                                      name^" is not nullary"))
+              | _ -> raise (Underivable (loc, "Bounded cannot be derived for this "
+                                        ^"polymorphic variant type"))) in
+      <:expr< { min_bound = `$List.hd names$ ;
+                max_bound = `$List.last names$ } >>
+
+  (* should perhaps implement this one *)
+  method record (name, _) ?eq _ = 
+    raise (Underivable (loc, "Bounded cannot be derived for record types (i.e. "^
+                          name^")"))
+  method expand e = e
+end
+
+let _ = Base.register classname (new bounded)

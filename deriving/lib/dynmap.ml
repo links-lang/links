@@ -1,58 +1,45 @@
 (* Finite maps : t -> dynamic *)
 
+open Eq
+open Hash
 open Typeable
 
-module Comp (T : Typeable) (E : Eq.Eq with type a = T.a) =
+module OrdType :
+sig
+  type t = int * TypeRep.t
+  val compare : t -> t -> int
+end =
 struct
-  type a = T.a
-  let adjust_comparator : (T.a -> T.a -> bool) -> dynamic -> dynamic -> bool 
-    = fun comparator d1 d2 ->
-      match T.cast d1, T.cast d2 with
-        | Some l, Some r -> comparator l r
-        | _ -> assert false
-  let eq = adjust_comparator E.eq
+  type t = int * TypeRep.t
+  let compare : t -> t -> int
+    = fun (lhash, lrep) (rhash, rrep) ->
+      let hashcmp = compare lhash rhash in
+        if hashcmp <> 0 then hashcmp
+        else TypeRep.compare lrep rrep
 end
 
+type eqtest = dynamic -> dynamic -> bool
 
-module DynMap =
-struct
-  module TypeMap = Map.Make(TypeRep)
-  type comparator = dynamic -> dynamic -> bool
-  type 'value t = (((dynamic * 'value) list * comparator) TypeMap.t)
+let comp : 'a typeable -> ('a -> 'a -> bool) -> (dynamic -> dynamic -> bool) =
+  fun typeable eq d1 d2 ->
+    match cast typeable d1, cast typeable d2 with
+      | Some l, Some r -> eq l r
+      | _ -> assert false
 
-  let empty = TypeMap.empty
+module CombinedMap = Map.Make(OrdType)
 
-  let is_empty _ = failwith "is_empty nyi"
+type 'v t = (('v * dynamic) list * eqtest) CombinedMap.t
+let empty = CombinedMap.empty
+  
+let add hsh typeable key value map =
+let mapKey = hash hsh key, type_rep typeable  in
+let matches, eqtest = (try CombinedMap.find mapKey map 
+                           with Not_found ->  [], comp typeable hsh._Eq.eq) in
+  CombinedMap.add mapKey (((value, mk typeable key) :: matches), eqtest) map
 
-  let add dynamic value comparator map =
-    let typeRep = tagOf dynamic in
-    let monomap = 
-      try (List.filter
-             (fun (k,_) -> not (comparator k dynamic))
-             (fst (TypeMap.find typeRep map)))
-      with Not_found -> []
-    in
-      TypeMap.add
-        typeRep 
-        (((dynamic,value)::monomap), comparator)
-        map
-
-  let mem dynamic map =
-    try let monomap, comparator = TypeMap.find (tagOf dynamic) map in
-      (List.exists 
-         (fun (k,_) -> (comparator dynamic k)) 
-         monomap)
-    with Not_found -> false
-
-  let find dynamic map =
-    try let monomap, comparator = TypeMap.find (tagOf dynamic) map in
-      Some (snd (List.find
-                   (fun (k,_) -> comparator dynamic k)
-                   monomap))
+let find hsh typeable key map =
+  let mapKey = hash hsh key, type_rep typeable  in 
+    try let candidates, eqtest = CombinedMap.find mapKey map in
+      Some (fst (List.find (fun (_, k) -> eqtest (mk typeable key) k) candidates))
     with Not_found -> None
 
-  let iter : (dynamic -> 'a -> unit) -> 'a t -> unit
-    = fun f -> 
-      TypeMap.iter 
-        (fun _ (monomap,_) -> List.iter (fun (k, v) -> f k v) monomap)
-end

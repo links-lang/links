@@ -1,106 +1,60 @@
-(** Bounded **)
-module type Bounded = sig
-  type a
-  val minBound : a
-  val maxBound : a
+(*pp deriving *)
+(** Primitive instanecs for bounded **)
+module Bounded = struct 
+
+type 'a bounded = {
+  min_bound : 'a ;
+  max_bound : 'a 
+}
+
+module Bounded_integer(B : sig type t
+                               val max_int : t
+                               val min_int : t
+                       end) =
+struct 
+  let bounded = { min_bound = B.min_int ;
+                  max_bound = B.max_int }
 end
-module Bounded_2
-  (B1 : Bounded)
-  (B2 : Bounded)
-  : Bounded with type a = B1.a * B2.a =
-struct
-  type a = B1.a * B2.a
-  let minBound = B1.minBound, B2.minBound
-  let maxBound = B1.maxBound, B2.maxBound
+let bounded_int32 = let module B = Bounded_integer(Int32) in B.bounded
+let bounded_int64 = let module B = Bounded_integer(Int64) in B.bounded
+let bounded_nativeint = let module B = Bounded_integer(Nativeint) in B.bounded
+let bounded_int = {
+  max_bound = Pervasives.max_int ;
+  min_bound = Pervasives.min_int ;
+}
+
+let bounded_bool = {
+  min_bound = false ;
+  max_bound = true 
+}
+let bounded_char = {
+  min_bound = (Char.chr 0) ;
+  max_bound = (Char.chr 0xff) (* Is this guaranteed? *)
+}
+
+let bounded_unit = {
+  min_bound = () ;
+  max_bound = ()
+}
 end
-module Bounded_3
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a =
-struct
-  type a = B1.a * B2.a * B3.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound
-end
-module Bounded_4
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound
-end
-module Bounded_5
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  (B5 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a * B5.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound
-end
-module Bounded_6
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  (B5 : Bounded)
-  (B6 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound, B6.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound, B6.maxBound
-end
-module Bounded_7
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  (B5 : Bounded)
-  (B6 : Bounded)
-  (B7 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound, B6.minBound, B7.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound, B6.maxBound, B7.maxBound
-end
-module Bounded_8
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  (B5 : Bounded)
-  (B6 : Bounded)
-  (B7 : Bounded)
-  (B8 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound, B6.minBound, B7.minBound, B8.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound, B6.maxBound, B7.maxBound, B8.maxBound
-end
-module Bounded_9
-  (B1 : Bounded)
-  (B2 : Bounded)
-  (B3 : Bounded)
-  (B4 : Bounded)
-  (B5 : Bounded)
-  (B6 : Bounded)
-  (B7 : Bounded)
-  (B8 : Bounded)
-  (B9 : Bounded)
-  : Bounded with type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a * B9.a =
-struct
-  type a = B1.a * B2.a * B3.a * B4.a * B5.a * B6.a * B7.a * B8.a * B9.a
-  let minBound = B1.minBound, B2.minBound, B3.minBound, B4.minBound, B5.minBound, B6.minBound, B7.minBound, B8.minBound, B9.minBound
-  let maxBound = B1.maxBound, B2.maxBound, B3.maxBound, B4.maxBound, B5.maxBound, B6.maxBound, B7.maxBound, B8.maxBound, B9.maxBound
-end
+
+include Bounded
+type open_flag = Pervasives.open_flag  =
+                 | Open_rdonly
+                 | Open_wronly
+                 | Open_append
+                 | Open_creat
+                 | Open_trunc
+                 | Open_excl
+                 | Open_binary
+                 | Open_text
+                 | Open_nonblock
+                     deriving (Bounded)
+
+type fpclass = Pervasives.fpclass =
+               | FP_normal
+               | FP_subnormal
+               | FP_zero
+               | FP_infinite
+               | FP_nan
+                   deriving (Bounded)
