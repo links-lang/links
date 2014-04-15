@@ -29,7 +29,6 @@ module Base64 = struct
        '0'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9'; plus; slash |];;
 
   let rfc_pattern = b64_pattern '+' '/';;
-  let url_pattern = b64_pattern '-' '/';;
 
   let encode_with_options b64 equal s pos len 
                           linelen first_linelen crlf =
@@ -313,14 +312,14 @@ module Base64 = struct
       let c2 = next_char() in
       let c3 = next_char() in
 
-      if (c2 = '=' & c3 = '=') or (p_url & c2 = '.' & c3 = '.') then begin
+      if (c2 = '=' && c3 = '=') || (p_url && c2 = '.' && c3 = '.') then begin
 	let n0 = decode_char c0 in
 	let n1 = decode_char c1 in
 	let x0 = (n0 lsl 2) lor (n1 lsr 4) in
 	s.[ q ]   <- Char.chr x0;
       end
       else
-	if (c3 = '=') or (p_url & c3 = '.') then begin
+	if (c3 = '=') || (p_url && c3 = '.') then begin
 	  let n0 = decode_char c0 in
 	  let n1 = decode_char c1 in
 	  let n2 = decode_char c2 in

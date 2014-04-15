@@ -126,11 +126,3 @@ let union point1 point2 =
 	      end
 	| _, _ ->
 	    assert false (* [repr] guarantees that [link] matches [Info _]. *)
-
-(** redundant maps all members of an equivalence class, but one, to true. *)
-let redundant = function
-  | { link = Link _ } ->
-      true
-  | { link = Info _ } ->
-      false
-
