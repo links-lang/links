@@ -219,12 +219,14 @@ fun q6() { outliersQFactored(nestedOrg())}
 
 
 var iters = 5;
-var tests = [test((iters=iters,msg="Q1",q=q1)),
+var tests = [
     	     test((iters=iters,msg="Q2",q=q2)),
 	     test((iters=iters,msg="Q3",q=q3)),
 	     test((iters=iters,msg="Q4",q=q4)),
 	     test((iters=iters,msg="Q5",q=q5)),
-	     test((iters=iters,msg="Q6",q=q6))];
+             test((iters=iters,msg="Q1",q=q1)),
+	     test((iters=iters,msg="Q6",q=q6))
+];
 
 iter(fun (u) {
   print(u.msg ^^ ":\t" ^^ intToString(u.time))
