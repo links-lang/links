@@ -600,9 +600,9 @@ struct
     method with_env env =
       {< env = env >}
 
-    method private with_env env =
+(*    method private with_env env =
       {< env = env >}
-
+*)
     method private with_rec_env recenv =
       {< rec_env = rec_env >}
 

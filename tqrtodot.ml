@@ -69,13 +69,14 @@ let rec tree_of_qr : Qr.ImpType.tqr -> QrDot.tree = function
       let label = ns "Concat" typ in
       let subtrees = List.map tree_of_qr xs in
 	QrDot.mk_node label QrKind.List subtrees
-  | `Record (map, typ) ->
+(*  | `Record (map, typ) ->
       let label = ns "Record" typ in
       let f k v (names, values) = (k :: names, v :: values) in
       let (names, values) = Utility.StringMap.fold f map ([], []) in
       let label = mapstrcat "\\n" identity (label :: names) in
       let subtrees = List.map tree_of_qr values in
 	QrDot.mk_node label QrKind.Record subtrees
+*)
   | `Project ((field, record), typ) ->
       let label = (ns "Project" typ) ^ "\\n" ^ field in
 	QrDot.mk_node label QrKind.Record [tree_of_qr record]

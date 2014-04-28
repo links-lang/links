@@ -489,8 +489,8 @@ struct
                     (bs, tailcomp)
               | `Rec defs ->
                   eval_error "Recursive function"
-              | `Alien _ 
-              | `Alias _ -> (* just skip it *)
+(*              | `Alias _ *)
+              | `Alien _ -> (* just skip it *)
                   computation env (bs, tailcomp)
               | `Module _ -> failwith "Not implemented modules yet"
           end

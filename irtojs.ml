@@ -789,9 +789,10 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
 and generate_special env : Ir.special -> code -> code = fun sp kappa ->
   let gv v = generate_value env v in
     match sp with
-      | `App (f, vs) ->
+(*      | `App (f, vs) ->
           Call (Var "_yield",
                 Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa])
+*)
       | `Wrong _ -> Die "Internal Error: Pattern matching failed"
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
@@ -870,8 +871,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
           (env', fun code ->
              LetRec (List.map (generate_function env fs) defs, code))
     | `Module _
-    | `Alien _
-    | `Alias _ -> env, (fun code -> code)
+    | `Alien _ -> env, (fun code -> code)
 
 and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
   function 
@@ -900,8 +900,7 @@ and generate_definition env
     | `Fun _
     | `Rec _
     | `Module _
-    | `Alien _
-    | `Alias _ -> (fun code -> code)
+    | `Alien _ -> (fun code -> code)
 
 and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
   fun bs ->

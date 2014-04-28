@@ -61,6 +61,7 @@ let rec tree_of_qr : Qr.qr -> QrDot.tree = function
       let label = "Concat" in
       let subtrees = List.map tree_of_qr xs in
 	QrDot.mk_node label QrKind.List subtrees
+(* Dead code according to Qr.qr type
   | `Record map ->
       let label = "Record" in
       let f k v (names, values) = (k :: names, v :: values) in
@@ -68,6 +69,7 @@ let rec tree_of_qr : Qr.qr -> QrDot.tree = function
       let label = mapstrcat "\\n" identity (label :: names) in
       let subtrees = List.map tree_of_qr values in
 	QrDot.mk_node label QrKind.Record subtrees
+*)
   | `Project (field, record) ->
       let label = "Project" ^ "\\n" ^ field in
 	QrDot.mk_node label QrKind.Record [tree_of_qr record]
