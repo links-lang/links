@@ -168,3 +168,10 @@ fun addRandom (ds,n) {
 
 
 fun go(n) {dropTables(); addRandom(n,n*100)}
+
+fun gonm(n,m) {
+  if (m > 0) {
+    var _ = addRandom(n,n*100);
+    gonm(n,m-1)
+  } else {}
+}

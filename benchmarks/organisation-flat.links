@@ -100,7 +100,7 @@ fun employeesDiff() {
    [(emp=e.emp)])
 }
 
-# QF6 difference between unions
+# QF6 
 
 fun employeesUnionDiff() {
   diff(
