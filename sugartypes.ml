@@ -122,7 +122,8 @@ and session_type =
     [ `Input of datatype * session_type
     | `Output of datatype * session_type
     | `Select of session_type list
-    | `Choice of session_type list ]
+    | `Choice of session_type list
+    | `End ]
       deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
