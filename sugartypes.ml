@@ -119,10 +119,10 @@ and type_arg =
     | `Row of row
     | `Presence of presence_flag ]
 and session_type =
-    [ `Input of datatype * session_type
-    | `Output of datatype * session_type
-    | `Select of session_type list
-    | `Choice of session_type list
+    [ `Input of datatype * datatype
+    | `Output of datatype * datatype
+    | `Select of row
+    | `Choice of row
     | `End ]
       deriving (Show)
 
@@ -220,13 +220,11 @@ and phrasenode = [
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
 | `FormBinding      of phrase * pattern
-(* send *)
-| `Give             of phrase * phrase
-(* receive *)
-| `Grab             of phrase
+(* choose *)
 | `Select           of name * phrase
+(* choice *)
 | `Offer            of phrase * (pattern * phrase) list * Types.datatype option
-| `Fork             of binder * phrase
+(* | `Fork             of binder * phrase *)
 ]
 and phrase = phrasenode * position
 and bindingnode = [

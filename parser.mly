@@ -116,10 +116,13 @@ let datatype d = d, None
 %token SQUIGRARROW TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH OFFER RECEIVE CASE SPAWN SPAWNWAIT
+%token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
+%token GIVE GRAB OFFER SELECT
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
+%token LBRACKETPLUSBAR BARPLUSRBRACKET
+%token LBRACKETAMPBAR BARAMPRBRACKET
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
@@ -134,11 +137,12 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD QUESTIONVAR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG INCLUDE
-%token QUESTION EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
+%token BANG QUESTION
+%token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
@@ -165,6 +169,7 @@ let datatype d = d, None
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
+%type <Sugartypes.session_type> session_type
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
@@ -581,8 +586,13 @@ formlet_placement:
 page_placement:
 | LBRACEBAR exp BARRBRACE                                      { `PagePlacement $2, pos() }
 
-conditional_expression:
+session_expression:
 | db_expression                                                { $1 }
+| SELECT field_label exp                                       { `Select ($2, $3) , pos() }
+| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
+
+conditional_expression:
+| session_expression                                           { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp                            { `Conditional ($3, $5, $7), pos() }
 
 cases:
@@ -600,7 +610,6 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -807,6 +816,10 @@ mu_datatype:
 
 forall_datatype:
 | FORALL varlist DOT datatype                                  { ForallType (List.map fst $2, $4) }
+| session_datatype                                             { $1 }
+
+session_datatype:
+| session_type                                                 { Session $1 }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -840,11 +853,19 @@ primary_datatype:
 
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
+session_type:
+| BANG datatype DOT datatype                                   { `Output ($2, $4) }
+| QUESTION datatype DOT datatype                               { `Input ($2, $4) }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
+| END                                                          { `End }
+
+
 type_var:
 | VARIABLE                                                     { RigidTypeVar ($1, `Any) }
-| QUESTIONVAR                                                  { TypeVar ($1, `Any) }
+| PERCENTVAR                                                   { TypeVar ($1, `Any) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable `Any }
-| QUESTION                                                     { fresh_type_variable `Any }
+| PERCENT                                                      { fresh_type_variable `Any }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -945,15 +966,15 @@ presence_flag:
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
 | LBRACE VARIABLE RBRACE                                       { `RigidVar $2 }
-| LBRACE QUESTIONVAR RBRACE                                    { `Var $2 }
+| LBRACE PERCENTVAR RBRACE                                     { `Var $2 }
 | LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
-| LBRACE QUESTION RBRACE                                       { fresh_presence_variable () }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable () }
 
 nonrec_row_var:
 | VARIABLE                                                     { `OpenRigid ($1, `Any) }
-| QUESTIONVAR                                                  { `Open ($1, `Any) }
+| PERCENTVAR                                                   { `Open ($1, `Any) }
 | UNDERSCORE                                                   { fresh_rigid_row_variable `Any }
-| QUESTION                                                     { fresh_row_variable `Any }
+| PERCENT                                                      { fresh_row_variable `Any }
 
 /* FIXME:
  *

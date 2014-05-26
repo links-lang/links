@@ -81,11 +81,9 @@ struct
     | `FnAppl _
     | `Switch _
     | `Receive _
-    | `Give _
-    | `Grab _
     | `Select _
     | `Offer _
-    | `Fork _
+    (* | `Fork _ *)
     | `DBDelete _
     | `DBInsert _
     | `DBUpdate _ -> false
@@ -1759,16 +1757,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             in
               `Receive (erase_cases binders, Some body_type), body_type
 
-        | `Give (m, n) -> assert false
-        | `Grab m -> assert false
         | `Select (name, channel) -> assert false
         | `Offer (channel, branches, _) -> assert false
-        | `Fork ((name, _, pos), body) ->
-            let ty = Types.fresh_type_variable `Any in
-            let context' = {context with var_env = Env.bind context.var_env (name, ty)} in
-            let body', body_type = type_check context' body in
-              (* TODO: check that body_type is 'end' *)
-              `Fork ((name, Some ty, pos), body'), TypeUtils.dual_type ty
+        (* | `Fork ((name, _, pos), body) -> *)
+        (*     let ty = Types.fresh_type_variable `Any in *)
+        (*     let context' = {context with var_env = Env.bind context.var_env (name, ty)} in *)
+        (*     let body', body_type = type_check context' body in *)
+        (*       (\* TODO: check that body_type is 'end' *\) *)
+        (*       `Fork ((name, Some ty, pos), body'), TypeUtils.dual_type ty *)
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->
             let tyargs, opt = type_unary_op context op

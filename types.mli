@@ -83,7 +83,8 @@ and session_type =
     [ `Input of typ * session_type
     | `Output of typ * session_type
     | `Select of session_type field_env
-    | `Choice of session_type field_env ]
+    | `Choice of session_type field_env
+    | `End ]
       deriving (Show)
 
 type datatype = typ

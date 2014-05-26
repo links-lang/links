@@ -218,6 +218,7 @@ let rec dual_session = function
   | `Output (t, s) -> `Input (t, dual_session s)
   | `Select bs     -> `Choice (StringMap.map dual_session bs)
   | `Choice bs     -> `Select (StringMap.map dual_session bs)
+  | `End           -> `End
 
 let dual_type t = match concrete_type t with
   | `Session s -> `Session (dual_session s)

@@ -174,6 +174,8 @@ let keywords = [
  "from"     , FROM; 
  "fun"      , FUN; 
  "formlet"  , FORMLET;
+ "give"     , GIVE;
+ "grab"     , GRAB;
  "if"       , IF; 
  "in"       , IN; 
  "include"  , INCLUDE; 
@@ -192,6 +194,7 @@ let keywords = [
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING; 
+ "select"   , SELECT;
  "server"   , SERVER; 
  "set"      , SET;
  "sig"      , SIG;
@@ -238,12 +241,12 @@ let string_contents = char_contents*
 let regexrepl_fsa =  [^ '{' '/']* (* this regex is too restrictive. But can't seem to get a more precise one to work  :( *) 
 let regex_flags = ['l' 'n' 'g']*
 
-let directive_prefix = ['' '@' '$' '%']
+let directive_prefix = ['' '@' '$']
 
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
+let opchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack 
@@ -256,6 +259,7 @@ let opchar = [ '!' '$' '%' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 rule lex ctxt nl = parse
   | '#' ([^ '\n'] *)                    { lex ctxt nl lexbuf }
   | eof                                 { END }
+  | "End"                               { END }
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}
   | '\n'                                { nl (); bump_lines lexbuf 1; lex ctxt nl lexbuf }
@@ -280,6 +284,10 @@ rule lex ctxt nl = parse
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
+  | "[+|"                               { LBRACKETPLUSBAR }
+  | "|+]"                               { BARPLUSRBRACKET }
+  | "[&|"                               { LBRACKETAMPBAR }
+  | "|&]"                               { BARAMPRBRACKET }
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
@@ -296,6 +304,10 @@ rule lex ctxt nl = parse
                                             raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
+  | '!'                                 { BANG }
+  | '?'                                 { QUESTION }
+  | "%" def_id as var                   { PERCENTVAR var }
+  | '%'                                 { PERCENT }
   | opchar + as op                      { ctxt#precedence op }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
@@ -315,8 +327,6 @@ rule lex ctxt nl = parse
                                           with Not_found | NotFound _ -> 
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
-  | "?" def_id as var                   { QUESTIONVAR var }
-  | '?'                                 { QUESTION }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse

@@ -156,6 +156,25 @@ struct
             end
         | PrimitiveType k -> `Primitive k
         | DBType -> `Primitive `DB
+        | Session s -> `Session (session_type var_env alias_env s)
+  and session_type var_env alias_env =
+    (* HACKY *)
+    (* TODO: add session kind and session type variables *)
+    function
+    | `Input (t, Session s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
+    | `Output (t, Session s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
+    | `Input (t, _) -> assert false
+    | `Output (t, _) -> assert false
+    | `Select (fs, r) ->
+      `Select (List.fold_left
+                 (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
+                 StringMap.empty fs)
+    | `Choice (fs, r) ->
+      `Choice (List.fold_left
+                 (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
+                 StringMap.empty fs)
+    | `End -> `End
+
   and presence ({tenv=_; renv=_; penv=penv}) _alias_env =
     let lookup_flag = flip StringMap.find penv in
       function

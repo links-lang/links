@@ -52,6 +52,7 @@ class map :
     method datatype        : datatype -> datatype
     method datatype'       : datatype' -> datatype'
     method type_arg        : type_arg -> type_arg
+    method session_type    : session_type -> session_type
     method constant        : constant -> constant
     method binop           : binop -> binop
     method tybinop         : tyarg list * binop -> tyarg list * binop
@@ -116,6 +117,7 @@ class fold :
     method datatype        : datatype -> 'self
     method datatype'       : datatype' -> 'self
     method type_arg        : type_arg -> 'self
+    method session_type    : session_type -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
     method tybinop         : tyarg list * binop -> 'self
@@ -176,6 +178,7 @@ object ('self)
   method row             : row -> 'self * row
   method row_var         : row_var -> 'self * row_var
   method sec             : sec -> 'self * sec
+  method session_type    : session_type -> 'self * session_type
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
   method subkind         : subkind -> 'self * subkind

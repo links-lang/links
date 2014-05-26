@@ -243,6 +243,10 @@ class map =
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
           in `Receive (_x, _x_i1)
+      | `Select ((_x, _x_i1)) ->
+          let _x = o#name _x in
+          let _x_i1 = o#phrase _x_i1
+          in `Select (_x, _x_i1)
       | `Offer ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -253,10 +257,10 @@ class map =
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
           in `Offer (_x, _x_i1, _x_i2)
-      | `Fork ((_x, _x_i1)) ->
-          let _x = o#binder _x in
-          let _x_i1 = o#phrase _x_i1 in
-          `Fork (_x, _x_i1)
+      (* | `Fork ((_x, _x_i1)) -> *)
+      (*     let _x = o#binder _x in *)
+      (*     let _x_i1 = o#phrase _x_i1 in *)
+      (*     `Fork (_x, _x_i1) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -469,6 +473,22 @@ class map =
           in TypeApplication _x
       | PrimitiveType _x -> let _x = o#unknown _x in PrimitiveType _x
       | DBType -> DBType
+      | Session _x ->
+          let _x = o#session_type _x in Session _x
+
+    method session_type : session_type -> session_type =
+      function
+      | `Input (_x, _x_i1) ->
+        let _x = o#datatype _x in
+        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
+      | `Output (_x, _x_i1) ->
+        let _x = o#datatype _x in
+        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
+      | `Select _x ->
+        let _x = o#row _x in `Select _x
+      | `Choice _x ->
+        let _x = o#row _x in `Choice _x
+      | `End -> `End
 
     method type_arg : type_arg -> type_arg =
       function
@@ -763,6 +783,10 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
+      | `Select ((_x, _x_i1)) ->
+          let o = o#name _x in
+          let o = o#phrase _x_i1
+          in o
       | `Offer ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -772,9 +796,9 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | `Fork ((_x, _x_i1)) ->
-          let o = o#binder _x in
-          o#phrase _x_i1
+      (* | `Fork ((_x, _x_i1)) -> *)
+      (*     let o = o#binder _x in *)
+      (*     o#phrase _x_i1 *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
@@ -957,6 +981,23 @@ class fold =
           in o
       | PrimitiveType _x -> let o = o#unknown _x in o
       | DBType -> o
+      | Session _x ->
+          let o = o#session_type _x
+          in o
+
+    method session_type : session_type -> 'self_type =
+      function
+      | `Input (_x, _x_i1) ->
+        let o = o#datatype _x in
+        let o = o#datatype _x_i1 in o
+      | `Output (_x, _x_i1) ->
+        let o = o#datatype _x in
+        let o = o#datatype _x_i1 in o
+      | `Select _x ->
+        let o = o#row _x in o
+      | `Choice _x ->
+        let o = o#row _x in o
+      | `End -> o
 
     method type_arg : type_arg -> 'self_type =
       function
@@ -1295,6 +1336,10 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
           in (o, (`Receive ((_x, _x_i1))))
+      | `Select ((_x, _x_i1)) ->
+          let (o, _x) = o#name _x in
+          let (o, _x_i1) = o#phrase _x_i1
+          in (o, (`Select (_x, _x_i1)))
       | `Offer ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1305,10 +1350,10 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
           in (o, (`Offer ((_x, _x_i1, _x_i2))))
-      | `Fork ((_x, _x_i1)) ->
-          let (o, _x) = o#binder _x in
-          let (o, _x_i1) = o#phrase _x_i1 in
-          (o, `Fork (_x, _x_i1))
+      (* | `Fork ((_x, _x_i1)) -> *)
+      (*     let (o, _x) = o#binder _x in *)
+      (*     let (o, _x_i1) = o#phrase _x_i1 in *)
+      (*     (o, `Fork (_x, _x_i1)) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1544,6 +1589,22 @@ class fold_map =
       | PrimitiveType _x ->
           let (o, _x) = o#unknown _x in (o, (PrimitiveType _x))
       | DBType -> (o, DBType)
+      | Session _x ->
+          let (o, _x) = o#session_type _x in (o, Session _x)
+
+    method session_type : session_type -> ('self_type * session_type) =
+      function
+      | `Input (_x, _x_i1) ->
+        let (o, _x) = o#datatype _x in
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
+      | `Output (_x, _x_i1) ->
+        let (o, _x) = o#datatype _x in
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
+      | `Select _x ->
+        let (o, _x) = o#row _x in (o, `Select _x)
+      | `Choice _x ->
+        let (o, _x) = o#row _x in (o, `Choice _x)
+      | `End -> (o, `End)
 
     method type_arg : type_arg -> ('self_type * type_arg) =
       function

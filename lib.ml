@@ -352,6 +352,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      wait : Process (a, {wild{_},hear{_}:_|e}) {hear{_}:_}~> a
   *)
 
+  (** Sessions *)
+
+  (* FIXME: can't use this type until we have support for session
+     type variables in the IR *)
+
+  (* "give", *)
+  (* (`PFun (fun _ -> assert false), *)
+  (*  datatype "(a, !a.s) ~> s", *)
+  (*  IMPURE); *)
+  
+
   (** Lists and collections **)
   "Nil",
   (`List [],
