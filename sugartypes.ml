@@ -219,8 +219,13 @@ and phrasenode = [
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
 | `FormBinding      of phrase * pattern
-| `SessionReceive   of phrase * (pattern * phrase) list * Types.datatype option
-| `SessionFork      of binder * phrase
+(* send *)
+| `Give             of phrase * phrase
+(* receive *)
+| `Grab             of phrase
+| `Select           of name * phrase
+| `Offer            of phrase * (pattern * phrase) list * Types.datatype option
+| `Fork             of binder * phrase
 ]
 and phrase = phrasenode * position
 and bindingnode = [

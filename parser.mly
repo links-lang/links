@@ -116,7 +116,7 @@ let datatype d = d, None
 %token SQUIGRARROW TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
+%token SWITCH OFFER RECEIVE CASE SPAWN SPAWNWAIT
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -600,7 +600,7 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| RECEIVE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE        { `SessionReceive ($3, $6, None) , pos() }
+| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }

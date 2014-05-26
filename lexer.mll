@@ -184,6 +184,7 @@ let keywords = [
  "insert"   , INSERT; 
  "mu"       , MU; 
  "native"   , NATIVE;
+ "offer"    , OFFER;
  "orderby"  , ORDERBY;
  "op"       , OP; 
  "page"     , PAGE;

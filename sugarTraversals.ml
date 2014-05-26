@@ -243,7 +243,7 @@ class map =
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
           in `Receive (_x, _x_i1)
-      | `SessionReceive ((_x, _x_i1, _x_i2)) ->
+      | `Offer ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             o#list
@@ -252,11 +252,11 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
-          in `SessionReceive (_x, _x_i1, _x_i2)
-      | `SessionFork ((_x, _x_i1)) ->
+          in `Offer (_x, _x_i1, _x_i2)
+      | `Fork ((_x, _x_i1)) ->
           let _x = o#binder _x in
           let _x_i1 = o#phrase _x_i1 in
-          `SessionFork (_x, _x_i1)
+          `Fork (_x, _x_i1)
       | `DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -763,7 +763,7 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
-      | `SessionReceive ((_x, _x_i1, _x_i2)) ->
+      | `Offer ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
             o#list
@@ -772,7 +772,7 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | `SessionFork ((_x, _x_i1)) ->
+      | `Fork ((_x, _x_i1)) ->
           let o = o#binder _x in
           o#phrase _x_i1
       | `DatabaseLit ((_x, _x_i1)) ->
@@ -1295,7 +1295,7 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
           in (o, (`Receive ((_x, _x_i1))))
-      | `SessionReceive ((_x, _x_i1, _x_i2)) ->
+      | `Offer ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             o#list
@@ -1304,11 +1304,11 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
-          in (o, (`SessionReceive ((_x, _x_i1, _x_i2))))
-      | `SessionFork ((_x, _x_i1)) ->
+          in (o, (`Offer ((_x, _x_i1, _x_i2))))
+      | `Fork ((_x, _x_i1)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#phrase _x_i1 in
-          (o, `SessionFork (_x, _x_i1))
+          (o, `Fork (_x, _x_i1))
       | `DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
