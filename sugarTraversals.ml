@@ -421,15 +421,15 @@ class map =
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Default -> `Default
 
-    method quantifier : quantifier -> quantifier =
-      function
-      | `TypeVar (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1))
-      | `RowVar (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in `RowVar ((_x, _x_i1))
-      | `PresenceVar _x -> let _x = o#name _x in `PresenceVar _x
+    (* method quantifier : quantifier -> quantifier = *)
+    (*   function *)
+    (*   | `TypeVar (_x, _x_i1) -> *)
+    (*       let _x = o#name _x in *)
+    (*       let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1)) *)
+    (*   | `RowVar (_x, _x_i1) -> *)
+    (*       let _x = o#name _x in *)
+    (*       let _x_i1 = o#subkind _x_i1 in `RowVar ((_x, _x_i1)) *)
+    (*   | `PresenceVar _x -> let _x = o#name _x in `PresenceVar _x *)
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -452,7 +452,7 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#datatype _x_i1 in MuType (_x, _x_i1)
       | ForallType (_x, _x_i1) ->
-          let _x = o#list (fun o -> o#quantifier) _x in
+          let _x = _x in (*o#list (fun o -> o#quantifier) _x in*)
           let _x_i1 = o#datatype _x_i1 in ForallType (_x, _x_i1)
       | UnitType -> UnitType
       | TupleType _x ->
@@ -553,7 +553,7 @@ class map =
           let _x_i1 =
             o#list
               (fun o (_x, _x_i1) ->
-                 let _x = o#quantifier _x in
+                 let _x = _x (*o#quantifier _x*) in
                  let _x_i1 = o#unknown _x_i1
                  in (_x, _x_i1))
               _x_i1
@@ -938,11 +938,11 @@ class fold =
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
 
-    method quantifier : quantifier -> 'self_type =
-      function
-      | `TypeVar _x -> o
-      | `RowVar _x -> o
-      | `PresenceVar _x -> o
+    (* method quantifier : quantifier -> 'self_type = *)
+    (*   function *)
+    (*   | `TypeVar _x -> o *)
+    (*   | `RowVar _x -> o *)
+    (*   | `PresenceVar _x -> o *)
 
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -964,7 +964,7 @@ class fold =
       | MuType (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
       | ForallType (_x, _x_i1) ->
-          let o = o#list (fun o -> o#quantifier) _x in let o = o#datatype _x_i1 in o
+          let o = o (*o#list (fun o -> o#quantifier) _x*) in let o = o#datatype _x_i1 in o
       | UnitType -> o
       | TupleType _x -> let o = o#list (fun o -> o#datatype) _x in o
       | RecordType _x -> let o = o#row _x in o
@@ -1060,7 +1060,7 @@ class fold =
           let o =
             o#list
               (fun o (_x, _x_i1) ->
-                 let o = o#quantifier _x in
+                 let o = o (* #quantifier _x*) in
                  let o = o#unknown _x_i1
                  in o)
               _x_i1
@@ -1527,15 +1527,15 @@ class fold_map =
       fieldconstraint -> ('self_type * fieldconstraint) =
       function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
 
-    method quantifier : quantifier -> ('self_type * quantifier) =
-      function
-      | `TypeVar (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, `TypeVar ((_x, _x_i1)))
-      | `RowVar (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, `RowVar ((_x, _x_i1)))
-      | `PresenceVar _x -> let (o, _x) = o#name _x in (o, `PresenceVar _x)
+    (* method quantifier : quantifier -> ('self_type * quantifier) = *)
+    (*   function *)
+    (*   | `TypeVar (_x, _x_i1) -> *)
+    (*       let (o, _x) = o#name _x in *)
+    (*       let (o, _x_i1) = o#subkind _x_i1 in (o, `TypeVar ((_x, _x_i1))) *)
+    (*   | `RowVar (_x, _x_i1) -> *)
+    (*       let (o, _x) = o#name _x in *)
+    (*       let (o, _x_i1) = o#subkind _x_i1 in (o, `RowVar ((_x, _x_i1))) *)
+    (*   | `PresenceVar _x -> let (o, _x) = o#name _x in (o, `PresenceVar _x) *)
 
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->
@@ -1565,7 +1565,7 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (MuType (_x, _x_i1)))
       | ForallType (_x, _x_i1) ->
-          let (o, _x) = o#list (fun o -> o#quantifier) _x in
+          (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
           let (o, _x_i1) = o#datatype _x_i1 in (o, (ForallType (_x, _x_i1)))
       | UnitType -> (o, UnitType)
       | TupleType _x ->
@@ -1672,7 +1672,7 @@ class fold_map =
           let (o, _x_i1) =
             o#list
               (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#quantifier _x in
+                 (*let (o, _x) = o#quantifier _x in*)
                  let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
                  in (o, (_x, _x_i1)))
               _x_i1 in

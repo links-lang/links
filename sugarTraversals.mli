@@ -46,7 +46,7 @@ class map :
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
     method presence_flag   : presence_flag -> presence_flag
-    method quantifier      : quantifier -> quantifier
+    (* method quantifier      : quantifier -> quantifier *)
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
@@ -109,7 +109,7 @@ class fold :
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
     method presence_flag   : presence_flag -> 'self
-    method quantifier      : quantifier -> 'self
+    (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
@@ -171,7 +171,7 @@ object ('self)
   method position        : position -> 'self * position
   method presence_flag   : presence_flag -> 'self * presence_flag
   method program         : program -> 'self * program
-  method quantifier      : quantifier -> 'self * quantifier
+  (* method quantifier      : quantifier -> 'self * quantifier *)
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs

@@ -72,23 +72,34 @@ type location = [`Client | `Server | `Native | `Unknown]
 type subkind = [`Any | `Base]
     deriving (Show)
 
-type type_variable =
-    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
-    | `RowVar of name * subkind | `RigidRowVar of name * subkind
-    | `PresenceVar of name | `RigidPresenceVar of name ]
-      deriving (Show)
+type freedom = [`Flexible | `Rigid]
+    deriving (Show)
 
-type quantifier =
-    [ `TypeVar of name * subkind
-    | `RowVar of name * subkind
-    | `PresenceVar of name ]
-      deriving (Show)
+type kind = [`Type of subkind | `Row of subkind | `Presence]
+    deriving (Show)
 
-let type_variable_of_quantifier =
-  function
-    | `TypeVar v -> `RigidTypeVar v
-    | `RowVar v -> `RigidRowVar v
-    | `PresenceVar v -> `RigidPresenceVar v
+type type_variable = name * kind * freedom
+    deriving (Show)
+
+(* type type_variable = *)
+(*     [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind *)
+(*     | `RowVar of name * subkind | `RigidRowVar of name * subkind *)
+(*     | `PresenceVar of name | `RigidPresenceVar of name ] *)
+(*       deriving (Show) *)
+
+type quantifier = type_variable
+  deriving (Show)
+    (* [ `TypeVar of name * subkind *)
+    (* | `RowVar of name * subkind *)
+    (* | `PresenceVar of name ] *)
+    (*   deriving (Show) *)
+
+let rigidify (name, kind, _) = (name, kind, `Rigid)
+  (* function *)
+  (*   | `TypeVar v -> `RigidTypeVar v *)
+  (*   | `RowVar v -> `RigidRowVar v *)
+  (*   | `PresenceVar v -> `RigidPresenceVar v *)
+  (*   | v -> v *)
 
 type datatype =
   | TypeVar         of name * subkind
@@ -123,6 +134,8 @@ and session_type =
     | `Output of datatype * datatype
     | `Select of row
     | `Choice of row
+    | `TypeVar of name
+    | `RigidTypeVar of name
     | `End ]
       deriving (Show)
 

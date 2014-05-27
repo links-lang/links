@@ -57,12 +57,16 @@ let annotate (signame, datatype) : _ -> binding =
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
 let attach_kind pos (t, k) =
-   match k with
-     | `Type -> `TypeVar (t, `Any)
-     | `BaseType -> `TypeVar (t, `Base)
-     | `Row -> `RowVar (t, `Any)
-     | `BaseRow -> `RowVar (t, `Base)
-     | `Presence -> `PresenceVar t
+   (t,
+    begin
+      match k with
+      | `Type -> `Type `Any
+      | `BaseType -> `Type `Base
+      | `Row -> `Row `Any
+      | `BaseRow -> `Row `Base
+      | `Presence -> `Presence
+    end,
+    `Flexible)
 
 let attach_subkind pos (t, k) =
    match k with
@@ -296,7 +300,7 @@ subkind:
 | BASE                                                         { "Base" }
 
 typearg:
-| VARIABLE                                                     { (`TypeVar ($1, `Any), None) }
+| VARIABLE                                                     { (($1, `Type `Any, `Flexible), None) }
 | VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -819,7 +823,7 @@ forall_datatype:
 | session_datatype                                             { $1 }
 
 session_datatype:
-| session_type                                                 { Session $1 }
+| session_type_top                                             { Session $1 }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -853,13 +857,16 @@ primary_datatype:
 
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
-session_type:
+session_type_top:
 | BANG datatype DOT datatype                                   { `Output ($2, $4) }
 | QUESTION datatype DOT datatype                               { `Input ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
 | END                                                          { `End }
 
+session_type:
+| session_type_top                                             { $1 }
+/*| type_var                                                     {   }   */
 
 type_var:
 | VARIABLE                                                     { RigidTypeVar ($1, `Any) }
