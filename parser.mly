@@ -458,6 +458,8 @@ infixl_6:
 | infixl_6 INFIXL6 infixr_6                                    { `InfixAppl (([], `Name $2), $1, $3), pos() }
 | infixl_6 MINUS infixr_6                                      { `InfixAppl (([], `Minus), $1, $3), pos() }
 | infixl_6 MINUSDOT infixr_6                                   { `InfixAppl (([], `FloatMinus), $1, $3), pos() }
+/* HACK: the type variables should get inserted later... */
+| infixl_6 BANG infixr_6                                       { `InfixAppl (([], `Name "!"), $1, $3), pos() }
 
 infixr_5:
 | infixl_6                                                     { $1 }
