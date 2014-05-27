@@ -488,6 +488,10 @@ class map =
         let _x = o#row _x in `Select _x
       | `Choice _x ->
         let _x = o#row _x in `Choice _x
+      | `TypeVar _x ->
+        let _x = o#name _x in `TypeVar _x
+      | `RigidTypeVar _x ->
+        let _x = o#name _x in `RigidTypeVar _x
       | `End -> `End
 
     method type_arg : type_arg -> type_arg =
@@ -997,6 +1001,10 @@ class fold =
         let o = o#row _x in o
       | `Choice _x ->
         let o = o#row _x in o
+      | `TypeVar _x ->
+        let o = o#name _x in o
+      | `RigidTypeVar _x ->
+        let o = o#name _x in o
       | `End -> o
 
     method type_arg : type_arg -> 'self_type =
@@ -1604,6 +1612,10 @@ class fold_map =
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
         let (o, _x) = o#row _x in (o, `Choice _x)
+      | `TypeVar _x ->
+        let (o, _x) = o#name _x in (o, `TypeVar _x)
+      | `RigidTypeVar _x ->
+        let (o, _x) = o#name _x in (o, `RigidTypeVar _x)
       | `End -> (o, `End)
 
     method type_arg : type_arg -> ('self_type * type_arg) =

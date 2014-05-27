@@ -174,6 +174,8 @@ struct
       `Choice (List.fold_left
                  (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
                  StringMap.empty fs)
+    | `TypeVar x -> assert false
+    | `RigidTypeVar x -> assert false
     | `End -> `End
 
   and presence ({tenv=_; renv=_; penv=penv}) _alias_env =

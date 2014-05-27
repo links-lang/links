@@ -860,15 +860,20 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
 session_type_top:
-| BANG datatype DOT datatype                                   { `Output ($2, $4) }
-| QUESTION datatype DOT datatype                               { `Input ($2, $4) }
+| BANG datatype DOT session_type                               { `Output ($2, Session $4) }
+| QUESTION datatype DOT session_type                           { `Input ($2, Session $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
 | END                                                          { `End }
 
 session_type:
 | session_type_top                                             { $1 }
-/*| type_var                                                     {   }   */
+| session_type_var                                             { $1 }
+
+session_type_var:
+| VARIABLE                                                     { `RigidTypeVar $1 }
+| PERCENTVAR                                                   { `TypeVar $1 }
+/* TODO: support underscore and percent; rationalise parsing of type variables */
 
 type_var:
 | VARIABLE                                                     { RigidTypeVar ($1, `Any) }
