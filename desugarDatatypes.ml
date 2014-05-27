@@ -67,15 +67,15 @@ object (self)
         
   method row_var = function
     | `Closed           -> self
-    | `OpenRigid (x, k) -> self#add (x, `Row k, `Rigid)
     | `Open (x, k)      -> self#add (x, `Row k, `Flexible)
+    | `OpenRigid (x, k) -> self#add (x, `Row k, `Rigid)
     | `Recursive (s, r) -> let o = self#bind (s, `Row `Any, `Rigid) in o#row r
 
   method presence_flag = function
     | `Absent
     | `Present -> self
+    | `Var s -> self#add (s, `Presence, `Flexible)
     | `RigidVar s -> self#add (s, `Presence, `Rigid)
-    | `Var s -> self#add (s, `Presence, `Rigid)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -291,15 +291,15 @@ struct
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with
-                      | (name, `Type subkind, freedom) ->
+                      | (name, `Type subkind, _freedom) ->
                           let point = Unionfind.fresh (`Rigid (var, subkind)) in
                             ((q, Some (`TypeVar ((var, subkind), point)))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-                      | (name, `Row subkind, freedom) ->
+                      | (name, `Row subkind, _freedom) ->
                           let point = Unionfind.fresh (`Rigid (var, subkind)) in
                             ((q, Some (`RowVar ((var, subkind), point)))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-                      | (name, `Presence, freedom) ->
+                      | (name, `Presence, _freedom) ->
                           let point = Unionfind.fresh (`Rigid var) in
                             ((q, Some (`PresenceVar (var, point)))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
