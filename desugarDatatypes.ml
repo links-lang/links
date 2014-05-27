@@ -252,26 +252,6 @@ struct
                let f = Unionfind.fresh (`Rigid var) in
                  `PresenceVar (var, f)::vars, addf x f envs)
              (* (var, `Presence, `Flexible)::vars, addf x f envs) *)
-
-             (* function *)
-             (*   | `TypeVar (x, subkind) -> *)
-             (*       let t = Unionfind.fresh (`Flexible (var, subkind)) in *)
-             (*         `TypeVar ((var, subkind), t)::vars, addt x t envs *)
-             (*   | `RigidTypeVar (x, subkind) -> *)
-             (*       let t = Unionfind.fresh (`Rigid (var, subkind)) in *)
-             (*         `TypeVar ((var, subkind), t)::vars, addt x t envs *)
-             (*   | `RowVar (x, subkind) -> *)
-             (*       let r = Unionfind.fresh (`Flexible (var, subkind)) in *)
-             (*         `RowVar ((var, subkind), r)::vars, addr x r envs *)
-             (*   | `RigidRowVar (x, subkind) -> *)
-             (*       let r = Unionfind.fresh (`Rigid (var, subkind)) in *)
-             (*         `RowVar ((var, subkind), r)::vars , addr x r envs *)
-             (*   | `PresenceVar x -> *)
-             (*       let f = Unionfind.fresh (`Flexible var) in *)
-             (*         `PresenceVar (var, f)::vars, addf x f envs *)
-             (*   | `RigidPresenceVar x -> *)
-             (*       let f = Unionfind.fresh (`Rigid var) in *)
-             (*         `PresenceVar (var, f)::vars, addf x f envs) *)
         ([], empty_env)
         vars
     in
