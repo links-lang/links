@@ -67,8 +67,8 @@ object (self)
 
   (* TODO: implement a proper session kind *)
   method session_type = function
-    | `TypeVar x -> self#add (x, `Type `Any, `Flexible)
-    | `RigidTypeVar x -> self#add (x, `Type `Any, `Rigid)
+    | `TypeVar x -> self#add (x, `Type (`Any, `Any), `Flexible)
+    | `RigidTypeVar x -> self#add (x, `Type (`Any, `Any), `Rigid)
     | st -> super#session_type st
 
   method row_var = function
@@ -96,11 +96,7 @@ module Desugar =
 struct
   let rec datatype var_env (alias_env : Types.tycon_environment) t =
   let datatype var_env t = datatype var_env alias_env t in
-<<<<<<< HEAD
     let lookup_type t = StringMap.find t var_env.tenv in
-=======
-    let lookup_type t = StringMap.find t tenv in
->>>>>>> Expand "subkinds" to include both linearity and "restriction" (i.e.,
       match t with
         | TypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
                              with NotFound _ -> raise (UnexpectedFreeVar s))
@@ -112,15 +108,9 @@ struct
                        datatype var_env t)
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
-<<<<<<< HEAD
-            let point = Unionfind.fresh (`Flexible (var, `Any)) in
+            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
-=======
-            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
-            let tenv = StringMap.add name point tenv in
-            let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv; penv=penv} t)) in
->>>>>>> Expand "subkinds" to include both linearity and "restriction" (i.e.,
               `MetaTypeVar point
         | ForallType (qs, t) ->
             let desugar_quantifier (var_env, qs) =
@@ -221,15 +211,9 @@ struct
             end
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
-<<<<<<< HEAD
-            let point = Unionfind.fresh (`Flexible (var, `Any)) in
+            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
             let renv = StringMap.add name point var_env.renv in
             let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
-=======
-            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
-            let renv = StringMap.add name point renv in
-            let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv; penv=penv} alias_env r)) in
->>>>>>> Expand "subkinds" to include both linearity and "restriction" (i.e.,
               (StringMap.empty, point) in
     let fields =
         List.map
@@ -291,15 +275,10 @@ struct
      here (except for the parameters, of course). *)
   let typename alias_env name args (rhs : Sugartypes.datatype') =
       try
-<<<<<<< HEAD
-        let args, envs =
-          ListLabels.fold_right ~init:([], empty_env) args
-=======
         let empty_envs =
           {tenv=StringMap.empty; renv=StringMap.empty; penv=StringMap.empty} in
         let args, envs =
           ListLabels.fold_right ~init:([], empty_envs) args
->>>>>>> Expand "subkinds" to include both linearity and "restriction" (i.e.,
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with

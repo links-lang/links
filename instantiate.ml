@@ -86,7 +86,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
               else
                 begin
                   let var' = Types.fresh_raw_variable () in
-                  let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                  let point' = Unionfind.fresh (`Flexible (var', (`Any, `Any))) in
                   let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
                   let _ = Unionfind.change point' (`Recursive (var', t')) in
                     `MetaSessionVar point'
