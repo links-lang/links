@@ -1423,7 +1423,7 @@ struct
                           "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
                 else
                   "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-          | `Session s -> "session (" ^ session bound_vars p s ^ ")"
+          | `Session s -> session bound_vars p s
           | `Table (r, w, n)   ->
               (* TODO:
 
@@ -1538,8 +1538,14 @@ struct
       | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
   and session bound_vars p =
     function
-    (* TODO: pretty-printer for session types *)
-    | s -> "SOME SESSION TYPE"
+    | `Input (t, s) -> "?" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
+    | `Output (t, s) -> "!" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
+    (* TODO: pretty-printer for selection and choice *)
+    | `Select bs -> "[+|" ^ "SOME SELECTION" ^ "|+]"
+    | `Choice bs -> "[&|" ^ "SOME CHOICE" ^ "|&]"
+    | `MetaSessionVar point -> datatype bound_vars p (`MetaTypeVar point) (* HACK *)
+    | `Dual s -> "~" ^ session bound_vars p s
+    | `End -> "End"
 
   let tycon_spec bound_vars p =
     function
