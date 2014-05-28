@@ -169,10 +169,8 @@ struct
     (* HACKY *)
     (* TODO: add session kind and session type variables *)
     function
-    | `Input (t, Session s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
-    | `Output (t, Session s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
-    | `Input (t, _) -> assert false
-    | `Output (t, _) -> assert false
+    | `Input (t, s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
+    | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Select (fs, r) ->
       `Select (List.fold_left
                  (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)

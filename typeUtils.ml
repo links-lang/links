@@ -226,6 +226,7 @@ let rec dual_session = function
   | `Select bs            -> `Choice (StringMap.map dual_session bs)
   | `Choice bs            -> `Select (StringMap.map dual_session bs)
   | `MetaSessionVar point -> failwith "Not implemented duality for type variables yet"
+  | `Dual s               -> s
   | `End                  -> `End
 
 let dual_type t = match concrete_type t with

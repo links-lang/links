@@ -121,8 +121,8 @@ and type_arg =
     | `Row of row
     | `Presence of presence_flag ]
 and session_type =
-    [ `Input of datatype * datatype
-    | `Output of datatype * datatype
+    [ `Input of datatype * session_type
+    | `Output of datatype * session_type
     | `Select of row
     | `Choice of row
     | `TypeVar of name

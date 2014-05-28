@@ -860,8 +860,8 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
 
 session_type_top:
-| BANG datatype DOT session_type                               { `Output ($2, Session $4) }
-| QUESTION datatype DOT session_type                           { `Input ($2, Session $4) }
+| BANG datatype DOT session_type                               { `Output ($2, $4) }
+| QUESTION datatype DOT session_type                           { `Input ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
 | END                                                          { `End }

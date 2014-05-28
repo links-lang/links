@@ -477,10 +477,10 @@ class map =
       function
       | `Input (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
+        let _x_i1 = o#session_type _x_i1 in `Input (_x, _x_i1)
       | `Output (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
+        let _x_i1 = o#session_type _x_i1 in `Output (_x, _x_i1)
       | `Select _x ->
         let _x = o#row _x in `Select _x
       | `Choice _x ->
@@ -987,10 +987,10 @@ class fold =
       function
       | `Input (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#datatype _x_i1 in o
+        let o = o#session_type _x_i1 in o
       | `Output (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#datatype _x_i1 in o
+        let o = o#session_type _x_i1 in o
       | `Select _x ->
         let o = o#row _x in o
       | `Choice _x ->
@@ -1595,10 +1595,10 @@ class fold_map =
       function
       | `Input (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
+        let (o, _x_i1) = o#session_type _x_i1 in (o, `Input (_x, _x_i1))
       | `Output (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
+        let (o, _x_i1) = o#session_type _x_i1 in (o, `Output (_x, _x_i1))
       | `Select _x ->
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
