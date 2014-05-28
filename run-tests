@@ -1,4 +1,3 @@
 #!/bin/bash
 
-make test-raw | perl -lne '($f) = /(\d+) failures/; $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'
-
+make test-raw | perl -lne '($f) = /(\d+) failures/; print "$f failures" if ($f > 0); $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'

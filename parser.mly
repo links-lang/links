@@ -60,10 +60,10 @@ let attach_kind pos (t, k) =
    (t,
     begin
       match k with
-      | `Type -> `Type `Any
-      | `BaseType -> `Type `Base
-      | `Row -> `Row `Any
-      | `BaseRow -> `Row `Base
+      | `Type -> `Type (`Any, `Any)
+      | `BaseType -> `Type (`Any, `Base)
+      | `Row -> `Row (`Any, `Any)
+      | `BaseRow -> `Row (`Any, `Base)
       | `Presence -> `Presence
     end,
     `Flexible)
@@ -74,8 +74,8 @@ let attach_subkind pos (t, k) =
      | "Base" ->
          begin
            match t with
-             | TypeVar (x, _) -> TypeVar (x, `Base)
-             | RigidTypeVar (x, _) -> RigidTypeVar (x, `Base)
+             | TypeVar (x, _) -> TypeVar (x, (`Any, `Base))
+             | RigidTypeVar (x, _) -> RigidTypeVar (x, (`Any, `Base))
              | _ -> assert false
          end
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
@@ -86,8 +86,8 @@ let attach_row_subkind pos (r, k) =
      | "Base" ->
          begin
            match r with
-             | `Open (x, _) -> `Open (x, `Base)
-             | `OpenRigid (x, _) -> `OpenRigid (x, `Base)
+             | `Open (x, _) -> `Open (x, (`Any, `Base))
+             | `OpenRigid (x, _) -> `OpenRigid (x, (`Any, `Base))
              | _ -> assert false
          end
      | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
@@ -300,7 +300,7 @@ subkind:
 | BASE                                                         { "Base" }
 
 typearg:
-| VARIABLE                                                     { (($1, `Type `Any, `Flexible), None) }
+| VARIABLE                                                     { (($1, `Type (`Any, `Any), `Flexible), None) }
 | VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -798,7 +798,7 @@ straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { FunctionType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
-                                                                               ([], fresh_rigid_row_variable `Any),
+                                                                               ([], fresh_rigid_row_variable (`Any, `Any)),
                                                                                $3) }
 
 squiggly_arrow:
@@ -813,7 +813,7 @@ squiggly_arrow:
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
                                                                                ([("wild", (`Present, UnitType))],
-                                                                                 fresh_rigid_row_variable `Any),
+                                                                                 fresh_rigid_row_variable (`Any, `Any)),
                                                                                 $3) }
 
 mu_datatype:
@@ -876,10 +876,10 @@ session_type_var:
 /* TODO: support underscore and percent; rationalise parsing of type variables */
 
 type_var:
-| VARIABLE                                                     { RigidTypeVar ($1, `Any) }
-| PERCENTVAR                                                   { TypeVar ($1, `Any) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable `Any }
-| PERCENT                                                      { fresh_type_variable `Any }
+| VARIABLE                                                     { RigidTypeVar ($1, (`Any, `Any)) }
+| PERCENTVAR                                                   { TypeVar ($1, (`Any, `Any)) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable (`Any, `Any) }
+| PERCENT                                                      { fresh_type_variable (`Any, `Any) }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -985,10 +985,10 @@ presence_flag:
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable () }
 
 nonrec_row_var:
-| VARIABLE                                                     { `OpenRigid ($1, `Any) }
-| PERCENTVAR                                                   { `Open ($1, `Any) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable `Any }
-| PERCENT                                                      { fresh_row_variable `Any }
+| VARIABLE                                                     { `OpenRigid ($1, (`Any, `Any)) }
+| PERCENTVAR                                                   { `Open ($1, (`Any, `Any)) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable (`Any, `Any) }
+| PERCENT                                                      { fresh_row_variable (`Any, `Any) }
 
 /* FIXME:
  *

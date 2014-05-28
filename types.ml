@@ -17,10 +17,15 @@ type 'a point = 'a Unionfind.point deriving (Show)
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     deriving (Show)
 
-type subkind = [ `Any | `Base ]
-    deriving (Show)
+type restriction = [ `Any | `Base | `Session ]
+    deriving (Eq, Show)
+type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
 
-type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
+type subkind = linearity * restriction
+    deriving (Eq, Show)
+
+type kind = [ `Type of subkind | `Row of subkind | `Presence ]
     deriving (Show, Eq)
 
 type 't meta_type_var_basis =
@@ -62,12 +67,12 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [`Row] ;
+  arity      = [`Row (`Any, `Any)] ;
 }
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [`Type] ;
+  arity      = [`Type (`Any, `Any)] ;
 }
 
 let event    = {
@@ -125,10 +130,10 @@ let rec is_base_type : typ -> bool =
     | `MetaTypeVar point ->
         begin
           match Unionfind.find point with
-            | `Rigid (_, `Base)
-            | `Flexible (_, `Base) -> true
-            | `Rigid (_, `Any)
-            | `Flexible (_, `Any) -> false
+            | `Rigid (_, (_, `Base))
+            | `Flexible (_, (_, `Base)) -> true
+            | `Rigid _
+            | `Flexible _ -> false
             | `Body t -> is_base_type t
             | `Recursive _ -> false
         end
@@ -138,10 +143,10 @@ let rec is_base_row (fields, row_var) =
   let base_row_var =
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, `Base)
-      | `Flexible (_, `Base) -> true
-      | `Rigid (_, `Any)
-      | `Flexible (_, `Any) -> false
+      | `Rigid (_, (_, `Base))
+      | `Flexible (_, (_, `Base)) -> true
+      | `Rigid _
+      | `Flexible _ -> false
       | `Body row -> is_base_row row
       | `Recursive _ -> false in
   let base_fields =
@@ -160,9 +165,9 @@ let rec is_baseable_type : typ -> bool =
     | `MetaTypeVar point ->
         begin
           match Unionfind.find point with
-            | `Rigid (_, `Base)
+            | `Rigid (_, (_, `Base))
             | `Flexible _ -> true
-            | `Rigid (_, `Any) -> false
+            | `Rigid _ -> false
             | `Body t -> is_baseable_type t
             | `Recursive _ -> false
         end
@@ -172,9 +177,9 @@ let rec is_baseable_row (fields, row_var) =
   let base_row_var =
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, `Base)
+      | `Rigid (_, (_, `Base))
       | `Flexible _ -> true
-      | `Rigid (_, `Any) -> false
+      | `Rigid _ -> false
       | `Body row -> is_baseable_row row
       | `Recursive _ -> false in
   let base_fields =
@@ -186,17 +191,18 @@ let rec is_baseable_row (fields, row_var) =
   in
     base_row_var && base_fields
 
-let rec basify_type =
+let rec basify_type : typ -> unit =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> ()
     | `Alias (_, t) -> basify_type t
     | `MetaTypeVar point ->
         begin
           match Unionfind.find point with
-            | `Rigid (_, `Base)
-            | `Flexible (_, `Base) -> ()
-            | `Rigid (_, `Any) -> assert false
-            | `Flexible (var, `Any) -> Unionfind.change point (`Flexible (var, `Base))
+            | `Rigid (_, (_, `Base))
+            | `Flexible (_, (_, `Base)) -> ()
+            | `Rigid _ -> assert false
+            | `Flexible (var, (lin, `Any)) -> Unionfind.change point (`Flexible (var, (lin, `Base)))
+            | `Flexible _ -> assert false
             | `Body t -> basify_type t
             | `Recursive _ -> assert false
         end
@@ -206,10 +212,11 @@ let rec basify_row (fields, row_var) =
   begin
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, `Base)
-      | `Flexible (_, `Base) -> ()
-      | `Rigid (_, `Any) -> assert false
-      | `Flexible (var, `Any) -> Unionfind.change row_var (`Flexible (var, `Base))
+      | `Rigid (_, (_, `Base))
+      | `Flexible (_, (_, `Base)) -> ()
+      | `Rigid _ -> assert false
+      | `Flexible (var, (lin, `Any)) -> Unionfind.change row_var (`Flexible (var, (lin, `Base)))
+      | `Flexible _ -> assert false
       | `Body row -> basify_row row
       | `Recursive _ -> assert false
   end;
@@ -230,11 +237,9 @@ let var_of_quantifier =
 
 let kind_of_quantifier =
   function
-    | `TypeVar ((_, `Any), _) -> `Type
-    | `RowVar ((_, `Any), _) -> `Row
-    | `TypeVar ((_, `Base), _) -> `BaseType
-    | `RowVar ((_, `Base), _) -> `BaseRow
-    | `PresenceVar _ -> `Presence
+  | `TypeVar ((_, sk), _) -> `Type sk
+  | `RowVar  ((_, sk), _) -> `Row sk
+  | `PresenceVar _        -> `Presence
 
 let type_arg_of_quantifier =
   function
@@ -521,7 +526,7 @@ let free_type_vars, free_row_type_vars =
       | `Session s               -> free_session_vars' rec_vars s
   and free_session_vars' : S.t -> session_type -> S.t = fun rec_vars ->
     function
-      | `Input (t, s) 
+      | `Input (t, s)
       | `Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_session_vars' rec_vars s)
       | `Select fields
       | `Choice fields -> assert false
@@ -686,7 +691,7 @@ let flatten_row : row -> row = fun (field_env, row_var) ->
               else
                 (let row_var' =
                    Unionfind.fresh (`Recursive (var, (FieldEnv.empty,
-                                                      Unionfind.fresh (`Flexible (var, `Any))))) in
+                                                      Unionfind.fresh (`Flexible (var, (`Any, `Any)))))) in
                  let rec_row' = flatten_row' (IntMap.add var row_var' rec_env) rec_row in
                    Unionfind.change row_var' (`Recursive (var, rec_row'));
                     field_env, row_var')
@@ -1228,18 +1233,25 @@ struct
     | `XmlItem -> "XmlItem" | `DB -> "Database" | `String -> "String"
 
   let subkind : (policy * names) -> subkind -> string =
-    fun (_policy, _vars) ->
-      function
-        | `Any -> ""
-        | `Base -> "::Base"
+    let linearity = function
+      | `Any -> ""
+      | `Unl -> "Unl " in
+    let restriction = function
+      | `Any -> ""
+      | `Base -> "Base"
+      | `Session -> "Session" in
+
+    fun (_policy, _vars) (l, r) ->
+      let s = linearity l ^ restriction r in
+      if s="" then "" else "::"^s
 
   let kind : (policy * names) -> kind -> string =
     fun (_policy, _vars) ->
       function
-        | `Type     -> ""
-        | `BaseType -> "::Base"
-        | `Row      -> "::Row"
-        | `BaseRow  -> "::BaseRow"
+        | `Type sk -> subkind (_policy, _vars) sk
+        | `Row sk ->
+           let s = subkind (_policy, _vars) sk in
+           if s="" then "::Row" else s ^ " Row"
         | `Presence -> "::Presence"
 
   let quantifier : (policy * names) -> quantifier -> string =
@@ -1844,14 +1856,14 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> fresh_rigid_type_variable `Any) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable `Any)) renv,
+    (IntMap.map (fun _ -> fresh_rigid_type_variable (`Any, `Any)) tenv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (`Any, `Any))) renv,
      IntMap.map (fun _ -> fresh_rigid_presence_variable ()) penv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> fresh_type_variable `Any) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable `Any)) renv,
+    (IntMap.map (fun _ -> fresh_type_variable (`Any, `Any)) tenv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (`Any, `Any))) renv,
      IntMap.map (fun _ -> fresh_presence_variable ()) penv)
 
 

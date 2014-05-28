@@ -13,14 +13,20 @@ type 'a point = 'a Unionfind.point
 
 val show_point : 'a Show.show -> 'a Unionfind.point Show.show
 
+
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
 
-type subkind = [ `Any | `Base ]
-    deriving (Show)
+type restriction = [ `Any | `Base | `Session ]
+    deriving (Eq, Show)
+type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
 
-type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
-    deriving (Show)
+type subkind = linearity * restriction
+    deriving (Eq, Show)
+
+type kind = [ `Type of subkind | `Row of subkind | `Presence ]
+    deriving (Show, Eq)
 
 type 't meta_type_var_basis =
     [ `Flexible of (int * subkind)

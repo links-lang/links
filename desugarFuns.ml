@@ -49,7 +49,7 @@ let unwrap_def ((f, Some ft, fpos), (tyvars, lam), location, t) =
                           ([], make_lam rt (pss, body)),
                           location,
                           None), dp],
-                   ((`Var g), dp)), dp))   
+                   ((`Var g), dp)), dp))
     in
       make_lam rt lam
   in
@@ -60,7 +60,7 @@ let unwrap_def ((f, Some ft, fpos), (tyvars, lam), location, t) =
   with a position attached
   (for recursive functions)
 *)
-let unwrap_def_dp (fb, tlam, location, t, pos) =  
+let unwrap_def_dp (fb, tlam, location, t, pos) =
   let (fb, tlam, location, t) = unwrap_def (fb, tlam, location, t) in
     (fb, tlam, location, t, pos)
 
@@ -87,9 +87,9 @@ object (o : 'self_type)
         in
           (o, e, ft)
     | `Section (`Project name) ->
-        let ab, a = Types.fresh_type_quantifier `Any in
-        let rhob, (fields, rho) = Types.fresh_row_quantifier `Any in
-        let effb, eff = Types.fresh_row_quantifier `Any in
+        let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
+        let rhob, (fields, rho) = Types.fresh_row_quantifier (`Any, `Any) in
+        let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
 
         let r = `Record (StringMap.add name (`Present, a) fields, rho) in
 
@@ -97,7 +97,7 @@ object (o : 'self_type)
         let x = gensym ~prefix:"_fun_" () in
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
-          
+
         let pss = [[`Variable (x, Some r, dp), dp]] in
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
