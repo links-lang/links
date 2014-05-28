@@ -356,7 +356,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "give",
   (`PFun (fun _ -> assert false),
-   datatype "(a, !a.s) ~> s",
+   datatype "forall a,s::Session,e::Row.(a, !a.s) ~e~> s",
    IMPURE);
 
   "grab",

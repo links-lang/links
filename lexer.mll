@@ -216,6 +216,7 @@ let kinds = [
  "Row"     , ROW;
  "BaseRow" , BASEROW;
  "Presence", PRESENCE;
+ "Session",  SESSION;
 ]
 
 let subkinds = [

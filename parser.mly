@@ -65,6 +65,7 @@ let attach_kind pos (t, k) =
       | `Row -> `Row (`Any, `Any)
       | `BaseRow -> `Row (`Any, `Base)
       | `Presence -> `Presence
+      | `Session -> `Type (`Any, `Session)
     end,
     `Flexible)
 
@@ -153,7 +154,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE
+%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -294,6 +295,7 @@ kind:
 | ROW                                                          { `Row }
 | BASEROW                                                      { `BaseRow }
 | PRESENCE                                                     { `Presence }
+| SESSION                                                      { `Session }
 
 subkind:
 | ANY                                                          { "Any" }

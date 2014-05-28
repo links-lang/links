@@ -67,8 +67,8 @@ object (self)
 
   (* TODO: implement a proper session kind *)
   method session_type = function
-    | `TypeVar x -> self#add (x, `Type (`Any, `Any), `Flexible)
-    | `RigidTypeVar x -> self#add (x, `Type (`Any, `Any), `Rigid)
+    | `TypeVar x -> self#add (x, `Type (`Any, `Session), `Flexible)
+    | `RigidTypeVar x -> self#add (x, `Type (`Any, `Session), `Rigid)
     | st -> super#session_type st
 
   method row_var = function
