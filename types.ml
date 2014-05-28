@@ -86,6 +86,12 @@ let dom_node = {
   arity      = [] ;
 }
 
+let ap       = {
+  Abstype.id = "AP" ;
+  name       = "AP" ;
+  arity      = [`Type (`Any, `Session)] ;
+}
+
 type typ =
     [ `Not_typed
     | `Primitive of primitive

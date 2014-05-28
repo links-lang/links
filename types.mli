@@ -58,6 +58,7 @@ val process  : Abstype.t
 val list     : Abstype.t
 val event    : Abstype.t
 val dom_node : Abstype.t
+val ap       : Abstype.t
 
 type typ =
     [ `Not_typed

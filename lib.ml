@@ -364,12 +364,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(?a.s) ~> (a, s)",
    IMPURE);
 
-  (* TODO: add support for access points *)
-  (*
-   new     : () ~> AP s
-   accept  : AP s -> s
-   request : AP s -> ~s
-  *)
+  (* access points *)
+  "new",
+  (`PFun (fun _ -> assert false),
+   datatype "() ~> AP(s)",
+   IMPURE);
+
+  "accept",
+  (`PFun (fun _ -> assert false),
+   datatype "(AP(s)) ~> s",
+   IMPURE);
+
+  "request",
+  (`PFun (fun _ -> assert false),
+   datatype "(AP(s)) ~> ~s",
+   IMPURE);
 
   (** Lists and collections **)
   "Nil",
