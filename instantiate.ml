@@ -60,6 +60,41 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
               `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
+          | `Session s -> `Session (inst_session rec_env s)
+    and inst_session : inst_env -> session_type -> session_type = fun rec_env s ->
+      match s with
+      | `Input (t, s) -> `Input (inst rec_env t, inst_session rec_env s)
+      | `Output (t, s) -> `Output (inst rec_env t, inst_session rec_env s)
+      | `Select fields -> assert false
+      | `Choice fields -> assert false
+      | `MetaSessionVar point ->
+        (* HACK:
+           this is just copied and adapted from the code above for `MetaTypeVar point *)
+        let t = Unionfind.find point in
+          begin
+            match t with
+            | `Flexible (var, _)
+            | `Rigid (var, _) ->
+              if IntMap.mem var tenv then
+                TypeUtils.session_of_type (IntMap.find var tenv)
+              else
+                s
+            | `Recursive (var, t) ->
+              let rec_type_env, rec_row_env = rec_env in
+              if IntMap.mem var rec_type_env then
+                (`MetaSessionVar (IntMap.find var rec_type_env))
+              else
+                begin
+                  let var' = Types.fresh_raw_variable () in
+                  let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                  let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
+                  let _ = Unionfind.change point' (`Recursive (var', t')) in
+                    `MetaSessionVar point'
+                end
+            | `Body t -> TypeUtils.session_of_type (inst rec_env t)
+          end
+      | `End -> `End
+
     and inst_presence : inst_env -> presence_flag -> presence_flag = fun rec_env ->
       function
         | `Present -> `Present

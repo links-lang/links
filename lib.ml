@@ -354,14 +354,22 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (** Sessions *)
 
-  (* FIXME: can't use this type until we have support for session
-     type variables in the IR *)
+  "give",
+  (`PFun (fun _ -> assert false),
+   datatype "(a, !a.s) ~> s",
+   IMPURE);
+ 
+  "grab",
+  (`PFun (fun _ -> assert false),
+   datatype "(?a.s) ~> (a, s)",
+   IMPURE);
 
-  (* "give", *)
-  (* (`PFun (fun _ -> assert false), *)
-  (*  datatype "(a, !a.s) ~> s", *)
-  (*  IMPURE); *)
-  
+  (* TODO: add support for access points *)
+  (*
+   new     : () ~> AP s
+   accept  : AP s -> s
+   request : AP s -> ~s
+  *) 
 
   (** Lists and collections **)
   "Nil",

@@ -64,7 +64,13 @@ object (self)
         in
           o#datatype t
     | dt                  -> super#datatype dt
-        
+  
+  (* TODO: implement a proper session kind *)
+  method session_type = function
+    | `TypeVar x -> self#add (x, `Type `Any, `Flexible)
+    | `RigidTypeVar x -> self#add (x, `Type `Any, `Rigid)
+    | st -> super#session_type st
+
   method row_var = function
     | `Closed           -> self
     | `Open (x, k)      -> self#add (x, `Row k, `Flexible)
@@ -159,6 +165,7 @@ struct
         | DBType -> `Primitive `DB
         | Session s -> `Session (session_type var_env alias_env s)
   and session_type var_env alias_env =
+    let lookup_type t = StringMap.find t var_env.tenv in 
     (* HACKY *)
     (* TODO: add session kind and session type variables *)
     function
@@ -174,8 +181,10 @@ struct
       `Choice (List.fold_left
                  (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
                  StringMap.empty fs)
-    | `TypeVar x -> assert false
-    | `RigidTypeVar x -> assert false
+    | `TypeVar s -> (try `MetaSessionVar (lookup_type s)
+                     with NotFound _ -> raise (UnexpectedFreeVar s))
+    | `RigidTypeVar s -> (try `MetaSessionVar (lookup_type s)
+                          with NotFound _ -> raise (UnexpectedFreeVar s))
     | `End -> `End
 
   and presence var_env _alias_env =

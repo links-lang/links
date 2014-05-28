@@ -79,6 +79,19 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
               get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
         | `Application (_, args) ->
             Utility.concat_map (get_type_arg_type_args kind bound_vars) args
+        | `Session s -> get_session_type_args kind bound_vars s
+
+and get_session_type_args : gen_kind -> TypeVarSet.t -> session_type -> type_arg list =
+  fun kind bound_vars s ->
+    let gt = get_type_args kind bound_vars in
+    let gs = get_session_type_args kind bound_vars in
+      match s with
+      | `Input (t, s) 
+      | `Output (t, s) -> gt t @ gs s
+      | `Select fields
+      | `Choice fields -> assert false
+      | `MetaSessionVar point -> gt (`MetaTypeVar point) (* HACK *)
+      | `End -> []
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =
   fun kind bound_vars row_var ->

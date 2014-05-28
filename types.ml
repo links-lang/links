@@ -111,7 +111,8 @@ and session_type =
     [ `Input of typ * session_type
     | `Output of typ * session_type
     | `Select of session_type field_env
-    | `Choice of session_type field_env 
+    | `Choice of session_type field_env
+    | `MetaSessionVar of meta_type_var
     | `End ]
       deriving (Show)
 
@@ -517,6 +518,15 @@ let free_type_vars, free_row_type_vars =
               | `Body t ->
                   free_type_vars' rec_vars t
           end
+      | `Session s               -> free_session_vars' rec_vars s
+  and free_session_vars' : S.t -> session_type -> S.t = fun rec_vars ->
+    function
+      | `Input (t, s) 
+      | `Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_session_vars' rec_vars s)
+      | `Select fields
+      | `Choice fields -> assert false
+      | `MetaSessionVar point -> free_type_vars' rec_vars (`MetaTypeVar point) (* HACK *)
+      | `End -> S.empty
   and free_flag_type_vars' : S.t -> presence_flag -> S.t =
     fun rec_vars ->
       function
@@ -792,11 +802,12 @@ and normalise_session rec_names s =
   let nt = normalise_datatype rec_names in
   let ns = normalise_session rec_names in
     match s with
-    | `Input (t, s)  -> `Input (nt t, ns s)
-    | `Output (t, s) -> `Input (nt t, ns s)
-    | `Select bs     -> `Select (StringMap.map ns bs)
-    | `Choice bs     -> `Choice (StringMap.map ns bs)
-    | `End           -> `End
+    | `Input (t, s)         -> `Input (nt t, ns s)
+    | `Output (t, s)        -> `Input (nt t, ns s)
+    | `Select bs            -> `Select (StringMap.map ns bs)
+    | `Choice bs            -> `Choice (StringMap.map ns bs)
+    | `MetaSessionVar point -> s (* FIXME: should actually look inside s! *)
+    | `End                  -> `End
 
 let concrete_type = concrete_type IntSet.empty
 
@@ -1123,6 +1134,7 @@ struct
         (fun _ s tvs ->
           free_bound_session_type_vars ~include_aliases bound_vars s @ tvs)
         bs []
+    | `MetaSessionVar point -> free_bound_type_vars ~include_aliases bound_vars (`MetaTypeVar point)
     | `End -> []
 
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =

@@ -89,6 +89,13 @@ let rec project_type name t = match concrete_type t with
   | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
+let rec session_of_type t = match concrete_type t with
+  | `ForAll (_, t) -> session_of_type t
+  | `Session s -> s
+  | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
+  | t -> 
+      error ("Attempt to convert non-session type to session type "^string_of_datatype t)
+
 (*
   This returns the type obtained by removing a set of
   fields from a record.
@@ -214,11 +221,12 @@ let record_without t names =
     | _ -> assert false
 
 let rec dual_session = function
-  | `Input (t, s)  -> `Output (t, dual_session s)
-  | `Output (t, s) -> `Input (t, dual_session s)
-  | `Select bs     -> `Choice (StringMap.map dual_session bs)
-  | `Choice bs     -> `Select (StringMap.map dual_session bs)
-  | `End           -> `End
+  | `Input (t, s)         -> `Output (t, dual_session s)
+  | `Output (t, s)        -> `Input (t, dual_session s)
+  | `Select bs            -> `Choice (StringMap.map dual_session bs)
+  | `Choice bs            -> `Select (StringMap.map dual_session bs)
+  | `MetaSessionVar point -> failwith "Not implemented duality for type variables yet"
+  | `End                  -> `End
 
 let dual_type t = match concrete_type t with
   | `Session s -> `Session (dual_session s)
