@@ -1187,9 +1187,12 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
               then ()
               else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s))))
              bs' ()
-      (* TODO: unification for session variables and duality *)
-      | `Dual s, s' -> assert false (* us (s, TypeUtils.dual_session s') *)
-      | s, `Dual s' -> assert false
+      | `MetaSessionVar point, s' -> unify' rec_env (`MetaTypeVar point, `Session s')
+      | s, `MetaSessionVar point -> unify' rec_env (`Session s, `MetaTypeVar point)
+      (* NOTE: the order of pattern matching is important
+         - duality must come after type variables *)
+      | `Dual s, s'
+      | s, `Dual s' -> us (s, TypeUtils.dual_session s')
       | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =
