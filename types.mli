@@ -91,6 +91,7 @@ and session_type =
     | `Select of session_type field_env
     | `Choice of session_type field_env
     | `MetaSessionVar of meta_type_var
+    | `Dual of session_type
     | `End ]
       deriving (Show)
 

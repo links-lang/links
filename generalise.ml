@@ -91,6 +91,7 @@ and get_session_type_args : gen_kind -> TypeVarSet.t -> session_type -> type_arg
       | `Select fields
       | `Choice fields -> assert false
       | `MetaSessionVar point -> gt (`MetaTypeVar point) (* HACK *)
+      | `Dual s -> gs s
       | `End -> []
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =

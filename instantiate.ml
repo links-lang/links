@@ -93,6 +93,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                 end
             | `Body t -> TypeUtils.session_of_type (inst rec_env t)
           end
+      | `Dual s -> `Dual (inst_session rec_env s)
       | `End -> `End
 
     and inst_presence : inst_env -> presence_flag -> presence_flag = fun rec_env ->

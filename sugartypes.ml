@@ -127,6 +127,7 @@ and session_type =
     | `Choice of row
     | `TypeVar of name
     | `RigidTypeVar of name
+    | `Dual of session_type
     | `End ]
       deriving (Show)
 

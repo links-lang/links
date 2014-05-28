@@ -183,6 +183,7 @@ struct
                      with NotFound _ -> raise (UnexpectedFreeVar s))
     | `RigidTypeVar s -> (try `MetaSessionVar (lookup_type s)
                           with NotFound _ -> raise (UnexpectedFreeVar s))
+    | `Dual s -> `Dual (session_type var_env alias_env s)
     | `End -> `End
 
   and presence var_env _alias_env =

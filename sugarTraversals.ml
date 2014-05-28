@@ -489,6 +489,8 @@ class map =
         let _x = o#name _x in `TypeVar _x
       | `RigidTypeVar _x ->
         let _x = o#name _x in `RigidTypeVar _x
+      | `Dual _x ->
+        let _x = o#session_type _x in `Dual _x
       | `End -> `End
 
     method type_arg : type_arg -> type_arg =
@@ -999,6 +1001,8 @@ class fold =
         let o = o#name _x in o
       | `RigidTypeVar _x ->
         let o = o#name _x in o
+      | `Dual _x ->
+        let o = o#session_type _x in o
       | `End -> o
 
     method type_arg : type_arg -> 'self_type =
@@ -1607,6 +1611,8 @@ class fold_map =
         let (o, _x) = o#name _x in (o, `TypeVar _x)
       | `RigidTypeVar _x ->
         let (o, _x) = o#name _x in (o, `RigidTypeVar _x)
+      | `Dual _x ->
+        let (o, _x) = o#session_type _x in (o, `Dual _x)
       | `End -> (o, `End)
 
     method type_arg : type_arg -> ('self_type * type_arg) =

@@ -1187,6 +1187,9 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
               then ()
               else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s))))
              bs' ()
+      (* TODO: unification for session variables and duality *)
+      | `Dual s, s' -> assert false (* us (s, TypeUtils.dual_session s') *)
+      | s, `Dual s' -> assert false
       | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =

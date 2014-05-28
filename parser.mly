@@ -864,6 +864,7 @@ session_type_top:
 | QUESTION datatype DOT session_type                           { `Input ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
+| TILDE session_type                                           { `Dual $2 }
 | END                                                          { `End }
 
 session_type:

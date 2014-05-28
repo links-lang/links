@@ -118,6 +118,7 @@ and session_type =
     | `Select of session_type field_env
     | `Choice of session_type field_env
     | `MetaSessionVar of meta_type_var
+    | `Dual of session_type
     | `End ]
       deriving (Show)
 
@@ -531,6 +532,7 @@ let free_type_vars, free_row_type_vars =
       | `Select fields
       | `Choice fields -> assert false
       | `MetaSessionVar point -> free_type_vars' rec_vars (`MetaTypeVar point) (* HACK *)
+      | `Dual s -> free_session_vars' rec_vars s
       | `End -> S.empty
   and free_flag_type_vars' : S.t -> presence_flag -> S.t =
     fun rec_vars ->
@@ -808,10 +810,11 @@ and normalise_session rec_names s =
   let ns = normalise_session rec_names in
     match s with
     | `Input (t, s)         -> `Input (nt t, ns s)
-    | `Output (t, s)        -> `Input (nt t, ns s)
+    | `Output (t, s)        -> `Output (nt t, ns s)
     | `Select bs            -> `Select (StringMap.map ns bs)
     | `Choice bs            -> `Choice (StringMap.map ns bs)
     | `MetaSessionVar point -> s (* FIXME: should actually look inside s! *)
+    | `Dual s               -> `Dual (ns s)
     | `End                  -> `End
 
 let concrete_type = concrete_type IntSet.empty
@@ -1140,6 +1143,7 @@ struct
           free_bound_session_type_vars ~include_aliases bound_vars s @ tvs)
         bs []
     | `MetaSessionVar point -> free_bound_type_vars ~include_aliases bound_vars (`MetaTypeVar point)
+    | `Dual s -> free_bound_session_type_vars ~include_aliases bound_vars s
     | `End -> []
 
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
@@ -1652,6 +1656,7 @@ and session_flexible_type_vars bound_vars =
       (fun _ s ftvs ->
         TypeVarMap.union_all [session_flexible_type_vars bound_vars s; ftvs])
       bs TypeVarMap.empty
+  | `Dual s -> session_flexible_type_vars bound_vars s
   | `End -> TypeVarMap.empty
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
@@ -1851,6 +1856,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
     | `Output (t, s) -> union [make_env boundvars t; make_env_s boundvars s]
     | `Select bs
     | `Choice bs     -> StringMap.fold (fun _ s envs -> union [make_env_s boundvars s; envs]) bs empties
+    | `Dual s        -> make_env_s boundvars s
     | `End           -> empties
   in make_env S.empty
 
