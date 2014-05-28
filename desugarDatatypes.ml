@@ -88,9 +88,9 @@ exception UnexpectedFreeVar of string
 
 module Desugar =
 struct
-  let rec datatype ({tenv=tenv; renv=renv; penv=penv} as var_env) (alias_env : Types.tycon_environment) t =
+  let rec datatype var_env (alias_env : Types.tycon_environment) t =
   let datatype var_env t = datatype var_env alias_env t in
-    let lookup_type t = StringMap.find t tenv in 
+    let lookup_type t = StringMap.find t var_env.tenv in 
       match t with
         | TypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
                              with NotFound _ -> raise (UnexpectedFreeVar s))
@@ -103,8 +103,8 @@ struct
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Flexible (var, `Any)) in
-            let tenv = StringMap.add name point tenv in
-            let _ = Unionfind.change point (`Recursive (var, datatype {tenv=tenv; renv=renv; penv=penv} t)) in
+            let tenv = StringMap.add name point var_env.tenv in
+            let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
         | ForallType (qs, t) ->
             let desugar_quantifier (var_env, qs) =
@@ -178,8 +178,8 @@ struct
     | `RigidTypeVar x -> assert false
     | `End -> `End
 
-  and presence ({tenv=_; renv=_; penv=penv}) _alias_env =
-    let lookup_flag = flip StringMap.find penv in
+  and presence var_env _alias_env =
+    let lookup_flag = flip StringMap.find var_env.penv in
       function
         | `Absent -> `Absent
         | `Present -> `Present
@@ -189,8 +189,8 @@ struct
               try `Var (lookup_flag name)
               with NotFound _ -> raise (UnexpectedFreeVar name)
             end
-  and row ({tenv=tenv; renv=renv; penv=penv} as var_env) alias_env (fields, rv) =
-    let lookup_row = flip StringMap.find renv in
+  and row var_env alias_env (fields, rv) =
+    let lookup_row = flip StringMap.find var_env.renv in
     let seed =
       match rv with
         | `Closed -> Types.make_empty_closed_row ()
@@ -203,8 +203,8 @@ struct
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Flexible (var, `Any)) in
-            let renv = StringMap.add name point renv in
-            let _ = Unionfind.change point (`Recursive (var, row {tenv=tenv; renv=renv; penv=penv} alias_env r)) in
+            let renv = StringMap.add name point var_env.renv in
+            let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
               (StringMap.empty, point) in
     let fields =
         List.map
@@ -266,10 +266,8 @@ struct
      here (except for the parameters, of course). *)
   let typename alias_env name args (rhs : Sugartypes.datatype') = 
       try
-        let empty_envs =
-          {tenv=StringMap.empty; renv=StringMap.empty; penv=StringMap.empty} in
         let args, envs = 
-          ListLabels.fold_right ~init:([], empty_envs) args
+          ListLabels.fold_right ~init:([], empty_env) args
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with
