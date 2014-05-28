@@ -36,7 +36,7 @@ object (o : 'self_type)
             [(`Tuple []), dp], [(`TupleLit []), dp], [Types.unit_type]
         | `FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
-            let t = Types.fresh_type_variable `Any in
+            let t = Types.fresh_type_variable (`Any, `Any) in
             let () =
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
@@ -64,7 +64,7 @@ object (o : 'self_type)
   method private formlet_body_node : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) =
     fun e ->
       let dp = Sugartypes.dummy_position in
-        match e with             
+        match e with
           | `TextNode s ->
               let e =
                 `FnAppl
@@ -193,7 +193,7 @@ object (o : 'self_type)
                 ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
                  [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], (pss, yields)), dp]), dp])
         in
-          (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)             
+          (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e
 end
 

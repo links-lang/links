@@ -118,7 +118,7 @@ let rec erase_type_poly names t = match concrete_type t with
           (fun name (qs, field_env) ->
              match StringMap.lookup name field_env with
                | Some (`Present, t) ->
-                   let q, t = fresh_type_quantifier `Any in
+                   let q, t = fresh_type_quantifier (`Any, `Any) in
                      if closed then
                        q::qs, StringMap.remove name field_env
                      else
@@ -192,7 +192,7 @@ let rec table_needed_type t = match concrete_type t with
       error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
 
 let inject_type name t =
-  `Variant (make_singleton_open_row (name, (`Present, t)) `Any)
+  `Variant (make_singleton_open_row (name, (`Present, t)) (`Any, `Any))
 
 let abs_type _ = assert false
 let app_type _ _ = assert false

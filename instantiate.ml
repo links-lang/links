@@ -37,13 +37,13 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                           datatype
                     | `Recursive (var, t) ->
                         Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
-                        
+
                         if IntMap.mem var rec_type_env then
                           (`MetaTypeVar (IntMap.find var rec_type_env))
                         else
                           begin
                             let var' = Types.fresh_raw_variable () in
-                            let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                            let point' = Unionfind.fresh (`Flexible (var', (`Any, `Any))) in
                             let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
                             let _ = Unionfind.change point' (`Recursive (var', t')) in
                               `MetaTypeVar point'
@@ -56,7 +56,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
           | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
           | `ForAll (qs, t) ->
               `ForAll (qs, inst rec_env t)
-          | `Alias ((name, ts), d) -> 
+          | `Alias ((name, ts), d) ->
               `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
@@ -109,16 +109,16 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                     else
                       `Var point
                 | `Body f ->
-                    inst_presence rec_env f                    
+                    inst_presence rec_env f
             end
     and inst_row : inst_env -> row -> row = fun rec_env row ->
       (* BUG?
-         
+
          If we change this to unwrap_row then it sometimes leads to
          divergence during type inference. Is this the correct
          behaviour? Why does this happen? *)
       let field_env, row_var = flatten_row row in
-        
+
       let is_closed =
         match Unionfind.find row_var with
           | `Closed -> true
@@ -144,7 +144,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                          in
                            StringMap.add label (f, inst rec_env t) field_env'
                      | `Body f ->
-                         add f                           
+                         add f
            in
              add f)
         field_env
@@ -170,7 +170,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                     else
                       begin
                         let var' = Types.fresh_raw_variable () in
-                        let point' = Unionfind.fresh (`Flexible (var', `Any)) in
+                        let point' = Unionfind.fresh (`Flexible (var', (`Any, `Any))) in
                         let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
                         let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
                           (StringMap.empty, point')
@@ -195,7 +195,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
         let () =
           Debug.if_set (show_instantiation)
             (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
-          
+
         let wrap v =
           if rigid then `Rigid v
           else `Flexible v in
@@ -242,11 +242,11 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           if Settings.get_value quantified_instantiation then
               tys, `ForAll (box_quantifiers qs, body)
           else
-            tys, body           
+            tys, body
     | t -> [], t
 
 (** instantiate_rigid t
-    
+
     as instantiate_typ, but instantiates the bound type variables with fresh
     rigid type variables
 *)
@@ -260,7 +260,7 @@ let instantiate_typ = instantiate_typ false
 (*         let () = *)
 (*           Debug.if_set (show_instantiation) *)
 (*             (fun () -> "Instantiating datatype (rigidly): " ^ string_of_datatype dtype) in *)
-          
+
 (*         let typ (var, subkind) (tenv, renv, penv, tys) = *)
 (*           let t = fresh_rigid_type_variable subkind in *)
 (*             IntMap.add var t tenv, renv, penv, `Type t :: tys in *)
@@ -314,14 +314,14 @@ let rigid : environment -> string -> type_arg list * datatype =
 (*        failwith ("Variable '"^ var ^ "' does not refer to a declaration") *)
     in
       instantiate_rigid t
-        
+
 let var = instantiate
 let typ = instantiate_typ
 let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = 
+let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
   fun t tyargs ->
 (*    Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let t, vars =
@@ -336,11 +336,11 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
              | (`TypeVar ((var, _subkind), _), `Type t) ->
                  (IntMap.add var t tenv, renv, penv)
              | (`RowVar ((var, _subkind), _), `Row row) ->
-                 (* 
+                 (*
                     QUESTION:
-                    
+
                     What is the right way to put the row in the row_var environment?
-                    
+
                     We can simply wrap it in a `Body tag, but then we need to be careful
                     about which bits of the compiler are assuming that
                     rows are already flattened. Maybe this is OK...
@@ -410,9 +410,9 @@ let replace_quantifiers t qs' =
           `ForAll (Types.box_quantifiers qs', apply_type t tyargs)
     | t -> t
 
-let alias name tyargs env = 
+let alias name tyargs env =
   (* This is just type application.
-     
+
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
   match (SEnv.find env name : Types.tycon_spec option) with

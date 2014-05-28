@@ -271,15 +271,31 @@ fun rec_env ->
                        else
                          (* presumably this should always be a no-op *)
                          Unionfind.union lpoint rpoint
-                   | `Flexible (_, lkind), `Flexible (rvar, rkind) ->
+                   | `Flexible (lvar, (llin,lrest)), `Flexible (rvar, (rlin,rrest)) ->
                        Unionfind.union lpoint rpoint;
                        begin
-                         match lkind, rkind with
-                           | `Base, `Any ->
-                               Unionfind.change rpoint (`Flexible (rvar, `Base))
-                           | _ -> ()
+                         let (llin',rlin') =
+                           match llin, rlin with
+                             | `Unl, _ -> (`Unl, `Unl)
+                             | _, `Unl -> (`Unl, `Unl)
+                             | _       -> (llin, rlin) in
+                         let (lrest',rrest') =
+                           match lrest, rrest with
+                             | `Base, `Any
+                             | `Any, `Base -> (`Base, `Base)
+                             | `Any, `Session
+                             | `Session, `Any -> (`Session, `Session)
+                             | `Base, `Session ->
+                                 raise (Failure (`Msg ("Cannot unify base type variable " ^ string_of_int lvar ^
+                                                         " with session type variable " ^ string_of_int rvar)))
+                             | `Session, `Base ->
+                                 raise (Failure (`Msg ("Cannot unify session type variable " ^ string_of_int lvar ^
+                                                         " with base type variable " ^ string_of_int rvar)))
+                             | _ -> (lrest, rrest) in
+                         Unionfind.change lpoint (`Flexible (lvar, (llin, lrest)));
+                         Unionfind.change rpoint (`Flexible (rvar, (rlin, rrest)))  (* TODO: unnecessary updates to lpoint and rpoint? *)
                        end
-                   | `Flexible (var, subkind), _ ->
+                   | `Flexible (var, (_, subkind)), _ ->
                        (if var_is_free_in_type var t2 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
                            if subkind = `Base then
@@ -295,7 +311,7 @@ fun rec_env ->
                            raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                                    " with the non-base type "^ string_of_datatype t2)));
                        Unionfind.union lpoint rpoint
-                   | _, `Flexible (var, subkind) ->
+                   | _, `Flexible (var, (_, subkind)) ->
                        (if var_is_free_in_type var t1 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
                            if subkind = `Base then
@@ -396,7 +412,7 @@ fun rec_env ->
                              raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
                                                      " with the type "^ string_of_datatype t)))
                      end
-                 | `Flexible (var, subkind) ->
+                 | `Flexible (var, (_, subkind)) ->
                      if var_is_free_in_type var t then
                        begin
                          Debug.if_set (show_recursion)
@@ -863,16 +879,16 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | _ -> assert false in
 
         (* unify row_var with `RigidRowVar var *)
-        let rigidify_empty_row_var (point, (var, subkind)) : row_var -> unit = fun point' ->
+        let rigidify_empty_row_var (point, (var, (lin, rest))) : row_var -> unit = fun point' ->
           match Unionfind.find point' with
             | `Closed ->
                 raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
-            | `Flexible (_, subkind') ->
-                if subkind = `Any && subkind' = `Base then
+            | `Flexible (_, (lin', rest')) ->
+                if rest = `Any && rest' = `Base then
                   raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
-                Unionfind.change point' (`Rigid (var, subkind))
+                Unionfind.change point' (`Rigid (var, (lin, rest)))
             | `Rigid (var', _) when var=var' -> ()
-            | `Rigid (var', subkind') when subkind=subkind' && compatible_quantifiers (var, var') rec_env.qs ->
+            | `Rigid (var', (_, rest')) when rest=rest' && compatible_quantifiers (var, var') rec_env.qs ->
               Unionfind.union point point'
             | `Rigid (var', _) ->
                 raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
@@ -893,17 +909,17 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
               else
                 raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                               ^string_of_row extension_row)))
-            | `Flexible (var, subkind) ->
+            | `Flexible (var, (_, rest)) ->
               if TypeVarSet.mem var (free_row_type_vars extension_row) then
                 begin
-                  if subkind = `Base then
+                  if rest = `Base then
                     raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
                                              " with the body "^ string_of_row extension_row)));
                   rec_row_intro point (var, extension_row)
                 end
               else
                 begin
-                  if subkind = `Base then
+                  if rest = `Base then
                     if Types.is_baseable_row extension_row then
                       Types.basify_row extension_row
                     else
@@ -1096,7 +1112,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                                        (rfield_env', Unionfind.fresh `Closed))
               else
                 begin
-                  let fresh_row_var = fresh_row_variable `Any in
+                  let fresh_row_var = fresh_row_variable (`Any, `Any) in
                     (* each row can contain fields missing from the other;
                        thus we call extend_field_env once in each direction *)
                   let rextension =

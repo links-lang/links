@@ -69,8 +69,14 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
-type subkind = [`Any | `Base]
-    deriving (Show)
+
+type restriction = [ `Any | `Base | `Session ]
+    deriving (Eq, Show)
+type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
+
+type subkind = linearity * restriction
+    deriving (Eq, Show)
 
 type freedom = [`Flexible | `Rigid]
     deriving (Show)

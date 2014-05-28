@@ -3,4 +3,3 @@
 make test-raw | perl -lne \
   '($f) = /(\d+) failures/;\
    print "1 failure" if ($f == 1); print "$f failures" if ($f > 1); $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'
-
