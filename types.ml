@@ -1271,7 +1271,7 @@ struct
         if not(policy.flavours) || is_rigid_quantifier q then
           ""
         else
-          "?"
+          "%"
       in
         match q with
           | `TypeVar ((var, _), _)
@@ -1310,9 +1310,9 @@ struct
                   | `Flexible (var, k) when policy.flavours ->
                       let name, spec = Vars.find_spec var vars in
                         (if hide_fresh_check var spec then
-                           "?"
+                           "%"
                          else
-                           "?" ^ name) ^ sk k
+                           "%" ^ name) ^ sk k
                   | `Rigid (var, k)
                   | `Flexible (var, k) ->
                       let name, spec = Vars.find_spec var vars in
@@ -1521,8 +1521,8 @@ struct
       | `Flexible (var, k) when policy.flavours ->
           let name, (_, _, count) = Vars.find_spec var vars in
             Some
-              ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "?"
-                else ("?" ^ name)) ^ subkind p k)
+              ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "%"
+                else ("%" ^ name)) ^ subkind p k)
       | `Rigid (var, k)
       | `Flexible (var, k) ->
           let name, (_, _, count) = Vars.find_spec var vars in
