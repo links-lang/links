@@ -113,6 +113,7 @@ val box_list : t list -> t
 val unbox_list : t -> t list
 val box_unit : unit -> t 
 val unbox_unit : t -> unit
+val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
 
 val intmap_of_record : t -> t Utility.intmap option

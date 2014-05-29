@@ -12,6 +12,6 @@ let alias_env : Types.tycon_environment =
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;
       "DomNode" , `Abstract Types.dom_node;
-      "AP"      , `Abstract Types.ap;
+      "AP"      , `Abstract Types.access_point;
     ]
 

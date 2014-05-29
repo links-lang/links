@@ -86,7 +86,7 @@ let dom_node = {
   arity      = [] ;
 }
 
-let ap       = {
+let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
   arity      = [`Type (`Any, `Session)] ;

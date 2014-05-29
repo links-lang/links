@@ -621,6 +621,7 @@ and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function 
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")

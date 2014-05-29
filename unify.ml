@@ -431,6 +431,7 @@ fun rec_env ->
                      else
                        (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
                         if subkind = `Base then
+                          (* TODO: do something similar for the session subkind *)
                           if Types.is_baseable_type t then
                             Types.basify_type t
                           else

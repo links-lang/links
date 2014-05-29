@@ -2,6 +2,73 @@ open Notfound
 
 open Utility
 
+module Session = struct
+  type apid = int
+  type cid = int
+
+  type ap_state = Balanced | Accepting of cid list | Requesting of cid list
+
+  let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
+  let channels = (Hashtbl.create 10000 : (cid, Value.t Queue.t) Hashtbl.t)
+
+  let generator () =
+    let i = ref 0 in
+      fun () -> incr i; !i
+
+  let fresh_apid = generator ()
+  let fresh_cid = generator ()
+
+  let new_channel () = 
+    let cid = fresh_cid () in
+      Hashtbl.add channels cid (Queue.create ());
+      cid
+
+  let new_access_point () =
+    let apid = fresh_apid () in
+      Hashtbl.add access_points apid Balanced;
+      apid
+
+  let accept apid =
+    let state = Hashtbl.find access_points apid in
+    let (cid, state') =
+      match state with
+      | Balanced -> let cid = new_channel () in (cid, Accepting [cid])
+      | Accepting cids -> let cid = new_channel () in (cid, Accepting (cid :: cids))
+      | Requesting [cid] -> (cid, Balanced)
+      | Requesting (cid::cids) -> (cid, Requesting cids)
+    in
+      Hashtbl.replace access_points apid state';
+      cid
+
+  let request apid =
+    let state = Hashtbl.find access_points apid in
+    let (cid, state') =
+      match state with
+      | Balanced -> let cid = new_channel () in (cid, Requesting [cid])
+      | Requesting cids -> let cid = new_channel () in (cid, Requesting (cid :: cids))
+      | Accepting [cid] -> (cid, Balanced)
+      | Accepting (cid::cids) -> (cid, Accepting cids)
+    in
+      Hashtbl.replace access_points apid state';
+      cid
+  
+  (* TODO: be consistent about checking lookup operations *)
+  exception UnknownChannelID of cid
+
+  let send msg cid =
+    try 
+      Queue.push msg (Hashtbl.find channels cid)
+    with Notfound.NotFound _ -> raise (UnknownChannelID cid)
+
+  let receive cid =
+    let channel = Hashtbl.find channels cid in
+      if not (Queue.is_empty channel) then
+        Some (Queue.pop channel)
+      else
+        None
+end
+
+
 module Eval = struct
   open Ir
 
@@ -237,6 +304,32 @@ module Eval = struct
                 Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
+    (* Session stuff *)
+    | `PrimitiveFunction ("new", _), [] ->
+      let apid = Session.new_access_point () in
+        apply_cont cont env (`Int (Num.num_of_int apid))
+    | `PrimitiveFunction ("accept", _), [ap] ->
+      let apid = Num.int_of_num (Value.unbox_int ap) in
+        apply_cont cont env (`Int (Num.num_of_int (Session.accept apid)))
+    | `PrimitiveFunction ("request", _), [ap] ->
+      let apid = Num.int_of_num (Value.unbox_int ap) in
+        apply_cont cont env (`Int (Num.num_of_int (Session.request apid)))
+    | `PrimitiveFunction ("give", _), [v; c] ->
+      Session.send v (Num.int_of_num (Value.unbox_int c));
+      apply_cont cont env c
+    | `PrimitiveFunction ("grab", _), [c] ->
+      begin
+        let c' = Value.unbox_int c in
+          match Session.receive (Num.int_of_num (Value.unbox_int c)) with
+          | Some v ->
+            apply_cont cont env (Value.box_pair v c)
+          | None ->
+            let grab_frame =
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Constant (`Int c')])
+            in 
+              Proc.block_current (grab_frame::cont, `Record [("1", c)]);
+              switch_context env
+      end          
     | `PrimitiveFunction (n,None), args -> 
 	apply_cont cont env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args -> 

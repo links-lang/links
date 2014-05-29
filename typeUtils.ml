@@ -225,7 +225,16 @@ let rec dual_session = function
   | `Output (t, s)        -> `Input (t, dual_session s)
   | `Select bs            -> `Choice (StringMap.map dual_session bs)
   | `Choice bs            -> `Select (StringMap.map dual_session bs)
-  | `MetaSessionVar point -> failwith "Not implemented duality for type variables yet"
+  | `MetaSessionVar point ->
+    begin
+      match Unionfind.find point with
+      | `Flexible _
+      | `Rigid _
+      | `Recursive _               -> `Dual (`MetaSessionVar point)
+      | `Body (`Session s)         -> dual_session s
+      | `Body (`MetaTypeVar point) -> dual_session (`MetaSessionVar point)
+      | `Body t                    -> error ("Attempt to dualise non-session type: " ^ string_of_datatype t)
+    end
   | `Dual s               -> s
   | `End                  -> `End
 
