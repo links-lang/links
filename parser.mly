@@ -69,29 +69,17 @@ let attach_kind pos (t, k) =
     end,
     `Flexible)
 
-let attach_subkind pos (t, k) =
-   match k with
-     | "Any" -> t
-     | "Base" ->
-         begin
-           match t with
-             | TypeVar (x, _) -> TypeVar (x, (`Any, `Base))
-             | RigidTypeVar (x, _) -> RigidTypeVar (x, (`Any, `Base))
-             | _ -> assert false
-         end
-     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
+let attach_subkind pos (t, restriction) =
+  match t with
+  | TypeVar (x, (linearity, _)) -> TypeVar (x, (linearity, restriction))
+  | RigidTypeVar (x, (linearity, _)) -> RigidTypeVar (x, (linearity, restriction))
+  | _ -> assert false
 
-let attach_row_subkind pos (r, k) =
-   match k with
-     | "Any" -> r
-     | "Base" ->
-         begin
-           match r with
-             | `Open (x, _) -> `Open (x, (`Any, `Base))
-             | `OpenRigid (x, _) -> `OpenRigid (x, (`Any, `Base))
-             | _ -> assert false
-         end
-     | s -> raise (ConcreteSyntaxError ("Unknown subkind", pos))
+let attach_row_subkind pos (r, restriction) =
+  match r with
+  | `Open (x, (linearity, _)) -> `Open (x, (linearity, restriction))
+  | `OpenRigid (x, (linearity, _)) -> `OpenRigid (x, (linearity, restriction))
+  | _ -> assert false
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -298,8 +286,9 @@ kind:
 | SESSION                                                      { `Session }
 
 subkind:
-| ANY                                                          { "Any" }
-| BASE                                                         { "Base" }
+| ANY                                                          { `Any }
+| BASE                                                         { `Base }
+| SESSION                                                      { `Session }
 
 typearg:
 | VARIABLE                                                     { (($1, `Type (`Any, `Any), `Flexible), None) }

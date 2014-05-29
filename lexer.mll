@@ -220,8 +220,9 @@ let kinds = [
 ]
 
 let subkinds = [
- "Any"    , ANY;
- "Base"   , BASE;
+ "Any"     , ANY;
+ "Base"    , BASE;
+ "Session" , SESSION;
 ]
 
 exception LexicalError of (string * Lexing.position)
