@@ -782,16 +782,19 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                   unify_presence' rec_env (f, f');
                   unify' rec_env (t, t');
                   extension
-                with e ->
+                with Failure e ->
                   if closed then
                     begin
                       (* if both rows are closed then absence is all we need *)
-                      unify_presence' rec_env (f, `Absent);
-                      unify_presence' rec_env (f', `Absent);
-                      extension
+                      try
+                        unify_presence' rec_env (f, `Absent);
+                        unify_presence' rec_env (f', `Absent);
+                        extension
+                      with Failure _ ->
+                        raise (Failure e)
                     end
                   else
-                    raise e
+                    raise (Failure e)
             else
               StringMap.add label field_spec extension
           ) env0 (StringMap.empty) in
@@ -814,16 +817,19 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     unify_presence' rec_env (f, f');
                     unify' rec_env (t, t')
                   with
-                      e ->
+                      Failure e ->
                         begin
                           if closed then
                             begin
                               (* if both rows are closed then absence is all we need *)
-                              unify_presence' rec_env (f, `Absent);
-                              unify_presence' rec_env (f', `Absent)
+                              try
+                                unify_presence' rec_env (f, `Absent);
+                                unify_presence' rec_env (f', `Absent)
+                              with Failure _ ->
+                                raise (Failure e)
                             end
                           else
-                            raise e
+                            raise (Failure e)
                         end
               else
                 match f with
@@ -1193,10 +1199,8 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
          - duality must come after type variables *)
       | `Dual s, s'
       | s, `Dual s' -> us (s, TypeUtils.dual_session s')
-      | `End, `End -> ()
-      | s, s' -> failwith "Failed to unify session types"
-
-(* raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s'))) *)
+(*      | `End, `End -> ()*)
+      | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =
   unify' {tenv=IntMap.empty; renv=IntMap.empty; qs=(0, IntMap.empty, IntMap.empty)} (t1, t2)
