@@ -18,6 +18,8 @@ let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarde
 
 type error = [
   `Msg of string
+(* TODO: is there a need to support errors other than plain
+   messages? *)
 | `PresentAbsentClash of string * Types.row * Types.row
 ]
 
@@ -253,6 +255,8 @@ fun rec_env ->
       begin
         match (t1, t2) with
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
+          | `Session (`MetaSessionVar point), _ -> unify' rec_env (`MetaTypeVar point, t2)
+          | _, `Session (`MetaSessionVar point) -> unify' rec_env (t1, `MetaTypeVar point)
           | `Primitive x, `Primitive y when x = y -> ()
           | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
               if Unionfind.equivalent lpoint rpoint then

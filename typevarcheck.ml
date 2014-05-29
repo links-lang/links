@@ -64,6 +64,20 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars var) ts
+        | `Session s -> is_guarded_session bound_vars var s
+and is_guarded_session : TypeVarSet.t -> int -> session_type -> bool =
+  fun bound_vars var s ->
+    let isg = is_guarded bound_vars var in
+    let isgs = is_guarded_session bound_vars var in
+      match s with
+      | `Input (t, s) 
+      | `Output (t, s) -> isg t && isgs s
+      (* TODO: implement check for select and choice *)
+      | `Select fields -> assert false
+      | `Choice fields -> assert false
+      | `MetaSessionVar point -> isg (`MetaTypeVar point)
+      | `Dual s -> isgs s
+      | `End -> true
 and is_guarded_row : bool -> TypeVarSet.t -> int -> row -> bool =
   fun check_fields bound_vars var (fields, row_var) ->
     (if check_fields then       
@@ -98,6 +112,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
     let isp = is_positive bound_vars var in
     let isn = is_negative bound_vars var in
     let isnr = is_negative_row bound_vars var in
+    let isns = is_negative_session bound_vars var in
       match t with
         | `Not_typed -> false
         | `Primitive _ -> false
@@ -120,6 +135,20 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `Alias (_, t) -> isn t
         | `Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars var) ts
+        | `Session s -> isns s
+and is_negative_session : TypeVarSet.t -> int -> session_type -> bool =
+  fun bound_vars var s ->
+    let isn = is_negative bound_vars var in
+    let isns = is_negative_session bound_vars var in
+      match s with
+      | `Input (t, s) 
+      | `Output (t, s) -> isn t && isns s
+      (* TODO: implement check for select and choice *)
+      | `Select fields -> assert false
+      | `Choice fields -> assert false
+      | `MetaSessionVar point -> isn (`MetaTypeVar point)
+      | `Dual s -> isns s
+      | `End -> true
 and is_negative_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var) ->
     is_negative_field_env bound_vars var field_env || is_negative_row_var bound_vars var row_var
@@ -152,6 +181,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
     let isp = is_positive bound_vars var in
     let isn = is_negative bound_vars var in
     let ispr = is_positive_row bound_vars var in
+    let isps = is_positive_session bound_vars var in
       match t with
         | `Not_typed -> false
         | `Primitive _ -> false
@@ -174,6 +204,20 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `Alias (_, t) -> isp t
         | `Application (s, ts) ->
             List.exists (is_positive_type_arg bound_vars var) ts
+        | `Session s -> isps s
+and is_positive_session : TypeVarSet.t -> int -> session_type -> bool =
+  fun bound_vars var s ->
+    let isp = is_positive bound_vars var in
+    let isps = is_positive_session bound_vars var in
+      match s with
+      | `Input (t, s) 
+      | `Output (t, s) -> isp t && isps s
+      (* TODO: implement check for select and choice *)
+      | `Select fields -> assert false
+      | `Choice fields -> assert false
+      | `MetaSessionVar point -> isp (`MetaTypeVar point)
+      | `Dual s -> isps s
+      | `End -> true
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var) ->
     is_positive_field_env bound_vars var field_env || is_positive_row_var bound_vars var row_var
