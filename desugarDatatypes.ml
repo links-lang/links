@@ -65,7 +65,6 @@ object (self)
           o#datatype t
     | dt                  -> super#datatype dt
 
-  (* TODO: implement a proper session kind *)
   method session_type = function
     | `TypeVar x -> self#add (x, `Type (`Any, `Session), `Flexible)
     | `RigidTypeVar x -> self#add (x, `Type (`Any, `Session), `Rigid)
@@ -167,7 +166,6 @@ struct
   and session_type var_env alias_env =
     let lookup_type t = StringMap.find t var_env.tenv in
     (* HACKY *)
-    (* TODO: add session kind and session type variables *)
     function
     | `Input (t, s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)

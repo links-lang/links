@@ -237,6 +237,7 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
             let cases = StringMap.singleton name (case_binder, body) in
               [], `Case (value, cases, None)
         | `Negative _ ->
+            (* TODO: compile this properly! *)
             body
         | `Record (fields, rest) ->
             let body =
