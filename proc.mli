@@ -2,13 +2,6 @@
 type pid (* FIXME: don't reveal impl type of `pid' *) = int
 type proc_state = Value.continuation * Value.t
 
-type scheduler_state =
-  { suspended : (proc_state * pid) Queue.t;
-    blocked : (pid, proc_state * pid) Hashtbl.t;
-    message_queues : (pid, Value.t Queue.t) Hashtbl.t;
-    current_pid : pid ref;
-    step_counter : int ref}
-
 val debug_process_status : unit -> unit
 val singlethreaded : unit -> bool
 val fresh_pid : unit -> pid
