@@ -278,26 +278,26 @@ fun rec_env ->
                    | `Flexible (lvar, (llin,lrest)), `Flexible (rvar, (rlin,rrest)) ->
                        Unionfind.union lpoint rpoint;
                        begin
-                         let (llin',rlin') =
+                         let lin =
                            match llin, rlin with
-                             | `Unl, _ -> (`Unl, `Unl)
-                             | _, `Unl -> (`Unl, `Unl)
-                             | _       -> (llin, rlin) in
-                         let (lrest',rrest') =
+                             | `Unl, _ 
+                             | _, `Unl -> `Unl
+                             | _       -> llin in
+                         let rest =
                            match lrest, rrest with
                              | `Base, `Any
-                             | `Any, `Base -> (`Base, `Base)
+                             | `Any, `Base -> `Base
                              | `Any, `Session
-                             | `Session, `Any -> (`Session, `Session)
+                             | `Session, `Any -> `Session
                              | `Base, `Session ->
                                  raise (Failure (`Msg ("Cannot unify base type variable " ^ string_of_int lvar ^
                                                          " with session type variable " ^ string_of_int rvar)))
                              | `Session, `Base ->
                                  raise (Failure (`Msg ("Cannot unify session type variable " ^ string_of_int lvar ^
                                                          " with base type variable " ^ string_of_int rvar)))
-                             | _ -> (lrest, rrest) in
-                         Unionfind.change lpoint (`Flexible (lvar, (llin, lrest)));
-                         Unionfind.change rpoint (`Flexible (rvar, (rlin, rrest)))  (* TODO: unnecessary updates to lpoint and rpoint? *)
+                             (* in the default case lrest and rrest must be identical *)
+                             | _ -> lrest in
+                         Unionfind.change lpoint (`Flexible (lvar, (lin, rest)))
                        end
                    | `Flexible (var, (_, subkind)), _ ->
                        (if var_is_free_in_type var t2 then
@@ -412,7 +412,6 @@ fun rec_env ->
                        match Types.flexible_of_type t with
                          | Some t -> unify' rec_env (t, `MetaTypeVar point)
                          | None ->
-                             (* Debug.print("c"); *)
                              raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
                                                      " with the type "^ string_of_datatype t)))
                      end
