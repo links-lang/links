@@ -1183,20 +1183,21 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
       | `Input (t, s), `Input (t', s')
       | `Output (t, s), `Output (t', s')
         -> unify' rec_env (t, t'); us (s, s')
-      | `Select bs, `Select bs'
-      | `Choice bs, `Choice bs'
-        -> StringMap.fold
-             (fun l s () ->
-              if StringMap.mem l bs'
-              then us (StringMap.find l bs', s)
-              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s'))))
-             bs ();
-           StringMap.fold
-             (fun l _ () ->
-              if StringMap.mem l bs
-              then ()
-              else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s))))
-             bs' ()
+      | `Select row, `Select row'
+      | `Choice row, `Choice row' ->
+        unify_rows' rec_env (row, row')
+        (* -> StringMap.fold *)
+        (*      (fun l s () -> *)
+        (*       if StringMap.mem l bs' *)
+        (*       then us (StringMap.find l bs', s) *)
+        (*       else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s')))) *)
+        (*      bs (); *)
+        (*    StringMap.fold *)
+        (*      (fun l _ () -> *)
+        (*       if StringMap.mem l bs *)
+        (*       then () *)
+        (*       else raise (Failure (`Msg ("Missing case " ^ l ^ " from session type " ^ string_of_session_type s)))) *)
+        (*      bs' () *)
       | `MetaSessionVar point, s' -> unify' rec_env (`MetaTypeVar point, `Session s')
       | s, `MetaSessionVar point -> unify' rec_env (`Session s, `MetaTypeVar point)
       (* NOTE: the order of pattern matching is important

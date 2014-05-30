@@ -121,8 +121,8 @@ and type_arg =
 and session_type =
     [ `Input of typ * session_type
     | `Output of typ * session_type
-    | `Select of session_type field_env
-    | `Choice of session_type field_env
+    | `Select of row
+    | `Choice of row
     | `MetaSessionVar of meta_type_var
     | `Dual of session_type
     | `End ]
@@ -814,11 +814,12 @@ and normalise_type_arg rec_names type_arg =
 and normalise_session rec_names s =
   let nt = normalise_datatype rec_names in
   let ns = normalise_session rec_names in
+  let nr = normalise_row rec_names in
     match s with
     | `Input (t, s)         -> `Input (nt t, ns s)
     | `Output (t, s)        -> `Output (nt t, ns s)
-    | `Select bs            -> `Select (StringMap.map ns bs)
-    | `Choice bs            -> `Choice (StringMap.map ns bs)
+    | `Select r             -> `Select (nr r)
+    | `Choice r             -> `Choice (nr r)
     | `MetaSessionVar point -> s (* FIXME: should actually look inside s! *)
     | `Dual s               -> `Dual (ns s)
     | `End                  -> `End
@@ -1142,12 +1143,8 @@ struct
     | `Input (t, s)
     | `Output (t, s) ->
       free_bound_type_vars ~include_aliases bound_vars t @ free_bound_session_type_vars ~include_aliases bound_vars s
-    | `Select bs
-    | `Choice bs ->
-      StringMap.fold
-        (fun _ s tvs ->
-          free_bound_session_type_vars ~include_aliases bound_vars s @ tvs)
-        bs []
+    | `Select row
+    | `Choice row -> free_bound_row_type_vars ~include_aliases bound_vars row
     | `MetaSessionVar point -> free_bound_type_vars ~include_aliases bound_vars (`MetaTypeVar point)
     | `Dual s -> free_bound_session_type_vars ~include_aliases bound_vars s
     | `End -> []
@@ -1662,12 +1659,8 @@ and session_flexible_type_vars bound_vars =
   function
   | `Input (t, s)
   | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; session_flexible_type_vars bound_vars s]
-  | `Select bs
-  | `Choice bs ->
-    StringMap.fold
-      (fun _ s ftvs ->
-        TypeVarMap.union_all [session_flexible_type_vars bound_vars s; ftvs])
-      bs TypeVarMap.empty
+  | `Select row
+  | `Choice row -> row_flexible_type_vars bound_vars row
   | `Dual s -> session_flexible_type_vars bound_vars s
   | `End -> TypeVarMap.empty
 
@@ -1866,8 +1859,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
     function
     | `Input (t, s)
     | `Output (t, s) -> union [make_env boundvars t; make_env_s boundvars s]
-    | `Select bs
-    | `Choice bs     -> StringMap.fold (fun _ s envs -> union [make_env_s boundvars s; envs]) bs empties
+    | `Select row
+    | `Choice row    -> make_env_r boundvars row
     | `Dual s        -> make_env_s boundvars s
     | `End           -> empties
   in make_env S.empty

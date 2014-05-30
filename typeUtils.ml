@@ -223,8 +223,8 @@ let record_without t names =
 let rec dual_session = function
   | `Input (t, s)         -> `Output (t, dual_session s)
   | `Output (t, s)        -> `Input (t, dual_session s)
-  | `Select bs            -> `Choice (StringMap.map dual_session bs)
-  | `Choice bs            -> `Select (StringMap.map dual_session bs)
+  | `Select row           -> `Choice (dual_row row)
+  | `Choice row           -> `Select (dual_row row)
   | `MetaSessionVar point ->
     begin
       match Unionfind.find point with
@@ -237,6 +237,19 @@ let rec dual_session = function
     end
   | `Dual s               -> s
   | `End                  -> `End
+and dual_row = fun (fields, row_var) ->
+  (* TODO: work out how to implement dualisation for row variables *)
+  let fields' =
+    StringMap.map (fun (f, t) -> (f, `Session (dual_session (session_of_type t)))) fields in
+  (* let row_var' = *)
+  (*   match Unionfind.find row_var with *)
+  (*   | `Flexible _ *)
+  (*   | `Rigid _ *)
+  (*   | `Recursive _ -> assert false *)
+  (*   | `Body row -> assert false *)
+  (*   | `Closed -> `Closed *)
+  (* in *)
+    (fields', row_var)
 
 let dual_type t = match concrete_type t with
   | `Session s -> `Session (dual_session s)

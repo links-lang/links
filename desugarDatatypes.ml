@@ -169,14 +169,16 @@ struct
     function
     | `Input (t, s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
-    | `Select (fs, r) ->
-      `Select (List.fold_left
-                 (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
-                 StringMap.empty fs)
-    | `Choice (fs, r) ->
-      `Choice (List.fold_left
-                 (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env)
-                 StringMap.empty fs)
+    | `Select r -> `Select (row var_env alias_env r)
+    | `Choice r -> `Choice (row var_env alias_env r)
+    (* | `Select (fs, r) -> *)
+    (*   `Select (List.fold_left *)
+    (*              (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env) *)
+    (*              StringMap.empty fs) *)
+    (* | `Choice (fs, r) -> *)
+    (*   `Choice (List.fold_left *)
+    (*              (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env) *)
+    (*              StringMap.empty fs) *)
     | `TypeVar s -> (try `MetaSessionVar (lookup_type s)
                      with NotFound _ -> raise (UnexpectedFreeVar s))
     | `RigidTypeVar s -> (try `MetaSessionVar (lookup_type s)

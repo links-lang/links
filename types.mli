@@ -89,8 +89,8 @@ and type_arg =
 and session_type =
     [ `Input of typ * session_type
     | `Output of typ * session_type
-    | `Select of session_type field_env
-    | `Choice of session_type field_env
+    | `Select of row
+    | `Choice of row
     | `MetaSessionVar of meta_type_var
     | `Dual of session_type
     | `End ]
