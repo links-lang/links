@@ -49,9 +49,9 @@ let annotate (signame, datatype) : _ -> binding =
                 ^ signame ^ "', not `"^ name ^"'.",
                 pos ())) in
     function
-      | `Fun ((name, bpos), phrase, location, dpos) ->
+      | `Fun ((name, bpos), lin, phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun ((name, None, bpos), ([], phrase), location, Some datatype), dpos
+            `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
@@ -105,8 +105,8 @@ let datatype d = d, None
 
 %token END
 %token EQ IN
-%token FUN RARROW FATRARROW MINUSLBRACE VAR OP
-%token SQUIGRARROW TILDE
+%token FUN LINFUN RARROW LOLLI FATRARROW MINUSLBRACE VAR OP
+%token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
@@ -168,7 +168,7 @@ let datatype d = d, None
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
+%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -243,8 +243,8 @@ fun_declarations:
 | fun_declaration                                              { [$1] }
 
 fun_declaration:
-| tlfunbinding                                                 { let ((d,dpos),p,l, pos) = $1
-                                                                 in `Fun ((d, None, dpos),([],p),l,None), pos }
+| tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
+                                                                 in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 
 perhaps_uinteger:
@@ -258,10 +258,11 @@ postfixop:
 | POSTFIXOP                                                    { $1, pos() }
 
 tlfunbinding:
-| FUN var arg_lists perhaps_location block                     { ($2, ($3, (`Block $5, pos ())), $4, pos()) }
-| OP pattern op pattern perhaps_location block                 { ($3, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
-| OP prefixop pattern perhaps_location block                   { ($2, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
-| OP pattern postfixop perhaps_location block                  { ($3, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
+| FUN var arg_lists perhaps_location block                     { ($2, `Unl, ($3, (`Block $5, pos ())), $4, pos ()) }
+| LINFUN var arg_lists perhaps_location block                  { ($2, `Lin, ($3, (`Block $5, pos ())), $4, pos ()) }
+| OP pattern op pattern perhaps_location block                 { ($3, `Unl, ([[$2; $4]], (`Block $6, pos ())), $5, pos ()) }
+| OP prefixop pattern perhaps_location block                   { ($2, `Unl, ([[$3]], (`Block $5, pos ())), $4, pos ()) }
+| OP pattern postfixop perhaps_location block                  { ($3, `Unl, ([[$2]], (`Block $5, pos ())), $4, pos ()) }
 
 tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3), pos() }
@@ -292,7 +293,7 @@ subkind:
 
 typearg:
 | VARIABLE                                                     { (($1, `Type (`Any, `Any), `Flexible), None) }
-| VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
+| VARIABLE  kind                                               { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
 | typearg                                                      { [$1] }
@@ -330,7 +331,8 @@ primary_expression:
 | LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() }
 | LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() }
 | xml                                                          { $1 }
-| FUN arg_lists block                                          { `FunLit (None, ($2, (`Block $3, pos ()))), pos() }
+| FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
+| LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
@@ -715,7 +717,8 @@ record_labels:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
-| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
+| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
+| LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 
 bindings:
@@ -788,9 +791,12 @@ hear_arrow_prefix:
 straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { FunctionType ($1, $2, $4) }
+| parenthesized_datatypes
+  straight_arrow_prefix LOLLI datatype                         { LolliType ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
                                                                                ([], fresh_rigid_row_variable (`Any, `Any)),
                                                                                $3) }
+| parenthesized_datatypes LOLLI datatype                       { LolliType ($1, ([], fresh_rigid_row_variable (`Any, `Any)), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -799,6 +805,12 @@ squiggly_arrow:
                                                                                  ("wild", (`Present, UnitType))
                                                                                  $2,
                                                                                $4) }
+| parenthesized_datatypes
+  squig_arrow_prefix SQUIGLOLLI datatype                       { LolliType ($1,
+                                                                            row_with
+                                                                              ("wild", (`Present, UnitType))
+                                                                            $2,
+                                                                            $4) }
 /*| parenthesized_datatypes hear_arrow_prefix
   SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
 */
@@ -806,6 +818,10 @@ squiggly_arrow:
                                                                                ([("wild", (`Present, UnitType))],
                                                                                  fresh_rigid_row_variable (`Any, `Any)),
                                                                                 $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { LolliType ($1,
+                                                                            ([("wild", (`Present, UnitType))],
+                                                                             fresh_rigid_row_variable (`Any, `Any)),
+                                                                            $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }

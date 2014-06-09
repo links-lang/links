@@ -96,6 +96,7 @@ type datatype =
   | TypeVar         of name * subkind
   | RigidTypeVar    of name * subkind
   | FunctionType    of datatype list * row * datatype
+  | LolliType       of datatype list * row * datatype
   | MuType          of name * datatype
   | ForallType      of quantifier list * datatype
   | UnitType
@@ -182,10 +183,11 @@ and iterpatt = [
 | `Table of pattern * phrase
 ]
 and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
+and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.row) list) option * funlit
+| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
 | `Spawn            of phrase * Types.row option
 | `SpawnWait        of phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
@@ -241,8 +243,8 @@ and bindingnode = [
        let p=/\X.e in ...
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
-| `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
+| `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
+| `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
@@ -366,7 +368,7 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit (_, fnlit) -> funlit fnlit
+    | `FunLit (_, _, fnlit) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -400,11 +402,11 @@ struct
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Fun ((name,_,_), (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs ->
         let names, rhss =
           List.fold_right
-            (fun ((n,_,_), (_, rhs), _, _, _) (names, rhss) ->
+            (fun ((n,_,_), _, (_, rhs), _, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in

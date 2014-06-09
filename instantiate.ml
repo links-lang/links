@@ -51,6 +51,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                     | `Body t -> inst rec_env t
                 end
           | `Function (f, m, t) -> `Function (inst rec_env f, inst_row rec_env m, inst rec_env t)
+          | `Lolli (f, m, t) -> `Lolli (inst rec_env f, inst_row rec_env m, inst rec_env t)
           | `Record row -> `Record (inst_row rec_env row)
           | `Variant row -> `Variant (inst_row rec_env row)
           | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)

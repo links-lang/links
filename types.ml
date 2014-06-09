@@ -96,6 +96,7 @@ type typ =
     [ `Not_typed
     | `Primitive of primitive
     | `Function of (typ * row * typ)
+    | `Lolli of (typ * row * typ)
     | `Record of row
     | `Variant of row
     | `Table of typ * typ * typ
@@ -110,7 +111,7 @@ and field_spec_map = field_spec field_env
 and row_var        = meta_row_var
 and row            = field_spec_map * row_var
 and meta_type_var  = (typ meta_type_var_basis) point
-and meta_row_var   = (row meta_row_var_basis) point
+and meta_row_var  = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of (int * subkind) * meta_type_var
@@ -232,6 +233,105 @@ let rec basify_row (fields, row_var) =
        basify_type t)
     fields
     ()
+
+let rec is_unl_type : typ -> bool =
+  function
+  | `Primitive ((`Bool | `Int | `Char | `Float | `String))
+  | `Function _ -> true
+  | `Lolli _ -> false
+  | `Record r
+  | `Variant r -> is_unl_row r
+  | `Table _ -> true
+  | `Alias (_, t) -> is_unl_type t
+  | `Application _ -> true (* TODO: change this if we add linear abstract types *)
+  | `MetaTypeVar point ->
+     begin
+       match Unionfind.find point with
+       | `Rigid (_, (lin, _))
+       | `Flexible (_, (lin, _)) -> lin=`Unl
+       | `Body t -> is_unl_type t
+       | `Recursive (_, t) -> is_unl_type t
+     end
+  | `ForAll (_, t) -> is_unl_type t
+  | `Session `End -> true
+  | `Session _ -> false
+and is_unl_row (fields, row_var) =
+  let unl_row_var =
+    match Unionfind.find row_var with
+    | `Closed -> true
+    | `Rigid (_, (lin, _))
+    | `Flexible (_, (lin, _)) -> lin=`Unl
+    | `Body row -> is_unl_row row
+    | `Recursive (_, row) -> is_unl_row row in
+  let unl_fields =
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+         b && is_unl_type t)
+      fields
+      true in
+  unl_row_var && unl_fields
+
+let rec type_can_be_unl : typ -> bool =
+  function
+  | `Primitive ((`Bool | `Int | `Char | `Float | `String))
+  | `Function _ -> true
+  | `Lolli _ -> false
+  | `Record r
+  | `Variant r -> row_can_be_unl r
+  | `Table _ -> true
+  | `Alias (_, t) -> type_can_be_unl t
+  | `Application _ -> true (* TODO: change this if we add linear abstract types *)
+  | `MetaTypeVar point ->
+     begin
+       match Unionfind.find point with
+       | `Rigid (_, (lin, _)) -> lin=`Unl
+       | `Flexible _ -> true
+       | `Body t -> type_can_be_unl t
+       | `Recursive (_, t) -> type_can_be_unl t
+     end
+  | `ForAll (_, t) -> type_can_be_unl t
+  | `Session `End -> true
+  | `Session _ -> false
+and row_can_be_unl (fields, row_var) =
+  let unl_row_var =
+    match Unionfind.find row_var with
+    | `Closed
+    | `Flexible _ -> true
+    | `Rigid (_, (lin, _)) -> lin=`Unl
+    | `Body row -> row_can_be_unl row
+    | `Recursive (_, row) -> row_can_be_unl row in
+  let unl_fields =
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+         b && type_can_be_unl t)
+      fields
+      true in
+  unl_row_var && unl_fields
+
+let rec make_type_unl : typ -> unit=
+  function
+  | `Primitive _ | `Function _ | `Table _ | `Session `End | `Application _ -> ()
+  | `Record r | `Variant r -> make_row_unl r
+  | `Alias (_, t) | `ForAll (_, t) -> make_type_unl t
+  | `MetaTypeVar point ->
+     begin
+       match Unionfind.find point with
+       | `Rigid (_, (`Unl, _)) -> ()
+       | `Flexible (var, (_, rest)) -> Unionfind.change point (`Flexible (var, (`Unl, rest)))
+       | `Body t
+       | `Recursive (_, t) -> make_type_unl t
+       | _ -> assert false
+     end
+  | _ -> assert false
+and make_row_unl (fields, row_var) =
+  begin
+    match Unionfind.find row_var with
+    | `Closed | `Rigid (_, (`Unl, _)) -> ()
+    | `Flexible (var, (_, rest)) -> Unionfind.change row_var (`Flexible (var, (`Unl, rest)))
+    | `Body row | `Recursive (_, row) -> make_row_unl row
+    | _ -> assert false
+  end;
+  FieldEnv.iter (fun _ (_, t) -> make_type_unl t) fields
 
 type type_variable = int * [`Rigid | `Flexible] *  [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
     deriving (Show)
@@ -507,6 +607,8 @@ let free_type_vars, free_row_type_vars =
       | `Primitive _             -> S.empty
       | `Function (f, m, t)      ->
           S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
+      | `Lolli (f, m, t)      ->
+          S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row
       | `Table (r, w, n)         ->
@@ -763,6 +865,8 @@ let rec normalise_datatype rec_names t =
       | `Primitive _             -> t
       | `Function (f, m, t)      ->
           `Function (nt f, nr m, nt t)
+      | `Lolli (f, m, t)         ->
+           `Lolli (nt f, nr m, nt t)
       | `Record row              -> `Record (nr row)
       | `Variant row             -> `Variant (nr row)
       | `Table (r, w, n)         ->
@@ -1080,6 +1184,8 @@ struct
             end
         | `Function (f, m, t) ->
             (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
+        | `Lolli (f, m, t) ->
+            (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
         | `Record row
         | `Variant row -> free_bound_row_type_vars ~include_aliases bound_vars row
         | `Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
@@ -1242,15 +1348,20 @@ struct
   let subkind : (policy * names) -> subkind -> string =
     let linearity = function
       | `Any -> ""
-      | `Unl -> "Unl " in
+      | `Unl -> "Unl" in
     let restriction = function
       | `Any -> ""
       | `Base -> "Base"
       | `Session -> "Session" in
 
     fun (_policy, _vars) (l, r) ->
-      let s = linearity l ^ restriction r in
-      if s="" then "" else "::"^s
+      let lins = linearity l in
+      let ress = restriction r in
+      match lins, ress with
+      | "", "" -> ""
+      | "", _  -> "::"^ress
+      | _,""   -> "::"^lins
+      | _      -> "::"^lins^" "^ress
 
   let kind : (policy * names) -> kind -> string =
     fun (_policy, _vars) ->
@@ -1399,6 +1510,86 @@ struct
                             sd (`Function (args, t', t))
                   else
                       "{" ^ row "," bound_vars p r ^ "}->"
+              in
+                begin match concrete_type args with
+                  | `Record row when is_tuple ~allow_onetuples:true row ->
+                    string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
+                  | t' -> assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)
+                end
+          | `Lolli (args, effects, t) ->
+              let arrow =
+                let (fields, row_var) as r = unwrap effects in
+                  if FieldEnv.is_empty fields then
+                    match Unionfind.find row_var with
+                      | `Closed -> "{}-@"
+                      | `Flexible (var, _) when policy.flavours ->
+                          let name, spec = Vars.find_spec var vars in
+                            if hide_fresh_check var spec then
+                              "-?-@"
+                            else
+                              "-?" ^ name ^ "-@"
+                      | `Rigid (var, _)
+                      | `Flexible (var, _) ->
+                          let name, spec = Vars.find_spec var vars in
+                            if hide_fresh_check var spec then
+                              "-@"
+                            else
+                              "-" ^ name ^ "-@"
+                      | `Recursive _ -> assert false
+                      | `Body t' ->
+                          sd (`Lolli (args, t', t))
+                  else if
+                    (FieldEnv.mem "wild" fields &&
+                       fst (FieldEnv.find "wild" fields) = `Present &&
+                        FieldEnv.size fields = 1)
+                  then
+                    match Unionfind.find row_var with
+                      | `Closed -> "{}~@"
+                      | `Flexible (var, _) when policy.flavours ->
+                          let name, spec = Vars.find_spec var vars in
+                            if hide_fresh_check var spec then
+                              "~?~@"
+                            else
+                              "~?" ^ name ^ "~@"
+                      | `Rigid (var, _)
+                      | `Flexible (var, _) ->
+                          let name, spec = Vars.find_spec var vars in
+                            if hide_fresh_check var spec then
+                              "~@"
+                            else
+                              "~" ^ name ^ "~@"
+                      | `Recursive _ -> assert false
+                      | `Body t' ->
+                          sd (`Lolli (args, t', t))
+                  else if
+                    (FieldEnv.mem "hear" fields &&
+                       FieldEnv.mem "wild" fields &&
+                       fst (FieldEnv.find "hear" fields) = `Present &&
+                        fst (FieldEnv.find "wild" fields) = `Present &&
+                        FieldEnv.size fields = 2)
+                  then
+                    let ht = sd (snd (FieldEnv.find "hear" fields)) in
+                      match Unionfind.find row_var with
+                        | `Closed ->
+                            "{:" ^ ht ^ "}~@"
+                        | `Flexible (var, _) when policy.flavours ->
+                            let name, spec = Vars.find_spec var vars in
+                              if hide_fresh_check var spec then
+                                "{:" ^ ht ^ "|?}~@"
+                              else
+                                "{:" ^ ht ^ "|?" ^ name ^ "}~@"
+                        | `Rigid (var, _)
+                        | `Flexible (var, _) ->
+                            let name, spec = Vars.find_spec var vars in
+                              if hide_fresh_check var spec then
+                                "{:" ^ ht ^ "|_}~@"
+                              else
+                                "{:" ^ ht ^ "|" ^ name ^ "}~@"
+                        | `Recursive _ -> assert false
+                        | `Body t' ->
+                            sd (`Lolli (args, t', t))
+                  else
+                      "{" ^ row "," bound_vars p r ^ "}-@"
               in
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
@@ -1785,6 +1976,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
       | `Not_typed
       | `Primitive _             -> empties
       | `Function (f, m, t)      -> union [make_env boundvars f; make_env_r boundvars m; make_env boundvars t]
+      | `Lolli (f, m, t)         -> union [make_env boundvars f; make_env_r boundvars m; make_env boundvars t]
       | `Record row
       | `Variant row             -> make_env_r boundvars row
       | `Table (l,r,n)           -> union [make_env boundvars l; make_env boundvars r; make_env boundvars n]

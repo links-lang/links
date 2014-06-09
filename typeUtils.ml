@@ -93,7 +93,7 @@ let rec session_of_type t = match concrete_type t with
   | `ForAll (_, t) -> session_of_type t
   | `Session s -> s
   | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
-  | t -> 
+  | t ->
       error ("Attempt to convert non-session type to session type "^string_of_datatype t)
 
 (*
@@ -150,6 +150,7 @@ let rec erase_type_poly names t = match concrete_type t with
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t
   | `Function (_, _, t) -> t
+  | `Lolli (_, _, t) -> t
   | t ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
 
@@ -157,12 +158,15 @@ let rec arg_types t = match concrete_type t with
   | `ForAll (_, t) -> arg_types t
   | `Function (`Record row, _, _) ->
       extract_tuple row
+  | `Lolli (`Record row, _, _) ->
+      extract_tuple row
   | t ->
       error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
 let rec effect_row t = match concrete_type t with
   | `ForAll (_, t) -> effect_row t
   | `Function (_, effects, _) -> effects
+  | `Lolli (_, effects, _) -> effects
   | t ->
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
 

@@ -8,7 +8,7 @@ let rec is_raw (phrase, pos) =
     | `PagePlacement _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
-    | e -> 
+    | e ->
         raise (ConcreteSyntaxError ("Invalid element in page literal", pos))
 
 (* DODGEYNESS:
@@ -35,7 +35,7 @@ let rec desugar_page (o, page_type) =
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
               (* WARNING:
-                 
+
                  This technique is rather brittle. A more robust approach
                  would be to use unification - compute a as the solution of:
 
@@ -57,6 +57,7 @@ let rec desugar_page (o, page_type) =
               (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Row (o#lookup_effects)]), pos),
                         [(`FunLit
                             (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
+                             `Unl,
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
                                      [`Block ([], (`Var x, pos)), pos]), pos))), pos);

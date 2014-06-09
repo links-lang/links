@@ -15,7 +15,7 @@ type gen_kind = [`Rigid|`All]
 
     NOTE: the order of the type arguments can be important.
 *)
-let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list = 
+let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
   fun kind bound_vars t ->
     let gt = get_type_args kind bound_vars in
       match t with
@@ -42,15 +42,20 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             and effect_gens = get_row_type_args kind bound_vars m
             and to_gens = gt t in
               from_gens @ effect_gens @ to_gens
+        | `Lolli (f, m, t) ->
+            let from_gens = gt f
+            and effect_gens = get_row_type_args kind bound_vars m
+            and to_gens = gt t in
+              from_gens @ effect_gens @ to_gens
         | `Record row
-        | `Variant row -> get_row_type_args kind bound_vars row 
+        | `Variant row -> get_row_type_args kind bound_vars row
         | `Table (r, w, n) -> gt r @ gt w @ gt n
         | `Alias ((_, ts), t) ->
             concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
-        | `ForAll (qsref, t) -> 
-            (* 
+        | `ForAll (qsref, t) ->
+            (*
                filter out flexible quantifiers
-               
+
                WARNING: this behaviour might not always be what we want
 
                  1) Its imperative nature seems a bit dodgey.
@@ -66,9 +71,9 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
                     instance, this would allow function application
                     in the case where the function has a rigid polymorphic
                     type such as:
-                    
+
                       forall a.(a) {}-> a
-               
+
                  4) Furthermore, we can keep as much polymorphism as possible
                     by only instantiating those type variables that appear
                     free in the function argument.
@@ -86,7 +91,7 @@ and get_session_type_args : gen_kind -> TypeVarSet.t -> session_type -> type_arg
     let gt = get_type_args kind bound_vars in
     let gs = get_session_type_args kind bound_vars in
       match s with
-      | `Input (t, s) 
+      | `Input (t, s)
       | `Output (t, s) -> gt t @ gs s
       | `Select fields
       | `Choice fields -> assert false
@@ -242,7 +247,7 @@ let rigidify_quantifier =
             | _ -> assert false
         end
 
-(** generalise: 
+(** generalise:
     Universally quantify any free type variables in the expression.
 *)
 let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =

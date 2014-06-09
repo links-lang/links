@@ -6,9 +6,9 @@ open Sugartypes
     declarations, which are only used during the parsing stage.)
 *)
 let refine_bindings : binding list -> binding list =
-  fun bindings -> 
+  fun bindings ->
     (* Group sequences of functions together *)
-    let initial_groups = 
+    let initial_groups =
       let add group groups = match group with
         | [] -> groups
         | _  -> List.rev group::groups in
@@ -18,9 +18,9 @@ let refine_bindings : binding list -> binding list =
          out to be necessary in order for desugaring of for
          comprehensions to work properly in the prelude - which
          defines concatMap. *)
-      let group, groups = 
+      let group, groups =
         List.fold_right
-          (fun (binding,_ as bind) (thisgroup, othergroups) -> 
+          (fun (binding,_ as bind) (thisgroup, othergroups) ->
             match binding with
               | `Funs _ -> assert false
               | `Exp _
@@ -34,34 +34,34 @@ let refine_bindings : binding list -> binding list =
                 | `Fun _ ->
                      (* Add binding to group *)
                   (bind::thisgroup, othergroups)
-                | `Infix -> 
+                | `Infix ->
                      (* discard binding *)
                   (thisgroup, othergroups))
             bindings ([], [])
       in
         add group groups
-    in 
+    in
       (* build a callgraph *)
     let callgraph : _ -> (string * (string list)) list
-      = fun defs -> 
+      = fun defs ->
         let defs = List.map (function
-                               | `Fun ((name,_,_), (_, funlit), _, _), _ -> (name, funlit)
+                               | `Fun ((name,_,_), _, (_, funlit), _, _), _ -> (name, funlit)
                                | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
-            (fun (name, body) -> name, 
-               StringSet.elements 
+            (fun (name, body) -> name,
+               StringSet.elements
                  (StringSet.inter (Freevars.funlit body) names))
             defs in
       (* refine a group of function bindings *)
-    let groupFuns pos (funs : binding list) : binding list = 
+    let groupFuns pos (funs : binding list) : binding list =
       let unFun = function
-        | `Fun (b, (_, funlit), location, dt), pos -> (b, (([], None), funlit), location, dt, pos)
+        | `Fun (b, lin, (_, funlit), location, dt), pos -> (b, lin, (([], None), funlit), location, dt, pos)
         | _ -> assert false in
-      let find_fun name = 
+      let find_fun name =
         List.find (function
-                     | `Fun ((n,_,_), _, _, _), _ when name = n -> true
-                     | _ -> false) 
+                     | `Fun ((n,_,_), _, _, _, _), _ when name = n -> true
+                     | _ -> false)
           funs in
       let graph = callgraph funs in
       let sccs = Graph.topo_sort_sccs graph in
@@ -69,16 +69,16 @@ let refine_bindings : binding list -> binding list =
           (fun scc ->
              let funs = List.map (find_fun ->- unFun) scc in
                match funs with
-                 | [(((n, _, _) as b), ((tyvars, _), body), location, dt, pos)]
-                     when not (StringSet.mem n (Freevars.funlit body)) -> `Fun (b, (tyvars, body), location, dt), pos
+                 | [(((n, _, _) as b), lin, ((tyvars, _), body), location, dt, pos)]
+                     when not (StringSet.mem n (Freevars.funlit body)) -> `Fun (b, lin, (tyvars, body), location, dt), pos
                  | _ -> `Funs (funs), pos)
-      
+
           sccs
-    in 
+    in
       (* refine a group of bindings *)
     let group = function
         (* TODO:
-           
+
            Compute the position corresponding to the whole collection
            of functions.
         *)
@@ -90,7 +90,7 @@ let refine_bindings =
 object (self)
   inherit SugarTraversals.map as super
   method phrasenode : phrasenode -> phrasenode = function
-    |`Block (bindings, body) -> 
+    |`Block (bindings, body) ->
        let bindings = self#list (fun o -> o#binding) bindings in
        let body = self#phrase body in
          `Block (refine_bindings bindings, body)
@@ -103,7 +103,7 @@ object (self)
         refine_bindings bindings, body
 
   method sentence : sentence -> sentence = function
-    |`Definitions defs -> 
+    |`Definitions defs ->
        let defs = self#list (fun o -> o#binding) defs in
          `Definitions (refine_bindings defs)
     | d -> super#sentence d

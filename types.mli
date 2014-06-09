@@ -64,6 +64,7 @@ type typ =
     [ `Not_typed
     | `Primitive of primitive
     | `Function of (typ * row * typ)
+    | `Lolli of (typ * row * typ)
     | `Record of row
     | `Variant of row
     | `Table of typ * typ * typ
@@ -113,6 +114,15 @@ val is_baseable_row : row -> bool
 
 val basify_type : datatype -> unit
 val basify_row : row -> unit
+
+val is_unl_type : datatype -> bool
+val is_unl_row : row -> bool
+
+val type_can_be_unl : datatype -> bool
+val row_can_be_unl : row -> bool
+
+val make_type_unl : datatype -> unit
+val make_row_unl : row -> unit
 
 val type_var_number : quantifier -> int
 

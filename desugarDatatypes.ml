@@ -391,21 +391,21 @@ object (self)
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
           o, `Val (tyvars, pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Fun (bind, (tyvars, fl), loc, dt) ->
+    | `Fun (bind, lin, (tyvars, fl), loc, dt) ->
         let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
-          o, `Fun (bind, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, `Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
     | `Funs binds ->
         let o, binds =
           super#list
-            (fun o (bind, (tyvars, fl), loc, dt, pos) ->
+            (fun o (bind, lin, (tyvars, fl), loc, dt, pos) ->
                let o, bind = o#binder bind in
                let o, fl   = o#funlit fl in
                let o, loc  = o#location loc in
                let    dt   = opt_map (Desugar.datatype' map alias_env) dt in
                let o, pos  = o#position pos
-               in (o, (bind, (tyvars, fl), loc, dt, pos)))
+               in (o, (bind, lin, (tyvars, fl), loc, dt, pos)))
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->

@@ -138,7 +138,7 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
-      | `FunLit (_x, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x_i1)
+      | `FunLit (_x, _x1, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x1, _x_i1)
       | `Spawn (_x, _x_i1) -> let _x = o#phrase _x in `Spawn (_x, _x_i1)
       | `SpawnWait (_x, _x_i1) -> let _x = o#phrase _x in `SpawnWait (_x, _x_i1)
       | `Query (_x, _x_i1, _x_i2) ->
@@ -528,22 +528,22 @@ class map =
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
           in `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | `Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
+          in `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
       | `Funs _x ->
           let _x =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let _x = o#binder _x in
                  let _x_i2 = o#funlit _x_i2 in
                  let _x_i3 = o#location _x_i3 in
                  let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
                  let _x_i5 = o#position _x_i5
-                 in (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
+                 in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in `Funs _x
       | `Foreign ((_x, _x_i1, _x_i2)) ->
@@ -698,7 +698,7 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
-      | `FunLit (_x, _x_i1) -> let o = o#funlit _x_i1 in o
+      | `FunLit (_x, _x1, _x_i1) -> let o = o#funlit _x_i1 in o
       | `Spawn (_x, _x_i1) -> let o = o#phrase _x in o
       | `SpawnWait (_x, _x_i1) -> let o = o#phrase _x in o
       | `Query (_x, _x_i1, _x_i2) ->
@@ -1039,7 +1039,7 @@ class fold =
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | `Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#funlit _x_i2 in
@@ -1048,7 +1048,7 @@ class fold =
       | `Funs _x ->
           let o =
             o#list
-              (fun o (_x, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let o = o#binder _x in
                  let o = o#list (fun o -> o#tyvar) _x_i1 in
                  let o = o#funlit _x_i2 in
@@ -1232,7 +1232,7 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `FunLit (_x, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x_i1)))
+      | `FunLit (_x, _x1, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x1, _x_i1)))
       | `Spawn (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`Spawn (_x, _x_i1)))
       | `SpawnWait (_x, _x_i1) -> let (o, _x) = o#phrase _x in (o, (`SpawnWait (_x, _x_i1)))
       | `Query (_x, _x_i1, _x_i2) ->
@@ -1652,22 +1652,22 @@ class fold_map =
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
           in (o, (`Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Fun ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
+          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
       | `Funs _x ->
           let (o, _x) =
             o#list
-              (fun o (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
                  let (o, _x) = o#binder _x in
                  let (o, _x_i2) = o#funlit _x_i2 in
                  let (o, _x_i3) = o#location _x_i3 in
                  let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
                  let (o, _x_i5) = o#position _x_i5
-                 in (o, (_x, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
+                 in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (`Funs _x))
       | `Foreign ((_x, _x_i1, _x_i2)) ->

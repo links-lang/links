@@ -34,7 +34,7 @@ let dp = Sugartypes.dummy_position
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def ((f, Some ft, fpos), (tyvars, lam), location, t) =
+let unwrap_def ((f, Some ft, fpos), lin, (tyvars, lam), location, t) =
   let rt = TypeUtils.return_type ft in
   let lam =
     let rec make_lam t : funlit -> funlit =
@@ -46,6 +46,7 @@ let unwrap_def ((f, Some ft, fpos), (tyvars, lam), location, t) =
               ([ps],
                (`Block
                   ([`Fun ((g, Some t, dp),
+                          lin,
                           ([], make_lam rt (pss, body)),
                           location,
                           None), dp],
@@ -53,24 +54,24 @@ let unwrap_def ((f, Some ft, fpos), (tyvars, lam), location, t) =
     in
       make_lam rt lam
   in
-    ((f, Some ft, fpos), (tyvars, lam), location, t)
+    ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
 
 (*
   unwrap a curried function definition
   with a position attached
   (for recursive functions)
 *)
-let unwrap_def_dp (fb, tlam, location, t, pos) =
-  let (fb, tlam, location, t) = unwrap_def (fb, tlam, location, t) in
-    (fb, tlam, location, t, pos)
+let unwrap_def_dp (fb, lin, tlam, location, t, pos) =
+  let (fb, lin, tlam, location, t) = unwrap_def (fb, lin, tlam, location, t) in
+    (fb, lin, tlam, location, t, pos)
 
 class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `FunLit (Some argss, lam) ->
-        let inner_mb = snd (last argss) in
+    | `FunLit (Some argss, lin, lam) ->
+        let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
         let ft =
           List.fold_right
@@ -81,7 +82,7 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           `Block
-            ([`Fun (unwrap_def ((f, Some ft, dp), ([], lam), `Unknown, None)),
+            ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), `Unknown, None)),
               dp],
              ((`Var f), dp))
         in
@@ -102,7 +103,7 @@ object (o : 'self_type)
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
           `Block
-            ([`Fun ((f, Some ft, dp), ([ab; rhob; effb], (pss, body)), `Unknown, None), dp],
+            ([`Fun ((f, Some ft, dp), `Unl, ([ab; rhob; effb], (pss, body)), `Unknown, None), dp],
              ((`Var f), dp))
         in
           (o, e, ft)
@@ -140,14 +141,14 @@ object
     | e -> super#phrasenode e
 
   method bindingnode = function
-    | `Fun (_f, (_tyvars, ([_ps], _body)), _location, _t) as b ->
+    | `Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
         super#bindingnode b
     | `Fun _ -> {< has_no_funs = false >}
     | `Funs defs as b ->
         if
           List.exists
             (function
-               | (_f, (_tyvars, ([_ps], _body)), _location, _t, _pos) -> false
+               | (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t, _pos) -> false
                | _ -> true) defs
         then
           {< has_no_funs = false >}

@@ -61,7 +61,7 @@ let results :  Types.row ->
             let r = results (es, xs, ts) in
             let qt = t in
             let qst = Types.make_tuple_type ts in
-              
+
             let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t ->
@@ -79,15 +79,16 @@ let results :  Types.row ->
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
                 `FunLit
-                  (Some [a, eff],
+                  (Some [a, eff], `Unl,
                    ([ps], (`TupleLit (q::qs), dp))), dp in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
                 `FunLit
                   (Some [Types.make_tuple_type [t], eff],
+                   `Unl,
                    ([[qb]],
-                    (`FnAppl                   
+                    (`FnAppl
                        ((`TAppl ((`Var "map", dp), [a; `Row eff; b]), dp),
                         [inner; r]), dp))), dp in
             let a = `Type qt in
@@ -119,7 +120,7 @@ object (o : 'self_type)
                | `List (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
-                     
+
                    let element_type = TypeUtils.element_type t in
 
                    let var = Utility.gensym ~prefix:"_for_" () in
@@ -130,13 +131,13 @@ object (o : 'self_type)
                    let (o, p) = o#pattern p in
 
                    let element_type = TypeUtils.table_read_type t in
-                     
+
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
                    let n = `Type (TypeUtils.table_needed_type t) in
                    let eff = `Row (o#lookup_effects) in
-                     
-                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp), 
+
+                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp),
                                              [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
@@ -146,8 +147,8 @@ object (o : 'self_type)
       in
         o, (List.rev es, List.rev ps, List.rev xs, List.rev ts)
 
-  method phrasenode : Sugartypes.phrasenode -> 
-    ('self_type * Sugartypes.phrasenode * Types.datatype) = 
+  method phrasenode : Sugartypes.phrasenode ->
+    ('self_type * Sugartypes.phrasenode * Types.datatype) =
     function
     | `Iteration (generators, body, filter, sort) ->
         let eff = o#lookup_effects in
@@ -172,23 +173,25 @@ object (o : 'self_type)
           match ts with
             | [t] -> t
             | ts -> Types.make_tuple_type ts in
-          
+
         let f : phrase =
           `FunLit
             (Some [Types.make_tuple_type [arg_type], eff],
+             `Unl,
              ([arg], body)), dp in
-          
+
         let results = results eff (es, xs, ts) in
         let results =
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
-                let sort_by, sort_type_arg = 
+                let sort_by, sort_type_arg =
                   "sortByBase", `Row (TypeUtils.extract_row sort_type) in
 
                 let g : phrase =
                   `FunLit
                     (Some [Types.make_tuple_type [arg_type], eff],
+                     `Unl,
                      ([arg], sort)), dp
                 in
                   `FnAppl

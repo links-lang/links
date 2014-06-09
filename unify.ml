@@ -71,6 +71,13 @@ let rec eq_types : (datatype * datatype) -> bool =
                                          && eq_rows  (lm,    rm)
             | _                          -> false
           end
+      | `Lolli (lfrom, lm, lto) ->
+          begin match unalias t2 with
+              `Lolli (rfrom, rm, rto) -> eq_types (lfrom, rfrom)
+                                      && eq_types (lto,   rto)
+                                      && eq_rows  (lm,    rm)
+            | _                       -> false
+          end
       | `Record l ->
           begin match unalias t2 with
               `Record r -> eq_rows (l, r)
@@ -280,7 +287,7 @@ fun rec_env ->
                        begin
                          let lin =
                            match llin, rlin with
-                             | `Unl, _ 
+                             | `Unl, _
                              | _, `Unl -> `Unl
                              | _       -> llin in
                          let rest =
@@ -299,37 +306,49 @@ fun rec_env ->
                              | _ -> lrest in
                          Unionfind.change lpoint (`Flexible (lvar, (lin, rest)))
                        end
-                   | `Flexible (var, (_, subkind)), _ ->
+                   | `Flexible (var, (lin, rest)), _ ->
                        (if var_is_free_in_type var t2 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-                           if subkind = `Base then
+                           if rest = `Base then
                              raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                                      " with the body "^ string_of_datatype t2)));
                            rec_intro rpoint (var, Types.concrete_type t2))
                         else
                           ());
-                       if subkind = `Base then
+                       if rest = `Base then
                          if Types.is_baseable_type t2 then
                            Types.basify_type t2
                          else
                            raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                                    " with the non-base type "^ string_of_datatype t2)));
+                       if lin = `Unl then
+                         if Types.type_can_be_unl t2 then
+                           Types.make_type_unl t2
+                         else
+                           raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
+                                                   " with the linear type " ^ string_of_datatype t2)));
                        Unionfind.union lpoint rpoint
-                   | _, `Flexible (var, (_, subkind)) ->
+                   | _, `Flexible (var, (lin, rest)) ->
                        (if var_is_free_in_type var t1 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
-                           if subkind = `Base then
+                           if rest = `Base then
                              raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                                      " with the body "^ string_of_datatype t1)));
                            rec_intro lpoint (var, Types.concrete_type t1))
                         else
                           ());
-                       if subkind = `Base then
+                       if rest = `Base then
                          if Types.is_baseable_type t1 then
                            Types.basify_type t1
                          else
                            raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                                    " with the non-base type "^ string_of_datatype t1)));
+                       if lin = `Unl then
+                         if Types.type_can_be_unl t1 then
+                           Types.make_type_unl t1
+                         else
+                           raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
+                                                   " with the linear type " ^ string_of_datatype t1)));
                        Unionfind.union rpoint lpoint
                    | `Rigid (l, _), _ ->
                        begin
@@ -415,12 +434,12 @@ fun rec_env ->
                              raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
                                                      " with the type "^ string_of_datatype t)))
                      end
-                 | `Flexible (var, (_, subkind)) ->
+                 | `Flexible (var, (lin, rest)) ->
                      if var_is_free_in_type var t then
                        begin
                          Debug.if_set (show_recursion)
                            (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
-                         if subkind = `Base then
+                         if rest = `Base then
                            raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                                    " with the body "^ string_of_datatype t)));
                          let point' = Unionfind.fresh (`Body t)
@@ -430,13 +449,20 @@ fun rec_env ->
                        end
                      else
                        (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
-                        if subkind = `Base then
+                        if rest = `Base then
                           (* TODO: do something similar for the session subkind *)
+
                           if Types.is_baseable_type t then
                             Types.basify_type t
                           else
                             raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                                     " with the non-base type "^ string_of_datatype t)));
+                        if lin = `Unl then
+                          if Types.type_can_be_unl t then
+                            Types.make_type_unl t
+                          else
+                            raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
+                                                    " with the linear type "^ string_of_datatype t)));
                         Unionfind.change point (`Body t))
                  | `Recursive (var, t') ->
                      Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
@@ -458,6 +484,10 @@ fun rec_env ->
           | `Alias (_, t1), t2
           | t1, `Alias (_, t2) -> ut (t1, t2)
           | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
+              (ut (lfrom, rfrom);
+               ur (lm, rm);
+               ut (lto, rto))
+          | `Lolli (lfrom, lm, lto), `Lolli (rfrom, rm, rto) ->
               (ut (lfrom, rfrom);
                ur (lm, rm);
                ut (lto, rto))
@@ -1204,7 +1234,7 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
          - duality must come after type variables *)
       | `Dual s, s'
       | s, `Dual s' -> us (s, TypeUtils.dual_session s')
-(*      | `End, `End -> ()*)
+      | `End, `End -> ()
       | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =

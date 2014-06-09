@@ -57,6 +57,8 @@ let fun_effects t pss =
     function
       | `Function (_, effects, _), [_] -> effects
       | `Function (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
+      | `Lolli (_, effects, _), [_] -> effects
+      | `Lolli (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
@@ -208,8 +210,8 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lam) ->
-          let inner_e = snd (last argss) in
+      | `FunLit (Some argss, lin, lam) ->
+          let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right
@@ -220,7 +222,7 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lam), t)
+            (o, `FunLit (Some argss, lin, lam), t)
       | `Spawn (body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -562,47 +564,47 @@ class transform (env : Types.typing_environment) =
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       ('self_type *
-         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
           | [] -> (o, [])
-          | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+          | (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-                (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+                (o, (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
       in
         list o
 
     method rec_activate_outer_bindings :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       ('self_type *
-         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
       let rec list o =
         function
           | [] -> o, []
-          | (f, body, location, t, pos)::defs ->
+          | (f, lin, body, location, t, pos)::defs ->
               let (o, f) = o#binder f in
               let (o, defs) = list o defs in
               let (o, t) = optionu o (fun o -> o#datatype') t in
-                o, (f, body, location, t, pos)::defs
+                o, (f, lin, body, location, t, pos)::defs
       in
         list o
 
     method rec_activate_inner_bindings :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       'self_type =
       let bt (name, _, pos) t = (name, Some t, pos) in
       let rec list o =
         function
           | [] -> o
-          | (f, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
+          | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
               let (o, _) = o#binder (bt f inner) in
                 list o defs
       in
@@ -618,7 +620,7 @@ class transform (env : Types.typing_environment) =
             let (o, p) = o#pattern p in
             let (o, t) = optionu o (fun o -> o#datatype') t in
               (o, `Val (tyvars, p, e, location, t))
-        | `Fun ((_, Some ft, _) as f, (tyvars, lam), location, t) ->
+        | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
             let outer_tyvars = o#backup_quantifiers in
             let (o, tyvars) = o#quantifiers tyvars in
             let inner_effects = fun_effects ft (fst lam) in
@@ -626,7 +628,7 @@ class transform (env : Types.typing_environment) =
             let o = o#restore_quantifiers outer_tyvars in
             let (o, f) = o#binder f in
             let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Fun (f, (tyvars, lam), location, t))
+              (o, `Fun (f, lin, (tyvars, lam), location, t))
         | `Funs defs ->
             (* put the inner bindings in the environment *)
             let o = o#rec_activate_inner_bindings defs in

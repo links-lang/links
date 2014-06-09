@@ -1,6 +1,6 @@
 open Notfound
 
-module type S = 
+module type S =
 sig
   type name
   type 'a t
@@ -15,12 +15,13 @@ sig
   val range : 'a t -> 'a list
 
   val map : ('a -> 'b) -> 'a t -> 'b t
+  val iter : (name -> 'a -> unit) -> 'a t -> unit
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val show_t : 'a Show.show -> 'a t Show.show
 end
 
 module Make (Ord : Utility.OrderedShow) :
-  S with type name = Ord.t 
+  S with type name = Ord.t
     and module Dom = Utility.Set.Make(Ord) =
 struct
   module M = Utility.Map.Make(Ord)
@@ -38,6 +39,7 @@ struct
   let domain map = M.fold (fun k _ -> Dom.add k) map Dom.empty
   let range map = M.fold (fun _ v l -> v::l) map []
   let map = M.map
+  let iter = M.iter
   let fold = M.fold
   let show_t = M.show_t
 end

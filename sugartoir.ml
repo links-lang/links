@@ -13,7 +13,7 @@ open Ir
    in order to perform administrative reductions on the fly. The basic
    idea is to use a non-standard evaluator which interprets source
    terms in a monadic semantics. The monadic semantics is chosen in
-   such a way that we can reify semantic values as IR terms. 
+   such a way that we can reify semantic values as IR terms.
 
    We can view our implementation as an instance of normalisation by
    evaluation (where normalisation means reduction to monadic normal
@@ -161,7 +161,7 @@ sig
     (var_info * (Types.quantifier list * (CompilePatterns.pattern list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
-    
+
   val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
 end
 
@@ -203,7 +203,7 @@ struct
   fun k ->
     let (bs', tc), t = k v in
       (bs @ bs', tc), t
-    
+
   let lift_binding b a =
     (fun k ->
        let (bs, a'), t = k a
@@ -248,7 +248,7 @@ struct
     val comp_binding : var_info * tail_computation -> var M.sem
 
     val fun_binding :
-      Var.var_info * (tyvar list * binder list * computation) * location -> 
+      Var.var_info * (tyvar list * binder list * computation) * location ->
       Var.var M.sem
     val rec_binding :
       (Var.var_info * (tyvar list * binder list * (Var.var list -> computation))
@@ -324,14 +324,14 @@ struct
          | e ->
              let t = sem_type s in
                value_of_untyped_var (comp_binding (Var.info_of_type t, e), t))
-      
+
   let comp_of_value s =
     bind s (fun v -> lift (`Return v, sem_type s))
 
   (* eval parameters *)
   let constant c = lift (`Constant c, Constant.constant_type c)
   let var (x, t) = lift (`Variable x, t)
-        
+
   let apply (s, ss) =
     let ss = lift_list ss in
     let t = TypeUtils.return_type (sem_type s) in
@@ -352,7 +352,7 @@ struct
     bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
 
   let concat (nil, append, ss) =
-    match ss with 
+    match ss with
       | [] -> nil
       | [s] -> s
       | s::ss ->
@@ -375,12 +375,12 @@ struct
                   (fun bs -> lift ((name, v) :: bs))))
         attrs (lift []) in
     let attrs = lift_attrs attrs in
-    let children = lift_list children in  
+    let children = lift_list children in
       M.bind attrs
         (fun attrs ->
            M.bind children
              (fun children ->
-                let attrs = StringMap.from_alist attrs in                    
+                let attrs = StringMap.from_alist attrs in
                   lift (`XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
@@ -401,17 +401,17 @@ struct
               bind s
                 (fun r ->
                    M.bind s'
-                     (fun fields -> lift (`Extend (StringMap.from_alist fields, Some r), t)))   
+                     (fun fields -> lift (`Extend (StringMap.from_alist fields, Some r), t)))
 
   let project (s, name) =
     let t = TypeUtils.project_type name (sem_type s) in
       bind s (fun v -> lift (`Project (name, v), t))
 
   (* HACK:
-     
+
      We rely on only using this function for compiling
      record update in the update function below.
-     
+
      If v has type rho then `Erase ({l1,...,lk}, v)
      has type:
 
@@ -531,15 +531,15 @@ struct
             bind limit
               (fun limit ->
                  bind offset
-                   (fun offset ->                      
-                      lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))           
-  
+                   (fun offset ->
+                      lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
+
   let letvar (x_info, s, body) =
     bind s
       (fun e ->
          M.bind (comp_binding (x_info, e))
            (fun x -> body x))
- 
+
   let comp env (p, s, body) =
     let vt = sem_type s in
       bind s
@@ -554,11 +554,11 @@ struct
     let body_type = sem_type body in
     let body = reify body in
     let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
-    let f_info = (ft, "", `Local) in      
+    let f_info = (ft, "", `Local) in
     let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)),
-                                              body_type) in        
+                                              body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), `Unknown)) rest
-       
+
   let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be
@@ -571,9 +571,13 @@ struct
                   let args = TypeUtils.arg_types ft' in
                     List.map (fun arg ->
                                 Var.fresh_binder_of_type arg) args
+              | `Lolli _ as ft' ->
+                  let args = TypeUtils.arg_types ft' in
+                    List.map (fun arg ->
+                                Var.fresh_binder_of_type arg) args
               | _ -> assert false
             end in
-      
+
     let body_type = sem_type body in
     let body =
       List.fold_left2
@@ -584,7 +588,7 @@ struct
         (reify body)
         ps
         xsb
-    in     
+    in
       M.bind (fun_binding (f_info, (tyvars, xsb, body), location)) rest
 (*        fun_binding (f_info, (tyvars, (xs_info, ps, body)), location) rest *)
 
@@ -593,7 +597,7 @@ struct
       List.map
         (fun ((ft, _, _) as f_info, (tyvars, (ps, body)), location) ->
            let xsb : binder list =
-             (* It is important to rename the quantifiers in the type to be those used in 
+             (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
              match Instantiate.replace_quantifiers ft tyvars with
                | `ForAll (_, t')
@@ -713,9 +717,9 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "!"), e1, e2) ->
               I.apply (instantiate "send" tyargs, [ev e1; ev e2])
-          | `InfixAppl ((tyargs, `Name n), e1, e2) when Lib.is_pure_primitive n -> 
+          | `InfixAppl ((tyargs, `Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
-          | `InfixAppl ((tyargs, `Name n), e1, e2) -> 
+          | `InfixAppl ((tyargs, `Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
           | `InfixAppl ((tyargs, `Cons), e1, e2) ->
               cofv (I.apply_pure (instantiate "Cons" tyargs, [ev e1; ev e2]))
@@ -743,7 +747,7 @@ struct
           | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) when is_pure_primitive e ->
-              cofv (I.apply_pure (ev e, evs es)) 
+              cofv (I.apply_pure (ev e, evs es))
           | `FnAppl (e, es) ->
               I.apply (ev e, evs es)
           | `TAbstr (tyvars, e) ->
@@ -867,7 +871,7 @@ struct
               let source = ev source in
               let where =
                 opt_map
-                  (fun where -> eval env' where) 
+                  (fun where -> eval env' where)
                   where in
               let body = eval env' (`RecordLit (fields, None), dp) in
                 I.db_update env (p, source, where, body)
@@ -877,7 +881,7 @@ struct
               let source = ev source in
               let where =
                 opt_map
-                  (fun where -> eval env' where) 
+                  (fun where -> eval env' where)
                   where
               in
                 I.db_delete env (p, source, where)
@@ -921,7 +925,7 @@ struct
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | `Fun ((f, Some ft, _), (tyvars, ([ps], body)), location, pos) ->
+                | `Fun ((f, Some ft, _), _, (tyvars, ([ps], body)), location, pos) ->
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -939,13 +943,13 @@ struct
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun ((f, Some outer, _), ((_tyvars, Some (inner, _extras)), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun ((f, Some outer, _), _, ((_tyvars, Some (inner, _extras)), _), _, _, _) (fs, inner_fts, outer_fts) ->
                               (f::fs, inner::inner_fts, outer::outer_fts))
-                        defs 
+                        defs
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun ((f, Some ft, _), ((tyvars, _), ([ps], body)), location, t, pos) ->
+                        (fun ((f, Some ft, _), _, ((tyvars, _), ([ps], body)), location, t, pos) ->
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -965,14 +969,14 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `Include _ -> assert false                   
+                | `Include _ -> assert false
             end
 
   and evalv env e =
     I.value_of_comp (eval env e)
 
   (* Given a program, return a triple consisting of:
-     
+
      - globals
      - the main computation (a list of locals and a tail computation)
      - an environment mapping source names of global bindings to IR names
@@ -984,7 +988,7 @@ struct
      The locals list contains all top-level binding on which global
      bindings may not depend, i.e., all top-level bindings after the
      last global binding. *)
-  let partition_program : program -> binding list * computation * nenv = 
+  let partition_program : program -> binding list * computation * nenv =
     fun (bs, main) ->
     let rec partition (globals, locals, nenv) =
       function

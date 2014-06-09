@@ -20,7 +20,7 @@
   actions.  The particularly notable manipulations are:
 
   1. On encountering '{' we push an expression lexer onto the stack.
-     On encountering '}' we pop the lexer, and carry on lexing in 
+     On encountering '}' we pop the lexer, and carry on lexing in
      the "mode" we were in before.
 
   2. On encountering the start of an XML literal we push an xml lexer.
@@ -71,7 +71,7 @@ let infixr9 x = INFIXR9 x
 let prefix  x = PREFIXOP x
 let postfix x = POSTFIXOP x
 
-let precs = 
+let precs =
   [
     infix0, infixl0, infixr0;
     infix1, infixl1, infixr1;
@@ -135,7 +135,7 @@ object
     let value = match List.nth precs level, assoc with
       | (a,_,_), `None -> a
       | (_,a,_), `Left -> a
-      | (_,_,a), `Right -> a 
+      | (_,_,a), `Right -> a
       | _,       `Pre -> prefix
       | _,       `Post -> postfix
     in
@@ -144,16 +144,16 @@ object
   method push_lexer (lexer : Lexing.lexbuf -> Parser.token) =
     Stack.push lexer lexers
 
-  method pop_lexer = 
+  method pop_lexer =
     Stack.pop lexers
 
-  method next_lexer = 
+  method next_lexer =
     Stack.top lexers
 end
 
 let fresh_context () = new lexer_context
 
-let bump_lines lexbuf n = 
+let bump_lines lexbuf n =
   lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_lnum = lexbuf.lex_curr_p.pos_lnum + n}
 
 let count_newlines = StringUtils.count '\n'
@@ -162,52 +162,53 @@ let keywords = [
  "alien"    , ALIEN;
  "as"       , AS;
  "case"     , CASE;
- "client"   , CLIENT; 
+ "client"   , CLIENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
- "else"     , ELSE; 
- "escape"   , ESCAPE; 
- "false"    , FALSE; 
+ "else"     , ELSE;
+ "escape"   , ESCAPE;
+ "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
- "from"     , FROM; 
- "fun"      , FUN; 
+ "from"     , FROM;
+ "fun"      , FUN;
  "formlet"  , FORMLET;
- "if"       , IF; 
- "in"       , IN; 
- "include"  , INCLUDE; 
- "yields"   , YIELDS; 
+ "if"       , IF;
+ "in"       , IN;
+ "include"  , INCLUDE;
+ "yields"   , YIELDS;
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
- "insert"   , INSERT; 
- "mu"       , MU; 
+ "insert"   , INSERT;
+ "linfun"   , LINFUN;
+ "mu"       , MU;
  "native"   , NATIVE;
  "offer"    , OFFER;
  "orderby"  , ORDERBY;
- "op"       , OP; 
+ "op"       , OP;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
- "returning", RETURNING; 
+ "returning", RETURNING;
  "select"   , SELECT;
- "server"   , SERVER; 
+ "server"   , SERVER;
  "set"      , SET;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnWait", SPAWNWAIT;
- "switch"   , SWITCH; 
- "table"    , TABLE; 
- "TableHandle", TABLEHANDLE; 
+ "switch"   , SWITCH;
+ "table"    , TABLE;
+ "TableHandle", TABLEHANDLE;
  "true"     , TRUE;
  "typename" , TYPENAME;
- "update"   , UPDATE; 
+ "update"   , UPDATE;
  "values"   , VALUES;
- "var"      , VAR; 
- "where"    , WHERE; 
- "with"     , WITH; 
+ "var"      , VAR;
+ "where"    , WHERE;
+ "with"     , WITH;
 ]
 
 let kinds = [
@@ -238,7 +239,7 @@ let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n']
 let char_contents = ([^ '\"' '\\']|"\\\"" |"\\\\" | "\\n" | "\\r" | "\\t" | ('\\' octal_code) | ('\\' ['x' 'X'] hex_code))
 let string_contents = char_contents*
-let regexrepl_fsa =  [^ '{' '/']* (* this regex is too restrictive. But can't seem to get a more precise one to work  :( *) 
+let regexrepl_fsa =  [^ '{' '/']* (* this regex is too restrictive. But can't seem to get a more precise one to work  :( *)
 let regex_flags = ['l' 'n' 'g']*
 
 let directive_prefix = ['' '@' '$']
@@ -249,7 +250,7 @@ let xml_closing_tag = ('<' '/' def_id '>')
 let opchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '.' '\\' '^' '-' ]
 
 (* Each lexer when called must return exactly one token and possibly
-   modify the stack of remaining lexers.  The lexer on top of the stack 
+   modify the stack of remaining lexers.  The lexer on top of the stack
    will be called next;  when each action starts it's the current lexer.
 
    Each rule takes two arguments: the currently operative precedence
@@ -267,6 +268,8 @@ rule lex ctxt nl = parse
   | '='                                 { EQ }
   | "->"                                { RARROW }
   | "~>"                                { SQUIGRARROW }
+  | "-@"                                { LOLLI }
+  | "~@"                                { SQUIGLOLLI }
   | "=>"                                { FATRARROW }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
@@ -323,8 +326,8 @@ rule lex ctxt nl = parse
   | "infixr"                            { INFIXR ctxt#setprec }
   | "prefix"                            { PREFIX ctxt#setprec }
   | "postfix"                           { POSTFIX ctxt#setprec }
-  | def_id as var                       { try List.assoc var keywords 
-                                          with Not_found | NotFound _ -> 
+  | def_id as var                       { try List.assoc var keywords
+                                          with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
@@ -349,9 +352,9 @@ and xmllex ctxt nl = parse
   | "}}"                                { CDATA "}" }
   | "}"                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | [^ '{' '}' '<' '&' ]* as cdata      { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
-  | "&amp;"                             { CDATA "&" } 
-  | "&lt;"                              { CDATA "<" } 
-  | "&gt;"                              { CDATA ">" } 
+  | "&amp;"                             { CDATA "&" }
+  | "&lt;"                              { CDATA "<" }
+  | "&gt;"                              { CDATA ">" }
   | "{|"                                { (* scan the expression, then back here *)
                                           ctxt#push_lexer (lex ctxt nl); LBRACEBAR }
   | '{'                                 { (* scan the expression, then back here *)
@@ -373,7 +376,7 @@ and regex' ctxt nl = parse
   | '/'                                 { ctxt#push_lexer (regex ctxt nl); SLASH }
   | "s/"                                { ctxt#push_lexer (regexrepl ctxt nl); (* push twice is intentional *)
 					  ctxt#push_lexer (regexrepl ctxt nl);
-					  ctxt#push_lexer (regex ctxt nl); 
+					  ctxt#push_lexer (regex ctxt nl);
 					  SSLASH }
   | '#' ([^ '\n'] *)                    { regex' ctxt nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' ctxt nl lexbuf }
@@ -405,7 +408,7 @@ and regexrepl ctxt nl = parse
   | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
 
 {
- let lexer ctxt ~newline_hook = 
+ let lexer ctxt ~newline_hook =
    ctxt#push_lexer (lex ctxt newline_hook);
    fun lexbuf -> ctxt#next_lexer lexbuf
 }
