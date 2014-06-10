@@ -236,7 +236,7 @@ let rec basify_row (fields, row_var) =
 
 let rec is_unl_type : typ -> bool =
   function
-  | `Primitive ((`Bool | `Int | `Char | `Float | `String))
+  | `Primitive _
   | `Function _ -> true
   | `Lolli _ -> false
   | `Record r
@@ -273,7 +273,7 @@ and is_unl_row (fields, row_var) =
 
 let rec type_can_be_unl : typ -> bool =
   function
-  | `Primitive ((`Bool | `Int | `Char | `Float | `String))
+  | `Primitive _
   | `Function _ -> true
   | `Lolli _ -> false
   | `Record r
