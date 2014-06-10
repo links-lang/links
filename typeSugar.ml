@@ -2410,7 +2410,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                              if Types.type_can_be_unl t then
                                                Types.make_type_unl t
                                              else
-                                               Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t))
+                                               Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^
+                                                                  v ^ " of linear type " ^ Types.string_of_datatype t))
                                (pattern_env pat))
                      (List.flatten pats) in
 
@@ -2422,7 +2423,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                 if Types.type_can_be_unl t then
                                   Types.make_type_unl t
                                 else
-                                  Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " was used in a non-linear function definition"))
+                                  Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
+                                                     " was used in a non-linear function definition"))
                              (usages body)
             else () in
 
@@ -2505,7 +2507,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                            if Types.type_can_be_unl t then
                                              Types.make_type_unl t
                                            else
-                                             Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t))
+                                             Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^
+                                                                v ^ " of linear type " ^ Types.string_of_datatype t))
                                         pat_env in
                       let used =
                         let vs = StringSet.add name (Env.domain pat_env) in

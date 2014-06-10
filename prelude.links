@@ -23,7 +23,7 @@ fun filter(p, l) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-# sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
+sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -37,7 +37,7 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get
 # optimised away - it does if we eta reduce it
-# sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
+sig sortByBase : ((a) ~b~> (| _::UnlBase), [a]) ~b~> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
 fun all(p, l) {
@@ -142,7 +142,7 @@ fun unzip(l) {
   }
 }
 
-# sig zip : ([a], [b]) ~> [(a, b)]
+sig zip : ([a], [b]) ~> [(a, b)]
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
@@ -204,7 +204,7 @@ fun mapi(f, xs) {
   mi(0, xs)
 }
 
-# sig substAt : ([a], Int, a) ~> [a]
+sig substAt : ([a], Int, a) ~> [a]
 fun substAt(xs, i, y) {
   switch (xs) {
     case [] -> []
@@ -247,7 +247,7 @@ fun join(glue,list) {
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
-# sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
   switch (list) {
     case [] -> []
@@ -259,7 +259,7 @@ fun takeWhile(pred, list) {
   }
 }
 
-# sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
   switch (list) {
     case [] -> []
@@ -271,7 +271,7 @@ fun dropWhile(pred, list) {
   }
 }
 
-# sig ignore : (a) -> ()
+sig ignore : (a) -> ()
 fun ignore (_) { }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
@@ -291,12 +291,12 @@ fun ignore (_) { }
 #   else 0
 # }
 
-#sig abs : (Int) -> Int
-# fun abs(i) {
-#   if (i < 0) -i else i
-# }
+sig abs : (Int) -> Int
+fun abs(i) {
+  if (i < 0) -i else i
+}
 
-# sig init : ([a]) ~> [a]
+sig init : ([a]) ~> [a]
 fun init(list) {
   switch (list) {
     case [y] -> []
@@ -306,7 +306,7 @@ fun init(list) {
 
 fun curtail(list) { init(list) }
 
-# sig last : ([a]) ~> a
+sig last : ([a]) ~> a
 fun last(list) {
   switch (list) {
     case [x] -> x
@@ -345,7 +345,7 @@ fun last(list) {
 # Option types
 typename Maybe (a) = [|Nothing | Just:a|];
 
-# sig isJust : (Maybe (a)) -> Bool
+sig isJust : (Maybe (a)) -> Bool
 fun isJust(x) {
   switch (x) {
     case Just (x) -> true
@@ -353,7 +353,7 @@ fun isJust(x) {
   }
 }
 
-# sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
+sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
 fun search(p,l) {
   switch (l) {
     case [] -> Nothing
@@ -362,7 +362,7 @@ fun search(p,l) {
   }
 }
 
-# sig find : ((a) ~b~> Bool, [a]) ~b~> a
+sig find : ((a) ~b~> Bool, [a]) ~b~> a
 fun find(p,l) {
   switch (l) {
     case [] -> error("Not_found")
@@ -371,7 +371,7 @@ fun find(p,l) {
   }
 }
 
-# sig fromJust : (Maybe (a)) ~> a
+sig fromJust : (Maybe (a)) ~> a
 fun fromJust(x) {
   switch (x) {
     case Just (x) -> x
@@ -379,7 +379,7 @@ fun fromJust(x) {
   }
 }
 
-# sig fromMaybe : (Maybe (a), a) -> a
+sig fromMaybe : (Maybe (a), a) -> a
 fun fromMaybe(x, y) {
   switch (x) {
     case Just (x) -> x
@@ -390,7 +390,7 @@ fun fromMaybe(x, y) {
 
 # FIXME: for some reason placing this further up the file where it should be
 # leads to an error
-# sig empty : ([a]) -> Bool
+sig empty : ([a]) -> Bool
 fun empty(l) {
   switch (l) {
     case [] -> true
@@ -400,7 +400,7 @@ fun empty(l) {
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
-# sig memassoc : (a,[(a,b)]) ~> Bool
+sig memassoc : (a,[(a,b)]) ~> Bool
 fun memassoc(x,l) {
   switch (l) {
     case []    -> false
@@ -408,7 +408,7 @@ fun memassoc(x,l) {
   }
 }
 
-# sig lookup : (a,[(a,b)]) ~> Maybe (b)
+sig lookup : (a,[(a,b)]) ~> Maybe (b)
 fun lookup(x,l) {
   switch (l) {
     case [] -> Nothing
@@ -417,7 +417,7 @@ fun lookup(x,l) {
   }
 }
 
-# sig assoc : (String,[(String,b)]) ~> b
+sig assoc : (String,[(String,b)]) ~> b
 fun assoc(x,l) {
   switch (l) {
     case []    -> error("Not found " ^^ x)
@@ -426,7 +426,7 @@ fun assoc(x,l) {
   }
 }
 
-# sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
+sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
 fun removeAssoc(x,l) {
   switch (l) {
     case [] -> []
@@ -435,7 +435,7 @@ fun removeAssoc(x,l) {
   }
 }
 
-# sig assocAll : (String,[(String,b)]) ~> [b]
+sig assocAll : (String,[(String,b)]) ~> [b]
 fun assocAll(x,l) {
   switch (l) {
     case []    -> []
@@ -446,588 +446,588 @@ fun assocAll(x,l) {
   }
 }
 
-# sig isInt : (String) -> Bool
+sig isInt : (String) -> Bool
 fun isInt (x) { x =~ /-?[0-9]+$/ }
 
-# sig isFloat : (String) -> Bool
+sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 fun asList(t) server {
   for (x <-- t) [x]
 }
 
-# #### FORMLETS ####
-# ####   A library of functions supporting the 'formlet ... yields ...' syntax
-# ####   TBD: move to a namespaced module
-#
-# ####   NOTE: top-level vars have been eta-expanded in order to tell
-# ####   the JS compiler that they are pure and hence can be safely
-# ####   compiled. If we had a purity analysis then all of these could
-# ####   be safely eta-reduced again.
-#
-# typename Env = [(String,String)];
-# typename Gen = Int;
-# typename State (d,a) = (d) {}~> (a,d);
-# typename Collector (a) = (Env) {}~> a;
-# typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
-# typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
-# typename XmlContext = (Xml) {}~> Xml;
-#
-# typename Attributes = [(String, String)];
-#
-# # attributes for a multipart form
-# var multipart = [("enctype", "multipart/form-data")];
-#
-# infixr 0 $;
-# # sig $ : ((a) -b-> c, a) -b-> c
-# op f $ x { f(x) }
-#
-# # state monad
-# # sig runState : (State (d,a), d) -%-> (a,d)
-# fun runState(s, i) { s(i) }
-#
-# infixl 1 >>=;
-# # sig >>= : (State (d,a), (a) -%-> State(d,b)) -%-> State (d,b)
-# op x >>= f {
-#    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
-# }
-#
-# # sig return : (a) -> State (b,a)
-# fun return(a) { fun (s) { (a,s) } }
-#
-# # sig fmap : ((a) -%-> b, State (c,a)) -%-> State (c,b)
-# fun fmap(f, x) { x >>= return `compose` f }
-#
-# # sig pure : (a) -> Formlet(a)
-# fun pure(v) {
-#   return(([], fun (_) { ([], Just (v)) }))
-# }
-#
-# # sig pureE : (a) -> Maybe (a)
-# fun pureE (x) { Just (x) }
-#
-# # sig applyE : (Maybe ((a) -%-> b), Maybe (a)) -%-> Maybe (b)
-# fun applyE (f, x) {
-#   switch ((f, x)) {
-#     case (Just (f), Just (x)) -> Just (f(x))
-#     case (_       , _       ) -> Nothing
-#   }
-# }
-#
-# infixr 1 @@@;
-# # sig @@@ : (Formlet (a), Formlet ((a) -%-> b)) -%-> Formlet (b)
-# op m @@@ k {
-#   m >>= fun((x,c)){
-#   k >>= fun((y,f)){
-#   return((x++y,
-#           fun(e){
-#                   var (fx, f) = f(e);
-#                   var (cx, c) = c(e);
-#                   (cx++fx,  f `applyE` c)
-#          }))}}
-# }
-#
-# # x @@=> f
-# #   Returns a formlet that post-processes the formlet x by running its
-# #   output through f.   (This is fmap for the Formlet functor.)
-# #   (This could be written more efficiently.)
-# # sig @@=> : (Formlet(a), (a) -%-> b) -%-> Formlet(b)
-# op m @@=> f {
-#   m @@@ pure(f)
-# }
-#
-# # sig xml : (Xml) -> Formlet (())
-# fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
-#
-# # sig text : (String) ~> Formlet (())
-# fun text(s) { xml(stringToXml(s)) }
-#
-# # sig plug : (XmlContext, Formlet (a)) -%-> Formlet (a)
-# op f `plug` m {
-#   m >>= fun((x,collector)){ return((f(x),
-#     fun (env) { var (xml,c) = collector (env);
-#                 (f(xml), c) }))}
-# }
-#
-# # sig makeName : (Int) -> String
-# fun makeName(i) { "input_" ^^ intToString(i) }
-#
-# # sig nextName : State (Int,String)
-# var nextName = fun (i) { (makeName(i), i+1) };
-#
-# # sig sequence : ([State(a,b)]) ~> State(a,[b])
-# fun sequence(xs) {
-#   switch (xs) {
-#     case [] -> return([])
-#     case x::xs -> x >>= (fun (x) {
-#                   sequence(xs) >>= (fun (xs) {
-#                     return (x :: xs)})})
-#   }
-# }
-#
-# # sig formlets : ([Formlet (a)]) ~> Formlet ([a])
-# # fun formlets(fs) {
-# #   switch (fs) {
-# #     case []    -> formlet <#/> yields []
-# #     case [x]   -> formlet <#>{x -> f}</#> yields [f]
-# #     case x::xs -> formlet <#>{x -> f}{formlets(xs) -> fs}</#> yields f::fs
-# #   }
-# # }
-# #
-# # Page stuff
-# typename RecForms = [mu a.(([a]) {}~> Xml)];
-# typename MultiXmlContext = ([Xml]) {}~> Xml;
-#
-# typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
-# typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
-# typename Handler (a) = (a) {}~> Page;
-#
-# # sig unitP : Page
-# var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
-#
-# # sig joinP : (Page, Page) -> Page
-# fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
-#   (i1+i2,
-#    fun (xs) {
-#      <#>{k1(take(i1, xs))}{k2(drop(i1, xs))}</#>
-#    },
-#    fun (gen) {
-#      var (ms1, gen) = fs1(gen);
-#      var (ms2, gen) = fs2(gen);
-#      (ms1 ++ ms2, gen)
-#    })
-# }
-#
-# # sig joinManyP : ([Page]) ~> Page
-# fun joinManyP(gs) {
-#   fold_left(joinP, unitP, gs)
-# }
-#
-# # sig bodyP : (Xml) -> Page
-# fun bodyP(xml) {
-#   (0, fun ([]) {xml}, fun (gen) {([], gen)})
-# }
-#
-# # sig plugP : (XmlContext, Page) -> Page
-# fun plugP(context, (i, k, fs)) {
-#   (i, fun (xs) {context(k(xs))}, fs)
-# }
-#
-# # sig formP : (Formlet(a), Handler(a), Attributes) -> Page
-# fun formP(f, h, attributes) {
-#   (1,
-#    fun ([x]) {x},
-#    fun (gen) {
-#      var ((x, c), gen) = runState(f, gen);
-#      ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
-#    })
-# }
-#
-# # sig pickleCont : (() -> Page) ~> String
-# fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
-#
-# sig mkForm : ((Env) ~> Page, Xml, Attributes) ~> Xml
-# fun mkForm(cont, contents, attributes) {
-#   <form enctype="application/x-www-form-urlencoded"
-#         action="#" method="POST" {attributes}>
-#     <input type="hidden"
-#            name="_k"
-#            value="{pickleCont(fun () {cont(environment())})}" />
-#     {contents}
-#   </form>
-# }
-# #
-# # sig renderPagePure : (Page) {}~> Xml
-# fun renderPagePure((n, k, fs)) {
-#   var (ms, _) = fs(0);
-#   var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-#   k(map (fun (z) {z(zs)}, zs))
-# }
-#
-# # sig renderPage : (Page) ~> Xml
-# fun renderPage(p) {
-#   # HACK: this allows us to use renderPage in effectful contexts
-#   (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
-# }
-#
-# # sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
-# fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
-#   mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
-# }
-#
-# # sig validate :
-# #  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
-# fun validate(c, h, k, zs, i, attributes) (env) {
-#   var (xml, v) = c(env);
-#   switch (v) {
-#     case Just(v) -> h(v)
-#     case Nothing  -> {
-#       fun z(zs) {
-#         mkForm(validate(c, h, k, zs, i, attributes), xml, attributes)
-#       }
-#       var zs = substAt(zs, i, z);
-#       bodyP(k(map (fun (z) {z(zs)}, zs)))
-#     }
-#   }
-# }
-# # end of pagelet stuff
-#
-# # Types of input we need to handle:
-# #   text (done)
-# #   password (done)
-# #   checkbox (done)
-# #   radio (done)
-# #   submit (done)
-# #   reset (done)
-# #   file (done)
-# #   hidden (done)
-# #   image
-# #   button (done)
-#
-# # A one element String-type formlet can be constructed using the [input]
-# # function.
-#
-# fun mkInput(mkXml,mkFilledXml) {
-#   nextName >>= fun (name) {
-#     (return ((mkXml(name),
-#               fun (env) { var v = assoc (name, env);
-#                           (mkFilledXml(name,v), pureE (v)) })))}
-# }
-#
-# # sig input : Formlet (String)
-# var input = fun (gen) {
-#               mkInput(fun(name) { <input name="{name}"/> },
-#                       fun(name,v) { <input name="{name}" value="{v}"/> })(gen)
-#             };
-#
-# # QUESTION:
-# #   Should we change the semantics of attribute expressions such that
-# #   they *do not* override literal attributes?
-# #
-# #   An advantage of doing this would be that we wouldn't have to use
-# #   removeAssoc in formlet library functions. A disadvantage is that
-# #   this wouldn't correspond with the usual update semantics.
-#
-# # input with attributes
-# # sig inputA : (Attributes) ~> Formlet (String)
-# fun inputA(attributes) {
-#   mkInput(fun(name) { <input name="{name}" {removeAssoc("name", attributes)}/> },
-#           fun(name,v) { <input name="{name}" value="{v}" {removeAssoc("name", removeAssoc("value", attributes))}/> })
-# }
-#
-# # A formlet producing a String whose contents are hidden on entry.
-# # sig inputPasswordA : (Attributes) ~> Formlet (String)
-# fun inputPasswordA(attributes) {
-#   inputA(("type", "password")::removeAssoc("type", attributes))
-# }
-#
-# # A one-element formlet populated with an initial value
-# # sig inputValueA : (String, Attributes) ~> Formlet (String)
-# fun inputValueA(v, attributes) {
-#   inputA(("value", v)::removeAssoc("value", attributes))
-# }
-#
-# # A "file" type input.
-# # sig inputFileA : (Attributes) ~> Formlet (String)
-# fun inputFileA(attributes) {
-#   inputA(("type", "file")::removeAssoc("type", attributes))
-# }
-#
-# # A formlet producing a String whose contents are hidden on entry.
-# # sig inputPassword : Formlet (String)
-# var inputPassword = fun (gen) {inputPasswordA([])(gen)};
-#
-# # A one-element formlet populated with an initial value
-# # sig inputValue : (String) ~> Formlet (String)
-# fun inputValue(v) {
-#   inputValueA(v, [])
-# }
-#
-# # A "file" type input.
-# # sig inputFile : Formlet (String)
-# var inputFile = fun (gen) {inputFileA([])(gen)};
-#
-# # sig textarea : (String) ~> Formlet (String)
-# fun textarea(value) {
-#   mkInput(fun (name) { <textarea name="{name}">{stringToXml(value)}</textarea> },
-#           fun (name,value) { <textarea name="{name}">{stringToXml(value)}</textarea> })
-# }
-#
-# # raw submit button
-# # sig submit : (String) ~> Xml
-# fun submit(text) {
-#   <button type="submit">{stringToXml(text)}</button>
-# }
-#
-# # button that returns true iff it is pressed
-# # sig button : (String,[|Submit|Reset|Button|]) ~> Formlet (Bool)
-# fun button(text, behaviour) {
-#   nextName >>= fun (name) {
-#     var behaviour = switch (behaviour) {
-#       case Submit -> "submit"
-#       case Reset -> "reset"
-#       case Button -> "button"
-#     };
-#     var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
-#     return ((xml,
-#              fun (env) { (xml, pureE (memassoc(name, env))) }))
-#   }
-# }
-#
-# # sig submitButton : (String) ~> Formlet (Bool)
-# fun submitButton(text) {
-#   button(text, Submit)
-# }
-#
-# # sig resetButton : (String) ~> Formlet (Bool)
-# fun resetButton(text) {
-#   button(text, Reset)
-# }
-#
-# # sig pushButton : (String) ~> Formlet (Bool)
-# fun pushButton(text) {
-#   button(text, Button)
-# }
-#
-# # sig checkboxDefault : (Bool) ~> Formlet (Bool)
-# fun checkboxDefault(checked) {
-#   fun (gen) {
-#     (nextName >>= fun (name) {
-#      var xml = <input type="checkbox" name="{name}" value="yes" />;
-#      return ((addAttributes(xml, if (checked) [("checked","Y")]
-#                                  else []),
-#              fun (env) { var checked = memassoc(name, env);
-#                          (addAttributes(xml,if (checked) [("checked","Y")]
-#                                             else []),
-#                           pureE (checked)) }))})(gen)
-#   }
-# }
-#
-# # sig checkbox : Formlet (Bool)
-# var checkbox = fun(gen) {checkboxDefault(false)(gen)};
-#
-# # before ++ [selected] ++ after is a list of (value, data) pairs
-# # layout is a function for rendering a list of (radio button, data) pairs
-# #
-# # [NOTE]
-# #   A default selection is compulsory as recommended by the HTML spec.
-# #   We should probably do the same for 'choice' (drop-down menus) as well.
-# #
-# # It is the user's responsibility to ensure that layout produces Xml that
-# # uses each radio button exactly once and does not introduce any other input
-# # elements.
-# #
-# # The data components are useful for attaching extra data such as labels to
-# # the radio buttons.
-#
-# # 'inputRadiogroup(items, selected, layout)' constructs a list of
-# # radio buttons in XML form, pairs them with the values from 'items',
-# # and passes this list of pairs to the 'layout' function, which should
-# # return XML. The result is a formlet that will return the value from
-# # 'items' that is associated with the radio button selected by the user.
-# # sig inputRadiogroup : ([a], a, ([(Xml, a)]) -%-> Xml) -%->
-# #                      Formlet (a)
-# fun inputRadiogroup(items, selected, layout) {
-#   nextName >>= fun (name) {
-#   sequence (for (x <- items) [nextName]) >>= fun (keys) {
-#     var keyedItems = zip(keys,items);
-#     fun itemXml(selected) {
-#       for ((key, data) <- keyedItems)
-#         [(addAttributes(<input type="radio" name="{name}" value="{key}" />,
-#                         if (data == selected)
-#                           [("checked","on")] else []),
-#           data)]
-#     }
-#     var xml = layout(itemXml(selected));
-#     return ((xml,
-#              fun (env) {
-#                var selectedValue = assoc(name, env);
-#                var selectedData = assoc(selectedValue, keyedItems);
-#                var xml = layout(itemXml(selectedData));
-#             (xml, pureE(selectedData))}))
-#   }
-#   }
-# }
-#
-# # preludeOptionKeyed: A utility function for the <select> formlets
-# # ('choice' and 'choices'). Constructs an <option> element and an associated
-# # function for determining whether this option was selected.
-# # sig preludeOptionKeyed : (String, (a,String), Bool) ~>
-# #                         (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
-# fun preludeOptionKeyed (key, (data,text), selected) {
-#   if (selected) {
-#      ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
-#       (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
-#   } else {
-#      ((<option value="{key}">{stringToXml(text)}</option>,
-#       (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
-#   }
-# }
-#
-# # sig preludeOptionsKeyed : ([(String,(a,String))], a) ~>
-# #                          (Xml, (String) -> [a])
-# fun preludeOptionsKeyed(items, def) {
-#   switch (items) {
-#      case [] -> ((<#/>, fun (_) { [] }))
-#      case (itemKey, item)::items -> {
-#        var (xml,r1) = preludeOptionKeyed(itemKey, item, (first(item) == def));
-#        var (morexml, r2) = preludeOptionsKeyed(items, def);
-#        ((xml++morexml, r1(r2))) }
-#   }
-# }
-#
-# # sig preludeMultiOptionsKeyed
-# #     : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
-# fun preludeMultiOptionsKeyed(items) {
-#   switch (items) {
-#      case [] -> ((<#/>, fun (_) { [] }))
-#      case (itemKey, item)::items ->
-#        var (xml,r1) = preludeOptionKeyed(itemKey,(first(item),second(item)),
-#                                          third(item));
-#        var (morexml, r2) = preludeMultiOptionsKeyed(items);
-#        (xml ++ morexml, r1(r2))
-#   }
-# }
-#
-# # sig choice : ([(a,String)]) ~> Formlet (a)
-# fun choice (items) {
-#   var (selected, _) = hd(items);
-#   choiceDefault(items, selected)
-# }
-#
-# # sig choiceDefault : ([(a,String)], a) ~> Formlet (a)
-# fun choiceDefault (items, selected) {
-#   # generate a fresh name for the field (menu) as a whole
-#   nextName >>= fun (fieldName) {
-#   # generate a list of fresh names, one for each menu item.
-#   sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
-#      var keyedItems = zip(optKeys, items);
-#      return ((
-#         # pre-validation, use the original 'selected' parameter
-#         {var (optsXml,_) = preludeOptionsKeyed(keyedItems, selected);
-#          <select name="{fieldName}">{optsXml}</select>},
-#         fun (env) {
-#           # post-validation, we need to find the 'selected' item in the env:
-#           # 1. get the String key of the selection
-#           var selectedKey = assoc(fieldName,env);
-#           # 2. find the corresponding 'data' value
-#           var (selected, _) = assoc(selectedKey, keyedItems);
-#           # 3. create the <option> elements, marking that one selected.
-#           var (optsXml, retrieve) = preludeOptionsKeyed(keyedItems, selected);
-#           (<select name="{fieldName}">{optsXml}</select>,
-#            pureE(hd(retrieve(selectedKey)))) }))
-#   }
-#   }
-# }
-#
-# # sig choices : ([(a,String, Bool)]) ~> Formlet ([a])
-# fun choices (items) {
-#   # generate a fresh name for the field (menu) as a whole
-#   nextName >>= fun (fieldName) {
-#   # generate a list of fresh names, one for each menu item.
-#   sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
-#     var keyedItems = zip(optKeys, items);
-#     return ((
-#        # pre-validation, use the 'selected' flags in the 'items' list
-#        {var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
-#         <select name="{fieldName}" multiple="multiple">{xml}</select>},
-#        fun (env) {
-#          # post-validation, 'env' determines which items are selected.
-#          var selectedKeys = assocAll(fieldName,env);
-#          # now re-mark the items as selected or not according to
-#          #     whether they appear in the query env.
-#          var keyedItems = for (((key, (data, text, sel))) <- keyedItems)
-#                             [(key, (data, text, key `elem` selectedKeys))];
-#          var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
-#          (<select name="{fieldName}" multiple="multiple">{xml}</select>,
-#           pureE(concatMap(retrieve, selectedKeys)))
-#        }))
-#   }
-#   }
-# }
-#
-# # sig choicesNone : ([(a, String)]) ~> Formlet ([a])
-# fun choicesNone (items) {
-#   choices (map (fun ((v, text)) {(v, text, false)}, items))
-# }
-#
-# typename Either (a,b) = [|Left:a | Right : b|];
-#
-# # given a formlet and a "predicate", return a new formlet that uses
-# # the predicate for validation.
-# # sig satisfies : (Formlet (a), (a,Xml) -%-> Either(Xml,Xml)) ~> Formlet(a)
-# fun satisfies(f, validate) {
-#    f >>= fun((xml,collector)) {
-#    return((xml, fun (env) {
-#        var (cxml, val) = collector(env);
-#        switch (val) {
-#          case Nothing  -> (cxml, Nothing)
-#          case Just (v) ->
-#             switch (validate(v, cxml)) {
-#                case Right (xml) -> (xml, Nothing)
-#                case Left (xml)  -> (xml, Just (v)) }}}))}
-# }
-#
-#
-# # sig errorMsg : ((a) ~b~> Bool, (a) ~b~> String) -> (a,Xml) ~b~> Either (Xml,Xml)
-# fun errorMsg (f, msg) (x,xml) {
-#   if (f(x)) Left (xml)
-#   else Right (<span class="errorinput">{xml} </span>
-#           ++ <span class="error"> {stringToXml(msg(x))}</span>)
-# }
-#
-# infixr 5 `errorMsg`;
-#
-# # sig transform : (Formlet(a), (a) -%-> Bool, (a) -%-> String, (a) ~b~> c) ~b~> Formlet(c)
-# fun transform(f, predicate, error, g) {
-#   formlet
-#     <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
-#   yields
-#     g(v)
-# }
-#
-# # checked input components
-#
-# # sig inputInt : Formlet(Int)
-# var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)(gen)};
-#
-# # sig inputIntA : (Attributes) ~> Formlet(Int)
-# fun inputIntA(attributes) {
-#   transform(inputA(attributes), isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)
-# }
-#
-# # sig inputIntValue : (Int) ~> Formlet(Int)
-# fun inputIntValue(v) {
-#   transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ^^ "is not an integer"}, stringToInt)
-# }
-#
-# # sig inputFloat : Formlet(Float)
-# var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a float"}, stringToFloat)(gen)};
-#
-# #### WEB-RELATED ####
-#
-# # [freshResource] is a bit of magic that makes the subsequent actions a
-# # new resource.  That is, it redirects the user to a new URL for the
-# # continuation. If you call this immediately after doing a destructive
-# # action (e.g. database updates) then reloading and the back button
-# # are made "safe": the visible URL does not refer to the action, but
-# # only to what follows the freshResource call.
-# # Note: doesn't presently work in client context, but could.
-# # sig freshResource : () ~> ()
-# fun freshResource() {
-#   escape esc in {
-#     redirect("?_cont=" ^^ reifyK(esc)); exit(0)
-#   }
-# }
-#
-# # [sendSuspend] generates a page, outputs it, and terminates. It
-# # passes to pagef the continuation, which will resume at the place
-# # of the sendSuspend call. This continuation can be used in l:action
-# # for example, to pass form values through as the return value
-# # of sendSuspend.
-# # sig sendSuspend : (((a) ~> Page) ~b~> Page) ~b~> a
-# fun sendSuspend(pagef) {
-#   escape returnf in {
-#     exit(renderPage(pagef(returnf)))
-#   }
-# }
+#### FORMLETS ####
+####   A library of functions supporting the 'formlet ... yields ...' syntax
+####   TBD: move to a namespaced module
+
+####   NOTE: top-level vars have been eta-expanded in order to tell
+####   the JS compiler that they are pure and hence can be safely
+####   compiled. If we had a purity analysis then all of these could
+####   be safely eta-reduced again.
+
+typename Env = [(String,String)];
+typename Gen = Int;
+typename State (d,a) = (d) {}~> (a,d);
+typename Collector (a) = (Env) {}~> a;
+typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
+typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
+typename XmlContext = (Xml) {}~> Xml;
+
+typename Attributes = [(String, String)];
+
+# attributes for a multipart form
+var multipart = [("enctype", "multipart/form-data")];
+
+infixr 0 $;
+sig $ : ((a) -b-> c, a) -b-> c
+op f $ x { f(x) }
+
+# state monad
+sig runState : (State (d,a), d) -%-> (a,d)
+fun runState(s, i) { s(i) }
+
+infixl 1 >>=;
+sig >>= : (State (d,a), (a) -%-> State(d,b)) -%-> State (d,b)
+op x >>= f {
+   (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
+}
+
+sig return : (a) -> State (b,a)
+fun return(a) { fun (s) { (a,s) } }
+
+sig fmap : ((a) -%-> b, State (c,a)) -%-> State (c,b)
+fun fmap(f, x) { x >>= return `compose` f }
+
+sig pure : (a) -> Formlet(a)
+fun pure(v) {
+  return(([], fun (_) { ([], Just (v)) }))
+}
+
+sig pureE : (a) -> Maybe (a)
+fun pureE (x) { Just (x) }
+
+sig applyE : (Maybe ((a) -%-> b), Maybe (a)) -%-> Maybe (b)
+fun applyE (f, x) {
+  switch ((f, x)) {
+    case (Just (f), Just (x)) -> Just (f(x))
+    case (_       , _       ) -> Nothing
+  }
+}
+
+infixr 1 @@@;
+sig @@@ : (Formlet (a), Formlet ((a) -%-> b)) -%-> Formlet (b)
+op m @@@ k {
+  m >>= fun((x,c)){
+  k >>= fun((y,f)){
+  return((x++y,
+          fun(e){
+                  var (fx, f) = f(e);
+                  var (cx, c) = c(e);
+                  (cx++fx,  f `applyE` c)
+         }))}}
+}
+
+# x @@=> f
+#   Returns a formlet that post-processes the formlet x by running its
+#   output through f.   (This is fmap for the Formlet functor.)
+#   (This could be written more efficiently.)
+sig @@=> : (Formlet(a), (a) -%-> b) -%-> Formlet(b)
+op m @@=> f {
+  m @@@ pure(f)
+}
+
+sig xml : (Xml) -> Formlet (())
+fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
+
+sig text : (String) ~> Formlet (())
+fun text(s) { xml(stringToXml(s)) }
+
+sig plug : (XmlContext, Formlet (a)) -%-> Formlet (a)
+op f `plug` m {
+  m >>= fun((x,collector)){ return((f(x),
+    fun (env) { var (xml,c) = collector (env);
+                (f(xml), c) }))}
+}
+
+sig makeName : (Int) -> String
+fun makeName(i) { "input_" ^^ intToString(i) }
+
+sig nextName : State (Int,String)
+var nextName = fun (i) { (makeName(i), i+1) };
+
+sig sequence : ([State(a,b)]) ~> State(a,[b])
+fun sequence(xs) {
+  switch (xs) {
+    case [] -> return([])
+    case x::xs -> x >>= (fun (x) {
+                  sequence(xs) >>= (fun (xs) {
+                    return (x :: xs)})})
+  }
+}
+
+sig formlets : ([Formlet (a)]) ~> Formlet ([a])
+fun formlets(fs) {
+  switch (fs) {
+    case []    -> formlet <#/> yields []
+    case [x]   -> formlet <#>{x -> f}</#> yields [f]
+    case x::xs -> formlet <#>{x -> f}{formlets(xs) -> fs}</#> yields f::fs
+  }
+}
+#
+# Page stuff
+typename RecForms = [mu a.(([a]) {}~> Xml)];
+typename MultiXmlContext = ([Xml]) {}~> Xml;
+
+typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
+typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
+typename Handler (a) = (a) {}~> Page;
+
+sig unitP : Page
+var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
+
+sig joinP : (Page, Page) -> Page
+fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
+  (i1+i2,
+   fun (xs) {
+     <#>{k1(take(i1, xs))}{k2(drop(i1, xs))}</#>
+   },
+   fun (gen) {
+     var (ms1, gen) = fs1(gen);
+     var (ms2, gen) = fs2(gen);
+     (ms1 ++ ms2, gen)
+   })
+}
+
+sig joinManyP : ([Page]) ~> Page
+fun joinManyP(gs) {
+  fold_left(joinP, unitP, gs)
+}
+
+sig bodyP : (Xml) -> Page
+fun bodyP(xml) {
+  (0, fun ([]) {xml}, fun (gen) {([], gen)})
+}
+
+sig plugP : (XmlContext, Page) -> Page
+fun plugP(context, (i, k, fs)) {
+  (i, fun (xs) {context(k(xs))}, fs)
+}
+
+sig formP : (Formlet(a), Handler(a), Attributes) -> Page
+fun formP(f, h, attributes) {
+  (1,
+   fun ([x]) {x},
+   fun (gen) {
+     var ((x, c), gen) = runState(f, gen);
+     ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
+   })
+}
+
+sig pickleCont : (() -> Page) ~> String
+fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
+
+sig mkForm : ((Env) ~> Page, Xml, Attributes) ~> Xml
+fun mkForm(cont, contents, attributes) {
+  <form enctype="application/x-www-form-urlencoded"
+        action="#" method="POST" {attributes}>
+    <input type="hidden"
+           name="_k"
+           value="{pickleCont(fun () {cont(environment())})}" />
+    {contents}
+  </form>
+}
+#
+sig renderPagePure : (Page) {}~> Xml
+fun renderPagePure((n, k, fs)) {
+  var (ms, _) = fs(0);
+  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+sig renderPage : (Page) ~> Xml
+fun renderPage(p) {
+  # HACK: this allows us to use renderPage in effectful contexts
+  (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
+}
+
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
+fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
+  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
+}
+
+sig validate :
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
+fun validate(c, h, k, zs, i, attributes) (env) {
+  var (xml, v) = c(env);
+  switch (v) {
+    case Just(v) -> h(v)
+    case Nothing  -> {
+      fun z(zs) {
+        mkForm(validate(c, h, k, zs, i, attributes), xml, attributes)
+      }
+      var zs = substAt(zs, i, z);
+      bodyP(k(map (fun (z) {z(zs)}, zs)))
+    }
+  }
+}
+# end of pagelet stuff
+
+# Types of input we need to handle:
+#   text (done)
+#   password (done)
+#   checkbox (done)
+#   radio (done)
+#   submit (done)
+#   reset (done)
+#   file (done)
+#   hidden (done)
+#   image
+#   button (done)
+
+# A one element String-type formlet can be constructed using the [input]
+# function.
+
+fun mkInput(mkXml,mkFilledXml) {
+  nextName >>= fun (name) {
+    (return ((mkXml(name),
+              fun (env) { var v = assoc (name, env);
+                          (mkFilledXml(name,v), pureE (v)) })))}
+}
+
+sig input : Formlet (String)
+var input = fun (gen) {
+              mkInput(fun(name) { <input name="{name}"/> },
+                      fun(name,v) { <input name="{name}" value="{v}"/> })(gen)
+            };
+
+# QUESTION:
+#   Should we change the semantics of attribute expressions such that
+#   they *do not* override literal attributes?
+#
+#   An advantage of doing this would be that we wouldn't have to use
+#   removeAssoc in formlet library functions. A disadvantage is that
+#   this wouldn't correspond with the usual update semantics.
+
+# input with attributes
+sig inputA : (Attributes) ~> Formlet (String)
+fun inputA(attributes) {
+  mkInput(fun(name) { <input name="{name}" {removeAssoc("name", attributes)}/> },
+          fun(name,v) { <input name="{name}" value="{v}" {removeAssoc("name", removeAssoc("value", attributes))}/> })
+}
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPasswordA : (Attributes) ~> Formlet (String)
+fun inputPasswordA(attributes) {
+  inputA(("type", "password")::removeAssoc("type", attributes))
+}
+
+# A one-element formlet populated with an initial value
+sig inputValueA : (String, Attributes) ~> Formlet (String)
+fun inputValueA(v, attributes) {
+  inputA(("value", v)::removeAssoc("value", attributes))
+}
+
+# A "file" type input.
+sig inputFileA : (Attributes) ~> Formlet (String)
+fun inputFileA(attributes) {
+  inputA(("type", "file")::removeAssoc("type", attributes))
+}
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPassword : Formlet (String)
+var inputPassword = fun (gen) {inputPasswordA([])(gen)};
+
+# A one-element formlet populated with an initial value
+sig inputValue : (String) ~> Formlet (String)
+fun inputValue(v) {
+  inputValueA(v, [])
+}
+
+# A "file" type input.
+sig inputFile : Formlet (String)
+var inputFile = fun (gen) {inputFileA([])(gen)};
+
+sig textarea : (String) ~> Formlet (String)
+fun textarea(value) {
+  mkInput(fun (name) { <textarea name="{name}">{stringToXml(value)}</textarea> },
+          fun (name,value) { <textarea name="{name}">{stringToXml(value)}</textarea> })
+}
+
+# raw submit button
+sig submit : (String) ~> Xml
+fun submit(text) {
+  <button type="submit">{stringToXml(text)}</button>
+}
+
+# button that returns true iff it is pressed
+sig button : (String,[|Submit|Reset|Button|]) ~> Formlet (Bool)
+fun button(text, behaviour) {
+  nextName >>= fun (name) {
+    var behaviour = switch (behaviour) {
+      case Submit -> "submit"
+      case Reset -> "reset"
+      case Button -> "button"
+    };
+    var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
+    return ((xml,
+             fun (env) { (xml, pureE (memassoc(name, env))) }))
+  }
+}
+
+sig submitButton : (String) ~> Formlet (Bool)
+fun submitButton(text) {
+  button(text, Submit)
+}
+
+sig resetButton : (String) ~> Formlet (Bool)
+fun resetButton(text) {
+  button(text, Reset)
+}
+
+sig pushButton : (String) ~> Formlet (Bool)
+fun pushButton(text) {
+  button(text, Button)
+}
+
+sig checkboxDefault : (Bool) ~> Formlet (Bool)
+fun checkboxDefault(checked) {
+  fun (gen) {
+    (nextName >>= fun (name) {
+     var xml = <input type="checkbox" name="{name}" value="yes" />;
+     return ((addAttributes(xml, if (checked) [("checked","Y")]
+                                 else []),
+             fun (env) { var checked = memassoc(name, env);
+                         (addAttributes(xml,if (checked) [("checked","Y")]
+                                            else []),
+                          pureE (checked)) }))})(gen)
+  }
+}
+
+sig checkbox : Formlet (Bool)
+var checkbox = fun(gen) {checkboxDefault(false)(gen)};
+
+# before ++ [selected] ++ after is a list of (value, data) pairs
+# layout is a function for rendering a list of (radio button, data) pairs
+#
+# [NOTE]
+#   A default selection is compulsory as recommended by the HTML spec.
+#   We should probably do the same for 'choice' (drop-down menus) as well.
+#
+# It is the user's responsibility to ensure that layout produces Xml that
+# uses each radio button exactly once and does not introduce any other input
+# elements.
+#
+# The data components are useful for attaching extra data such as labels to
+# the radio buttons.
+
+# 'inputRadiogroup(items, selected, layout)' constructs a list of
+# radio buttons in XML form, pairs them with the values from 'items',
+# and passes this list of pairs to the 'layout' function, which should
+# return XML. The result is a formlet that will return the value from
+# 'items' that is associated with the radio button selected by the user.
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) -%-> Xml) -%->
+                     Formlet (a)
+fun inputRadiogroup(items, selected, layout) {
+  nextName >>= fun (name) {
+  sequence (for (x <- items) [nextName]) >>= fun (keys) {
+    var keyedItems = zip(keys,items);
+    fun itemXml(selected) {
+      for ((key, data) <- keyedItems)
+        [(addAttributes(<input type="radio" name="{name}" value="{key}" />,
+                        if (data == selected)
+                          [("checked","on")] else []),
+          data)]
+    }
+    var xml = layout(itemXml(selected));
+    return ((xml,
+             fun (env) {
+               var selectedValue = assoc(name, env);
+               var selectedData = assoc(selectedValue, keyedItems);
+               var xml = layout(itemXml(selectedData));
+            (xml, pureE(selectedData))}))
+  }
+  }
+}
+
+# preludeOptionKeyed: A utility function for the <select> formlets
+# ('choice' and 'choices'). Constructs an <option> element and an associated
+# function for determining whether this option was selected.
+sig preludeOptionKeyed : (String, (a,String), Bool) ~>
+                        (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
+fun preludeOptionKeyed (key, (data,text), selected) {
+  if (selected) {
+     ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
+      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+  } else {
+     ((<option value="{key}">{stringToXml(text)}</option>,
+      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+  }
+}
+
+sig preludeOptionsKeyed : ([(String,(a,String))], a) ~>
+                         (Xml, (String) -> [a])
+fun preludeOptionsKeyed(items, def) {
+  switch (items) {
+     case [] -> ((<#/>, fun (_) { [] }))
+     case (itemKey, item)::items -> {
+       var (xml,r1) = preludeOptionKeyed(itemKey, item, (first(item) == def));
+       var (morexml, r2) = preludeOptionsKeyed(items, def);
+       ((xml++morexml, r1(r2))) }
+  }
+}
+
+sig preludeMultiOptionsKeyed
+    : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
+fun preludeMultiOptionsKeyed(items) {
+  switch (items) {
+     case [] -> ((<#/>, fun (_) { [] }))
+     case (itemKey, item)::items ->
+       var (xml,r1) = preludeOptionKeyed(itemKey,(first(item),second(item)),
+                                         third(item));
+       var (morexml, r2) = preludeMultiOptionsKeyed(items);
+       (xml ++ morexml, r1(r2))
+  }
+}
+
+sig choice : ([(a,String)]) ~> Formlet (a)
+fun choice (items) {
+  var (selected, _) = hd(items);
+  choiceDefault(items, selected)
+}
+
+sig choiceDefault : ([(a,String)], a) ~> Formlet (a)
+fun choiceDefault (items, selected) {
+  # generate a fresh name for the field (menu) as a whole
+  nextName >>= fun (fieldName) {
+  # generate a list of fresh names, one for each menu item.
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
+     var keyedItems = zip(optKeys, items);
+     return ((
+        # pre-validation, use the original 'selected' parameter
+        {var (optsXml,_) = preludeOptionsKeyed(keyedItems, selected);
+         <select name="{fieldName}">{optsXml}</select>},
+        fun (env) {
+          # post-validation, we need to find the 'selected' item in the env:
+          # 1. get the String key of the selection
+          var selectedKey = assoc(fieldName,env);
+          # 2. find the corresponding 'data' value
+          var (selected, _) = assoc(selectedKey, keyedItems);
+          # 3. create the <option> elements, marking that one selected.
+          var (optsXml, retrieve) = preludeOptionsKeyed(keyedItems, selected);
+          (<select name="{fieldName}">{optsXml}</select>,
+           pureE(hd(retrieve(selectedKey)))) }))
+  }
+  }
+}
+
+sig choices : ([(a,String, Bool)]) ~> Formlet ([a])
+fun choices (items) {
+  # generate a fresh name for the field (menu) as a whole
+  nextName >>= fun (fieldName) {
+  # generate a list of fresh names, one for each menu item.
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
+    var keyedItems = zip(optKeys, items);
+    return ((
+       # pre-validation, use the 'selected' flags in the 'items' list
+       {var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
+        <select name="{fieldName}" multiple="multiple">{xml}</select>},
+       fun (env) {
+         # post-validation, 'env' determines which items are selected.
+         var selectedKeys = assocAll(fieldName,env);
+         # now re-mark the items as selected or not according to
+         #     whether they appear in the query env.
+         var keyedItems = for (((key, (data, text, sel))) <- keyedItems)
+                            [(key, (data, text, key `elem` selectedKeys))];
+         var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
+         (<select name="{fieldName}" multiple="multiple">{xml}</select>,
+          pureE(concatMap(retrieve, selectedKeys)))
+       }))
+  }
+  }
+}
+
+sig choicesNone : ([(a, String)]) ~> Formlet ([a])
+fun choicesNone (items) {
+  choices (map (fun ((v, text)) {(v, text, false)}, items))
+}
+
+typename Either (a,b) = [|Left:a | Right : b|];
+
+# given a formlet and a "predicate", return a new formlet that uses
+# the predicate for validation.
+sig satisfies : (Formlet (a), (a,Xml) -%-> Either(Xml,Xml)) ~> Formlet(a)
+fun satisfies(f, validate) {
+   f >>= fun((xml,collector)) {
+   return((xml, fun (env) {
+       var (cxml, val) = collector(env);
+       switch (val) {
+         case Nothing  -> (cxml, Nothing)
+         case Just (v) ->
+            switch (validate(v, cxml)) {
+               case Right (xml) -> (xml, Nothing)
+               case Left (xml)  -> (xml, Just (v)) }}}))}
+}
+
+
+sig errorMsg : ((a) ~b~> Bool, (a) ~b~> String) -> (a,Xml) ~b~> Either (Xml,Xml)
+fun errorMsg (f, msg) (x,xml) {
+  if (f(x)) Left (xml)
+  else Right (<span class="errorinput">{xml} </span>
+          ++ <span class="error"> {stringToXml(msg(x))}</span>)
+}
+
+infixr 5 `errorMsg`;
+
+sig transform : (Formlet(a), (a) -%-> Bool, (a) -%-> String, (a) ~b~> c) ~b~> Formlet(c)
+fun transform(f, predicate, error, g) {
+  formlet
+    <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
+  yields
+    g(v)
+}
+
+# checked input components
+
+sig inputInt : Formlet(Int)
+var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)(gen)};
+
+sig inputIntA : (Attributes) ~> Formlet(Int)
+fun inputIntA(attributes) {
+  transform(inputA(attributes), isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)
+}
+
+sig inputIntValue : (Int) ~> Formlet(Int)
+fun inputIntValue(v) {
+  transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ^^ "is not an integer"}, stringToInt)
+}
+
+sig inputFloat : Formlet(Float)
+var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a float"}, stringToFloat)(gen)};
+
+#### WEB-RELATED ####
+
+# [freshResource] is a bit of magic that makes the subsequent actions a
+# new resource.  That is, it redirects the user to a new URL for the
+# continuation. If you call this immediately after doing a destructive
+# action (e.g. database updates) then reloading and the back button
+# are made "safe": the visible URL does not refer to the action, but
+# only to what follows the freshResource call.
+# Note: doesn't presently work in client context, but could.
+sig freshResource : () ~> ()
+fun freshResource() {
+  escape esc in {
+    redirect("?_cont=" ^^ reifyK(esc)); exit(0)
+  }
+}
+
+# [sendSuspend] generates a page, outputs it, and terminates. It
+# passes to pagef the continuation, which will resume at the place
+# of the sendSuspend call. This continuation can be used in l:action
+# for example, to pass form values through as the return value
+# of sendSuspend.
+sig sendSuspend : (((a) ~> Page) ~b~> Page) ~b~> a
+fun sendSuspend(pagef) {
+  escape returnf in {
+    exit(renderPage(pagef(returnf)))
+  }
+}

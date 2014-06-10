@@ -224,6 +224,8 @@ let subkinds = [
  "Any"     , ANY;
  "Base"    , BASE;
  "Session" , SESSION;
+ "Unl"     , UNL;
+ "UnlBase" , UNLBASE;
 ]
 
 exception LexicalError of (string * Lexing.position)

@@ -69,17 +69,35 @@ let attach_kind pos (t, k) =
     end,
     `Flexible)
 
-let attach_subkind pos (t, restriction) =
-  match t with
-  | TypeVar (x, (linearity, _)) -> TypeVar (x, (linearity, restriction))
-  | RigidTypeVar (x, (linearity, _)) -> RigidTypeVar (x, (linearity, restriction))
-  | _ -> assert false
+let attach_subkind pos (t, subkind) =
+  let update lin_opt rest_opt =
+    match t with
+    | TypeVar (x, (linearity, restriction)) ->
+       TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | RigidTypeVar (x, (linearity, restriction)) ->
+       RigidTypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | _ -> assert false in
+  match subkind with
+  | `Any     -> update (Some `Any) (Some `Any)
+  | `Unl     -> update (Some `Unl) None
+  | `Base    -> update None (Some `Base)
+  | `UnlBase -> update (Some `Unl) (Some `Base)
+  | `Session -> update (Some `Any) (Some `Session)
 
-let attach_row_subkind pos (r, restriction) =
-  match r with
-  | `Open (x, (linearity, _)) -> `Open (x, (linearity, restriction))
-  | `OpenRigid (x, (linearity, _)) -> `OpenRigid (x, (linearity, restriction))
-  | _ -> assert false
+let attach_row_subkind pos (r, subkind) =
+  let update lin_opt rest_opt =
+    match r with
+    | `Open (x, (linearity, restriction)) ->
+       `Open (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | `OpenRigid (x, (linearity, restriction)) ->
+       `OpenRigid (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | _ -> assert false in
+  match subkind with
+  | `Any     -> update (Some `Any) (Some `Any)
+  | `Unl     -> update (Some `Unl) None
+  | `Base    -> update None (Some `Base)
+  | `UnlBase -> update (Some `Unl) (Some `Base)
+  | `Session -> update (Some `Any) (Some `Session)
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -142,7 +160,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION
+%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION UNL UNLBASE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -290,9 +308,11 @@ subkind:
 | ANY                                                          { `Any }
 | BASE                                                         { `Base }
 | SESSION                                                      { `Session }
+| UNL                                                          { `Unl }
+| UNLBASE                                                      { `UnlBase }
 
 typearg:
-| VARIABLE                                                     { (($1, `Type (`Any, `Any), `Flexible), None) }
+| VARIABLE                                                     { (($1, `Type (`Unl, `Any), `Flexible), None) }
 | VARIABLE  kind                                               { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -884,8 +904,8 @@ session_type_var:
 /* TODO: support underscore and percent; rationalise parsing of type variables */
 
 type_var:
-| VARIABLE                                                     { RigidTypeVar ($1, (`Any, `Any)) }
-| PERCENTVAR                                                   { TypeVar ($1, (`Any, `Any)) }
+| VARIABLE                                                     { RigidTypeVar ($1, (`Unl, `Any)) }
+| PERCENTVAR                                                   { TypeVar ($1, (`Unl, `Any)) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable (`Any, `Any) }
 | PERCENT                                                      { fresh_type_variable (`Any, `Any) }
 

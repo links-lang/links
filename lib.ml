@@ -356,12 +356,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "give",
   (`PFun (fun _ -> assert false),
-   datatype "(a, !a.s) ~> s",
+   datatype "(a::Any, !a::Any.s) ~> s::Session",
    IMPURE);
 
   "grab",
   (`PFun (fun _ -> assert false),
-   datatype "(?a.s) ~> (a, s)",
+   datatype "(?a::Any.s) ~> (a::Any, s::Session)",
    IMPURE);
 
   (* access points *)
