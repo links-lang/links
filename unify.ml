@@ -304,7 +304,9 @@ fun rec_env ->
                                                          " with base type variable " ^ string_of_int rvar)))
                              (* in the default case lrest and rrest must be identical *)
                              | _ -> lrest in
-                         Unionfind.change lpoint (`Flexible (lvar, (lin, rest)))
+                         if lin = `Unl && rest = `Session
+                         then Unionfind.change lpoint (`Body (`Session `End))
+                         else Unionfind.change lpoint (`Flexible (lvar, (lin, rest)))
                        end
                    | `Flexible (var, (lin, rest)), _ ->
                        (if var_is_free_in_type var t2 then
