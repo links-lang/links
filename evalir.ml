@@ -5,11 +5,29 @@ open Utility
 module Session = struct
   type apid = int
   type cid = int
+  type pid = int
+  type chan = cid * cid
 
-  type ap_state = Balanced | Accepting of cid list | Requesting of cid list
+  type ap_state = Balanced | Accepting of chan list | Requesting of chan list
+
+  let flip_chan (c, d) = (d, c)
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
   let channels = (Hashtbl.create 10000 : (cid, Value.t Queue.t) Hashtbl.t)
+
+  let blocked = (Hashtbl.create 10000 : (pid, cid) Hashtbl.t)
+
+  let block cid pid =
+    Hashtbl.add blocked cid pid
+  let unblock cid =
+    if Hashtbl.mem blocked cid then
+      begin
+        let pid = Hashtbl.find blocked cid in
+        Hashtbl.remove blocked cid;
+        Some pid
+      end
+    else
+      None
 
   let generator () =
     let i = ref 0 in
@@ -17,11 +35,16 @@ module Session = struct
 
   let fresh_apid = generator ()
   let fresh_cid = generator ()
+  let fresh_chan () =
+    let c = fresh_cid () in
+    let d = fresh_cid () in
+      (c, d)
 
   let new_channel () = 
-    let cid = fresh_cid () in
-      Hashtbl.add channels cid (Queue.create ());
-      cid
+    let (c, d) = fresh_chan () in
+      Hashtbl.add channels c (Queue.create ());
+      Hashtbl.add channels d (Queue.create ());
+      (c, d)
 
   let new_access_point () =
     let apid = fresh_apid () in
@@ -30,38 +53,38 @@ module Session = struct
 
   let accept apid =
     let state = Hashtbl.find access_points apid in
-    let (cid, state') =
+    let (chan, state') =
       match state with
-      | Balanced -> let cid = new_channel () in (cid, Accepting [cid])
-      | Accepting cids -> let cid = new_channel () in (cid, Accepting (cid :: cids))
-      | Requesting [cid] -> (cid, Balanced)
-      | Requesting (cid::cids) -> (cid, Requesting cids)
+      | Balanced -> let chan = new_channel () in (chan, Accepting [chan])
+      | Accepting chans -> let chan = new_channel () in (chan, Accepting (chan :: chans))
+      | Requesting [chan] -> (chan, Balanced)
+      | Requesting (chan::chans) -> (chan, Requesting chans)
     in
       Hashtbl.replace access_points apid state';
-      cid
+      chan
 
   let request apid =
     let state = Hashtbl.find access_points apid in
-    let (cid, state') =
+    let (chan, state') =
       match state with
-      | Balanced -> let cid = new_channel () in (cid, Requesting [cid])
-      | Requesting cids -> let cid = new_channel () in (cid, Requesting (cid :: cids))
-      | Accepting [cid] -> (cid, Balanced)
-      | Accepting (cid::cids) -> (cid, Accepting cids)
+      | Balanced -> let chan = new_channel () in (chan, Requesting [chan])
+      | Requesting chans -> let chan = new_channel () in (chan, Requesting (chan :: chans))
+      | Accepting [chan] -> (chan, Balanced)
+      | Accepting (chan::chans) -> (chan, Accepting chans)
     in
       Hashtbl.replace access_points apid state';
-      cid
+      flip_chan chan
   
   (* TODO: be consistent about checking lookup operations *)
   exception UnknownChannelID of cid
 
-  let send msg cid =
+  let send msg c =
     try 
-      Queue.push msg (Hashtbl.find channels cid)
-    with Notfound.NotFound _ -> raise (UnknownChannelID cid)
+      Queue.push msg (Hashtbl.find channels c)
+    with Notfound.NotFound _ -> raise (UnknownChannelID c)
 
-  let receive cid =
-    let channel = Hashtbl.find channels cid in
+  let receive c =
+    let channel = Hashtbl.find channels c in
       if not (Queue.is_empty channel) then
         Some (Queue.pop channel)
       else
@@ -310,24 +333,41 @@ module Eval = struct
         apply_cont cont env (`Int (Num.num_of_int apid))
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
-        apply_cont cont env (`Int (Num.num_of_int (Session.accept apid)))
+      let c, d = Session.accept apid in
+        apply_cont cont env (Value.box_pair (Value.box_int (Num.num_of_int c))
+                                            (Value.box_int (Num.num_of_int d)))
     | `PrimitiveFunction ("request", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
-        apply_cont cont env (`Int (Num.num_of_int (Session.request apid)))
-    | `PrimitiveFunction ("give", _), [v; c] ->
-      Session.send v (Num.int_of_num (Value.unbox_int c));
-      apply_cont cont env c
-    | `PrimitiveFunction ("grab", _), [c] ->
+      let c, d = Session.request apid in
+        apply_cont cont env (Value.box_pair (Value.box_int (Num.num_of_int c))
+                                            (Value.box_int (Num.num_of_int d)))
+    | `PrimitiveFunction ("give", _), [v; chan] ->
+      Debug.print ("giving: " ^ Value.string_of_value v ^ " to: " ^ Value.string_of_value chan);
+      let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
+      Session.send v c;
       begin
-        let c' = Value.unbox_int c in
-          match Session.receive (Num.int_of_num (Value.unbox_int c)) with
+        match Session.unblock c with
+          Some pid -> Proc.awaken pid
+        | None     -> ()
+      end;
+      apply_cont cont env chan
+    | `PrimitiveFunction ("grab", _), [chan] ->
+      begin
+        Debug.print("grabbing from: " ^ Value.string_of_value chan);
+        let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
+        let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
+          match Session.receive (Num.int_of_num d') with
           | Some v ->
-            apply_cont cont env (Value.box_pair v c)
+            Debug.print ("grabbed: " ^ Value.string_of_value v);
+            apply_cont cont env (Value.box_pair v chan)
           | None ->
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Constant (`Int c')])
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c')) 
+                                                                           (StringMap.add "2" (`Constant (`Int d'))
+                                                                            StringMap.empty), None)])
             in 
-              Proc.block_current (grab_frame::cont, `Record [("1", c)]);
+              Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
+              Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
     (*****************)

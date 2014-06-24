@@ -613,7 +613,9 @@ and unbox_xml  :  t -> xmlitem = function
   | `XML x -> x | _ -> failwith "Type error unboxing xml"
 and box_string s = `String s
 and unbox_string : t -> string = function
-  | `String s -> s | _ -> failwith "Type error unboxing string"
+  | `String s -> s
+  | v ->
+     failwith ("Type error unboxing string: " ^ string_of_value v)
 and box_list l = `List l
 and unbox_list : t -> t list = function
   | `List l -> l | _ -> failwith "Type error unboxing list"
