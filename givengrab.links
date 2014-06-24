@@ -1,0 +1,18 @@
+fun main() {
+  fun giver(x,y,s) {
+    var (z,_) = grab(give(y,give(x,s)));
+    z
+  }
+
+  fun grabber(s) {
+    var (x,s) = grab(s);
+    var (y,s) = grab(s);
+    var _ = give(x+y,s);
+    ()
+  }
+
+  var a = new();
+
+  var _ = spawn { grabber(accept(a)) };
+  print(intToString(giver(6,7,request(a))));
+}
