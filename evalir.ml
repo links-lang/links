@@ -533,6 +533,47 @@ module Eval = struct
         apply_cont cont env (`Record [])
     | `CallCC f                   -> 
       apply cont env (value env f, [`Continuation cont])
+    | `Select (name, v) ->
+      let chan = value env v in      
+      Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
+      let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
+      Session.send (Value.box_string name) c;
+      begin
+        match Session.unblock c with
+          Some pid -> Proc.awaken pid
+        | None     -> ()
+      end;
+      apply_cont cont env chan
+    (* Session stuff *)
+    | `Choice (v, cases) ->
+      begin
+        let chan = value env v in
+        Debug.print("choosing from: " ^ Value.string_of_value chan);
+        let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
+        let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
+          match Session.receive (Num.int_of_num d') with
+          | Some v ->
+            Debug.print ("chose: " ^ Value.string_of_value v);
+            let label = Value.unbox_string v in
+              begin
+                match StringMap.lookup label cases with
+                | Some ((var,_), c) ->
+                  computation (Value.bind var (chan, `Local) env) cont ([], c)
+                | None -> eval_error "Choice pattern matching failed"
+              end
+            (* apply_cont cont env (Value.box_pair v chan) *)
+          | None ->
+            let grab_frame =
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c')) 
+                                                                           (StringMap.add "2" (`Constant (`Int d'))
+                                                                            StringMap.empty), None)])
+            in 
+              Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
+              Session.block (Num.int_of_num d') (Proc.get_current_pid ());
+              switch_context env
+      end
+    (*****************)
+
   let eval : Value.env -> program -> Value.t = 
     fun env -> computation env Value.toplevel_cont
 end
