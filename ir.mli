@@ -72,7 +72,9 @@ and special =
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation
   | `Delete of (binder * value) * computation option
-  | `CallCC of value ]
+  | `CallCC of value
+  | `Select of (name * value)
+  | `Choice of (value * (binder * tail_computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -123,13 +125,13 @@ sig
     method name_map :
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
+      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type
     method var : var -> (var * Types.datatype * 'self_type)
     method value : value -> (value * Types.datatype * 'self_type)
-                                                
+
     method tail_computation :
       tail_computation -> (tail_computation * Types.datatype * 'self_type)
-    method special : special -> (special * Types.datatype * 'self_type)      
+    method special : special -> (special * Types.datatype * 'self_type)
     method bindings : binding list -> (binding list * 'self_type)
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
@@ -138,7 +140,7 @@ sig
     method program : program -> (program * Types.datatype * 'self_type)
 
     method get_type_environment : environment
-  end  
+  end
 end
 
 module Transform : TRANSFORM
@@ -167,7 +169,7 @@ sig
   val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
 end
 
-val var_appln : var Env.String.t -> Env.String.name -> value list -> 
+val var_appln : var Env.String.t -> Env.String.name -> value list ->
   tail_computation
 
 val funcmap : program -> (Var.var * binding) list

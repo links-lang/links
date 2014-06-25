@@ -66,8 +66,8 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
       match s with
       | `Input (t, s) -> `Input (inst rec_env t, inst_session rec_env s)
       | `Output (t, s) -> `Output (inst rec_env t, inst_session rec_env s)
-      | `Select fields -> assert false
-      | `Choice fields -> assert false
+      | `Select fields -> `Select (inst_row rec_env fields)
+      | `Choice fields -> `Choice (inst_row rec_env fields)
       | `MetaSessionVar point ->
         (* HACK:
            this is just copied and adapted from the code above for `MetaTypeVar point *)

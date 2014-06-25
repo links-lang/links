@@ -70,6 +70,8 @@ let rec variant_at name t = match concrete_type t with
   | `ForAll (_, t) -> variant_at name t
   | `Variant row ->
       let t, _ = split_row name row in t
+  | `Session (`Choice row) ->
+      let t, _ = split_row name row in t
   | t ->
       error ("Attempt to deconstruct non-variant type "^string_of_datatype t)
 
@@ -78,6 +80,9 @@ let rec split_variant_type name t = match concrete_type t with
   | `Variant row ->
       let t, row = split_row name row in
         `Variant (make_singleton_closed_row (name, (`Present, t))), `Variant row
+  | `Session (`Choice row) ->
+      let t, row = split_row name row in
+        `Session (`Choice (make_singleton_closed_row (name, (`Present, t)))), `Session (`Choice row)
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
@@ -86,6 +91,8 @@ let rec project_type name t = match concrete_type t with
   | `Record row ->
       let t, _ = split_row name row in
         t
+  | `Session (`Select row) ->
+     let t, _ = split_row name row in t
   | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 

@@ -1837,8 +1837,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
 
         (* session-based concurrency *)
-        | `Select (name, channel) -> assert false
-        | `Offer (channel, branches, _) -> assert false
+        | `Select (l, e) ->
+           let e = tc e in
+           let selected_session = Types.fresh_type_variable (`Any, `Session) in
+           unify ~handle:Gripers.projection
+                 (pos_and_typ e, no_pos (`Session (`Select (Types.make_singleton_open_row
+                                                              (l, (`Present, selected_session))
+                                                              (`Any, `Session)))));
+           `Select (l, erase e), selected_session, usages e
+        | `Offer (e, branches, _) ->
+           let e = tc e in
+           let branches, pattern_type, body_type = type_cases branches in
+           let to_choice t =
+             match t with
+             | `Variant r -> `Session (`Choice r)
+             | _          -> assert false in
+           let _ = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos (to_choice pattern_type)) in
+           `Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
 
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->

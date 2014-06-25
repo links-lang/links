@@ -242,6 +242,19 @@ class transform (env : Types.typing_environment) =
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
             (o, `SpawnWait (body, Some inner_effects), body_type)
+      | `Select (l, e) ->
+         let (o, e, t) = o#phrase e in
+         (o, (`Select (l, e)), TypeUtils.project_type l t)
+      | `Offer (e, bs, Some t) ->
+          let (o, e, _) = o#phrase e in
+          let (o, bs) =
+            listu o
+              (fun o (p, e) ->
+                 let (o, p) = o#pattern p in
+                 let (o, e, _) = o#phrase e in (o, (p, e)))
+              bs in
+          let (o, t) = o#datatype t in
+            (o, `Offer (e, bs, Some t), t)
       | `Query (range, body, Some t) ->
           let (o, range) =
             optionu o

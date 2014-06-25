@@ -163,6 +163,10 @@ sig
     tail_computation sem
 
   val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
+
+  val select : name * value sem -> tail_computation sem
+
+  val offer : value sem * (CompilePatterns.pattern * tail_computation sem) list * Types.datatype -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -490,6 +494,22 @@ struct
 
   let alien (x_info, language, rest) =
     M.bind (alien_binding (x_info, language)) rest
+
+  let select (l, e) =
+    let t = TypeUtils.project_type l (sem_type e) in
+      bind e (fun v -> lift (`Special (`Select (l, v)), t))
+
+  let offer (e, bs, t) =
+    let rec build_cases ps : (binder * tail_computation) name_map sem =
+      match ps with
+      | ((p, b) :: ps) ->
+         bind b (fun b ->
+         bind (build_cases ps) (fun nm ->
+         match p with
+          | `Variant (name, `Variable v) -> lift (StringMap.add name (v, b) nm, `Not_typed)
+          | _ -> assert false))
+      | [] -> lift (StringMap.empty, `Not_typed) in
+    bind e (fun v -> bind (build_cases bs) (fun bs -> lift (`Special (`Choice (v, bs)), t)))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in
@@ -885,6 +905,18 @@ struct
                   where
               in
                 I.db_delete env (p, source, where)
+
+          | `Select (l, e) ->
+             I.select (l, ev e)
+
+          | `Offer (e, bs, Some t) ->
+             let desugar_case (p, b) =
+               let p, penv = CompilePatterns.desugar_pattern `Local p in
+               let env' = env ++ penv in
+               let b = eval env' b in
+               p, b in
+             I.offer (ev e, List.map desugar_case bs, t)
+
                   (* These things should all have been desugared already *)
           | `Spawn _
           | `SpawnWait _

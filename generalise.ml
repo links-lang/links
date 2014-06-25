@@ -93,8 +93,8 @@ and get_session_type_args : gen_kind -> TypeVarSet.t -> session_type -> type_arg
       match s with
       | `Input (t, s)
       | `Output (t, s) -> gt t @ gs s
-      | `Select fields
-      | `Choice fields -> assert false
+      | `Select fields -> get_row_type_args kind bound_vars fields
+      | `Choice fields -> get_row_type_args kind bound_vars fields
       | `MetaSessionVar point -> gt (`MetaTypeVar point) (* HACK *)
       | `Dual s -> gs s
       | `End -> []

@@ -637,8 +637,8 @@ let free_type_vars, free_row_type_vars =
     function
       | `Input (t, s)
       | `Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_session_vars' rec_vars s)
-      | `Select fields
-      | `Choice fields -> assert false
+      | `Select fields -> free_row_type_vars' rec_vars fields
+      | `Choice fields -> free_row_type_vars' rec_vars fields
       | `MetaSessionVar point -> free_type_vars' rec_vars (`MetaTypeVar point) (* HACK *)
       | `Dual s -> free_session_vars' rec_vars s
       | `End -> S.empty
@@ -1734,9 +1734,8 @@ struct
     function
     | `Input (t, s) -> "?" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
     | `Output (t, s) -> "!" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
-    (* TODO: pretty-printer for selection and choice *)
-    | `Select bs -> "[+|" ^ "SOME SELECTION" ^ "|+]"
-    | `Choice bs -> "[&|" ^ "SOME CHOICE" ^ "|&]"
+    | `Select bs -> "[+|" ^ row "," bound_vars p bs ^ "|+]"
+    | `Choice bs -> "[&|" ^ row "," bound_vars p bs ^ "|&]"
     | `MetaSessionVar point -> datatype bound_vars p (`MetaTypeVar point) (* HACK *)
     | `Dual s -> "~" ^ session bound_vars p s
     | `End -> "End"

@@ -605,7 +605,8 @@ and match_variant
                    let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
                 match default_type with
-                  | `Variant row ->
+                  | `Variant row
+                  | `Session (`Choice row) ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], `Case (`Variable var, cases, None))
                       else
