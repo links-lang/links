@@ -19,7 +19,7 @@ let rec add_extras =
         begin
           match q with
             | `TypeVar (_, point) -> `Type (`MetaTypeVar point) :: add_extras (extras, tyargs)
-            | `RowVar (_, row_var) -> `Row (StringMap.empty, row_var) :: add_extras (extras, tyargs)
+            | `RowVar (_, row_var) -> `Row (StringMap.empty, row_var, false) :: add_extras (extras, tyargs)
             | `PresenceVar (_, point) -> `Presence (`Var point) :: add_extras (extras, tyargs)
         end
 

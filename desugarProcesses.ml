@@ -51,8 +51,8 @@ object (o : 'self_type)
         in
           (o, e, body_type)
     | `Receive (cases, Some t) ->
-        let fields, row_var = o#lookup_effects in
-        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in
+        let fields, row_var, false = o#lookup_effects in
+        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
               | (`Present, mbt) ->

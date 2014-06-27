@@ -837,8 +837,8 @@ let type_section context (`Section s as s') =
           let a = Types.fresh_type_variable (`Any, `Any) in
           let rho = Types.fresh_row_variable (`Any, `Any) in
           let effects = Types.make_empty_open_row (`Any, `Any) in (* projection is pure! *)
-          let r = `Record (StringMap.add label (`Present, a) StringMap.empty, rho) in
-            ([`Type a; `Row (StringMap.empty, rho); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
+          let r = `Record (StringMap.add label (`Present, a) StringMap.empty, rho, false) in
+            ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
       | `Name var      -> Utils.instantiate env var, StringMap.singleton var 1
   in
     if Settings.get_value Instantiate.quantified_instantiation then
@@ -883,7 +883,7 @@ let type_binary_op ctxt =
   | `Name "<="
   | `Name "<>"    ->
       let a = Types.fresh_type_variable (`Any, `Any) in
-      let eff = (StringMap.empty, Types.fresh_row_variable (`Any, `Any)) in
+      let eff = (StringMap.empty, Types.fresh_row_variable (`Any, `Any), false) in
         ([`Type a; `Row eff],
          `Function (Types.make_tuple_type [a; a], eff, `Primitive `Bool),
          StringMap.empty)
@@ -900,7 +900,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
     match t with
       | `Alias (alias, t) -> `Alias (alias, close_pattern_type pats t)
       | `Record row when Types.is_tuple row->
-          let fields, row_var = fst (Types.unwrap_row row) in
+          let fields, row_var, dual = fst (Types.unwrap_row row) in
           let rec unwrap_at i p =
             match fst p with
               | `Variable _ | `Any | `Constant _ -> p
@@ -918,9 +918,9 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                    | `Absent, _
                    | `Var _, _ ->
                        assert false) fields StringMap.empty in
-            `Record (fields, row_var)
+            `Record (fields, row_var, dual)
       | `Record row ->
-          let fields, row_var = fst (Types.unwrap_row row) in
+          let fields, row_var, false = fst (Types.unwrap_row row) in
           let rec unwrap_at name p =
             match fst p with
               | `Variable _ | `Any | `Constant _ -> p
@@ -945,9 +945,9 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                    | `Absent, _
                    | `Var _, _ ->
                         assert false) fields StringMap.empty in
-            `Record (fields, row_var)
+            `Record (fields, row_var, false)
       | `Variant row ->
-          let fields, row_var = fst (Types.unwrap_row row) in
+          let fields, row_var, false = fst (Types.unwrap_row row) in
           let end_pos p =
             let _, (_, end_pos, buf) = p in
               (*
@@ -990,7 +990,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
           in
             if are_open pats then
               begin
-                let row = (fields, row_var) in
+                let row = (fields, row_var, false) in
                   (* NOTE: type annotations can lead to a closed type even though the patterns are open *)
 (*
                   if Types.is_closed_row row then
@@ -1002,7 +1002,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             else
               begin
                 match Unionfind.find row_var with
-                  | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed)
+                  | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed, false)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
       | `Application (l, [`Type t])
@@ -1174,8 +1174,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                       StringMap.add name (`Absent, b) negative))
                 names (StringMap.empty, StringMap.empty) in
 
-            let outer_type = `Variant (positive, row_var) in
-            let inner_type = `Variant (negative, row_var) in
+            let outer_type = `Variant (positive, row_var, false) in
+            let inner_type = `Variant (negative, row_var, false) in
               `Negative names, Env.empty, (outer_type, inner_type)
         | `Record (ps, default) ->
             let ps = alistmap tp ps in
@@ -1296,7 +1296,7 @@ let make_ft declared_linearity ps effects return_type =
   let rec ft =
     function
       | [p] -> ftcon (args p, effects, return_type)
-      | p::ps -> ftcon (args p, (StringMap.empty, Types.fresh_row_variable (`Any, `Any)), ft ps)
+      | p::ps -> ftcon (args p, (StringMap.empty, Types.fresh_row_variable (`Any, `Any), false), ft ps)
   in
     ft ps
 
@@ -1461,7 +1461,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 fields ([], StringMap.empty, StringMap.empty, StringMap.empty) in
               begin match rest with
                 | None ->
-                    `RecordLit (alistmap erase fields, None), `Record (field_env, Unionfind.fresh `Closed), StringMap.empty
+                    `RecordLit (alistmap erase fields, None), `Record (field_env, Unionfind.fresh `Closed, false), StringMap.empty
                 | Some r ->
                     let r : phrase * Types.datatype * usagemap = tc r in
 
@@ -1482,9 +1482,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                     (* make sure rtype is a record type that doesn't match any of the existing fields *)
                     let () = unify ~handle:Gripers.extend_record
-                      (pos_and_typ r, no_pos (`Record (absent_field_env, Types.fresh_row_variable (`Any, `Any)))) in
+                      (pos_and_typ r, no_pos (`Record (absent_field_env, Types.fresh_row_variable (`Any, `Any), false))) in
 
-                    let (rfield_env, rrow_var), _ = Types.unwrap_row (TypeUtils.extract_row rtype) in
+                    let (rfield_env, rrow_var, false), _ = Types.unwrap_row (TypeUtils.extract_row rtype) in
                       (* attempt to extend field_env with the labels from rfield_env
                          i.e. all the labels belonging to the record r
                       *)
@@ -1501,12 +1501,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                 failwith ("Could not extend record "^ expr_string (erase r)^" (of type "^
                                                             Types.string_of_datatype rtype^") with the label "^
                                                             label^
-                                                            " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed))^
+                                                            " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed, false))^
                                                             ") because the labels overlap")
                                               else
                                                 StringMap.add label t field_env'
                                           | `Var _, _ -> assert false) rfield_env field_env in
-                      `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var), field_usages
+                      `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var, false), field_usages
               end
         | `ListLit (es, _) ->
             begin match List.map tc es with
@@ -1524,7 +1524,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let {var_env = env'} = List.fold_left fold_in_envs context pats in
 
             (* type of the effects in the body of the lambda *)
-            let effects = (StringMap.empty, Types.fresh_row_variable (`Any, `Any)) in
+            let effects = (StringMap.empty, Types.fresh_row_variable (`Any, `Any), false) in
             let body = type_check ({context with
                                       var_env = env';
                                       effect_row = effects}) body in
@@ -1663,7 +1663,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () =
               unify ~handle:Gripers.insert_values
                 (pos_and_typ values,
-                 no_pos (Types.make_list_type (`Record (field_env, Unionfind.fresh `Closed)))) in
+                 no_pos (Types.make_list_type (`Record (field_env, Unionfind.fresh `Closed, false)))) in
 
             let needed_env =
               StringMap.map
@@ -1672,15 +1672,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             (* all fields being inserted must be present in the read row *)
             let () = unify ~handle:Gripers.insert_read
-              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base)))) in
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base), false))) in
 
             (* all fields being inserted must be present in the write row *)
             let () = unify ~handle:Gripers.insert_write
-              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base)))) in
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base), false))) in
 
             (* all fields being inserted must be consistent with the needed row *)
             let () = unify ~handle:Gripers.insert_needed
-              (no_pos needed, no_pos (`Record (needed_env, Unionfind.fresh `Closed))) in
+              (no_pos needed, no_pos (`Record (needed_env, Unionfind.fresh `Closed, false))) in
 
             (* insert returning ... *)
             let return_type =
@@ -1698,7 +1698,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             unify
                               ~handle:Gripers.insert_id
                               (no_pos read,
-                               no_pos (`Record (StringMap.singleton id (`Present, Types.int_type), Types.fresh_row_variable (`Any, `Base))));
+                               no_pos (`Record (StringMap.singleton id (`Present, Types.int_type), Types.fresh_row_variable (`Any, `Base), false)));
                             Types.int_type
                         | _ -> assert false
                     end in
@@ -1752,15 +1752,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             (* all fields being updated must be present in the read row *)
             let () = unify ~handle:Gripers.update_read
-              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base)))) in
+              (no_pos read, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base), false))) in
 
             (* all fields being updated must be present in the write row *)
             let () = unify ~handle:Gripers.update_write
-              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base)))) in
+              (no_pos write, no_pos (`Record (field_env, Types.fresh_row_variable (`Any, `Base), false))) in
 
             (* all fields being updated must be consistent with the needed row *)
             let () = unify ~handle:Gripers.update_needed
-              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable (`Any, `Base)))) in
+              (no_pos needed, no_pos (`Record (needed_env, Types.fresh_row_variable (`Any, `Base), false))) in
 
             (* update is wild *)
             let () =
@@ -1790,7 +1790,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (`Any, `Base))) in
+            let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (`Any, `Base), false)) in
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* concurrency *)
@@ -2227,7 +2227,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                       let rt = Instantiate.apply_type t tyargs in
 
-                      let (field_env, row_var) as row =
+                      let (field_env, row_var, false) as row =
                         match rt with
                           | `Record row -> fst (Types.unwrap_row row)
                           | _ -> assert false in
@@ -2253,7 +2253,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                 (* really we just need to unify the presence variable
                                    with `Presence, but our griper interface doesn't currently
                                    support that *)
-                                let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var) in
+                                let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var, false) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
                                      no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable (`Unl, `Any))))));
@@ -2293,7 +2293,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                               Types.row_with (lab, (`Present, Types.fresh_type_variable (`Unl, `Any))) row)
                            fields (Types.make_empty_open_row (`Any, `Any))) in
                 unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type) in
-            let (rfields, row_var), _ = Types.unwrap_row (TypeUtils.extract_row (typ r)) in
+            let (rfields, row_var, false), _ = Types.unwrap_row (TypeUtils.extract_row (typ r)) in
             let rfields =
               StringMap.mapi
                 (fun name t ->
@@ -2302,7 +2302,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    else t)
                 rfields
             in
-              `With (erase r, alistmap erase fields), `Record (rfields, row_var), merge_usages (usages r :: List.map usages (range fields))
+              `With (erase r, alistmap erase fields), `Record (rfields, row_var, false), merge_usages (usages r :: List.map usages (range fields))
         | `TypeAnnotation (e, (_, Some t as dt)) ->
             let e = tc e in
               unify ~handle:Gripers.type_annotation (pos_and_typ e, no_pos t);

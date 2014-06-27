@@ -17,7 +17,7 @@ let bind_quantifiers  = List.fold_right (Types.type_var_number ->- TypeVarSet.ad
 *)
 
 (* return true if all free occurrences of a variable are guarded in a type
-   
+
    Guarded means 'only occurs inside a field of a row'.
 
    In line with OCaml, we should change it to mean 'only occurs inside
@@ -44,13 +44,13 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
             end
         | `Function (f, m, t) ->
             isg f && isgr m && isg t
-        | `ForAll (qs, t) -> 
+        | `ForAll (qs, t) ->
             is_guarded (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row ->
             begin
               (* HACK: silly 1-tuple test *)
               match row with
-                | (fields, row_var)
+                | (fields, row_var, dual)
                     when
                       (FieldEnv.mem "1" fields &&
                          FieldEnv.size fields = 1 &&
@@ -70,7 +70,7 @@ and is_guarded_session : TypeVarSet.t -> int -> session_type -> bool =
     let isg = is_guarded bound_vars var in
     let isgs = is_guarded_session bound_vars var in
       match s with
-      | `Input (t, s) 
+      | `Input (t, s)
       | `Output (t, s) -> isg t && isgs s
       (* TODO: implement check for select and choice *)
       | `Select fields -> assert false
@@ -79,8 +79,8 @@ and is_guarded_session : TypeVarSet.t -> int -> session_type -> bool =
       | `Dual s -> isgs s
       | `End -> true
 and is_guarded_row : bool -> TypeVarSet.t -> int -> row -> bool =
-  fun check_fields bound_vars var (fields, row_var) ->
-    (if check_fields then       
+  fun check_fields bound_vars var (fields, row_var, dual) ->
+    (if check_fields then
        (StringMap.fold
           (fun _ (_f, t) b -> b && is_guarded bound_vars var t)
           fields
@@ -126,7 +126,8 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
                       is_negative (TypeVarSet.add var' bound_vars) var t
                 | `Body t -> isn t
             end
-        | `Function (f, m, t) ->
+        | `Function (f, m, t)
+        | `Lolli (f, m, t) ->
             isp f || isnr m || isn t
         | `ForAll (qs, t) -> is_negative (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> isnr row
@@ -141,7 +142,7 @@ and is_negative_session : TypeVarSet.t -> int -> session_type -> bool =
     let isn = is_negative bound_vars var in
     let isns = is_negative_session bound_vars var in
       match s with
-      | `Input (t, s) 
+      | `Input (t, s)
       | `Output (t, s) -> isn t && isns s
       (* TODO: implement check for select and choice *)
       | `Select fields -> assert false
@@ -150,7 +151,7 @@ and is_negative_session : TypeVarSet.t -> int -> session_type -> bool =
       | `Dual s -> isns s
       | `End -> true
 and is_negative_row : TypeVarSet.t -> int -> row -> bool =
-  fun bound_vars var (field_env, row_var) ->
+  fun bound_vars var (field_env, row_var, dual) ->
     is_negative_field_env bound_vars var field_env || is_negative_row_var bound_vars var row_var
 and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
@@ -210,7 +211,7 @@ and is_positive_session : TypeVarSet.t -> int -> session_type -> bool =
     let isp = is_positive bound_vars var in
     let isps = is_positive_session bound_vars var in
       match s with
-      | `Input (t, s) 
+      | `Input (t, s)
       | `Output (t, s) -> isp t && isps s
       (* TODO: implement check for select and choice *)
       | `Select fields -> assert false
@@ -219,7 +220,7 @@ and is_positive_session : TypeVarSet.t -> int -> session_type -> bool =
       | `Dual s -> isps s
       | `End -> true
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
-  fun bound_vars var (field_env, row_var) ->
+  fun bound_vars var (field_env, row_var, dual) ->
     is_positive_field_env bound_vars var field_env || is_positive_row_var bound_vars var row_var
 and is_positive_presence : TypeVarSet.t -> int -> presence_flag -> bool =
   fun bound_vars var ->

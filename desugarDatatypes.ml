@@ -205,7 +205,7 @@ struct
         | `OpenRigid (rv, _)
         | `Open (rv, _) ->
             begin
-              try (StringMap.empty, lookup_row rv)
+              try (StringMap.empty, lookup_row rv, false)
               with NotFound _ -> raise (UnexpectedFreeVar rv)
             end
         | `Recursive (name, r) ->
@@ -213,7 +213,7 @@ struct
             let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
             let renv = StringMap.add name point var_env.renv in
             let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
-              (StringMap.empty, point) in
+              (StringMap.empty, point, false) in
     let fields =
         List.map
           (fun (k, (f, t)) ->
@@ -312,7 +312,7 @@ struct
       let (_, Some read_type) = datatype' empty_env alias_env (dt, None) in
       let write_row, needed_row =
         match TypeUtils.concrete_type read_type with
-          | `Record (fields, _) ->
+          | `Record (fields, _, _) ->
             StringMap.fold
               (fun label t (write, needed) ->
                 match lookup label constraints with

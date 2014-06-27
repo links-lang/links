@@ -3,13 +3,13 @@ open Utility
 
 module NormalForms =
 struct
-  (* 
+  (*
      This module gives the datatype of normal forms for query
      expressions.
 
      Instead of using normal forms we use a single datatype t as it
      makes the implementation considerably simpler.
-     
+
      At some point it might be interesting to try to target the normal
      form directly.
   *)
@@ -128,9 +128,9 @@ struct
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
       match v with
-        | `For (gs, os, b) -> 
-            `For (List.map (fun (x, source) -> (x, bt source)) gs, 
-                  List.map bt os, 
+        | `For (gs, os, b) ->
+            `For (List.map (fun (x, source) -> (x, bt source)) gs,
+                  List.map bt os,
                   bt b)
         | `If (c, t, e) -> `If (bt c, bt t, bt e)
         | `Table t -> `Table t
@@ -146,7 +146,7 @@ struct
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
-          
+
   let t = Show.show show_pt -<- pt_of_t
 end
 let string_of_t = S.t
@@ -210,7 +210,7 @@ let rec value_of_expression : t -> Value.t = fun v ->
       | `XML xmlitem -> `XML xmlitem
       | `Record fields ->
           `Record (List.rev (StringMap.fold (fun name v fields ->
-                                               (name, ve v)::fields) 
+                                               (name, ve v)::fields)
                                fields []))
       | _ -> assert false
 
@@ -218,7 +218,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
   fun env v ->
     let ffb = freshen_for_bindings env in
       match v with
-      | `For (gs, os, b) -> 
+      | `For (gs, os, b) ->
         let gs', env' =
           List.fold_left
             (fun (gs', env') (x, source) ->
@@ -257,7 +257,7 @@ let labels_of_field_types field_types =
     field_types
     StringSet.empty
 
-let table_field_types (_, _, (fields, _)) = StringMap.map snd fields
+let table_field_types (_, _, (fields, _, _)) = StringMap.map snd fields
 let rec field_types_of_list =
   function
     | `Concat (v::vs) -> field_types_of_list v
@@ -279,15 +279,15 @@ struct
       | `Singleton _
       | `Concat _
       | `If (_, _, `Concat []) -> true
-      | _ -> false    
+      | _ -> false
 
-  let eval_error fmt = 
+  let eval_error fmt =
     let error msg = raise (DbEvaluationError msg) in
       Printf.kprintf error fmt
 
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
-    Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'  
+    Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
   let rec expression_of_value : Value.t -> t =
     function
@@ -296,7 +296,7 @@ struct
       | `Char c -> `Constant (`Char c)
       | `Float f -> `Constant (`Float f)
       | `String s -> `Constant (`String s)
-      | `Table t -> `Table t 
+      | `Table t -> `Table t
       | `List vs ->
           `Concat (List.map (fun v -> `Singleton (expression_of_value v)) vs)
       | `Record fields ->
@@ -392,13 +392,13 @@ struct
               (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
               freshen_for_bindings (Env.Int.empty) v
         end
-    | `Extend (ext_fields, r) -> 
+    | `Extend (ext_fields, r) ->
       begin
         match opt_app (value env) (`Record StringMap.empty) r with
           | `Record fields ->
-            `Record (StringMap.fold 
+            `Record (StringMap.fold
                        (fun label v fields ->
-                         if StringMap.mem label fields then 
+                         if StringMap.mem label fields then
                            eval_error
                              "Error adding fields: label %s already present"
                              label
@@ -465,7 +465,7 @@ struct
         in
           `Singleton (`XML (Value.Node (tag, children)))
 
-    | `ApplyPure (f, ps) -> 
+    | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Coerce (v, _) -> value env v
 
@@ -518,7 +518,7 @@ struct
                 let xs = `For (gs, os', body) in
                   begin
                     match f with
-                      | `Closure (([x], os), closure_env) ->                
+                      | `Closure (([x], os), closure_env) ->
                           let os =
                             let env = env ++ closure_env in
                               let o = computation (bind env (x, tail_of_t xs)) os in
@@ -631,7 +631,7 @@ struct
               (t, fun v -> reduce_where_then (c, body v))
           | `For (gs, os, v) ->
             (* NOTE:
-               
+
                We are relying on peculiarities of the way we manage
                the environment in order to avoid having to
                augment it with the generator bindings here.
@@ -752,8 +752,8 @@ struct
           if s1 <> s2 then
             `Constant (`Bool false)
           else
-            reduce_eq (a, b)              
-        | (`Record lfields, `Record rfields) -> 
+            reduce_eq (a, b)
+        | (`Record lfields, `Record rfields) ->
           List.fold_right2
             (fun (s1, v1) (s2, v2) e ->
               reduce_and (reduce_eq (v1, v2), e))
@@ -761,7 +761,7 @@ struct
             (StringMap.to_alist rfields)
             (`Constant (`Bool true))
         | (a, b) -> `Apply ("==", [a; b])
-        
+
   let eval env e =
 (*    Debug.print ("e: "^Ir.Show_computation.show e); *)
     computation (env_of_value_env env) e
@@ -775,7 +775,7 @@ struct
   type context = gen list
 
 (* TODO:
-     
+
       - add a setting for selecting unordered queries
       - more refined generation of ordered queries
         - make use of unique keys to
@@ -798,7 +798,7 @@ struct
 
      In general this is unlikely to be necessary, as the programmer
      can supply an orderby clause when needed.
-     
+
      If we ignore tail generators, then this corresponds to
      interpretting asList (table t) non-deterministically, that is,
      each invocation of asList (table t) may return a different
@@ -845,7 +845,7 @@ struct
      for (x <-- t) orderby (x.a, -x.a) [x]
 
      which is equivalent to:
-     
+
      for (x <-- t) orderby (x.a) [x] *)
 
   type orders = order_index list
@@ -861,7 +861,7 @@ struct
   let gen : (Var.var * t) -> t list =
     function
       | (x, `Table t) ->
-        let field_types = table_field_types t in 
+        let field_types = table_field_types t in
           List.rev
             (StringMap.fold
                (fun name _t es ->
@@ -1005,7 +1005,7 @@ struct
             let (branch :: path) = path in
               os @ `Branch branch :: flatten_at_children branch path active cs
           else
-            os @ `Branch 0 :: flatten_at_children 0 [] active cs          
+            os @ `Branch 0 :: flatten_at_children 0 [] active cs
   and flatten_at_children branch path active =
     function
       | [] -> []
@@ -1023,7 +1023,7 @@ struct
     List.map
       (fun ((path, (gs, body)), tree) ->
         (gs, body, flatten_at path true tree))
-      (decompose q)   
+      (decompose q)
 
   let query : t -> clause list =
     fun v ->
@@ -1080,7 +1080,7 @@ end
 (* Hoist concatenation to the top-level and lower conditionals to the
    tails of comprehensions, yielding a collection of canonical
    comprehensions.
-   
+
    This process doesn't necessarily respect list ordering. The order
    module generalises it in order to support various degrees of
    list-ordering.
@@ -1126,7 +1126,7 @@ struct
   (* Table variables that are actually used are always bound in a for
      comprehension. In this case the IR variable from the for
      comprehension is used to generate the table variable.
-     
+
      e.g. if the IR variable is 1485 then the table variable is t1485
   *)
   let fresh_table_var : unit -> Var.var = Var.fresh_raw_var
@@ -1138,12 +1138,12 @@ struct
   let dummy_counter = ref 0
   let reset_dummy_counter () = dummy_counter := 0
   let fresh_dummy_var () =
-    incr dummy_counter;     
+    incr dummy_counter;
     "dummy" ^ string_of_int (!dummy_counter)
 
   let string_of_label label =
     if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier; 
+      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier;
                                  works in MySQL and PostgreSQL *)
     else
       label
@@ -1341,7 +1341,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (_db, table, (fields, _)) ->
+      | `Table (_db, table, (fields, _, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
@@ -1384,7 +1384,7 @@ struct
             | None ->
               let r =
                     (* HACK:
-                       
+
                        this only works if the regexp doesn't include any variables bound by the query
                     *)
                     `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
@@ -1415,7 +1415,7 @@ struct
         | `Variant ("Simply", `Constant (`String s)) -> Some (quote s)
         | `Variant ("Quote", `Variant ("Simply", v)) ->
             (* TODO:
-               
+
                detect variables and convert to a concatenation operation
                (this needs to happen in RLIKE compilation as well)
             *)
@@ -1553,4 +1553,3 @@ let compile_delete : Value.database -> Value.env ->
     let q = Sql.delete db ((x, table), where) in
       Debug.print ("Generated update query: "^q);
       q
-

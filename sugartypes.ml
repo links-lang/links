@@ -330,6 +330,7 @@ struct
     | `Page p
     | `PagePlacement p
     | `Upcast (p, _, _)
+    | `Select (_, p)
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit (ps, _)
@@ -387,7 +388,8 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Switch (p, cases, _) -> union (phrase p) (union_map case cases)
+    | `Switch (p, cases, _)
+    | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `Receive (cases, _) -> union_map case cases
     | `DBDelete (pat, p, where) ->
         union (phrase p)

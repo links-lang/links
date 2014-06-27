@@ -77,7 +77,7 @@ and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec = presence_flag * typ
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
-and row = field_spec_map * row_var
+and row = field_spec_map * row_var * bool
 and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
@@ -123,6 +123,10 @@ val row_can_be_unl : row -> bool
 
 val make_type_unl : datatype -> unit
 val make_row_unl : row -> unit
+
+val dual_session : session_type -> session_type
+val dual_row : row -> row
+val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
 
