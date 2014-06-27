@@ -501,45 +501,6 @@ struct
     let t = TypeUtils.project_type l (sem_type e) in
       bind e (fun v -> lift (`Special (`Select (l, v)), t))
 
-  let offer env (v, cases, t) = assert false
-    (* let rec build_cases ps : (binder * tail_computation) name_map sem = *)
-    (*   (\* HACK: bind throws away the type so we can get away with using *)
-    (*      `Not_typed *\) *)
-    (*   match ps with *)
-    (*   | ((p, b) :: ps) -> *)
-    (*     let (ann, p') = CompilePatterns.reduce_pattern p in *)
-    (*     let body = CompilePatterns.apply_annotation (assert false) (ann, assert false) in *)
-    (*     bind (b env) (fun b -> *)
-    (*       bind (build_cases ps) (fun nm -> *)
-    (*         match p with *)
-    (*         | `Variant (name, `Variable v) -> lift (StringMap.add name (v, b) nm, `Not_typed) *)
-    (*         | _ -> assert false)) *)
-    (*   | [] -> lift (StringMap.empty, `Not_typed) in *)
-    (* bind v (fun v -> bind (build_cases cases) (fun bs -> lift (`Special (`Choice (v, bs)), t))) *)
-
-  (* let offer' env (v, cases, t) = *)
-  (*   let cases = *)
-  (*     List.map *)
-  (*       (fun (p, body) -> *)
-  (*         let (ann, p') = CompilePatterns.reduce_pattern p in *)
-  (*           ([p], *)
-  (*            fun env -> *)
-  (*              match p' with *)
-  (*              | `Variant (name, `Variable (x, info)) -> *)
-  (*                let foo = CompilePatterns.apply_annotation (`Variable x) (ann, body) in *)
-  (*                reify (body env))) cases *)
-  (*   in *)
-  (*     bind v *)
-  (*       (fun e -> *)
-  (*          M.bind *)
-  (*            (comp_binding (Var.info_of_type (sem_type v), `Return e)) *)
-  (*            (fun var -> *)
-  (*               let nenv, tenv, eff = env in *)
-  (*               let tenv = TEnv.bind tenv (var, sem_type v) in *)
-  (*               let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in *)
-  (*                 reflect (bs, (tc, t)))) *)
-
-
   let offer env (v, cases, t) =
     let cases =
       List.map
@@ -952,8 +913,6 @@ struct
 
           | `Select (l, e) ->
              I.select (l, ev e)
-
-
           | `Offer (e, cases, Some t) ->
               let cases =
                 List.map
@@ -963,14 +922,6 @@ struct
                   cases
               in
                 I.offer env (ev e, cases, t)
-
-          (* | `Offer (e, bs, Some t) -> *)
-          (*    let desugar_case (p, b) = *)
-          (*      let p, penv = CompilePatterns.desugar_pattern `Local p in *)
-          (*      let env' = env ++ penv in *)
-          (*      let b = eval env' b in *)
-          (*      p, b in *)
-          (*    I.offer (ev e, List.map desugar_case bs, t) *)
 
                   (* These things should all have been desugared already *)
           | `Spawn _
