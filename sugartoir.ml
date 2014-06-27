@@ -136,10 +136,10 @@ sig
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
-  val case :
-    value sem * string * (var_info * (var -> tail_computation sem)) *
-    (var_info * (var -> tail_computation sem)) option ->
-    tail_computation sem
+  (* val case : *)
+  (*   value sem * string * (var_info * (var -> tail_computation sem)) * *)
+  (*   (var_info * (var -> tail_computation sem)) option -> *)
+  (*   tail_computation sem *)
   val case_zero : value sem * datatype -> tail_computation sem
 
   val concat : (value sem * value sem * (value sem) list) -> value sem
@@ -166,7 +166,7 @@ sig
 
   val select : name * value sem -> tail_computation sem
 
-  val offer : value sem * (CompilePatterns.pattern * tail_computation sem) list * Types.datatype -> tail_computation sem
+  val offer : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -461,20 +461,22 @@ struct
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))
-  let case (s, name, (cinfo, cbody), default) =
-    bind s (fun v ->
-              let cb, c = Var.fresh_var cinfo in
-              let cbody' = cbody c in
-              let t = sem_type cbody' in
-              let default =
-                opt_map (fun (dinfo, dbody) ->
-                           let db, d = Var.fresh_var dinfo in
-                             (db, reify (dbody d))) default
-              in
-                lift
-                  (`Case (v,
-                          StringMap.add name (cb, reify cbody') StringMap.empty,
-                          default), t))
+
+  (* this isn't used... *)
+  (* let case (s, name, (cinfo, cbody), default) = *)
+  (*   bind s (fun v -> *)
+  (*             let cb, c = Var.fresh_var cinfo in *)
+  (*             let cbody' = cbody c in *)
+  (*             let t = sem_type cbody' in *)
+  (*             let default = *)
+  (*               opt_map (fun (dinfo, dbody) -> *)
+  (*                          let db, d = Var.fresh_var dinfo in *)
+  (*                            (db, reify (dbody d))) default *)
+  (*             in *)
+  (*               lift *)
+  (*                 (`Case (v, *)
+  (*                         StringMap.add name (cb, reify cbody') StringMap.empty, *)
+  (*                         default), t)) *)
 
   let case_zero (s, t) =
     bind s (fun v ->
@@ -499,17 +501,59 @@ struct
     let t = TypeUtils.project_type l (sem_type e) in
       bind e (fun v -> lift (`Special (`Select (l, v)), t))
 
-  let offer (e, bs, t) =
-    let rec build_cases ps : (binder * tail_computation) name_map sem =
-      match ps with
-      | ((p, b) :: ps) ->
-         bind b (fun b ->
-         bind (build_cases ps) (fun nm ->
-         match p with
-          | `Variant (name, `Variable v) -> lift (StringMap.add name (v, b) nm, `Not_typed)
-          | _ -> assert false))
-      | [] -> lift (StringMap.empty, `Not_typed) in
-    bind e (fun v -> bind (build_cases bs) (fun bs -> lift (`Special (`Choice (v, bs)), t)))
+  let offer env (v, cases, t) = assert false
+    (* let rec build_cases ps : (binder * tail_computation) name_map sem = *)
+    (*   (\* HACK: bind throws away the type so we can get away with using *)
+    (*      `Not_typed *\) *)
+    (*   match ps with *)
+    (*   | ((p, b) :: ps) -> *)
+    (*     let (ann, p') = CompilePatterns.reduce_pattern p in *)
+    (*     let body = CompilePatterns.apply_annotation (assert false) (ann, assert false) in *)
+    (*     bind (b env) (fun b -> *)
+    (*       bind (build_cases ps) (fun nm -> *)
+    (*         match p with *)
+    (*         | `Variant (name, `Variable v) -> lift (StringMap.add name (v, b) nm, `Not_typed) *)
+    (*         | _ -> assert false)) *)
+    (*   | [] -> lift (StringMap.empty, `Not_typed) in *)
+    (* bind v (fun v -> bind (build_cases cases) (fun bs -> lift (`Special (`Choice (v, bs)), t))) *)
+
+  (* let offer' env (v, cases, t) = *)
+  (*   let cases = *)
+  (*     List.map *)
+  (*       (fun (p, body) -> *)
+  (*         let (ann, p') = CompilePatterns.reduce_pattern p in *)
+  (*           ([p], *)
+  (*            fun env -> *)
+  (*              match p' with *)
+  (*              | `Variant (name, `Variable (x, info)) -> *)
+  (*                let foo = CompilePatterns.apply_annotation (`Variable x) (ann, body) in *)
+  (*                reify (body env))) cases *)
+  (*   in *)
+  (*     bind v *)
+  (*       (fun e -> *)
+  (*          M.bind *)
+  (*            (comp_binding (Var.info_of_type (sem_type v), `Return e)) *)
+  (*            (fun var -> *)
+  (*               let nenv, tenv, eff = env in *)
+  (*               let tenv = TEnv.bind tenv (var, sem_type v) in *)
+  (*               let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in *)
+  (*                 reflect (bs, (tc, t)))) *)
+
+
+  let offer env (v, cases, t) =
+    let cases =
+      List.map
+        (fun (p, body) -> ([p], fun env -> reify (body env))) cases
+    in
+      bind v
+        (fun e ->
+           M.bind
+             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (fun var ->
+                let nenv, tenv, eff = env in
+                let tenv = TEnv.bind tenv (var, sem_type v) in
+                let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
+                  reflect (bs, (tc, t))))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in
@@ -909,13 +953,24 @@ struct
           | `Select (l, e) ->
              I.select (l, ev e)
 
-          | `Offer (e, bs, Some t) ->
-             let desugar_case (p, b) =
-               let p, penv = CompilePatterns.desugar_pattern `Local p in
-               let env' = env ++ penv in
-               let b = eval env' b in
-               p, b in
-             I.offer (ev e, List.map desugar_case bs, t)
+
+          | `Offer (e, cases, Some t) ->
+              let cases =
+                List.map
+                  (fun (p, body) ->
+                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                       (p, fun env ->  eval (env ++ penv) body))
+                  cases
+              in
+                I.offer env (ev e, cases, t)
+
+          (* | `Offer (e, bs, Some t) -> *)
+          (*    let desugar_case (p, b) = *)
+          (*      let p, penv = CompilePatterns.desugar_pattern `Local p in *)
+          (*      let env' = env ++ penv in *)
+          (*      let b = eval env' b in *)
+          (*      p, b in *)
+          (*    I.offer (ev e, List.map desugar_case bs, t) *)
 
                   (* These things should all have been desugared already *)
           | `Spawn _

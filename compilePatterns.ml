@@ -889,3 +889,48 @@ let compile_cases
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
+
+
+let rec match_choices : var -> clause list -> bound_computation =
+  fun var clauses env ->
+    ([], `Special (`Choice (`Variable var,
+                            List.fold_left
+                              (fun cases ([(annotation, pattern)], body) ->
+                                let (label, ((x, _) as b)) =
+                                  match pattern with
+                                    `Variant (label, `Variable b) -> (label, b)
+                                  | _ -> assert false in
+                                let body = apply_annotation (`Variable x) (annotation, body) in
+                                  StringMap.add label (b, body env) cases)
+                              StringMap.empty
+                              clauses)))
+
+let compile_choices
+    : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, var, raw_clauses) ->
+    let clauses = List.map reduce_clause raw_clauses in
+    let initial_env = (nenv, tenv, eff, PEnv.empty) in
+    let result =
+      match_choices var clauses initial_env
+    in
+      Debug.if_set (show_pattern_compilation)
+        (fun () -> "Compiled choices: "^(string_of_computation result));
+      result
+
+
+(* match_choices var clauses initial_env *)
+
+
+(* let compile_choices *)
+(*     : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation = *)
+(*   fun (nenv, tenv, eff) (output_type, var, raw_clauses) -> *)
+(*     let clauses = List.map reduce_clause raw_clauses in *)
+(*     let initial_env = (nenv, tenv, eff, PEnv.empty) in *)
+(*     let result = *)
+
+
+(*       match_cases [var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env *)
+(*     in *)
+(*       Debug.if_set (show_pattern_compilation) *)
+(*         (fun () -> "Compiled pattern: "^(string_of_computation result)); *)
+(*       result *)

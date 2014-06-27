@@ -558,7 +558,7 @@ module Eval = struct
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), c) ->
-                  computation (Value.bind var (chan, `Local) env) cont ([], c)
+                  computation (Value.bind var (chan, `Local) env) cont c
                 | None -> eval_error "Choice pattern matching failed"
               end
             (* apply_cont cont env (Value.box_pair v chan) *)

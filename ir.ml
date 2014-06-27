@@ -83,7 +83,7 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of (value)
   | `Select of (name * value)
-  | `Choice of (value * (binder * tail_computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -408,7 +408,7 @@ struct
            let bs, branch_types, o =
              o#name_map (fun o (b, c) ->
                          let b, o = o#binder b in
-                         let c, t, o = o#tail_computation c in
+                         let c, t, o = o#computation c in
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o

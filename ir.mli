@@ -74,7 +74,7 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of value
   | `Select of (name * value)
-  | `Choice of (value * (binder * tail_computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
