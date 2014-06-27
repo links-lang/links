@@ -563,12 +563,10 @@ module Eval = struct
               end
             (* apply_cont cont env (Value.box_pair v chan) *)
           | None ->
-            let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c'))
-                                                                           (StringMap.add "2" (`Constant (`Int d'))
-                                                                            StringMap.empty), None)])
+            let choice_frame =
+              Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
-              Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
+              Proc.block_current (choice_frame::cont, `Record [("1", chan)]);
               Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
