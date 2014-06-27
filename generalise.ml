@@ -105,9 +105,9 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
       | `Closed -> []
       | `Flexible (var, _)
       | `Rigid (var, _) when TypeVarSet.mem var bound_vars -> []
-      | `Flexible _ when kind=`All -> [`Row (StringMap.empty, row_var)]
+      | `Flexible _ when kind=`All -> [`Row (StringMap.empty, row_var, false)]
       | `Flexible _ -> []
-      | `Rigid _ -> [`Row (StringMap.empty, row_var)]
+      | `Rigid _ -> [`Row (StringMap.empty, row_var, false)]
       | `Recursive (var, rec_row) ->
           Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_type_args): " ^(string_of_int var));
           (if TypeVarSet.mem var bound_vars then
@@ -136,7 +136,7 @@ and get_presence_type_args : gen_kind -> TypeVarSet.t -> presence_flag -> type_a
           end
 
 and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
-  fun kind bound_vars (field_env, row_var) ->
+  fun kind bound_vars (field_env, row_var, _) ->
     let field_vars =
       StringMap.fold
         (fun _ field_spec vars ->
@@ -157,7 +157,7 @@ let remove_duplicates =
   unduplicate (fun l r ->
                  match l, r with
                    | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
-                   | `Row (_, l), `Row (_, r) -> Unionfind.equivalent l r
+                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
                    | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
                    | _ -> false)
 
@@ -181,7 +181,7 @@ let type_variables_of_type_args =
                | _ -> assert false
            end
        | `Type _ -> assert false
-       | `Row (fields, row_var) ->
+       | `Row (fields, row_var, false) ->
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with

@@ -9,10 +9,10 @@ let type_section env =
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho) = Types.fresh_row_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
         let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
 
-        let r = `Record (StringMap.add label (`Present, a) fields, rho) in
+        let r = `Record (StringMap.add label (`Present, a) fields, rho, false) in
           `ForAll (Types.box_quantifiers [ab; rhob; eb],
                    `Function (Types.make_tuple_type [r], e, a))
     | `Name var -> TyEnv.lookup env var

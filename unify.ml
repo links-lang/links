@@ -111,8 +111,8 @@ and eq_quantifier : (quantifier * quantifier) -> bool =
     | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
     | `PresenceVar (lvar, _), `PresenceVar (rvar, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
-  fun ((lfield_env, lrow_var), (rfield_env, rrow_var)) ->
-    eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
+  fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
+    eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
 and eq_presence =
   function
     | `Absent, `Absent
@@ -765,7 +765,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     *)
 
     let is_unguarded_recursive row =
-      let rec is_unguarded rec_rows (field_env, row_var) =
+      let rec is_unguarded rec_rows (field_env, row_var, _) =
         StringMap.is_empty field_env &&
           (match Unionfind.find row_var with
              | `Closed
@@ -873,8 +873,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     (* closed rows don't need to explicitly mention absent *)
                     unify_presence' rec_env (f, `Absent)
                   | _ ->
-                    raise (Failure (`Msg ("Field environments\n "^ string_of_row (lenv, closed_row_var)
-                                          ^"\nand\n "^ string_of_row (renv, closed_row_var)
+                    raise (Failure (`Msg ("Field environments\n "^ string_of_row (lenv, closed_row_var, false)
+                                          ^"\nand\n "^ string_of_row (renv, closed_row_var, false)
                                           ^"\n could not be unified because they have different fields")))
             ) env1 in
         let lenv, renv =
@@ -909,7 +909,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       it is unified with row.
     *)
     let unify_row_var_with_row : unify_env -> row_var * row -> unit =
-      fun rec_env (row_var, ((extension_field_env, extension_row_var) as extension_row)) ->
+      fun rec_env (row_var, ((extension_field_env, extension_row_var, extension_dual) as extension_row)) ->
         (* unify row_var with `RowVar None *)
         let close_empty_row_var : row_var -> unit = fun point ->
           match Unionfind.find point with
@@ -975,7 +975,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     Unionfind.change point (`Body extension_row)
                 end
             | `Recursive _ ->
-              unify_rows' rec_env ((StringMap.empty, point), extension_row)
+              unify_rows' rec_env ((StringMap.empty, point, false), extension_row)
             | `Body row ->
               unify_rows' rec_env (row, extension_row)
         in
@@ -996,12 +996,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                             labels) big_field_env StringSet.empty in
 
     let row_without_labels : StringSet.t -> row -> row =
-      fun labels (field_env, row_var) ->
+      fun labels (field_env, row_var, dual) ->
         let restricted_field_env =
           StringSet.fold (fun label field_env ->
                             StringMap.remove label field_env) labels field_env
         in
-          (restricted_field_env, row_var) in
+          (restricted_field_env, row_var, dual) in
 
     (*
       register a recursive row in the rec_env environment
@@ -1024,7 +1024,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                           if IntMap.mem var rec_rows then
                             IntMap.find var rec_rows
                           else
-                            [(StringMap.empty, row_var)]
+                            [(StringMap.empty, row_var, false)]
                         in
                           if List.exists (fun r ->
                                             eq_rows (r, restricted_row)) rs then
@@ -1045,9 +1045,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           | None -> None
           | Some rec_env -> register_rec_row p2 rec_env in
 
-    let unify_both_rigid_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
-      let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
-      let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
+    let unify_both_rigid_with_rec_env rec_env ((lfield_env, _, _ as lrow), (rfield_env, _, _ as rrow)) =
+      let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
+      let (rfield_env', rrow_var', rdual') as rrow', rrec_row = unwrap_row rrow in
         (*
           fail_on_absent_fields lfield_env;
           fail_on_absent_fields rfield_env;
@@ -1102,10 +1102,10 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       (*   (fun () -> "(both rigid rows)"); *)
       unify_both_rigid_with_rec_env rec_env (lrow, rrow) in
 
-    let unify_one_rigid ((rigid_field_env, _ as rigid_row), (open_field_env, _ as open_row)) =
-      let (rigid_field_env', rigid_row_var') as rigid_row', rigid_rec_row = unwrap_row rigid_row in
+    let unify_one_rigid ((rigid_field_env, _, _ as rigid_row), (open_field_env, _, _ as open_row)) =
+      let (rigid_field_env', rigid_row_var', rigid_dual') as rigid_row', rigid_rec_row = unwrap_row rigid_row in
       let closed = is_closed_row rigid_row' in
-      let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in
+      let (open_field_env', open_row_var', open_dual) as open_row', open_rec_row = unwrap_row open_row in
         (* check that the open row contains no extra fields *)
         StringMap.iter
           (fun label (flag, _) ->
@@ -1135,11 +1135,11 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | None -> ()
             | Some rec_env ->
                 let open_extension = extend_field_env closed rec_env rigid_field_env' open_field_env' in
-                  unify_row_var_with_row rec_env (open_row_var', (open_extension, rigid_row_var')) in
+                  unify_row_var_with_row rec_env (open_row_var', (open_extension, rigid_row_var', rigid_dual')) in
 
-    let unify_both_open ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
-      let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
-      let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in
+    let unify_both_open ((lfield_env, _, ldual as lrow), (rfield_env, _, rdual as rrow)) =
+      let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
+      let (rfield_env', rrow_var', rdual') as rrow', rrec_row = unwrap_row rrow in
       let rec_env' =
         (register_rec_rows
            (lfield_env, lfield_env', lrec_row, rrow')
@@ -1149,9 +1149,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         match rec_env' with
           | None -> ()
           | Some rec_env ->
-              if (get_row_var lrow = get_row_var rrow) then
-                unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed),
-                                                       (rfield_env', Unionfind.fresh `Closed))
+              if get_row_var lrow = get_row_var rrow && ldual = rdual then
+                unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh `Closed, false),
+                                                       (rfield_env', Unionfind.fresh `Closed, false))
               else
                 begin
                   let fresh_row_var = fresh_row_variable (`Any, `Any) in
@@ -1163,9 +1163,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                        extend_field_env may change rrow_var' or lrow_var', as either
                        could occur inside the body of lfield_env' or rfield_env'
                     *)
-                    unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var));
+                    unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var ,false));
                     let lextension = extend_field_env false rec_env rfield_env' lfield_env' in
-                      unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
+                      unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var, false))
                 end in
 
     (* report an error if an attempt is made to unify
@@ -1235,7 +1235,7 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
       (* NOTE: the order of pattern matching is important
          - duality must come after type variables *)
       | `Dual s, s'
-      | s, `Dual s' -> us (s, TypeUtils.dual_session s')
+      | s, `Dual s' -> us (s, dual_session s')
       | `End, `End -> ()
       | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 

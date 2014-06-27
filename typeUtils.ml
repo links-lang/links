@@ -52,7 +52,7 @@ let extract_row t = match concrete_type t with
          ^ string_of_datatype t)
 
 let split_row name row =
-  let (field_env, row_var) = fst (unwrap_row row) in
+  let (field_env, row_var, dual) = fst (unwrap_row row) in
   let t =
     if StringMap.mem name field_env then
       match (StringMap.find name field_env) with
@@ -64,7 +64,7 @@ let split_row name row =
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
   in
-    t, (StringMap.remove name field_env, row_var)
+    t, (StringMap.remove name field_env, row_var, dual)
 
 let rec variant_at name t = match concrete_type t with
   | `ForAll (_, t) -> variant_at name t
@@ -119,7 +119,7 @@ let rec erase_type_poly names t = match concrete_type t with
   | `ForAll (_, t) -> erase_type_poly names t
   | `Record row ->
       let closed = is_closed_row row in
-      let (field_env, row_var) = fst (unwrap_row row) in
+      let (field_env, row_var, dual) = fst (unwrap_row row) in
       let qs, field_env =
         StringSet.fold
           (fun name (qs, field_env) ->
@@ -139,7 +139,7 @@ let rec erase_type_poly names t = match concrete_type t with
           names
           ([], field_env) in
         let qs = List.rev qs in
-          Types.for_all (qs, `Record (field_env, row_var))
+          Types.for_all (qs, `Record (field_env, row_var, dual))
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
 
 (*
@@ -214,11 +214,12 @@ let quantifiers t = match concrete_type t with
 
 let record_without t names =
   match concrete_type t with
-    | `Record ((fields, row_var) as row) ->
+    | `Record ((fields, row_var, dual) as row) ->
         if is_closed_row row then
           `Record
             (StringSet.fold (fun name fields -> StringMap.remove name fields) names fields,
-             row_var)
+             row_var,
+             dual)
         else
           `Record
             (StringMap.mapi
@@ -228,10 +229,16 @@ let record_without t names =
                   else
                     flag, t)
                fields,
-             row_var)
+             row_var,
+             dual)
     | _ -> assert false
 
-let rec dual_session = function
+(*
+let rec dual_session s =
+  let s' = dual_session' s in
+  Printf.printf "The dual of \n     %s \nis \n    %s\n" (string_of_datatype (`Session s)) (string_of_datatype (`Session s'));
+  s'
+and dual_session' = function
   | `Input (t, s)         -> `Output (t, dual_session s)
   | `Output (t, s)        -> `Input (t, dual_session s)
   | `Select row           -> `Choice (dual_row row)
@@ -248,7 +255,7 @@ let rec dual_session = function
     end
   | `Dual s               -> s
   | `End                  -> `End
-and dual_row = fun (fields, row_var) ->
+and dual_row = fun (fields, row_var, dual) ->
   (* TODO: work out how to implement dualisation for row variables *)
   let fields' =
     StringMap.map (fun (f, t) -> (f, `Session (dual_session (session_of_type t)))) fields in
@@ -260,8 +267,9 @@ and dual_row = fun (fields, row_var) ->
   (*   | `Body row -> assert false *)
   (*   | `Closed -> `Closed *)
   (* in *)
-    (fields', row_var)
+    (fields', row_var, not dual)
 
 let dual_type t = match concrete_type t with
   | `Session s -> `Session (dual_session s)
   | _ -> assert false
+ *)

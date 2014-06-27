@@ -89,10 +89,10 @@ object (o : 'self_type)
           (o, e, ft)
     | `Section (`Project name) ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho) = Types.fresh_row_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
         let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
 
-        let r = `Record (StringMap.add name (`Present, a) fields, rho) in
+        let r = `Record (StringMap.add name (`Present, a) fields, rho, false) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in

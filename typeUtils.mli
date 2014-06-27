@@ -29,6 +29,3 @@ val variant_at : string -> Types.datatype -> Types.datatype
 val quantifiers : Types.datatype -> Types.quantifier list
 
 val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
-
-val dual_session : Types.session_type -> Types.session_type
-val dual_type : Types.datatype -> Types.datatype

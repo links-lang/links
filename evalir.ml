@@ -40,7 +40,7 @@ module Session = struct
     let d = fresh_cid () in
       (c, d)
 
-  let new_channel () = 
+  let new_channel () =
     let (c, d) = fresh_chan () in
       Hashtbl.add channels c (Queue.create ());
       Hashtbl.add channels d (Queue.create ());
@@ -74,12 +74,12 @@ module Session = struct
     in
       Hashtbl.replace access_points apid state';
       flip_chan chan
-  
+
   (* TODO: be consistent about checking lookup operations *)
   exception UnknownChannelID of cid
 
   let send msg c =
-    try 
+    try
       Queue.push msg (Hashtbl.find channels c)
     with Notfound.NotFound _ -> raise (UnknownChannelID c)
 
@@ -99,7 +99,7 @@ module Eval = struct
   exception Wrong
   exception TopLevel of (Value.env * Value.t)
 
-  let eval_error fmt = 
+  let eval_error fmt =
     let error msg = raise (EvaluationError msg) in
       Printf.kprintf error fmt
 
@@ -120,15 +120,15 @@ module Eval = struct
 *)
 
 (* Alternative, faster version *)
-   let lookup_var var env = 
-     if Lib.is_primitive_var var 
+   let lookup_var var env =
+     if Lib.is_primitive_var var
      then Lib.primitive_stub_by_code var
      else Value.find var env
 
 
-   let serialize_call_to_client (continuation, name, arg) = 
+   let serialize_call_to_client (continuation, name, arg) =
      Json.jsonize_call continuation name arg
-       
+
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
        if not(Settings.get_value Basicsettings.web_mode) then
@@ -145,26 +145,26 @@ module Eval = struct
   (** {0 Scheduling} *)
 
   (** {1 Scheduler parameters} *)
-  (** [switch_granularity]: The number of steps to take before 
+  (** [switch_granularity]: The number of steps to take before
       switching threads.  *)
   let switch_granularity = 5
 
   let atomic = ref false (* FIXME: This needs some documentation *)
 
-  let rec switch_context env = 
+  let rec switch_context env =
     match Proc.pop_ready_proc() with
         Some((cont, value), pid) -> (
           Proc.activate pid;
           apply_cont cont env value)
-      | None -> 
+      | None ->
           if not(Proc.singlethreaded()) then
             failwith("Server stuck with suspended threads, none runnable.")
           (* Outside web mode, this case indicates deadlock:
                all running processes are blocked. *)
-          else 
+          else
             exit 0
 
-  and scheduler env state stepf = 
+  and scheduler env state stepf =
 (*     if Proc.singlethreaded() then stepf() else (* No need to schedule if
                                                      there are no threads...*)*)
     let step_ctr = Proc.count_step() in
@@ -192,7 +192,7 @@ module Eval = struct
             | _      -> eval_error "Variable not found: %d" var
         end
 *)
-    | `Extend (fields, r) -> 
+    | `Extend (fields, r) ->
         begin
           match opt_app (value env) (`Record []) r with
             | `Record fs ->
@@ -204,7 +204,7 @@ module Eval = struct
                    order on the "Your Shopping Cart" page of the
                    winestore example. *)
                 `Record (List.rev
-                           (StringMap.fold 
+                           (StringMap.fold
                               (fun label v fs ->
                                  if List.mem_assoc label fs then
                                    (* (label, value env v) :: (List.remove_assoc label fs) *)
@@ -247,7 +247,7 @@ module Eval = struct
                  List.map Value.unbox_xml (Value.unbox_list v) @ children)
             children [] in
         let children =
-          StringMap.fold 
+          StringMap.fold
             (fun name v attrs ->
                Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
             attrs children
@@ -266,17 +266,17 @@ module Eval = struct
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
-    | `RecFunction (recs, locals, n, scope), ps -> 
+    | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
           | Some (args, body) ->
               (* unfold recursive definitions once *)
-              
+
               (* extend env with locals *)
               let env = Value.shadow env ~by:locals in
- 
+
               (* extend env with recs *)
 
-              let env =	      
+              let env =
 	        List.fold_right
                   (fun (name, _) env ->
                       Value.bind name
@@ -293,18 +293,18 @@ module Eval = struct
            client_call "_sendWrapper" cont [pid; msg]
         else
           let pid = Num.int_of_num (Value.unbox_int pid) in
-            (try 
+            (try
                Proc.send_message msg pid;
                Proc.awaken pid
              with
-                 Proc.UnknownProcessID pid -> 
+                 Proc.UnknownProcessID pid ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode then
            client_call "_spawnWrapper" cont [func]
-        else 
+        else
           apply_cont cont env (Lib.apply_pfun "spawn" [func])
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -315,15 +315,15 @@ module Eval = struct
 (*             Debug.print("receive in web server mode--not implemented."); *)
         if Settings.get_value Basicsettings.web_mode then
            client_call "_recvWrapper" cont []
-        else 
+        else
         begin match Proc.pop_message() with
-            Some message -> 
+            Some message ->
               Debug.print("delivered message.");
               apply_cont cont env message
-          | None -> 
-              let recv_frame = Value.expr_to_contframe 
+          | None ->
+              let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
-              in 
+              in
                 Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
@@ -362,18 +362,18 @@ module Eval = struct
             apply_cont cont env (Value.box_pair v chan)
           | None ->
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c')) 
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c'))
                                                                            (StringMap.add "2" (`Constant (`Int d'))
                                                                             StringMap.empty), None)])
-            in 
+            in
               Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
               Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
     (*****************)
-    | `PrimitiveFunction (n,None), args -> 
+    | `PrimitiveFunction (n,None), args ->
 	apply_cont cont env (Lib.apply_pfun n args)
-    | `PrimitiveFunction (n,Some code), args -> 
+    | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont args
     | `Continuation c,      [p] -> apply_cont c env p
@@ -381,7 +381,7 @@ module Eval = struct
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont env v : Value.t =
-    let stepf() = 
+    let stepf() =
       match cont with
         | [] when !atomic || Proc.current_is_main() ->
             raise (TopLevel (Value.globals env, v))
@@ -406,10 +406,10 @@ module Eval = struct
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), _) -> 
+          | `Fun ((f, _) as fb, (_, args, body), _) ->
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
-              let env' = 
+              let env' =
                 Value.bind f
                   (`RecFunction ([f, (List.map fst args, body)],
                                  locals, f, scope), scope) env
@@ -421,7 +421,7 @@ module Eval = struct
                 List.partition (function
                                   | (_fb, _lam, (`Client | `Native)) -> true
                                   | _ -> false) defs in
-              
+
               let locals =
                 match defs with
                   | [] -> Value.empty_env (Value.get_closures env)
@@ -496,7 +496,7 @@ module Eval = struct
         match Query.compile env (range, e) with
           | None -> computation env cont e
           | Some (db, q, t) ->
-            let (fieldMap, _), _ = 
+            let (fieldMap, _, _), _ =
               Types.unwrap_row(TypeUtils.extract_row t) in
             let fields =
               StringMap.fold
@@ -514,7 +514,7 @@ module Eval = struct
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _)) ->
+          | `Table ((db, _), table, (fields, _, _)) ->
             db, table, (StringMap.map snd fields)
           | _ -> assert false in
       let update_query =
@@ -524,17 +524,17 @@ module Eval = struct
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _)) ->
+          | `Table ((db, _), table, (fields, _, _)) ->
             db, table, (StringMap.map snd fields)
           | _ -> assert false in
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
-    | `CallCC f                   -> 
+    | `CallCC f                   ->
       apply cont env (value env f, [`Continuation cont])
     | `Select (name, v) ->
-      let chan = value env v in      
+      let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
       Session.send (Value.box_string name) c;
@@ -564,17 +564,17 @@ module Eval = struct
             (* apply_cont cont env (Value.box_pair v chan) *)
           | None ->
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c')) 
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c'))
                                                                            (StringMap.add "2" (`Constant (`Int d'))
                                                                             StringMap.empty), None)])
-            in 
+            in
               Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
               Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
     (*****************)
 
-  let eval : Value.env -> program -> Value.t = 
+  let eval : Value.env -> program -> Value.t =
     fun env -> computation env Value.toplevel_cont
 end
 
@@ -582,52 +582,52 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
   (Value.env * Value.t) =
   fun cont env program ->
     try (
-      ignore 
+      ignore
         (Eval.computation env cont program);
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                    " while interpreting.")
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (
-      ignore 
+      ignore
         (Eval.eval env program);
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                    " while interpreting.")
       | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
   fun env bs ->
-    let env, _value = 
+    let env, _value =
       run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
       env
 
 (** [apply_cont_toplevel cont env v] applies a continuation to a value
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
-let apply_cont_toplevel cont env v = 
+let apply_cont_toplevel cont env v =
   try Eval.apply_cont cont env v
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
   try Eval.apply [] env (f, vs)
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let eval_toplevel env program =
   try Eval.eval env program
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")

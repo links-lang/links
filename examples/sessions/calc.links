@@ -1,0 +1,27 @@
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var _ = give(x+y,s);
+      ()
+    case Mul(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var _ = give(x+y,s);
+      ()
+  }
+}
+
+fun user(s) {
+  var s = select Mul s;
+  grab(give(6,give(7,s))).1
+}
+
+fun main() {
+  var a = new ();
+  var _ = spawn { calc(accept(a)) };
+  user(request(a))
+}
+
+main()

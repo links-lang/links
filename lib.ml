@@ -1307,7 +1307,7 @@ let primitive_location (name:string) =
 
 let rec function_arity =
   function
-    | `Function(`Record (l, _), _, _) ->
+    | `Function(`Record (l, _, _), _, _) ->
         (Some (StringMap.size l))
     | `ForAll (_, t) -> function_arity t
     | _ -> None

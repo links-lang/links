@@ -109,7 +109,7 @@ and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
 and field_spec     = presence_flag * typ
 and field_spec_map = field_spec field_env
 and row_var        = meta_row_var
-and row            = field_spec_map * row_var
+and row            = field_spec_map * row_var * bool (* true if the row variable is dualised *)
 and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var  = (row meta_row_var_basis) point
 and meta_presence_var = (presence_flag meta_presence_var_basis) point
@@ -147,7 +147,7 @@ let rec is_base_type : typ -> bool =
         end
     | _ -> false
 
-let rec is_base_row (fields, row_var) =
+let rec is_base_row (fields, row_var, _) =
   let base_row_var =
     match Unionfind.find row_var with
       | `Closed
@@ -181,7 +181,7 @@ let rec is_baseable_type : typ -> bool =
         end
     | _ -> false
 
-let rec is_baseable_row (fields, row_var) =
+let rec is_baseable_row (fields, row_var, _) =
   let base_row_var =
     match Unionfind.find row_var with
       | `Closed
@@ -216,7 +216,7 @@ let rec basify_type : typ -> unit =
         end
     | _ -> assert false
 
-let rec basify_row (fields, row_var) =
+let rec basify_row (fields, row_var, _) =
   begin
     match Unionfind.find row_var with
       | `Closed
@@ -255,7 +255,7 @@ let rec is_unl_type : typ -> bool =
   | `ForAll (_, t) -> is_unl_type t
   | `Session `End -> true
   | `Session _ -> false
-and is_unl_row (fields, row_var) =
+and is_unl_row (fields, row_var, _) =
   let unl_row_var =
     match Unionfind.find row_var with
     | `Closed -> true
@@ -292,7 +292,7 @@ let rec type_can_be_unl : typ -> bool =
   | `ForAll (_, t) -> type_can_be_unl t
   | `Session `End -> true
   | `Session _ -> false
-and row_can_be_unl (fields, row_var) =
+and row_can_be_unl (fields, row_var, _) =
   let unl_row_var =
     match Unionfind.find row_var with
     | `Closed
@@ -323,7 +323,7 @@ let rec make_type_unl : typ -> unit=
        | _ -> assert false
      end
   | _ -> assert false
-and make_row_unl (fields, row_var) =
+and make_row_unl (fields, row_var, _) =
   begin
     match Unionfind.find row_var with
     | `Closed | `Rigid (_, (`Unl, _)) -> ()
@@ -351,7 +351,7 @@ let kind_of_quantifier =
 let type_arg_of_quantifier =
   function
     | `TypeVar (_, point) -> `Type (`MetaTypeVar point)
-    | `RowVar (_, row_var) -> `Row (FieldEnv.empty, row_var)
+    | `RowVar (_, row_var) -> `Row (FieldEnv.empty, row_var, false)
     | `PresenceVar (_, point) -> `Presence (`Var point)
 
 type datatype = typ
@@ -410,7 +410,7 @@ let _ =
   let is_closed_row =
     let rec is_closed rec_vars =
       function
-        | (_, row_var) ->
+        | (_, row_var, _) ->
             begin
               match Unionfind.find row_var with
                 | `Closed -> true
@@ -425,20 +425,20 @@ let _ =
     in
       is_closed TypeVarSet.empty
 
-  let is_empty_row ((fields, row_var) as row) =
+  let is_empty_row ((fields, row_var, _) as row) =
     is_closed_row row && FieldEnv.is_empty fields
 
-  let get_row_var : row -> int option = fun (_, row_var) ->
+  let get_row_var : row -> int option = fun (_, row_var, _) ->
     let rec get_row_var' = fun rec_vars -> function
       | `Closed -> None
       | `Flexible (var, _)
       | `Rigid (var, _) -> Some var
-      | `Recursive (var, (_, row_var')) ->
+      | `Recursive (var, (_, row_var', _)) ->
           if TypeVarSet.mem var rec_vars then
             None
           else
             get_row_var' (TypeVarSet.add var rec_vars) (Unionfind.find row_var')
-      | `Body (_, row_var') ->
+      | `Body (_, row_var', _) ->
           get_row_var' rec_vars (Unionfind.find row_var')
     in
       get_row_var' TypeVarSet.empty (Unionfind.find row_var)
@@ -459,7 +459,7 @@ let _ =
   let fresh_row_quantifier subkind =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var subkind in
-      `RowVar ((var, subkind), point), (FieldEnv.empty, point)
+      `RowVar ((var, subkind), point), (FieldEnv.empty, point, false)
 
   let fresh_presence_quantifier () =
     let var = fresh_raw_variable () in
@@ -474,7 +474,7 @@ let _ =
   let fresh_flexible_row_quantifier subkind =
     let var = fresh_raw_variable () in
     let point = make_row_variable var subkind in
-      `RowVar ((var, subkind), point), (FieldEnv.empty, point)
+      `RowVar ((var, subkind), point), (FieldEnv.empty, point, false)
 
   let fresh_flexible_presence_quantifier () =
     let var = fresh_raw_variable () in
@@ -505,22 +505,22 @@ let freshen_quantifier_flexible =
         let q, f = fresh_flexible_presence_quantifier () in
           q, `Presence f
 
-  let make_empty_closed_row () = empty_field_env, closed_row_var
-  let make_empty_open_row subkind = empty_field_env, fresh_row_variable subkind
+let make_empty_closed_row () = empty_field_env, closed_row_var, false
+let make_empty_open_row subkind = empty_field_env, fresh_row_variable subkind, false
 
-  let make_singleton_closed_row (label, field_spec) =
-    FieldEnv.add label field_spec empty_field_env, closed_row_var
-  let make_singleton_open_row (label, field_spec) subkind =
-    FieldEnv.add label field_spec empty_field_env, fresh_row_variable subkind
+let make_singleton_closed_row (label, field_spec) =
+  FieldEnv.add label field_spec empty_field_env, closed_row_var, false
+let make_singleton_open_row (label, field_spec) subkind =
+  FieldEnv.add label field_spec empty_field_env, fresh_row_variable subkind, false
 
-  let is_absent_from_row label (field_env, _ as row) =
-    if FieldEnv.mem label field_env then
-      fst (FieldEnv.find label field_env) = `Absent
-    else
-      is_closed_row row
+let is_absent_from_row label (field_env, _, _ as row) =
+  if FieldEnv.mem label field_env then
+    fst (FieldEnv.find label field_env) = `Absent
+  else
+    is_closed_row row
 
-  let row_with (label, f : string * field_spec) (field_env, row_var : field_spec_map * row_var) =
-    FieldEnv.add label f field_env, row_var
+let row_with (label, f : string * field_spec) (field_env, row_var, dual : row) =
+  FieldEnv.add label f field_env, row_var, dual
 
 (*** end of type_basis ***)
 
@@ -654,7 +654,7 @@ let free_type_vars, free_row_type_vars =
                 | `Body f -> free_flag_type_vars' rec_vars f
             end
   and free_row_type_vars' : S.t -> row -> S.t =
-    fun rec_vars (field_env, row_var) ->
+    fun rec_vars (field_env, row_var, _) ->
       let field_vars =
         FieldEnv.fold
           (fun _ (f, t) field_vars ->
@@ -710,7 +710,7 @@ let is_canonical_row_var row_var =
     | `Body _ -> false
 
 let is_rigid_row : row -> bool =
-  let rec is_rigid rec_vars (_, row_var) =
+  let rec is_rigid rec_vars (_, row_var, _) =
     match Unionfind.find row_var with
       | `Closed
       | `Rigid _ -> true
@@ -727,7 +727,7 @@ let is_rigid_row : row -> bool =
 *)
 let is_rigid_row_with_var : int -> row -> bool =
   fun var ->
-    let rec is_rigid rec_vars (_, row_var) =
+    let rec is_rigid rec_vars (_, row_var, _) =
       match Unionfind.find row_var with
         | `Closed
         | `Flexible _ -> false
@@ -742,7 +742,7 @@ let is_rigid_row_with_var : int -> row -> bool =
 
 let is_flattened_row : row -> bool =
   let rec is_flattened =
-    fun rec_vars (_, row_var) ->
+    fun rec_vars (_, row_var, _) ->
       match Unionfind.find row_var with
         | `Closed
         | `Flexible _
@@ -755,7 +755,7 @@ let is_flattened_row : row -> bool =
     is_flattened TypeVarSet.empty
 
 let is_empty_row : row -> bool =
-  let rec is_empty = fun rec_vars -> fun (field_env, row_var) ->
+  let rec is_empty = fun rec_vars -> fun (field_env, row_var, _) ->
     FieldEnv.is_empty field_env &&
       begin
         match Unionfind.find row_var with
@@ -779,6 +779,46 @@ let normalise_fields =
     (fun (f, t) ->
        (normalise_presence_flag f, t))
 
+let rec session_of_type t = match concrete_type IntSet.empty t with
+  | `ForAll (_, t) -> session_of_type t
+  | `Session s -> s
+  | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
+  | t -> assert false
+
+let rec dual_session = function
+  | `Input (t, s)         -> `Output (t, dual_session s)
+  | `Output (t, s)        -> `Input (t, dual_session s)
+  | `Select row           -> `Choice (dual_row row)
+  | `Choice row           -> `Select (dual_row row)
+  | `MetaSessionVar point ->
+    begin
+      match Unionfind.find point with
+      | `Flexible _
+      | `Rigid _
+      | `Recursive _               -> `Dual (`MetaSessionVar point)
+      | `Body (`Session s)         -> dual_session s
+      | `Body (`MetaTypeVar point) -> dual_session (`MetaSessionVar point)
+      | `Body t                    -> assert false (* error ("Attempt to dualise non-session type: " ^ string_of_datatype t) *)
+    end
+  | `Dual s               -> s
+  | `End                  -> `End
+and dual_row = fun (fields, row_var, dual) ->
+  (* TODO: work out how to implement dualisation for row variables *)
+  let fields' =
+    StringMap.map (fun (f, t) -> (f, dual_type t)) fields in
+  (* let row_var' = *)
+  (*   match Unionfind.find row_var with *)
+  (*   | `Flexible _ *)
+  (*   | `Rigid _ *)
+  (*   | `Recursive _ -> assert false *)
+  (*   | `Body row -> assert false *)
+  (*   | `Closed -> `Closed *)
+  (* in *)
+    (fields', row_var, not dual)
+and dual_type t = match concrete_type IntSet.empty t with
+  | `Session s -> `Session (dual_session s)
+  | _ -> t
+
 (*
  convert a row to the form (field_env, row_var)
  where Unionfind.find row_var is of the form:
@@ -787,9 +827,10 @@ let normalise_fields =
   | `Flexible var
   | `Recursive (var, body)
  *)
-let flatten_row : row -> row = fun (field_env, row_var) ->
+let flatten_row : row -> row = fun (field_env, row_var, dual) ->
+  let dual_if r = if dual then dual_row r else r in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
-    fun rec_env ((field_env, row_var) as row) ->
+    fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
         match Unionfind.find row_var with
           | `Closed
@@ -801,19 +842,20 @@ let flatten_row : row -> row = fun (field_env, row_var) ->
               else
                 (let row_var' =
                    Unionfind.fresh (`Recursive (var, (FieldEnv.empty,
-                                                      Unionfind.fresh (`Flexible (var, (`Any, `Any)))))) in
+                                                      Unionfind.fresh (`Flexible (var, (`Any, `Any))),
+                                                      false))) in
                  let rec_row' = flatten_row' (IntMap.add var row_var' rec_env) rec_row in
                    Unionfind.change row_var' (`Recursive (var, rec_row'));
-                    field_env, row_var')
+                    field_env, row_var', dual)
           | `Body row' ->
-              let field_env', row_var' = flatten_row' rec_env row' in
-                field_env_union (field_env, field_env'), row_var'
+              let field_env', row_var', dual = flatten_row' rec_env (dual_if row') in
+                field_env_union (field_env, field_env'), row_var', dual
       in
         assert (is_flattened_row row');
         row' in
-  let field_env, row_var = flatten_row' IntMap.empty (field_env, row_var) in
+  let field_env, row_var, dual = flatten_row' IntMap.empty (field_env, row_var, dual) in
   let field_env = normalise_fields field_env in
-    field_env, row_var
+    field_env, row_var, dual
 
 (*
  As flatten_row except if the flattened row_var is of the form:
@@ -823,9 +865,10 @@ let flatten_row : row -> row = fun (field_env, row_var) ->
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
-let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
+let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) ->
+  let dual_if r = if dual then dual_row r else r in
   let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
-    fun rec_env ((field_env, row_var) as row) ->
+    fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
         match Unionfind.find row_var with
           | `Closed
@@ -840,18 +883,18 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var) ->
                     Unionfind.fresh (`Recursive (var, body)) in
                   let unwrapped_body, _ = unwrap_row' (IntMap.add var point rec_env) body in
                     Unionfind.change point (`Recursive (var, unwrapped_body));
-                    let field_env', row_var' = unwrapped_body in
-                      (field_env_union (field_env, field_env'), row_var'), Some point
+                    let field_env', row_var', dual' = unwrapped_body in
+                      (field_env_union (field_env, field_env'), row_var', dual'), Some point
                 end
           | `Body row' ->
-              let (field_env', row_var'), rec_row = unwrap_row' rec_env row' in
-                (field_env_union (field_env, field_env'), row_var'), rec_row
+              let (field_env', row_var', dual), rec_row = unwrap_row' rec_env (dual_if row') in
+                (field_env_union (field_env, field_env'), row_var', dual), rec_row
       in
         assert (is_flattened_row (fst row'));
         row' in
-  let (field_env, row_var), rec_row = unwrap_row' IntMap.empty (field_env, row_var) in
+  let (field_env, row_var, dual), rec_row = unwrap_row' IntMap.empty (field_env, row_var, dual) in
   let field_env = normalise_fields field_env in
-    (field_env, row_var), rec_row
+    (field_env, row_var, dual), rec_row
 
 
 (* TODO: tidy up all this normalisation / concretisation code *)
@@ -902,14 +945,14 @@ and normalise_row rec_names row =
      We cannot use unwrap_row here, as that would lead to
      non-termination.
   *)
-  let fields, row_var = flatten_row row in
+  let fields, row_var, dual = flatten_row row in
   let fields =
     FieldEnv.map
       (fun (f, t) ->
          (normalise_presence_flag f, normalise_datatype rec_names t))
       fields
   in
-    (fields, row_var)
+    (fields, row_var, dual)
 and normalise_type_arg rec_names type_arg =
   match type_arg with
     | `Type t -> `Type (normalise_datatype rec_names t)
@@ -946,7 +989,7 @@ let quantifiers_of_type_args =
                | _ -> assert false
            end
        | `Type _ -> assert false
-       | `Row (fields, row_var) ->
+       | `Row (fields, row_var, dual) ->
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
@@ -990,7 +1033,7 @@ let is_instantiated_quantifier q =
       | _ -> true in
 
   let is_concrete_row row =
-    let (field_env, row_var) = flatten_row row in
+    let (field_env, row_var, _) = flatten_row row in
       FieldEnv.is_empty field_env &&
         match Unionfind.find row_var with
           | `Recursive _
@@ -1085,7 +1128,7 @@ let xml_type = `Alias (("Xml", []), `Application (list, [`Type (`Primitive `XmlI
 let database_type = `Primitive `DB
 
 (* precondition: the row is unwrapped *)
-let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
+let is_tuple ?(allow_onetuples=false) (field_env, rowvar, _) =
   match Unionfind.find rowvar with
     | `Closed ->
         let n = StringMap.size field_env in
@@ -1106,7 +1149,7 @@ let is_tuple ?(allow_onetuples=false) (field_env, rowvar) =
           b && (allow_onetuples || n <> 1)
     | _ -> false
 
-let extract_tuple (field_env, _) =
+let extract_tuple (field_env, _, _) =
   FieldEnv.to_list (fun _ ->
                       function
                         | `Present, t -> t
@@ -1217,7 +1260,7 @@ struct
                     [var, (`Rigid, `Presence, `Free)]
               | `Body f -> free_bound_presence_type_vars ~include_aliases bound_vars f
           end
-  and free_bound_row_type_vars ~include_aliases bound_vars (field_env, row_var) =
+  and free_bound_row_type_vars ~include_aliases bound_vars (field_env, row_var, _) =
     let field_type_vars =
       FieldEnv.fold
         (fun name (f, t) tvs ->
@@ -1398,7 +1441,7 @@ struct
 
       let unwrap = fst -<- unwrap_row in
         (* precondition: the row is unwrapped *)
-      let string_of_tuple (field_env, row_var) =
+      let string_of_tuple (field_env, row_var, _) =
         let tuple_env =
           FieldEnv.fold
             (fun i t tuple_env ->
@@ -1438,7 +1481,7 @@ struct
               end
           | `Function (args, effects, t) ->
               let arrow =
-                let (fields, row_var) as r = unwrap effects in
+                let (fields, row_var, false) as r = unwrap effects in
                   if FieldEnv.is_empty fields then
                     match Unionfind.find row_var with
                       | `Closed -> "{}->"
@@ -1518,7 +1561,7 @@ struct
                 end
           | `Lolli (args, effects, t) ->
               let arrow =
-                let (fields, row_var) as r = unwrap effects in
+                let (fields, row_var, false) as r = unwrap effects in
                   if FieldEnv.is_empty fields then
                     match Unionfind.find row_var with
                       | `Closed -> "{}-@"
@@ -1680,7 +1723,7 @@ struct
                   presence bound_vars p f
           end
 
-  and row sep bound_vars ((policy, vars) as p) (field_env, rv) =
+  and row sep bound_vars ((policy, vars) as p) (field_env, rv, dual) =
     (* FIXME:
 
        should quote labels when necessary, i.e., when they
@@ -1701,7 +1744,7 @@ struct
         begin
           match row_var_string with
             | None -> ""
-            | Some s -> "|"^s
+            | Some s -> "|"^ (if dual then "~" else "") ^ s
         end
   and row_var sep bound_vars ((policy, vars) as p) rv =
     match Unionfind.find rv with
@@ -1817,7 +1860,7 @@ and presence_flexible_type_vars bound_vars =
             | `Body f -> presence_flexible_type_vars bound_vars f
         end
 
-and row_flexible_type_vars bound_vars (field_env, row_var) =
+and row_flexible_type_vars bound_vars (field_env, row_var, _) =
   TypeVarMap.superimpose
     (FieldEnv.fold
        (fun _ (f, t) ftvs ->
@@ -2022,7 +2065,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
                     (tenv, renv, M.add var (fresh_rigid_presence_variable ()) penv)
               | `Body f -> make_env_f boundvars f
           end
-  and make_env_r boundvars ((field_env, row_var):row) =
+  and make_env_r boundvars ((field_env, row_var, _):row) =
     let field_vars =
       FieldEnv.fold
         (fun _ (f, t) envs ->
@@ -2033,10 +2076,10 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
         | `Closed -> empties
         | `Flexible (var, subkind) ->
             let tenv, renv, penv = empties in
-              (tenv, M.add var (StringMap.empty, fresh_row_variable subkind) renv, penv)
+              (tenv, M.add var (StringMap.empty, fresh_row_variable subkind, false) renv, penv)
         | `Rigid (var, subkind) ->
             let tenv, renv, penv = empties in
-              (tenv, M.add var (StringMap.empty, fresh_rigid_row_variable subkind) renv, penv)
+              (tenv, M.add var (StringMap.empty, fresh_rigid_row_variable subkind, false) renv, penv)
         | `Recursive (l, _) when S.mem l boundvars -> empties
         | `Recursive (l, row) -> make_env_r (S.add l boundvars) row
         | `Body row -> make_env_r boundvars row
@@ -2059,13 +2102,13 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_rigid_type_variable (`Any, `Any)) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (`Any, `Any))) renv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (`Any, `Any), false)) renv,
      IntMap.map (fun _ -> fresh_rigid_presence_variable ()) penv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_type_variable (`Any, `Any)) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (`Any, `Any))) renv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (`Any, `Any), false)) renv,
      IntMap.map (fun _ -> fresh_presence_variable ()) penv)
 
 
@@ -2168,7 +2211,7 @@ let is_sub_type, is_sub_row =
      associated with input).
   *)
   and is_sub_eff =
-    fun rec_vars ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) ->
+    fun rec_vars ((lfield_env, lrow_var, false as lrow), (rfield_env, rrow_var, false as rrow)) ->
       let sub_fields =
         FieldEnv.fold (fun name t b ->
                          match t with
@@ -2201,7 +2244,7 @@ let is_sub_type, is_sub_row =
       in
         sub_fields && sub_row_vars
   and is_sub_row =
-    fun rec_vars ((lfield_env, lrow_var as lrow), (rfield_env, rrow_var as rrow)) ->
+    fun rec_vars ((lfield_env, lrow_var, ldual as lrow), (rfield_env, rrow_var, rdual as rrow)) ->
       let sub_fields =
         FieldEnv.fold (fun name t b ->
                          match t with
@@ -2221,12 +2264,13 @@ let is_sub_type, is_sub_row =
                                true
                            | `Var _, _ -> assert false (* TODO *)) lfield_env true in
       let sub_row_vars =
+        let dual_if b r = if b then dual_row r else r in
         match Unionfind.find lrow_var, Unionfind.find rrow_var with
           | `Flexible (var, _), `Flexible (var', _)
-          | `Rigid (var, _), `Rigid (var', _) -> var=var'
+          | `Rigid (var, _), `Rigid (var', _) -> ldual=rdual && var=var'
           | `Closed, _ -> true
-          | `Body lrow, _ -> is_sub_row rec_vars (lrow, rrow)
-          | _, `Body rrow -> is_sub_row rec_vars (lrow, rrow)
+          | `Body lrow, _ -> is_sub_row rec_vars (dual_if ldual lrow, rrow)
+          | _, `Body rrow -> is_sub_row rec_vars (lrow, dual_if rdual rrow)
           | `Recursive (lvar, lrow), `Recursive (rvar, rrow) ->
               failwith "not implemented subtyping on recursive rows yet"
           | _, _ -> false
@@ -2248,15 +2292,15 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = `Application (list, [`Type t])
 let make_process_type r = `Application (process, [`Row r])
 
-let extend_row fields (fields', row_var) =
+let extend_row fields (fields', row_var, dual) =
   (FieldEnv.fold
      (fun name t fields -> FieldEnv.add name (`Present, t) fields)
      fields
      fields',
-   row_var)
+   row_var, dual)
 
 let make_closed_row fields =
-  (FieldEnv.map (fun t -> (`Present, t)) fields), closed_row_var
+  (FieldEnv.map (fun t -> (`Present, t)) fields), closed_row_var, false
 
 let make_record_type ts = `Record (make_closed_row ts)
 let make_variant_type ts = `Variant (make_closed_row ts)
