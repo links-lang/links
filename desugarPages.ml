@@ -34,19 +34,11 @@ let rec desugar_page (o, page_type) =
                       [e, pos]), pos)
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
-              (* WARNING:
-
-                 This technique is rather brittle. A more robust approach
-                 would be to use unification - compute a as the solution of:
-
-                   Formlet(a) `unify` formlet_type
-              *)
             let formlet_type = Types.concrete_type formlet_type in
-            let a =
-              match formlet_type with
-                | `Alias ((_, [`Type a]), _) -> a
-                | _ -> assert false
-            in
+            let a = Types.fresh_type_variable (`Any, `Any) in
+            let b = Types.fresh_type_variable (`Any, `Any) in
+            let template = `Alias (("Formlet", [`Type a]), b) in
+              Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
                         [formlet; handler; attributes]), pos)
         | `PagePlacement (page) -> page
