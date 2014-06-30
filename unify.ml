@@ -740,6 +740,11 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
           raise (Failure (`Msg ("Couldn't match "^ string_of_presence l ^" against "^ string_of_presence r)))
 
 and unify_rows' : unify_env -> ((row * row) -> unit) =
+  let unwrap_row r =
+    let r', rvar = unwrap_row r in
+    Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r'));
+    r', rvar in
+
   fun rec_env (lrow, rrow) ->
     Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
@@ -908,8 +913,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       However, row_var may already have been instantiated, in which case
       it is unified with row.
     *)
-    let unify_row_var_with_row : unify_env -> row_var * row -> unit =
-      fun rec_env (row_var, ((extension_field_env, extension_row_var, extension_dual) as extension_row)) ->
+    let unify_row_var_with_row : unify_env -> row_var * bool * row -> unit =
+      fun rec_env (row_var, dual, ((extension_field_env, extension_row_var, extension_dual) as extension_row)) ->
         (* unify row_var with `RowVar None *)
         let close_empty_row_var : row_var -> unit = fun point ->
           match Unionfind.find point with
@@ -968,16 +973,20 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                       raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
                                                " with the non-base row "^ string_of_row extension_row)));
                   if StringMap.is_empty extension_field_env then
-                    match extension_row_var with
-                      | point' ->
-                        Unionfind.union point point'
+                    if dual then
+                      Unionfind.change point (`Body (StringMap.empty, extension_row_var, true))
+                    else
+                      Unionfind.union point extension_row_var
                   else
-                    Unionfind.change point (`Body extension_row)
+                    if dual then
+                      Unionfind.change point (`Body (dual_row extension_row))
+                    else
+                      Unionfind.change point (`Body extension_row)
                 end
             | `Recursive _ ->
-              unify_rows' rec_env ((StringMap.empty, point, false), extension_row)
+              unify_rows' rec_env ((StringMap.empty, point, dual), extension_row)
             | `Body row ->
-              unify_rows' rec_env (row, extension_row)
+              unify_rows' rec_env ((if dual then dual_row row else row), extension_row)
         in
           extend row_var in
 
@@ -1135,7 +1144,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             | None -> ()
             | Some rec_env ->
                 let open_extension = extend_field_env closed rec_env rigid_field_env' open_field_env' in
-                  unify_row_var_with_row rec_env (open_row_var', (open_extension, rigid_row_var', rigid_dual')) in
+                  unify_row_var_with_row rec_env (open_row_var', open_dual, (open_extension, rigid_row_var', rigid_dual')) in
 
     let unify_both_open ((lfield_env, _, ldual as lrow), (rfield_env, _, rdual as rrow)) =
       let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
@@ -1163,9 +1172,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                        extend_field_env may change rrow_var' or lrow_var', as either
                        could occur inside the body of lfield_env' or rfield_env'
                     *)
-                    unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var ,false));
+                    unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var ,false));
                     let lextension = extend_field_env false rec_env rfield_env' lfield_env' in
-                      unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var, false))
+                      unify_row_var_with_row rec_env (lrow_var', ldual', (lextension, fresh_row_var, false))
                 end in
 
     (* report an error if an attempt is made to unify

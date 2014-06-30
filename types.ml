@@ -817,7 +817,6 @@ and dual_row = fun (fields, row_var, dual) ->
     (fields', row_var, not dual)
 and dual_type t = match concrete_type IntSet.empty t with
   | `Session s -> `Session (dual_session s)
-  | _ -> t
 
 (*
  convert a row to the form (field_env, row_var)
