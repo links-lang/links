@@ -17,9 +17,9 @@ type 'a point = 'a Unionfind.point deriving (Show)
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     deriving (Show)
 
-type restriction = [ `Any | `Base | `Session ]
-    deriving (Eq, Show)
 type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
+type restriction = [ `Any | `Base | `Session ]
     deriving (Eq, Show)
 
 type subkind = linearity * restriction
@@ -131,6 +131,9 @@ and session_type =
 
 type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 
+(* TODO: consider abstracting some of this subkind manipulation code *)
+
+(* base type stuff *)
 let rec is_base_type : typ -> bool =
   function
     | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
@@ -234,6 +237,7 @@ let rec basify_row (fields, row_var, _) =
     fields
     ()
 
+(* unl type stuff *)
 let rec is_unl_type : typ -> bool =
   function
   | `Primitive _
@@ -332,6 +336,111 @@ and make_row_unl (fields, row_var, _) =
     | _ -> assert false
   end;
   FieldEnv.iter (fun _ (_, t) -> make_type_unl t) fields
+
+(* session kind stuff *)
+let rec is_session_type : typ -> bool =
+  function
+  | `Session _ -> true 
+  | `Alias (_, t) -> is_session_type t
+  | `MetaTypeVar point ->
+    begin
+      match Unionfind.find point with
+      | `Rigid (_, (_, `Session))
+      | `Flexible (_, (_, `Session)) -> true
+      | `Rigid _
+      | `Flexible _ -> false
+      | `Body t -> is_session_type t
+      | `Recursive _ -> false
+    end
+  | _ -> false
+
+let rec is_session_row (fields, row_var, _) =
+  let session_row_var =
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, (_, `Session))
+      | `Flexible (_, (_, `Session)) -> true
+      | `Rigid _
+      | `Flexible _ -> false
+      | `Body row -> is_session_row row
+      | `Recursive _ -> false in
+  let session_fields =
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+         b && is_session_type t)
+      fields
+      true
+  in
+    session_row_var && session_fields
+
+let rec is_sessionable_type : typ -> bool =
+  function
+  | `Session _ -> true 
+  | `Alias (_, t) -> is_sessionable_type t
+  | `MetaTypeVar point ->
+    begin
+      match Unionfind.find point with
+      | `Rigid (_, (_, `Session))
+      | `Flexible _ -> true
+      | `Rigid _ -> false
+      | `Body t -> is_sessionable_type t
+      | `Recursive _ -> false
+    end
+  | _ -> false
+
+let rec is_sessionable_row (fields, row_var, _) =
+  let session_row_var =
+    match Unionfind.find row_var with
+    | `Closed
+    | `Rigid (_, (_, `Session))
+    | `Flexible _ -> true
+    | `Rigid _ -> false
+    | `Body row -> is_sessionable_row row
+    | `Recursive _ -> false in
+  let session_fields =
+    FieldEnv.fold
+      (fun _ (_, t) b ->
+        b && is_sessionable_type t)
+      fields
+      true
+  in
+    session_row_var && session_fields
+
+let rec sessionify_type : typ -> unit =
+  function
+  | `Session _ -> () 
+  | `Alias (_, t) -> sessionify_type t
+  | `MetaTypeVar point ->
+    begin
+      match Unionfind.find point with
+      | `Rigid (_, (_, `Session))
+      | `Flexible (_, (_, `Session)) -> ()
+            | `Rigid _ -> assert false
+            | `Flexible (var, (lin, `Any)) -> Unionfind.change point (`Flexible (var, (lin, `Session)))
+            | `Flexible _ -> assert false
+            | `Body t -> sessionify_type t
+            | `Recursive _ -> assert false
+    end
+  | _ -> assert false
+    
+let rec sessionify_row (fields, row_var, _) =
+  begin
+    match Unionfind.find row_var with
+      | `Closed
+      | `Rigid (_, (_, `Session))
+      | `Flexible (_, (_, `Session)) -> ()
+      | `Rigid _ -> assert false
+      | `Flexible (var, (lin, `Any)) -> Unionfind.change row_var (`Flexible (var, (lin, `Session)))
+      | `Flexible _ -> assert false
+      | `Body row -> sessionify_row row
+      | `Recursive _ -> assert false
+  end;
+  FieldEnv.fold
+    (fun _ (_, t) () ->
+       sessionify_type t)
+    fields
+    ()
+
 
 type type_variable = int * [`Rigid | `Flexible] *  [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
     deriving (Show)

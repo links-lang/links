@@ -329,6 +329,12 @@ fun rec_env ->
                          else
                            raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                                    " with the linear type " ^ string_of_datatype t2)));
+                       if rest = `Session then
+                         if Types.is_sessionable_type t2 then
+                           Types.sessionify_type t2
+                         else
+                           raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
+                                                   " with the non-session type "^ string_of_datatype t2)));
                        Unionfind.union lpoint rpoint
                    | _, `Flexible (var, (lin, rest)) ->
                        (if var_is_free_in_type var t1 then
@@ -351,6 +357,12 @@ fun rec_env ->
                          else
                            raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                                    " with the linear type " ^ string_of_datatype t1)));
+                       if rest = `Session then
+                         if Types.is_sessionable_type t1 then
+                           Types.sessionify_type t1
+                         else
+                           raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
+                                                   " with the non-session type "^ string_of_datatype t1)));
                        Unionfind.union rpoint lpoint
                    | `Rigid (l, _), _ ->
                        begin
@@ -452,8 +464,6 @@ fun rec_env ->
                      else
                        (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
                         if rest = `Base then
-                          (* TODO: do something similar for the session subkind *)
-
                           if Types.is_baseable_type t then
                             Types.basify_type t
                           else
@@ -465,6 +475,12 @@ fun rec_env ->
                           else
                             raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                                     " with the linear type "^ string_of_datatype t)));
+                        if rest = `Session then
+                          if Types.is_sessionable_type t then
+                            Types.sessionify_type t
+                          else
+                            raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
+                                                    " with the non-session type "^ string_of_datatype t)));
                         Unionfind.change point (`Body t))
                  | `Recursive (var, t') ->
                      Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
@@ -742,7 +758,7 @@ and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
 and unify_rows' : unify_env -> ((row * row) -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
-    Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r'));
+    (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)
     r', rvar in
 
   fun rec_env (lrow, rrow) ->
@@ -925,6 +941,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                 raise (Failure (`Msg ("Closed row var cannot be unified with rigid row var\n")))
             | _ -> assert false in
 
+        (* TODO: do we need to do something special here for the session subkind? *)
+
         (* unify row_var with `RigidRowVar var *)
         let rigidify_empty_row_var (point, (var, (lin, rest))) : row_var -> unit = fun point' ->
           match Unionfind.find point' with
@@ -972,6 +990,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     else
                       raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
                                                " with the non-base row "^ string_of_row extension_row)));
+                  if rest = `Session then
+                    if Types.is_sessionable_row extension_row then
+                      Types.sessionify_row extension_row
+                    else
+                      raise (Failure (`Msg ("Cannot unify the session row variable "^ string_of_int var ^
+                                               " with the non-session row "^ string_of_row extension_row)));
+
                   if StringMap.is_empty extension_field_env then
                     if dual then
                       Unionfind.change point (`Body (StringMap.empty, extension_row_var, true))

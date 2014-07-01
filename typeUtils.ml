@@ -70,8 +70,8 @@ let rec variant_at name t = match concrete_type t with
   | `ForAll (_, t) -> variant_at name t
   | `Variant row ->
       let t, _ = split_row name row in t
-  | `Session (`Choice row) ->
-      let t, _ = split_row name row in t
+  (* | `Session (`Choice row) -> *)
+  (*     let t, _ = split_row name row in t *)
   | t ->
       error ("Attempt to deconstruct non-variant type "^string_of_datatype t)
 
@@ -80,9 +80,9 @@ let rec split_variant_type name t = match concrete_type t with
   | `Variant row ->
       let t, row = split_row name row in
         `Variant (make_singleton_closed_row (name, (`Present, t))), `Variant row
-  | `Session (`Choice row) ->
-      let t, row = split_row name row in
-        `Session (`Choice (make_singleton_closed_row (name, (`Present, t)))), `Session (`Choice row)
+  (* | `Session (`Choice row) -> *)
+  (*     let t, row = split_row name row in *)
+  (*       `Session (`Choice (make_singleton_closed_row (name, (`Present, t)))), `Session (`Choice row) *)
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
@@ -91,10 +91,12 @@ let rec project_type name t = match concrete_type t with
   | `Record row ->
       let t, _ = split_row name row in
         t
-  | `Session (`Select row) ->
-     let t, _ = split_row name row in t
+  (* | `Session (`Select row) -> *)
+  (*    let t, _ = split_row name row in t *)
   | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
+
+
 
 let rec session_of_type t = match concrete_type t with
   | `ForAll (_, t) -> session_of_type t
@@ -102,6 +104,30 @@ let rec session_of_type t = match concrete_type t with
   | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
   | t ->
       error ("Attempt to convert non-session type to session type "^string_of_datatype t)
+
+
+let rec select_type name t = match concrete_type t with
+  | `ForAll (_, t) -> project_type name t
+  | `Session (`Select row) ->
+    let t, _ = split_row name row in t
+  | t ->
+    error ("Attempt to select from non-selection type "^string_of_datatype t)
+
+let rec split_choice_type name t = match concrete_type t with
+  | `ForAll (_, t) -> split_variant_type name t
+  | `Session (`Choice row) ->
+      let t, row = split_row name row in
+        `Session (`Choice (make_singleton_closed_row (name, (`Present, t)))), `Session (`Choice row)
+  | t ->
+      error ("Attempt to split non-session type "^string_of_datatype t)
+
+let rec choice_at name t = match concrete_type t with
+  | `ForAll (_, t) -> variant_at name t
+  | `Session (`Choice row) ->
+      let t, _ = split_row name row in t
+  | t ->
+      error ("Attempt to deconstruct non-choice type "^string_of_datatype t)
+
 
 (*
   This returns the type obtained by removing a set of

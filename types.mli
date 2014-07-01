@@ -115,6 +115,7 @@ val is_baseable_row : row -> bool
 val basify_type : datatype -> unit
 val basify_row : row -> unit
 
+(* unl stuff *)
 val is_unl_type : datatype -> bool
 val is_unl_row : row -> bool
 
@@ -123,6 +124,16 @@ val row_can_be_unl : row -> bool
 
 val make_type_unl : datatype -> unit
 val make_row_unl : row -> unit
+
+(* session kind stuff *)
+val is_session_type : datatype -> bool
+val is_session_row : row -> bool
+
+val is_sessionable_type : datatype -> bool
+val is_sessionable_row : row -> bool
+
+val sessionify_type : datatype -> unit
+val sessionify_row : row -> unit
 
 val dual_session : session_type -> session_type
 val dual_row : row -> row

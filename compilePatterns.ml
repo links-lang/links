@@ -894,17 +894,24 @@ let compile_cases
 (* Session typing choice compilation *)
 let rec match_choices : var -> clause list -> bound_computation =
   fun var clauses env ->
-    ([], `Special (`Choice (`Variable var,
-                            List.fold_left
-                              (fun cases ([(annotation, pattern)], body) ->
-                                let (label, ((x, _) as b)) =
-                                  match pattern with
-                                    `Variant (label, `Variable b) -> (label, b)
-                                  | _ -> assert false in
-                                let body = apply_annotation (`Variable x) (annotation, body) in
-                                  StringMap.add label (b, body env) cases)
-                              StringMap.empty
-                              clauses)))
+    let t = lookup_type var env in
+      ([], `Special (`Choice (`Variable var,
+                              List.fold_left
+                                (fun cases ([(annotation, pattern)], body) ->
+                                  let (name, ((x, _) as b)) =
+                                    match pattern with
+                                      `Variant (name, `Variable b) -> (name, b)
+                                    | `Variant (name, `Any)        ->
+                                      let bt = TypeUtils.choice_at name t in
+                                        (name, Var.fresh_binder (bt, "_", `Local))
+                                    | _ ->
+                                      (* TODO: give a more useful error message - including the position
+                                         (it may be necessary to detect the error earlier on) *)
+                                      failwith ("Only choice patterns are supported in choice compilation") in
+                                  let body = apply_annotation (`Variable x) (annotation, body) in
+                                    StringMap.add name (b, body env) cases)
+                                StringMap.empty
+                                clauses)))
 
 let compile_choices
     : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =

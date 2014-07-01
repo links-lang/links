@@ -255,6 +255,11 @@ sig
   val pattern_annotation : griper
 
   val splice_exp : griper
+
+  val offer_variant : griper
+  val offer_patterns : griper
+
+  val selection : griper
 end
   = struct
     type griper =
@@ -801,6 +806,32 @@ An expression enclosed in {} in a regex pattern must have type String,
 but the expression here has type " ^ (show_type lt))
 
 
+(* session stuff *)
+    let selection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
+      die pos ("\
+Only a label that is present in a session selection can be selected, but \
+the expression" ^ nl() ^
+tab() ^ code lexpr ^ nl() ^
+"has type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"while the selection has type" ^ code (show_type t) ^ ".")
+
+    let offer_variant ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The cases of an offer should have choice type, but
+the type " ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"is not a choice type")
+
+    let offer_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
+      die pos ("\
+The cases of an offer should match the type of its patterns, but
+the pattern" ^ nl () ^
+tab () ^ code lexpr ^ nl () ^
+"has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"while the subsequent patterns have type" ^ nl () ^
+tab () ^ code (show_type rt))
 end
 
 type context = Types.typing_environment = {
@@ -1840,7 +1871,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Select (l, e) ->
            let e = tc e in
            let selected_session = Types.fresh_type_variable (`Any, `Session) in
-           unify ~handle:Gripers.projection
+           unify ~handle:Gripers.selection
                  (pos_and_typ e, no_pos (`Session (`Select (Types.make_singleton_open_row
                                                               (l, (`Present, selected_session))
                                                               (`Any, `Session)))));
@@ -1848,12 +1879,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Offer (e, branches, _) ->
            let e = tc e in
            let branches, pattern_type, body_type = type_cases branches in
-           let to_choice t =
-             match t with
-             | `Variant r -> `Session (`Choice r)
-             | _          -> assert false in
-           let _ = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos (to_choice pattern_type)) in
-           `Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
+           let r = Types.make_empty_open_row (`Any, `Session) in
+             unify ~handle:Gripers.offer_variant (no_pos pattern_type, no_pos (`Variant r));
+             unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (`Session (`Choice r)));
+             `Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
 
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->

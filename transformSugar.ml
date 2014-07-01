@@ -244,7 +244,7 @@ class transform (env : Types.typing_environment) =
             (o, `SpawnWait (body, Some inner_effects), body_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
-         (o, (`Select (l, e)), TypeUtils.project_type l t)
+         (o, (`Select (l, e)), TypeUtils.select_type l t)
       | `Offer (e, bs, Some t) ->
           let (o, e, _) = o#phrase e in
           let (o, bs) =
