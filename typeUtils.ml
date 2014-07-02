@@ -70,8 +70,6 @@ let rec variant_at name t = match concrete_type t with
   | `ForAll (_, t) -> variant_at name t
   | `Variant row ->
       let t, _ = split_row name row in t
-  (* | `Session (`Choice row) -> *)
-  (*     let t, _ = split_row name row in t *)
   | t ->
       error ("Attempt to deconstruct non-variant type "^string_of_datatype t)
 
@@ -80,9 +78,6 @@ let rec split_variant_type name t = match concrete_type t with
   | `Variant row ->
       let t, row = split_row name row in
         `Variant (make_singleton_closed_row (name, (`Present, t))), `Variant row
-  (* | `Session (`Choice row) -> *)
-  (*     let t, row = split_row name row in *)
-  (*       `Session (`Choice (make_singleton_closed_row (name, (`Present, t)))), `Session (`Choice row) *)
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
@@ -91,8 +86,6 @@ let rec project_type name t = match concrete_type t with
   | `Record row ->
       let t, _ = split_row name row in
         t
-  (* | `Session (`Select row) -> *)
-  (*    let t, _ = split_row name row in t *)
   | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
@@ -258,44 +251,3 @@ let record_without t names =
              row_var,
              dual)
     | _ -> assert false
-
-(*
-let rec dual_session s =
-  let s' = dual_session' s in
-  Printf.printf "The dual of \n     %s \nis \n    %s\n" (string_of_datatype (`Session s)) (string_of_datatype (`Session s'));
-  s'
-and dual_session' = function
-  | `Input (t, s)         -> `Output (t, dual_session s)
-  | `Output (t, s)        -> `Input (t, dual_session s)
-  | `Select row           -> `Choice (dual_row row)
-  | `Choice row           -> `Select (dual_row row)
-  | `MetaSessionVar point ->
-    begin
-      match Unionfind.find point with
-      | `Flexible _
-      | `Rigid _
-      | `Recursive _               -> `Dual (`MetaSessionVar point)
-      | `Body (`Session s)         -> dual_session s
-      | `Body (`MetaTypeVar point) -> dual_session (`MetaSessionVar point)
-      | `Body t                    -> error ("Attempt to dualise non-session type: " ^ string_of_datatype t)
-    end
-  | `Dual s               -> s
-  | `End                  -> `End
-and dual_row = fun (fields, row_var, dual) ->
-  (* TODO: work out how to implement dualisation for row variables *)
-  let fields' =
-    StringMap.map (fun (f, t) -> (f, `Session (dual_session (session_of_type t)))) fields in
-  (* let row_var' = *)
-  (*   match Unionfind.find row_var with *)
-  (*   | `Flexible _ *)
-  (*   | `Rigid _ *)
-  (*   | `Recursive _ -> assert false *)
-  (*   | `Body row -> assert false *)
-  (*   | `Closed -> `Closed *)
-  (* in *)
-    (fields', row_var, not dual)
-
-let dual_type t = match concrete_type t with
-  | `Session s -> `Session (dual_session s)
-  | _ -> assert false
- *)
