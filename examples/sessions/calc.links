@@ -8,7 +8,7 @@ fun calc(s) {
     case Mul(s) ->
       var (x,s) = grab(s);
       var (y,s) = grab(s);
-      var _ = give(x+y,s);
+      var _ = give(x*y,s);
       ()
   }
 }
