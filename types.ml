@@ -1522,8 +1522,8 @@ struct
 
   let subkind : (policy * names) -> subkind -> string =
     let linearity = function
-      | `Any -> ""
-      | `Unl -> "Unl" in
+      | `Any -> "Any"
+      | `Unl -> "" in
     let restriction = function
       | `Any -> ""
       | `Base -> "Base"
