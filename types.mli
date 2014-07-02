@@ -121,9 +121,11 @@ val is_unl_row : row -> bool
 
 val type_can_be_unl : datatype -> bool
 val row_can_be_unl : row -> bool
+val session_can_be_unl : session_type -> bool
 
 val make_type_unl : datatype -> unit
 val make_row_unl : row -> unit
+val make_session_unl : session_type -> unit
 
 (* session kind stuff *)
 val is_session_type : datatype -> bool
