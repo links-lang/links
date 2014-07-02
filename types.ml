@@ -423,109 +423,130 @@ let make_row_unl = make_row_unl IntSet.empty
 let make_session_unl = make_session_unl IntSet.empty
 
 (* session kind stuff *)
-let rec is_session_type : typ -> bool =
-  function
-  | `Session _ -> true
-  | `Alias (_, t) -> is_session_type t
-  | `MetaTypeVar point ->
-    begin
-      match Unionfind.find point with
-      | `Rigid (_, (_, `Session))
-      | `Flexible (_, (_, `Session)) -> true
-      | `Rigid _
-      | `Flexible _ -> false
-      | `Body t -> is_session_type t
-      | `Recursive _ -> false
-    end
-  | _ -> false
+let rec is_session_type : rec_vars -> typ -> bool =
+  fun rec_vars ->
+    function
+    | `Session _ -> true
+    | `Alias (_, t) -> is_session_type rec_vars t
+    | `MetaTypeVar point ->
+      begin
+        match Unionfind.find point with
+        | `Rigid    (_, (_, `Session))
+        | `Flexible (_, (_, `Session)) -> true
+        | `Rigid    _
+        | `Flexible _ -> false
+        | `Body t -> is_session_type rec_vars t
+        | `Recursive (var, t) ->
+          check_rec var rec_vars true (flip is_session_type t)
+      end
+    | _ -> false
 
-let rec is_session_row (fields, row_var, _) =
+let rec is_session_row rec_vars (fields, row_var, _) =
   let session_row_var =
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, (_, `Session))
+      | `Rigid    (_, (_, `Session))
       | `Flexible (_, (_, `Session)) -> true
-      | `Rigid _
+      | `Rigid    _
       | `Flexible _ -> false
-      | `Body row -> is_session_row row
-      | `Recursive _ -> false in
+      | `Body row -> is_session_row rec_vars row
+      | `Recursive (var, row) ->
+        check_rec var rec_vars true (flip is_session_row row) in
   let session_fields =
     FieldEnv.fold
       (fun _ (_, t) b ->
-         b && is_session_type t)
+         b && is_session_type rec_vars t)
       fields
       true
   in
     session_row_var && session_fields
 
-let rec is_sessionable_type : typ -> bool =
-  function
-  | `Session _ -> true
-  | `Alias (_, t) -> is_sessionable_type t
-  | `MetaTypeVar point ->
-    begin
-      match Unionfind.find point with
-      | `Rigid (_, (_, `Session))
-      | `Flexible _ -> true
-      | `Rigid _ -> false
-      | `Body t -> is_sessionable_type t
-      | `Recursive _ -> false
-    end
-  | _ -> false
+let rec is_sessionable_type : rec_vars -> typ -> bool =
+  fun rec_vars ->
+    function
+    | `Session _ -> true
+    | `Alias (_, t) -> is_sessionable_type rec_vars t
+    | `MetaTypeVar point ->
+      begin
+        match Unionfind.find point with
+        | `Rigid    (_, (_, `Session))
+        | `Flexible (_, (_, `Session))
+        | `Flexible (_, (_, `Any)) -> true
+        | `Rigid    (_, (_, `Base))
+        | `Rigid    (_, (_, `Session))
+        | `Flexible (_, (_, `Base)) -> false
+        | `Body t -> is_sessionable_type rec_vars t
+        | `Recursive (var, t) ->
+          check_rec var rec_vars true (flip is_sessionable_type t)
+      end
+    | _ -> false
 
-let rec is_sessionable_row (fields, row_var, _) =
+let rec is_sessionable_row rec_vars (fields, row_var, _) =
   let session_row_var =
     match Unionfind.find row_var with
     | `Closed
-    | `Rigid (_, (_, `Session))
-    | `Flexible _ -> true
-    | `Rigid _ -> false
-    | `Body row -> is_sessionable_row row
-    | `Recursive _ -> false in
+    | `Rigid    (_, (_, `Session))
+    | `Flexible (_, (_, `Session))
+    | `Flexible (_, (_, `Any)) -> true
+    | `Rigid    (_, (_, `Base))
+    | `Rigid    (_, (_, `Any))
+    | `Flexible (_, (_, `Base)) -> false
+    | `Body row -> is_sessionable_row rec_vars row
+    | `Recursive (var, row) ->
+      check_rec var rec_vars true (flip is_sessionable_row row) in
   let session_fields =
     FieldEnv.fold
       (fun _ (_, t) b ->
-        b && is_sessionable_type t)
+        b && is_sessionable_type rec_vars t)
       fields
       true
   in
     session_row_var && session_fields
 
-let rec sessionify_type : typ -> unit =
-  function
-  | `Session _ -> ()
-  | `Alias (_, t) -> sessionify_type t
-  | `MetaTypeVar point ->
-    begin
-      match Unionfind.find point with
-      | `Rigid (_, (_, `Session))
-      | `Flexible (_, (_, `Session)) -> ()
-            | `Rigid _ -> assert false
-            | `Flexible (var, (lin, `Any)) -> Unionfind.change point (`Flexible (var, (lin, `Session)))
-            | `Flexible _ -> assert false
-            | `Body t -> sessionify_type t
-            | `Recursive _ -> assert false
-    end
-  | _ -> assert false
+let rec sessionify_type : rec_vars -> typ -> unit =
+  fun rec_vars ->
+    function
+    | `Session _ -> ()
+    | `Alias (_, t) -> sessionify_type rec_vars t
+    | `MetaTypeVar point ->
+      begin
+        match Unionfind.find point with
+        | `Rigid    (_,   (_,   `Session))
+        | `Flexible (_,   (_,   `Session)) -> ()
+        | `Flexible (var, (lin, `Any))     -> Unionfind.change point (`Flexible (var, (lin, `Session)))
+        | `Rigid    _                      -> assert false
+        | `Flexible _                      -> assert false
+        | `Body t                          -> sessionify_type rec_vars t
+        | `Recursive (var, t)              -> check_rec var rec_vars () (flip sessionify_type t)
+      end
+    | _ -> assert false
 
-let rec sessionify_row (fields, row_var, _) =
+let rec sessionify_row rec_vars (fields, row_var, _) =
   begin
     match Unionfind.find row_var with
       | `Closed
-      | `Rigid (_, (_, `Session))
-      | `Flexible (_, (_, `Session)) -> ()
-      | `Rigid _ -> assert false
-      | `Flexible (var, (lin, `Any)) -> Unionfind.change row_var (`Flexible (var, (lin, `Session)))
-      | `Flexible _ -> assert false
-      | `Body row -> sessionify_row row
-      | `Recursive _ -> assert false
+      | `Rigid    (_,   (_,   `Session))
+      | `Flexible (_,   (_,   `Session)) -> ()
+      | `Flexible (var, (lin, `Any))     -> Unionfind.change row_var (`Flexible (var, (lin, `Session)))
+      | `Rigid    _                      -> assert false
+      | `Flexible _                      -> assert false
+      | `Body row                        -> sessionify_row rec_vars row
+      | `Recursive (var, row)            -> check_rec var rec_vars () (flip sessionify_row row)
   end;
   FieldEnv.fold
     (fun _ (_, t) () ->
-       sessionify_type t)
+       sessionify_type rec_vars t)
     fields
     ()
 
+let is_session_type = is_session_type IntSet.empty
+let is_session_row = is_session_row IntSet.empty
+
+let is_sessionable_type = is_sessionable_type IntSet.empty
+let is_sessionable_row = is_sessionable_row IntSet.empty
+
+let sessionify_type = sessionify_type IntSet.empty
+let sessionify_row = sessionify_row IntSet.empty
 
 type type_variable = int * [`Rigid | `Flexible] *  [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
     deriving (Show)
