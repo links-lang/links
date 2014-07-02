@@ -2285,13 +2285,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                 let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var, false) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
-                                     no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable (`Unl, `Any))))));
+                                     no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable (`Any, `Any))))));
 
                                   let rn, rpos = erase r in
                                   let e = tabstr (pqs, `Projection ((tappl (rn, tyargs), rpos), l)) in
                                     e, fieldtype, usages r
                             | None ->
-                                let fieldtype = Types.fresh_type_variable (`Unl, `Any) in
+                                let fieldtype = Types.fresh_type_variable (`Any, `Any) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
                                      no_pos (`Record (Types.make_singleton_open_row
@@ -2304,11 +2304,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                         end
                   | _ ->
-                      let fieldtype = Types.fresh_type_variable (`Unl, `Any) in
+                      let fieldtype = Types.fresh_type_variable (`Any, `Any) in
                         unify ~handle:Gripers.projection
                           (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row
                                                              (l, (`Present, fieldtype))
-                                                             (`Any, `Any))));
+                                                             (`Unl, `Any))));
                         `Projection (erase r, l), fieldtype, usages r
               end
         | `With (r, fields) ->

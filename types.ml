@@ -294,8 +294,7 @@ let rec type_can_be_unl : typ -> bool =
        | `Recursive (_, t) -> type_can_be_unl t
      end
   | `ForAll (_, t) -> type_can_be_unl t
-  | `Session `End -> true
-  | `Session _ -> false
+  | `Session s -> session_can_be_unl s
 and row_can_be_unl (fields, row_var, _) =
   let unl_row_var =
     match Unionfind.find row_var with
@@ -311,6 +310,18 @@ and row_can_be_unl (fields, row_var, _) =
       fields
       true in
   unl_row_var && unl_fields
+and session_can_be_unl = function
+  | `MetaSessionVar point ->
+     begin
+       match Unionfind.find point with
+       | `Rigid (_, (lin, _)) -> lin=`Unl
+       | `Flexible _ -> true
+       | `Body s -> type_can_be_unl s
+       | `Recursive _ -> assert false
+     end
+  | `Dual s -> session_can_be_unl s
+  | `End -> true
+  | _ -> false
 
 let rec make_type_unl : typ -> unit=
   function
@@ -326,6 +337,7 @@ let rec make_type_unl : typ -> unit=
        | `Recursive (_, t) -> make_type_unl t
        | _ -> assert false
      end
+  | `Session s -> make_session_unl s
   | _ -> assert false
 and make_row_unl (fields, row_var, _) =
   begin
@@ -336,11 +348,23 @@ and make_row_unl (fields, row_var, _) =
     | _ -> assert false
   end;
   FieldEnv.iter (fun _ (_, t) -> make_type_unl t) fields
+and make_session_unl = function
+  | `MetaSessionVar point ->
+     begin
+       match Unionfind.find point with
+       | `Rigid (_, (`Unl, _)) -> ()
+       | `Flexible (var, (_, rest)) -> Unionfind.change point (`Flexible (var, (`Unl, rest)))
+       | `Body s -> make_type_unl s
+       | `Recursive _ -> assert false
+     end
+  | `Dual s -> make_session_unl s
+  | `End -> ()
+  | _ -> assert false
 
 (* session kind stuff *)
 let rec is_session_type : typ -> bool =
   function
-  | `Session _ -> true 
+  | `Session _ -> true
   | `Alias (_, t) -> is_session_type t
   | `MetaTypeVar point ->
     begin
@@ -375,7 +399,7 @@ let rec is_session_row (fields, row_var, _) =
 
 let rec is_sessionable_type : typ -> bool =
   function
-  | `Session _ -> true 
+  | `Session _ -> true
   | `Alias (_, t) -> is_sessionable_type t
   | `MetaTypeVar point ->
     begin
@@ -408,7 +432,7 @@ let rec is_sessionable_row (fields, row_var, _) =
 
 let rec sessionify_type : typ -> unit =
   function
-  | `Session _ -> () 
+  | `Session _ -> ()
   | `Alias (_, t) -> sessionify_type t
   | `MetaTypeVar point ->
     begin
@@ -422,7 +446,7 @@ let rec sessionify_type : typ -> unit =
             | `Recursive _ -> assert false
     end
   | _ -> assert false
-    
+
 let rec sessionify_row (fields, row_var, _) =
   begin
     match Unionfind.find row_var with
