@@ -346,6 +346,9 @@ and compress_env env : compressed_env =
        env
        [])
 
+(* let string_of_value : t -> string = *)
+(*   fun v -> Show.show show_compressed_t (compress_t v) *)
+
 type unmarshal_envs =
     env * Ir.scope IntMap.t *
       Ir.computation IntMap.t * 
@@ -503,7 +506,7 @@ let escape =
 
 (** {1 Pretty-printing values} *)
 
-let string_of_cont = Show.show show_continuation
+(* let string_of_cont = Show.show show_continuation *)
 
 exception Not_tuple
 
@@ -572,6 +575,17 @@ and string_of_tuple (fields : (string * t) list) : string =
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
+
+and string_of_cont : continuation -> string =
+  fun cont ->
+    let frame (_scope, var, _env, body) =
+      "(" ^ string_of_int var ^ ", " ^ Show.show Ir.show_computation body ^ ")"
+    in
+      "[" ^ mapstrcat ", " frame cont ^ "]"
+
+
+(* let string_of_cont : continuation -> string = *)
+(*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
 
 (** {1 Record manipulations} *)
 
