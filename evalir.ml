@@ -152,8 +152,12 @@ module Eval = struct
   let atomic = ref false (* FIXME: This needs some documentation *)
 
   let rec switch_context env =
+    assert (not (!atomic));
     match Proc.pop_ready_proc() with
         Some((cont, value), pid) -> (
+          (* Debug.print ("Switching context (pid = " ^ string_of_int pid ^ ")"); *)
+          (* Debug.print ("  Continuation: " ^ Value.string_of_cont cont); *)
+          (* Debug.print ("  Value: " ^ Value.string_of_value value); *)
           Proc.activate pid;
           apply_cont cont env value)
       | None ->
@@ -165,17 +169,20 @@ module Eval = struct
             exit 0
 
   and scheduler env state stepf =
-(*     if Proc.singlethreaded() then stepf() else (* No need to schedule if
-                                                     there are no threads...*)*)
-    let step_ctr = Proc.count_step() in
-      if step_ctr mod switch_granularity == 0 then
-        begin
-          Proc.reset_step_counter();
-          Proc.suspend_current state;
-          switch_context env
-        end
-      else
-        stepf()
+    if !atomic || Proc.singlethreaded() then stepf()
+    else (* No need to schedule if we're in an atomic section or there are no threads *)
+      let step_ctr = Proc.count_step() in
+        if step_ctr mod switch_granularity == 0 then
+          begin
+            (* Debug.print ("Scheduled context switch"); *)
+            (* Debug.print ("  Continuation: " ^ Value.string_of_cont (fst state)); *)
+            (* Debug.print ("  Value: " ^ Value.string_of_value (snd state)); *)
+            Proc.reset_step_counter();
+            Proc.suspend_current state;
+            switch_context env
+          end
+        else
+          stepf()
 
   (** {0 Evaluation} *)
   and value env : Ir.value -> Value.t = function
@@ -257,10 +264,13 @@ module Eval = struct
         begin
           try (
             atomic := true;
+            (* Debug.print ("Applying pure function"); *)
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
-            | TopLevel (_, v) -> atomic := false; v
+            | TopLevel (_, v) -> atomic := false;
+              (* Debug.print ("Applied pure function with result: " ^ Value.string_of_value v); *)
+              v
         end
     | `Coerce (v, t) -> value env v
 
@@ -324,6 +334,7 @@ module Eval = struct
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
               in
+                (* the value passed to block_current is ignored, so can be anything *)
                 Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
@@ -354,6 +365,7 @@ module Eval = struct
     | `PrimitiveFunction ("grab", _), [chan] ->
       begin
         Debug.print("grabbing from: " ^ Value.string_of_value chan);
+        (* Debug.print("  cont: " ^ Value.string_of_cont cont); *)
         let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
         let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
           match Session.receive (Num.int_of_num d') with
@@ -366,7 +378,7 @@ module Eval = struct
                                                                            (StringMap.add "2" (`Constant (`Int d'))
                                                                             StringMap.empty), None)])
             in
-              Proc.block_current (grab_frame::cont, `Record [("1", chan)]);
+              Proc.block_current (grab_frame::cont, `Record []);
               Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
@@ -385,7 +397,9 @@ module Eval = struct
       match cont with
         | [] when !atomic || Proc.current_is_main() ->
             raise (TopLevel (Value.globals env, v))
-        | [] -> switch_context env
+        | [] ->
+          Debug.print ("Finished process");
+          switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
               computation env cont comp
@@ -453,6 +467,13 @@ module Eval = struct
               computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
+    (* | `Return (`ApplyPure _ as v) -> *)
+    (*   let w = (value env v) in *)
+    (*     Debug.print ("ApplyPure"); *)
+    (*     Debug.print ("  value term: " ^ Show.show Ir.show_value v); *)
+    (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
+    (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
+    (*     apply_cont cont env w *)
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
@@ -566,7 +587,7 @@ module Eval = struct
             let choice_frame =
               Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
-              Proc.block_current (choice_frame::cont, `Record [("1", chan)]);
+              Proc.block_current (choice_frame::cont, `Record []);
               Session.block (Num.int_of_num d') (Proc.get_current_pid ());
               switch_context env
       end
