@@ -906,8 +906,8 @@ session_type_var:
 type_var:
 | VARIABLE                                                     { RigidTypeVar ($1, (`Unl, `Any)) }
 | PERCENTVAR                                                   { TypeVar ($1, (`Unl, `Any)) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable (`Any, `Any) }
-| PERCENT                                                      { fresh_type_variable (`Any, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
+| PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -1015,7 +1015,7 @@ presence_flag:
 nonrec_row_var:
 | VARIABLE                                                     { `OpenRigid ($1, (`Any, `Any)) }
 | PERCENTVAR                                                   { `Open ($1, (`Any, `Any)) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable (`Any, `Any) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable (`Unl, `Any) }
 | PERCENT                                                      { fresh_row_variable (`Any, `Any) }
 
 /* FIXME:
