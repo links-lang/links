@@ -974,7 +974,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
               else
                 raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                               ^string_of_row extension_row)))
-            | `Flexible (var, (_, rest)) ->
+            | `Flexible (var, (lin, rest)) ->
               if TypeVarSet.mem var (free_row_type_vars extension_row) then
                 begin
                   if rest = `Base then
@@ -996,6 +996,12 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                     else
                       raise (Failure (`Msg ("Cannot unify the session row variable "^ string_of_int var ^
                                                " with the non-session row "^ string_of_row extension_row)));
+
+                  if lin = `Unl then
+                    if Types.row_can_be_unl extension_row then
+                      Types.make_row_unl extension_row
+                    else
+                      raise (Failure (`Msg ("Cannot force row " ^ string_of_row extension_row ^ " to be unlimited")));
 
                   if StringMap.is_empty extension_field_env then
                     if dual then
