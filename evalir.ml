@@ -149,7 +149,9 @@ module Eval = struct
       switching threads.  *)
   let switch_granularity = 5
 
-  let atomic = ref false (* FIXME: This needs some documentation *)
+  (* If this flag is set then context switching is prohibited.
+     It is currently used for running pure functions. *)
+  let atomic = ref false
 
   let rec switch_context env =
     assert (not (!atomic));
