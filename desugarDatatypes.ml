@@ -105,6 +105,10 @@ struct
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
                        row var_env alias_env e,
                        datatype var_env t)
+        | LolliType (f, e, t) ->
+            `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
+                       row var_env alias_env e,
+                       datatype var_env t)
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in

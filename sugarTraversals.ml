@@ -445,6 +445,10 @@ class map =
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
           let _x_i2 = o#datatype _x_i2 in FunctionType (_x, _x_i1, _x_i2)
+      | LolliType (_x, _x_i1, _x_i2) ->
+          let _x = o#list (fun o -> o#datatype) _x in
+          let _x_i1 = o#row _x_i1 in
+          let _x_i2 = o#datatype _x_i2 in LolliType (_x, _x_i1, _x_i2)
       | MuType (_x, _x_i1) ->
           let _x = o#name _x in
           let _x_i1 = o#datatype _x_i1 in MuType (_x, _x_i1)
@@ -959,6 +963,9 @@ class fold =
           let o = o#name _x in
           let o = o#subkind _x_i1 in o
       | FunctionType (_x, _x_i1, _x_i2) ->
+          let o = o#list (fun o -> o#datatype) _x in
+          let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
+      | LolliType (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
       | MuType (_x, _x_i1) ->
@@ -1564,6 +1571,11 @@ class fold_map =
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
           in (o, (FunctionType (_x, _x_i1, _x_i2)))
+      | LolliType (_x, _x_i1, _x_i2) ->
+          let (o, _x) = o#list (fun o -> o#datatype) _x in
+          let (o, _x_i1) = o#row _x_i1 in
+          let (o, _x_i2) = o#datatype _x_i2
+          in (o, (LolliType (_x, _x_i1, _x_i2)))
       | MuType (_x, _x_i1) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (MuType (_x, _x_i1)))
