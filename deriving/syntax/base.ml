@@ -29,7 +29,7 @@ let contains_tvars, contains_tvars_decl =
   let o = object
      inherit [bool] fold as default
      method crush = List.exists F.id
-     method expr = function
+     method! expr = function
        | `Tyvar _ -> true
        | e -> default#expr e
   end in (o#expr, o#decl)
@@ -116,9 +116,9 @@ let make_safe : (name * rhs * Ast.binding) list -> (Ast.binding) list * [`Recurs
       match sorted with
         | [(name, rhs, mbind)] -> 
             let recursive = object
-              inherit [bool] fold as default
+              inherit [bool] fold
               method crush = List.exists F.id
-              method localtype (`Local (lname, _)) = (lname = name)
+              method! localtype (`Local (lname, _)) = (lname = name)
             end # rhs rhs in
               [mbind], if recursive then `Recursive else `Nonrecursive
         | _ -> (List.map (fun (_,_,b) -> b) sorted, `Recursive)
@@ -262,7 +262,7 @@ struct
     method signature (params, names : sigdecl) : Ast.sig_item =
       (* TODO: distinguish generated names *)
         NameMap.fold
-          (fun name rhs si ->
+          (fun name _rhs si ->
              <:sig_item< $si$ ;; val $lid:typename ^ "_" ^ name$ : $self#mktype name params$ >>)
           names
           <:sig_item< open $uid:classname$ >>
@@ -275,7 +275,7 @@ struct
       | `Tyvar t -> self#tyvar t
       | `Appl c  -> self#constr c
   
-    method function_ f = raise (Underivable (loc, classname ^ " cannot be derived for function types"))
+    method function_ _f = raise (Underivable (loc, classname ^ " cannot be derived for function types"))
   
     method constr (qname, args) = 
       self#mapply <:expr< $id:modname_from_qname ~loc ~typename qname$ >> args

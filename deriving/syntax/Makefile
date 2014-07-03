@@ -8,6 +8,8 @@ PPFLAGS    = -loc loc
 USE_CAMLP4 = yes
 LIBS       = dynlink camlp4lib unix 
 
+OCAMLFLAGS=-dtypes -w Ae-27-44
+
 CAMLP4_PRE_NOPRINTER = 
 
 CAMLP4_PREFILES = Camlp4Parsers/Camlp4OCamlRevisedParser.cmo \

@@ -7,7 +7,7 @@ open Camlp4.PreCast
 
 let classname = "Show"
 
-let tuple_functors = [2;3;4;5;6]
+(* let tuple_functors = [2;3;4;5;6] *)
 let tuple_functors = []
 
 let in_a_box ~loc box e =
@@ -17,7 +17,7 @@ let in_a_box ~loc box e =
 
 let in_hovbox = in_a_box "pp_open_hovbox" and in_box = in_a_box "pp_open_box"
 
-let wrap ~loc atype matches = <:expr<  {format = fun formatter -> function $list:matches$ } >>
+let wrap ~loc _atype matches = <:expr<  {format = fun formatter -> function $list:matches$ } >>
 
 class show ~loc =
 object (self)
@@ -32,7 +32,7 @@ object (self)
     method private case : summand -> Ast.match_case = function
       | name, [] -> <:match_case< $uid:name$ -> Format.pp_print_string formatter $str:name$ >>
       | name, args -> 
-          let patt, exp = tuple ~loc (List.length args) in
+          let patt, _exp = tuple ~loc (List.length args) in
             <:match_case<
               $uid:name$ $patt$ ->
               $in_hovbox ~loc <:expr< Format.pp_print_string formatter $str:name$;

@@ -24,7 +24,7 @@ object (self)
              (<:expr< true >>, 0)
              args)
 
-  method tuple atype args = 
+  method tuple _atype args = 
     let nargs = List.length args in
     let lpatt, _ = tuple ~loc ~param:"l" nargs
     and rpatt, _ = tuple ~loc ~param:"r" nargs in
@@ -52,11 +52,11 @@ object (self)
     | (name, t, `Immutable) -> <:expr< $self#atomic t$.eq $lid:"l" ^ name$ $lid:"r" ^ name$ >>
     | (_,    _, `Mutable)   -> assert false
 
-  method sum atype ?eq summands =
+  method sum _atype ?eq summands =
     let wildcard = match summands with [_] -> [] | _ -> [ <:match_case< _ -> false >>] in
       <:expr< { eq = fun l r -> match l, r with $list:(List.map self#case summands) @ wildcard$ } >>
 
-  method record atype ?eq fields = 
+  method record _atype ?eq fields = 
     if List.exists (function (_,_,`Mutable) -> true | _ -> false) fields then
        <:expr< { eq = (==) } >>
     else
@@ -69,7 +69,7 @@ object (self)
         <:expr< true >>
     in <:expr< { eq = fun $lpatt$ $rpatt$ -> $expr$ } >>
 
-  method variant atype (spec, tags) = 
+  method variant _atype (_spec, tags) = 
     <:expr< {eq = fun l r -> match l, r with
                  $list:List.map self#polycase tags$
                | _ -> false } >>

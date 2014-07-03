@@ -14,7 +14,7 @@ class hash ~loc =
 object (self)
   inherit Base.deriver ~loc  ~classname ~allow_private:true
 
-  val superclasses = ["Eq"]
+  val! superclasses = ["Eq"]
   val methods = ["hash"]
 
   method private nargs : atomic list -> Ast.expr = 
@@ -32,7 +32,7 @@ object (self)
       wrap ~loc ~atype ~eq:(self#eq_instance atype) <:expr< fun $patt$ -> $self#nargs args$ >> 
   
   method private polycase : Type.tagspec -> int -> Ast.match_case = 
-    fun spec n -> match spec with
+    fun spec _n -> match spec with
     | `Tag (name, None)   -> <:match_case< `$name$ -> hash_int.hash $`int:tag_hash name$ _state >>
     | `Tag (name, Some e) -> <:match_case< `$name$ l ->  $self#atomic e$.hash l (hash_int.hash  $`int:tag_hash name$ _state); >>
     | `Local (c, _ as a) -> <:match_case< (# $lid:c$ as l) -> $self#local a$.hash l _state >>
@@ -59,7 +59,7 @@ object (self)
     wrap ~loc ~atype ~eq:(self#eq_instance atype)
       (<:expr< fun _v -> $projs$ >>)
            
-  method variant atype (spec, tags) = 
+  method variant atype (_spec, tags) = 
     wrap ~loc ~atype ~eq:(self#eq_instance atype)
     <:expr< function $list:List.mapn self#polycase tags$ >>
 
