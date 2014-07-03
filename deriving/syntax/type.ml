@@ -233,9 +233,9 @@ struct
   let unexpected loc msg = raise (Unexpected (loc, msg))
 
   let param = function
-    | Ast.TyQuP (loc, name) -> name, Some `Plus
-    | Ast.TyQuM (loc, name) -> name, Some `Minus
-    | Ast.TyQuo (loc, name)  -> name, None
+    | Ast.TyQuP (_loc, name) -> name, Some `Plus
+    | Ast.TyQuM (_loc, name) -> name, Some `Minus
+    | Ast.TyQuo (_loc, name) -> name, None
     | _ -> assert false
 
   let params = List.map param
@@ -418,7 +418,6 @@ struct
           | # atomic as a, binds -> a, binds
           | e            , binds -> 
               let name = fresh_name () in
-              let e, binds = expr t in
                 (`Local (name, params), bind_binding name true (e :> sigrhs) binds)
 
       let field : Ast.ctyp -> field * env = function 
@@ -463,33 +462,33 @@ struct
         let () = set_name_prefix name in
         let bind = bind_binding name false in function
         (* Record types (private, public, with and without equations) *)
-        | Ast.TyPrv (_, (Ast.TyRec (loc, t))) ->
+        | Ast.TyPrv (_, (Ast.TyRec (_loc, t))) ->
             let r, binds = record t in
               bind ( `Fresh (None, (r :> fresh), `Private)) binds
-        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec (loc, t)))) ->
+        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TyRec (_loc, t)))) ->
             let r, rbinds = record t 
             and e, ebinds = expr eq in
               bind (`Fresh (Some e, (r :> fresh), `Private)) (rbinds ++ ebinds)
-        | Ast.TyRec (loc, t) ->
+        | Ast.TyRec (_loc, t) ->
             let r, binds = record t in
               bind ( `Fresh (None, (r :> fresh), `Public)) binds
-        | Ast.TyMan (_, eq, (Ast.TyRec (loc, t))) ->
+        | Ast.TyMan (_, eq, (Ast.TyRec (_loc, t))) ->
             let r, rbinds = record t 
             and e, ebinds = expr   eq in
               bind (`Fresh (Some e, (r :> fresh), `Public)) (rbinds ++ ebinds)
 
         (* Sum types (private, public, with and without equations) *)
-        | Ast.TyPrv (_, (Ast.TySum (loc, t))) -> 
+        | Ast.TyPrv (_, (Ast.TySum (_loc, t))) -> 
             let s, binds = sum t in
               bind (`Fresh (None, (s :> fresh), `Private)) binds
-        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TySum (loc, t)))) ->
+        | Ast.TyMan (_, eq, Ast.TyPrv (_, (Ast.TySum (_loc, t)))) ->
             let r, sbinds = sum t 
             and e, ebinds = expr eq in
               bind (`Fresh (Some e, (r :> fresh), `Private)) (sbinds ++ ebinds)
-        | Ast.TySum (loc, t) -> 
+        | Ast.TySum (_loc, t) -> 
             let s, binds = sum t in
               bind (`Fresh (None, (s :> fresh), `Public)) binds
-        | Ast.TyMan (_, eq, (Ast.TySum (loc, t))) ->
+        | Ast.TyMan (_, eq, (Ast.TySum (_loc, t))) ->
             let r, sbinds = sum t 
             and e, ebinds = expr eq in
               bind (`Fresh (Some e, (r :> fresh), `Public)) (sbinds ++ ebinds)
@@ -516,9 +515,9 @@ struct
       in M.results
  
    let extract_params : Ast.ctyp -> param list * (name * Ast.ctyp) = function
-     | Ast.TyDcl (loc, _   , _ , _  , _::_) -> raise (Unsupported (loc, "type constraints"))
-     | Ast.TyDcl (loc, name, ps, rhs, []  ) -> (params ps, (name, rhs))
-     | _                                    -> assert false
+     | Ast.TyDcl (loc, _   , _ , _  , _::_)  -> raise (Unsupported (loc, "type constraints"))
+     | Ast.TyDcl (_loc, name, ps, rhs, []  ) -> (params ps, (name, rhs))
+     | _                                     -> assert false
 
    let check_params loc : param list list -> param list = 
      let check_eq ps' ps =
@@ -530,7 +529,7 @@ struct
    let substitute_aliases params : alias_map -> sigdecl -> sigdecl = fun map ->
    object
      inherit transform as super
-     method atomic = function
+     method! atomic = function
        | `Tyvar p when NameMap.mem p map ->
            `Local (NameMap.find p map, List.map fst params)
        | e -> super#atomic e

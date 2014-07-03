@@ -28,7 +28,7 @@ object (self)
       let dumpers, undump = 
         let n = List.length ts in 
         let pinner, undump = self#nargs (List.mapn (fun t n -> (Printf.sprintf "v%d" n, t)) ts) in
-        let patt, expr = tuple ~loc n in
+        let patt, _expr = tuple ~loc n in
           [ <:match_case< $patt$ -> $pinner$ >> ], undump in
         wrap ~loc ~atype ~dumpers ~undump
 

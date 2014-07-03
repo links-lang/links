@@ -50,7 +50,7 @@ struct
         map
         Type.NameMap.empty
 
-  open Ast
+  (* open Ast *)
 
   (*
     Suppose that we're generating an instance of a class C for a type t.

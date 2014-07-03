@@ -2,7 +2,7 @@
 
 open Base
 open Utils
-open Type
+(* open Type *)
 open Camlp4.PreCast
 
 let classname = "Bounded"
@@ -15,7 +15,7 @@ object (self)
       "min_bound";
       "max_bound"
     ]
-    method tuple atype ts = 
+    method tuple _atype ts = 
     let minBounds, maxBounds = 
       List.split (List.map
                     (fun t -> let e = self#atomic t in 
@@ -24,7 +24,7 @@ object (self)
     <:expr< { min_bound = $tuple_expr ~loc minBounds$ ;
               max_bound = $tuple_expr ~loc maxBounds$ } >>
 
-    method sum (name, params) ?eq summands = 
+    method sum (_name, _params) ?eq summands = 
     let names = ListLabels.map summands
         ~f:(function
               | (name,[]) -> name
@@ -49,7 +49,7 @@ object (self)
   method record (name, _) ?eq _ = 
     raise (Underivable (loc, "Bounded cannot be derived for record types (i.e. "^
                           name^")"))
-  method expand e = e
+  method! expand e = e
 end
 
 let _ = Base.register classname (new bounded)

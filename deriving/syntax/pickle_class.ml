@@ -5,7 +5,7 @@ open Utils
 open Type
 open Camlp4.PreCast
 
-let tuple_functors = [2;3;4;5;6]
+(* let tuple_functors = [2;3;4;5;6] *)
 let tuple_functors = []
 
 let classname = "Pickle"
@@ -29,7 +29,7 @@ class pickle ~loc =
 object (self)
   inherit Base.deriver ~loc  ~classname ~allow_private:false
 
-  val superclasses = ["Hash"; "Typeable"]
+  val! superclasses = ["Hash"; "Typeable"]
   val methods = ["pickle"; "unpickle"]
 
   method private extension atype tname ts : Ast.match_case =
@@ -48,7 +48,7 @@ object (self)
              | `Local t -> 
                  (<:expr< try $exp$
                           with UnknownTag _ -> ($self#local t$.unpickle x state :> $atype$ * read_state) >>)
-             | `Appl (qname, _ as c) ->
+             | `Appl (_qname, _ as c) ->
                  (<:expr< try $exp$
                           with UnknownTag _ -> ($self#constr c$.unpickle x state :> $atype$ * read_state) >>))
         ts
@@ -95,7 +95,7 @@ object (self)
     | (name, None)   -> <:match_case< $`int:(tag_hash name)$, [] ->  `$name$, state >>
     | (name, Some t) -> <:match_case< $`int:(tag_hash name)$, [x] -> `$name$ (fst ($self#atomic t$.unpickle x state)), state >> (* TODO: is this right? *)
 
-    method variant (tname, params as atype) (_, tagspec) : Ast.expr =
+    method variant (tname, _params as atype) (_, tagspec) : Ast.expr =
       let unpickler, extension_tag = 
         let tags, extensions = either_partition
           (function (`Tag (name,t)) -> Left (name,t) | (`Local _) as t -> Right t | `Appl _ as t -> Right t) tagspec in

@@ -7,7 +7,7 @@ open Camlp4.PreCast
 
 let classname = "Enum"
 class enum ~loc =
-object (self)
+object (_self)
   inherit Base.deriver ~loc  ~classname ~allow_private:false
 
     val methods = [ "succ";
@@ -19,7 +19,7 @@ object (self)
                     "enum_from_to";
                     "enum_from_then_to"]
 
-    method sum (name, params) ?eq summands =
+    method sum (_name, _params) ?eq summands =
     let numbering = 
       List.fold_right2
         (fun n ctor rest -> 
@@ -33,7 +33,7 @@ object (self)
         <:expr< [] >> in
       <:expr< Enum.from_numbering $numbering$ >>
 
-    method variant atype (_, tags) = 
+    method variant _atype (_, tags) = 
     let numbering = 
       List.fold_right2
         (fun n tagspec rest -> 

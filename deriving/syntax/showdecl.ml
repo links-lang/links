@@ -261,7 +261,7 @@ module rec Show_name : Show.Show with type a = name =
   
 type qname = deriving_qname_1 list and deriving_qname_1 = name
 
-open Show
+(* open Show *)
   
 module  Show_deriving_qname_1 : Show.Show with type a = deriving_qname_1 =
     Show.Defaults(Show_name)
@@ -300,7 +300,7 @@ type param =
   and deriving_param_2 =
   deriving_param_3 option
 
-open Show
+(* open Show *)
   
 module rec Show_deriving_param_3 : Show.Show with type a = deriving_param_3 =
              Show.Defaults
@@ -339,7 +339,7 @@ type localtype =
   and deriving_localtype_1 =
   name
 
-open Show
+(* open Show *)
   
 module rec Show_localtype : Show.Show with type a = localtype =
              Show.Defaults
@@ -363,7 +363,7 @@ and
 (* A reference to a type parameter *)
 type tyvar = [ | `Tyvar of deriving_tyvar_1 ] and deriving_tyvar_1 = name
 
-open Show
+(* open Show *)
   
 module rec Show_tyvar : Show.Show with type a = tyvar =
              Show.Defaults
@@ -394,7 +394,7 @@ type deriving_atomic_2 =
   [ | localtype | tyvar
   ]
 
-open Show
+(* open Show *)
   
 module rec Show_atomic : Show.Show with type a = atomic =
              Show.Defaults
@@ -434,7 +434,7 @@ type deriving_appl_9 =
   [ | `Appl of deriving_appl_5
   ]
 
-open Show
+(* open Show *)
   
 module rec Show_appl : Show.Show with type a = appl =
              Show.Defaults
@@ -479,7 +479,7 @@ type tagspec =
   and deriving_tagspec_1 =
   localtype
 
-open Show
+(* open Show *)
   
 module rec Show_tagspec : Show.Show with type a = tagspec =
              Show.Defaults
@@ -529,7 +529,7 @@ type variant =
   and deriving_variant_5 =
   (deriving_variant_9 * deriving_variant_7)
 
-open Show
+(* open Show *)
   
 module rec Show_variant : Show.Show with type a = variant =
              Show.Defaults
@@ -581,7 +581,7 @@ type field =
   [ | `Mutable | `Immutable
   ]
 
-open Show
+(* open Show *)
   
 module rec Show_deriving_field_1 : Show.Show with type a = deriving_field_1 =
              Show.Defaults
@@ -617,7 +617,7 @@ type record =
   and deriving_record_2 =
   deriving_record_3 list
 
-open Show
+(* open Show *)
   
 module rec Show_record : Show.Show with type a = record =
              Show.Defaults
@@ -651,7 +651,7 @@ type summand =
   and deriving_summand_2 =
   deriving_summand_3 list
 
-open Show
+(* open Show *)
   
 module rec Show_deriving_summand_4 :
              Show.Show with type a = deriving_summand_4 =
@@ -674,7 +674,7 @@ type sum =
   and deriving_sum_2 =
   deriving_sum_3 list
 
-open Show
+(* open Show *)
   
 module rec Show_sum : Show.Show with type a = sum =
              Show.Defaults
@@ -707,7 +707,7 @@ type fresh =
   and deriving_fresh_1 =
   record
 
-open Show
+(* open Show *)
   
 module rec Show_fresh : Show.Show with type a = fresh =
              Show.Defaults
@@ -760,7 +760,7 @@ type expr =
   and deriving_expr_1 =
   atomic
 
-open Show
+(* open Show *)
   
 module rec Show_expr : Show.Show with type a = expr =
              Show.Defaults
@@ -837,7 +837,7 @@ type rhs =
   and deriving_rhs_1 =
   expr
 
-open Show
+(* open Show *)
   
 module rec Show_rhs : Show.Show with type a = rhs =
              Show.Defaults
@@ -890,7 +890,7 @@ and
   
 type sigrhs = [ | rhs | `Nothing ] and deriving_sigrhs_1 = rhs
 
-open Show
+(* open Show *)
   
 module rec Show_sigrhs : Show.Show with type a = sigrhs =
              Show.Defaults
@@ -924,7 +924,7 @@ type deriving_decl_6 =
   and decl =
   (deriving_decl_5 * deriving_decl_2)
 
-open Show
+(* open Show *)
   
 module rec Show_deriving_decl_6 : Show.Show with type a = deriving_decl_6 =
              Show.Defaults(Show_param)
@@ -953,7 +953,7 @@ type sigdecl =
   and deriving_sigdecl_2 =
   deriving_sigdecl_3 NameMap.t
 
-open Show
+(* open Show *)
   
 module rec Show_deriving_sigdecl_6 :
              Show.Show with type a = deriving_sigdecl_6 =

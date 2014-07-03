@@ -11,7 +11,7 @@ let mkName ~loc : name -> string =
     Printf.sprintf "%s_%d_%f_%s" 
       file_name sl (Unix.gettimeofday ())
 
-let gen ~loc atype (tname,params) = 
+let gen ~loc _atype (tname,params) = 
   let paramList = 
     List.fold_right 
       (fun (p,_) cdr ->
@@ -26,14 +26,14 @@ object (self)
 
   val methods = ["type_rep"]
 
-  method tuple atype ts = 
+  method tuple _atype ts = 
     let params = 
       expr_list ~loc
         (List.map (fun t -> <:expr< $self#atomic t$.type_rep >>) ts) in
       <:expr< { type_rep = lazy (Lazy.force (Typeable.TypeRep.mkTuple $params$))  } >>
   method sum ctyp ?eq _ = gen ~loc (self#atype ctyp) ctyp  (* TODO: handle equations correctly *)
   method record ctyp ?eq _ = gen ~loc (self#atype ctyp) ctyp  (* TODO: handle equations correctly *)
-  method variant atype (_,tags) =
+  method variant _atype (_,tags) =
     let tags, extends = 
       List.fold_left 
         (fun (tags, extends) -> function
@@ -44,7 +44,7 @@ object (self)
         (<:expr< [] >>, <:expr< [] >>) tags in
       <:expr< { type_rep = lazy (Lazy.force (Typeable.TypeRep.mkPolyv $tags$ $extends$)) } >>
 
-    method expand : Ast.expr -> Ast.expr = 
+  method! expand : Ast.expr -> Ast.expr = 
       fun expr -> <:expr< { type_rep = lazy (Lazy.force $expr$.type_rep) } >>
 end
 
