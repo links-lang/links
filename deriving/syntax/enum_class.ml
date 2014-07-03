@@ -2,7 +2,7 @@
 
 open Base
 open Utils
-open Type
+(* open Type *)
 open Camlp4.PreCast
 
 let classname = "Enum"
