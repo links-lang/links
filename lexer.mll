@@ -249,7 +249,8 @@ let directive_prefix = ['' '@' '$']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let opchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
+let initopchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
+let opchar = [ '.' '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack
@@ -313,7 +314,7 @@ rule lex ctxt nl = parse
   | '?'                                 { QUESTION }
   | "%" def_id as var                   { PERCENTVAR var }
   | '%'                                 { PERCENT }
-  | opchar + as op                      { ctxt#precedence op }
+  | initopchar opchar * as op           { ctxt#precedence op }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
                                           else ctxt#precedence var }
