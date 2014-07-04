@@ -105,6 +105,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
+      | `Session _ -> failwith "TODO: implement eq_session"
 and eq_quantifier : (quantifier * quantifier) -> bool =
   function
     | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)

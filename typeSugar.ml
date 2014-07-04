@@ -1059,7 +1059,10 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
       | `Not_typed
       | `Primitive _
       | `Function _
+      | `Lolli _
       | `Table _
+      (* TODO: do we need to do something special for session types? *)
+      | `Session _
        (* TODO: expand applications? *)
       | `Application _ -> t
 

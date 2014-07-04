@@ -256,6 +256,7 @@ let rec is_unl_type : rec_vars -> typ -> bool =
   fun rec_vars ->
     let iut t = is_unl_type rec_vars t in
       function
+      | `Not_typed -> assert false
       | `Primitive _
       | `Function _ -> true
       | `Lolli _ -> false
@@ -313,6 +314,7 @@ let rec type_can_be_unl : rec_vars -> typ -> bool =
   fun rec_vars ->
     let tcu t = type_can_be_unl rec_vars t in
     function
+    | `Not_typed -> assert false
     | `Primitive _
     | `Function _ -> true
     | `Lolli _ -> false
@@ -377,6 +379,7 @@ let session_can_be_unl = session_can_be_unl IntSet.empty
 let rec make_type_unl : rec_vars -> typ -> unit =
   fun rec_vars ->
     function
+    | `Not_typed -> assert false
     | `Primitive _ | `Function _ | `Table _ | `Session `End | `Application _ -> ()
     | `Record r | `Variant r -> make_row_unl rec_vars r
     | `Alias (_, t) | `ForAll (_, t) -> make_type_unl rec_vars t
@@ -408,6 +411,7 @@ and make_session_unl rec_vars =
   | `MetaSessionVar point ->
     begin
       match Unionfind.find point with
+      | `Rigid (_, (`Any, _)) -> assert false
       | `Rigid (_, (`Unl, _)) -> ()
       | `Flexible (var, (_, rest)) -> Unionfind.change point (`Flexible (var, (`Unl, rest)))
       | `Body t -> make_type_unl rec_vars t
@@ -473,7 +477,7 @@ let rec is_sessionable_type : rec_vars -> typ -> bool =
         | `Flexible (_, (_, `Session))
         | `Flexible (_, (_, `Any)) -> true
         | `Rigid    (_, (_, `Base))
-        | `Rigid    (_, (_, `Session))
+        | `Rigid    (_, (_, `Any))
         | `Flexible (_, (_, `Base)) -> false
         | `Body t -> is_sessionable_type rec_vars t
         | `Recursive (var, t) ->
@@ -1032,6 +1036,7 @@ and dual_row = fun (fields, row_var, dual) ->
     (fields', row_var, not dual)
 and dual_type t = match concrete_type IntSet.empty t with
   | `Session s -> `Session (dual_session s)
+  | _ -> assert false
 
 (*
  convert a row to the form (field_env, row_var)
@@ -2042,6 +2047,8 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
           end
       | `Function (f, m, t) ->
           TypeVarMap.union_all [ftv f; row_flexible_type_vars bound_vars m; ftv t]
+      | `Lolli (f, m, t) ->
+          TypeVarMap.union_all [ftv f; row_flexible_type_vars bound_vars m; ftv t]
       | `Record row -> row_flexible_type_vars bound_vars row
       | `ForAll (tyvars, body) ->
           let bound_vars =
@@ -2110,6 +2117,7 @@ and session_flexible_type_vars bound_vars =
   | `Choice row -> row_flexible_type_vars bound_vars row
   | `Dual s -> session_flexible_type_vars bound_vars s
   | `End -> TypeVarMap.empty
+  | `MetaSessionVar point -> flexible_type_vars bound_vars (`MetaTypeVar point)
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty
@@ -2311,6 +2319,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * presence_fl
     | `Choice row    -> make_env_r boundvars row
     | `Dual s        -> make_env_s boundvars s
     | `End           -> empties
+    | `MetaSessionVar point -> make_env boundvars (`MetaTypeVar point)
   in make_env S.empty
 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * presence_flag Utility.IntMap.t =

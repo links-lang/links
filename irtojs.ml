@@ -809,6 +809,10 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
+      | `Choice _
+      | `Select _ ->
+	(* TODO: JS generation for session types *)
+	failwith "Not implemented JS generation for Choice and Select yet"
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa -> 
