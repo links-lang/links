@@ -102,10 +102,29 @@ let rec eq_types : (datatype * datatype) -> bool =
                   eq_types (t, t')
             | _ -> false
           end
+      | `Session l ->
+        begin match unalias t2 with
+        | `Session r -> eq_sessions (l, r)
+        | _          -> false
+        end
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
-      | `Session _ -> failwith "TODO: implement eq_session"
+and eq_sessions : (session_type * session_type) -> bool =
+  function
+  | `Input (lt, ls), `Input (rt, rs)
+  | `Output (lt, ls), `Output (rt, rs) ->
+    eq_types (lt, rt)
+  | `Select l, `Select r
+  | `Choice l, `Choice r ->
+    eq_rows (l, r)
+  | `MetaSessionVar lpoint, `MetaSessionVar rpoint ->
+    Unionfind.equivalent lpoint rpoint
+  (* TODO: do we need to actually perform any dualisation here? *)
+  | `Dual l, `Dual r ->
+    eq_sessions (l, r)
+  | `End, `End -> true
+  | _, _ -> false
 and eq_quantifier : (quantifier * quantifier) -> bool =
   function
     | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
