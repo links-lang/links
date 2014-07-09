@@ -70,8 +70,7 @@ object(self)
           | false, true  -> "ntilde" in
           self#phrase (appl pos libfn tyargs [e1; (desugar_regex self#phrase regex_type pos r, pos)])
     | `InfixAppl ((_tyargs, `RegexMatch _), _, _) -> 
-        raise (ConcreteSyntaxError ("Internal error: unexpected rhs of regex operator",
-                                    pos))
+        raise (Errors.SugarError (pos, "Internal error: unexpected rhs of regex operator"))
     | p -> super#phrase (p, pos)
 end
 

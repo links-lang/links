@@ -854,7 +854,7 @@ struct
                     | [] -> ()
                     | (name, _) :: attrs ->
                         if StringSet.mem name names then
-                          raise (ASTSyntaxError (pos,
+                          raise (Errors.SugarError (pos,
                                                  "XML attribute '"^name^"' is defined more than once"))
                         else
                           dup_check (StringSet.add name names) attrs
@@ -863,7 +863,7 @@ struct
               in
                 if tag = "#" then
                   if List.length attrs != 0 || attrexp <> None then
-                    raise (ASTSyntaxError (pos,
+                    raise (Errors.SugarError (pos,
                                            "XML forest literals cannot have attributes"))
                   else
                     cofv

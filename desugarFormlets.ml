@@ -2,16 +2,15 @@ open Utility
 open Sugartypes
 open List
 
-
-let rec is_raw (e, pos) =
-  match e with
-    | `TextNode _
-    | `Block _ -> true
+let rec is_raw (phrase, pos) =
+  match phrase with
+    | `TextNode _ -> true
+    | `Block _    -> true
     | `FormBinding _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
     | e ->
-        raise (ConcreteSyntaxError ("Invalid element in formlet literal", pos))
+        raise (Errors.SugarError (pos, "Invalid element in formlet literal"))
 
 let tt =
   function

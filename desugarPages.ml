@@ -2,14 +2,14 @@ open Sugartypes
 
 let rec is_raw (phrase, pos) =
   match phrase with
-    | `TextNode _
+    | `TextNode _ -> true
     | `Block _ -> true
     | `FormletPlacement _
     | `PagePlacement _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
     | e ->
-        raise (ConcreteSyntaxError ("Invalid element in page literal", pos))
+        raise (Errors.SugarError (pos, "Invalid element in page literal"))
 
 (* DODGEYNESS:
 
@@ -30,6 +30,7 @@ let rec desugar_page (o, page_type) =
     fun (e, pos) ->
       match e with
         | _ when is_raw (e, pos) ->
+          (* TODO: check that e doesn't contain any formletplacements or page placements *)
             (`FnAppl ((`TAppl ((`Var "bodyP", pos), [`Row (o#lookup_effects)]), pos),
                       [e, pos]), pos)
         | `FormletPlacement (formlet, handler, attributes) ->
@@ -55,7 +56,7 @@ let rec desugar_page (o, page_type) =
                                      [`Block ([], (`Var x, pos)), pos]), pos))), pos);
                          desugar_nodes pos children]), pos)
         | _ ->
-            raise (ConcreteSyntaxError ("Invalid element in page literal", pos))
+          raise (Errors.SugarError (pos, "Invalid element in page literal"))
 
 and desugar_pages env =
 object
