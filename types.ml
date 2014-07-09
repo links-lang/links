@@ -1033,6 +1033,7 @@ let rec dual_session = function
   | `End                  -> `End
 and dual_row = fun (fields, row_var, dual) ->
   (* TODO: work out how to implement dualisation for row variables *)
+  (* DONE? *)
   let fields' =
     StringMap.map (fun (f, t) -> (f, dual_type t)) fields in
   (* let row_var' = *)
@@ -1046,6 +1047,10 @@ and dual_row = fun (fields, row_var, dual) ->
     (fields', row_var, not dual)
 and dual_type t = match concrete_type IntSet.empty t with
   | `Session s -> `Session (dual_session s)
+  (* HACK: is this the right thing to do? 
+     it appears to allow us to implement recursive session types...
+  *)
+  | `MetaTypeVar point -> `Session (dual_session (`MetaSessionVar point))
   | _ -> assert false
 
 (*
