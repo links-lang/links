@@ -126,8 +126,8 @@ and session_type =
     | `Output of datatype * session_type
     | `Select of row
     | `Choice of row
-    | `TypeVar of name
-    | `RigidTypeVar of name
+    | `TypeVar of name * subkind
+    | `RigidTypeVar of name * subkind
     | `Dual of session_type
     | `End ]
       deriving (Show)

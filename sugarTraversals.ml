@@ -489,10 +489,12 @@ class map =
         let _x = o#row _x in `Select _x
       | `Choice _x ->
         let _x = o#row _x in `Choice _x
-      | `TypeVar _x ->
-        let _x = o#name _x in `TypeVar _x
-      | `RigidTypeVar _x ->
-        let _x = o#name _x in `RigidTypeVar _x
+      | `TypeVar (_x, _x_i1) ->
+        let _x = o#name _x in
+        let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1))
+      | `RigidTypeVar (_x, _x_i1) ->
+        let _x = o#name _x in
+        let _x_i1 = o#subkind _x_i1 in `RigidTypeVar ((_x, _x_i1))
       | `Dual _x ->
         let _x = o#session_type _x in `Dual _x
       | `End -> `End
@@ -942,12 +944,6 @@ class fold =
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
 
-    (* method quantifier : quantifier -> 'self_type = *)
-    (*   function *)
-    (*   | `TypeVar _x -> o *)
-    (*   | `RowVar _x -> o *)
-    (*   | `PresenceVar _x -> o *)
-
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
         let o = o#string _x in let o = o#list (fun o -> o#string) _x_i1 in o
@@ -1004,10 +1000,12 @@ class fold =
         let o = o#row _x in o
       | `Choice _x ->
         let o = o#row _x in o
-      | `TypeVar _x ->
-        let o = o#name _x in o
-      | `RigidTypeVar _x ->
-        let o = o#name _x in o
+      | `TypeVar (_x, _x_i1) ->
+        let o = o#name _x in
+        let o = o#subkind _x_i1 in o
+      | `RigidTypeVar (_x, _x_i1) ->
+        let o = o#name _x in
+        let o = o#subkind _x_i1 in o
       | `Dual _x ->
         let o = o#session_type _x in o
       | `End -> o
@@ -1537,16 +1535,6 @@ class fold_map =
       fieldconstraint -> ('self_type * fieldconstraint) =
       function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
 
-    (* method quantifier : quantifier -> ('self_type * quantifier) = *)
-    (*   function *)
-    (*   | `TypeVar (_x, _x_i1) -> *)
-    (*       let (o, _x) = o#name _x in *)
-    (*       let (o, _x_i1) = o#subkind _x_i1 in (o, `TypeVar ((_x, _x_i1))) *)
-    (*   | `RowVar (_x, _x_i1) -> *)
-    (*       let (o, _x) = o#name _x in *)
-    (*       let (o, _x_i1) = o#subkind _x_i1 in (o, `RowVar ((_x, _x_i1))) *)
-    (*   | `PresenceVar _x -> let (o, _x) = o#name _x in (o, `PresenceVar _x) *)
-
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->
         let (o, _x) = o#string _x in
@@ -1619,10 +1607,12 @@ class fold_map =
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
         let (o, _x) = o#row _x in (o, `Choice _x)
-      | `TypeVar _x ->
-        let (o, _x) = o#name _x in (o, `TypeVar _x)
-      | `RigidTypeVar _x ->
-        let (o, _x) = o#name _x in (o, `RigidTypeVar _x)
+      | `TypeVar (_x, _x_i1) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#subkind _x_i1 in (o, (`TypeVar ((_x, _x_i1))))
+      | `RigidTypeVar (_x, _x_i1) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#subkind _x_i1 in (o, (`RigidTypeVar ((_x, _x_i1))))
       | `Dual _x ->
         let (o, _x) = o#session_type _x in (o, `Dual _x)
       | `End -> (o, `End)

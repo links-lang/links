@@ -66,8 +66,8 @@ object (self)
     | dt                  -> super#datatype dt
 
   method session_type = function
-    | `TypeVar x -> self#add (x, `Type (`Any, `Session), `Flexible)
-    | `RigidTypeVar x -> self#add (x, `Type (`Any, `Session), `Rigid)
+    | `TypeVar (x, (lin, _)) -> self#add (x, `Type (lin, `Session), `Flexible)
+    | `RigidTypeVar (x, (lin, _)) -> self#add (x, `Type (lin, `Session), `Rigid)
     | st -> super#session_type st
 
   method row_var = function
@@ -175,18 +175,16 @@ struct
     | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Select r -> `Select (row var_env alias_env r)
     | `Choice r -> `Choice (row var_env alias_env r)
-    (* | `Select (fs, r) -> *)
-    (*   `Select (List.fold_left *)
-    (*              (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env) *)
-    (*              StringMap.empty fs) *)
-    (* | `Choice (fs, r) -> *)
-    (*   `Choice (List.fold_left *)
-    (*              (fun env (name, (_, Session t)) -> StringMap.add name (session_type var_env alias_env t) env) *)
-    (*              StringMap.empty fs) *)
-    | `TypeVar s -> (try `MetaSessionVar (lookup_type s)
-                     with NotFound _ -> raise (UnexpectedFreeVar s))
-    | `RigidTypeVar s -> (try `MetaSessionVar (lookup_type s)
-                          with NotFound _ -> raise (UnexpectedFreeVar s))
+    | `TypeVar (s, _) ->
+      begin
+        try `MetaSessionVar (lookup_type s)
+        with NotFound _ -> raise (UnexpectedFreeVar s)
+      end
+    | `RigidTypeVar (s, _) ->
+      begin
+        try `MetaSessionVar (lookup_type s)
+        with NotFound _ -> raise (UnexpectedFreeVar s)
+      end
     | `Dual s -> `Dual (session_type var_env alias_env s)
     | `End -> `End
 
