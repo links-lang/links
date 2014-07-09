@@ -69,6 +69,15 @@ let attach_kind pos (t, k) =
     end,
     `Flexible)
 
+let attach_subkind_helper update pos subkind =
+  match subkind with
+  | `Any        -> update (Some `Any) (Some `Any)
+  | `Unl        -> update (Some `Unl) None
+  | `Base       -> update None (Some `Base)
+  | `UnlBase    -> update (Some `Unl) (Some `Base)
+  | `Session    -> update (Some `Any) (Some `Session)
+  | `UnlSession -> update (Some `Unl) (Some `Session)
+
 let attach_subkind pos (t, subkind) =
   let update lin_opt rest_opt =
     match t with
@@ -76,13 +85,20 @@ let attach_subkind pos (t, subkind) =
        TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
     | RigidTypeVar (x, (linearity, restriction)) ->
        RigidTypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
-    | _ -> assert false in
-  match subkind with
-  | `Any     -> update (Some `Any) (Some `Any)
-  | `Unl     -> update (Some `Unl) None
-  | `Base    -> update None (Some `Base)
-  | `UnlBase -> update (Some `Unl) (Some `Base)
-  | `Session -> update (Some `Any) (Some `Session)
+    | _ -> assert false
+  in
+    attach_subkind_helper update pos subkind
+    
+let attach_session_subkind pos (t, subkind) =
+  let update lin_opt rest_opt =
+    match t with
+    | `TypeVar (x, (linearity, restriction)) ->
+       `TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | `RigidTypeVar (x, (linearity, restriction)) ->
+       `RigidTypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | _ -> assert false
+  in
+    attach_subkind_helper update pos subkind
 
 let attach_row_subkind pos (r, subkind) =
   let update lin_opt rest_opt =
@@ -91,13 +107,9 @@ let attach_row_subkind pos (r, subkind) =
        `Open (x, (from_option linearity lin_opt, from_option restriction rest_opt))
     | `OpenRigid (x, (linearity, restriction)) ->
        `OpenRigid (x, (from_option linearity lin_opt, from_option restriction rest_opt))
-    | _ -> assert false in
-  match subkind with
-  | `Any     -> update (Some `Any) (Some `Any)
-  | `Unl     -> update (Some `Unl) None
-  | `Base    -> update None (Some `Base)
-  | `UnlBase -> update (Some `Unl) (Some `Base)
-  | `Session -> update (Some `Any) (Some `Session)
+    | _ -> assert false
+  in
+    attach_subkind_helper update pos subkind
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -160,7 +172,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION UNL UNLBASE
+%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION UNL UNLBASE UNLSESSION
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -310,6 +322,7 @@ subkind:
 | SESSION                                                      { `Session }
 | UNL                                                          { `Unl }
 | UNLBASE                                                      { `UnlBase }
+| UNLSESSION                                                   { `UnlSession }
 
 typearg:
 | VARIABLE                                                     { (($1, `Type (`Unl, `Any), `Flexible), None) }
@@ -897,11 +910,15 @@ session_type_top:
 session_type:
 | session_type_top                                             { $1 }
 | session_type_var                                             { $1 }
+| kinded_session_type_var                                      { $1 }
 
 session_type_var:
-| VARIABLE                                                     { `RigidTypeVar $1 }
-| PERCENTVAR                                                   { `TypeVar $1 }
+| VARIABLE                                                     { `RigidTypeVar ($1, (`Any, `Any)) }
+| PERCENTVAR                                                   { `TypeVar ($1, (`Any, `Any)) }
 /* TODO: support underscore and percent; rationalise parsing of type variables */
+
+kinded_session_type_var:
+| session_type_var subkind                                     { attach_session_subkind (pos()) ($1, $2) }
 
 type_var:
 | VARIABLE                                                     { RigidTypeVar ($1, (`Unl, `Any)) }

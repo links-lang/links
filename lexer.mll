@@ -221,11 +221,12 @@ let kinds = [
 ]
 
 let subkinds = [
- "Any"     , ANY;
- "Base"    , BASE;
- "Session" , SESSION;
- "Unl"     , UNL;
- "UnlBase" , UNLBASE;
+ "Any"        , ANY;
+ "Base"       , BASE;
+ "Session"    , SESSION;
+ "Unl"        , UNL;
+ "UnlBase"    , UNLBASE;
+ "UnlSession" , UNLSESSION;
 ]
 
 exception LexicalError of (string * Lexing.position)
