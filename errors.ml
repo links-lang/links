@@ -13,15 +13,14 @@ exception UndefinedVariable of string
 exception Type_error of (SourceCode.pos * string)
 exception MultiplyDefinedToplevelNames of ((SourceCode.pos list) stringmap)
 exception RichSyntaxError of synerrspec
-
+exception SugarError of (SourceCode.pos * string)
 exception Runtime_error of string
-
 
 let show_pos : SourceCode.pos -> string = 
   fun ((pos : Lexing.position), _, _) ->
     Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
-               
-let prefix_lines prefix s =  (* TBD: prepend `prefix' to each line of s *)
+
+let prefix_lines prefix s =
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
 
 let indent n str = String.make n ' ' ^ str
@@ -38,12 +37,19 @@ let get_mailbox_msg add_code_tags =
       | Some mbtype ->
 	  " (mailbox type "^ string_of_datatype mbtype ^ ") "
 
+
+
 let format_exception = function
   | RichSyntaxError s ->
       ("*** Parse error: " ^ s.filename ^ ":"
        ^ s.linespec ^ "\n"
-       ^ s.message ^ "\n" ^ prefix_lines "   " s.linetext ^ "\n"
+       ^ s.message ^ "\n" ^ prefix_lines "  " s.linetext ^ "\n"
        ^ "   " ^ s.marker)
+  | SugarError (pos, s) ->
+      let (pos, _, expr) = SourceCode.resolve_pos pos in
+        ("*** Syntactic sugar error: " ^ pos.pos_fname ^ ":"
+         ^ string_of_int pos.pos_lnum ^ "\n"
+         ^ prefix_lines "   " (s ^ "\nIn expression: " ^ expr ^ "\n"))
   | Getopt.Error s -> s
   | Type_error (pos, s) ->
       let (pos, _, expr) = SourceCode.resolve_pos pos in
@@ -77,14 +83,21 @@ let format_exception = function
 
 let format_exception_html = function
   | RichSyntaxError s ->
-      ("<h1>Links Syntax Error</h1>\n<p>Syntax error in <code>" ^ s.filename ^ "</code> line "
+      ("<h1>Links syntax error</h1>\n<p>Syntax error in <code>" ^ s.filename ^ "</code> line "
        ^ s.linespec ^ ":</p><p>"
        ^ s.message ^ "</p><pre>" ^ xml_escape s.linetext ^ "\n"
        ^ s.marker ^ "</pre>")
+  | SugarError (pos, s) -> 
+      let (pos,_,expr) = SourceCode.resolve_pos pos in
+        ("<h1>Links syntactic sugar error</h1>\n<p>Syntactic sugar error at <code>"
+         ^ pos.pos_fname ^"</code>:"
+         ^ string_of_int pos.pos_lnum ^ ":</p> <p>"
+         ^ s ^ "</p><p>In expression:</p>\n<pre>"
+         ^ xml_escape expr ^ "</pre>\n")
   | Getopt.Error s -> s
   | Type_error (pos, s) -> 
       let (pos,_,expr) = SourceCode.resolve_pos pos in
-        Printf.sprintf ("<h1>Links Type Error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
+        Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
   | MultiplyDefinedToplevelNames duplicates -> 
       let show_pos : SourceCode.pos -> string = fun ((pos : Lexing.position), _, _) ->

@@ -127,7 +127,7 @@ let desugar_form : phrasenode -> phrasenode = function
       let lnames = 
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames 
         with StringMap.Not_disjoint (item, _) ->
-          raise (ConcreteSyntaxError ("Duplicate l:name binding: " ^ item, dummy_pos)) in
+          raise (Errors.SugarError (dummy_pos, "Duplicate l:name binding: " ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
         `Xml (form, attrs, attrexp, List.combine children children_positions)
   | e -> e
@@ -137,7 +137,7 @@ let replace_lattrs : phrasenode -> phrasenode = desugar_form ->- desugar_laction
      if (has_lattrs xml) then
        match xml with
          | `Xml (_tag, _attributes, _, _) ->
-             raise (ConcreteSyntaxError ("Illegal l: attribute in XML node", dummy_pos))
+             raise (Errors.SugarError (dummy_pos, "Illegal l: attribute in XML node"))
          | _ -> assert false
      else
        xml)

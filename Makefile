@@ -66,23 +66,23 @@ TRASH=*.tmp *.output *.cache
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml
 
-SOURCES = $(OPC)                		\
-          notfound.ml				\
-          utility.ml            		\
+SOURCES = $(OPC)                                \
+          notfound.ml                           \
+          utility.ml                            \
           env.mli env.ml                        \
-          settings.mli settings.ml 		\
+          settings.mli settings.ml              \
           basicsettings.ml                      \
-          debug.mli debug.ml    		\
-          performance.mli performance.ml	\
+          debug.mli debug.ml                    \
+          performance.mli performance.ml        \
           graph.ml                              \
-          types.mli types.ml 	                \
+          types.mli types.ml                    \
           constant.ml                           \
           sourceCode.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
-          parser.mly            		\
-          lexer.mli lexer.mll         		\
-	  typeUtils.mli typeUtils.ml            \
+          parser.mly                            \
+          lexer.mli lexer.mll                   \
+          typeUtils.mli typeUtils.ml            \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
@@ -90,46 +90,47 @@ SOURCES = $(OPC)                		\
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
-          parse.mli parse.ml    		\
-          sugarTraversals.mli  sugarTraversals.ml	\
+          parse.mli parse.ml                    \
+          sugarTraversals.mli  sugarTraversals.ml       \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
-	  resolvePositions.mli resolvePositions.ml	 \
-          refineBindings.mli refineBindings.ml		 \
-          desugarLAttributes.mli desugarLAttributes.ml	 \
+          resolvePositions.mli resolvePositions.ml       \
+          refineBindings.mli refineBindings.ml           \
+          desugarLAttributes.mli desugarLAttributes.ml   \
           transformSugar.mli transformSugar.ml           \
           fixTypeAbstractions.mli fixTypeAbstractions.ml \
-          desugarPages.mli desugarPages.ml		 \
+          desugarPages.mli desugarPages.ml               \
           desugarFormlets.mli desugarFormlets.ml         \
-          desugarRegexes.mli desugarRegexes.ml		 \
+          desugarRegexes.mli desugarRegexes.ml           \
           desugarFors.mli desugarFors.ml                 \
           desugarDbs.mli desugarDbs.ml                   \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-          typeSugar.mli typeSugar.ml			 \
+          typeSugar.mli typeSugar.ml                     \
+          checkXmlQuasiquotes.ml                \
           frontend.ml                           \
-	  dumpTypes.ml                          \
+          dumpTypes.ml                          \
           compilePatterns.ml                    \
           jsonparse.mly                         \
-          jsonlex.mll           		\
+          jsonlex.mll                           \
           js.ml                                 \
           json.ml                               \
-          database.mli database.ml 		\
+          database.mli database.ml              \
           linksregex.ml                         \
           proc.mli proc.ml                      \
           lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
-          $(DB_CODE)            		\
+          $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
           query.ml                              \
           evalir.ml                             \
           webif.mli webif.ml                    \
-          links.ml              		\
+          links.ml                              \
 
 # TODO: get these working again
 #
