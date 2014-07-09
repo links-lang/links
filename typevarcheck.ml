@@ -71,12 +71,12 @@ and is_guarded_session : TypeVarSet.t -> int -> session_type -> bool =
   fun bound_vars var s ->
     let isg = is_guarded bound_vars var in
     let isgs = is_guarded_session bound_vars var in
+    let isgv row = is_guarded_row false bound_vars var row in
       match s with
       | `Input (t, s)
       | `Output (t, s) -> isg t && isgs s
-      (* TODO: implement check for select and choice *)
-      | `Select fields -> assert false
-      | `Choice fields -> assert false
+      | `Select row
+      | `Choice row -> isgv row
       | `MetaSessionVar point -> isg (`MetaTypeVar point)
       | `Dual s -> isgs s
       | `End -> true
