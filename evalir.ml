@@ -164,13 +164,14 @@ module Eval = struct
         in
           Value.box_list [Value.box_xml (Value.Node (tag, children))]
     | `ApplyPure (f, args) ->
+      let previousAtomic = !atomic in
         begin
           try (
             atomic := true;
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
-            | TopLevel (_, v) -> atomic := false; v
+            | TopLevel (_, v) -> atomic := previousAtomic; v
         end
     | `Coerce (v, t) -> value env v
 
