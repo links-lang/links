@@ -63,10 +63,10 @@ type venv = string VEnv.t
   LINKS.XML(tag, attrs, children)
     create a DOM node with name `tag'
                        and attributes `attrs' (a dictionary)
-                       and children `children' (a sequence of DOM nodes and strings)    
+                       and children `children' (a sequence of DOM nodes and strings)
   LINKS.union(r, s)
     return the union of the records r and s
-    precondition: r and s have disjoint labels 
+    precondition: r and s have disjoint labels
   LINKS.project(record, label)
     project a field of a record
   LINKS.erase(record, label)
@@ -85,9 +85,9 @@ sig
 end =
 struct
   let rec show code =
-    let show_func name (Fn (vars, body)) = 
-      "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }" 
-    and arglist args = String.concat ", " (List.map show args) 
+    let show_func name (Fn (vars, body)) =
+      "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }"
+    and arglist args = String.concat ", " (List.map show args)
     and paren = function
       | Var _
       | Lit _
@@ -148,7 +148,7 @@ struct
 
   (** Pretty-print a Code value as a JavaScript string. *)
   let rec show c : PP.doc =
-    let show_func name (Fn (vars, body)) = 
+    let show_func name (Fn (vars, body)) =
       PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
                 ^+^  (braces
                         (break ^^ group(nest 2 (show body)) ^^ break))) in
@@ -194,13 +194,13 @@ struct
               break ^^ show rest
 
         | Fn _ as f -> show_func "" f
-        | Call (Var "LINKS.project", [record; label]) -> 
+        | Call (Var "LINKS.project", [record; label]) ->
             maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) -> 
+        | Call (Var "hd", [list;kappa]) ->
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
-        | Call (Var "tl", [list;kappa]) -> 
+        | Call (Var "tl", [list;kappa]) ->
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
-        | Call (fn, args) -> maybe_parenise fn ^^ 
+        | Call (fn, args) -> maybe_parenise fn ^^
             (PP.arglist (List.map show args))
         | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
@@ -214,11 +214,11 @@ struct
         | Case (v, cases, default) ->
             PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
                         (braces ((show_cases v cases) ^+^ (show_default v default))))
-        | Dict (elems) -> 
+        | Dict (elems) ->
             PP.braces (hsep (punctuate ","
-                               (List.map (fun (name, value) -> 
-                                       group (PP.text "'" ^^ PP.text name ^^ 
-                                                PP.text "':" ^^ show value)) 
+                               (List.map (fun (name, value) ->
+                                       group (PP.text "'" ^^ PP.text name ^^
+                                                PP.text "':" ^^ show value))
                                   elems)))
         | Lst elems -> brackets(hsep(punctuate "," (List.map show elems)))
         | Bind (name, value, body) ->
@@ -337,7 +337,7 @@ struct
         ">",  ">"  ;
         "<=", "<=" ;
         ">=", ">=" ]
-      
+
   (* these names should be used for non-primitive types *)
   let funs =
     StringMap.from_alist
@@ -364,7 +364,7 @@ struct
              necessitate making the JS compiler type-aware.
           *)
       | "<" | ">" | "<=" | ">=" ->
-          Binop(l, op, r)         
+          Binop(l, op, r)
       | _ ->  Call(Var (js_name op), [l; r])
 end
 
@@ -398,9 +398,9 @@ struct
   class visitor (closures, nenv, venv, tenv) =
   object (o)
     inherit Ir.Transform.visitor(tenv) as super
-      
+
     val fun_env = VEnv.empty
-      
+
     val nenv = nenv
     val venv = venv
 
@@ -452,7 +452,7 @@ struct
         b, o#bind_name b
 
     method tail_computation =
-      fun e ->        
+      fun e ->
         match e with
           | `Apply (f, [cont]) ->
               let f = strip_poly f in
@@ -464,21 +464,21 @@ struct
                           match strip_poly cont with
                             | `Variable f -> f
                             | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
-                          
+
                         (* hereafter [cont] is a variable, [`Variable f] *)
-                          
+
                         let e, t, o = super#tail_computation e in
                         let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
                         let concat = `Variable (Env.String.lookup nenv "Concat") in
-                          
-                        let lam = 
+
+                        let lam =
                           let _tyvars, xsb, body = VEnv.lookup fun_env f in
                             (List.map Var.var_of_binder xsb, body) in
                         let fv = IntMap.find f closures in
-                          
+
                         let func = Value.marshal_value
                           (`RecFunction([f, lam],
-                                        Value.empty_env closures, 
+                                        Value.empty_env closures,
                                         f, `Local)) in
                         let fields =
                           IntSet.fold
@@ -509,7 +509,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "grab"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
@@ -519,12 +519,12 @@ let bind_continuation kappa body =
   match kappa with
     | Var _ -> body kappa
     | _ ->
-        (* It is important to generate a unique name for continuation 
+        (* It is important to generate a unique name for continuation
            bindings because in the JavaScript code:
-           
+
            var f = e;
            var f = function (args) {C[f]};
-           
+
            the inner f is bound to function (args) {C[f]} and not e as we
            might expect in a saner language. (In other words var f =
            function(args) {body} is just syntactic sugar for function
@@ -537,11 +537,11 @@ let apply_yielding (f, args) =
   Call(Var "_yield", f :: args)
 
 let callk_yielding kappa arg =
-  Call(Var "_yieldCont", [kappa; arg]) 
+  Call(Var "_yieldCont", [kappa; arg])
 
 (** [generate]
     Generates JavaScript code for a Links expression
-    
+
     With CPS transform, result of generate is always of type : (a -> w) -> b
 *)
 let rec generate_value env : Ir.value -> code =
@@ -627,16 +627,16 @@ let rec generate_value env : Ir.value -> code =
                           | _ ->
                               if Lib.is_primitive f_name
                                 && not (List.mem f_name cps_prims)
-                                && Lib.primitive_location f_name <> `Server 
+                                && Lib.primitive_location f_name <> `Server
                               then
                                 Call (Var ("_" ^ f_name), List.map gv vs)
                               else
                                 Call (gv (`Variable f), List.map gv vs)
                       end
                 | _ ->
-                    Call (gv f, List.map gv vs)                      
+                    Call (gv f, List.map gv vs)
             end
-      | `Coerce (v, _) ->     
+      | `Coerce (v, _) ->
           gv v
 
 and generate_xml env tag attrs children =
@@ -652,12 +652,12 @@ let generate_remote_call f_name xs_names env =
         env;
         Dict (
           List.map2
-            (fun n v -> string_of_int n, Var v) 
+            (fun n v -> string_of_int n, Var v)
             (Utility.fromTo 1 (1 + List.length xs_names))
             xs_names
         )])
 
-(** The [lambdalift] operations build up a [code->code] function (effectively 
+(** The [lambdalift] operations build up a [code->code] function (effectively
     a code context consisting of definitions) by function composition. *)
 let rec lambdalift_function
     ((fb, (_, xsb, body), location)
@@ -666,7 +666,7 @@ let rec lambdalift_function
     let f_var, f_name = fb in
     let bs = List.map name_binder xsb in
     let xs, xs_names = List.split bs in
-    let fbody = 
+    let fbody =
       match location with
         | `Client | `Native -> Ret(Var (snd(name_binder fb)))
             (* Note: this is wrong for nested functions--those with
@@ -693,20 +693,20 @@ let rec lambdalift_function
 and lambdalift_binding =
   function
   | `Fun def -> lambdalift_function def
-  | `Rec defs -> List.fold_right (-<-) 
-      (List.map (lambdalift_function) defs) 
+  | `Rec defs -> List.fold_right (-<-)
+      (List.map (lambdalift_function) defs)
         identity
   | `Let (_x, (_tbs, tc)) ->
       lambdalift_tailcomp tc
   | `Alien _ -> identity
   | _ -> failwith "Not implemented"
-and lambdalift_tailcomp : Ir.tail_computation -> (code->code) = 
+and lambdalift_tailcomp : Ir.tail_computation -> (code->code) =
   function
   | `Apply _
   | `Special _
   | `Return _ -> identity
-  | `Case (_, branches, default) -> 
-      ((StringMap.fold (fun _lbl (_b, comp) acc -> 
+  | `Case (_, branches, default) ->
+      ((StringMap.fold (fun _lbl (_b, comp) acc ->
                           acc -<- lambdalift_computation comp)
           branches) identity
        -<-
@@ -715,22 +715,22 @@ and lambdalift_tailcomp : Ir.tail_computation -> (code->code) =
            | Some (_b, comp) ->
                lambdalift_computation comp
          end)
-  | `If (_, t, f) -> 
+  | `If (_, t, f) ->
       lambdalift_computation t -<-
-      lambdalift_computation f 
+      lambdalift_computation f
 and lambdalift_computation (bindings, tailcomp : Ir.computation)
-    : code -> code = 
-  (List.fold_right (-<-) 
+    : code -> code =
+  (List.fold_right (-<-)
      (List.map (lambdalift_binding) bindings) identity
      : code -> code)
   -<- (lambdalift_tailcomp tailcomp : code->code)
-          
+
 let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
   fun tc kappa ->
   let gv v = generate_value env v in
   let gc c kappa = snd (generate_computation env c kappa) in
     match tc with
-      | `Return v ->           
+      | `Return v ->
           callk_yielding kappa (gv v)
       | `Apply (f, vs) ->
           let f = strip_poly f in
@@ -751,7 +751,7 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                           | _ ->
                               if Lib.is_primitive f_name
                                 && not (List.mem f_name cps_prims)
-                                && Lib.primitive_location f_name <> `Server 
+                                && Lib.primitive_location f_name <> `Server
                               then
                                 Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
                               else
@@ -764,7 +764,7 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
           generate_special env special kappa
       | `Case (v, cases, default) ->
           let v = gv v in
-          let k, x = 
+          let k, x =
             match v with
               | Var x -> (fun e -> e), x
               | _ ->
@@ -809,16 +809,27 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `CallCC v ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
-      | `Choice _
-      | `Select _ ->
+      | `Select (l, c) ->
+         Call (kappa, [Call (Var "_give", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
 	(* TODO: JS generation for session types *)
-	failwith "Not implemented JS generation for Choice and Select yet"
+      | `Choice (c, bs) ->
+         let result = gensym () in
+         let received = gensym () in
+         bind_continuation kappa
+            (fun kappa ->
+             let scrutinee = Call (Var "LINKS.project", [Var result; strlit "1"]) in
+             let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
+             let generate_branch (cb, b) =
+               let (c, cname) = name_binder cb in
+               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
+             let branches = StringMap.map generate_branch bs in
+             Call (Var "grab", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
-  fun (bs, tc) kappa -> 
+  fun (bs, tc) kappa ->
   let rec gbs env c =
     function
-      | b :: bs -> 
+      | b :: bs ->
           let env, c' = generate_binding env b in
             gbs env (c -<- c') bs
       | [] ->
@@ -828,7 +839,7 @@ and generate_computation env : Ir.computation -> code -> (venv * code) =
 
 and generate_function env fs :
     (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location) ->
-    (string * string list * code * Ir.location) = 
+    (string * string list * code * Ir.location) =
   fun (fb, (_, xsb, body), location) ->
   let (f, f_name) = name_binder fb in
   let bs = List.map name_binder xsb in
@@ -846,7 +857,7 @@ and generate_function env fs :
      body,
      location)
 
-and generate_binding env : Ir.binding -> (venv * (code -> code)) = 
+and generate_binding env : Ir.binding -> (venv * (code -> code)) =
   function
     | `Let (b, (_, `Return v)) ->
         let (x, x_name) = name_binder b in
@@ -863,7 +874,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
         let (f_name, args, _, _) as def_header = generate_function env [] def in
-          (env', fun code -> 
+          (env', fun code ->
              LetFun (def_header, code))
     | `Rec defs ->
         let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
@@ -874,7 +885,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
     | `Alien _ -> env, (fun code -> code)
 
 and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
-  function 
+  function
     | `Let (b, (_, `Return v)) as binding ->
         generate_binding env binding
     | `Let (b, (_, tc)) ->
@@ -927,7 +938,7 @@ and generate_program env : Ir.program -> (venv * code) = fun comp ->
   let (venv, code) = generate_computation env comp (Var "_start") in
     (venv, lambdalift_computation comp code)
 
-let script_tag body = 
+let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
 let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
@@ -971,7 +982,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   _startTimer();" ^ body ^ ";
   </script>")
 
-let wrap_with_server_stubs (code : code) : code = 
+let wrap_with_server_stubs (code : code) : code =
   let server_library_funcs =
     List.rev
       (Env.Int.fold
@@ -988,12 +999,12 @@ let wrap_with_server_stubs (code : code) : code =
 (*          Lib.primitive_location name = `Server) *)
 (*       (StringMap.to_alist !Lib.value_env)) in *)
 
-  let rec some_vars = function 
-      0 -> []      
+  let rec some_vars = function
+      0 -> []
     | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
-    
+
   let prim_server_calls =
-    concat_map (fun (name, _) -> 
+    concat_map (fun (name, _) ->
                   match Lib.primitive_arity name with
                         None -> []
                     | Some arity ->
@@ -1001,7 +1012,7 @@ let wrap_with_server_stubs (code : code) : code =
                           [(name, args, generate_remote_call name args (Dict[]))])
       server_library_funcs
   in
-    List.fold_right 
+    List.fold_right
       (fun (name, args, body) code ->
          LetFun
            ((name,
@@ -1016,12 +1027,12 @@ let initialise_envs (nenv, tyenv) =
   let dt = DesugarDatatypes.read ~aliases:tyenv.Types.tycon_env in
 
   (* TODO:
-     
+
      - add stringifyB64 to lib.ml as a built-in function?
      - get rid of ConcatMap here?
   *)
   let tyenv =
-    {Types.var_env = 
+    {Types.var_env =
         Env.String.bind
           (Env.String.bind tyenv.Types.var_env
              ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
@@ -1043,19 +1054,19 @@ let initialise_envs (nenv, tyenv) =
     (nenv, venv, tenv)
 
 let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
-  let printed_code = Loader.wpcache "irtojs" (fun () -> 
+  let printed_code = Loader.wpcache "irtojs" (fun () ->
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
     let program = FixPickles.program (closures, nenv, venv, tenv) program in
     let _, code = generate_program venv program in
     let code = wrap_with_server_stubs code in
-    show code) 
+    show code)
   in
   (make_boiler_page
      ~cgi_env:cgi_env
      ~body:printed_code
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
-    
+
 let generate_program_defs (closures, nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in

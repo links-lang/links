@@ -1,0 +1,38 @@
+fun main() client {
+  fun giver0(x,y,a) {
+    var (z,_) = grab(give(y,give(x,request(a))));
+    z
+  }
+
+  fun giver(x,y,a) {
+    (grab(give(y,give(x,request(a))))).1
+  }
+
+  fun grabber(a) {
+    var s = accept(a);
+    var (x,s) = grab(s);
+    var (y,s) = grab(s);
+    var _ = give(x+y,s);
+    ()
+  }
+
+  var a = new();
+
+  var _ = spawn { grabber(a) };
+
+  # Strangely (1) corrupts the stack, but (2) and (3) are fine!
+  #
+  # Perhaps there's a strange bug in pattern matching
+  # compilation?
+  #
+  # var result = giver0(6,7,request(a));                  # (1)
+  var result = giver(6,7,a);                              # (2)
+  # var (result, _) = grab(give(7, give(6, request(a)))); # (3)
+
+  result
+}
+
+page
+  <html><body>
+    Hey, hi.  Also {stringToXml(intToString(main()))}.
+  </body></html>
