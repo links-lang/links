@@ -6,19 +6,16 @@
 let check mode pos e =
   let checker =
     object (o)
-      inherit SugarTraversals.predicate as super
+      inherit SugarTraversals.fold as super
 
       val error = None
 
       method get_error = error
 
-      method satisfied =
-        match error with
-        | None   -> true
-        | Some _ -> false
-      
       method phrase = fun ((e, pos) as phrase) ->
         match e with
+        | `Xml (_, _, _, children) ->
+          o#list (fun o -> o#phrase) children
         | `FormBinding _ ->
           if mode <> `Formlet then
             {< error = Some (`FormletBinding, pos) >}
@@ -34,8 +31,6 @@ let check mode pos e =
             {< error = Some (`PagePlacement, pos) >}
           else
             super#phrase phrase
-        | `Xml _ ->
-          super#phrase phrase
         | e -> o
     end
   in
@@ -58,11 +53,20 @@ let check mode pos e =
       let (_, _, expr) = SourceCode.resolve_pos pos' in
         raise (Errors.SugarError (pos, "Page placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
 
+(* traverse a whole tree searching for and then checking quasiquotes *)
 let checker =
-object (o : 'self)
+object (o)
   inherit SugarTraversals.fold as super
 
-  val mode = `Exp
+  (* In expression mode we're looking for a quasiquote.
+     In quasiquote mode we're traversing a quasiquote. *)
+
+  (* initially we're in expression mode *)
+  val mode : [ `Exp | `Quasi ] = `Exp
+
+  method private set_mode new_mode = {< mode = new_mode >}
+  method private phrase_with new_mode phrase =
+    ((o#set_mode new_mode)#phrase phrase)#set_mode mode
 
   method phrase = fun ((e, pos) as phrase) ->
     match e with
@@ -70,18 +74,18 @@ object (o : 'self)
       super#phrase phrase
     | `Xml _ when mode = `Exp ->
       check `Xml pos e;
-      {< mode = `Quasi >}#phrase phrase
-    | `Formlet ((body, _) as body', yields) when mode = `Exp->
+      o#phrase_with `Quasi phrase
+    | `Formlet ((body, _) as body', yields) when mode = `Exp ->
       check `Formlet pos body;
-      let _ = {< mode = `Quasi >}#phrase body' in
-        super#phrase yields
+      (o#phrase_with `Quasi body')#phrase yields
     | `Page ((body, _) as body') when mode = `Exp ->
       check `Page pos body;
-      {< mode = `Quasi >}#phrase body'
+      o#phrase_with `Quasi body'
     | (`Formlet _ | `Page _) when mode = `Quasi ->
+      (* The parser should prevent this from ever happening *)
       raise (Errors.SugarError (pos, "Malformed quasiquote (internal error)"))
     | _ when mode = `Quasi ->
-      {< mode = `Exp >}#phrase phrase
+      o#phrase_with `Exp phrase
     | _ when mode = `Exp ->
       super#phrase phrase
 end
