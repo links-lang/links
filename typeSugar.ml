@@ -2620,10 +2620,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in
-              List.rev defs, outer_env
+              List.rev defs, outer_env in
+
+          let defined = List.map (fun ((name, _, _), _, _, _, _, _) -> name) defs
 
           in
-            `Funs defs, {empty_context with var_env = outer_env}, merge_usages used
+            `Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
       | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
           (`Foreign ((name, Some datatype, pos), language, dt),
