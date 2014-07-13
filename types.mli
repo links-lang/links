@@ -64,20 +64,19 @@ type typ =
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var 
     | `ForAll of (quantifier list ref * typ)]
-and presence_flag  = [ `Present | `Absent | `Var of meta_presence_var ]
-and field_spec = presence_flag * typ
+and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var
 and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
-and meta_presence_var = (presence_flag meta_presence_var_basis) point
+and meta_presence_var = (field_spec meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of (int * subkind) * meta_type_var
     | `RowVar of (int * subkind) * meta_row_var
     | `PresenceVar of int * meta_presence_var ]
 and type_arg = 
-    [ `Type of typ | `Row of row | `Presence of presence_flag ]
+    [ `Type of typ | `Row of row | `Presence of field_spec ]
       deriving (Show)
 
 type datatype = typ
@@ -110,7 +109,7 @@ type environment        = datatype Env.String.t
     deriving (Show)
 
 val concrete_type : datatype -> datatype
-val concrete_presence_flag : presence_flag -> presence_flag
+val concrete_field_spec : field_spec -> field_spec
 
 val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
@@ -172,8 +171,8 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_presence_variable : unit -> presence_flag
-val fresh_rigid_presence_variable : unit -> presence_flag
+val fresh_presence_variable : unit -> field_spec
+val fresh_rigid_presence_variable : unit -> field_spec
 
 (** fresh quantifiers *)
 val fresh_type_quantifier : subkind -> quantifier * datatype
@@ -182,8 +181,8 @@ val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
 val fresh_row_quantifier : subkind -> quantifier * row
 val fresh_flexible_row_quantifier : subkind -> quantifier * row
 
-val fresh_presence_quantifier : unit -> quantifier * presence_flag
-val fresh_flexible_presence_quantifier : unit -> quantifier * presence_flag
+val fresh_presence_quantifier : unit -> quantifier * field_spec
+val fresh_flexible_presence_quantifier : unit -> quantifier * field_spec
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -268,9 +267,9 @@ type inference_type_map =
 
 val extend_typing_environment : typing_environment -> typing_environment -> typing_environment
 
-val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
-val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
-val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * presence_flag Utility.IntMap.t
+val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
+val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
+val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 
 (** mailboxes *)
 val show_mailbox_annotations : bool Settings.setting
@@ -279,7 +278,7 @@ val show_mailbox_annotations : bool Settings.setting
 val string_of_datatype : datatype -> string
 (*val string_of_datatype_raw : datatype -> string*)
 val string_of_row : row -> string
-val string_of_presence : presence_flag -> string
+val string_of_presence : field_spec -> string
 val string_of_type_arg : type_arg -> string
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string

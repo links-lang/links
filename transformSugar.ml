@@ -12,7 +12,7 @@ let type_section env =
         let rhob, (fields, rho) = Types.fresh_row_quantifier `Any in
         let eb, e = Types.fresh_row_quantifier `Any in
 
-        let r = `Record (StringMap.add label (`Present, a) fields, rho) in
+        let r = `Record (StringMap.add label (`Present a) fields, rho) in
           `ForAll (Types.box_quantifiers [ab; rhob; eb],
                    `Function (Types.make_tuple_type [r], e, a))
     | `Name var -> TyEnv.lookup env var

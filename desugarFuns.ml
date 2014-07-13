@@ -91,7 +91,7 @@ object (o : 'self_type)
         let rhob, (fields, rho) = Types.fresh_row_quantifier `Any in
         let effb, eff = Types.fresh_row_quantifier `Any in
 
-        let r = `Record (StringMap.add name (`Present, a) fields, rho) in
+        let r = `Record (StringMap.add name (`Present a) fields, rho) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in

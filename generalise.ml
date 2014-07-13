@@ -44,7 +44,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
               from_gens @ effect_gens @ to_gens
         | `Record row
         | `Variant row -> get_row_type_args kind bound_vars row 
-        | `Table (r, w, n) -> gt r @ gt w @ gt n
+        | `Table (f, d, r) -> gt f @ gt d @ gt r
         | `Alias ((_, ts), t) ->
             concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | `ForAll (qsref, t) -> 
@@ -97,14 +97,11 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
              get_row_type_args kind (TypeVarSet.add var bound_vars) rec_row)
       | `Body row -> get_row_type_args kind bound_vars row
 
-and get_field_spec_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
-  fun kind bound_vars (f, t) ->
-    get_presence_type_args kind bound_vars f @ get_type_args kind bound_vars t
-
-and get_presence_type_args : gen_kind -> TypeVarSet.t -> presence_flag -> type_arg list =
+and get_presence_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
   fun kind bound_vars ->
     function
-      | `Present | `Absent -> []
+      | `Present t -> get_type_args kind bound_vars t
+      | `Absent -> []
       | `Var point ->
           begin
             match Unionfind.find point with
@@ -121,7 +118,7 @@ and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
     let field_vars =
       StringMap.fold
         (fun _ field_spec vars ->
-           vars @ get_field_spec_type_args kind bound_vars field_spec
+           vars @ get_presence_type_args kind bound_vars field_spec
         ) field_env [] in
     let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
     in

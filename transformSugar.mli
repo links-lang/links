@@ -67,10 +67,10 @@ object ('self)
     (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     'self
 
-  method sugar_datatype  : datatype -> 'self * datatype
-  method datatype        : Types.datatype -> 'self * Types.datatype
-  method datatype'       : datatype' -> 'self * datatype'
-  method row             : Types.row -> 'self * Types.row
+  method sugar_datatype   : datatype -> 'self * datatype
+  method datatype         : Types.datatype -> 'self * Types.datatype
+  method datatype'        : datatype' -> 'self * datatype'
+  method row              : Types.row -> 'self * Types.row
 
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern

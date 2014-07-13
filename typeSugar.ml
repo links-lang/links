@@ -625,6 +625,7 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
 
     let iteration_table_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
       let rt = Types.make_table_type (rt, Types.fresh_type_variable `Any, Types.fresh_type_variable `Any) in
+      (* let rt = Types.make_table_type (rt, StringMap.empty) in *)
         with_but2things pos
           ("The binding must match the table in a table generator") ("pattern", l) ("expression", (rexpr, rt))
 
@@ -834,7 +835,7 @@ let type_section context (`Section s as s') =
           let a = Types.fresh_type_variable `Any in
           let rho = Types.fresh_row_variable `Any in
           let effects = Types.make_empty_open_row `Any in (* projection is pure! *)
-          let r = `Record (StringMap.add label (`Present, a) StringMap.empty, rho) in
+          let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho) in
             [`Type a; `Row (StringMap.empty, rho); `Row effects], `Function (Types.make_tuple_type [r], effects, a)
       | `Name var      -> Utils.instantiate env var
   in
@@ -905,11 +906,11 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             StringMap.fold
               (fun name ->
                  function
-                   | `Present, t ->
+                   | `Present t ->
                        let pats = List.map (unwrap_at ((int_of_string name) - 1)) pats in
-                         StringMap.add name (`Present, cpt pats t)
-                   | `Absent, _
-                   | `Var _, _ ->
+                         StringMap.add name (`Present (cpt pats t))
+                   | `Absent
+                   | `Var _ ->
                        assert false) fields StringMap.empty in
             `Record (fields, row_var)
       | `Record row ->
@@ -932,11 +933,11 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             StringMap.fold
               (fun name ->
                  function
-                   | `Present, t ->
+                   | `Present t ->
                        let pats = List.map (unwrap_at name) pats in
-                         StringMap.add name (`Present, cpt pats t)
-                   | `Absent, _
-                   | `Var _, _ ->
+                         StringMap.add name (`Present (cpt pats t))
+                   | `Absent
+                   | `Var _ ->
                         assert false) fields StringMap.empty in
             `Record (fields, row_var)
       | `Variant row ->
@@ -973,12 +974,12 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             StringMap.fold
               (fun name field_spec env ->
                  match field_spec with
-                   | `Present, t ->
+                   | `Present t ->
                        let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
-                         (StringMap.add name (`Present, t)) env
-                   | `Absent, _
-                   | `Var _, _ ->
+                         (StringMap.add name (`Present t)) env
+                   | `Absent
+                   | `Var _ ->
                        assert false) fields StringMap.empty
           in
             if are_open pats then
@@ -1144,11 +1145,11 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
             in                            
               `List (List.map erase ps'), env', ts
         | `Variant (name, None) -> 
-            let vtype () = `Variant (make_singleton_row (name, (`Present, Types.unit_type))) in
+            let vtype () = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
               `Variant (name, None), Env.empty, (vtype (), vtype ())
         | `Variant (name, Some p) -> 
             let p = tp p in
-            let vtype typ = `Variant (make_singleton_row (name, (`Present, typ p))) in
+            let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
               `Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
         | `Negative names ->
             let row_var = Types.fresh_row_variable `Any in
@@ -1157,12 +1158,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
               List.fold_right
                 (fun name (positive, negative) ->
                    let a = Types.fresh_type_variable `Any in
-                   let b =
-                     if Settings.get_value constrain_absence_types then a
-                     else Types.fresh_type_variable `Any
-                   in                         
-                     (StringMap.add name (`Present, a) positive,
-                      StringMap.add name (`Absent, b) negative))
+                     (StringMap.add name (`Present a) positive,
+                      StringMap.add name `Absent negative))
                 names (StringMap.empty, StringMap.empty) in
                 
             let outer_type = `Variant (positive, row_var) in
@@ -1181,8 +1178,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                       let row = 
                         List.fold_right
                           (fun (label, _) ->
-                             let field_type = Types.fresh_type_variable `Any in
-                               Types.row_with (label, (`Absent, field_type))) (* Types.for_all ([q], field_type)))) *)
+                           Types.row_with (label, `Absent))
                           ps (Types.make_empty_open_row `Any) in
                       let () = unify ~handle:Gripers.record_pattern (("", `Record row),
                                                                     (pos r, typ r))
@@ -1192,7 +1188,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                       make_closed_row ot, make_closed_row it, env r in
             let rtype typ initial =
               `Record (List.fold_right
-                         (fun (l, f) -> Types.row_with (l, (`Present, typ f)))
+                         (fun (l, f) -> Types.row_with (l, `Present (typ f)))
                          ps initial) in
             let penv = 
               List.fold_right (snd ->- env ->- (++)) ps Env.empty
@@ -1396,13 +1392,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                 (fun (label, e) (fields, field_env, absent_field_env) ->
                    let e = tc e in
                    let t = typ e in
-                   let t' =
-                     if Settings.get_value constrain_absence_types then t
-                     else Types.fresh_type_variable `Any
-                   in
                      ((label, e)::fields,
-                      StringMap.add label (`Present, t) field_env,
-                      StringMap.add label (`Absent, t') absent_field_env))
+                      StringMap.add label (`Present t) field_env,
+                      StringMap.add label `Absent absent_field_env))
                 fields ([], StringMap.empty, StringMap.empty) in
               begin match rest with
                 | None ->
@@ -1434,14 +1426,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                          i.e. all the labels belonging to the record r
                       *)
                     let field_env' =
-                      StringMap.fold (fun label t field_env' ->
-                                        match t with
-                                          | `Absent, t ->
+                      StringMap.fold (fun label f field_env' ->
+                                        match f with
+                                          | `Absent ->
                                               if StringMap.mem label field_env then
                                                 field_env'
                                               else
-                                                StringMap.add label (`Absent, t) field_env'
-                                          | `Present, _ ->
+                                                StringMap.add label `Absent field_env'
+                                          | `Present _ ->
                                               if StringMap.mem label field_env then
                                                 failwith ("Could not extend record "^ expr_string (fst r)^" (of type "^
                                                             Types.string_of_datatype rtype^") with the label "^
@@ -1449,8 +1441,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                                             " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed))^
                                                             ") because the labels overlap")
                                               else
-                                                StringMap.add label t field_env'
-                                          | `Var _, _ -> assert false) rfield_env field_env in
+                                                StringMap.add label f field_env'
+                                          | `Var _ -> assert false) rfield_env field_env in
                       `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var)
               end
         | `ListLit (es, _) ->
@@ -1509,14 +1501,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
         | `ConstructorLit (c, None, _) ->
             let type' = `Variant (Types.make_singleton_open_row 
-                                    (c, (`Present, Types.unit_type))
+                                    (c, `Present Types.unit_type)
                                     `Any) in
               `ConstructorLit (c, None, Some type'), type'
 
         | `ConstructorLit (c, Some v, _) ->
             let v = tc v in
             let type' = `Variant (Types.make_singleton_open_row
-                                    (c, (`Present, typ v))
+                                    (c, `Present (typ v))
                                     `Any) in
               `ConstructorLit (c, Some (erase v), Some type'), type'
 
@@ -1526,14 +1518,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             and args   = opt_map tc args
             and name   = tc name in
               `DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive `DB
-
         | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
-            let tname = tc tname 
-            and db = tc db in
-            let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
-            and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
-              `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase db), 
-            `Table (read_row, write_row, needed_row)
+           let tname = tc tname 
+           and db = tc db in
+           let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
+           and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type) in
+           `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase db), 
+           `Table (read_row, write_row, needed_row)
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -1555,7 +1546,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* delete is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.delete_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
@@ -1577,7 +1568,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                    if StringMap.mem name field_env then
                      Gripers.die pos "Duplicate labels in insert expression."
                    else
-                     StringMap.add name (`Present, Types.fresh_type_variable `Base) field_env)
+                     StringMap.add name (`Present (Types.fresh_type_variable `Base)) field_env)
                 labels StringMap.empty in
 
             (* check that the fields in the type of values match the declared labels *)
@@ -1588,7 +1579,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             let needed_env =
               StringMap.map
-                (fun (_f, t) -> Types.fresh_presence_variable (), t)
+                (fun _f -> Types.fresh_presence_variable ())
                 field_env in
 
             (* all fields being inserted must be present in the read row *)
@@ -1619,7 +1610,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                             unify
                               ~handle:Gripers.insert_id
                               (no_pos read,
-                               no_pos (`Record (StringMap.singleton id (`Present, Types.int_type), Types.fresh_row_variable `Base)));
+                               no_pos (`Record (StringMap.singleton id (`Present Types.int_type), Types.fresh_row_variable `Base)));
                             Types.int_type
                         | _ -> assert false
                     end in
@@ -1627,7 +1618,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* insert is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.insert_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
@@ -1662,12 +1653,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                      if StringMap.mem name field_env then
                        Gripers.die pos "Duplicate fields in update expression."
                      else
-                       (name, exp)::set, StringMap.add name (`Present, typ exp) field_env)
+                       (name, exp)::set, StringMap.add name (`Present (typ exp)) field_env)
                 set ([], StringMap.empty) in
 
             let needed_env =
               StringMap.map
-                (fun (_f, t) -> Types.fresh_presence_variable (), t)
+                (fun _f -> Types.fresh_presence_variable ())
                 field_env in
 
             (* all fields being updated must be present in the read row *)
@@ -1685,7 +1676,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             (* update is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.update_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
@@ -1700,7 +1691,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
@@ -1712,7 +1703,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.spawn_wait_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
@@ -1729,7 +1720,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                     let offset = tc offset in
                     let () = unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type) in
                     let outer_effects =
-                      Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                      Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
                     in
                       Some (erase limit, erase offset), outer_effects in
             let inner_effects = Types.make_empty_closed_row () in
@@ -1742,8 +1733,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable `Any in
             let effects =
-              Types.row_with ("wild", (`Present, Types.unit_type))
-                (Types.make_singleton_open_row ("hear", (`Present, mb_type)) `Any) in
+              Types.row_with ("wild", `Present Types.unit_type)
+                (Types.make_singleton_open_row ("hear", `Present mb_type) `Any) in
 
             let () = unify ~handle:Gripers.receive_mailbox
               (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
@@ -2025,7 +2016,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
             let f = Types.fresh_type_variable `Any in
             let t = Types.fresh_type_variable `Any in
 
-            let eff = Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any in
+            let eff = Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any in
               (*            let eff = Types.make_empty_open_row `Any in*)
 
             let cont_type = `Function (Types.make_tuple_type [f], eff, t) in
@@ -2035,7 +2026,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) `Any
               in
                 unify ~handle:Gripers.escape_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
@@ -2097,7 +2088,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
 
                         begin
                           match StringMap.lookup l field_env with
-                            | Some (presence, t) ->
+                            | Some (`Present t) ->
+                               (* TODO: probably more complicated than it needs to be now... *)
                                 (* the free type variables in the projected type *)
                                 let vars = Types.free_type_vars t in
 
@@ -2116,20 +2108,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                 (* really we just need to unify the presence variable
                                    with `Presence, but our griper interface doesn't currently
                                    support that *)
-                                let rt = `Record (StringMap.singleton l (presence, fieldtype), Types.closed_row_var) in
+                                let rt = `Record (StringMap.singleton l (`Present fieldtype), Types.closed_row_var) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
-                                     no_pos (`Record (Types.make_singleton_closed_row (l, (`Present, Types.fresh_type_variable `Any)))));
+                                     no_pos (`Record (Types.make_singleton_closed_row (l, `Present (Types.fresh_type_variable `Any)))));
 
                                   let rn, rpos = erase r in
                                   let e = tabstr (pqs, `Projection ((tappl (rn, tyargs), rpos), l)) in
                                     e, fieldtype
+                            | Some _ -> (* TODO: what happens here? *)assert false
                             | None ->
                                 let fieldtype = Types.fresh_type_variable `Any in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
                                      no_pos (`Record (Types.make_singleton_open_row 
-                                                        (l, (`Present, fieldtype))
+                                                        (l, `Present fieldtype)
                                                         `Any)));
 
                                   let rn, rpos = erase r in
@@ -2141,7 +2134,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                       let fieldtype = Types.fresh_type_variable `Any in
                         unify ~handle:Gripers.projection
                           (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row 
-                                                             (l, (`Present, fieldtype))
+                                                             (l, `Present fieldtype)
                                                              `Any)));
                         `Projection (erase r, l), fieldtype
               end
@@ -2153,7 +2146,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               let fields_type =
                 `Record (List.fold_right
                            (fun (lab, _) row ->
-                              Types.row_with (lab, (`Present, Types.fresh_type_variable `Any)) row)
+                              Types.row_with (lab, `Present (Types.fresh_type_variable `Any)) row)
                            fields (Types.make_empty_open_row `Any)) in
                 unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type) in
             let (rfields, row_var), _ = Types.unwrap_row (TypeUtils.extract_row (typ r)) in
@@ -2161,7 +2154,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
               StringMap.mapi
                 (fun name t ->
                    if List.mem_assoc name fields then
-                     `Present, snd (List.assoc name fields)
+                     `Present (snd (List.assoc name fields))
                    else t)
                 rfields
             in
@@ -2296,7 +2289,7 @@ and type_binding : context -> binding -> binding * context =
             As well as the function types, the typed patterns are also
             returned here as a simple optimisation.  *)
 
-          let fresh_wild () = Types.make_singleton_open_row ("wild", (`Present, Types.unit_type)) `Any in
+          let fresh_wild () = Types.make_singleton_open_row ("wild", (`Present Types.unit_type)) `Any in
 
           let inner_env, patss =
             List.fold_left

@@ -18,7 +18,7 @@ type inst_env = inst_type_env * inst_row_env
 
 exception ArityMismatch
 
-let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag IntMap.t) -> datatype -> datatype =
+let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap.t) -> datatype -> datatype =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
@@ -53,16 +53,16 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
           | `Function (f, m, t) -> `Function (inst rec_env f, inst_row rec_env m, inst rec_env t)
           | `Record row -> `Record (inst_row rec_env row)
           | `Variant row -> `Variant (inst_row rec_env row)
-          | `Table (r, w, n) -> `Table (inst rec_env r, inst rec_env w, inst rec_env n)
+          | `Table (f, d, r) -> `Table (inst rec_env f, inst rec_env d, inst rec_env r)
           | `ForAll (qs, t) ->
               `ForAll (qs, inst rec_env t)
           | `Alias ((name, ts), d) -> 
               `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
-    and inst_presence : inst_env -> presence_flag -> presence_flag = fun rec_env ->
+    and inst_presence : inst_env -> field_spec -> field_spec = fun rec_env ->
       function
-        | `Present -> `Present
+        | `Present t -> `Present (inst rec_env t)
         | `Absent -> `Absent
         | `Var point ->
             begin
@@ -90,13 +90,13 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
           | _ -> false in
 
       let field_env' = StringMap.fold
-        (fun label (f, t) field_env' ->
+        (fun label f field_env' ->
            let rec add =
              function
-               | `Present -> StringMap.add label (`Present, inst rec_env t) field_env'
+               | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
                | `Absent ->
                    if is_closed then field_env'
-                   else StringMap.add label (`Absent, inst rec_env t) field_env'
+                   else StringMap.add label `Absent field_env'
                | `Var point ->
                    match Unionfind.find point with
                      | `Flexible var
@@ -107,7 +107,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * presence_flag Int
                            else
                              `Var point
                          in
-                           StringMap.add label (f, inst rec_env t) field_env'
+                           StringMap.add label f field_env'
                      | `Body f ->
                          add f                           
            in

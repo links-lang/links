@@ -90,6 +90,9 @@ let type_variable_of_quantifier =
     | `RowVar v -> `RigidRowVar v
     | `PresenceVar v -> `RigidPresenceVar v
 
+type fieldconstraint = [ `Readonly | `Default ]
+    deriving (Show)
+
 type datatype =
   | TypeVar         of name * subkind
   | RigidTypeVar    of name * subkind
@@ -111,19 +114,19 @@ and row_var =
     | `Open of name * subkind
     | `OpenRigid of name * subkind
     | `Recursive of name * row ]
-and presence_flag = [ `Present | `Absent | `RigidVar of name | `Var of name ]
-and fieldspec = presence_flag * datatype
+and fieldspec =
+    [ `Present of datatype
+    | `Absent
+    | `RigidVar of name
+    | `Var of name ]
 and type_arg =
     [ `Type of datatype
     | `Row of row
-    | `Presence of presence_flag ]
+    | `Presence of fieldspec ]
       deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = datatype * Types.datatype option
-    deriving (Show)
-
-type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type constant = Constant.constant

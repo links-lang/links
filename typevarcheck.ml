@@ -54,12 +54,17 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                     when
                       (FieldEnv.mem "1" fields &&
                          FieldEnv.size fields = 1 &&
-                          Unionfind.find row_var = `Closed) -> isg (snd (FieldEnv.find "1" fields))
+                          Unionfind.find row_var = `Closed) ->
+                  begin
+                    match FieldEnv.find "1" fields with
+                    | `Present t         -> isg t
+                    | (`Absent | `Var _) -> true
+                  end
                 | _ ->
                     isgr row
             end
         | `Variant row -> isgv row
-        | `Table (r, w, n) -> isg r && isg w && isg n
+        | `Table (f, d, r) -> isg f && isg d && isg r
         | `Alias (_, t) -> is_guarded bound_vars var t
         | `Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
@@ -68,7 +73,10 @@ and is_guarded_row : bool -> TypeVarSet.t -> int -> row -> bool =
   fun check_fields bound_vars var (fields, row_var) ->
     (if check_fields then       
        (StringMap.fold
-          (fun _ (_f, t) b -> b && is_guarded bound_vars var t)
+          (fun _ f b ->
+            match f with
+            | `Present t         -> b && is_guarded bound_vars var t
+            | (`Absent | `Var _) -> b)
           fields
           true)
      else
@@ -116,7 +124,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `ForAll (qs, t) -> is_negative (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> isnr row
         | `Variant row -> isnr row
-        | `Table (r, w, n) -> isn r || isn w || isn n
+        | `Table (f, d, r) -> isn f || isn d || isn r
         | `Alias (_, t) -> isn t
         | `Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars var) ts
@@ -127,7 +135,10 @@ and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
     FieldEnv.fold (fun _ spec result ->
                       match spec with
-                        | _, t -> result || is_negative bound_vars var t
+                        | `Present t -> result || is_negative bound_vars var t
+                        | `Absent    -> false
+                        | `Var _     -> false
+                          (* TODO: shouldn't we handle this case somehow? *)
                    ) field_env false
 and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->
@@ -170,18 +181,18 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `ForAll (qs, t) -> is_positive (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> ispr row
         | `Variant row -> ispr row
-        | `Table (r, w, n) -> isp r || isp w || isp n
+        | `Table (f, d, r) -> isp f || isp d || isp r
         | `Alias (_, t) -> isp t
         | `Application (s, ts) ->
             List.exists (is_positive_type_arg bound_vars var) ts
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var) ->
     is_positive_field_env bound_vars var field_env || is_positive_row_var bound_vars var row_var
-and is_positive_presence : TypeVarSet.t -> int -> presence_flag -> bool =
+and is_positive_presence : TypeVarSet.t -> int -> field_spec -> bool =
   fun bound_vars var ->
     function
-      | `Absent
-      | `Present -> false
+      | `Absent    -> false
+      | `Present t -> is_positive bound_vars var t
       | `Var point ->
           begin
             match Unionfind.find point with
@@ -192,8 +203,8 @@ and is_positive_presence : TypeVarSet.t -> int -> presence_flag -> bool =
 and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
     FieldEnv.fold
-      (fun _ (f, t) result ->
-         result || is_positive_presence bound_vars var f || is_positive bound_vars var t)
+      (fun _ f result ->
+         result || is_positive_presence bound_vars var f)
       field_env false
 and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->

@@ -106,11 +106,11 @@ and eq_rows : (row * row) -> bool =
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
 and eq_presence =
   function
-    | `Absent, `Absent
-    | `Present, `Present -> true
+    | `Absent, `Absent -> true
+    | `Present lt, `Present rt -> eq_types (lt, rt)
     | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
 and eq_field_envs (lfield_env, rfield_env) =
-  let eq_specs (lf, lt) (rf, rt) = eq_presence (lf, rf) && eq_types (lt, rt) in
+  let eq_specs lf rf = eq_presence (lf, rf) in
     StringMap.equal eq_specs lfield_env rfield_env
 and eq_row_vars (lpoint, rpoint) =
   (* QUESTION:
@@ -442,10 +442,10 @@ fun rec_env ->
                ut (lto, rto))
           | `Record l, `Record r -> ur (l, r)
           | `Variant l, `Variant r -> ur (l, r)
-          | `Table (lr, lw, ln), `Table (rr, rw, rn) ->
-              (ut (lr, rr);
-               ut (lw, rw);
-               ut (ln, rn))
+          | `Table (lf, ld, lr), `Table (rf, rd, rr) ->
+              (ut (lf, rf);
+               ut (ld, rd);
+               ut (lr, rr))
           | `Application (l, _), `Application (r, _) when l <> r ->
               raise (Failure
                        (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
@@ -631,13 +631,13 @@ fun rec_env ->
        end;
       counter := !counter-1;
       Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1 ^ counter')
-and unify_presence' : unify_env -> ((presence_flag * presence_flag) -> unit) =
+and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
   fun rec_env (l, r) ->
     match l, r with
-      | `Present, `Present
+      | `Present lt, `Present rt -> unify' rec_env (lt, rt)
       | `Absent, `Absent -> ()
-      | `Present, `Absent
-      | `Absent, `Present ->
+      | `Present _, `Absent
+      | `Absent, `Present _ ->
           raise (Failure (`Msg ("Present absent clash")))
 (*`PresentAbsentClash (label, lrow, rrow) *)
       | `Var lpoint, `Var rpoint ->
@@ -726,8 +726,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
     (* optimisation? *)
     let strip_absent : field_spec_map -> field_spec_map =
       StringMap.filter
-        (fun label (f, _) ->
-          match Types.concrete_presence_flag f with
+        (fun label f ->
+          match Types.concrete_field_spec f with
             | `Absent -> false
             | _ -> true) in
 
@@ -744,8 +744,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         StringMap.fold
           (fun label field_spec extension ->
             if StringMap.mem label env1 then
-              let f, t = field_spec in
-              let f', t' = StringMap.find label env1 in
+              let f = field_spec in
+              let f' = StringMap.find label env1 in
                 (* Because unification is imperative the following
                    might lead to somewhat surprising
                    behaviour. Suppose f = f' = `Absent, t = (a, Bool)
@@ -762,7 +762,6 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                    anyway. *)
                 try
                   unify_presence' rec_env (f, f');
-                  unify' rec_env (t, t');
                   extension
                 with e ->
                   if closed then
@@ -789,12 +788,11 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       fun closed rec_env (lenv, renv) ->
         let aux env1 env2 =
           StringMap.iter
-            (fun label (f, t) ->
+            (fun label f ->
               if StringMap.mem label env2 then
-                let f', t' = StringMap.find label env2 in
+                let f' = StringMap.find label env2 in
                   try
-                    unify_presence' rec_env (f, f');
-                    unify' rec_env (t, t')
+                    unify_presence' rec_env (f, f')
                   with
                       e ->
                         begin
@@ -1048,14 +1046,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let (open_field_env', open_row_var') as open_row', open_rec_row = unwrap_row open_row in 
         (* check that the open row contains no extra fields *)
         StringMap.iter
-          (fun label (flag, _) ->
+          (fun label f ->
              if (StringMap.mem label rigid_field_env') then
                ()
              else
-               match flag with
+               match f with
                  | (`Absent | `Var _) when closed ->
                    (* closed rows don't need to explicitly mention absent *)
-                   unify_presence' rec_env (flag, `Absent)
+                   unify_presence' rec_env (f, `Absent)
                  | _ ->
                      raise (Failure
                               (`Msg 

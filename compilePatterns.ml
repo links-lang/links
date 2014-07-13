@@ -249,7 +249,7 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
                            StringSet.add name names)
                         fields
                         StringSet.empty in
-                    let rt = TypeUtils.erase_type_poly names t in
+                    let rt = TypeUtils.erase_type names t in
                       lp rt p (`Erase (names, value)) body
 (*                      lp rt p (`Coerce (value, rt)) body *)
             in
@@ -739,7 +739,7 @@ and match_record
                                      | (_, Some _, _) -> false) xs in
 
     (* type of the flattened record continuation *)
-    let restt = TypeUtils.erase_type_poly names t in
+    let restt = TypeUtils.erase_type names t in
     let restb, rest = Var.fresh_var_of_type restt in
 
     let annotated_clauses =
@@ -778,47 +778,7 @@ and match_record
                    StringSet.empty in
 
                (* type of the original record continuation *)
-               let pt = TypeUtils.erase_type_poly original_names t in
-
-               (* HACK:
-                  
-                  We rely on implementation details of
-                  TypeUtils.erase_type_poly.  The following only works
-                  if the quantifiers in pt appear in the same order
-                  that a fold traverses original_names.
-               *)
-               let qs, qmap =
-                 match pt with
-                   | `ForAll (qs, _) ->
-                       let qs = Types.unbox_quantifiers qs in
-                       let _, qmap =
-                         StringSet.fold
-                           (fun name (qs, qmap) ->
-                              let q::qs = qs in
-                                qs, StringMap.add name q qmap)
-                           original_names
-                           (qs, StringMap.empty)
-                       in
-                         qs, qmap
-                   | _ -> [], StringMap.empty in
-
-               (* HACK:
-                  
-                  As we know that any missing names are immediately
-                  going to be filled in it is sound to instantiate
-                  their quantifiers with any type at all. Here we
-                  pick Int.                  
-               *)
-               let tyargs =
-                 StringSet.fold
-                   (fun name tyargs ->
-                      match StringMap.lookup name qmap with
-                        | Some q ->
-                            Types.type_arg_of_quantifier q :: tyargs
-                        | None -> `Type (Types.int_type) :: tyargs)
-                   names
-                   [] in
-               let tyargs = List.rev tyargs in
+               let pt = TypeUtils.erase_type original_names t in
 
                let body =
                  fun env ->
@@ -828,12 +788,12 @@ and match_record
                      | (annotation, `Any) ->
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
-                             [`Let (yb, (qs, `Return (`Extend (fields, Some (tapp (`Variable rest, tyargs))))))]
+                             [`Let (yb, ([], `Return (`Extend (fields, Some (`Variable rest)))))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | (annotation, `Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
-                             [`Let (yb, (qs, `Return (`Extend (fields, Some (tapp (`Variable rest, tyargs))))))]
+                             [`Let (yb, ([], `Return (`Extend (fields, Some (`Variable rest)))))]
                              ((apply_annotation (`Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
