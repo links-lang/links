@@ -268,13 +268,11 @@ class map =
           in `DatabaseLit ((_x, _x_i1))
       | `TableLit ((_x, (y, z), _x_i2, _x_i3)) ->
           let _x = o#phrase _x in
-          let y = o#datatype y in
-          let z = o#option
-            (fun o (l,r,s) ->
-               let l = o#unknown l in
+          let y = o#datatype y in 
+          let z = o#option 
+            (fun o r ->
                let r = o#unknown r in
-               let s = o#unknown s in
-                 (l,r,s)) z in
+                 r) z in
           let _x_i2 =
             o#list
               (fun o (_x, _x_i1) ->
@@ -402,18 +400,13 @@ class map =
       fun (_x, _x_i1) ->
         let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
-
-    method presence_flag : presence_flag -> presence_flag =
+      
+    method fieldspec : fieldspec -> fieldspec =
       function
-      | `Present -> `Present
+      | `Present _x -> let _x = o#datatype _x in `Present _x
       | `Absent -> `Absent
       | `RigidVar _x -> let _x = o#name _x in `RigidVar _x
       | `Var _x -> let _x = o#name _x in `Var _x
-
-    method fieldspec : fieldspec -> fieldspec =
-      fun (_x, _x_i1) ->
-        let _x = o#presence_flag _x in
-        let _x_i1 = o#datatype _x_i1 in (_x, _x_i1)
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Default -> `Default
@@ -461,9 +454,9 @@ class map =
       | RecordType _x -> let _x = o#row _x in RecordType _x
       | VariantType _x -> let _x = o#row _x in VariantType _x
       | TableType (_x, _x_i1, _x_i2) ->
-          let _x = o#datatype _x in
-          let _x_i1 = o#datatype _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in TableType (_x, _x_i1, _x_i2)
+         let _x = o#datatype _x in
+         let _x_i1 = o#datatype _x_i1 in
+         let _x_i2 = o#datatype _x_i2 in TableType (_x, _x_i1, _x_i2)
       | ListType _x -> let _x = o#datatype _x in ListType _x
       | TypeApplication _x ->
           let _x =
@@ -503,7 +496,7 @@ class map =
       function
       | `Type _x -> let _x = o#datatype _x in `Type _x
       | `Row _x -> let _x = o#row _x in `Row _x
-      | `Presence _x -> let _x = o#presence_flag _x in `Presence _x
+      | `Presence _x -> let _x = o#fieldspec _x in `Presence _x
 
     method constant : constant -> constant =
       function
@@ -816,11 +809,9 @@ class fold =
       | `TableLit ((_x, (y,z), _x_i2, _x_i3)) ->
           let o = o#phrase _x in
           let o = o#datatype y in
-          let o = o#option
-            (fun o (l, r, s) ->
-               let o = o#unknown l in
+          let o = o#option 
+            (fun o r ->
                let o = o#unknown r in
-               let o = o#unknown s in
                  o) z in
           let o =
             o#list
@@ -930,16 +921,12 @@ class fold =
         let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let o = o#phrase _x_i1 in o
 
-    method presence_flag : presence_flag -> 'self_type =
+    method fieldspec : fieldspec -> 'self_type =
       function
-      | `Present -> o
+      | `Present _x -> let o = o#datatype _x in o
       | `Absent -> o
       | `RigidVar _x -> let o = o#name _x in o
       | `Var _x -> let o = o#name _x in o
-
-    method fieldspec : fieldspec -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#presence_flag _x in let o = o#datatype _x_i1 in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
@@ -1014,7 +1001,7 @@ class fold =
       function
       | `Type _x -> let o = o#datatype _x in o
       | `Row _x -> let o = o#row _x in o
-      | `Presence _x -> let o = o#presence_flag _x in o
+      | `Presence _x -> let o = o#fieldspec _x in o
 
     method constant : constant -> 'self_type =
       function
@@ -1378,10 +1365,8 @@ class fold_map =
                let (o, _x) = o#datatype _x in
                let (o, _x_i1) =
                  o#option
-                   (fun o (_x, _x_i1, _x_i2) ->
-                      let (o, _x) = o#unknown _x in
-                      let (o, _x_i1) = o#unknown _x_i1 in
-                      let (o, _x_i2) = o#unknown _x_i2 in (o, (_x, _x_i1, _x_i2)))
+                   (fun o _x ->
+                      let (o, _x) = o#unknown _x in (o, _x))
                    _x_i1
                in (o, (_x, _x_i1)))
               _x_i1 in
@@ -1518,18 +1503,13 @@ class fold_map =
       fun (_x, _x_i1) ->
         let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
-
-    method presence_flag : presence_flag -> ('self_type * presence_flag) =
+      
+    method fieldspec : fieldspec -> ('self_type * fieldspec) =
       function
-      | `Present -> (o, `Present)
+      | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
       | `Absent -> (o, `Absent)
       | `RigidVar _x -> let (o, _x) = o#name _x in (o, `RigidVar _x)
       | `Var _x -> let (o, _x) = o#name _x in (o, `Var _x)
-
-    method fieldspec : fieldspec -> ('self_type * fieldspec) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#presence_flag _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, (_x, _x_i1))
 
     method fieldconstraint :
       fieldconstraint -> ('self_type * fieldconstraint) =
@@ -1621,7 +1601,7 @@ class fold_map =
       function
       | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
       | `Row _x -> let (o, _x) = o#row _x in (o, `Row _x)
-      | `Presence _x -> let (o, _x) = o#presence_flag _x in (o, `Presence _x)
+      | `Presence _x -> let (o, _x) = o#fieldspec _x in (o, `Presence _x)
 
     method constant : constant -> ('self_type * constant) =
       function

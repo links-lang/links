@@ -257,7 +257,11 @@ let labels_of_field_types field_types =
     field_types
     StringSet.empty
 
-let table_field_types (_, _, (fields, _, _)) = StringMap.map snd fields
+let table_field_types (_, _, (fields, _, _)) =
+  StringMap.map (function
+                  | `Present t -> t
+                  | _ -> assert false) fields
+
 let rec field_types_of_list =
   function
     | `Concat (v::vs) -> field_types_of_list v

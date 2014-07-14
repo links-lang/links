@@ -55,7 +55,7 @@ object (o : 'self_type)
         let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
-              | (`Present, mbt) ->
+              | (`Present mbt) ->
                   o#phrasenode
                     (`Switch
                        ((`FnAppl

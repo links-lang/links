@@ -45,7 +45,6 @@ class map :
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
-    method presence_flag   : presence_flag -> presence_flag
     (* method quantifier      : quantifier -> quantifier *)
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
@@ -108,7 +107,6 @@ class fold :
     method location        : location -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
-    method presence_flag   : presence_flag -> 'self
     (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
@@ -169,7 +167,6 @@ object ('self)
   method phrase          : phrase -> 'self * phrase
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : position -> 'self * position
-  method presence_flag   : presence_flag -> 'self * presence_flag
   method program         : program -> 'self * program
   (* method quantifier      : quantifier -> 'self * quantifier *)
   method regex           : regex -> 'self * regex

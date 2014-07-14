@@ -524,9 +524,9 @@ module Eval = struct
               StringMap.fold
                 (fun name t fields ->
                   match t with
-                    | `Present, t -> (name, t)::fields
-                    | `Absent, _ -> assert false
-                    | `Var _, t -> assert false)
+                    | `Present t -> (name, t)::fields
+                    | `Absent -> assert false
+                    | `Var _ -> assert false)
                 fieldMap
                 []
             in
@@ -537,7 +537,9 @@ module Eval = struct
       let db, table, field_types =
         match value env source with
           | `Table ((db, _), table, (fields, _, _)) ->
-            db, table, (StringMap.map snd fields)
+            db, table, (StringMap.map (function
+                                        | `Present t -> t
+                                        | _ -> assert false) fields)
           | _ -> assert false in
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
@@ -547,7 +549,9 @@ module Eval = struct
       let db, table, field_types =
         match value env source with
           | `Table ((db, _), table, (fields, _, _)) ->
-            db, table, (StringMap.map snd fields)
+            db, table, (StringMap.map (function
+                                        | `Present t -> t
+                                        | _ -> assert false) fields)
           | _ -> assert false in
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in

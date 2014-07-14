@@ -24,12 +24,12 @@ let fresh_rigid_row_variable : subkind -> row_var =
   function subkind ->
     incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter), subkind)
 
-let fresh_presence_variable : unit -> presence_flag =
-  function () ->
+let fresh_presence_variable : unit -> fieldspec =
+  function () -> 
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter))
-
-let fresh_rigid_presence_variable : unit -> presence_flag =
-  function () ->
+  
+let fresh_rigid_presence_variable : unit -> fieldspec =
+  function () -> 
     incr type_variable_counter; `RigidVar ("_" ^ string_of_int (!type_variable_counter))
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
@@ -807,18 +807,18 @@ squig_arrow_prefix:
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", (`Present, UnitType))
+                                                                   ("wild", `Present UnitType)
                                                                    (row_with
-                                                                      ("hear", (`Present, $3))
+                                                                      ("hear", `Present $3)
                                                                       $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
+| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present UnitType);
+                                                                   ("hear", `Present $3)],
                                                                   `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present UnitType);
+                                                                   ("hear", `Present $3)],
                                                                   $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", (`Present, UnitType));
-                                                                   ("hear", (`Present, $3))],
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present UnitType);
+                                                                   ("hear", `Present $3)],
                                                                   $5) }
 
 straight_arrow:
@@ -835,24 +835,24 @@ squiggly_arrow:
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGRARROW datatype                      { FunctionType ($1,
                                                                                row_with
-                                                                                 ("wild", (`Present, UnitType))
+                                                                                 ("wild", `Present UnitType)
                                                                                  $2,
                                                                                $4) }
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { LolliType ($1,
                                                                             row_with
-                                                                              ("wild", (`Present, UnitType))
+                                                                              ("wild", `Present UnitType)
                                                                             $2,
                                                                             $4) }
 /*| parenthesized_datatypes hear_arrow_prefix
   SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
-                                                                               ([("wild", (`Present, UnitType))],
+                                                                               ([("wild", `Present UnitType)],
                                                                                  fresh_rigid_row_variable (`Any, `Any)),
                                                                                 $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { LolliType ($1,
-                                                                            ([("wild", (`Present, UnitType))],
+                                                                            ([("wild", `Present UnitType)],
                                                                              fresh_rigid_row_variable (`Any, `Any)),
                                                                             $3) }
 
@@ -881,6 +881,7 @@ primary_datatype:
 
 | TABLEHANDLE
      LPAREN datatype COMMA datatype COMMA datatype RPAREN      { TableType ($3, $5, $7) }
+/* | TABLEHANDLE datatype perhaps_table_constraints               { TableType ($2, $3) } */
 
 | LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
 | LBRACKET datatype RBRACKET                                   { ListType $2 }
@@ -937,7 +938,7 @@ type_arg:
 | datatype                                                     { `Type $1 }
 | TYPE LPAREN datatype RPAREN                                  { `Type $3 }
 | ROW LPAREN row RPAREN                                        { `Row $3 }
-| PRESENCE LPAREN presence_flag RPAREN                         { `Presence $3 }
+| PRESENCE LPAREN fieldspec RPAREN                             { `Presence $3 }
 | LBRACE row RBRACE                                            { `Row $2 }
 
 vrow:
@@ -961,10 +962,8 @@ fields:
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
-| field_label                                                  { $1, (`Present, UnitType) }
-| field_label COLON datatype                                   { $1, (`Present, $3) }
-| field_label presence_flag                                    { $1, ($2, UnitType) }
-| field_label presence_flag COLON datatype                     { $1, ($2, $4) }
+| field_label                                                  { $1, `Present UnitType }
+| field_label fieldspec                                        { $1, $2 }
 
 field_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -981,9 +980,8 @@ rfields:
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
-| record_label COLON datatype                                  { $1, (`Present, $3) }
-| record_label presence_flag                                   { $1, ($2, UnitType) }
-| record_label presence_flag COLON datatype                    { $1, ($2, $4) }
+| record_label                                                 { $1, `Present UnitType }
+| record_label fieldspec                                       { $1, $2 }
 
 record_label:
 | field_label                                                  { $1 }
@@ -995,10 +993,8 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, (`Present, UnitType) }
-| CONSTRUCTOR COLON datatype                                   { $1, (`Present, $3) }
-| CONSTRUCTOR presence_flag                                    { $1, ($2, UnitType) }
-| CONSTRUCTOR presence_flag COLON datatype                     { $1, ($2, $4) }
+| CONSTRUCTOR                                                  { $1, `Present UnitType }
+| CONSTRUCTOR fieldspec                                        { $1, $2 }
 
 efields:
 | efield                                                       { [$1], `Closed }
@@ -1009,19 +1005,16 @@ efields:
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
-| effect_label                                                 { $1, (`Present, UnitType) }
-| effect_label COLON datatype                                  { $1, (`Present, $3) }
-| effect_label presence_flag                                   { $1, ($2, UnitType) }
-| effect_label presence_flag COLON datatype                    { $1, ($2, $4) }
+| effect_label                                                 { $1, `Present UnitType }
+| effect_label fieldspec                                       { $1, $2 }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 
-presence_flag:
-| PLUS                                                         { `Present }
-| LBRACE RBRACE                                                { `Present }
-| LBRACE PLUS RBRACE                                           { `Present }
+fieldspec:
+| COLON datatype                                               { `Present $2 }
+| LBRACE COLON datatype RBRACE                                 { `Present $3 }
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
 | LBRACE VARIABLE RBRACE                                       { `RigidVar $2 }

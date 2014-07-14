@@ -131,6 +131,7 @@ object (o : 'self_type)
 (*         in *)
 (*           o, e, Types.unit_type           *)
     | `DBInsert (table, _labels, rows, returning) ->
+      (* TODO: work out how to type this properly *)
         let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
@@ -152,7 +153,7 @@ object (o : 'self_type)
             | None ->
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type value_type; `Row eff]), dp),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in

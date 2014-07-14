@@ -283,7 +283,7 @@ struct
               `Project (name, v), deconstruct (project_type name) vt, o
         | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type_poly names) vt in
+            let t = deconstruct (erase_type names) vt in
               `Erase (names, v), t, o
         | `Inject (name, v, t) ->
             let v, _vt, o = o#value v in
@@ -372,10 +372,10 @@ struct
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
-        | `Table (db, table_name, (rt, wt, nt)) ->
+        | `Table (db, table_name, tt) ->
             let db, _, o = o#value db in
             let table_name, _, o = o#value table_name in
-              `Table (db, table_name, (rt, wt, nt)), `Table (rt, wt, nt), o
+              `Table (db, table_name, tt), `Table tt, o
         | `Query (range, e, t) ->
             let range, o =
               o#optionu
