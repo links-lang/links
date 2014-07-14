@@ -56,7 +56,7 @@ PATH := $(PATH):$(DERIVING_DIR)/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae-44-45
+OCAMLFLAGS=-dtypes -w Ae-44-45 -g
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -209,10 +209,9 @@ install: nc
 	@echo "your environment to enable calling Links from any directory."
 
 .PHONY: uninstall
-uninstall: 
+uninstall:
 	@echo "Uninstalling Links from $(LINKS_PREFIX)"
-	@echo "Removing $(LINKS_BIN)/links"	
+	@echo "Removing $(LINKS_BIN)/links"
 	rm -f $(LINKS_BIN)/links
 	@echo "Removing $(LINKS_LIB)/prelude.links"
 	rm -f $(LINKS_LIB)/prelude.links
-
