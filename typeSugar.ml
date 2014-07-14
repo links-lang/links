@@ -2089,7 +2089,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                         begin
                           match StringMap.lookup l field_env with
                             | Some (`Present t) ->
-                               (* TODO: probably more complicated than it needs to be now... *)
                                 (* the free type variables in the projected type *)
                                 let vars = Types.free_type_vars t in
 
@@ -2111,12 +2110,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype =
                                 let rt = `Record (StringMap.singleton l (`Present fieldtype), Types.closed_row_var) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
-                                     no_pos (`Record (Types.make_singleton_closed_row (l, `Present (Types.fresh_type_variable `Any)))));
+                                     no_pos (`Record (Types.make_singleton_closed_row
+                                                        (l, `Present (Types.fresh_type_variable `Any)))));
 
                                   let rn, rpos = erase r in
                                   let e = tabstr (pqs, `Projection ((tappl (rn, tyargs), rpos), l)) in
                                     e, fieldtype
-                            | Some _ -> (* TODO: what happens here? *)assert false
+                            | Some (`Absent | `Var _)
                             | None ->
                                 let fieldtype = Types.fresh_type_variable `Any in
                                   unify ~handle:Gripers.projection
