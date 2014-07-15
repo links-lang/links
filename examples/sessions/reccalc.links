@@ -23,6 +23,8 @@ sig user : (CalcSelect) ~> Int
 fun user(s) {
   var s = select Mul s;
   var (v, s) = grab(give(6,give(7,s)));
+  var s = select Add s;
+  var (v, s) = grab(give(v,give(v,s)));
   var _ = select Stop s;
   v
 }
