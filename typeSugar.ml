@@ -1033,7 +1033,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             else
               begin
                 match Unionfind.find row_var with
-                  | `Flexible _ | `Rigid _ -> `Variant (fields, Unionfind.fresh `Closed, false)
+                  | `Var _ -> `Variant (fields, Unionfind.fresh `Closed, false)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
       | `Application (l, [`Type t])
@@ -1053,7 +1053,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
           begin
             match Unionfind.find point with
               | `Body t -> cpt pats t
-              | `Flexible _ | `Rigid _ -> t
+              | `Var _ -> t
               | `Recursive _ -> assert false
           end
       | `Not_typed

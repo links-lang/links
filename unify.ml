@@ -129,7 +129,7 @@ and eq_quantifier : (quantifier * quantifier) -> bool =
   function
     | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
     | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
-    | `PresenceVar (lvar, _), `PresenceVar (rvar, _) -> lvar = rvar
+    | `PresenceVar ((lvar, _), _), `PresenceVar ((rvar, _), _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
@@ -147,8 +147,7 @@ and eq_row_vars (lpoint, rpoint) =
   *)
   match Unionfind.find lpoint, Unionfind.find rpoint with
     | `Closed, `Closed -> true
-    | `Flexible (var, _), `Flexible (var', _)
-    | `Rigid (var, _), `Rigid (var', _)
+    | `Var (var, _, _), `Var (var', _, _)
     | `Recursive (var, _), `Recursive (var', _) -> var=var'
     | _, _ -> Unionfind.equivalent lpoint rpoint
 and eq_type_args =
@@ -294,15 +293,15 @@ fun rec_env ->
                   concrete_point rpoint;
 
                   match (Unionfind.find lpoint, Unionfind.find rpoint) with
-                   | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind && compatible_quantifiers (lvar, rvar) qs ->
+                   | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind && compatible_quantifiers (lvar, rvar) qs ->
                        Unionfind.union lpoint rpoint
-                   | `Rigid (l, _), `Rigid (r, _) ->
+                   | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
                        if l <> r then
                          raise (Failure (`Msg ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match")))
                        else
                          (* presumably this should always be a no-op *)
                          Unionfind.union lpoint rpoint
-                   | `Flexible (lvar, (llin,lrest)), `Flexible (rvar, (rlin,rrest)) ->
+                   | `Var (lvar, (llin,lrest), `Flexible), `Var (rvar, (rlin,rrest), `Flexible) ->
                        Unionfind.union lpoint rpoint;
                        begin
                          let lin =
@@ -324,9 +323,9 @@ fun rec_env ->
                                                          " with base type variable " ^ string_of_int rvar)))
                              (* in the default case lrest and rrest must be identical *)
                              | _ -> lrest in
-                         Unionfind.change lpoint (`Flexible (lvar, (lin, rest)))
+                         Unionfind.change lpoint (`Var (lvar, (lin, rest), `Flexible))
                        end
-                   | `Flexible (var, (lin, rest)), _ ->
+                   | `Var (var, (lin, rest), `Flexible), _ ->
                        (if var_is_free_in_type var t2 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
                            if rest = `Base then
@@ -354,7 +353,7 @@ fun rec_env ->
                            raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
                                                    " with the non-session type "^ string_of_datatype t2)));
                        Unionfind.union lpoint rpoint
-                   | _, `Flexible (var, (lin, rest)) ->
+                   | _, `Var (var, (lin, rest), `Flexible) ->
                        (if var_is_free_in_type var t1 then
                           (Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
                            if rest = `Base then
@@ -382,7 +381,7 @@ fun rec_env ->
                            raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
                                                    " with the non-session type "^ string_of_datatype t1)));
                        Unionfind.union rpoint lpoint
-                   | `Rigid (l, _), _ ->
+                   | `Var (l, _, `Rigid), _ ->
                        begin
                          match Types.flexible_of_type t2 with
                            | Some t2 -> unify' rec_env (t1, t2)
@@ -391,7 +390,7 @@ fun rec_env ->
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
                        end
-                   | _, `Rigid (r, _) ->
+                   | _, `Var (r, _, `Rigid) ->
                        begin
                          match Types.flexible_of_type t1 with
                            | Some t1 -> unify' rec_env (t1, t2)
@@ -458,7 +457,7 @@ fun rec_env ->
               concrete_point point;
               begin
                 match Unionfind.find point with
-                 | `Rigid (l, _) ->
+                 | `Var (l, _, `Rigid) ->
                      begin
                        match Types.flexible_of_type t with
                          | Some t -> unify' rec_env (t, `MetaTypeVar point)
@@ -466,7 +465,7 @@ fun rec_env ->
                              raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
                                                      " with the type "^ string_of_datatype t)))
                      end
-                 | `Flexible (var, (lin, rest)) ->
+                 | `Var (var, (lin, rest), `Flexible) ->
                      if var_is_free_in_type var t then
                        begin
                          Debug.if_set (show_recursion)
@@ -579,7 +578,7 @@ fun rec_env ->
                 function
                   | `TypeVar ((l, _), _), `TypeVar ((r, _), _)
                   | `RowVar ((l, _), _), `RowVar ((r, _), _)
-                  | `PresenceVar (l, _), `PresenceVar (r, _) -> l=r
+                  | `PresenceVar ((l, _), _), `PresenceVar ((r, _), _) -> l=r
                   | _ -> false in
 
               (* identify which quantifiers start off rigid *)
@@ -733,28 +732,28 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
             match Unionfind.find lpoint, Unionfind.find rpoint with
               | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)
               | _, `Body r -> unify_presence' rec_env (`Var lpoint, r)
-              | `Rigid lvar, `Rigid rvar when compatible_quantifiers (lvar, rvar) rec_env.qs ->
+              | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qs ->
                   Unionfind.union lpoint rpoint
-              | `Flexible flexible_var, `Rigid rigid_var
-              | `Rigid rigid_var, `Flexible flexible_var
+              | `Var (flexible_var, _, `Flexible), `Var (rigid_var, _, `Rigid)
+              | `Var (rigid_var, _, `Rigid), `Var (flexible_var, _, `Flexible)
                   when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
                   Unionfind.union lpoint rpoint
-              | `Rigid l, `Rigid r ->
+              | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
                   if l <> r then
                     raise (Failure (`Msg ("Rigid presence variables "^
                                             string_of_int l ^" and "^
                                             string_of_int r ^" do not match")))
                   else
                     Unionfind.union lpoint rpoint
-              | `Flexible var, _ ->
+              | `Var (var, _, `Flexible), _ ->
                   Unionfind.union lpoint rpoint
-              | _, `Flexible var ->
+              | _, `Var (var, _, `Flexible) ->
                   Unionfind.union rpoint lpoint
-              | `Rigid l, _ ->
+              | `Var (l, _, `Rigid), _ ->
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
                                           string_of_int l ^" with the presence variable "^
                                           string_of_presence (`Var rpoint))))
-              | _, `Rigid r ->
+              | _, `Var (r, _, `Rigid) ->
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
                                           string_of_int r ^" with the type "^
                                           string_of_presence (`Var lpoint))))
@@ -762,11 +761,11 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
       | `Var point, f | f, `Var point ->
           begin
             match (Unionfind.find point) with
-              | `Rigid l ->
+              | `Var (l, _, `Rigid) ->
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
                                           string_of_int l ^" with the presence flag "^
                                           string_of_presence f)))
-              | `Flexible var ->
+              | `Var (var, _, `Flexible) ->
                   Unionfind.change point (`Body f)
               | `Body f' -> unify_presence' rec_env (f, f')
           end
@@ -808,8 +807,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         StringMap.is_empty field_env &&
           (match Unionfind.find row_var with
              | `Closed
-             | `Flexible _
-             | `Rigid _ -> false
+             | `Var _ -> false
              | `Recursive (var, row) when IntSet.mem var rec_rows -> true
              | `Recursive (var, row) -> is_unguarded (IntSet.add var rec_rows) row
              | `Body row -> is_unguarded rec_rows row)
@@ -951,9 +949,9 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
         let close_empty_row_var : row_var -> unit = fun point ->
           match Unionfind.find point with
             | `Closed -> ()
-            | `Flexible _ ->
+            | `Var (_, _, `Flexible) ->
                 Unionfind.change point `Closed
-            | `Rigid _ ->
+            | `Var (_, _, `Rigid) ->
                 raise (Failure (`Msg ("Closed row var cannot be unified with rigid row var\n")))
             | _ -> assert false in
 
@@ -964,14 +962,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
           match Unionfind.find point' with
             | `Closed ->
                 raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
-            | `Flexible (_, (lin', rest')) ->
+            | `Var (_, (lin', rest'), `Flexible) ->
                 if rest = `Any && rest' = `Base then
                   raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
-                Unionfind.change point' (`Rigid (var, (lin, rest)))
-            | `Rigid (var', _) when var=var' -> ()
-            | `Rigid (var', (_, rest')) when rest=rest' && compatible_quantifiers (var, var') rec_env.qs ->
+                Unionfind.change point' (`Var (var, (lin, rest), `Rigid))
+            | `Var (var', _, `Rigid) when var=var' -> ()
+            | `Var (var', (_, rest'), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qs ->
               Unionfind.union point point'
-            | `Rigid (var', _) ->
+            | `Var (var', _, `Rigid) ->
                 raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
             | _ -> assert false in
 
@@ -984,13 +982,13 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
               else
                 raise (Failure (`Msg ("Closed row cannot be extended with non-empty row\n"
                                       ^string_of_row extension_row)))
-            | `Rigid (var, subkind) ->
+            | `Var (var, subkind, `Rigid) ->
               if is_empty_row extension_row then
                 rigidify_empty_row_var (point, (var, subkind)) extension_row_var
               else
                 raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                               ^string_of_row extension_row)))
-            | `Flexible (var, (lin, rest)) ->
+            | `Var (var, (lin, rest), `Flexible) ->
               if TypeVarSet.mem var (free_row_type_vars extension_row) then
                 begin
                   if rest = `Base then
@@ -1111,7 +1109,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let closed =
         begin
           match Unionfind.find lrow_var', Unionfind.find rrow_var' with
-            | `Rigid (lvar, lkind), `Rigid (rvar, rkind) when lkind=rkind &&
+            | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind &&
                                                            (lvar=rvar ||
                                                                compatible_quantifiers (lvar, rvar) rec_env.qs) ->
             (* FIXME:
@@ -1122,14 +1120,14 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
             (*
                Both rows are rigid!
             *)
-            | `Flexible _, _ | _, `Flexible _ ->
+            | `Var (_, _, `Flexible), _ | _, `Var (_, _, `Flexible) ->
               assert false
-            | `Rigid lvar, `Rigid rvar when lvar <> rvar ->
+            | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when lvar <> rvar ->
               raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
                                     ^"\nand\n "^ string_of_row lrow
                                     ^"\n could not be unified because they have distinct rigid row variables")))
-            | `Rigid _, _
-            | _, `Rigid _ ->
+            | `Var (_, _, `Rigid), _
+            | _, `Var (_, _, `Rigid) ->
               raise (Failure (`Msg ("Rows\n "^ string_of_row lrow
                                     ^"\nand\n "^ string_of_row lrow
                                     ^"\n could not be unified because one is closed and the other has a rigid row variable")))

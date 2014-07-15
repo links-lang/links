@@ -25,24 +25,33 @@ type linearity   = [ `Any | `Unl ]
 type subkind = linearity * restriction
     deriving (Eq, Show)
 
-type kind = [ `Type of subkind | `Row of subkind | `Presence ]
+type freedom = [`Rigid | `Flexible]
+    deriving (Show)
+
+type kind = [ `Type of subkind | `Row of subkind | `Presence of subkind ]
     deriving (Show, Eq)
 
-type 't meta_type_var_basis =
-    [ `Flexible of (int * subkind)
-    | `Rigid of (int * subkind)
-    | `Recursive of (int * 't)
+(* TODO: separate kind into a primary_kind and a subkind *)
+(* type primary_kind = [ `Type | `Row | `Presence ] *)
+(*     deriving (Show) *)
+(* type kind = primary_kind * subkind *)
+(*     deriving (Show) *)
+
+type 't meta_type_var_non_rec_basis =
+    [ `Var of (int * subkind * freedom)
     | `Body of 't ]
+      deriving (Show)
+
+type 't meta_type_var_basis =
+    [ 't meta_type_var_non_rec_basis
+    | `Recursive of (int * 't) ]
       deriving (Show)
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Show)
 
-type 't meta_presence_var_basis =
-    [ `Flexible of int
-    | `Rigid of int
-    | `Body of 't ]
+type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
       deriving (Show)
 
 module Abstype :
@@ -83,7 +92,7 @@ and meta_presence_var = (field_spec meta_presence_var_basis) point
 and quantifier =
     [ `TypeVar of (int * subkind) * meta_type_var
     | `RowVar of (int * subkind) * meta_row_var
-    | `PresenceVar of int * meta_presence_var ]
+    | `PresenceVar of (int * subkind) * meta_presence_var ]
 and type_arg = 
     [ `Type of typ | `Row of row | `Presence of field_spec ]
 and session_type =
@@ -99,9 +108,10 @@ and session_type =
 type datatype = typ
       deriving (Show)
 
-type type_variable =
-    (int * [`Rigid | `Flexible] *
-       [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var])
+type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
+      deriving (Show)
+
+type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
       deriving (Show)
 
 (* base kind stuff *)
@@ -224,8 +234,8 @@ val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
 val fresh_row_quantifier : subkind -> quantifier * row
 val fresh_flexible_row_quantifier : subkind -> quantifier * row
 
-val fresh_presence_quantifier : unit -> quantifier * field_spec
-val fresh_flexible_presence_quantifier : unit -> quantifier * field_spec
+val fresh_presence_quantifier : subkind -> quantifier * field_spec
+val fresh_flexible_presence_quantifier : subkind -> quantifier * field_spec
 
 (** {0 rows} *)
 (** empty row constructors *)

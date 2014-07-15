@@ -24,11 +24,10 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `MetaTypeVar point ->
             begin
               match Unionfind.find point with
-                | `Flexible (var, _)
-                | `Rigid (var, _) when TypeVarSet.mem var bound_vars -> []
-                | `Flexible _ when kind=`All -> [`Type (`MetaTypeVar point)]
-                | `Flexible _ -> []
-                | `Rigid _ -> [`Type (`MetaTypeVar point)]
+                | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+                | `Var (_, _, `Flexible) when kind=`All -> [`Type (`MetaTypeVar point)]
+                | `Var (_, _, `Flexible) -> []
+                | `Var (_, _, `Rigid) -> [`Type (`MetaTypeVar point)]
                 | `Recursive (var, body) ->
                     Debug.if_set (show_recursion) (fun () -> "rec (get_type_args): " ^(string_of_int var));
                     if TypeVarSet.mem var bound_vars then
@@ -103,11 +102,10 @@ and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list
   fun kind bound_vars row_var ->
     match Unionfind.find row_var with
       | `Closed -> []
-      | `Flexible (var, _)
-      | `Rigid (var, _) when TypeVarSet.mem var bound_vars -> []
-      | `Flexible _ when kind=`All -> [`Row (StringMap.empty, row_var, false)]
-      | `Flexible _ -> []
-      | `Rigid _ -> [`Row (StringMap.empty, row_var, false)]
+      | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+      | `Var (_, _, `Flexible) when kind=`All -> [`Row (StringMap.empty, row_var, false)]
+      | `Var (_, _, `Flexible) -> []
+      | `Var (_, _, `Rigid) -> [`Row (StringMap.empty, row_var, false)]
       | `Recursive (var, rec_row) ->
           Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_type_args): " ^(string_of_int var));
           (if TypeVarSet.mem var bound_vars then
@@ -124,11 +122,10 @@ and get_presence_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg 
       | `Var point ->
           begin
             match Unionfind.find point with
-              | `Flexible var
-              | `Rigid var when TypeVarSet.mem var bound_vars -> []
-              | `Flexible _ when kind=`All -> [`Presence (`Var point)]
-              | `Flexible _ -> []
-              | `Rigid _ -> [`Presence (`Var point)]
+              | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+              | `Var (_, _, `Flexible) when kind=`All -> [`Presence (`Var point)]
+              | `Var (_, _, `Flexible) -> []
+              | `Var (_, _,`Rigid) -> [`Presence (`Var point)]
               | `Body f -> get_presence_type_args kind bound_vars f
           end
 
@@ -173,8 +170,7 @@ let type_variables_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Flexible (var, _) -> (var, `Flexible, `Type point)
-               | `Rigid (var, _) -> (var, `Rigid, `Type point)
+               | `Var (var, _, freedom) -> (var, freedom, `Type point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -182,15 +178,13 @@ let type_variables_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Flexible (var, _) -> (var, `Flexible, `Row row_var)
-               | `Rigid (var, _) -> (var, `Rigid, `Row row_var)
+               | `Var (var, _, freedom) -> (var, freedom, `Row row_var)
                | _ -> assert false
            end
        | `Presence (`Var point) ->
            begin
              match Unionfind.find point with
-               | `Flexible var -> (var, `Flexible, `Presence point)
-               | `Rigid var -> (var, `Rigid, `Presence point)
+               | `Var (var, _, freedom) -> (var, freedom, `Presence point)
                | _ -> assert false
            end
        | `Presence _ -> assert false)
@@ -220,29 +214,17 @@ let extract_quantifiers quantifiers =
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
-let rigidify_quantifier =
-  function
-    | `TypeVar (_, point) ->
-        begin
-          match Unionfind.find point with
-            | `Flexible (var, subkind) -> Unionfind.change point (`Rigid (var, subkind))
-            | `Rigid _ -> ()
-            | _ -> assert false
-        end
-    | `RowVar (_, point) ->
-        begin
-          match Unionfind.find point with
-            | `Flexible (var, subkind) -> Unionfind.change point (`Rigid (var, subkind))
-            | `Rigid _ -> ()
-            | _ -> assert false
-        end
-    | `PresenceVar (_, point) ->
-        begin
-          match Unionfind.find point with
-            | `Flexible var -> Unionfind.change point (`Rigid var)
-            | `Rigid _ -> ()
-            | _ -> assert false
-        end
+let rigidify_quantifier : quantifier -> unit =
+  let rigidify_point point =
+    match Unionfind.find point with
+    | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
+    | `Var _ -> ()
+    | _ -> assert false
+  in
+    function
+    | `TypeVar (_, point) -> rigidify_point point
+    | `RowVar (_, point) -> rigidify_point point
+    | `PresenceVar (_, point) -> rigidify_point point
 
 (** generalise:
     Universally quantify any free type variables in the expression.
@@ -281,7 +263,7 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_type_variables : environment -> datatype -> type_variable list =
+let get_type_variables : environment -> datatype -> tyvar_wrapper list =
   fun env t ->
     get_type_variables (env_type_vars env) t
 

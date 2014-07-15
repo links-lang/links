@@ -106,7 +106,7 @@ struct
                        datatype var_env t)
         | MuType (name, t) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
+            let point = Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
@@ -116,20 +116,20 @@ struct
                 match kind with
                 | `Type, subkind ->
                     let var = Types.fresh_raw_variable () in
-                    let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                    let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = `TypeVar ((var, subkind), point) in
                     let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
                       var_env, q::qs
                 | `Row, subkind ->
                     let var = Types.fresh_raw_variable () in
-                    let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                    let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = `RowVar ((var, subkind), point) in
                     let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
                       var_env, q::qs
-                | `Presence, _subkind ->
+                | `Presence, subkind ->
                     let var = Types.fresh_raw_variable () in
-                    let point = Unionfind.fresh (`Rigid var) in
-                    let q = `PresenceVar (var, point) in
+                    let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
+                    let q = `PresenceVar ((var, subkind), point) in
                     let var_env = {var_env with penv=StringMap.add name point var_env.penv} in
                       var_env, q::qs in
 
@@ -200,7 +200,7 @@ struct
             end
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Flexible (var, (`Any, `Any))) in
+            let point = Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)) in
             let renv = StringMap.add name point var_env.renv in
             let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
               (StringMap.empty, point, false) in
@@ -227,30 +227,15 @@ struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (`Type, subkind), `Flexible ->
-               let t = Unionfind.fresh (`Flexible (var, subkind)) in
+             | (`Type, subkind), freedom ->
+               let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  `TypeVar ((var, subkind), t)::vars, addt x t envs
-             (* (var, `Type subkind, `Flexible)::vars, addt x t envs *)
-             | (`Type, subkind), `Rigid ->
-               let t = Unionfind.fresh (`Rigid (var, subkind)) in
-                 `TypeVar ((var, subkind), t)::vars, addt x t envs
-             (* (var, `Type subkind, `Rigid)::vars, addt x t envs *)
-             | (`Row, subkind), `Flexible ->
-               let r = Unionfind.fresh (`Flexible (var, subkind)) in
+             | (`Row, subkind), freedom ->
+               let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  `RowVar ((var, subkind), r)::vars, addr x r envs
-             (* (var, `Row subkind, `Flexible)::vars, addr x r envs *)
-             | (`Row, subkind), `Rigid ->
-               let r = Unionfind.fresh (`Rigid (var, subkind)) in
-                 `RowVar ((var, subkind), r)::vars , addr x r envs
-             (* (var, `Row subkind, `Rigid)::vars, addr x r envs *)
-             | (`Presence, _subkind), `Flexible ->
-               let f = Unionfind.fresh (`Flexible var) in
-                 `PresenceVar (var, f)::vars, addf x f envs
-             (* (var, `Presence, `Flexible)::vars, addf x f envs *)
-             | (`Presence, _subkind), `Rigid ->
-               let f = Unionfind.fresh (`Rigid var) in
-                 `PresenceVar (var, f)::vars, addf x f envs)
-             (* (var, `Presence, `Flexible)::vars, addf x f envs) *)
+             | (`Presence, subkind), freedom ->
+               let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
+                 `PresenceVar ((var, subkind), f)::vars, addf x f envs)
         ([], empty_env)
         vars
     in
@@ -271,16 +256,16 @@ struct
                   let var = Types.fresh_raw_variable () in
                     match q with
                       | (name, (`Type, subkind), _freedom) ->
-                          let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                          let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (`TypeVar ((var, subkind), point)))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
                       | (name, (`Row, subkind), _freedom) ->
-                          let point = Unionfind.fresh (`Rigid (var, subkind)) in
+                          let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (`RowVar ((var, subkind), point)))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-                      | (name, (`Presence, _subkind), _freedom) ->
-                          let point = Unionfind.fresh (`Rigid var) in
-                            ((q, Some (`PresenceVar (var, point)))::args,
+                      | (name, (`Presence, subkind), _freedom) ->
+                          let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
+                            ((q, Some (`PresenceVar ((var, subkind), point)))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
           (args, datatype' envs alias_env rhs)
       with

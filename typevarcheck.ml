@@ -35,8 +35,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `MetaTypeVar point ->
             begin
               match Unionfind.find point with
-                | `Flexible (var', _)
-                | `Rigid (var', _) -> (var <> var')
+                | `Var (var', _, _) -> (var <> var')
                 | `Recursive (var', t) ->
                     (var=var' || TypeVarSet.mem var' bound_vars) ||
                       is_guarded (TypeVarSet.add var' bound_vars) var t
@@ -102,8 +101,7 @@ and is_guarded_row_var : bool -> TypeVarSet.t -> int -> row_var -> bool =
   fun check_fields bound_vars var row_var ->
     match Unionfind.find row_var with
       | `Closed -> true
-      | `Flexible (var', _)
-      | `Rigid (var', _) -> var <> var'
+      | `Var (var', _, _) -> var <> var'
       | `Recursive (var', row) ->
           (var=var' || TypeVarSet.mem var' bound_vars) ||
             is_guarded_row check_fields (TypeVarSet.add var' bound_vars) var row
@@ -129,8 +127,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `MetaTypeVar point ->
             begin
               match Unionfind.find point with
-                | `Flexible _
-                | `Rigid _ -> false
+                | `Var _ -> false
                 | `Recursive (var', t) ->
                     not (TypeVarSet.mem var' bound_vars) &&
                       is_negative (TypeVarSet.add var' bound_vars) var t
@@ -176,8 +173,7 @@ and is_negative_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->
     match Unionfind.find row_var with
       | `Closed
-      | `Flexible _
-      | `Rigid _ -> false
+      | `Var _ -> false
       | `Recursive (var', row) ->
           not (TypeVarSet.mem var' bound_vars) &&
             is_negative_row (TypeVarSet.add var' bound_vars) var row
@@ -202,8 +198,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `MetaTypeVar point ->
             begin
               match Unionfind.find point with
-                | `Flexible _
-                | `Rigid _ -> false
+                | `Var _ -> false
                 | `Recursive (var', t) ->
                     not (TypeVarSet.mem var' bound_vars) &&
                       is_positive (TypeVarSet.add var' bound_vars) var t
@@ -245,8 +240,7 @@ and is_positive_presence : TypeVarSet.t -> int -> field_spec -> bool =
       | `Var point ->
           begin
             match Unionfind.find point with
-              | `Flexible var'
-              | `Rigid var' -> var = var'
+              | `Var (var', _, _) -> var = var'
               | `Body f -> is_positive_presence bound_vars var f
           end
 and is_positive_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
@@ -259,8 +253,7 @@ and is_positive_row_var : TypeVarSet.t -> int -> row_var -> bool =
   fun bound_vars var row_var ->
     match Unionfind.find row_var with
       | `Closed -> false
-      | `Flexible (var', _)
-      | `Rigid (var', _) -> var=var'
+      | `Var (var', _, _) -> var=var'
       | `Recursive (var', row) ->
           not (TypeVarSet.mem var' bound_vars) &&
             is_positive_row (TypeVarSet.add var' bound_vars) var row
