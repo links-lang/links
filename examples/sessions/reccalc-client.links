@@ -1,0 +1,41 @@
+typename CalcSelect = mu a.[+|Add:!Int.!Int.?Int.a, Mul:!Int.!Int.?Int.a, Stop:End|+];
+typename CalcOffer  = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
+
+sig calc : (CalcOffer) ~> ()
+fun calc(s) client {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var s = give(x+y,s);
+      calc(s)
+    case Mul(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var s = give(x*y,s);
+      calc(s)
+    case Stop(s) ->
+      ()
+  }
+}
+
+sig user : (CalcSelect) ~> Int
+fun user(s) client {
+  var (x, s) = grab(give(6,give(7,select Mul s)));
+  var (y, s) = grab(give(6,give(7,select Mul s)));
+  var (z, s) = grab(give(x,give(y,select Add s)));
+  var _ = select Stop s;
+  z
+}
+
+fun main() client {
+  var a = new ();
+  var _ = spawn { calc(accept(a)) };
+  user(request(a))
+}
+
+
+page
+  <html><body>
+    Hey, hi.  Also {stringToXml(intToString(main()))}.
+  </body></html>
