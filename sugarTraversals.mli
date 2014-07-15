@@ -27,6 +27,10 @@ class map :
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
     method subkind         : subkind -> subkind
+    method kind            : kind -> kind
+    method freedom         : freedom -> freedom
+    method type_variable   : type_variable -> type_variable
+    method known_type_variable   : known_type_variable -> known_type_variable
     method row_var         : row_var -> row_var
     method row             : row -> row
     method replace_rhs     : replace_rhs -> replace_rhs
@@ -45,7 +49,6 @@ class map :
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
-    (* method quantifier      : quantifier -> quantifier *)
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
@@ -90,6 +93,10 @@ class fold :
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
     method subkind         : subkind -> 'self
+    method kind            : kind -> 'self
+    method freedom         : freedom -> 'self
+    method type_variable   : type_variable -> 'self
+    method known_type_variable : known_type_variable -> 'self
     method row_var         : row_var -> 'self
     method row             : row -> 'self
     method replace_rhs     : replace_rhs -> 'self
@@ -179,6 +186,10 @@ object ('self)
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
   method subkind         : subkind -> 'self * subkind
+  method kind            : kind -> 'self * kind
+  method freedom         : freedom -> 'self * freedom
+  method type_variable   : type_variable -> 'self * type_variable
+  method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : type_arg -> 'self * type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op

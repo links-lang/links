@@ -10,27 +10,27 @@ let type_variable_counter = ref 0
 
 let fresh_type_variable : subkind -> datatype =
   function subkind ->
-    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_type_variable : subkind -> datatype =
   function subkind ->
-    incr type_variable_counter; RigidTypeVar ("_" ^ string_of_int (!type_variable_counter), subkind)
+    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_row_variable : subkind -> row_var =
   function subkind ->
-    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind)
+    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_row_variable : subkind -> row_var =
   function subkind ->
-    incr type_variable_counter; `OpenRigid ("_" ^ string_of_int (!type_variable_counter), subkind)
+    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_presence_variable : unit -> fieldspec =
   function () -> 
-    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter))
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Flexible)
   
 let fresh_rigid_presence_variable : unit -> fieldspec =
   function () -> 
-    incr type_variable_counter; `RigidVar ("_" ^ string_of_int (!type_variable_counter))
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Rigid)
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -60,12 +60,12 @@ let attach_kind pos (t, k) =
    (t,
     begin
       match k with
-      | `Type -> `Type (`Any, `Any)
-      | `BaseType -> `Type (`Any, `Base)
-      | `Row -> `Row (`Any, `Any)
-      | `BaseRow -> `Row (`Any, `Base)
-      | `Presence -> `Presence
-      | `Session -> `Type (`Any, `Session)
+      | `Type     -> `Type, (`Any, `Any)
+      | `BaseType -> `Type, (`Any, `Base)
+      | `Row      -> `Row, (`Any, `Any)
+      | `BaseRow  -> `Row, (`Any, `Base)
+      | `Presence -> `Presence, (`Any, `Any)
+      | `Session  -> `Type, (`Any, `Session)
     end,
     `Flexible)
 
@@ -81,10 +81,8 @@ let attach_subkind_helper update pos subkind =
 let attach_subkind pos (t, subkind) =
   let update lin_opt rest_opt =
     match t with
-    | TypeVar (x, (linearity, restriction)) ->
-       TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
-    | RigidTypeVar (x, (linearity, restriction)) ->
-       RigidTypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | TypeVar (x, (linearity, restriction), freedom) ->
+       TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt), freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -92,10 +90,8 @@ let attach_subkind pos (t, subkind) =
 let attach_session_subkind pos (t, subkind) =
   let update lin_opt rest_opt =
     match t with
-    | `TypeVar (x, (linearity, restriction)) ->
-       `TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
-    | `RigidTypeVar (x, (linearity, restriction)) ->
-       `RigidTypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | `TypeVar (x, (linearity, restriction), freedom) ->
+       `TypeVar (x, (from_option linearity lin_opt, from_option restriction rest_opt), freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -103,10 +99,8 @@ let attach_session_subkind pos (t, subkind) =
 let attach_row_subkind pos (r, subkind) =
   let update lin_opt rest_opt =
     match r with
-    | `Open (x, (linearity, restriction)) ->
-       `Open (x, (from_option linearity lin_opt, from_option restriction rest_opt))
-    | `OpenRigid (x, (linearity, restriction)) ->
-       `OpenRigid (x, (from_option linearity lin_opt, from_option restriction rest_opt))
+    | `Open (x, (linearity, restriction), freedom) ->
+       `Open (x, (from_option linearity lin_opt, from_option restriction rest_opt), freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -325,8 +319,8 @@ subkind:
 | UNLSESSION                                                   { `UnlSession }
 
 typearg:
-| VARIABLE                                                     { (($1, `Type (`Unl, `Any), `Flexible), None) }
-| VARIABLE  kind                                               { (attach_kind (pos()) ($1, $2), None) }
+| VARIABLE                                                     { (($1, (`Type, (`Unl, `Any)), `Flexible), None) }
+| VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
 | typearg                                                      { [$1] }
@@ -914,16 +908,16 @@ session_type:
 | kinded_session_type_var                                      { $1 }
 
 session_type_var:
-| VARIABLE                                                     { `RigidTypeVar ($1, (`Any, `Any)) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Any, `Any)) }
+| VARIABLE                                                     { `TypeVar ($1, (`Any, `Any), `Rigid) }
+| PERCENTVAR                                                   { `TypeVar ($1, (`Any, `Any), `Flexible) }
 /* TODO: support underscore and percent; rationalise parsing of type variables */
 
 kinded_session_type_var:
 | session_type_var subkind                                     { attach_session_subkind (pos()) ($1, $2) }
 
 type_var:
-| VARIABLE                                                     { RigidTypeVar ($1, (`Unl, `Any)) }
-| PERCENTVAR                                                   { TypeVar ($1, (`Unl, `Any)) }
+| VARIABLE                                                     { TypeVar ($1, (`Unl, `Any), `Rigid) }
+| PERCENTVAR                                                   { TypeVar ($1, (`Unl, `Any), `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
 | PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
 
@@ -1017,14 +1011,14 @@ fieldspec:
 | LBRACE COLON datatype RBRACE                                 { `Present $3 }
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `RigidVar $2 }
-| LBRACE PERCENTVAR RBRACE                                     { `Var $2 }
+| LBRACE VARIABLE RBRACE                                       { `Var ($2, (`Any, `Any), `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, (`Any, `Any), `Flexible) }
 | LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable () }
 
 nonrec_row_var:
-| VARIABLE                                                     { `OpenRigid ($1, (`Any, `Any)) }
-| PERCENTVAR                                                   { `Open ($1, (`Any, `Any)) }
+| VARIABLE                                                     { `Open ($1, (`Any, `Any), `Rigid) }
+| PERCENTVAR                                                   { `Open ($1, (`Any, `Any), `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_row_variable (`Unl, `Any) }
 | PERCENT                                                      { fresh_row_variable (`Any, `Any) }
 

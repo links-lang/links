@@ -64,15 +64,27 @@ class map =
 
     method subkind : subkind -> subkind = fun x -> x
 
+    method kind : kind -> kind = fun x -> x
+
+    method freedom : freedom -> freedom = fun x -> x
+
+    method type_variable : type_variable -> type_variable =
+      fun (_x, _x_i1, _x_i2) ->
+        let _x = o#name _x in
+        let _x_i1 = o#kind _x_i1 in
+        let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
+
+    method known_type_variable : known_type_variable -> known_type_variable =
+      fun (_x, _x_i1, _x_i2) ->
+        let _x = o#name _x in
+        let _x_i1 = o#subkind _x_i1 in
+        let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
+
     method row_var : row_var -> row_var =
       function
       | `Closed -> `Closed
-      | `Open (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in `Open ((_x, _x_i1))
-      | `OpenRigid (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in `OpenRigid ((_x, _x_i1))
+      | `Open _x ->
+          let _x = o#known_type_variable _x in `Open _x
       | `Recursive ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
@@ -405,21 +417,10 @@ class map =
       function
       | `Present _x -> let _x = o#datatype _x in `Present _x
       | `Absent -> `Absent
-      | `RigidVar _x -> let _x = o#name _x in `RigidVar _x
-      | `Var _x -> let _x = o#name _x in `Var _x
+      | `Var _x -> let _x = o#known_type_variable _x in `Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       function | `Readonly -> `Readonly | `Default -> `Default
-
-    (* method quantifier : quantifier -> quantifier = *)
-    (*   function *)
-    (*   | `TypeVar (_x, _x_i1) -> *)
-    (*       let _x = o#name _x in *)
-    (*       let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1)) *)
-    (*   | `RowVar (_x, _x_i1) -> *)
-    (*       let _x = o#name _x in *)
-    (*       let _x_i1 = o#subkind _x_i1 in `RowVar ((_x, _x_i1)) *)
-    (*   | `PresenceVar _x -> let _x = o#name _x in `PresenceVar _x *)
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -428,12 +429,8 @@ class map =
 
     method datatype : datatype -> datatype =
       function
-      | TypeVar (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in TypeVar ((_x, _x_i1))
-      | RigidTypeVar (_x , _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#subkind _x_i1 in RigidTypeVar ((_x, _x_i1))
+      | TypeVar _x ->
+          let _x = o#known_type_variable _x in TypeVar _x
       | FunctionType (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -482,12 +479,8 @@ class map =
         let _x = o#row _x in `Select _x
       | `Choice _x ->
         let _x = o#row _x in `Choice _x
-      | `TypeVar (_x, _x_i1) ->
-        let _x = o#name _x in
-        let _x_i1 = o#subkind _x_i1 in `TypeVar ((_x, _x_i1))
-      | `RigidTypeVar (_x, _x_i1) ->
-        let _x = o#name _x in
-        let _x_i1 = o#subkind _x_i1 in `RigidTypeVar ((_x, _x_i1))
+      | `TypeVar _x ->
+        let _x = o#known_type_variable _x in `TypeVar _x
       | `Dual _x ->
         let _x = o#session_type _x in `Dual _x
       | `End -> `End
@@ -629,15 +622,27 @@ class fold =
 
     method subkind : subkind -> 'self_type = fun x -> o
 
+    method kind : kind -> 'self_type = fun x -> o
+
+    method freedom : freedom -> 'self_type = fun x -> o
+
+    method type_variable : type_variable -> 'self_type =
+      fun (_x, _x_i1, _x_i2) ->
+        let o = o#name _x in
+        let o = o#kind _x_i1 in
+        let o = o#freedom _x_i2 in o
+
+    method known_type_variable : known_type_variable -> 'self_type =
+      fun (_x, _x_i1, _x_i2) ->
+        let o = o#name _x in
+        let o = o#subkind _x_i1 in
+        let o = o#freedom _x_i2 in o
+
     method row_var : row_var -> 'self_type =
       function
       | `Closed -> o
-      | `Open (_x, _x_i1) ->
-          let o = o#name _x in
-          let o = o#subkind _x_i1 in o
-      | `OpenRigid (_x, _x_i1) ->
-          let o = o#name _x in
-          let o = o#subkind _x_i1 in o
+      | `Open _x ->
+          let o = o#known_type_variable _x in o
       | `Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
 
@@ -925,8 +930,7 @@ class fold =
       function
       | `Present _x -> let o = o#datatype _x in o
       | `Absent -> o
-      | `RigidVar _x -> let o = o#name _x in o
-      | `Var _x -> let o = o#name _x in o
+      | `Var _x -> let o = o#known_type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
       function | `Readonly -> o | `Default -> o
@@ -939,12 +943,8 @@ class fold =
 
     method datatype : datatype -> 'self_type =
       function
-      | TypeVar (_x, _x_i1) ->
-          let o = o#name _x in
-          let o = o#subkind _x_i1 in o
-      | RigidTypeVar (_x, _x_i1) ->
-          let o = o#name _x in
-          let o = o#subkind _x_i1 in o
+      | TypeVar _x ->
+          let o = o#known_type_variable _x in o
       | FunctionType (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -987,12 +987,8 @@ class fold =
         let o = o#row _x in o
       | `Choice _x ->
         let o = o#row _x in o
-      | `TypeVar (_x, _x_i1) ->
-        let o = o#name _x in
-        let o = o#subkind _x_i1 in o
-      | `RigidTypeVar (_x, _x_i1) ->
-        let o = o#name _x in
-        let o = o#subkind _x_i1 in o
+      | `TypeVar _x ->
+        let o = o#known_type_variable _x in o
       | `Dual _x ->
         let o = o#session_type _x in o
       | `End -> o
@@ -1147,15 +1143,27 @@ class fold_map =
 
     method subkind : subkind -> ('self_type * subkind) = fun k -> (o, k)
 
+    method kind : kind -> ('self_type * kind) = fun k -> (o, k)
+
+    method freedom : freedom -> ('self_type * freedom) = fun k -> (o, k)
+
+    method type_variable : type_variable -> ('self_type * type_variable) =
+      fun (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#kind _x_i1 in
+        let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
+
+    method known_type_variable : known_type_variable -> ('self_type * known_type_variable) =
+      fun (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#subkind _x_i1 in
+        let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
+
     method row_var : row_var -> ('self_type * row_var) =
       function
       | `Closed -> (o, `Closed)
-      | `Open (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, (`Open ((_x, _x_i1))))
-      | `OpenRigid (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, (`OpenRigid ((_x, _x_i1))))
+      | `Open _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (`Open _x))
       | `Recursive ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
@@ -1508,8 +1516,7 @@ class fold_map =
       function
       | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
       | `Absent -> (o, `Absent)
-      | `RigidVar _x -> let (o, _x) = o#name _x in (o, `RigidVar _x)
-      | `Var _x -> let (o, _x) = o#name _x in (o, `Var _x)
+      | `Var _x -> let (o, _x) = o#known_type_variable _x in (o, `Var _x)
 
     method fieldconstraint :
       fieldconstraint -> ('self_type * fieldconstraint) =
@@ -1528,12 +1535,8 @@ class fold_map =
 
     method datatype : datatype -> ('self_type * datatype) =
       function
-      | TypeVar (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, (TypeVar ((_x, _x_i1))))
-      | RigidTypeVar (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#subkind _x_i1 in (o, (RigidTypeVar ((_x, _x_i1))))
+      | TypeVar _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (TypeVar _x))
       | FunctionType (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
@@ -1587,12 +1590,8 @@ class fold_map =
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
         let (o, _x) = o#row _x in (o, `Choice _x)
-      | `TypeVar (_x, _x_i1) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#subkind _x_i1 in (o, (`TypeVar ((_x, _x_i1))))
-      | `RigidTypeVar (_x, _x_i1) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#subkind _x_i1 in (o, (`RigidTypeVar ((_x, _x_i1))))
+      | `TypeVar _x ->
+        let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
       | `Dual _x ->
         let (o, _x) = o#session_type _x in (o, `Dual _x)
       | `End -> (o, `End)

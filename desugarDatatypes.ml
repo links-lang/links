@@ -51,9 +51,8 @@ object (self)
     | b          -> super#bindingnode b
 
   method datatype = function
-    | TypeVar (x, k)      -> self#add (x, `Type k, `Flexible)
-    | RigidTypeVar (x, k) -> self#add (x, `Type k, `Rigid)
-    | MuType (v, t)       -> let o = self#bind (v, `Type (`Any, `Any), `Rigid) in o#datatype t
+    | TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
+    | MuType (v, t)       -> let o = self#bind (v, (`Type, (`Any, `Any)), `Rigid) in o#datatype t
     | ForallType (qs, t)  ->
         let o =
           List.fold_left
@@ -66,21 +65,19 @@ object (self)
     | dt                  -> super#datatype dt
 
   method session_type = function
-    | `TypeVar (x, (lin, _)) -> self#add (x, `Type (lin, `Session), `Flexible)
-    | `RigidTypeVar (x, (lin, _)) -> self#add (x, `Type (lin, `Session), `Rigid)
+    (* TODO: the wildcard on the restriction indicates a bug in the parser *)
+    | `TypeVar (x, (lin, _), freedom) -> self#add (x, (`Type, (lin, `Session)), freedom)
     | st -> super#session_type st
 
   method row_var = function
-    | `Closed           -> self
-    | `Open (x, k)      -> self#add (x, `Row k, `Flexible)
-    | `OpenRigid (x, k) -> self#add (x, `Row k, `Rigid)
-    | `Recursive (s, r) -> let o = self#bind (s, `Row (`Any, `Any), `Rigid) in o#row r
+    | `Closed               -> self
+    | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
+    | `Recursive (s, r)     -> let o = self#bind (s, (`Row, (`Any, `Any)), `Rigid) in o#row r
 
   method fieldspec = function
     | `Absent -> self
     | `Present t -> self#datatype t
-    | `Var s -> self#add (s, `Presence, `Flexible)
-    | `RigidVar s -> self#add (s, `Presence, `Rigid)
+    | `Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -97,10 +94,8 @@ struct
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t var_env.tenv in
       match t with
-        | TypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
-                             with NotFound _ -> raise (UnexpectedFreeVar s))
-        | RigidTypeVar (s, _) -> (try `MetaTypeVar (lookup_type s)
-                                  with NotFound _ -> raise (UnexpectedFreeVar s))
+        | TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
+                                with NotFound _ -> raise (UnexpectedFreeVar s))
         | FunctionType (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
                        row var_env alias_env e,
@@ -119,19 +114,19 @@ struct
             let desugar_quantifier (var_env, qs) =
               fun (name, kind, freedom) ->
                 match kind with
-                | `Type subkind ->
+                | `Type, subkind ->
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Rigid (var, subkind)) in
                     let q = `TypeVar ((var, subkind), point) in
                     let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
                       var_env, q::qs
-                | `Row subkind ->
+                | `Row, subkind ->
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Rigid (var, subkind)) in
                     let q = `RowVar ((var, subkind), point) in
                     let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
                       var_env, q::qs
-                | `Presence ->
+                | `Presence, _subkind ->
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Rigid var) in
                     let q = `PresenceVar (var, point) in
@@ -175,12 +170,7 @@ struct
     | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Select r -> `Select (row var_env alias_env r)
     | `Choice r -> `Choice (row var_env alias_env r)
-    | `TypeVar (s, _) ->
-      begin
-        try `MetaSessionVar (lookup_type s)
-        with NotFound _ -> raise (UnexpectedFreeVar s)
-      end
-    | `RigidTypeVar (s, _) ->
+    | `TypeVar (s, _, _) ->
       begin
         try `MetaSessionVar (lookup_type s)
         with NotFound _ -> raise (UnexpectedFreeVar s)
@@ -193,8 +183,7 @@ struct
       function
         | `Absent -> `Absent
         | `Present t -> `Present (datatype var_env alias_env t)
-        | `RigidVar name
-        | `Var name ->
+        | `Var (name, _, _) ->
             begin
               try `Var (lookup_flag name)
               with NotFound _ -> raise (UnexpectedFreeVar name)
@@ -204,8 +193,7 @@ struct
     let seed =
       match rv with
         | `Closed -> Types.make_empty_closed_row ()
-        | `OpenRigid (rv, _)
-        | `Open (rv, _) ->
+        | `Open (rv, _, _) ->
             begin
               try (StringMap.empty, lookup_row rv, false)
               with NotFound _ -> raise (UnexpectedFreeVar rv)
@@ -239,27 +227,27 @@ struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (`Type subkind, `Flexible) ->
+             | (`Type, subkind), `Flexible ->
                let t = Unionfind.fresh (`Flexible (var, subkind)) in
                  `TypeVar ((var, subkind), t)::vars, addt x t envs
              (* (var, `Type subkind, `Flexible)::vars, addt x t envs *)
-             | (`Type subkind, `Rigid) ->
+             | (`Type, subkind), `Rigid ->
                let t = Unionfind.fresh (`Rigid (var, subkind)) in
                  `TypeVar ((var, subkind), t)::vars, addt x t envs
              (* (var, `Type subkind, `Rigid)::vars, addt x t envs *)
-             | (`Row subkind, `Flexible) ->
+             | (`Row, subkind), `Flexible ->
                let r = Unionfind.fresh (`Flexible (var, subkind)) in
                  `RowVar ((var, subkind), r)::vars, addr x r envs
              (* (var, `Row subkind, `Flexible)::vars, addr x r envs *)
-             | (`Row subkind, `Rigid) ->
+             | (`Row, subkind), `Rigid ->
                let r = Unionfind.fresh (`Rigid (var, subkind)) in
                  `RowVar ((var, subkind), r)::vars , addr x r envs
              (* (var, `Row subkind, `Rigid)::vars, addr x r envs *)
-             | (`Presence, `Flexible) ->
+             | (`Presence, _subkind), `Flexible ->
                let f = Unionfind.fresh (`Flexible var) in
                  `PresenceVar (var, f)::vars, addf x f envs
              (* (var, `Presence, `Flexible)::vars, addf x f envs *)
-             | (`Presence, `Rigid) ->
+             | (`Presence, _subkind), `Rigid ->
                let f = Unionfind.fresh (`Rigid var) in
                  `PresenceVar (var, f)::vars, addf x f envs)
              (* (var, `Presence, `Flexible)::vars, addf x f envs) *)
@@ -282,15 +270,15 @@ struct
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with
-                      | (name, `Type subkind, _freedom) ->
+                      | (name, (`Type, subkind), _freedom) ->
                           let point = Unionfind.fresh (`Rigid (var, subkind)) in
                             ((q, Some (`TypeVar ((var, subkind), point)))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-                      | (name, `Row subkind, _freedom) ->
+                      | (name, (`Row, subkind), _freedom) ->
                           let point = Unionfind.fresh (`Rigid (var, subkind)) in
                             ((q, Some (`RowVar ((var, subkind), point)))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-                      | (name, `Presence, _freedom) ->
+                      | (name, (`Presence, _subkind), _freedom) ->
                           let point = Unionfind.fresh (`Rigid var) in
                             ((q, Some (`PresenceVar (var, point)))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in

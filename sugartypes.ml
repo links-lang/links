@@ -81,10 +81,16 @@ type subkind = linearity * restriction
 type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
-type kind = [`Type of subkind | `Row of subkind | `Presence]
+type primary_kind = [`Type | `Row | `Presence]
+    deriving (Show)
+
+type kind = primary_kind * subkind
     deriving (Show)
 
 type type_variable = name * kind * freedom
+    deriving (Show)
+
+type known_type_variable = name * subkind * freedom
     deriving (Show)
 
 type quantifier = type_variable
@@ -96,8 +102,7 @@ type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type datatype =
-  | TypeVar         of name * subkind
-  | RigidTypeVar    of name * subkind
+  | TypeVar         of known_type_variable
   | FunctionType    of datatype list * row * datatype
   | LolliType       of datatype list * row * datatype
   | MuType          of name * datatype
@@ -115,14 +120,12 @@ type datatype =
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
-    | `Open of name * subkind
-    | `OpenRigid of name * subkind
+    | `Open of known_type_variable
     | `Recursive of name * row ]
 and fieldspec =
     [ `Present of datatype
     | `Absent
-    | `RigidVar of name
-    | `Var of name ]
+    | `Var of known_type_variable ]
 and type_arg =
     [ `Type of datatype
     | `Row of row
@@ -132,8 +135,7 @@ and session_type =
     | `Output of datatype * session_type
     | `Select of row
     | `Choice of row
-    | `TypeVar of name * subkind
-    | `RigidTypeVar of name * subkind
+    | `TypeVar of known_type_variable
     | `Dual of session_type
     | `End ]
       deriving (Show)
