@@ -724,6 +724,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
           raise (Failure (`Msg ("Present absent clash")))
 (*`PresentAbsentClash (label, lrow, rrow) *)
       | `Var lpoint, `Var rpoint ->
+        (* TODO: take into account subkinds! *)
           begin
             match Unionfind.find lpoint, Unionfind.find rpoint with
               | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)

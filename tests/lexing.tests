@@ -1,0 +1,24 @@
+Incomplete expression
+1 +
+stderr : @..*
+exit : 1
+
+Incomplete start element
+<a
+stderr : @..*
+exit : 1
+
+Incomplete attribute
+<a b="
+stderr : @..*
+exit : 1
+
+Incomplete regexp (1)
+"abc" =~ /ab
+stderr : @..*
+exit : 1
+
+Incomplete regexp (2)
+"abc" =~ s/ab/de
+stderr : @..*
+exit : 1

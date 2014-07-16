@@ -26,7 +26,6 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
-        Debug.print ("program: " ^ Show.show Sugartypes.show_program program);
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
