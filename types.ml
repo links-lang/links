@@ -306,6 +306,9 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
       | `Variant r -> is_unl_row (rec_vars, quant_vars) r
       | `Table _ -> true
       | `Alias (_, t) -> iut t
+      (* We might support linear lists like this...
+         but we'd need to replace hd and tl with a split operation. *)
+      (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
       | `MetaTypeVar point ->
         begin
@@ -368,6 +371,9 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `Variant r -> row_can_be_unl (rec_vars, quant_vars) r
     | `Table _ -> true
     | `Alias (_, t) -> tcu t
+      (* We might support linear lists like this...
+         but we'd need to replace hd and tl with a split operation. *)
+    (* | `Application ({Abstype.id="List"}, [`Type t]) -> tcu t *)
     | `Application _ -> true (* TODO: change this if we add linear abstract types *)
     | `MetaTypeVar point ->
       begin
