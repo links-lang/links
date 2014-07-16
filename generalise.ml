@@ -201,11 +201,11 @@ let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_ar
 let extract_quantifiers quantifiers =
   let quantifier_type_args =
     function
-      | `TypeVar (_, point) ->
+      | (_, _, `Type point) ->
           get_type_args `All TypeVarSet.empty (`MetaTypeVar point)
-      | `RowVar (_, row_var) ->
+      | (_, _, `Row row_var) ->
           get_row_var_type_args `All TypeVarSet.empty row_var
-      | `PresenceVar (_, point) ->
+      | (_, _, `Presence point) ->
           get_presence_type_args `All TypeVarSet.empty (`Var point)
   in
     Types.quantifiers_of_type_args
@@ -222,9 +222,9 @@ let rigidify_quantifier : quantifier -> unit =
     | _ -> assert false
   in
     function
-    | `TypeVar (_, point) -> rigidify_point point
-    | `RowVar (_, point) -> rigidify_point point
-    | `PresenceVar (_, point) -> rigidify_point point
+    | (_, _, `Type point)     -> rigidify_point point
+    | (_, _, `Row point)      -> rigidify_point point
+    | (_, _, `Presence point) -> rigidify_point point
 
 (** generalise:
     Universally quantify any free type variables in the expression.

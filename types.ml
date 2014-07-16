@@ -26,10 +26,13 @@ type subkind = linearity * restriction
     deriving (Eq, Show)
 
 type freedom = [`Rigid | `Flexible]
-    deriving (Show)
+    deriving (Eq, Show)
 
-type kind = [ `Type of subkind | `Row of subkind | `Presence of subkind ]
-    deriving (Show, Eq)
+type primary_kind = [ `Type | `Row | `Presence ]
+    deriving (Eq, Show)
+
+type kind = primary_kind * subkind
+    deriving (Eq, Show)
 
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
@@ -71,12 +74,13 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [`Row (`Any, `Any)] ;
+  arity      = [`Row, (`Any, `Any)] ;
 }
+
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [`Type (`Any, `Any)] ;
+  arity      = [`Type, (`Any, `Any)] ;
 }
 
 let event    = {
@@ -93,7 +97,7 @@ let dom_node = {
 let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
-  arity      = [`Type (`Any, `Session)] ;
+  arity      = [`Type, (`Any, `Session)] ;
 }
 
 type typ =
@@ -117,10 +121,8 @@ and row            = field_spec_map * row_var * bool (* true if the row variable
 and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
-and quantifier =
-    [ `TypeVar of (int * subkind) * meta_type_var
-    | `RowVar of (int * subkind) * meta_row_var
-    | `PresenceVar of (int * subkind) * meta_presence_var]
+and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
+and quantifier = int * subkind * meta_var
 and type_arg = 
     [ `Type of typ | `Row of row | `Presence of field_spec ]
 and session_type =
@@ -259,11 +261,35 @@ let check_rec : int -> var_set -> 'a -> (var_set -> 'a) -> 'a =
     else
       k (IntSet.add var rec_vars)
 
+let var_of_quantifier : quantifier -> int =
+  function
+    | var, _, _ -> var
+
+let kind_of_quantifier : quantifier -> kind =
+  function
+  | _, sk, `Type _     -> `Type, sk
+  | _, sk, `Row _      -> `Row, sk
+  | _, sk, `Presence _ -> `Presence, sk
+
+let type_arg_of_quantifier : quantifier -> type_arg =
+  function
+    | _, _, `Type point     -> `Type (`MetaTypeVar point)
+    | _, _, `Row row_var    -> `Row (FieldEnv.empty, row_var, false)
+    | _, _, `Presence point -> `Presence (`Var point)
+
+let primary_kind_of_quantifier : quantifier -> primary_kind =
+  function
+  | _, _, `Type _     -> `Type
+  | _, _, `Row _      -> `Row
+  | _, _, `Presence _ -> `Presence
+
+let primary_kind_of_type_arg : type_arg -> primary_kind =
+  function
+  | `Type _     -> `Type
+  | `Row _      -> `Row
+  | `Presence _ -> `Presence
+
 let add_quantified_vars qs vars =
-  let var_of_quantifier = function
-    | `TypeVar ((v, _), _) -> v
-    | `RowVar ((v, _), _) -> v
-    | `PresenceVar ((v, _), _) -> v in
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
 
 
@@ -585,25 +611,7 @@ type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `
 
 type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
       deriving (Show)
-
-let var_of_quantifier =
-  function
-    | `TypeVar     ((var, _), _) -> var
-    | `RowVar      ((var, _), _) -> var
-    | `PresenceVar ((var, _), _) -> var
-
-let kind_of_quantifier =
-  function
-  | `TypeVar     ((_, sk), _) -> `Type sk
-  | `RowVar      ((_, sk), _) -> `Row sk
-  | `PresenceVar ((_, sk), _) -> `Presence sk
-
-let type_arg_of_quantifier =
-  function
-    | `TypeVar (_, point)     -> `Type (`MetaTypeVar point)
-    | `RowVar (_, row_var)    -> `Row (FieldEnv.empty, row_var, false)
-    | `PresenceVar (_, point) -> `Presence (`Var point)
-
+    
 type datatype = typ
 
 (* useful for debugging: types tend to be too big to read *)
@@ -690,54 +698,54 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let fresh_type_quantifier subkind : quantifier * datatype =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
-      `TypeVar ((var, subkind), point), `MetaTypeVar point
+      (var, subkind, `Type point), `MetaTypeVar point
 
   let fresh_row_quantifier subkind : quantifier * row =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var subkind in
-      `RowVar ((var, subkind), point), (FieldEnv.empty, point, false)
+      (var, subkind, `Row point), (FieldEnv.empty, point, false)
 
   let fresh_presence_quantifier subkind : quantifier * field_spec =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
-      `PresenceVar ((var, subkind), point), `Var point
+      (var, subkind, `Presence point), `Var point
 
   let fresh_flexible_type_quantifier subkind : quantifier * datatype =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Flexible)) in
-      `TypeVar ((var, subkind), point), `MetaTypeVar point
+      (var, subkind, `Type point), `MetaTypeVar point
 
   let fresh_flexible_row_quantifier subkind : quantifier * row =
     let var = fresh_raw_variable () in
     let point = make_row_variable var subkind in
-      `RowVar ((var, subkind), point), (FieldEnv.empty, point, false)
+      (var, subkind, `Row point), (FieldEnv.empty, point, false)
 
   let fresh_flexible_presence_quantifier subkind : quantifier * field_spec =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Flexible)) in
-      `PresenceVar ((var, subkind), point), `Var point
+      (var, subkind, `Presence point), `Var point
 
 let freshen_quantifier =
   function
-    | `TypeVar ((_, subkind), _) ->
+    | (_, subkind, `Type _) ->
         let q, t = fresh_type_quantifier subkind in
           q, `Type t
-    | `RowVar ((_, subkind), _) ->
+    | (_, subkind, `Row _) ->
         let q, row = fresh_row_quantifier subkind in
           q, `Row row
-    | `PresenceVar ((_, subkind), _) ->
+    | (_, subkind, `Presence _) ->
         let q, f = fresh_presence_quantifier subkind in
           q, `Presence f
 
 let freshen_quantifier_flexible =
   function
-    | `TypeVar ((_, subkind), _) ->
+    | (_, subkind, `Type _) ->
         let q, t = fresh_flexible_type_quantifier subkind in
           q, `Type t
-    | `RowVar ((_, subkind), _) ->
+    | (_, subkind, `Row _) ->
         let q, row = fresh_flexible_row_quantifier subkind in
           q, `Row row
-    | `PresenceVar ((_, subkind), _) ->
+    | (_, subkind, `Presence _) ->
         let q, f = fresh_flexible_presence_quantifier subkind in
           q, `Presence f
 
@@ -1215,7 +1223,7 @@ let quantifiers_of_type_args =
        | `Type (`MetaTypeVar point) ->
            begin
              match Unionfind.find point with
-               | `Var (var, subkind, _) -> `TypeVar ((var, subkind), point)
+               | `Var (var, subkind, _) -> (var, subkind, `Type point)
                | _ -> assert false
            end
        | `Type _ -> assert false
@@ -1223,13 +1231,13 @@ let quantifiers_of_type_args =
            assert (StringMap.is_empty fields);
            begin
              match Unionfind.find row_var with
-               | `Var (var, subkind, _) -> `RowVar ((var, subkind), row_var)
+               | `Var (var, subkind, _) -> (var, subkind, `Row row_var)
                | _ -> assert false
            end
        | `Presence (`Var point) ->
            begin
              match Unionfind.find point with
-               | `Var (var, subkind, _) -> `PresenceVar ((var, subkind), point)
+               | `Var (var, subkind, _) -> (var, subkind, `Presence point)
                | _ -> assert false
            end
        | `Presence _ -> assert false)
@@ -1242,12 +1250,9 @@ let is_rigid_quantifier q =
       | _ -> false
   in
     match q with
-      | `TypeVar (_, point) ->
-          rigid point
-      | `RowVar (_, point) ->
-          rigid point
-      | `PresenceVar (_, point) ->
-          rigid point
+      | _, _, `Type     point -> rigid point
+      | _, _, `Row      point -> rigid point
+      | _, _, `Presence point -> rigid point
 
 let is_instantiated_quantifier q =
   let is_concrete_type t =
@@ -1274,21 +1279,21 @@ let is_instantiated_quantifier q =
       | _ -> true
   in
     match q with
-      | `TypeVar (_, point) ->
+      | _, _, `Type point ->
           begin
             match Unionfind.find point with
               | `Recursive _ -> true
               | `Body t -> is_concrete_type t
               | _ -> false
           end
-      | `RowVar (_, point) ->
+      | _, _, `Row point ->
           begin
             match Unionfind.find point with
               | `Recursive _ -> true
               | `Body row -> is_concrete_row row
               | _ -> false
           end
-      | `PresenceVar (_, point) ->
+      | _, _, `Presence point ->
           begin
             match Unionfind.find point with
               | `Body f -> is_concrete_field_spec f
@@ -1298,23 +1303,23 @@ let is_instantiated_quantifier q =
 (* update a quantifier with any changes to its point *)
 let normalise_quantifier = fun q ->
   match q with
-    | `TypeVar (_, point) ->
+    | _, _, `Type point ->
         begin
           match Unionfind.find point with
-            | `Var (var, subkind, _) -> `TypeVar ((var, subkind), point)
-            | _ -> q
+            | `Var (var, subkind, _) -> (var, subkind, `Type point)
+            | _ -> (* TODO: shouldn't this be an error? *) q
         end
-    | `RowVar (_, point) ->
+    | _, _, `Row point ->
         begin
           match Unionfind.find point with
-            | `Var (var, subkind, _) -> `RowVar ((var, subkind), point)
-            | _ -> q
+            | `Var (var, subkind, _) -> (var, subkind, `Row point)
+            | _ -> (* TODO: shouldn't this be an error? *) q
         end
-    | `PresenceVar (_, point) ->
+    | _, _, `Presence point ->
         begin
           match Unionfind.find point with
-            | `Var (var, subkind, _) -> `PresenceVar ((var, subkind), point)
-            | _ -> q
+            | `Var (var, subkind, _) -> (var, subkind, `Presence point)
+            | _ -> (* TODO: shouldn't this be an error? *) q
         end
 
 let rec flexible_of_type t =
@@ -1396,7 +1401,7 @@ let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
 module Vars =
 struct
   type flavour = [`Rigid | `Flexible | `Recursive]
-  type kind = [`Type | `Row  | `Presence]
+  type kind = primary_kind
   type scope = [`Free | `Bound]
   type spec = flavour * kind * int
 
@@ -1422,10 +1427,7 @@ struct
     else
       `Flexible
     in
-      match q with
-        | `TypeVar ((var, _subkind), _) -> var, (flavour, `Type, `Bound)
-        | `RowVar ((var, _subkind), _) -> var, (flavour, `Row, `Bound)
-        | `PresenceVar ((var, _subkind), _) -> var, (flavour, `Presence, `Bound)
+      var_of_quantifier q, (flavour, primary_kind_of_quantifier q, `Bound)
 
   (* find all free and bound type variables *)
   (*
@@ -1628,11 +1630,11 @@ struct
   let kind : (policy * names) -> kind -> string =
     fun (_policy, _vars) ->
       function
-        | `Type sk -> subkind (_policy, _vars) sk
-        | `Row sk ->
+        | `Type, sk -> subkind (_policy, _vars) sk
+        | `Row, sk ->
            let s = subkind (_policy, _vars) sk in
              if s="" then "::Row" else s ^ " Row"
-        | `Presence sk ->
+        | `Presence, sk ->
            let s = subkind (_policy, _vars) sk in
              if s ="" then "::Presence" else s ^ " Presence"
 
@@ -1645,11 +1647,7 @@ struct
         else
           "%"
       in
-        match q with
-          | `TypeVar ((var, _), _)
-          | `RowVar ((var, _), _)
-          | `PresenceVar ((var, _), _) ->
-              prefix ^ Vars.find var vars ^ kind (policy, vars) k
+        prefix ^ Vars.find (var_of_quantifier q) vars ^ kind (policy, vars) k
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
@@ -2038,7 +2036,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
           begin
             match Unionfind.find point with
               | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-              | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (`TypeVar ((var, subkind), point))
+              | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Type point)
               | `Var (_, _, `Rigid) -> TypeVarMap.empty
               | `Recursive (var, body) ->
                   if TypeVarSet.mem var bound_vars then
@@ -2078,7 +2076,7 @@ and presence_flexible_type_vars bound_vars =
         begin
           match Unionfind.find point with
             | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-            | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (`PresenceVar ((var, subkind), point))
+            | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Presence point)
             | `Var (var, _, `Rigid) -> TypeVarMap.empty
             | `Body f -> presence_flexible_type_vars bound_vars f
         end
@@ -2096,7 +2094,7 @@ and row_var_flexible_type_vars bound_vars row_var =
   match Unionfind.find row_var with
     | `Closed -> TypeVarMap.empty
     | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
-    | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (`RowVar ((var, subkind), row_var))
+    | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Row row_var)
     | `Var (_, _, `Rigid) -> TypeVarMap.empty
     | `Recursive (var, row) ->
         if TypeVarSet.mem var bound_vars then
@@ -2251,12 +2249,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `ForAll (qs, t)          ->
           make_env
             (List.fold_right
-               (fun q boundvars ->
-                  match q with
-                    | `TypeVar ((var, _), _)
-                    | `RowVar ((var, _), _)
-                    | `PresenceVar ((var, _), _) ->
-                        S.add var boundvars)
+               (fun q boundvars -> S.add (var_of_quantifier q) boundvars)
                (unbox_quantifiers qs)
                boundvars)
             t

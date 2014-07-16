@@ -16,12 +16,7 @@ let rec add_extras =
     | [], [] -> []
     | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
     | Some q::extras, tyargs ->
-        begin
-          match q with
-            | `TypeVar (_, point) -> `Type (`MetaTypeVar point) :: add_extras (extras, tyargs)
-            | `RowVar (_, row_var) -> `Row (StringMap.empty, row_var, false) :: add_extras (extras, tyargs)
-            | `PresenceVar (_, point) -> `Presence (`Var point) :: add_extras (extras, tyargs)
-        end
+      (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
 
 class desugar_inners env =
 object (o : 'self_type)

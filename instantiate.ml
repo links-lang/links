@@ -202,26 +202,26 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           let var' = fresh_raw_variable () in
           let point = Unionfind.fresh (wrap var' subkind) in
           let t = `MetaTypeVar point in
-            IntMap.add var t tenv, renv, penv, `Type t :: tys, (`TypeVar ((var', subkind), point)) :: qs in
+            IntMap.add var t tenv, renv, penv, `Type t :: tys, (var', subkind, `Type point) :: qs in
 
         let row (var, subkind) (tenv, renv, penv, tys, qs ) =
           let var' = fresh_raw_variable () in
           let r = Unionfind.fresh (wrap var' subkind) in
-            tenv, IntMap.add var (StringMap.empty, r, false) renv, penv, `Row (StringMap.empty, r ,false) :: tys, (`RowVar ((var', subkind), r)) :: qs in
+            tenv, IntMap.add var (StringMap.empty, r, false) renv, penv, `Row (StringMap.empty, r ,false) :: tys, (var', subkind, `Row r) :: qs in
 
         let presence (var, subkind) (tenv, renv, penv, tys, qs) =
           let var' = fresh_raw_variable () in
           let point = Unionfind.fresh (wrap var' subkind) in
           let t = `Var point in
-            tenv, renv, IntMap.add var t penv, `Presence t :: tys, (`PresenceVar ((var, subkind), point)) :: qs in
+            tenv, renv, IntMap.add var t penv, `Presence t :: tys, (var, subkind, `Presence point) :: qs in
 
         let tenv, renv, penv, tys, qs =
           List.fold_left
             (fun env ->
                function
-                 | `TypeVar ((var, subkind), _) -> typ (var, subkind) env
-                 | `RowVar ((var, subkind), _) -> row (var, subkind) env
-                 | `PresenceVar ((var, subkind), _) -> presence (var, subkind) env)
+                 | (var, subkind, `Type _)     -> typ (var, subkind) env
+                 | (var, subkind, `Row _)      -> row (var, subkind) env
+                 | (var, subkind, `Presence _) -> presence (var, subkind) env)
             (IntMap.empty, IntMap.empty, IntMap.empty, [], []) (unbox_quantifiers quantifiers) in
 
         let tys = List.rev tys in
@@ -331,9 +331,9 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
       List.fold_right2
         (fun var t (tenv, renv, penv) ->
            match (var, t) with
-             | (`TypeVar ((var, _subkind), _), `Type t) ->
+             | (var, _subkind, `Type _), `Type t ->
                  (IntMap.add var t tenv, renv, penv)
-             | (`RowVar ((var, _subkind), _), `Row row) ->
+             | (var, _subkind, `Row _), `Row row ->
                  (*
                     QUESTION:
 
@@ -350,7 +350,7 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
                      | _ ->
                          (tenv, IntMap.add var row renv, penv)
                  end
-             | (`PresenceVar ((var, _), _), `Presence f) ->
+             | (var, _, `Presence _), `Presence f ->
                  (tenv, renv, IntMap.add var f penv)
              | _ -> assert false)
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
@@ -371,13 +371,13 @@ let freshen_quantifiers t =
                   List.split
                     (List.map
                        (function
-                          | `TypeVar ((_, subkind), _) ->
+                          | (_, subkind, `Type _) ->
                               let q, t = Types.fresh_type_quantifier subkind in
                                 q, `Type t
-                          | `RowVar ((_, subkind), _) ->
+                          | (_, subkind, `Row _) ->
                               let q, r = Types.fresh_row_quantifier subkind in
                                 q, `Row r
-                          | `PresenceVar ((_, subkind), _) ->
+                          | (_, subkind, `Presence _) ->
                               let q, f = Types.fresh_presence_quantifier subkind in
                                 q, `Presence f)
                        qs)
@@ -395,13 +395,8 @@ let replace_quantifiers t qs' =
         let tyargs =
           List.map2
             (fun q q' ->
-               match q, q' with
-                 | `TypeVar _, `TypeVar (_, point)  ->
-                     `Type (`MetaTypeVar point)
-                 | `RowVar _, `RowVar (_, row_var) ->
-                     `Row (StringMap.empty, row_var, false)
-                 | `PresenceVar _, `PresenceVar (_, point)  ->
-                     `Presence (`Var point))
+              assert (primary_kind_of_quantifier q = primary_kind_of_quantifier q');
+              type_arg_of_quantifier q')
             (Types.unbox_quantifiers qs)
             qs'
         in
@@ -426,13 +421,15 @@ let alias name tyargs env =
         let tenv, renv, penv =
           List.fold_right2
             (fun q arg (tenv, renv, penv) ->
-               match q, arg with
-                 | `TypeVar ((x, _), _), `Type t ->
-                     IntMap.add x t tenv, renv, penv
-                 | `RowVar ((x, _), _), `Row row ->
-                     tenv, IntMap.add x row renv, penv
-                 | `PresenceVar ((x, _), _), `Presence f  ->
-                     tenv, renv, IntMap.add x f penv)
+              assert (primary_kind_of_quantifier q = primary_kind_of_type_arg arg);
+              let x = var_of_quantifier q in
+                match arg with
+                | `Type t ->
+                  IntMap.add x t tenv, renv, penv
+                | `Row row ->
+                  tenv, IntMap.add x row renv, penv
+                | `Presence f  ->
+                  tenv, renv, IntMap.add x f penv)
             vars
             tyargs
             (IntMap.empty, IntMap.empty, IntMap.empty) in

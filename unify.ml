@@ -127,9 +127,7 @@ and eq_sessions : (session_type * session_type) -> bool =
   | _, _ -> false
 and eq_quantifier : (quantifier * quantifier) -> bool =
   function
-    | `TypeVar ((lvar, _), _), `TypeVar ((rvar, _), _)
-    | `RowVar ((lvar, _), _), `RowVar ((rvar, _), _)
-    | `PresenceVar ((lvar, _), _), `PresenceVar ((rvar, _), _) -> lvar = rvar
+    | (lvar, _, _), (rvar, _, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
@@ -576,9 +574,7 @@ fun rec_env ->
               (* check that two quantifiers have the same kind *)
               let are_compatible =
                 function
-                  | `TypeVar ((l, _), _), `TypeVar ((r, _), _)
-                  | `RowVar ((l, _), _), `RowVar ((r, _), _)
-                  | `PresenceVar ((l, _), _), `PresenceVar ((r, _), _) -> l=r
+                  | (l, _, _), (r, _, _) -> l=r
                   | _ -> false in
 
               (* identify which quantifiers start off rigid *)

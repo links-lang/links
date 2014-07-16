@@ -26,16 +26,13 @@ type subkind = linearity * restriction
     deriving (Eq, Show)
 
 type freedom = [`Rigid | `Flexible]
-    deriving (Show)
+    deriving (Eq, Show)
 
-type kind = [ `Type of subkind | `Row of subkind | `Presence of subkind ]
-    deriving (Show, Eq)
+type primary_kind = [ `Type | `Row | `Presence ]
+    deriving (Eq, Show)
 
-(* TODO: separate kind into a primary_kind and a subkind *)
-(* type primary_kind = [ `Type | `Row | `Presence ] *)
-(*     deriving (Show) *)
-(* type kind = primary_kind * subkind *)
-(*     deriving (Show) *)
+type kind = primary_kind * subkind
+    deriving (Eq, Show)
 
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
@@ -89,10 +86,8 @@ and row = field_spec_map * row_var * bool
 and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
-and quantifier =
-    [ `TypeVar of (int * subkind) * meta_type_var
-    | `RowVar of (int * subkind) * meta_row_var
-    | `PresenceVar of (int * subkind) * meta_presence_var ]
+and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
+and quantifier = int * subkind * meta_var
 and type_arg = 
     [ `Type of typ | `Row of row | `Presence of field_spec ]
 and session_type =
@@ -195,9 +190,13 @@ val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
 val var_of_quantifier : quantifier -> int
+val primary_kind_of_quantifier : quantifier -> primary_kind
+val kind_of_quantifier : quantifier -> kind
 val type_arg_of_quantifier : quantifier -> type_arg
 val freshen_quantifier : quantifier -> quantifier * type_arg
 val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
+
+val primary_kind_of_type_arg : type_arg -> primary_kind
 
 val quantifiers_of_type_args : type_arg list -> quantifier list
 
