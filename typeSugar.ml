@@ -1692,7 +1692,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let needed_env =
               StringMap.map
-                (fun _f -> Types.fresh_presence_variable ())
+                (fun _f -> Types.fresh_presence_variable (`Any, `Base))
                 field_env in
 
             (* all fields being inserted must be present in the read row *)
@@ -1772,7 +1772,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let needed_env =
               StringMap.map
-                (fun _f -> Types.fresh_presence_variable ())
+                (fun _f -> Types.fresh_presence_variable (`Any, `Base))
                 field_env in
 
             (* all fields being updated must be present in the read row *)

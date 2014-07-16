@@ -52,6 +52,9 @@ type 't meta_presence_var_basis =
     [ 't meta_type_var_non_rec_basis ]
       deriving (Show)
 
+(* this subsumes all of the other meta_X_basis thingies *)
+type 't meta_max_basis = 't meta_row_var_basis
+
 type istring = string deriving (Show)
 let eq_istring : istring Eq.eq = { Eq.eq = (=) }
 
@@ -77,10 +80,13 @@ let process  = {
   arity      = [`Row, (`Any, `Any)] ;
 }
 
+(* Lists are currently unlimited because the only deconstructors are
+   hd and tl. There's nothing to stop us rolling our own potentially
+   linear lists, though. *)
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [`Type, (`Any, `Any)] ;
+  arity      = [`Type, (`Unl, `Any)] ;
 }
 
 let event    = {
@@ -294,6 +300,18 @@ let add_quantified_vars qs vars =
 
 
 (* unl type stuff *)
+
+let is_unl_point =
+  fun f (rec_vars, quant_vars) point ->
+    begin
+      match Unionfind.find point with
+      | `Closed -> true
+      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || lin=`Unl
+      | `Body t -> f (rec_vars, quant_vars) t
+      | `Recursive (var, t) ->
+        check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
+    end
+
 let rec is_unl_type : (var_set * var_set) -> typ -> bool =
   fun (rec_vars, quant_vars) ->
     let iut t = is_unl_type (rec_vars, quant_vars) t in
@@ -310,117 +328,78 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
          but we'd need to replace hd and tl with a split operation. *)
       (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-      | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-          | `Var (var, (lin, _), _) ->
-             IntSet.mem var quant_vars || lin=`Unl
-          | `Body t -> iut t
-          | `Recursive (var, t) ->
-            check_rec var rec_vars true (fun rec_vars' -> is_unl_type (rec_vars', quant_vars) t)
-        end
+      | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
       | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
       | `Session s -> is_unl_session (rec_vars, quant_vars) s
-and is_unl_row (rec_vars, quant_vars) (fields, row_var, _) =
-  let unl_row_var =
-    match Unionfind.find row_var with
-    | `Closed -> true
-    | `Var (v, (lin, _), _) -> IntSet.mem v quant_vars || lin=`Unl
-    | `Body row -> is_unl_row (rec_vars, quant_vars) row
-    | `Recursive (var, row) ->
-      check_rec var rec_vars true (fun rec_vars' -> is_unl_row (rec_vars', quant_vars) row) in
+and is_unl_field vars =
+  function
+  | `Absent -> true
+  | `Present t ->
+    is_unl_type vars t
+  | `Var point -> is_unl_point is_unl_field vars point
+and is_unl_row vars (fields, row_var, _) =
+  let unl_row_var = is_unl_point is_unl_row vars row_var in
   let unl_fields =
     FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Absent -> b
-        | `Present t ->
-          b && is_unl_type (rec_vars, quant_vars) t
-        | `Var point ->
-          (* TODO: need to add subkinds to presence variables *)
-          assert false)
+      (fun _ f b -> b && is_unl_field vars f)
       fields
       true in
   unl_row_var && unl_fields
-and is_unl_session (rec_vars, quant_vars) =
+and is_unl_session vars =
   function
-  | `MetaSessionVar point ->
-    begin
-      match Unionfind.find point with
-      | `Var (v, (lin, _), _) -> IntSet.mem v quant_vars || lin=`Unl
-      | `Body t -> is_unl_type (rec_vars, quant_vars) t
-      | `Recursive (var, t) ->
-        (* SL: I'm not sure that we can actually do anything useful
-           with unlimited recursive sessions, but at least this makes
-           things uniform *)
-        check_rec var rec_vars true (fun rec_vars' -> is_unl_type (rec_vars', quant_vars) t)
-    end
-  | `Dual s -> is_unl_session (rec_vars, quant_vars) s
+  | `MetaSessionVar point -> is_unl_type vars (`MetaTypeVar point)
+  | `Dual s -> is_unl_session vars s
   | `End -> true
   | _ -> false
 
+let point_can_be_unl =
+  fun f ((rec_vars, quant_vars) as vars) point ->
+    begin
+        match Unionfind.find point with
+        | `Closed -> true
+        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || lin=`Unl
+        | `Var (_, _, `Flexible)     -> true
+        | `Body t -> f vars t
+        | `Recursive (var, t) ->
+          check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
+      end
+
 let rec type_can_be_unl : var_set * var_set -> typ -> bool =
-  fun (rec_vars, quant_vars) ->
-    let tcu t = type_can_be_unl (rec_vars, quant_vars) t in
+  fun ((rec_vars, quant_vars) as vars) ->
+    let tcu t = type_can_be_unl vars t in
     function
     | `Not_typed -> assert false
     | `Primitive _
     | `Function _ -> true
     | `Lolli _ -> false
     | `Record r
-    | `Variant r -> row_can_be_unl (rec_vars, quant_vars) r
+    | `Variant r -> row_can_be_unl vars r
     | `Table _ -> true
     | `Alias (_, t) -> tcu t
-      (* We might support linear lists like this...
+    (* We might support linear lists like this...
          but we'd need to replace hd and tl with a split operation. *)
     (* | `Application ({Abstype.id="List"}, [`Type t]) -> tcu t *)
     | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || lin=`Unl
-        | `Var (_, _, `Flexible) -> true
-        | `Body t -> tcu t
-        | `Recursive (var, t) ->
-          check_rec var rec_vars true (fun rec_vars' -> type_can_be_unl (rec_vars', quant_vars) t)
-      end
+    | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
-    | `Session s -> session_can_be_unl (rec_vars, quant_vars) s
-and row_can_be_unl (rec_vars, quant_vars) (fields, row_var, _) =
-  let unl_row_var =
-    match Unionfind.find row_var with
-    | `Closed
-    | `Var (_, _, `Flexible) -> true
-    | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || lin=`Unl
-    | `Body row -> row_can_be_unl (rec_vars, quant_vars) row
-    | `Recursive (var, row) ->
-      check_rec var rec_vars true (fun rec_vars' -> row_can_be_unl (rec_vars', quant_vars) row) in
+    | `Session s -> session_can_be_unl vars s
+and field_can_be_unl vars =
+  function
+  | `Absent    -> true
+  | `Present t -> type_can_be_unl vars t
+  | `Var point -> point_can_be_unl field_can_be_unl vars point
+and row_can_be_unl vars (fields, row_var, _) =
+  let unl_row_var = point_can_be_unl row_can_be_unl vars row_var in
   let unl_fields =
     FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Absent -> b
-        | `Present t ->
-         b && type_can_be_unl (rec_vars, quant_vars) t
-        | `Var _ -> (* TODO: subkinds for presence variables *) assert false)
+      (fun _ f b -> b && field_can_be_unl vars f)
       fields
       true in
   unl_row_var && unl_fields
-and session_can_be_unl (rec_vars, quant_vars) =
+and session_can_be_unl vars =
   function
-  | `MetaSessionVar point ->
-    begin
-      match Unionfind.find point with
-      | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || lin=`Unl
-      | `Var (_, _, `Flexible) -> true
-      | `Body t -> type_can_be_unl (rec_vars, quant_vars) t
-      | `Recursive (var, t) ->
-        (* SL: I'm not sure that we can actually do anything useful
-           with unlimited recursive sessions, but at least this makes
-           things uniform *)
-        check_rec var rec_vars true (fun rec_vars' -> type_can_be_unl (rec_vars', quant_vars) t)
-    end
-  | `Dual s -> session_can_be_unl (rec_vars, quant_vars) s
+  | `MetaSessionVar point -> type_can_be_unl vars (`MetaTypeVar point)
+  | `Dual s -> session_can_be_unl vars s
   | `End -> true
   | _ -> false
 
@@ -432,53 +411,39 @@ let type_can_be_unl = type_can_be_unl (IntSet.empty, IntSet.empty)
 let row_can_be_unl = row_can_be_unl (IntSet.empty, IntSet.empty)
 let session_can_be_unl = session_can_be_unl (IntSet.empty, IntSet.empty)
 
+let make_point_unl : ((var_set * var_set) -> 'a -> unit) -> (var_set * var_set) -> [< 'a meta_max_basis] point -> unit =
+  fun f ((rec_vars, quant_vars) as vars) point ->
+    match Unionfind.find point with
+    | `Closed -> ()
+    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || lin = `Unl then () else assert false
+    | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (`Unl, rest), `Flexible))
+    | `Body t -> f vars t
+    | `Recursive (var, t) ->
+      check_rec var rec_vars () (fun rec_vars' -> f (rec_vars', quant_vars) t)
+
 let rec make_type_unl : var_set * var_set -> typ -> unit =
-  fun (rec_vars, quant_vars) ->
+  fun ((rec_vars, quant_vars) as vars) ->
     function
     | `Not_typed -> assert false
     | `Primitive _ | `Function _ | `Table _ | `Session `End | `Application _ -> ()
-    | `Record r | `Variant r -> make_row_unl (rec_vars, quant_vars) r
-    | `Alias (_, t) -> make_type_unl (rec_vars, quant_vars) t
+    | `Record r | `Variant r -> make_row_unl vars r
+    | `Alias (_, t) -> make_type_unl vars t
     | `ForAll (qs, t) -> make_type_unl (rec_vars, add_quantified_vars !qs quant_vars) t
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var (v, (lin, _), `Rigid) -> if IntSet.mem v quant_vars || lin = `Unl then () else assert false
-        | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (`Unl, rest), `Flexible))
-        | `Body t -> make_type_unl (rec_vars, quant_vars) t
-        | `Recursive (var, t) ->
-          check_rec var rec_vars () (fun rec_vars' -> make_type_unl (rec_vars', quant_vars) t)
-        | _ -> assert false
-      end
-    | `Session s -> make_session_unl (rec_vars, quant_vars) s
+    | `MetaTypeVar point -> make_point_unl make_type_unl vars point
+    | `Session s -> make_session_unl vars s
     | _ -> assert false
-and make_row_unl (rec_vars, quant_vars) (fields, row_var, _) =
-  begin
-    match Unionfind.find row_var with
-    | `Closed -> ()
-    | `Var (v, (lin, _), `Rigid) -> if IntSet.mem v quant_vars || lin = `Unl then () else assert false
-    | `Var (var, (_, rest), `Flexible) -> Unionfind.change row_var (`Var (var, (`Unl, rest), `Flexible))
-    | `Body row -> make_row_unl (rec_vars, quant_vars) row
-    | `Recursive (var, row) ->
-      check_rec var rec_vars () (fun rec_vars' -> make_row_unl (rec_vars', quant_vars) row)
-    | _ -> assert false
-  end;
-  FieldEnv.iter (fun _ -> function
-  | `Absent -> ()
-  | `Present t -> make_type_unl (rec_vars, quant_vars) t
-  | `Var _ -> (* TODO: subkinds for presence variables *) assert false) fields
-and make_session_unl (rec_vars, quant_vars) =
+and make_field_unl vars =
   function
-  | `MetaSessionVar point ->
-    begin
-      match Unionfind.find point with
-      | `Var (v, (l, _), `Rigid) -> if IntSet.mem v quant_vars || l = `Unl then () else assert false
-      | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (`Unl, rest), `Flexible))
-      | `Body t -> make_type_unl (rec_vars, quant_vars) t
-      | `Recursive (var, t) ->
-        check_rec var rec_vars () (fun rec_vars' -> make_type_unl (rec_vars', quant_vars) t)
-    end
-  | `Dual s -> make_session_unl (rec_vars, quant_vars) s
+  | `Absent -> ()
+  | `Present t -> make_type_unl vars t
+  | `Var point -> make_point_unl make_field_unl vars point
+and make_row_unl vars (fields, row_var, _) =
+  make_point_unl make_row_unl vars row_var;
+  FieldEnv.iter (fun _name -> make_field_unl vars) fields
+and make_session_unl vars =
+  function 
+  | `MetaSessionVar point -> make_type_unl vars (`MetaTypeVar point)
+  | `Dual s -> make_session_unl vars s
   | `End -> ()
   | _ -> assert false
 
@@ -487,121 +452,109 @@ let make_row_unl = make_row_unl (IntSet.empty, IntSet.empty)
 let make_session_unl = make_session_unl (IntSet.empty, IntSet.empty)
 
 (* session kind stuff *)
+
+let is_session_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_basis] point -> bool =
+  fun f rec_vars point ->
+    match Unionfind.find point with
+    | `Closed
+    | `Var (_, (_, `Session), _) -> true
+    | `Var _ -> false
+    | `Body t -> f rec_vars t
+    | `Recursive (var, t) ->
+      check_rec var rec_vars true (flip f t)
+
 let rec is_session_type : var_set -> typ -> bool =
   fun rec_vars ->
     function
     | `Session _ -> true
     | `Alias (_, t) -> is_session_type rec_vars t
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var (_, (_, `Session), _) -> true
-        | `Var _ -> false
-        | `Body t -> is_session_type rec_vars t
-        | `Recursive (var, t) ->
-          check_rec var rec_vars true (flip is_session_type t)
-      end
+    | `MetaTypeVar point -> is_session_point is_session_type rec_vars point
     | _ -> false
 
+let rec is_session_field rec_vars =
+  function
+  | `Absent -> true
+  | `Present t -> is_session_type rec_vars t
+  | `Var point -> is_session_point is_session_field rec_vars point
+
 let rec is_session_row rec_vars (fields, row_var, _) =
-  let session_row_var =
-    match Unionfind.find row_var with
-      | `Closed
-      | `Var (_, (_, `Session), _) -> true
-      | `Var _ -> false
-      | `Body row -> is_session_row rec_vars row
-      | `Recursive (var, row) ->
-        check_rec var rec_vars true (flip is_session_row row) in
+  let session_row_var = is_session_point is_session_row rec_vars row_var in
   let session_fields =
-    FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Absent -> b
-        | `Present t -> b && is_session_type rec_vars t
-        | `Var _ -> (* TODO: subkinds for presence variables *) assert false)
+    FieldEnv.fold 
+      (fun _ f b -> b && is_session_field rec_vars f)
       fields
       true
   in
     session_row_var && session_fields
 
-let rec is_sessionable_type : var_set -> typ -> bool =
-  fun rec_vars ->
-    function
-    | `Session _ -> true
-    | `Alias (_, t) -> is_sessionable_type rec_vars t
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var (_, (_, `Session), _)
-        | `Var (_, (_, `Any),     `Flexible) -> true
-        | `Var (_, (_, `Base),    `Rigid)
-        | `Var (_, (_, `Any),     `Rigid)
-        | `Var (_, (_, `Base),    `Flexible) -> false
-        | `Body t -> is_sessionable_type rec_vars t
-        | `Recursive (var, t) ->
-          check_rec var rec_vars true (flip is_sessionable_type t)
-      end
-    | _ -> false
 
-let rec is_sessionable_row rec_vars (fields, row_var, _) =
-  let session_row_var =
-    match Unionfind.find row_var with
+let is_sessionable_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_basis] point -> bool =
+  fun f rec_vars point ->
+    match Unionfind.find point with
     | `Closed
     | `Var (_, (_, `Session), _)
     | `Var (_, (_, `Any),     `Flexible) -> true
     | `Var (_, (_, `Base),    `Rigid)
     | `Var (_, (_, `Any),     `Rigid)
     | `Var (_, (_, `Base),    `Flexible) -> false
-    | `Body row -> is_sessionable_row rec_vars row
-    | `Recursive (var, row) ->
-      check_rec var rec_vars true (flip is_sessionable_row row) in
+    | `Body t -> f rec_vars t
+    | `Recursive (var, t) ->
+      check_rec var rec_vars true (flip f t)
+
+let rec is_sessionable_type : var_set -> typ -> bool =
+  fun rec_vars ->
+    function
+    | `Session _ -> true
+    | `Alias (_, t) -> is_sessionable_type rec_vars t
+    | `MetaTypeVar point -> is_sessionable_point is_sessionable_type rec_vars point
+    | _ -> false
+
+let rec is_sessionable_field rec_vars =
+  function
+  | `Absent -> true
+  | `Present t -> is_sessionable_type rec_vars t
+  | `Var point -> is_sessionable_point is_sessionable_field rec_vars point
+  
+let rec is_sessionable_row rec_vars (fields, row_var, _) =
+  let session_row_var = is_sessionable_point is_sessionable_row rec_vars row_var in
   let session_fields =
     FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Absent -> b
-        | `Present t ->
-          b && is_sessionable_type rec_vars t
-        | `Var _ -> (* TODO: subkinds for presence variables *) assert false)
+      (fun _ f b -> b && is_sessionable_field rec_vars f)
       fields
       true
   in
     session_row_var && session_fields
+
+(* precondition: point is sessionable *)
+let sessionify_point : (var_set -> 'a -> unit) -> var_set -> [< 'a meta_max_basis] point -> unit =
+  fun f rec_vars point ->
+    match Unionfind.find point with
+    | `Closed
+    | `Var (_,   (_,   `Session), _)     -> ()
+    | `Var (var, (lin, `Any), `Flexible) -> Unionfind.change point (`Var (var, (lin, `Session), `Flexible))
+    | `Var _                             -> assert false
+    | `Body t                            -> f rec_vars t
+    | `Recursive (var, t)                -> check_rec var rec_vars () (flip f t)
 
 let rec sessionify_type : var_set -> typ -> unit =
   fun rec_vars ->
     function
     | `Session _ -> ()
     | `Alias (_, t) -> sessionify_type rec_vars t
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var (_,   (_,   `Session), _)     -> ()
-        | `Var (var, (lin, `Any), `Flexible) -> Unionfind.change point (`Var (var, (lin, `Session), `Flexible))
-        | `Var _                             -> assert false
-        | `Body t                            -> sessionify_type rec_vars t
-        | `Recursive (var, t)                -> check_rec var rec_vars () (flip sessionify_type t)
-      end
+    | `MetaTypeVar point -> sessionify_point sessionify_type rec_vars point
     | _ -> assert false
 
+let rec sessionify_field rec_vars =
+  function
+  | `Absent -> ()
+  | `Present t -> sessionify_type rec_vars t
+  | `Var point -> sessionify_point sessionify_field rec_vars point
+
 let rec sessionify_row rec_vars (fields, row_var, _) =
-  begin
-    match Unionfind.find row_var with
-      | `Closed
-      | `Var (_,   (_,   `Session), _)     -> ()
-      | `Var (var, (lin, `Any), `Flexible) -> Unionfind.change row_var (`Var (var, (lin, `Session), `Flexible))
-      | `Var _                             -> assert false
-      | `Body row                          -> sessionify_row rec_vars row
-      | `Recursive (var, row)              -> check_rec var rec_vars () (flip sessionify_row row)
-  end;
-  FieldEnv.fold
-    (fun _ f () ->
-      match f with
-      | `Absent -> ()
-      | `Present t -> sessionify_type rec_vars t
-      | `Var _ -> (* TODO: subkinds for presence variables *) assert false)
+  sessionify_point sessionify_row rec_vars row_var;
+  FieldEnv.iter
+    (fun _ f -> sessionify_field rec_vars f)
     fields
-    ()
 
 let is_session_type = is_session_type IntSet.empty
 let is_session_row = is_session_row IntSet.empty
@@ -655,9 +608,8 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let make_row_variable = build_type_variable `Flexible
   let make_rigid_row_variable = build_type_variable `Rigid
 
-  (* FIXME: subkind for presence *)
-  let make_presence_variable var = `Var (build_type_variable `Flexible var (`Any, `Any))
-  let make_rigid_presence_variable var = `Var (build_type_variable `Rigid var (`Any, `Any))
+  let make_presence_variable var subkind = `Var (build_type_variable `Flexible var subkind)
+  let make_rigid_presence_variable var subkind = `Var (build_type_variable `Rigid var subkind)
 
   let is_closed_row : row -> bool =
     let rec is_closed rec_vars =
@@ -669,7 +621,7 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
                 | `Var _ -> false
                 | `Recursive (var, row) ->
                     ((TypeVarSet.mem var rec_vars)
-                     or (is_closed (TypeVarSet.add var rec_vars) row))
+                        || (is_closed (TypeVarSet.add var rec_vars) row))
                 | `Body row ->
                     is_closed rec_vars row
             end
@@ -698,8 +650,8 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let fresh_row_variable subkind = make_row_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_row_variable subkind = make_rigid_row_variable (fresh_raw_variable ()) subkind
 
-  let fresh_presence_variable = make_presence_variable -<- fresh_raw_variable
-  let fresh_rigid_presence_variable = make_rigid_presence_variable -<- fresh_raw_variable
+  let fresh_presence_variable subkind = make_presence_variable (fresh_raw_variable ()) subkind
+  let fresh_rigid_presence_variable subkind = make_rigid_presence_variable (fresh_raw_variable ()) subkind
 
   let fresh_type_quantifier subkind : quantifier * datatype =
     let var = fresh_raw_variable () in
@@ -962,7 +914,7 @@ let is_rigid_row : row -> bool =
       | `Var (_, _, `Rigid) -> true
       | `Var (_, _, `Flexible) -> false
       | `Recursive (var, row) ->
-          ((TypeVarSet.mem var rec_vars) or (is_rigid (TypeVarSet.add var rec_vars) row))
+          ((TypeVarSet.mem var rec_vars) || (is_rigid (TypeVarSet.add var rec_vars) row))
       | `Body row ->
           is_rigid rec_vars row
   in
@@ -979,7 +931,7 @@ let is_rigid_row_with_var : int -> row -> bool =
         | `Var (_, _, `Flexible) -> false
         | `Var (var', _, `Rigid) -> var=var'
         | `Recursive (var', row) ->
-            ((TypeVarSet.mem var' rec_vars) or (is_rigid (TypeVarSet.add var' rec_vars) row))
+            ((TypeVarSet.mem var' rec_vars) || (is_rigid (TypeVarSet.add var' rec_vars) row))
         | `Body row ->
             is_rigid rec_vars row
     in
@@ -2279,12 +2231,12 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Var point ->
           begin
             match Unionfind.find point with
-              | `Var (var, _, `Flexible) ->
+              | `Var (var, subkind, `Flexible) ->
                   let tenv, renv, penv = empties in
-                    (tenv, renv, M.add var (fresh_presence_variable ()) penv)
-              | `Var (var, _, `Rigid) ->
+                    (tenv, renv, M.add var (fresh_presence_variable subkind) penv)
+              | `Var (var, subkind, `Rigid) ->
                   let tenv, renv, penv = empties in
-                    (tenv, renv, M.add var (fresh_rigid_presence_variable ()) penv)
+                    (tenv, renv, M.add var (fresh_rigid_presence_variable subkind) penv)
               | `Body f -> make_env_f boundvars f
           end
   and make_env_r boundvars ((field_env, row_var, _):row) =
@@ -2326,13 +2278,13 @@ let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Uti
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_rigid_type_variable (`Any, `Any)) tenv,
      IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (`Any, `Any), false)) renv,
-     IntMap.map (fun _ -> fresh_rigid_presence_variable ()) penv)
+     IntMap.map (fun _ -> fresh_rigid_presence_variable (`Any, `Any)) penv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_type_variable (`Any, `Any)) tenv,
      IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (`Any, `Any), false)) renv,
-     IntMap.map (fun _ -> fresh_presence_variable ()) penv)
+     IntMap.map (fun _ -> fresh_presence_variable (`Any, `Any)) penv)
 
 
 (* subtyping *)

@@ -223,8 +223,8 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_presence_variable : unit -> field_spec
-val fresh_rigid_presence_variable : unit -> field_spec
+val fresh_presence_variable : subkind -> field_spec
+val fresh_rigid_presence_variable : subkind -> field_spec
 
 (** fresh quantifiers *)
 val fresh_type_quantifier : subkind -> quantifier * datatype
