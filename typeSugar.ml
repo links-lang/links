@@ -1186,7 +1186,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
                     list_type p ps ot, list_type p ps it
             in
               `List (List.map erase ps'), env', ts
-        | `Variant (name, None) -> 
+        | `Variant (name, None) ->
             let vtype () = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
               `Variant (name, None), Env.empty, (vtype (), vtype ())
         | `Variant (name, Some p) ->
@@ -1361,6 +1361,25 @@ let uses_of v us =
   with
     _ -> 0
 
+let usage_compat (u::us) =
+  let same m n =
+    let mvs = List.map fst (StringMap.bindings m) in
+    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
+                          mvs in
+    let f v resulting_usages =
+      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
+        StringMap.add v (StringMap.find v m) resulting_usages
+      else
+        (* We need to treat anything appearing in this case as unlimited; '2' assures that no
+           matter whether the variable in question is used anywhere else or not, it must be
+           unlimited. *)
+        StringMap.add v 2 resulting_usages in
+    List.fold_right f vs StringMap.empty in
+  List.fold_right same us u
+
+let usages_cases bs =
+  usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
+
 let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
   fun context (expr, pos) ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -1385,23 +1404,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
-    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e)
-    and usages_cases bs =
-      let (u::us) = List.map (fun (_, (_, _, m)) -> m) bs in
-      let same m n =
-        let mvs = List.map fst (StringMap.bindings m) in
-        let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-                              mvs in
-        let f v resulting_usages =
-          if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-            StringMap.add v (StringMap.find v m) resulting_usages
-          else
-            (* We need to treat anything appearing in this case as unlimited; '2' assures that no
-            matter whether the variable in question is used anywhere else or not, it must be
-            unlimited. *)
-            StringMap.add v 2 resulting_usages in
-        List.fold_right f vs StringMap.empty in
-      List.fold_right same us u in
+    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
     let type_cases binders =
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
@@ -2208,7 +2211,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (pos_and_typ i, no_pos (`Primitive `Bool));
               unify ~handle:Gripers.if_branches
                 (pos_and_typ t, pos_and_typ e);
-              `Conditional (erase i, erase t, erase e), (typ t), merge_usages [usages i; usages t; usages e]
+              `Conditional (erase i, erase t, erase e), (typ t), merge_usages [usages i; usage_compat [usages t; usages e]]
         | `Block (bindings, e) ->
             let context', bindings, usage_builder = type_bindings context bindings in
             let e = type_check (Types.extend_typing_environment context context') e in
@@ -2289,10 +2292,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                 let fieldtype = Types.fresh_type_variable (`Any, `Any) in
                                   unify ~handle:Gripers.projection
                                     ((exp_pos r, rt),
-                                     no_pos (`Record (Types.make_singleton_open_row 
+                                     no_pos (`Record (Types.make_singleton_open_row
                                                         (l, `Present fieldtype)
                                                         (`Unl, `Any))));
-                                     
+
                                   let rn, rpos = erase r in
                                   let e = `Projection ((tappl (rn, tyargs), rpos), l) in
                                     e, fieldtype, usages r
@@ -2300,7 +2303,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   | _ ->
                       let fieldtype = Types.fresh_type_variable (`Any, `Any) in
                         unify ~handle:Gripers.projection
-                          (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row 
+                          (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row
                                                              (l, `Present fieldtype)
                                                              (`Unl, `Any))));
                         `Projection (erase r, l), fieldtype, usages r

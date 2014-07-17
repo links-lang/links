@@ -1,0 +1,10 @@
+fun (c) {
+  var (x, c) = grab(c);
+  if (x) {
+    ignore(give(1,c));
+    ()
+  } else {
+    ignore(give(2,c));
+    ()
+  }
+}
