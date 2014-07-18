@@ -509,7 +509,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"; "grab"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "grab"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
