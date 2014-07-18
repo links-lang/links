@@ -76,7 +76,7 @@ type typ =
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `MetaTypeVar of meta_type_var 
+    | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | `Session of session_type ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
@@ -88,7 +88,7 @@ and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
 and quantifier = int * subkind * meta_var
-and type_arg = 
+and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
 and session_type =
     [ `Input of typ * session_type
@@ -215,6 +215,7 @@ val make_type_variable : int -> subkind -> datatype
 val make_rigid_type_variable : int -> subkind -> datatype
 val make_row_variable : int -> subkind -> row_var
 val make_rigid_row_variable : int -> subkind -> row_var
+val make_session_variable : int -> subkind -> session_type
 
 (** fresh type variable generation *)
 val fresh_type_variable : subkind -> datatype
@@ -222,6 +223,8 @@ val fresh_rigid_type_variable : subkind -> datatype
 
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
+
+val fresh_session_variable : subkind -> session_type
 
 val fresh_presence_variable : subkind -> field_spec
 val fresh_rigid_presence_variable : subkind -> field_spec

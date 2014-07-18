@@ -116,7 +116,7 @@ type typ =
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `MetaTypeVar of meta_type_var 
+    | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | `Session of session_type ]
 
@@ -129,7 +129,7 @@ and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
 and quantifier = int * subkind * meta_var
-and type_arg = 
+and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
 and session_type =
     [ `Input of typ * session_type
@@ -142,7 +142,7 @@ and session_type =
       deriving (Show)
 
 let is_present =
-  function 
+  function
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
@@ -441,7 +441,7 @@ and make_row_unl vars (fields, row_var, _) =
   make_point_unl make_row_unl vars row_var;
   FieldEnv.iter (fun _name -> make_field_unl vars) fields
 and make_session_unl vars =
-  function 
+  function
   | `MetaSessionVar point -> make_type_unl vars (`MetaTypeVar point)
   | `Dual s -> make_session_unl vars s
   | `End -> ()
@@ -480,7 +480,7 @@ let rec is_session_field rec_vars =
 let rec is_session_row rec_vars (fields, row_var, _) =
   let session_row_var = is_session_point is_session_row rec_vars row_var in
   let session_fields =
-    FieldEnv.fold 
+    FieldEnv.fold
       (fun _ f b -> b && is_session_field rec_vars f)
       fields
       true
@@ -514,7 +514,7 @@ let rec is_sessionable_field rec_vars =
   | `Absent -> true
   | `Present t -> is_sessionable_type rec_vars t
   | `Var point -> is_sessionable_point is_sessionable_field rec_vars point
-  
+
 let rec is_sessionable_row rec_vars (fields, row_var, _) =
   let session_row_var = is_sessionable_point is_sessionable_row rec_vars row_var in
   let session_fields =
@@ -570,7 +570,7 @@ type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `
 
 type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
       deriving (Show)
-    
+
 type datatype = typ
 
 (* useful for debugging: types tend to be too big to read *)
@@ -602,12 +602,11 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let closed_row_var = Unionfind.fresh `Closed
 
   let build_type_variable freedom var subkind = Unionfind.fresh (`Var (var, subkind, freedom))
-
   let make_type_variable var subkind = `MetaTypeVar (build_type_variable `Flexible var subkind)
   let make_rigid_type_variable var subkind = `MetaTypeVar (build_type_variable `Rigid var subkind)
   let make_row_variable = build_type_variable `Flexible
   let make_rigid_row_variable = build_type_variable `Rigid
-
+  let make_session_variable var subkind = `MetaSessionVar (build_type_variable `Flexible var subkind)
   let make_presence_variable var subkind = `Var (build_type_variable `Flexible var subkind)
   let make_rigid_presence_variable var subkind = `Var (build_type_variable `Rigid var subkind)
 
@@ -649,6 +648,7 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let fresh_rigid_type_variable subkind = make_rigid_type_variable (fresh_raw_variable ()) subkind
   let fresh_row_variable subkind = make_row_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_row_variable subkind = make_rigid_row_variable (fresh_raw_variable ()) subkind
+  let fresh_session_variable subkind = make_session_variable (fresh_raw_variable ()) subkind
 
   let fresh_presence_variable subkind = make_presence_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_presence_variable subkind = make_rigid_presence_variable (fresh_raw_variable ()) subkind
@@ -991,7 +991,7 @@ let rec dual_session = function
       | `Recursive _               -> `Dual (`MetaSessionVar point)
       | `Body (`Session s)         -> dual_session s
       | `Body (`MetaTypeVar point) -> dual_session (`MetaSessionVar point)
-      | `Body t                    -> assert false (* error ("Attempt to dualise non-session type: " ^ string_of_datatype t) *)
+      | `Body t                    -> raise (Invalid_argument ("Attempt to dualise non-session type."))
     end
   | `Dual s               -> s
   | `End                  -> `End
@@ -1014,7 +1014,7 @@ and dual_row = fun (fields, row_var, dual) ->
     (fields', row_var, not dual)
 and dual_type t = match concrete_type IntSet.empty t with
   | `Session s -> `Session (dual_session s)
-  (* HACK: is this the right thing to do? 
+  (* HACK: is this the right thing to do?
      it appears to allow us to implement recursive session types...
   *)
   | `MetaTypeVar point -> `Session (dual_session (`MetaSessionVar point))
@@ -1154,7 +1154,7 @@ and normalise_type_arg rec_names type_arg =
   match type_arg with
     | `Type t -> `Type (normalise_datatype rec_names t)
     | `Row row -> `Row (normalise_row rec_names row)
-    | `Presence f -> `Presence (normalise_field_spec f)  
+    | `Presence f -> `Presence (normalise_field_spec f)
 and normalise_session rec_names s =
   let nt = normalise_datatype rec_names in
   let ns = normalise_session rec_names in
@@ -1343,7 +1343,7 @@ let extract_tuple (field_env, _, _) =
                         | `Present t -> t
                         | `Absent
                         | `Var _ -> assert false) field_env
-    
+
 (* whether to display mailbox annotations on arrow types
    [NOTE]
       unused mailbox parameters are never shown
@@ -2103,7 +2103,7 @@ let string_of_row ?(policy=Print.default_policy) row =
     (policy (), Vars.make_names (free_bound_row_type_vars ~include_aliases:true row))
     row
 
-let string_of_presence ?(policy=Print.default_policy) (f : field_spec) = 
+let string_of_presence ?(policy=Print.default_policy) (f : field_spec) =
   let policy = policy () in
     Print.presence
       TypeVarSet.empty

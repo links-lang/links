@@ -25,11 +25,11 @@ let fresh_rigid_row_variable : subkind -> row_var =
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_presence_variable : unit -> fieldspec =
-  function () -> 
+  function () ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Flexible)
-  
+
 let fresh_rigid_presence_variable : unit -> fieldspec =
-  function () -> 
+  function () ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Rigid)
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
@@ -86,7 +86,7 @@ let attach_subkind pos (t, subkind) =
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
-    
+
 let attach_session_subkind pos (t, subkind) =
   let update lin_opt rest_opt =
     match t with
@@ -140,6 +140,7 @@ let datatype d = d, None
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token LBRACKETPLUSBAR BARPLUSRBRACKET
 %token LBRACKETAMPBAR BARAMPRBRACKET
+%token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
@@ -352,6 +353,27 @@ atomic_expression:
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 
+cp_name:
+| VARIABLE                                                     { $1, None }
+
+cp_label:
+| CONSTRUCTOR                                                  { $1 }
+
+cp_case:
+| cp_label COLON cp_expression                                 { $1, $3 }
+
+cp_cases:
+| cp_case                                                      { [$1] }
+| cp_case SEMICOLON cp_cases                                   { $1 :: $3 }
+
+cp_expression:
+| LBRACE exp RBRACE                                            { `Unquote $2, pos () }
+| cp_name LPAREN cp_name RPAREN DOT cp_expression              { `Grab ($1, $3, $6), pos () }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ($1, $3, $6), pos () }
+| CASE cp_name LBRACE cp_cases RBRACE                          { `Offer ($2, $4), pos () }
+| cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
+
 primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET RBRACKET                                            { `ListLit ([], None), pos() }
@@ -360,6 +382,7 @@ primary_expression:
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
+| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }

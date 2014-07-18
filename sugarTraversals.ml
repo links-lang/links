@@ -266,6 +266,7 @@ class map =
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
           in `Offer (_x, _x_i1, _x_i2)
+      | `CP p -> `CP (o#cp_phrase p)
       (* | `Fork ((_x, _x_i1)) -> *)
       (*     let _x = o#binder _x in *)
       (*     let _x_i1 = o#phrase _x_i1 in *)
@@ -280,8 +281,8 @@ class map =
           in `DatabaseLit ((_x, _x_i1))
       | `TableLit ((_x, (y, z), _x_i2, _x_i3)) ->
           let _x = o#phrase _x in
-          let y = o#datatype y in 
-          let z = o#option 
+          let y = o#datatype y in
+          let z = o#option
             (fun o r ->
                let r = o#unknown r in
                  r) z in
@@ -344,6 +345,18 @@ class map =
       fun (_x, _x_i1) ->
         let _x = o#phrasenode _x in
         let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+
+    method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
+      function
+      | `Unquote e -> `Unquote (o#phrase e)
+      | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
+      | `Give (c, e, p) -> `Give (c, o#phrase e, o#cp_phrase p)
+      | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
+      | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
+
+    method cp_phrase : cp_phrase -> cp_phrase =
+      fun (p, pos) -> (o#cp_phrasenode p, o#position pos)
 
     method patternnode : patternnode -> patternnode =
       function
@@ -412,7 +425,7 @@ class map =
       fun (_x, _x_i1) ->
         let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
-      
+
     method fieldspec : fieldspec -> fieldspec =
       function
       | `Present _x -> let _x = o#datatype _x in `Present _x
@@ -800,6 +813,7 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
+      | `CP p -> o#cp_phrase p
       (* | `Fork ((_x, _x_i1)) -> *)
       (*     let o = o#binder _x in *)
       (*     o#phrase _x_i1 *)
@@ -814,7 +828,7 @@ class fold =
       | `TableLit ((_x, (y,z), _x_i2, _x_i3)) ->
           let o = o#phrase _x in
           let o = o#datatype y in
-          let o = o#option 
+          let o = o#option
             (fun o r ->
                let o = o#unknown r in
                  o) z in
@@ -867,6 +881,18 @@ class fold =
     method phrase : phrase -> 'self_type =
       fun (_x, _x_i1) ->
         let o = o#phrasenode _x in let o = o#position _x_i1 in o
+
+    method cp_phrasenode : cp_phrasenode -> 'self_type =
+      function
+      | `Unquote e -> o#phrase e
+      | `Grab (_c, _x, p) -> o#cp_phrase p
+      | `Give (_c, e, p) -> (o#phrase e)#cp_phrase p
+      | `Select (_c, _l, p) -> o#cp_phrase p
+      | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
+
+    method cp_phrase : cp_phrase -> 'self_node =
+      fun (p, pos) -> (o#cp_phrasenode p)#position pos
 
     method patternnode : patternnode -> 'self_type =
       function
@@ -1353,6 +1379,9 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
           in (o, (`Offer ((_x, _x_i1, _x_i2))))
+      | `CP p ->
+         let (o, p) = o#cp_phrase p in
+         o, `CP p
       (* | `Fork ((_x, _x_i1)) -> *)
       (*     let (o, _x) = o#binder _x in *)
       (*     let (o, _x_i1) = o#phrase _x_i1 in *)
@@ -1443,6 +1472,37 @@ class fold_map =
         let (o, _x) = o#phrasenode _x in
         let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
 
+    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
+      function
+      | `Unquote e ->
+         let o, e = o#phrase e in
+         o, `Unquote e
+      | `Grab (c, x, p) ->
+         let o, p = o#cp_phrase p in
+         o, `Grab (c, x, p)
+      | `Give (c, e, p) ->
+         let o, e = o#phrase e in
+         let o, p = o#cp_phrase p in
+         o, `Give (c, e, p)
+      | `Select (c, l, p) ->
+         let o, p = o#cp_phrase p in
+         o, `Select (c, l, p)
+      | `Offer (c, bs) ->
+         let o, bs = o#list (fun o (l, p) ->
+                             let o, p = o#cp_phrase p in
+                             o, (l, p)) bs in
+         o, `Offer (c, bs)
+      | `Comp (c, p, q) ->
+         let o, p = o#cp_phrase p in
+         let o, q = o#cp_phrase q in
+         o, `Comp (c, p, q)
+
+    method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
+      fun (p, pos) ->
+      let o, p = o#cp_phrasenode p in
+      let o, pos = o#position pos in
+      o, (p, pos)
+
     method patternnode : patternnode -> ('self_type * patternnode) =
       function
       | `Any -> (o, `Any)
@@ -1511,7 +1571,7 @@ class fold_map =
       fun (_x, _x_i1) ->
         let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
-      
+
     method fieldspec : fieldspec -> ('self_type * fieldspec) =
       function
       | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)

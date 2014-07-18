@@ -237,6 +237,7 @@ and phrasenode = [
 (* choice *)
 | `Offer            of phrase * (pattern * phrase) list * Types.datatype option
 (* | `Fork             of binder * phrase *)
+| `CP               of cp_phrase
 ]
 and phrase = phrasenode * position
 and bindingnode = [
@@ -262,7 +263,17 @@ and sentence = [
 | `Definitions of binding list
 | `Expression  of phrase
 | `Directive   of directive ]
+and typed_id = string * Types.datatype option
+and cp_phrasenode = [
+| `Unquote of phrase
+| `Grab of typed_id * typed_id * cp_phrase
+| `Give of typed_id * phrase * cp_phrase
+| `Select of typed_id * string * cp_phrase
+| `Offer of typed_id * (string * cp_phrase) list
+| `Comp of typed_id * cp_phrase * cp_phrase ]
+and cp_phrase = cp_phrasenode * position
     deriving (Show)
+
 
 type program = binding list * phrase option
   deriving (Show)
@@ -395,6 +406,7 @@ struct
 (*                      diff (option_map phrase orderby) pat_bound] *)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
+    | `CP cp -> cp_phrase cp
     | `Receive (cases, _) -> union_map case cases
     | `DBDelete (pat, p, where) ->
         union (phrase p)
@@ -445,4 +457,11 @@ struct
     | `Splice p -> phrase p
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
+  and cp_phrase (p, _pos) = match p with
+    | `Unquote e -> phrase e
+    | `Grab ((c, _t), (x, _u), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
+    | `Give ((c, _t), e, p) -> union (singleton c) (union (phrase e) (cp_phrase p))
+    | `Select ((c, _t), _label, p) -> union (singleton c) (cp_phrase p)
+    | `Offer ((c, _t), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | `Comp ((c, _t), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end

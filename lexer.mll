@@ -185,12 +185,14 @@ let keywords = [
  "linfun"   , LINFUN;
  "mu"       , MU;
  "native"   , NATIVE;
+ "nu"       , NU;
  "offer"    , OFFER;
  "orderby"  , ORDERBY;
  "op"       , OP;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
+
  "receive"  , RECEIVE;
  "returning", RETURNING;
  "select"   , SELECT;
@@ -285,6 +287,8 @@ rule lex ctxt nl = parse
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
   | "<-"                                { LARROW }
   | "<--"                               { LLARROW }
+  | "<|"                                { LEFTTRIANGLE }
+  | "|>"                                { RIGHTTRIANGLE }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
   | "[|"                                { LBRACKETBAR }

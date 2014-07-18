@@ -39,6 +39,8 @@ class map :
     method position        : position -> position
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
+    method cp_phrasenode   : cp_phrasenode -> cp_phrasenode
+    method cp_phrase       : cp_phrase -> cp_phrase
     method patternnode     : patternnode -> patternnode
     method pattern         : pattern -> pattern
     method operator        : operator -> operator
@@ -64,7 +66,7 @@ class map :
     method unknown         : 'a. 'a -> 'a
   end
 
-(* Reduce a value.  See 
+(* Reduce a value.  See
 
    http://brion.inria.fr/gallium/index.php/Camlp4FoldGenerator
 
@@ -72,7 +74,7 @@ class map :
 
    This example counts all the names in a datatype.
 
-   object 
+   object
      inherit fold
      val count = 0
      method count = count
@@ -105,6 +107,8 @@ class fold :
     method position        : position -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
+    method cp_phrasenode   : cp_phrasenode -> 'self
+    method cp_phrase       : cp_phrase -> 'self
     method patternnode     : patternnode -> 'self
     method pattern         : pattern -> 'self
     method operator        : operator -> 'self
@@ -131,7 +135,7 @@ class fold :
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
-  
+
 
 (*
   The special casse of a predicate class
@@ -173,6 +177,8 @@ object ('self)
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase
   method phrasenode      : phrasenode -> 'self * phrasenode
+  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
+  method cp_phrase       : cp_phrase -> 'self * cp_phrase
   method position        : position -> 'self * position
   method program         : program -> 'self * program
   (* method quantifier      : quantifier -> 'self * quantifier *)

@@ -83,6 +83,7 @@ struct
     | `Receive _
     | `Select _
     | `Offer _
+    | `CP _
     (* | `Fork _ *)
     | `DBDelete _
     | `DBInsert _
@@ -260,6 +261,8 @@ sig
   val offer_patterns : griper
 
   val selection : griper
+
+  val cp_grab : griper
 end
   = struct
     type griper =
@@ -832,6 +835,13 @@ tab () ^ code lexpr ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "while the subsequent patterns have type" ^ nl () ^
 tab () ^ code (show_type rt))
+
+    let cp_grab ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The channel in a receive expression must have input type, but has type" ^ nl () ^
+tab () ^ code (show_type rt) ^ nl () ^
+"instead.")
+
 end
 
 type context = Types.typing_environment = {
@@ -1355,6 +1365,24 @@ let merge_usages (ms:usagemap list) : usagemap =
                                     | Some x, Some y -> Some (x + y)
                                     | Some x, None   -> Some x
                                     | None, Some y   -> Some y) m n) ms m
+let compat_usages (u::us) =
+  let same m n =
+    let mvs = List.map fst (StringMap.bindings m) in
+    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
+                          mvs in
+    let f v resulting_usages =
+      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
+        StringMap.add v (StringMap.find v m) resulting_usages
+      else
+        (* We need to treat anything appearing in this case as unlimited; '2' assures that no
+            matter whether the variable in question is used anywhere else or not, it must be
+            unlimited. *)
+        StringMap.add v 2 resulting_usages in
+    List.fold_right f vs StringMap.empty in
+  List.fold_right same us u
+
+let usages_cases bs = compat_usages (List.map (fun (_, (_, _, m)) -> m) bs)
+
 let uses_of v us =
   try
     StringMap.find v us
@@ -1879,6 +1907,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              unify ~handle:Gripers.offer_variant (no_pos pattern_type, no_pos (`Variant r));
              unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (`Session (`Choice r)));
              `Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
+
+        (* No comment *)
+        | `CP p ->
+           let (p, t, u) = type_cp context p in
+           `CP p, t, u
 
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->
@@ -2677,6 +2710,77 @@ and type_bindings (globals : context)  bindings =
                    body_usage uinf
   in
     tyenv, List.rev bindings, usage_builder
+and type_cp (context : context) = fun (p, pos) ->
+  let with_channel = fun c s (p, t, u) ->
+    if uses_of c u <> 1 then
+      if Types.session_can_be_unl s then
+        Types.make_session_unl s
+      else
+        Gripers.die pos ("Non-linear use of variable " ^ c ^ "of linear type " ^ Types.string_of_datatype (`Session s));
+    (p, t, StringMap.remove c u) in
+
+  let use s u = StringMap.add s 1 u in
+
+  let unify ~pos ~handle (t, u) = unify ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
+
+  let (p, t, u) = match p with
+    | `Unquote e ->
+       let (e, t, u) = type_check context e in
+       `Unquote e, t, u
+    | `Grab ((c, _), (x, _), p) ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let a = Types.fresh_type_variable (`Any, `Any) in
+       let s = Types.fresh_session_variable (`Any, `Session) in
+       let ctype = `Session (`Input (a, s)) in
+       unify ~pos:pos ~handle:Gripers.cp_grab
+             (t, ctype);
+       let (p, t, u) = with_channel c s (type_cp (bind_var (bind_var context (c, `Session s)) (x, a)) p) in
+       if uses_of x u <> 1 then
+         if Types.type_can_be_unl a then
+           Types.make_type_unl a
+         else
+           Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of x u) ^ " uses) of variable " ^ x ^ " of linear type " ^ Types.string_of_datatype a);
+       `Grab ((c, Some ctype), (x, Some a), p), t, use c (StringMap.remove x u)
+    | `Give ((c, _), e, p) ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let (e, t', u) = type_check context e in
+       let s = Types.fresh_session_variable (`Any, `Session) in
+       let ctype = `Session (`Output (t', s)) in
+       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+             (t, ctype);
+       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
+       `Give ((c, Some ctype), e, p), t, use c u
+    | `Select ((c, _), label, p) ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let s = Types.fresh_session_variable (`Any, `Session) in
+       let r = Types.make_singleton_open_row (label, `Present (`Session s)) (`Any, `Session) in
+       let ctype = `Session (`Select r) in
+       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+             (t, ctype);
+       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
+       `Select ((c, Some ctype), label, p), t, use c u
+    | `Offer ((c, _), branches) ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let check_branch (label, body) =
+         let s = Types.fresh_session_variable (`Any, `Session) in
+         let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) body) in
+         (label, s), ((label, p), t, u) in
+       let ctypes, branches = List.split (List.map check_branch branches) in
+       let crow = List.fold_right (fun (label, s) -> Types.row_with (label, `Present (`Session s))) ctypes (Types.make_empty_closed_row ()) in
+       let ctype = `Session (`Choice crow) in
+       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+             (t, ctype);
+       let t' = Types.fresh_type_variable (`Any, `Any) in
+       List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_grab (t, t')) branches;
+       let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
+       `Offer ((c, Some ctype), List.map (fun (x, _, _) -> x) branches), t', use c u
+    | `Comp ((c, _), left, right) ->
+       let s = Types.fresh_session_variable (`Any, `Session) in
+       let left, t, u = with_channel c s (type_cp (bind_var context (c, `Session s)) left) in
+       let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Session (`Dual s))) right) in
+       unify ~pos:pos ~handle:Gripers.cp_grab (t, Types.unit_type);
+       `Comp ((c, Some (`Session s)), left, right), t', merge_usages [u; u'] in
+  (p, pos), t, u
 
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",
                                               false, `User)
