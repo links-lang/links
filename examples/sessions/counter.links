@@ -1,9 +1,8 @@
-typename Counter = AP (?().!Int.End);
+typename Counter = AP (!Int.End);
 
 sig counter : (Counter, Int) ~> ()
 fun counter(p, i) {
   var s = accept(p);
-  var ((), s) = grab(s);
   var _ = give(i, s);
   counter(p, i+1)  
 }
@@ -11,7 +10,6 @@ fun counter(p, i) {
 sig readCounter : (Counter) ~> Int
 fun readCounter(p) {
   var c = request(p);
-  var c = give((), c);
   grab(c).1 
 }
 

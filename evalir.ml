@@ -15,10 +15,9 @@ module Session = struct
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
   let channels = (Hashtbl.create 10000 : (cid, Value.t Queue.t) Hashtbl.t)
 
-  let blocked = (Hashtbl.create 10000 : (pid, cid) Hashtbl.t)
+  let blocked = (Hashtbl.create 10000 : (cid, pid) Hashtbl.t)
 
-  let block cid pid =
-    Hashtbl.add blocked cid pid
+  let block cid pid = Hashtbl.add blocked cid pid
   let unblock cid =
     if Hashtbl.mem blocked cid then
       begin
@@ -51,29 +50,31 @@ module Session = struct
       Hashtbl.add access_points apid Balanced;
       apid
 
-  let accept apid =
-    let state = Hashtbl.find access_points apid in
-    let (chan, state') =
-      match state with
-      | Balanced -> let chan = new_channel () in (chan, Accepting [chan])
-      | Accepting chans -> let chan = new_channel () in (chan, Accepting (chan :: chans))
-      | Requesting [chan] -> (chan, Balanced)
-      | Requesting (chan::chans) -> (chan, Requesting chans)
-    in
-      Hashtbl.replace access_points apid state';
-      chan
+  let accept : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (chan, state', blocked) =
+        match state with
+        | Balanced                   -> let chan = new_channel () in (chan, Accepting [chan], true)
+        | Accepting chans            -> let chan = new_channel () in (chan, Accepting (chans @ [chan]), true)
+        | Requesting [chan]          -> (chan, Balanced, false)
+        | Requesting (chan :: chans) -> (chan, Requesting chans, false)
+      in
+        Hashtbl.replace access_points apid state';
+        chan, blocked
 
-  let request apid =
-    let state = Hashtbl.find access_points apid in
-    let (chan, state') =
-      match state with
-      | Balanced -> let chan = new_channel () in (chan, Requesting [chan])
-      | Requesting chans -> let chan = new_channel () in (chan, Requesting (chan :: chans))
-      | Accepting [chan] -> (chan, Balanced)
-      | Accepting (chan::chans) -> (chan, Accepting chans)
-    in
-      Hashtbl.replace access_points apid state';
-      flip_chan chan
+  let request : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (chan, state', blocked) =
+        match state with
+        | Balanced                  -> let chan = new_channel () in (chan, Requesting [chan], true)
+        | Requesting chans          -> let chan = new_channel () in (chan, Requesting (chans @ [chan]), true)
+        | Accepting [chan]          -> (chan, Balanced, false)
+        | Accepting (chan :: chans) -> (chan, Accepting chans, false)
+      in
+        Hashtbl.replace access_points apid state';
+        flip_chan chan, blocked
 
   (* TODO: be consistent about checking lookup operations *)
   exception UnknownChannelID of cid
@@ -345,14 +346,60 @@ module Eval = struct
         apply_cont cont env (`Int (Num.num_of_int apid))
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
-      let c, d = Session.accept apid in
-        apply_cont cont env (Value.box_pair (Value.box_int (Num.num_of_int c))
-                                            (Value.box_int (Num.num_of_int d)))
+      let (c, d), blocked = Session.accept apid in
+      let c' = Num.num_of_int c in
+      let d' = Num.num_of_int d in
+        if blocked then
+          let accept_frame =
+              Value.expr_to_contframe env
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
+                                     (StringMap.add "2" (`Constant (`Int d'))
+                                        StringMap.empty), None)))
+            in
+              Proc.block_current (accept_frame::cont, `Record []);
+              (* block my end of the channel *)
+              Session.block c (Proc.get_current_pid ());
+              switch_context env
+        else
+          begin
+            begin
+              (* unblock the other end of the channel *)
+              match Session.unblock d with
+              | Some pid -> Proc.awaken pid
+              | None     -> assert false
+            end;
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int (Num.num_of_int c))
+                                   (Value.box_int (Num.num_of_int d)))
+          end
     | `PrimitiveFunction ("request", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
-      let c, d = Session.request apid in
-        apply_cont cont env (Value.box_pair (Value.box_int (Num.num_of_int c))
-                                            (Value.box_int (Num.num_of_int d)))
+      let (c, d), blocked = Session.request apid in
+      let c' = Num.num_of_int c in
+      let d' = Num.num_of_int d in
+        if blocked then
+          let request_frame =
+              Value.expr_to_contframe env
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
+                                     (StringMap.add "2" (`Constant (`Int d'))
+                                        StringMap.empty), None)))
+            in
+              Proc.block_current (request_frame::cont, `Record []);
+              (* block my end of the channel *)
+              Session.block c (Proc.get_current_pid ());
+              switch_context env
+        else
+          begin
+            begin
+              (* unblock the other end of the channel *)
+              match Session.unblock d with
+              | Some pid -> Proc.awaken pid
+              | None     -> assert false
+            end;
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int (Num.num_of_int c))
+                                   (Value.box_int (Num.num_of_int d)))
+          end
     | `PrimitiveFunction ("give", _), [v; chan] ->
       Debug.print ("giving: " ^ Value.string_of_value v ^ " to: " ^ Value.string_of_value chan);
       let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
@@ -366,10 +413,10 @@ module Eval = struct
     | `PrimitiveFunction ("grab", _), [chan] ->
       begin
         Debug.print("grabbing from: " ^ Value.string_of_value chan);
-        (* Debug.print("  cont: " ^ Value.string_of_cont cont); *)
         let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
         let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
-          match Session.receive (Num.int_of_num d') with
+        let d = Num.int_of_num d' in
+          match Session.receive d with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
             apply_cont cont env (Value.box_pair v chan)
@@ -380,7 +427,7 @@ module Eval = struct
                                                                             StringMap.empty), None)])
             in
               Proc.block_current (grab_frame::cont, `Record []);
-              Session.block (Num.int_of_num d') (Proc.get_current_pid ());
+              Session.block d (Proc.get_current_pid ());
               switch_context env
       end
     (*****************)
