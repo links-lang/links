@@ -1274,7 +1274,11 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
       (* NOTE: the order of pattern matching is important
          - duality must come after type variables *)
       | `Dual (`MetaSessionVar point), s' -> us (`MetaSessionVar point, dual_session s')
-      | s, `Dual (`MetaSessionVar point) -> us (dual_session s, `MetaSessionVar point)
+      | s, `Dual (`MetaSessionVar point) ->
+        Debug.print ("Dualising session: " ^ string_of_session_type s);
+        let s' = dual_session s in
+          Debug.print "done dualising session";
+          us (s', `MetaSessionVar point)
       | `Dual s, s'
       | s, `Dual s' -> us (s, dual_session s')
       | `End, `End -> ()

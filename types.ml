@@ -256,7 +256,7 @@ let rec basify_row (fields, row_var, _) =
 (* Var depends on Types so we use int instead of Var.var here... *)
 
 (* set of recursive variables seen so far *)
-type var_set = IntSet.t
+type var_set = TypeVarSet.t
 
 (* Check if the recursive variable has been seen and return a default
    value or continue accordingly *)
@@ -979,57 +979,61 @@ let rec session_of_type t = match concrete_type IntSet.empty t with
   | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
   | t -> assert false
 
-let rec dual_session = function
-  | `Input (t, s)         -> `Output (t, dual_session s)
-  | `Output (t, s)        -> `Input (t, dual_session s)
-  | `Select row           -> `Choice (dual_row row)
-  | `Choice row           -> `Select (dual_row row)
-  | `MetaSessionVar point ->
-    begin
-      match Unionfind.find point with
-      | `Var _
-      | `Recursive _               -> `Dual (`MetaSessionVar point)
-      | `Body (`Session s)         -> dual_session s
-      | `Body (`MetaTypeVar point) -> dual_session (`MetaSessionVar point)
-      | `Body t                    -> raise (Invalid_argument ("Attempt to dualise non-session type."))
-    end
-  | `Dual s               -> s
-  | `End                  -> `End
-and dual_row = fun (fields, row_var, dual) ->
-  (* TODO: work out how to implement dualisation for row variables *)
-  (* DONE? *)
-  let fields' =
-    StringMap.map (function
-    | `Absent -> `Absent
-    | `Present t -> `Present (dual_type t)
-    | `Var _ -> (* TODO: what should happen here? *) assert false) fields in
-  (* let row_var' = *)
-  (*   match Unionfind.find row_var with *)
-  (*   | `Flexible _ *)
-  (*   | `Rigid _ *)
-  (*   | `Recursive _ -> assert false *)
-  (*   | `Body row -> assert false *)
-  (*   | `Closed -> `Closed *)
-  (* in *)
-    (fields', row_var, not dual)
-and dual_type t = match concrete_type IntSet.empty t with
-  | `Session s -> `Session (dual_session s)
-  (* HACK: is this the right thing to do?
-     it appears to allow us to implement recursive session types...
-  *)
-  | `MetaTypeVar point -> `Session (dual_session (`MetaSessionVar point))
-  | _ -> assert false
+let rec dual_session : var_set -> session_type -> session_type =
+  fun rec_vars ->
+    function
+    | `Input (t, s)         -> `Output (t, dual_session rec_vars s)
+    | `Output (t, s)        -> `Input (t, dual_session rec_vars s)
+    | `Select row           -> `Choice (dual_row rec_vars row)
+    | `Choice row           -> `Select (dual_row rec_vars row)
+    | `MetaSessionVar point ->
+      begin
+        match Unionfind.find point with
+        | `Var _                     -> `Dual (`MetaSessionVar point)
+        | `Recursive (var, t)        ->
+          if TypeVarSet.mem var rec_vars then
+            `Dual (`MetaSessionVar point)
+          else
+            begin
+              match dual_type (TypeVarSet.add var rec_vars) t with
+              |  `Session s -> s
+              | _ -> assert false
+            end
+        | `Body (`Session s)         -> dual_session rec_vars s
+        | `Body (`MetaTypeVar point) -> dual_session rec_vars (`MetaSessionVar point)
+        | `Body t                    -> raise (Invalid_argument ("Attempt to dualise non-session type."))
+      end
+    | `Dual s               -> s
+    | `End                  -> `End
+and dual_row : var_set -> row -> row =
+  fun rec_vars row ->
+    let (fields, row_var, dual) = fst (unwrap_row row) in
+    let fields' =
+      StringMap.map (function
+      | `Absent -> `Absent
+      | `Present t ->
+        `Present (dual_type rec_vars t)
+      | `Var _ -> (* TODO: what should happen here? *) assert false) fields
+    in
+      (fields', row_var, not dual)
+and dual_type : var_set -> datatype -> datatype =
+  fun rec_vars ->
+    function
+    | `Session s -> 
+      `Session (dual_session rec_vars s)
+    | `MetaTypeVar point ->
+      `Session (dual_session rec_vars (`MetaSessionVar point))
+    | _ -> assert false
 
 (*
  convert a row to the form (field_env, row_var)
  where Unionfind.find row_var is of the form:
     `Closed
-  | `Rigid var
-  | `Flexible var
+  | `Var var
   | `Recursive (var, body)
  *)
-let flatten_row : row -> row = fun (field_env, row_var, dual) ->
-  let dual_if r = if dual then dual_row r else r in
+and flatten_row : row -> row = fun (field_env, row_var, dual) ->
+  let dual_if r = if dual then dual_row TypeVarSet.empty r else r in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
     fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
@@ -1065,8 +1069,8 @@ let flatten_row : row -> row = fun (field_env, row_var, dual) ->
 then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
-let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) ->
-  let dual_if r = if dual then dual_row r else r in
+and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) ->
+  let dual_if r = if dual then dual_row TypeVarSet.empty r else r in
   let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
     fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
@@ -1094,6 +1098,11 @@ let unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) 
   let (field_env, row_var, dual), rec_row = unwrap_row' IntMap.empty (field_env, row_var, dual) in
   let field_env = normalise_fields field_env in
     (field_env, row_var, dual), rec_row
+
+
+let dual_session = dual_session TypeVarSet.empty
+let dual_type = dual_type TypeVarSet.empty
+let dual_row = dual_row TypeVarSet.empty
 
 
 (* TODO: tidy up all this normalisation / concretisation code *)
