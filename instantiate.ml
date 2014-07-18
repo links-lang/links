@@ -92,7 +92,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap
                 end
             | `Body t -> TypeUtils.session_of_type (inst rec_env t)
           end
-      | `Dual s -> `Dual (inst_session rec_env s)
+      | `Dual s -> Types.dual_session (inst_session rec_env s)
       | `End -> `End
 
     and inst_presence : inst_env -> field_spec -> field_spec = fun rec_env ->

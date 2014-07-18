@@ -330,7 +330,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                      ([], `Apply (`Variable var, []))) in
          let new_pid = Proc.create_process (cont::Value.toplevel_cont, f) in
            (`Int (num_of_int new_pid))),
-   datatype "(() ~e~> _) ~> Process ({ |e })",
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnWait",

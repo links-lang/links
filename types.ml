@@ -1173,8 +1173,9 @@ and normalise_session rec_names s =
     | `Output (t, s)        -> `Output (nt t, ns s)
     | `Select r             -> `Select (nr r)
     | `Choice r             -> `Choice (nr r)
-    | `MetaSessionVar point -> s (* FIXME: should actually look inside s! *)
-    | `Dual s               -> `Dual (ns s)
+    | `MetaSessionVar point ->
+      session_of_type (normalise_datatype rec_names (`MetaTypeVar point))
+    | `Dual s               -> dual_session (ns s)
     | `End                  -> `End
 
 let concrete_type = concrete_type IntSet.empty

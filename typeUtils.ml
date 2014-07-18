@@ -39,6 +39,7 @@ let concrete_type t =
                       | _ -> `ForAll (qs, t)
                   end
           end
+      | `Session (`Dual s) -> `Session (dual_session s)
       | _ -> t
   in
     ct (IntSet.empty) t
@@ -100,11 +101,11 @@ let rec session_of_type t = match concrete_type t with
 
 
 let rec select_type name t = match concrete_type t with
-  | `ForAll (_, t) -> project_type name t
+  | `ForAll (_, t) -> select_type name t
   | `Session (`Select row) ->
     let t, _ = split_row name row in t
   | t ->
-    error ("Attempt to select from non-selection type "^string_of_datatype t)
+    error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
 
 let rec split_choice_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
