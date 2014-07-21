@@ -1031,3 +1031,18 @@ fun sendSuspend(pagef) {
     exit(renderPage(pagef(returnf)))
   }
 }
+
+#### SESSION TYPING STUFF ####
+sig fork : ((s::Any) ~e~> ()) ~e~> ~s::Any
+fun fork(f) {
+  var ap = new();
+  var _ = spawn { f(accept(ap)) };
+  request(ap)
+}
+
+sig replicate : (AP(s::Any), (s::Any) ~e~> ()) ~e~> ()
+fun replicate(ap, f) {
+  var x = accept(ap);
+  var _ = spawn {f(x)};
+  replicate(ap, f)
+}
