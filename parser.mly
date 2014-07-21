@@ -929,6 +929,8 @@ session_type:
 | session_type_top                                             { $1 }
 | session_type_var                                             { $1 }
 | kinded_session_type_var                                      { $1 }
+| MU VARIABLE DOT session_type                                 { `Recursive ($2, $4) }
+
 
 session_type_var:
 | VARIABLE                                                     { `TypeVar ($1, (`Any, `Any), `Rigid) }

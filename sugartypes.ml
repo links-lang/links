@@ -136,6 +136,7 @@ and session_type =
     | `Select of row
     | `Choice of row
     | `TypeVar of known_type_variable
+    | `Recursive of name * session_type
     | `Dual of session_type
     | `End ]
       deriving (Show)

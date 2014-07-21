@@ -494,6 +494,9 @@ class map =
         let _x = o#row _x in `Choice _x
       | `TypeVar _x ->
         let _x = o#known_type_variable _x in `TypeVar _x
+      | `Recursive (_x, _x_i1) ->
+        let _x = o#name _x in
+        let _x_i1 = o#session_type _x_i1 in `Recursive (_x, _x_i1)
       | `Dual _x ->
         let _x = o#session_type _x in `Dual _x
       | `End -> `End
@@ -1015,6 +1018,9 @@ class fold =
         let o = o#row _x in o
       | `TypeVar _x ->
         let o = o#known_type_variable _x in o
+      | `Recursive (_x, _x_i1) ->
+        let o = o#name _x in
+        let o = o#session_type _x_i1 in o
       | `Dual _x ->
         let o = o#session_type _x in o
       | `End -> o
@@ -1652,6 +1658,9 @@ class fold_map =
         let (o, _x) = o#row _x in (o, `Choice _x)
       | `TypeVar _x ->
         let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
+      | `Recursive (_x, _x_i1) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#session_type _x_i1 in (o, (`Recursive (_x, _x_i1)))
       | `Dual _x ->
         let (o, _x) = o#session_type _x in (o, `Dual _x)
       | `End -> (o, `End)

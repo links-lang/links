@@ -170,11 +170,18 @@ struct
     | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
     | `Select r -> `Select (row var_env alias_env r)
     | `Choice r -> `Choice (row var_env alias_env r)
-    | `TypeVar (s, _, _) ->
+    | `TypeVar (name, _, _) ->
       begin
-        try `MetaSessionVar (lookup_type s)
-        with NotFound _ -> raise (UnexpectedFreeVar s)
+        try `MetaSessionVar (lookup_type name)
+        with NotFound _ -> raise (UnexpectedFreeVar name)
       end
+    | `Recursive (name, s) ->
+      let var = Types.fresh_raw_variable () in
+      let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in
+      let tenv = StringMap.add name point var_env.tenv in
+      let _ = Unionfind.change point (`Recursive (var,
+                                                  `Session (session_type {var_env with tenv=tenv} alias_env s))) in
+        `MetaSessionVar point
     | `Dual s -> `Dual (session_type var_env alias_env s)
     | `End -> `End
 
