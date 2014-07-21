@@ -263,6 +263,11 @@ sig
   val selection : griper
 
   val cp_grab : griper
+  val cp_give : griper
+  val cp_select : griper
+  val cp_offer_choice : griper
+  val cp_offer_branches : griper
+  val cp_comp_left : griper
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -841,6 +846,37 @@ tab () ^ code (show_type rt))
     let cp_grab ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 The channel in a receive expression must have input type, but has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"instead.")
+
+    let cp_give ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The channel in a send expression must have output type, but has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"instead.")
+
+    let cp_select ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The channel in a select expression must have selection type, but has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"instead.")
+
+    let cp_offer_choice ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The channel in an offer expression must have choice type, but has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"instead.")
+
+    let cp_offer_branches ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The branches of an offer expression have divergent types:" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"and" ^ nl () ^
+tab () ^ code (show_type rt))
+
+    let cp_comp_left ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+The left-hand computation in a composition must have unit type, but has type" ^ nl () ^
 tab () ^ code (show_type rt) ^ nl () ^
 "instead.")
 
@@ -2763,7 +2799,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable (`Any, `Session) in
        let ctype = `Session (`Output (t', s)) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+       unify ~pos:pos ~handle:Gripers.cp_give
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
        `Give ((c, Some ctype), e, p), t, use c u
@@ -2772,7 +2808,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let s = Types.fresh_session_variable (`Any, `Session) in
        let r = Types.make_singleton_open_row (label, `Present (`Session s)) (`Any, `Session) in
        let ctype = `Session (`Select r) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+       unify ~pos:pos ~handle:Gripers.cp_select
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
        `Select ((c, Some ctype), label, p), t, use c u
@@ -2785,17 +2821,17 @@ and type_cp (context : context) = fun (p, pos) ->
        let ctypes, branches = List.split (List.map check_branch branches) in
        let crow = List.fold_right (fun (label, s) -> Types.row_with (label, `Present (`Session s))) ctypes (Types.make_empty_closed_row ()) in
        let ctype = `Session (`Choice crow) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (* TODO *)
+       unify ~pos:pos ~handle:Gripers.cp_offer_choice
              (t, ctype);
        let t' = Types.fresh_type_variable (`Any, `Any) in
-       List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_grab (t, t')) branches;
+       List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some ctype), List.map (fun (x, _, _) -> x) branches), t', use c u
     | `Comp ((c, _), left, right) ->
        let s = Types.fresh_session_variable (`Any, `Session) in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, `Session s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Session (`Dual s))) right) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (t, Types.unit_type);
+       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.unit_type, t);
        `Comp ((c, Some (`Session s)), left, right), t', merge_usages [u; u'] in
   (p, pos), t, u
 
