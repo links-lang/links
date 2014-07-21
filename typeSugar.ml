@@ -263,6 +263,8 @@ sig
   val selection : griper
 
   val cp_grab : griper
+
+  val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
   = struct
     type griper =
@@ -842,6 +844,10 @@ The channel in a receive expression must have input type, but has type" ^ nl () 
 tab () ^ code (show_type rt) ^ nl () ^
 "instead.")
 
+    let non_linearity pos uses v t =
+      die pos ("\
+Non-linear use (" ^ string_of_int uses ^ " uses) of variable " ^
+                  v ^ " of linear type " ^ Types.string_of_datatype t)
 end
 
 type context = Types.typing_environment = {
@@ -1457,11 +1463,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let body = type_check (context ++ pattern_env pat) body in
              let () = unify ~handle:Gripers.switch_branches
                (pos_and_typ body, no_pos bt) in
-             let () = Env.iter (fun v t -> if uses_of v (usages body) <> 1 then
+             let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
+                                           if uses <> 1 then
                                              if Types.type_can_be_unl t then
                                                Types.make_type_unl t
                                              else
-                                               Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is not used linearly."))
+                                               Gripers.non_linearity pos uses v t)
                                (pattern_env pat) in
              let vs = Env.domain (pattern_env pat) in
              let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
@@ -1576,8 +1583,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
-            let fold_in_envs = List.fold_left (fun env pat' -> env ++ pattern_env pat') in
-            let {var_env = env'} = List.fold_left fold_in_envs context pats in
+            let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
+            let env' = Env.extend context.var_env pat_env in
 
             (* type of the effects in the body of the lambda *)
             let effects = (StringMap.empty, Types.fresh_row_variable (`Any, `Any), false) in
@@ -1587,12 +1594,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let () =
               Env.iter (fun v t ->
-                        if uses_of v (usages body) <> 1 then
-                          if Types.type_can_be_unl t then
-                            Types.make_type_unl t
-                          else
-                            Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is not used linearly."))
-                       env' in
+                let uses = uses_of v (usages body) in
+                  if uses <> 1 then
+                    if Types.type_can_be_unl t then
+                      Types.make_type_unl t
+                    else
+                      Gripers.non_linearity pos uses v t)
+                pat_env in
 
             let () =
               if lin=`Unl then
@@ -2480,12 +2488,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
              linearity of their types *)
           let () = List.iter
                      (fun pat ->
-                      Env.iter (fun v t -> if uses_of v (usages body) <> 1 then
-                                             if Types.type_can_be_unl t then
-                                               Types.make_type_unl t
-                                             else
-                                               Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^
-                                                                  v ^ " of linear type " ^ Types.string_of_datatype t))
+                      Env.iter (fun v t ->
+                        let uses = uses_of v (usages body) in
+                        if uses <> 1 then
+                          if Types.type_can_be_unl t then
+                            Types.make_type_unl t
+                          else
+                            Gripers.non_linearity pos uses v t)
                                (pattern_env pat))
                      (List.flatten pats) in
 
@@ -2576,14 +2585,18 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let context' = {context with var_env = Env.extend body_env pat_env} in
                       let effects = fresh_wild () in
                       let body = type_check (bind_effects context' effects) body in
-                      let () = Env.iter (fun v t ->
-                                         if uses_of v (usages body) <> 1 then
-                                           if Types.type_can_be_unl t then
-                                             Types.make_type_unl t
-                                           else
-                                             Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v (usages body)) ^ " uses) of variable " ^
-                                                                v ^ " of linear type " ^ Types.string_of_datatype t))
-                                        pat_env in
+                      let () =
+                        Env.iter
+                          (fun v t ->
+                            let uses = uses_of v (usages body) in
+                              if uses <> 1 then
+                                begin
+                                  if Types.type_can_be_unl t then
+                                    Types.make_type_unl t
+                                  else
+                                    Gripers.non_linearity pos uses v t
+                                end)
+                          pat_env in
                       let used =
                         let vs = StringSet.add name (Env.domain pat_env) in
                         if lin=`Unl then
@@ -2700,12 +2713,15 @@ and type_bindings (globals : context)  bindings =
   let usage_builder body_usage =
     List.fold_left (fun usages (pos,env,usage) ->
                     let vs = Env.domain env in
-                    Env.iter (fun v t -> if uses_of v usages <> 1 then
-                                           if Types.type_can_be_unl t then
-                                             Types.make_type_unl t
-                                           else
-                                             Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of v usages) ^ " uses) of variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t))
-                             env;
+                    Env.iter
+                      (fun v t ->
+                        let uses = uses_of v usages in
+                          if uses <> 1 then
+                            if Types.type_can_be_unl t then
+                              Types.make_type_unl t
+                            else
+                              Gripers.non_linearity pos uses v t)
+                      env;
                     merge_usages [usage; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) usages])
                    body_usage uinf
   in
@@ -2735,11 +2751,12 @@ and type_cp (context : context) = fun (p, pos) ->
        unify ~pos:pos ~handle:Gripers.cp_grab
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var (bind_var context (c, `Session s)) (x, a)) p) in
-       if uses_of x u <> 1 then
-         if Types.type_can_be_unl a then
-           Types.make_type_unl a
-         else
-           Gripers.die pos ("Non-linear use (" ^ string_of_int (uses_of x u) ^ " uses) of variable " ^ x ^ " of linear type " ^ Types.string_of_datatype a);
+       let uses = uses_of x u in
+         if uses <> 1 then
+           if Types.type_can_be_unl a then
+             Types.make_type_unl a
+           else
+             Gripers.non_linearity pos uses x a;
        `Grab ((c, Some ctype), (x, Some a), p), t, use c (StringMap.remove x u)
     | `Give ((c, _), e, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
