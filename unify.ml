@@ -384,7 +384,6 @@ fun rec_env ->
                          match Types.flexible_of_type t2 with
                            | Some t2 -> unify' rec_env (t1, t2)
                            | None ->
-                               Debug.print("a");
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
                        end
@@ -393,7 +392,6 @@ fun rec_env ->
                          match Types.flexible_of_type t1 with
                            | Some t1 -> unify' rec_env (t1, t2)
                            | None ->
-                               Debug.print("b");
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                        end
@@ -1275,9 +1273,7 @@ and unify_sessions : unify_env -> (session_type * session_type) -> unit =
          - duality must come after type variables *)
       | `Dual (`MetaSessionVar point), s' -> us (`MetaSessionVar point, dual_session s')
       | s, `Dual (`MetaSessionVar point) ->
-        Debug.print ("Dualising session: " ^ string_of_session_type s);
         let s' = dual_session s in
-          Debug.print "done dualising session";
           us (s', `MetaSessionVar point)
       | `Dual s, s'
       | s, `Dual s' -> us (s, dual_session s')
