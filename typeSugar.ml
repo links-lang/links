@@ -1560,7 +1560,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 fields ([], StringMap.empty, StringMap.empty, StringMap.empty) in
               begin match rest with
                 | None ->
-                    `RecordLit (alistmap erase fields, None), `Record (field_env, Unionfind.fresh `Closed, false), StringMap.empty
+                    `RecordLit (alistmap erase fields, None), `Record (field_env, Unionfind.fresh `Closed, false), field_usages
                 | Some r ->
                     let r : phrase * Types.datatype * usagemap = tc r in
 
@@ -1605,7 +1605,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                               else
                                                 StringMap.add label (`Present t) field_env'
                                           | `Var _ -> assert false) rfield_env field_env in
-                      `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var, false), field_usages
+                    let usages = merge_usages [field_usages; usages r] in
+                      `RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var, false), usages
               end
         | `ListLit (es, _) ->
             begin match List.map tc es with
