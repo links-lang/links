@@ -115,12 +115,10 @@ Here we illustrate an example configuration for Apache 2.
 
 First make sure you've enabled modules 'cgid' and 'actions'.
 
-Add the following to your apache config file (apache2.conf on standard
+Add the following to your apache config file (httpd.conf on standard
 Apache installs, sites-enabled/000-default.conf on Debian-based
 systems):
 
-  # handle .cgi files as CGI scripts
-  AddHandler cgi-script .cgi
 
   # add a mime type for the .links file extension
   AddType text/links .links
@@ -131,10 +129,12 @@ allow CGI scripts to be executed under /web/bin we need to make sure
 the ExecCGI option is set:
 
   <Directory /web/bin/>
-    AllowOverride None
     Options ExecCGI
-    Order allow, deny
-    allow from all
+    AddHandler cgi-script .cgi
+    <Files "config">
+      Order deny,allow
+      Deny from all
+    </Files>
   </Directory>
 
 In order to handle .links files you need to define an action:
