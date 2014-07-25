@@ -1033,8 +1033,16 @@ fun sendSuspend(pagef) {
 }
 
 #### SESSION TYPING STUFF ####
-sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
+sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> ()) ~e~> ~s
 fun fork(f) {
+  var ap = new();
+  var _ = spawn { f(accept(ap)) };
+  request(ap)
+}
+
+
+sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
+fun linfork(f) {
   var ap = new();
   var _ = spawn { f(accept(ap)) };
   request(ap)

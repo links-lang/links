@@ -267,8 +267,8 @@ and sentence = [
 and typed_id = string * Types.datatype option
 and cp_phrasenode = [
 | `Unquote of binding list * phrase
-| `Grab of typed_id * typed_id * cp_phrase
-| `Give of typed_id * phrase * cp_phrase
+| `Grab of (string * (Types.datatype * tyarg list) option) * typed_id * cp_phrase
+| `Give of (string * (Types.datatype * tyarg list) option) * phrase * cp_phrase
 | `Select of typed_id * string * cp_phrase
 | `Offer of typed_id * (string * cp_phrase) list
 | `Comp of typed_id * cp_phrase * cp_phrase ]

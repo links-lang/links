@@ -18,7 +18,7 @@ object (o : 'self_type)
             let (o, e, t) = o#phrase e in
             let o = o#restore_envs envs in
             o, `Block (bs, e), t
-         | `Grab ((c, Some (`Session (`Input (_a, s))) as cbind), (x, Some u), p) -> (* FYI: a = u *)
+         | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), (x, Some u), p) -> (* FYI: a = u *)
             let envs = o#backup_envs in
             let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
                                               (x, u))
@@ -26,19 +26,20 @@ object (o : 'self_type)
             let o = {< var_env = venv >} in
             let (o, e, u) = desugar_cp o p in
             o, `Block
-                  ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos))); ("2", add_pos (`Variable (c, Some (`Session s), pos)))], None)),
-                                   add_pos (`FnAppl (add_pos (`Var "grab"),
+                  ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos)));
+                                                          ("2", add_pos (`Variable (c, Some (`Session s), pos)))], None)),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "grab", grab_tyargs)),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                   add_pos e), u
-         | `Give ((c, Some (`Session (`Output (_t, s))) as cbind), e, p) ->
+         | `Give ((c, Some (`Session (`Output (_t, s)), give_tyargs) as cbind), e, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
             let (o, e, _typ) = o#phrase e in
             let (o, p, t) = desugar_cp o p in
             o, `Block
                   ([add_pos (`Val ([], add_pos (`Variable (c, Some (`Session s), pos)),
-                                   add_pos (`FnAppl (add_pos (`Var "give"),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "give", give_tyargs)),
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos p), t

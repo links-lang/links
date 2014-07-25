@@ -403,8 +403,8 @@ cp_cases:
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
-| cp_name LPAREN cp_name RPAREN DOT cp_expression              { `Grab ($1, $3, $6), pos () }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ($1, $3, $6), pos () }
+| cp_name LPAREN cp_name RPAREN DOT cp_expression              { `Grab ((fst $1, None), $3, $6), pos () }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ((fst $1, None), $3, $6), pos () }
 | CASE cp_name LBRACE cp_cases RBRACE                          { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }

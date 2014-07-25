@@ -2771,7 +2771,7 @@ and type_cp (context : context) = fun (p, pos) ->
       if Types.session_can_be_unl s then
         Types.make_session_unl s
       else
-        Gripers.die pos ("Non-linear use of variable " ^ c ^ "of linear type " ^ Types.string_of_datatype (`Session s));
+        Gripers.non_linearity pos (uses_of c u) c (`Session s);
     (p, t, StringMap.remove c u) in
 
   let use s u = StringMap.add s 1 u in
@@ -2790,14 +2790,28 @@ and type_cp (context : context) = fun (p, pos) ->
        let ctype = `Session (`Input (a, s)) in
        unify ~pos:pos ~handle:Gripers.cp_grab
              (t, ctype);
-       let (p, t, u) = with_channel c s (type_cp (bind_var (bind_var context (c, `Session s)) (x, a)) p) in
+       let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, `Session s)) (x, a)) p) in
        let uses = uses_of x u in
-         if uses <> 1 then
-           if Types.type_can_be_unl a then
-             Types.make_type_unl a
-           else
-             Gripers.non_linearity pos uses x a;
-       `Grab ((c, Some ctype), (x, Some a), p), t, use c (StringMap.remove x u)
+       if uses <> 1 then
+         if Types.type_can_be_unl a then
+           Types.make_type_unl a
+         else
+           Gripers.non_linearity pos uses x a;
+       let (_, grab_ty, _) = type_check context (`Var "grab", pos) in
+       let tyargs =
+         match Types.concrete_type grab_ty with
+         | `ForAll (qs, t) ->
+            let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
+            let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
+            begin
+              match Instantiate.apply_type grab_ty tyargs with
+              | `Function (fps, fe, rettpe) ->
+                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [ctype], fps);
+                 tyargs
+              | _ -> assert false
+            end
+         | _ -> assert false in
+       `Grab ((c, Some (ctype, tyargs)), (x, Some a), p), pt, use c (StringMap.remove x u)
     | `Give ((c, _), e, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let (e, t', u) = type_check context e in
@@ -2805,8 +2819,23 @@ and type_cp (context : context) = fun (p, pos) ->
        let ctype = `Session (`Output (t', s)) in
        unify ~pos:pos ~handle:Gripers.cp_give
              (t, ctype);
-       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
-       `Give ((c, Some ctype), e, p), t, use c u
+       let (p, t, u') = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
+
+       let (_, give_ty, _) = type_check context (`Var "give", pos) in
+       let tyargs =
+         match Types.concrete_type give_ty with
+         | `ForAll (qs, t) ->
+            let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
+            let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
+            begin
+              match Instantiate.apply_type give_ty tyargs with
+              | `Function (fps, fe, rettpe) ->
+                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [t'; ctype], fps);
+                 tyargs
+              | _ -> assert false
+            end
+         | _ -> assert false in
+       `Give ((c, Some (ctype, tyargs)), e, p), t, use c (merge_usages [u; u'])
     | `Select ((c, _), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let s = Types.fresh_session_variable (`Any, `Session) in

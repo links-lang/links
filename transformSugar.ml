@@ -379,7 +379,7 @@ class transform (env : Types.typing_environment) =
             (o, `RecordLit (fields, base), t)
       | `Projection (e, name) ->
           let (o, e, t) = o#phrase e in
-            (o, `Projection (e, name), TypeUtils.project_type name t)
+          (o, `Projection (e, name), TypeUtils.project_type name t)
       | `With (e, fields) ->
           let (o, e, t) = o#phrase e in
           let (o, fields) =
@@ -687,7 +687,7 @@ class transform (env : Types.typing_environment) =
          let (o, e, t) = o#phrase e in
          let o = o#restore_envs envs in
          {< var_env=var_env >}, `Unquote (bs, e), t
-      | `Grab ((c, Some (`Session (`Input (_a, s))) as cbind), (x, Some u), p) -> (* FYI: a = u *)
+      | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), (x, Some u), p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
                                            (x, u))
@@ -696,7 +696,7 @@ class transform (env : Types.typing_environment) =
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, `Grab (cbind, (x, Some u), p), t
-      | `Give ((c, Some (`Session (`Output (_t, s))) as cbind), e, p) ->
+      | `Give ((c, Some (`Session (`Output (_t, s)), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
          let (o, e, _typ) = o#phrase e in
