@@ -266,7 +266,7 @@ and sentence = [
 | `Directive   of directive ]
 and typed_id = string * Types.datatype option
 and cp_phrasenode = [
-| `Unquote of phrase
+| `Unquote of binding list * phrase
 | `Grab of typed_id * typed_id * cp_phrase
 | `Give of typed_id * phrase * cp_phrase
 | `Select of typed_id * string * cp_phrase
@@ -459,7 +459,7 @@ struct
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase (p, _pos) = match p with
-    | `Unquote e -> phrase e
+    | `Unquote e -> block e
     | `Grab ((c, _t), (x, _u), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
     | `Give ((c, _t), e, p) -> union (singleton c) (union (phrase e) (cp_phrase p))
     | `Select ((c, _t), _label, p) -> union (singleton c) (cp_phrase p)

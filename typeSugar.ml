@@ -2777,9 +2777,10 @@ and type_cp (context : context) = fun (p, pos) ->
   let unify ~pos ~handle (t, u) = unify ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
   let (p, t, u) = match p with
-    | `Unquote e ->
-       let (e, t, u) = type_check context e in
-       `Unquote e, t, u
+    | `Unquote (bindings, e) ->
+       let context', bindings, usage_builder = type_bindings context bindings in
+       let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
+       `Unquote (bindings, e), t, usage_builder u
     | `Grab ((c, _), (x, _), p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let a = Types.fresh_type_variable (`Any, `Any) in
@@ -2806,7 +2807,7 @@ and type_cp (context : context) = fun (p, pos) ->
        `Give ((c, Some ctype), e, p), t, use c u
     | `Select ((c, _), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
-       let s = Types.fresh_session_variable (`Any, `Session) in
+       let s = Types.fresh_type_variable (`Any, `Session) in
        let r = Types.make_singleton_open_row (label, `Present (`Session s)) (`Any, `Session) in
        let ctype = `Session (`Select r) in
        unify ~pos:pos ~handle:Gripers.cp_select

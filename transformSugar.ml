@@ -681,9 +681,12 @@ class transform (env : Types.typing_environment) =
       (o, (p, pos), t)
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
-      | `Unquote e ->
+      | `Unquote (bs, e) ->
+         let envs = o#backup_envs in
+         let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
-         o, `Unquote e, t
+         let o = o#restore_envs envs in
+         {< var_env=var_env >}, `Unquote (bs, e), t
       | `Grab ((c, Some (`Session (`Input (_a, s))) as cbind), (x, Some u), p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())

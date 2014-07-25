@@ -348,7 +348,7 @@ class map =
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
-      | `Unquote e -> `Unquote (o#phrase e)
+      | `Unquote (bs, e) -> `Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
       | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
       | `Give (c, e, p) -> `Give (c, o#phrase e, o#cp_phrase p)
       | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
@@ -887,7 +887,7 @@ class fold =
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
-      | `Unquote e -> o#phrase e
+      | `Unquote (bs, e) -> (o#list (fun o -> o#binding) bs)#phrase e
       | `Grab (_c, _x, p) -> o#cp_phrase p
       | `Give (_c, e, p) -> (o#phrase e)#cp_phrase p
       | `Select (_c, _l, p) -> o#cp_phrase p
@@ -1480,9 +1480,10 @@ class fold_map =
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
-      | `Unquote e ->
+      | `Unquote (bs, e) ->
+         let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
-         o, `Unquote e
+         o, `Unquote (bs, e)
       | `Grab (c, x, p) ->
          let o, p = o#cp_phrase p in
          o, `Grab (c, x, p)

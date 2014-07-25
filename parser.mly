@@ -367,7 +367,7 @@ cp_cases:
 | cp_case SEMICOLON cp_cases                                   { $1 :: $3 }
 
 cp_expression:
-| LBRACE exp RBRACE                                            { `Unquote $2, pos () }
+| LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
 | cp_name LPAREN cp_name RPAREN DOT cp_expression              { `Grab ($1, $3, $6), pos () }
 | cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ($1, $3, $6), pos () }
 | CASE cp_name LBRACE cp_cases RBRACE                          { `Offer ($2, $4), pos () }

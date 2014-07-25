@@ -12,9 +12,12 @@ object (o : 'self_type)
        let rec desugar_cp = fun o (p, pos) ->
          let add_pos x = (x, pos) in
          match p with
-         | `Unquote e ->
-            let (o, (e, _), t) = o#phrase e in
-            (o, e, t)
+         | `Unquote (bs, e) ->
+            let envs = o#backup_envs in
+            let (o, bs) = TransformSugar.listu o (fun o -> o#binding) bs in
+            let (o, e, t) = o#phrase e in
+            let o = o#restore_envs envs in
+            o, `Block (bs, e), t
          | `Grab ((c, Some (`Session (`Input (_a, s))) as cbind), (x, Some u), p) -> (* FYI: a = u *)
             let envs = o#backup_envs in
             let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
