@@ -40,6 +40,17 @@ let concrete_type t =
                   end
           end
       | `Session (`Dual s) -> `Session (dual_session s)
+      | `Session (`MetaSessionVar point) ->
+         begin
+           match Unionfind.find point with
+           | `Body t -> ct rec_names t
+           | `Recursive (var, t) ->
+              if IntSet.mem var rec_names then
+                `Session (`MetaSessionVar point)
+              else
+                ct (IntSet.add var rec_names) t
+           | _ -> t
+         end
       | _ -> t
   in
     ct (IntSet.empty) t
