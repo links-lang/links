@@ -1906,7 +1906,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-              `Spawn (erase p, Some inner_effects), pid_type, usages p
+            if not (Types.type_can_be_unl (typ p)) then
+              Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
+            `Spawn (erase p, Some inner_effects), pid_type, usages p
         | `SpawnWait (p, _) ->
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
