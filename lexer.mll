@@ -307,12 +307,14 @@ rule lex ctxt nl = parse
   | ','                                 { COMMA }
   | '.'                                 { DOT }
   | ".."                                { DOTDOT }
+(* 
   | "::" (def_kind as var)              { if List.mem_assoc var kinds then
                                             List.assoc var kinds
                                           else if List.mem_assoc var subkinds then
                                             List.assoc var subkinds
                                           else
                                             raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+ *)
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
   | '!'                                 { BANG }

@@ -56,6 +56,23 @@ let annotate (signame, datatype) : _ -> binding =
           let _ = checksig signame name in
             `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
 
+let kind_of =
+  function
+  | "Type" -> `Type
+  | "BaseType" -> `BaseType
+  | "Row" -> `Row
+  | "Presence" -> `Presence
+  | "Session" -> `Session
+
+let subkind_of =
+  function
+  | "Any" -> `Any
+  | "Base" -> `Base
+  | "Session" -> `Session
+  | "Unl" -> `Unl
+  | "UnlBase" -> `UnlBase
+  | "UnlSession" -> `UnlSession
+
 let attach_kind pos (t, k) =
    (t,
     begin
@@ -304,20 +321,26 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 kind:
+| COLONCOLON CONSTRUCTOR                                       { kind_of $2 }
+/*
 | TYPE                                                         { `Type }
 | BASETYPE                                                     { `BaseType }
 | ROW                                                          { `Row }
 | BASEROW                                                      { `BaseRow }
 | PRESENCE                                                     { `Presence }
 | SESSION                                                      { `Session }
+*/
 
 subkind:
+| COLONCOLON CONSTRUCTOR                                       { subkind_of $2 }
+/*
 | ANY                                                          { `Any }
 | BASE                                                         { `Base }
 | SESSION                                                      { `Session }
 | UNL                                                          { `Unl }
 | UNLBASE                                                      { `UnlBase }
 | UNLSESSION                                                   { `UnlSession }
+*/
 
 typearg:
 | VARIABLE                                                     { (($1, (`Type, (`Unl, `Any)), `Flexible), None) }
