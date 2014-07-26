@@ -1,0 +1,16 @@
+#typename Selection(r::Row) = ![|~r|].End;
+typename Choice(r::Row) = ?[|r|].End;
+
+#sig sel_A : Selection({A:~s|r} ~> s
+sig sel_A : (![|A:s|r|].End) ~> ~s
+fun sel_A(e) {fork (linfun (x) {ignore(give(A(x), e))})}
+
+#sig off : (Choice({r}), ([|r|]) ~e~> a) ~e~> a
+sig off : (?[|r|].End, ([|r|]) ~e~> a) ~e~> a
+fun off(e, f) {
+  var (x, _) = grab(e);
+  f(x)
+}
+
+#sel_A
+fun (c) {off(c, fun (x) {switch (x) {case A(s) -> grab(s)}})}
