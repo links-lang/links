@@ -209,7 +209,7 @@ let datatype d = d, None
 %token UNDERSCORE AS
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
-%token TYPE BASETYPE ROW BASEROW PRESENCE ANY BASE SESSION UNL UNLBASE UNLSESSION
+%token TYPE ROW PRESENCE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -988,6 +988,9 @@ type_arg_list:
 | type_arg                                                     { [$1] }
 | type_arg COMMA type_arg_list                                 { $1 :: $3 }
 
+/* TODO: fix the syntax for type arguments
+   (TYPE, ROW, and PRESENCE are no longer tokens...)
+*/
 type_arg:
 | datatype                                                     { `Type $1 }
 | TYPE LPAREN datatype RPAREN                                  { `Type $3 }

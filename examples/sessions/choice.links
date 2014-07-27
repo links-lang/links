@@ -1,12 +1,11 @@
 #typename Selection(r::Row(Any,Session)) = ![|~r|].End;
-typename Choice(r::Row(Any,Session)) = ?[|r|].End;
+typename Choice(r::Row(Any,Session)) = ?[|r::Session|].End;
 
 #sig sel_A : Selection({A:~s|r} ~> s
 sig sel_A : (![|A:s|r|].End) ~> ~s
 fun sel_A(e) {fork (linfun (x) {ignore(give(A(x), e))})}
 
-#sig off : (Choice({r}), ([|r|]) ~e~> a) ~e~> a
-sig off : (?[|r::(Any,Session)|].End, ([|r::(Any,Session)|]) ~e~> a) ~e~> a
+sig off : forall r::Row(Any,Session).(Choice({ | r}), ([|r|]) ~e~> a) ~e~> a
 fun off(e, f) {
   var (x, _) = grab(e);
   f(x)

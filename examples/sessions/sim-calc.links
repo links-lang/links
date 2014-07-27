@@ -39,3 +39,7 @@ fun main() {
 }
 
 main()
+
+
+#sig sel : ((s::Session) ~e~@ c::Any) -> (!c::Any.End) ~e~> ~s::Session
+#fun sel(f)(c) {fork (linfun (d) {ignore(give(f(d), c))})}
