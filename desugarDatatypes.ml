@@ -33,16 +33,16 @@ object (self)
   *)
 
   val tyvars : type_variable list = []
-  val bound  : type_variable list = []
+  val bound  : type_variable StringMap.t = StringMap.empty
 
   method tyvars = Utility.unduplicate (=) (List.rev tyvars)
 
-  method add tv =
-    if List.mem tv bound then self
+  method add ((name, _, _) as tv) =
+    if StringMap.mem name bound then self
     else
       {< tyvars = tv :: tyvars >}
 
-  method bind tv = {< bound = tv :: bound >}
+  method bind ((name, _, _) as tv) = {< bound = StringMap.add name tv bound >}
 
   method bindingnode = function
     (* type declarations bind variables; exclude those from the
