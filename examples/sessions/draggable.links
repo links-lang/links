@@ -55,7 +55,7 @@ fun draggableList(id, items)
       }|>)
     }
     
-    manage(fork (fun (s) {waiting(id, s)}));
+    manage(fork (linfun (s) {waiting(id, s)}));
   };
 
   fun mouseUp() {

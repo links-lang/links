@@ -20,17 +20,17 @@ exit : 0
 
 Grab value
 fun (c) {grab(c).1}
-stdout : fun : (?a::Any._::Session) ~> a::Any
+stdout : fun : (?a::Any._::(Unl,Session)) ~> a::Any
 exit : 0
 
 Grab channel
 fun (c) {grab(c).2}
-stdout : fun : (?_.b::Any Session) ~> b::Any Session
+stdout : fun : (?_.b::Session) ~> b::Session
 exit : 0
 
 Ignore give
 fun (c) {ignore(give(42, c))}
-stdout : fun : (!Int._::Session) ~> ()
+stdout : fun : (!Int._::(Unl,Session)) ~> ()
 exit : 0
 
 Non-linear generalisation (1)

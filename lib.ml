@@ -356,28 +356,30 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "give",
   (`PFun (fun _ -> assert false),
-   datatype "(a::Any, !a::Any.s) ~> s::Session",
+   (* datatype "(a::Any, !a::Any.s) ~> s::Session", *)
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session).(a, !a.s) ~> s",
    IMPURE);
 
   "grab",
   (`PFun (fun _ -> assert false),
-   datatype "(?a::Any.s) ~> (a::Any, s::Session)",
+   (* datatype "(?a::Any.s) ~> (a::Any, s::Session)", *)
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
    IMPURE);
 
   (* access points *)
   "new",
   (`PFun (fun _ -> assert false),
-   datatype "() ~> AP(s::Any)",
+   datatype "forall s::Type(Any, Session).() ~> AP(s)",
    IMPURE);
 
   "accept",
   (`PFun (fun _ -> assert false),
-   datatype "(AP(s)) ~> s::Any",
+   datatype "forall s::Type(Any, Session).(AP(s)) ~> s",
    IMPURE);
 
   "request",
   (`PFun (fun _ -> assert false),
-   datatype "(AP(s)) ~> ~s",
+   datatype "forall s::Type(Any, Session).(AP(s)) ~> ~s",
    IMPURE);
 
   (** Lists and collections **)

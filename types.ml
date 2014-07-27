@@ -1561,50 +1561,74 @@ struct
   let show_quantifiers = Settings.add_bool ("show_quantifiers", false, `User)
   let show_flavours = Settings.add_bool ("show_flavours", false, `User)
   let hide_fresh_type_vars = Settings.add_bool ("hide_fresh_type_vars", true, `User)
+  let show_full_kinds = Settings.add_bool ("show_full_kindw", true, `User)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; full_kinds:bool}
   type names = (string * Vars.spec) IntMap.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
      flavours=Settings.get_value show_flavours;
-     hide_fresh=Settings.get_value hide_fresh_type_vars}
+     hide_fresh=Settings.get_value hide_fresh_type_vars;
+     full_kinds=Settings.get_value show_full_kinds}
 
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"
     | `XmlItem -> "XmlItem" | `DB -> "Database" | `String -> "String"
 
+  let has_kind =
+    function
+    | "" -> ""
+    | s -> "::" ^ s
+
   let subkind : (policy * names) -> subkind -> string =
     let linearity = function
       | `Any -> "Any"
-      | `Unl -> "" in
+      | `Unl -> "Unl" in
     let restriction = function
-      | `Any -> ""
+      | `Any -> "Any"
       | `Base -> "Base"
       | `Session -> "Session" in
+    let full (l, r) = "(" ^ linearity l ^ "," ^ restriction r ^ ")" in
 
-    fun (_policy, _vars) (l, r) ->
-      let lins = linearity l in
-      let ress = restriction r in
-      match lins, ress with
-      | "", "" -> ""
-      | "", _  -> "::"^ress
-      | _,""   -> "::"^lins
-      | _      -> "::"^lins^" "^ress
+    fun (policy, _vars) ->
+    if policy.full_kinds then
+      full
+    else
+      function
+      | (`Unl, `Any) -> ""
+      | (`Any, `Any) -> "Any"
+      | (`Unl, `Base) -> restriction `Base
+      | (`Any, `Session) -> restriction `Session
+      | (l, r) -> full (l, r)
 
   let kind : (policy * names) -> kind -> string =
-    fun (_policy, _vars) ->
-      function
-        | `Type, sk -> subkind (_policy, _vars) sk
-        | `Row, sk ->
-           let s = subkind (_policy, _vars) sk in
-             if s="" then "::Row" else s ^ " Row"
-        | `Presence, sk ->
-           let s = subkind (_policy, _vars) sk in
-             if s ="" then "::Presence" else s ^ " Presence"
+    let primary_kind = function
+      | `Type -> "Type"
+      | `Row -> "Row"
+      | `Presence -> "Presence" in
+    let restriction = function
+      | `Any -> "Any"
+      | `Base -> "Base"
+      | `Session -> "Session" in
+    let full (policy, _vars) (k, sk) =
+      primary_kind k ^ subkind (policy, _vars) sk in
+    fun (policy, _vars) (k, sk) ->
+    if policy.full_kinds then
+      full (policy, _vars) (k, sk)
+    else
+      match (k, sk) with
+      | `Type, (`Unl, `Any) -> ""
+      | `Type, (`Unl, `Base) -> restriction `Base
+      | `Type, (`Any, `Session) -> restriction `Session
+      | `Type, sk -> subkind ({policy with full_kinds=true}, _vars) sk
+      | `Row, (`Unl, `Any) -> primary_kind `Row
+      | `Presence, (`Unl, `Any) -> primary_kind `Presence
+      | `Row, _
+      | `Presence, _ -> full ({policy with full_kinds=true}, _vars) (k, sk)
 
   let quantifier : (policy * names) -> quantifier -> string =
     fun (policy, vars) q ->
@@ -1615,12 +1639,12 @@ struct
         else
           "%"
       in
-        prefix ^ Vars.find (var_of_quantifier q) vars ^ kind (policy, vars) k
+        prefix ^ Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
 
   let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
     fun bound_vars ((policy, vars) as p) t ->
       let sd = datatype bound_vars p in
-      let sk = subkind p in
+      let sk k = has_kind (subkind p k) in
 
       let hide_fresh_check var (flavour, _, count) =
         policy.hide_fresh && count = 1 &&
@@ -1941,12 +1965,12 @@ struct
           let name, (_, _, count) = Vars.find_spec var vars in
             Some
               ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "%"
-                else ("%" ^ name)) ^ subkind p k)
+                else ("%" ^ name)) ^ has_kind (subkind p k))
       | `Var (var, k, _) ->
           let name, (_, _, count) = Vars.find_spec var vars in
             Some
               ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "_"
-                else name) ^ subkind p k)
+                else name) ^ has_kind (subkind p k))
       | `Recursive (var, r) ->
           if TypeVarSet.mem var bound_vars then
             Some (Vars.find var vars)
