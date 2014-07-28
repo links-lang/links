@@ -5,7 +5,7 @@ OCAMLMAKEFILE = ./OCamlMakefile
 PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime
 export OCAMLFLAGS=-syntax camlp4o
 
-PATH := $(PATH):deriving-script
+PATH := $(PATH):deriving
 
 ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
