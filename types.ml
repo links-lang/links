@@ -1561,7 +1561,7 @@ struct
   let show_quantifiers = Settings.add_bool ("show_quantifiers", false, `User)
   let show_flavours = Settings.add_bool ("show_flavours", false, `User)
   let hide_fresh_type_vars = Settings.add_bool ("hide_fresh_type_vars", true, `User)
-  let show_full_kinds = Settings.add_bool ("show_full_kindw", true, `User)
+  let show_full_kinds = Settings.add_bool ("show_full_kinds", false, `User)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
