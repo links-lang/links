@@ -911,7 +911,8 @@ struct
           | `Page _
           | `FormletPlacement _
           | `PagePlacement _
-          | `FormBinding _ ->
+          | `FormBinding _
+          | `CP _ ->
               Debug.print ("oops: " ^ Show.show Sugartypes.show_phrasenode e);
               assert false
 

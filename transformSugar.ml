@@ -703,6 +703,8 @@ class transform (env : Types.typing_environment) =
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, `Give (cbind, e, p), t
+      | `Grab _ -> failwith "Malformed grab in TransformSugar"
+      | `Give _ -> failwith "Malformed give in TransformSugar"
       | `Select ((c, Some s as cbind), label, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
