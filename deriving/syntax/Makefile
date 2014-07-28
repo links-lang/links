@@ -1,8 +1,5 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-OCAMLC     = ocamlc.opt
-OCAMLOPT   = ocamlopt.opt
-OCAMLDEP   = ocamldep.opt
 ANNOTATE   = yes
 PPFLAGS    = -loc loc
 USE_CAMLP4 = yes

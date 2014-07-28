@@ -2,6 +2,8 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
+PACKS=bigarray num str
+
 ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
    DB_AUXLIBS += $(SQLITE_LIBDIR)
@@ -41,15 +43,8 @@ DERIVING_DIR=deriving
 AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
 
 ifdef PROF
-OCAMLOPT := ocamlopt.opt -p -inline 0
-else
-OCAMLOPT := ocamlopt.opt
+OCAMLOPT := ocamlopt -p -inline 0
 endif
-OCAMLC := ocamlc.opt
-
-# use ocamldep.opt if it exists
-# (it doesn't exist for all OCaml installations)
-OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
 
 PATH := $(PATH):$(DERIVING_DIR)/syntax
 
@@ -138,7 +133,7 @@ SOURCES = $(OPC)                                \
 #          tests.ml                              \
 
 
-LIBS    = bigarray nums str $(DB_LIBS) deriving
+LIBS    = $(DB_LIBS) deriving
 
 ifndef THREADS
 LIBS += unix

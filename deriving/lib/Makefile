@@ -1,12 +1,10 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
+LIBS=
+
 PATH       := $(PATH):../syntax
 
-OCAMLOPT   = ocamlopt.opt
-OCAMLC     = ocamlc.opt
-OCAMLDEP   = ocamldep.opt
 OCAMLFLAGS =-w ae -g
-LIBS       = nums str unix
 
 SOURCES = show.ml           show.mli		\
           interned.mli      interned.ml		\
