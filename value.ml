@@ -10,8 +10,12 @@ object
   method show : string
 end
 
-let show_otherfield () = 
-  { Show.format = fun formatter obj -> Format.pp_print_string formatter (obj # show) }
+module Show_otherfield =
+  Deriving_Show.Defaults
+    (struct
+      type a = otherfield
+      let format formatter obj = Format.pp_print_string formatter (obj # show)
+     end)
 
 type db_status = [ `QueryOk | `QueryError of string ]
   deriving (Show)
@@ -39,9 +43,13 @@ class virtual database = object(self)
       failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
 end
 
-let eq_database = Eq.eq_mutable
-let typeable_database  = { Typeable.type_rep = Typeable.TypeRep.mkFresh "database" [] }
-let show_database = show_unprintable
+module Eq_database = Deriving_Eq.Eq_mutable(struct type a = database end)
+module Typeable_database  = Deriving_Typeable.Primitive_typeable
+  (struct
+    type t = database
+    let magic = "database"
+   end)
+module Show_database = Deriving_Show.Show_unprintable(struct type a = database end)
 
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
@@ -105,7 +113,7 @@ type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Eq, Hash, Pickle, Dump)
+    deriving (Typeable, Show, Eq, Pickle, Dump)
 
 let is_attr = function
   | Attr _ -> true
@@ -134,14 +142,21 @@ and string_of_item : xmlitem -> string =
 type table = (database * string) * string * Types.row
   deriving (Show)    
 
+type number = num
+module Show_number = Deriving_num.Show_num
+module Typeable_number = Deriving_num.Typeable_num
+module Eq_number = Deriving_num.Eq_num
+module Pickle_number = Deriving_num.Pickle_num
+module Dump_number = Deriving_num.Dump_num
+
 type primitive_value_basis =  [
 | `Bool of bool
 | `Char of char
 | `Float of float
-| `Int of num
+| `Int of number
 | `XML of xmlitem 
 | `String of string ]
-  deriving (Show, Typeable, Eq, Hash, Pickle, Dump)
+  deriving (Show, Typeable, Eq, Pickle, Dump)
 
 type primitive_value = [
 | primitive_value_basis
@@ -280,7 +295,7 @@ type compressed_primitive_value = [
 | `Table of string * string * string
 | `Database of string
 ]
-  deriving (Show, Eq, Typeable, Hash, Pickle, Dump)
+  deriving (Show, Eq, Typeable, Pickle, Dump)
 
 type compressed_continuation = (Ir.var * compressed_env) list
 and compressed_t = [
@@ -294,7 +309,7 @@ and compressed_t = [
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
-  deriving (Show, Eq, Typeable, Dump, Hash, Pickle)
+  deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
@@ -503,7 +518,7 @@ let escape =
 
 (** {1 Pretty-printing values} *)
 
-let string_of_cont = Show.show show_continuation
+let string_of_cont = Show_continuation.show 
 
 exception Not_tuple
 
@@ -512,7 +527,7 @@ exception Match of string
 let rec char_of_primchar = function 
     `Char c -> c
   | o ->
-      raise (Match (Show.show show_t o))
+      raise (Match (Show_t.show o))
 
 and charlist_as_string chlist = 
   match chlist with
@@ -646,10 +661,12 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   { save = marshal_save ; load = marshal_load };
   
   "Pickle",
-  { save = Pickle.to_string pickle_compressed_continuation ; load = Pickle.from_string pickle_compressed_continuation };
+  { save = Pickle_compressed_continuation.to_string ;
+    load = Pickle_compressed_continuation.from_string };
 
   "Dump",
-  { save = Dump.to_string dump_compressed_continuation ; load = Dump.from_string dump_compressed_continuation }
+  { save = Dump_compressed_continuation.to_string ;
+    load = Dump_compressed_continuation.from_string }
 ]
 
 let value_serialisers : (string * compressed_t serialiser) list = [
@@ -657,10 +674,12 @@ let value_serialisers : (string * compressed_t serialiser) list = [
   { save = marshal_save ; load = marshal_load };
   
   "Pickle",
-  { save = Pickle.to_string pickle_compressed_t ; load = Pickle.from_string pickle_compressed_t };
+  { save = Pickle_compressed_t.to_string ;
+    load = Pickle_compressed_t.from_string };
 
   "Dump",
-  { save = Dump.to_string dump_compressed_t ; load = Dump.from_string dump_compressed_t };
+  { save = Dump_compressed_t.to_string ;
+    load = Dump_compressed_t.from_string };
 ]
 
 let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =

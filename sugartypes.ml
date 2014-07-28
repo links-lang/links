@@ -48,7 +48,7 @@ let string_of_binop =
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
-let show_position = Show.show_unprintable
+module Show_position = Deriving_Show.Show_unprintable(struct type a = position end)
 
 type binder = name * Types.datatype option * position
     deriving (Show)

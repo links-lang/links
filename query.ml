@@ -147,7 +147,7 @@ struct
         | `Var v -> `Var v
         | `Constant c -> `Constant c
           
-  let t = Show.show show_pt -<- pt_of_t
+  let t = Show_pt.show -<- pt_of_t
 end
 let string_of_t = S.t
 
@@ -180,7 +180,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | e -> Debug.print("Can't deduce type for: " ^ Show.show show_t e); assert false
+      | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
 let default_of_base_type : Types.primitive -> t =
   function

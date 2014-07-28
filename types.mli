@@ -10,8 +10,7 @@ module TypeVarSet : Utility.INTSET
 
 (* points *)
 type 'a point = 'a Unionfind.point 
-
-val show_point : 'a Show.show -> 'a Unionfind.point Show.show
+  deriving (Show)
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)

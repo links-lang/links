@@ -463,7 +463,7 @@ struct
                         let f =
                           match strip_poly cont with
                             | `Variable f -> f
-                            | v -> failwith ("don't know how to pickle this value on the client: "^Show.show Ir.show_value v) in
+                            | v -> failwith ("don't know how to pickle this value on the client: "^ Ir.Show_value.show v) in
                           
                         (* hereafter [cont] is a variable, [`Variable f] *)
                           

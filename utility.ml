@@ -35,7 +35,7 @@ let ( |> ) f arg = f arg
 module type OrderedShow = sig
   type t
   val compare : t -> t -> int
-  val show_t : t Show.show 
+  module Show_t : Deriving_Show.Show with type a = t
 end
 
 module type Map = 
@@ -80,12 +80,13 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
-  val show_t : 'a Show.show -> 'a t Show.show
+  module Show_t (A : Deriving_Show.Show) : Deriving_Show.Show
+    with type a = A.a t
 end
 
 module String = struct
   include String
-  let show_t = Show.show_string
+  module Show_t = Deriving_Show.Show_string
 end
 
 module Int = struct
@@ -93,13 +94,13 @@ module Int = struct
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare i j = i-j 
-  let show_t = Show.show_int
+  module Show_t = Deriving_Show.Show_int
 end
 
 module Char = 
 struct
   include Char
-  let show_t = Show.show_char
+  module Show_t = Deriving_Show.Show_char
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
   let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
   let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
@@ -123,11 +124,11 @@ struct
     include Map.Make(Ord)
 
     exception Not_disjoint of key * string
-    module S = Show.Show_map(Ord)
+    module S = Deriving_Show.Show_map(Ord)(Ord.Show_t)
 
     let find elem map = 
       try find elem map 
-      with NotFound _ -> raise (NotFound (Show.show Ord.show_t elem ^ 
+      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^ 
                                   " (in Map.find)"))
     let filterv f map =
       filter (fun _ -> f) map
@@ -160,7 +161,7 @@ struct
     let union_disjoint a b = 
       fold
         (fun k v r -> 
-           if (mem k r) then raise (Not_disjoint (k, Show.show Ord.show_t k)) 
+           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
            else
              add k v r) b a
 
@@ -182,7 +183,8 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    let show_t (v : 'a Show.show) = S.show_t Ord.show_t v
+    module Show_t (V : Deriving_Show.Show) = 
+      Deriving_Show.Show_map(Ord)(Ord.Show_t)(V)
   end
 end
 
@@ -196,7 +198,7 @@ sig
   val from_list : elt list -> t
   (** Construct a set from a list *)
 
-  val show_t : t Show.show
+  module Show_t : Deriving_Show.Show with type a = t
 end
 
 module Set :
@@ -212,8 +214,7 @@ struct
     include Set.Make(Ord)
     let union_all sets = List.fold_right union sets empty
     let from_list l = List.fold_right add l empty
-    module S = Show.Show_set(Ord)
-    let show_t = S.show_t Ord.show_t
+    module Show_t = Deriving_Show.Show_set(Ord)(Ord.Show_t)
   end
 end
 
@@ -232,13 +233,12 @@ module CharMap = Map.Make(Char)
 type stringset = StringSet.t
     deriving (Show)
 
-module Eq_stringset :
-sig
-  val eq : StringSet.t Eq.eq
-end = Eq.Eq_set_s_t (StringSet)
-
-let typeable_stringset : stringset Typeable.typeable = 
-  { Typeable.type_rep = Typeable.TypeRep.mkFresh "stringset" [] }
+module Typeable_stringset : Deriving_Typeable.Typeable
+  with type a = stringset = 
+  Deriving_Typeable.Primitive_typeable(struct
+    type t = stringset
+    let magic = "stringset"
+  end)
 
 type 'a stringmap = 'a StringMap.t
     deriving (Show)
@@ -631,7 +631,7 @@ let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
   in aux ([], []) l
 
 
-module EitherMonad = Monad.MonadPlusUtils(
+module EitherMonad = Deriving_monad.MonadPlusUtils(
   struct
     type 'a m = (string, 'a) either
     let return v = Right v
