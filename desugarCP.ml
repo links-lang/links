@@ -24,14 +24,14 @@ object (o : 'self_type)
                                               (x, u))
                                   (c, `Session s) in
             let o = {< var_env = venv >} in
-            let (o, e, u) = desugar_cp o p in
+            let (o, e, t) = desugar_cp o p in
             o, `Block
                   ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos)));
                                                           ("2", add_pos (`Variable (c, Some (`Session s), pos)))], None)),
                                    add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "grab", grab_tyargs)),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
-                  add_pos e), u
+                  add_pos e), t
          | `Give ((c, Some (`Session (`Output (_t, s)), give_tyargs) as cbind), e, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
