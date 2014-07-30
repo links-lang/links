@@ -687,7 +687,10 @@ class transform (env : Types.typing_environment) =
          let (o, e, t) = o#phrase e in
          let o = o#restore_envs envs in
          {< var_env=var_env >}, `Unquote (bs, e), t
-      | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), (x, Some u), p) -> (* FYI: a = u *)
+      | `Grab (cbind, None, p) ->
+         let (o, p, t) = o#cp_phrase p in
+         o, `Grab (cbind, None, p), t
+      | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), Some (x, Some u), p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
                                            (x, u))
@@ -695,11 +698,11 @@ class transform (env : Types.typing_environment) =
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Grab (cbind, (x, Some u), p), t
+         o, `Grab (cbind, Some (x, Some u), p), t
       | `Give ((c, Some (`Session (`Output (_t, s)), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
-         let (o, e, _typ) = o#phrase e in
+         let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, `Give (cbind, e, p), t

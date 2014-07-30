@@ -267,8 +267,8 @@ and sentence = [
 and typed_id = string * Types.datatype option
 and cp_phrasenode = [
 | `Unquote of binding list * phrase
-| `Grab of (string * (Types.datatype * tyarg list) option) * typed_id * cp_phrase
-| `Give of (string * (Types.datatype * tyarg list) option) * phrase * cp_phrase
+| `Grab of (string * (Types.datatype * tyarg list) option) * typed_id option * cp_phrase
+| `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
 | `Select of typed_id * string * cp_phrase
 | `Offer of typed_id * (string * cp_phrase) list
 | `Comp of typed_id * cp_phrase * cp_phrase ]
@@ -460,8 +460,9 @@ struct
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase (p, _pos) = match p with
     | `Unquote e -> block e
-    | `Grab ((c, _t), (x, _u), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
-    | `Give ((c, _t), e, p) -> union (singleton c) (union (phrase e) (cp_phrase p))
+    | `Grab ((c, _t), Some (x, _u), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
+    | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
+    | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
     | `Select ((c, _t), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
     | `Comp ((c, _t), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)

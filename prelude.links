@@ -1054,3 +1054,16 @@ fun replicate(ap, f) {
   var _ = spawn {f(x)};
   replicate(ap, f)
 }
+
+typename EndBang = !().End;
+typename EndQuery = ?().End;
+
+sig wait : (?().End) ~> ()
+fun wait(s) {
+  ignore(grab(s))
+}
+
+sig close : (!().End) ~> ()
+fun close(s) {
+  ignore(give((), s))
+}

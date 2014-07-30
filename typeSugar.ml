@@ -907,6 +907,7 @@ let empty_context eff =
     effect_row = eff }
 
 let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (v,t)}
+let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
 let bind_tycon context (v, t) = {context with tycon_env = Env.bind context.tycon_env (v,t)}
 let bind_effects context r = {context with effect_row = r}
 
@@ -2783,7 +2784,13 @@ and type_cp (context : context) = fun (p, pos) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
        `Unquote (bindings, e), t, usage_builder u
-    | `Grab ((c, _), (x, _), p) ->
+    | `Grab ((c, _), None, p) ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let ctype = `Session (`Input (Types.unit_type, `End)) in
+       unify ~pos:pos ~handle:Gripers.cp_grab (t, ctype);
+       let (p, pt, u) = type_cp (unbind_var context c) p in
+       `Grab ((c, Some (ctype, [])), None, p), pt, use c u
+    | `Grab ((c, _), Some (x, _), p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let a = Types.fresh_type_variable (`Any, `Any) in
        let s = Types.fresh_session_variable (`Any, `Session) in
@@ -2811,8 +2818,14 @@ and type_cp (context : context) = fun (p, pos) ->
               | _ -> assert false
             end
          | _ -> assert false in
-       `Grab ((c, Some (ctype, tyargs)), (x, Some a), p), pt, use c (StringMap.remove x u)
-    | `Give ((c, _), e, p) ->
+       `Grab ((c, Some (ctype, tyargs)), Some (x, Some a), p), pt, use c (StringMap.remove x u)
+    | `Give ((c, _), None, p) as p' ->
+       let (_, t, _) = type_check context (`Var c, pos) in
+       let ctype = `Session (`Output (Types.unit_type, `End)) in
+       unify ~pos:pos ~handle:Gripers.cp_give (t, ctype);
+       let (p, t, u) = type_cp (unbind_var context c) p in
+       `Give ((c, Some (ctype, [])), None, p), t, use c u
+    | `Give ((c, _), Some e, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable (`Any, `Session) in
@@ -2835,7 +2848,7 @@ and type_cp (context : context) = fun (p, pos) ->
               | _ -> assert false
             end
          | _ -> assert false in
-       `Give ((c, Some (ctype, tyargs)), e, p), t, use c (merge_usages [u; u'])
+       `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
     | `Select ((c, _), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let s = Types.fresh_session_variable (`Any, `Session) in

@@ -1,0 +1,21 @@
+fun oneA(a)(c) {
+  var c = give(a, c);
+  var _ = close(c);
+  ()
+}
+
+fun oneB(c) {
+  var (y, c) = grab(c);
+  var _ = wait(c);
+  y
+}
+
+fun twoA(a)(c) {
+  <| c[a].c[].{()} |>
+}
+
+fun twoB(c) {
+  <| c(y).c().{y} |>
+}
+
+(oneB(fork(oneA(1))), twoB(fork(twoA(2))))

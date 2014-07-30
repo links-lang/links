@@ -6,6 +6,7 @@ sig
   type 'a t
   val empty : 'a t
   val bind : 'a t -> name * 'a -> 'a t
+  val unbind : 'a t -> name -> 'a t
   val extend : 'a t -> 'a t -> 'a t
   val has : 'a t -> name -> bool
   val lookup : 'a t -> name -> 'a
@@ -31,6 +32,7 @@ struct
 
   let empty = M.empty
   let bind env (n,v) = M.add n v env
+  let unbind env n = M.remove n env
   let extend = M.superimpose
   let has env name = M.mem name env
   let lookup env name = M.find name env

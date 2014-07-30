@@ -14,6 +14,9 @@ sig
   val bind : 'a t -> name * 'a -> 'a t
   (** Extend an environment with a new entry. *)
 
+  val unbind : 'a t -> name -> 'a t
+  (** Remove an entry from an environment. *)
+
   val extend : 'a t -> 'a t -> 'a t
   (** Extend an environment with another.  Bindings from the right
       shadow bindings from the left. *)
