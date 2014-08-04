@@ -1,7 +1,6 @@
-typename CalcSelect = mu a.[+|Add:!Int.!Int.?Int.a, Mul:!Int.!Int.?Int.a, Stop:End|+];
-typename CalcOffer  = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
+typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
 
-sig calc : (CalcOffer) ~> ()
+sig calc : (Calc) ~> ()
 fun calc(s) {
   offer (s) {
     case Add(s) ->
@@ -19,7 +18,7 @@ fun calc(s) {
   }
 }
 
-sig user : (CalcSelect) ~> Int
+sig user : (~Calc) ~> Int
 fun user(s) {
   var s = select Mul s;
   var (v, s) = grab(give(6,give(7,s)));

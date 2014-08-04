@@ -1,10 +1,7 @@
-typename WaitSelect = mu a.[+|MouseDown:!DomNode.mu b.[+|MouseOut:!DomNode.b, MouseUp:a|+]|+];
-typename WaitOffer  = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseOut:?DomNode.b, MouseUp:a|&]|&];
+typename Wait = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseOut:?DomNode.b, MouseUp:a|&]|&];
+typename Drag = mu b.[&|MouseOut:?DomNode.b, MouseUp:Wait|&];
 
-typename DragSelect = mu b.[+|MouseOut:!DomNode.b, MouseUp:[+|MouseDown:!DomNode.b|+]|+];
-typename DragOffer  = mu b.[&|MouseOut:?DomNode.b, MouseUp:[&|MouseDown:?DomNode.b|&]|&];
-
-sig waiting : (String, WaitOffer) ~> ()
+sig waiting : (String, Wait) ~> ()
 fun waiting(id, s) client {
   offer (s) {
     case MouseDown(s) ->
@@ -13,7 +10,7 @@ fun waiting(id, s) client {
   }
 }
 
-sig dragging : (String, DomNode, DragOffer) ~> ()
+sig dragging : (String, DomNode, Drag) ~> ()
 fun dragging(id, elem, s) {
   offer(s) {
     case MouseUp(s)   -> waiting(id, s)

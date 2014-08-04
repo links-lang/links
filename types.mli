@@ -66,6 +66,15 @@ val event        : Abstype.t
 val dom_node     : Abstype.t
 val access_point : Abstype.t
 
+type ('t, 'r) session_type_basis =
+    [ `Input of 't * 't
+    | `Output of 't * 't
+    | `Select of 'r
+    | `Choice of 'r
+    | `Dual of 't
+    | `End ]
+      deriving (Show)
+
 type typ =
     [ `Not_typed
     | `Primitive of primitive
@@ -78,7 +87,7 @@ type typ =
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
-    | `Session of session_type ]
+    | (typ, row) session_type_basis ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
@@ -90,15 +99,10 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-and session_type =
-    [ `Input of typ * session_type
-    | `Output of typ * session_type
-    | `Select of row
-    | `Choice of row
-    | `MetaSessionVar of meta_type_var
-    | `Dual of session_type
-    | `End ]
       deriving (Show)
+
+type session_type = (typ, row) session_type_basis
+  deriving (Show)
 
 type datatype = typ
       deriving (Show)
@@ -125,11 +129,11 @@ val is_unl_row : row -> bool
 
 val type_can_be_unl : datatype -> bool
 val row_can_be_unl : row -> bool
-val session_can_be_unl : session_type -> bool
+(* val session_can_be_unl : datatype -> bool *)
 
 val make_type_unl : datatype -> unit
 val make_row_unl : row -> unit
-val make_session_unl : session_type -> unit
+(* val make_session_unl : datatype -> unit *)
 
 (* session kind stuff *)
 val is_session_type : datatype -> bool
@@ -141,7 +145,7 @@ val is_sessionable_row : row -> bool
 val sessionify_type : datatype -> unit
 val sessionify_row : row -> unit
 
-val dual_session : session_type -> session_type
+(* val dual_session : datatype -> datatype *)
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
@@ -215,7 +219,6 @@ val make_type_variable : int -> subkind -> datatype
 val make_rigid_type_variable : int -> subkind -> datatype
 val make_row_variable : int -> subkind -> row_var
 val make_rigid_row_variable : int -> subkind -> row_var
-val make_session_variable : int -> subkind -> session_type
 
 (** fresh type variable generation *)
 val fresh_type_variable : subkind -> datatype
@@ -224,7 +227,7 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_session_variable : subkind -> session_type
+val fresh_session_variable : linearity -> datatype
 
 val fresh_presence_variable : subkind -> field_spec
 val fresh_rigid_presence_variable : subkind -> field_spec
@@ -335,7 +338,7 @@ val string_of_datatype : datatype -> string
 val string_of_row : row -> string
 val string_of_presence : field_spec -> string
 val string_of_type_arg : type_arg -> string
-val string_of_session_type : session_type -> string
+(* val string_of_session_type : datatype -> string *)
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string

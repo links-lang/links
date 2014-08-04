@@ -967,6 +967,9 @@ session_type_top:
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
 | TILDE session_type                                           { `Dual $2 }
 | END                                                          { `End }
+| CONSTRUCTOR                                                  { `TypeApplication ($1, []) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
+
 
 session_type:
 | session_type_top                                             { $1 }

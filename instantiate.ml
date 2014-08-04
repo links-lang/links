@@ -60,40 +60,12 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap
               `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
-          | `Session s -> `Session (inst_session rec_env s)
-    and inst_session : inst_env -> session_type -> session_type = fun rec_env s ->
-      match s with
-      | `Input (t, s) -> `Input (inst rec_env t, inst_session rec_env s)
-      | `Output (t, s) -> `Output (inst rec_env t, inst_session rec_env s)
-      | `Select fields -> `Select (inst_row rec_env fields)
-      | `Choice fields -> `Choice (inst_row rec_env fields)
-      | `MetaSessionVar point ->
-        (* HACK:
-           this is just copied and adapted from the code above for `MetaTypeVar point *)
-        let t = Unionfind.find point in
-          begin
-            match t with
-            | `Var (var, _, _) ->
-              if IntMap.mem var tenv then
-                TypeUtils.session_of_type (IntMap.find var tenv)
-              else
-                s
-            | `Recursive (var, t) ->
-              let rec_type_env, rec_row_env = rec_env in
-              if IntMap.mem var rec_type_env then
-                (`MetaSessionVar (IntMap.find var rec_type_env))
-              else
-                begin
-                  let var' = Types.fresh_raw_variable () in
-                  let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
-                  let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-                  let _ = Unionfind.change point' (`Recursive (var', t')) in
-                    `MetaSessionVar point'
-                end
-            | `Body t -> TypeUtils.session_of_type (inst rec_env t)
-          end
-      | `Dual s -> Types.dual_session (inst_session rec_env s)
-      | `End -> `End
+          | `Input (t, s) -> `Input (inst rec_env t, inst rec_env s)
+          | `Output (t, s) -> `Output (inst rec_env t, inst rec_env s)
+          | `Select fields -> `Select (inst_row rec_env fields)
+          | `Choice fields -> `Choice (inst_row rec_env fields)
+          | `Dual s -> Types.dual_type (inst rec_env s)
+          | `End -> `End
 
     and inst_presence : inst_env -> field_spec -> field_spec = fun rec_env ->
       function

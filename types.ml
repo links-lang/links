@@ -106,6 +106,15 @@ let access_point = {
   arity      = [`Type, (`Any, `Session)] ;
 }
 
+type ('t, 'r) session_type_basis =
+    [ `Input of 't * 't
+    | `Output of 't * 't
+    | `Select of 'r
+    | `Choice of 'r
+    | `Dual of 't
+    | `End ]
+      deriving (Show)
+
 type typ =
     [ `Not_typed
     | `Primitive of primitive
@@ -118,8 +127,7 @@ type typ =
     | `Application of (Abstype.t * type_arg list)
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
-    | `Session of session_type ]
-
+    | (typ, row) session_type_basis ]
 and field_spec     = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
 and row_var        = meta_row_var
@@ -131,15 +139,10 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-and session_type =
-    [ `Input of typ * session_type
-    | `Output of typ * session_type
-    | `Select of row
-    | `Choice of row
-    | `MetaSessionVar of meta_type_var
-    | `Dual of session_type
-    | `End ]
       deriving (Show)
+
+type session_type = (typ, row) session_type_basis
+  deriving (Show)
 
 let is_present =
   function
@@ -330,7 +333,9 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
       | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
       | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
-      | `Session s -> is_unl_session (rec_vars, quant_vars) s
+      | `Dual s -> is_unl_type (rec_vars, quant_vars) s
+      | `End -> true
+      | #session_type -> false
 and is_unl_field vars =
   function
   | `Absent -> true
@@ -345,12 +350,6 @@ and is_unl_row vars (fields, row_var, _) =
       fields
       true in
   unl_row_var && unl_fields
-and is_unl_session vars =
-  function
-  | `MetaSessionVar point -> is_unl_type vars (`MetaTypeVar point)
-  | `Dual s -> is_unl_session vars s
-  | `End -> true
-  | _ -> false
 
 let point_can_be_unl =
   fun f ((rec_vars, quant_vars) as vars) point ->
@@ -382,7 +381,9 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `Application _ -> true (* TODO: change this if we add linear abstract types *)
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
-    | `Session s -> session_can_be_unl vars s
+    | `Dual s -> type_can_be_unl vars s
+    | `End -> true
+    | #session_type -> false
 and field_can_be_unl vars =
   function
   | `Absent    -> true
@@ -396,20 +397,12 @@ and row_can_be_unl vars (fields, row_var, _) =
       fields
       true in
   unl_row_var && unl_fields
-and session_can_be_unl vars =
-  function
-  | `MetaSessionVar point -> type_can_be_unl vars (`MetaTypeVar point)
-  | `Dual s -> session_can_be_unl vars s
-  | `End -> true
-  | _ -> false
 
 let is_unl_type = is_unl_type (IntSet.empty, IntSet.empty)
 let is_unl_row = is_unl_row (IntSet.empty, IntSet.empty)
-let is_unl_session = is_unl_session (IntSet.empty, IntSet.empty)
 
 let type_can_be_unl = type_can_be_unl (IntSet.empty, IntSet.empty)
 let row_can_be_unl = row_can_be_unl (IntSet.empty, IntSet.empty)
-let session_can_be_unl = session_can_be_unl (IntSet.empty, IntSet.empty)
 
 let make_point_unl : ((var_set * var_set) -> 'a -> unit) -> (var_set * var_set) -> [< 'a meta_max_basis] point -> unit =
   fun f ((rec_vars, quant_vars) as vars) point ->
@@ -425,12 +418,12 @@ let rec make_type_unl : var_set * var_set -> typ -> unit =
   fun ((rec_vars, quant_vars) as vars) ->
     function
     | `Not_typed -> assert false
-    | `Primitive _ | `Function _ | `Table _ | `Session `End | `Application _ -> ()
+    | `Primitive _ | `Function _ | `Table _ | `End | `Application _ -> ()
     | `Record r | `Variant r -> make_row_unl vars r
     | `Alias (_, t) -> make_type_unl vars t
     | `ForAll (qs, t) -> make_type_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `MetaTypeVar point -> make_point_unl make_type_unl vars point
-    | `Session s -> make_session_unl vars s
+    | `Dual s -> make_type_unl vars s
     | _ -> assert false
 and make_field_unl vars =
   function
@@ -440,16 +433,9 @@ and make_field_unl vars =
 and make_row_unl vars (fields, row_var, _) =
   make_point_unl make_row_unl vars row_var;
   FieldEnv.iter (fun _name -> make_field_unl vars) fields
-and make_session_unl vars =
-  function
-  | `MetaSessionVar point -> make_type_unl vars (`MetaTypeVar point)
-  | `Dual s -> make_session_unl vars s
-  | `End -> ()
-  | _ -> assert false
 
 let make_type_unl = make_type_unl (IntSet.empty, IntSet.empty)
 let make_row_unl = make_row_unl (IntSet.empty, IntSet.empty)
-let make_session_unl = make_session_unl (IntSet.empty, IntSet.empty)
 
 (* session kind stuff *)
 
@@ -466,7 +452,7 @@ let is_session_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_basi
 let rec is_session_type : var_set -> typ -> bool =
   fun rec_vars ->
     function
-    | `Session _ -> true
+    | #session_type -> true
     | `Alias (_, t) -> is_session_type rec_vars t
     | `MetaTypeVar point -> is_session_point is_session_type rec_vars point
     | _ -> false
@@ -504,7 +490,7 @@ let is_sessionable_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_
 let rec is_sessionable_type : var_set -> typ -> bool =
   fun rec_vars ->
     function
-    | `Session _ -> true
+    | #session_type -> true
     | `Alias (_, t) -> is_sessionable_type rec_vars t
     | `MetaTypeVar point -> is_sessionable_point is_sessionable_type rec_vars point
     | _ -> false
@@ -539,7 +525,7 @@ let sessionify_point : (var_set -> 'a -> unit) -> var_set -> [< 'a meta_max_basi
 let rec sessionify_type : var_set -> typ -> unit =
   fun rec_vars ->
     function
-    | `Session _ -> ()
+    | #session_type -> ()
     | `Alias (_, t) -> sessionify_type rec_vars t
     | `MetaTypeVar point -> sessionify_point sessionify_type rec_vars point
     | _ -> assert false
@@ -606,7 +592,6 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let make_rigid_type_variable var subkind = `MetaTypeVar (build_type_variable `Rigid var subkind)
   let make_row_variable = build_type_variable `Flexible
   let make_rigid_row_variable = build_type_variable `Rigid
-  let make_session_variable var subkind = `MetaSessionVar (build_type_variable `Flexible var subkind)
   let make_presence_variable var subkind = `Var (build_type_variable `Flexible var subkind)
   let make_rigid_presence_variable var subkind = `Var (build_type_variable `Rigid var subkind)
 
@@ -648,7 +633,7 @@ let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
   let fresh_rigid_type_variable subkind = make_rigid_type_variable (fresh_raw_variable ()) subkind
   let fresh_row_variable subkind = make_row_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_row_variable subkind = make_rigid_row_variable (fresh_raw_variable ()) subkind
-  let fresh_session_variable subkind = make_session_variable (fresh_raw_variable ()) subkind
+  let fresh_session_variable linearity = make_type_variable (fresh_raw_variable ()) (linearity, `Session)
 
   let fresh_presence_variable subkind = make_presence_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_presence_variable subkind = make_rigid_presence_variable (fresh_raw_variable ()) subkind
@@ -832,15 +817,11 @@ let free_type_vars, free_row_type_vars =
               | `Body t ->
                   free_type_vars' rec_vars t
           end
-      | `Session s               -> free_session_vars' rec_vars s
-  and free_session_vars' : S.t -> session_type -> S.t = fun rec_vars ->
-    function
       | `Input (t, s)
-      | `Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_session_vars' rec_vars s)
+      | `Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_type_vars' rec_vars s)
       | `Select fields -> free_row_type_vars' rec_vars fields
       | `Choice fields -> free_row_type_vars' rec_vars fields
-      | `MetaSessionVar point -> free_type_vars' rec_vars (`MetaTypeVar point) (* HACK *)
-      | `Dual s -> free_session_vars' rec_vars s
+      | `Dual s -> free_type_vars' rec_vars s
       | `End -> S.empty
   and free_field_spec_type_vars' : S.t -> field_spec -> S.t =
     fun rec_vars ->
@@ -973,38 +954,33 @@ let normalise_field_spec = concrete_field_spec
 let normalise_fields =
   FieldEnv.map normalise_field_spec
 
-let rec session_of_type t = match concrete_type IntSet.empty t with
-  | `ForAll (_, t) -> session_of_type t
-  | `Session s -> s
-  | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
-  | t -> assert false
-
-let rec dual_session : var_set -> session_type -> session_type =
+let rec dual_type : var_set -> datatype -> datatype =
   fun rec_vars ->
     function
-    | `Input (t, s)         -> `Output (t, dual_session rec_vars s)
-    | `Output (t, s)        -> `Input (t, dual_session rec_vars s)
+    | `Input (t, s)         -> `Output (t, dual_type rec_vars s)
+    | `Output (t, s)        -> `Input (t, dual_type rec_vars s)
     | `Select row           -> `Choice (dual_row rec_vars row)
     | `Choice row           -> `Select (dual_row rec_vars row)
-    | `MetaSessionVar point ->
+    | `MetaTypeVar point ->
       begin
         match Unionfind.find point with
-        | `Var _                     -> `Dual (`MetaSessionVar point)
+        | `Var _                     -> `Dual (`MetaTypeVar point)
         | `Recursive (var, t)        ->
           if TypeVarSet.mem var rec_vars then
-            `Dual (`MetaSessionVar point)
+            `Dual (`MetaTypeVar point)
           else
-            begin
-              match dual_type (TypeVarSet.add var rec_vars) t with
-              |  `Session s -> s
-              | _ -> assert false
-            end
-        | `Body (`Session s)         -> dual_session rec_vars s
-        | `Body (`MetaTypeVar point) -> dual_session rec_vars (`MetaSessionVar point)
-        | `Body t                    -> raise (Invalid_argument ("Attempt to dualise non-session type."))
+            dual_type (TypeVarSet.add var rec_vars) t
+        | `Body s                    -> dual_type rec_vars s
+        | `Body (`MetaTypeVar point) -> dual_type rec_vars (`MetaTypeVar point)
       end
     | `Dual s               -> s
     | `End                  -> `End
+    (* it sometimes seems tempting to preserve aliases here, but it
+       won't always work - e.g. when we use dual_type to expose a
+       concrete type *)
+    (* | `Alias _ as t         -> `Dual t *)
+    | `Alias (_, t)         -> dual_type rec_vars t
+    | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show.show show_typ t))
 and dual_row : var_set -> row -> row =
   fun rec_vars row ->
     let (fields, row_var, dual) = fst (unwrap_row row) in
@@ -1016,14 +992,6 @@ and dual_row : var_set -> row -> row =
       | `Var _ -> (* TODO: what should happen here? *) assert false) fields
     in
       (fields', row_var, not dual)
-and dual_type : var_set -> datatype -> datatype =
-  fun rec_vars ->
-    function
-    | `Session s -> 
-      `Session (dual_session rec_vars s)
-    | `MetaTypeVar point ->
-      `Session (dual_session rec_vars (`MetaSessionVar point))
-    | _ -> assert false
 
 (*
  convert a row to the form (field_env, row_var)
@@ -1100,7 +1068,6 @@ and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) 
     (field_env, row_var, dual), rec_row
 
 
-let dual_session = dual_session TypeVarSet.empty
 let dual_type = dual_type TypeVarSet.empty
 let dual_row = dual_row TypeVarSet.empty
 
@@ -1108,7 +1075,6 @@ let dual_row = dual_row TypeVarSet.empty
 (* TODO: tidy up all this normalisation / concretisation code *)
 let rec normalise_datatype rec_names t =
   let nt = normalise_datatype rec_names in
-  let ns = normalise_session rec_names in
   let nr = normalise_row rec_names in
     hoist_quantifiers t;
     match t with
@@ -1132,7 +1098,6 @@ let rec normalise_datatype rec_names t =
               | [] -> nt body
               | _ -> `ForAll (qs, nt body)
           end
-      | `Session s -> `Session (ns s)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -1146,6 +1111,13 @@ let rec normalise_datatype rec_names t =
                       `MetaTypeVar point
               | `Body t -> nt t
           end
+      | `Input (t, s)         -> `Input (nt t, nt s)
+      | `Output (t, s)        -> `Output (nt t, nt s)
+      | `Select r             -> `Select (nr r)
+      | `Choice r             -> `Choice (nr r)
+      | `Dual s               -> dual_type (nt s)
+      | `End                  -> `End
+
 and normalise_row rec_names row =
   (* WARNING:
 
@@ -1164,19 +1136,6 @@ and normalise_type_arg rec_names type_arg =
     | `Type t -> `Type (normalise_datatype rec_names t)
     | `Row row -> `Row (normalise_row rec_names row)
     | `Presence f -> `Presence (normalise_field_spec f)
-and normalise_session rec_names s =
-  let nt = normalise_datatype rec_names in
-  let ns = normalise_session rec_names in
-  let nr = normalise_row rec_names in
-    match s with
-    | `Input (t, s)         -> `Input (nt t, ns s)
-    | `Output (t, s)        -> `Output (nt t, ns s)
-    | `Select r             -> `Select (nr r)
-    | `Choice r             -> `Choice (nr r)
-    | `MetaSessionVar point ->
-      session_of_type (normalise_datatype rec_names (`MetaTypeVar point))
-    | `Dual s               -> dual_session (ns s)
-    | `End                  -> `End
 
 let concrete_type = concrete_type IntSet.empty
 
@@ -1435,12 +1394,18 @@ struct
                 (unbox_quantifiers tyvars)
             in
               (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
-        | `Session s -> free_bound_session_type_vars ~include_aliases bound_vars s
         | `Alias ((_,ts), d) when include_aliases ->
             List.concat
               (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts) @ (fbtv d)
         | `Alias (_, d) -> fbtv d
         | `Application (_, datatypes) -> List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) datatypes)
+        | `Input (t, s)
+        | `Output (t, s) ->
+           free_bound_type_vars ~include_aliases bound_vars t @ free_bound_type_vars ~include_aliases bound_vars s
+        | `Select row
+        | `Choice row -> free_bound_row_type_vars ~include_aliases bound_vars row
+        | `Dual s -> free_bound_type_vars ~include_aliases bound_vars s
+        | `End -> []
   and free_bound_field_spec_type_vars ~include_aliases bound_vars =
     function
       | `Present t -> free_bound_type_vars ~include_aliases bound_vars t
@@ -1476,16 +1441,6 @@ struct
       | `Type t -> free_bound_type_vars ~include_aliases bound_vars t
       | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
       | `Presence f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
-  and free_bound_session_type_vars  ~include_aliases bound_vars =
-    function
-    | `Input (t, s)
-    | `Output (t, s) ->
-      free_bound_type_vars ~include_aliases bound_vars t @ free_bound_session_type_vars ~include_aliases bound_vars s
-    | `Select row
-    | `Choice row -> free_bound_row_type_vars ~include_aliases bound_vars row
-    | `MetaSessionVar point -> free_bound_type_vars ~include_aliases bound_vars (`MetaTypeVar point)
-    | `Dual s -> free_bound_session_type_vars ~include_aliases bound_vars s
-    | `End -> []
 
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
     match tycon_spec with
@@ -1872,7 +1827,12 @@ struct
                           "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
                 else
                   "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-          | `Session s -> session bound_vars p s
+          | `Input (t, s) -> "?" ^ datatype bound_vars p t ^ "." ^ datatype bound_vars p s
+          | `Output (t, s) -> "!" ^ datatype bound_vars p t ^ "." ^ datatype bound_vars p s
+          | `Select bs -> "[+|" ^ row "," bound_vars p bs ^ "|+]"
+          | `Choice bs -> "[&|" ^ row "," bound_vars p bs ^ "|&]"
+          | `Dual s -> "~" ^ datatype bound_vars p s
+          | `End -> "End"
           | `Table (r, w, n)   ->
              (* TODO:
 
@@ -1984,15 +1944,6 @@ struct
       | `Type t -> datatype bound_vars p t
       | `Row r -> "{ " ^ row "," bound_vars p r ^ " }"
       | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
-  and session bound_vars p =
-    function
-    | `Input (t, s) -> "?" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
-    | `Output (t, s) -> "!" ^ datatype bound_vars p t ^ "." ^ session bound_vars p s
-    | `Select bs -> "[+|" ^ row "," bound_vars p bs ^ "|+]"
-    | `Choice bs -> "[&|" ^ row "," bound_vars p bs ^ "|&]"
-    | `MetaSessionVar point -> datatype bound_vars p (`MetaTypeVar point) (* HACK *)
-    | `Dual s -> "~" ^ session bound_vars p s
-    | `End -> "End"
 
   let tycon_spec bound_vars p =
     function
@@ -2052,7 +2003,6 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
                 (unbox_quantifiers tyvars)
           in
             flexible_type_vars bound_vars body
-      | `Session s -> session_flexible_type_vars bound_vars s
       | `Variant row -> row_flexible_type_vars bound_vars row
       | `Table (r, w, n) -> TypeVarMap.union_all [ftv r; ftv w; ftv n]
       | `Alias ((name, ts), d) ->
@@ -2060,6 +2010,12 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
             ((ftv d)::(List.map (tyarg_flexible_type_vars bound_vars) ts))
       | `Application (name, datatypes) ->
           TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) datatypes)
+      | `Input (t, s)
+      | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; flexible_type_vars bound_vars s]
+      | `Select row
+      | `Choice row -> row_flexible_type_vars bound_vars row
+      | `Dual s -> flexible_type_vars bound_vars s
+      | `End -> TypeVarMap.empty
 and presence_flexible_type_vars bound_vars =
   function
     | `Present t -> flexible_type_vars bound_vars t
@@ -2100,15 +2056,6 @@ and tyarg_flexible_type_vars bound_vars =
     | `Type t -> flexible_type_vars bound_vars t
     | `Row row -> row_flexible_type_vars bound_vars row
     | `Presence f -> presence_flexible_type_vars bound_vars f
-and session_flexible_type_vars bound_vars =
-  function
-  | `Input (t, s)
-  | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; session_flexible_type_vars bound_vars s]
-  | `Select row
-  | `Choice row -> row_flexible_type_vars bound_vars row
-  | `Dual s -> session_flexible_type_vars bound_vars s
-  | `End -> TypeVarMap.empty
-  | `MetaSessionVar point -> flexible_type_vars bound_vars (`MetaTypeVar point)
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty
@@ -2117,8 +2064,6 @@ let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyar
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
 
 let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
-
-let free_bound_session_type_vars ?(include_aliases=true) = Vars.free_bound_session_type_vars ~include_aliases TypeVarSet.empty
 
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) (t : datatype) =
@@ -2151,13 +2096,6 @@ let string_of_type_arg ?(policy=Print.default_policy) (arg : type_arg) =
       (policy, Vars.make_names (free_bound_type_arg_type_vars ~include_aliases:true arg))
       arg
 
-let string_of_session_type ?(policy=Print.default_policy) (s : session_type) =
-  let policy = policy () in
-    Print.session
-      TypeVarSet.empty
-      (policy, Vars.make_names (free_bound_session_type_vars ~include_aliases:true s))
-      s
-
 let string_of_row_var ?(policy=Print.default_policy) row_var =
   match
     Print.row_var "," TypeVarSet.empty
@@ -2184,7 +2122,6 @@ let string_of_datatype t = string_of_datatype t
 let string_of_row r = string_of_row r
 let string_of_presence f = string_of_presence f
 let string_of_type_arg arg = string_of_type_arg arg
-let string_of_session_type s = string_of_session_type s
 let string_of_row_var r = string_of_row_var r
 let string_of_tycon_spec s = string_of_tycon_spec s
 
@@ -2237,7 +2174,6 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
       | `Alias ((name, ts), d)   -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
-      | `Session s               -> make_env_s boundvars s
       | `ForAll (qs, t)          ->
           make_env
             (List.fold_right
@@ -2258,6 +2194,12 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
               | `Recursive (l, b) -> make_env (S.add l boundvars) b
               | `Body t -> make_env boundvars t
           end
+      | `Input (t, s)
+      | `Output (t, s) -> union [make_env boundvars t; make_env boundvars s]
+      | `Select row
+      | `Choice row    -> make_env_r boundvars row
+      | `Dual s        -> make_env boundvars s
+      | `End           -> empties
   and make_env_f boundvars =
     function
       | `Present t -> make_env boundvars t
@@ -2297,15 +2239,6 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Type t -> make_env boundvars t
       | `Row row -> make_env_r boundvars row
       | `Presence f -> make_env_f boundvars f
-  and make_env_s boundvars =
-    function
-    | `Input (t, s)
-    | `Output (t, s) -> union [make_env boundvars t; make_env_s boundvars s]
-    | `Select row
-    | `Choice row    -> make_env_r boundvars row
-    | `Dual s        -> make_env_s boundvars s
-    | `End           -> empties
-    | `MetaSessionVar point -> make_env boundvars (`MetaTypeVar point)
   in make_env S.empty
 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =

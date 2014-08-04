@@ -39,18 +39,7 @@ let concrete_type t =
                       | _ -> `ForAll (qs, t)
                   end
           end
-      | `Session (`Dual s) -> `Session (dual_session s)
-      | `Session (`MetaSessionVar point) ->
-         begin
-           match Unionfind.find point with
-           | `Body t -> ct rec_names t
-           | `Recursive (var, t) ->
-              if IntSet.mem var rec_names then
-                `Session (`MetaSessionVar point)
-              else
-                ct (IntSet.add var rec_names) t
-           | _ -> t
-         end
+      | `Dual s -> dual_type s
       | _ -> t
   in
     ct (IntSet.empty) t
@@ -101,34 +90,24 @@ let rec project_type name t = match concrete_type t with
   | t ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
-
-
-let rec session_of_type t = match concrete_type t with
-  | `ForAll (_, t) -> session_of_type t
-  | `Session s -> s
-  | `MetaTypeVar point -> `MetaSessionVar point (* HACK *)
-  | t ->
-      error ("Attempt to convert non-session type to session type "^string_of_datatype t)
-
-
 let rec select_type name t = match concrete_type t with
   | `ForAll (_, t) -> select_type name t
-  | `Session (`Select row) ->
+  | `Select row ->
     let t, _ = split_row name row in t
   | t ->
     error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
 
 let rec split_choice_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
-  | `Session (`Choice row) ->
+  | `Choice row ->
       let t, row = split_row name row in
-        `Session (`Choice (make_singleton_closed_row (name, `Present t))), `Session (`Choice row)
+        `Choice (make_singleton_closed_row (name, `Present t)), `Choice row
   | t ->
       error ("Attempt to split non-session type "^string_of_datatype t)
 
 let rec choice_at name t = match concrete_type t with
   | `ForAll (_, t) -> variant_at name t
-  | `Session (`Choice row) ->
+  | `Choice row ->
       let t, _ = split_row name row in t
   | t ->
       error ("Attempt to deconstruct non-choice type "^string_of_datatype t)
