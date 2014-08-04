@@ -102,21 +102,21 @@ type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type datatype =
-  | TypeVar         of known_type_variable
-  | FunctionType    of datatype list * row * datatype
-  | LolliType       of datatype list * row * datatype
-  | MuType          of name * datatype
-  | ForallType      of quantifier list * datatype
-  | UnitType
-  | TupleType       of (datatype list)
-  | RecordType      of row
-  | VariantType     of row
-  | TableType       of datatype * datatype * datatype
-  | ListType        of datatype
-  | TypeApplication of (string * type_arg list)
-  | PrimitiveType   of Types.primitive
-  | DBType
-  | Session         of session_type
+  [ `TypeVar         of known_type_variable
+  | `FunctionType    of datatype list * row * datatype
+  | `LolliType       of datatype list * row * datatype
+  | `MuType          of name * datatype
+  | `ForallType      of quantifier list * datatype
+  | `UnitType
+  | `TupleType       of datatype list
+  | `RecordType      of row
+  | `VariantType     of row
+  | `TableType       of datatype * datatype * datatype
+  | `ListType        of datatype
+  | `TypeApplication of (string * type_arg list)
+  | `PrimitiveType   of Types.primitive
+  | `DBType
+  | `Session         of session_type ]
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
