@@ -116,7 +116,12 @@ type datatype =
   | `TypeApplication of (string * type_arg list)
   | `Primitive       of Types.primitive
   | `DB
-  | `Session         of session_type ]
+  | `Input           of datatype * datatype
+  | `Output          of datatype * datatype
+  | `Select          of row
+  | `Choice          of row
+  | `Dual            of datatype
+  | `End ]
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
@@ -130,15 +135,6 @@ and type_arg =
     [ `Type of datatype
     | `Row of row
     | `Presence of fieldspec ]
-and session_type =
-    [ `Input of datatype * session_type
-    | `Output of datatype * session_type
-    | `Select of row
-    | `Choice of row
-    | `TypeVar of known_type_variable
-    | `Recursive of name * session_type
-    | `Dual of session_type
-    | `End ]
       deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)

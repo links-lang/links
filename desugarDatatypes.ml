@@ -64,11 +64,6 @@ object (self)
           o#datatype t
     | dt                  -> super#datatype dt
 
-  method session_type = function
-    (* TODO: the wildcard on the restriction indicates a bug in the parser *)
-    | `TypeVar (x, (lin, _), freedom) -> self#add (x, (`Type, (lin, `Session)), freedom)
-    | st -> super#session_type st
-
   method row_var = function
     | `Closed               -> self
     | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
@@ -161,7 +156,7 @@ struct
             end
         | `Primitive k -> `Primitive k
         | `DB -> `Primitive `DB
-        | `Session s -> `Session (session_type var_env alias_env s)
+        | (`Input _ | `Output _ | `Select _ | `Choice _ | `Dual _ | `End) as s -> `Session (session_type var_env alias_env s)
   and session_type var_env alias_env =
     let lookup_type t = StringMap.find t var_env.tenv in
     (* HACKY *)
@@ -175,7 +170,7 @@ struct
         try `MetaSessionVar (lookup_type name)
         with NotFound _ -> raise (UnexpectedFreeVar name)
       end
-    | `Recursive (name, s) ->
+    | `Mu (name, s) ->
       let var = Types.fresh_raw_variable () in
       let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in
       let tenv = StringMap.add name point var_env.tenv in
@@ -184,6 +179,7 @@ struct
         `MetaSessionVar point
     | `Dual s -> `Dual (session_type var_env alias_env s)
     | `End -> `End
+    | _ -> assert false
 
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in

@@ -477,28 +477,18 @@ class map =
           in `TypeApplication _x
       | `Primitive _x -> let _x = o#unknown _x in `Primitive _x
       | `DB -> `DB
-      | `Session _x ->
-          let _x = o#session_type _x in `Session _x
-
-    method session_type : session_type -> session_type =
-      function
       | `Input (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#session_type _x_i1 in `Input (_x, _x_i1)
+        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
       | `Output (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#session_type _x_i1 in `Output (_x, _x_i1)
+        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
       | `Select _x ->
         let _x = o#row _x in `Select _x
       | `Choice _x ->
         let _x = o#row _x in `Choice _x
-      | `TypeVar _x ->
-        let _x = o#known_type_variable _x in `TypeVar _x
-      | `Recursive (_x, _x_i1) ->
-        let _x = o#name _x in
-        let _x_i1 = o#session_type _x_i1 in `Recursive (_x, _x_i1)
       | `Dual _x ->
-        let _x = o#session_type _x in `Dual _x
+        let _x = o#datatype _x in `Dual _x
       | `End -> `End
 
     method type_arg : type_arg -> type_arg =
@@ -1000,29 +990,18 @@ class fold =
           in o
       | `Primitive _x -> let o = o#unknown _x in o
       | `DB -> o
-      | `Session _x ->
-          let o = o#session_type _x
-          in o
-
-    method session_type : session_type -> 'self_type =
-      function
       | `Input (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#session_type _x_i1 in o
+        let o = o#datatype _x_i1 in o
       | `Output (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#session_type _x_i1 in o
+        let o = o#datatype _x_i1 in o
       | `Select _x ->
         let o = o#row _x in o
       | `Choice _x ->
         let o = o#row _x in o
-      | `TypeVar _x ->
-        let o = o#known_type_variable _x in o
-      | `Recursive (_x, _x_i1) ->
-        let o = o#name _x in
-        let o = o#session_type _x_i1 in o
       | `Dual _x ->
-        let o = o#session_type _x in o
+        let o = o#datatype _x in o
       | `End -> o
 
     method type_arg : type_arg -> 'self_type =
@@ -1642,28 +1621,18 @@ class fold_map =
       | `Primitive _x ->
           let (o, _x) = o#unknown _x in (o, (`Primitive _x))
       | `DB -> (o, `DB)
-      | `Session _x ->
-          let (o, _x) = o#session_type _x in (o, `Session _x)
-
-    method session_type : session_type -> ('self_type * session_type) =
-      function
       | `Input (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, `Input (_x, _x_i1))
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
       | `Output (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, `Output (_x, _x_i1))
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
       | `Select _x ->
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
         let (o, _x) = o#row _x in (o, `Choice _x)
-      | `TypeVar _x ->
-        let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `Recursive (_x, _x_i1) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, (`Recursive (_x, _x_i1)))
       | `Dual _x ->
-        let (o, _x) = o#session_type _x in (o, `Dual _x)
+        let (o, _x) = o#datatype _x in (o, `Dual _x)
       | `End -> (o, `End)
 
     method type_arg : type_arg -> ('self_type * type_arg) =

@@ -229,7 +229,7 @@ let datatype d = d, None
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
-%type <Sugartypes.session_type> session_type
+%type <Sugartypes.datatype> session_type
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
@@ -925,7 +925,7 @@ forall_datatype:
 | session_datatype                                             { $1 }
 
 session_datatype:
-| session_type_top                                             { `Session $1 }
+| session_type_top                                             { $1 }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -972,7 +972,7 @@ session_type:
 | session_type_top                                             { $1 }
 | session_type_var                                             { $1 }
 | kinded_session_type_var                                      { $1 }
-| MU VARIABLE DOT session_type                                 { `Recursive ($2, $4) }
+| MU VARIABLE DOT session_type                                 { `Mu ($2, $4) }
 
 
 session_type_var:
