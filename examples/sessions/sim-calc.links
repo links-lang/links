@@ -21,10 +21,10 @@ fun calc(s) {
 }
 
 sig sel_Add : (CalcSelect) ~> !Int.!Int.?Int.End
-fun sel_Add(c) {fork (linfun (d) {ignore(give(Add(d), c))})}
+fun sel_Add(c) {linfork (linfun (d) {ignore(give(Add(d), c))})}
 
 sig sel_Mul : (CalcSelect) ~> !Int.!Int.?Int.End
-fun sel_Mul(c) {fork (linfun (d) {ignore(give(Mul(d), c))})}
+fun sel_Mul(c) {linfork (linfun (d) {ignore(give(Mul(d), c))})}
 
 sig user : (CalcSelect) ~> Int
 fun user(s) {

@@ -1,0 +1,22 @@
+typename State(a) = AP (!a.End);
+
+sig newCell : (a) ~> State(a)
+fun newCell(v) {
+  var x = new();
+  var _ = spawn {give(v, accept(x))};
+  x
+}
+
+sig put : (State(a), a) ~> ()
+fun put(x, v) {
+  var _ = grab(request(x)).1;
+  var _ = spawn {give(v, accept(x))};
+  ()
+}
+
+sig get : (State(a)) ~> a
+fun get(x) {
+  var v = grab(request(x)).1;
+  var _ = spawn {give(v, accept(x))};
+  v
+}
