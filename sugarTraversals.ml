@@ -444,30 +444,30 @@ class map =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
-      | `FunctionType (_x, _x_i1, _x_i2) ->
+      | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `FunctionType (_x, _x_i1, _x_i2)
-      | `LolliType (_x, _x_i1, _x_i2) ->
+          let _x_i2 = o#datatype _x_i2 in `Function (_x, _x_i1, _x_i2)
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `LolliType (_x, _x_i1, _x_i2)
-      | `MuType (_x, _x_i1) ->
+          let _x_i2 = o#datatype _x_i2 in `Lolli (_x, _x_i1, _x_i2)
+      | `Mu (_x, _x_i1) ->
           let _x = o#name _x in
-          let _x_i1 = o#datatype _x_i1 in `MuType (_x, _x_i1)
-      | `ForallType (_x, _x_i1) ->
+          let _x_i1 = o#datatype _x_i1 in `Mu (_x, _x_i1)
+      | `Forall (_x, _x_i1) ->
           let _x = _x in (*o#list (fun o -> o#quantifier) _x in*)
-          let _x_i1 = o#datatype _x_i1 in `ForallType (_x, _x_i1)
-      | `UnitType -> `UnitType
-      | `TupleType _x ->
-          let _x = o#list (fun o -> o#datatype) _x in `TupleType _x
-      | `RecordType _x -> let _x = o#row _x in `RecordType _x
-      | `VariantType _x -> let _x = o#row _x in `VariantType _x
-      | `TableType (_x, _x_i1, _x_i2) ->
+          let _x_i1 = o#datatype _x_i1 in `Forall (_x, _x_i1)
+      | `Unit -> `Unit
+      | `Tuple _x ->
+          let _x = o#list (fun o -> o#datatype) _x in `Tuple _x
+      | `Record _x -> let _x = o#row _x in `Record _x
+      | `Variant _x -> let _x = o#row _x in `Variant _x
+      | `Table (_x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in `TableType (_x, _x_i1, _x_i2)
-      | `ListType _x -> let _x = o#datatype _x in `ListType _x
+         let _x_i2 = o#datatype _x_i2 in `Table (_x, _x_i1, _x_i2)
+      | `List _x -> let _x = o#datatype _x in `List _x
       | `TypeApplication _x ->
           let _x =
             (fun (_x, _x_i1) ->
@@ -475,8 +475,8 @@ class map =
                let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
               _x
           in `TypeApplication _x
-      | `PrimitiveType _x -> let _x = o#unknown _x in `PrimitiveType _x
-      | `DBType -> `DBType
+      | `Primitive _x -> let _x = o#unknown _x in `Primitive _x
+      | `DB -> `DB
       | `Session _x ->
           let _x = o#session_type _x in `Session _x
 
@@ -974,23 +974,23 @@ class fold =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | `FunctionType (_x, _x_i1, _x_i2) ->
+      | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `LolliType (_x, _x_i1, _x_i2) ->
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `MuType (_x, _x_i1) ->
+      | `Mu (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
-      | `ForallType (_x, _x_i1) ->
+      | `Forall (_x, _x_i1) ->
           let o = o (*o#list (fun o -> o#quantifier) _x*) in let o = o#datatype _x_i1 in o
-      | `UnitType -> o
-      | `TupleType _x -> let o = o#list (fun o -> o#datatype) _x in o
-      | `RecordType _x -> let o = o#row _x in o
-      | `VariantType _x -> let o = o#row _x in o
-      | `TableType (_x, _x_i1, _x_i2) ->
+      | `Unit -> o
+      | `Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
+      | `Record _x -> let o = o#row _x in o
+      | `Variant _x -> let o = o#row _x in o
+      | `Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
-      | `ListType _x -> let o = o#datatype _x in o
+      | `List _x -> let o = o#datatype _x in o
       | `TypeApplication _x ->
           let o =
             (fun (_x, _x_i1) ->
@@ -998,8 +998,8 @@ class fold =
                let o = o#list (fun o -> o#type_arg) _x_i1 in o)
               _x
           in o
-      | `PrimitiveType _x -> let o = o#unknown _x in o
-      | `DBType -> o
+      | `Primitive _x -> let o = o#unknown _x in o
+      | `DB -> o
       | `Session _x ->
           let o = o#session_type _x
           in o
@@ -1604,33 +1604,33 @@ class fold_map =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `FunctionType (_x, _x_i1, _x_i2) ->
+      | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`FunctionType (_x, _x_i1, _x_i2)))
-      | `LolliType (_x, _x_i1, _x_i2) ->
+          in (o, (`Function (_x, _x_i1, _x_i2)))
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`LolliType (_x, _x_i1, _x_i2)))
-      | `MuType (_x, _x_i1) ->
+          in (o, (`Lolli (_x, _x_i1, _x_i2)))
+      | `Mu (_x, _x_i1) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`MuType (_x, _x_i1)))
-      | `ForallType (_x, _x_i1) ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Mu (_x, _x_i1)))
+      | `Forall (_x, _x_i1) ->
           (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`ForallType (_x, _x_i1)))
-      | `UnitType -> (o, `UnitType)
-      | `TupleType _x ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Forall (_x, _x_i1)))
+      | `Unit -> (o, `Unit)
+      | `Tuple _x ->
           let (o, _x) = o#list (fun o -> o#datatype) _x
-          in (o, (`TupleType _x))
-      | `RecordType _x -> let (o, _x) = o#row _x in (o, (`RecordType _x))
-      | `VariantType _x -> let (o, _x) = o#row _x in (o, (`VariantType _x))
-      | `TableType (_x, _x_i1, _x_i2) ->
+          in (o, (`Tuple _x))
+      | `Record _x -> let (o, _x) = o#row _x in (o, (`Record _x))
+      | `Variant _x -> let (o, _x) = o#row _x in (o, (`Variant _x))
+      | `Table (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (`TableType (_x, _x_i1, _x_i2)))
-      | `ListType _x -> let (o, _x) = o#datatype _x in (o, (`ListType _x))
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (`Table (_x, _x_i1, _x_i2)))
+      | `List _x -> let (o, _x) = o#datatype _x in (o, (`List _x))
       | `TypeApplication _x ->
           let (o, _x) =
             (fun (_x, _x_i1) ->
@@ -1639,9 +1639,9 @@ class fold_map =
                in (o, (_x, _x_i1)))
               _x
           in (o, (`TypeApplication _x))
-      | `PrimitiveType _x ->
-          let (o, _x) = o#unknown _x in (o, (`PrimitiveType _x))
-      | `DBType -> (o, `DBType)
+      | `Primitive _x ->
+          let (o, _x) = o#unknown _x in (o, (`Primitive _x))
+      | `DB -> (o, `DB)
       | `Session _x ->
           let (o, _x) = o#session_type _x in (o, `Session _x)
 

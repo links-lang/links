@@ -867,61 +867,61 @@ squig_arrow_prefix:
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", `Present `UnitType)
+                                                                   ("wild", `Present `Unit)
                                                                    (row_with
                                                                       ("hear", `Present $3)
                                                                       $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present `UnitType);
+| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present `UnitType);
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present `UnitType);
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   $5) }
 
 straight_arrow:
 | parenthesized_datatypes
-  straight_arrow_prefix RARROW datatype                        { `FunctionType ($1, $2, $4) }
+  straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { `LolliType ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `FunctionType ($1,
+  straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1,
                                                                                ([], fresh_rigid_row_variable (`Unl, `Any)),
                                                                                $3) }
-| parenthesized_datatypes LOLLI datatype                       { `LolliType ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `FunctionType ($1,
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1,
                                                                                row_with
-                                                                                 ("wild", `Present `UnitType)
+                                                                                 ("wild", `Present `Unit)
                                                                                  $2,
                                                                                $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `LolliType ($1,
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli ($1,
                                                                             row_with
-                                                                              ("wild", `Present `UnitType)
+                                                                              ("wild", `Present `Unit)
                                                                             $2,
                                                                             $4) }
 /*| parenthesized_datatypes hear_arrow_prefix
-  SQUIGRARROW datatype                                         { `FunctionType ($1, $2, $4) }
+  SQUIGRARROW datatype                                         { `Function ($1, $2, $4) }
 */
-| parenthesized_datatypes SQUIGRARROW datatype                 { `FunctionType ($1,
-                                                                               ([("wild", `Present `UnitType)],
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
+                                                                               ([("wild", `Present `Unit)],
                                                                                  fresh_rigid_row_variable (`Unl, `Any)),
                                                                                 $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `LolliType ($1,
-                                                                            ([("wild", `Present `UnitType)],
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
+                                                                            ([("wild", `Present `Unit)],
                                                                              fresh_rigid_row_variable (`Unl, `Any)),
                                                                             $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { `MuType ($2, $4) }
+| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { `ForallType (List.map fst $2, $4) }
+| FORALL varlist DOT datatype                                  { `Forall (List.map fst $2, $4) }
 | session_datatype                                             { $1 }
 
 session_datatype:
@@ -934,27 +934,27 @@ parenthesized_datatypes:
 
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
-                                                                   | [] -> `UnitType
+                                                                   | [] -> `Unit
                                                                    | [t] -> t
-                                                                   | ts  -> `TupleType ts }
-| LPAREN rfields RPAREN                                        { `RecordType $2 }
+                                                                   | ts  -> `Tuple ts }
+| LPAREN rfields RPAREN                                        { `Record $2 }
 
 | TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `TableType ($3, $5, $7) }
-/* | TABLEHANDLE datatype perhaps_table_constraints               { `TableType ($2, $3) } */
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
+/* | TABLEHANDLE datatype perhaps_table_constraints               { `Table ($2, $3) } */
 
-| LBRACKETBAR vrow BARRBRACKET                                 { `VariantType $2 }
-| LBRACKET datatype RBRACKET                                   { `ListType $2 }
+| LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
+| LBRACKET datatype RBRACKET                                   { `List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { match $1 with
-                                                                   | "Bool"    -> `PrimitiveType `Bool
-                                                                   | "Int"     -> `PrimitiveType `Int
-                                                                   | "Char"    -> `PrimitiveType `Char
-                                                                   | "Float"   -> `PrimitiveType `Float
-                                                                   | "XmlItem" -> `PrimitiveType `XmlItem
-                                                                   | "String"  -> `PrimitiveType `String
-                                                                   | "Database"-> `DBType
+                                                                   | "Bool"    -> `Primitive `Bool
+                                                                   | "Int"     -> `Primitive `Int
+                                                                   | "Char"    -> `Primitive `Char
+                                                                   | "Float"   -> `Primitive `Float
+                                                                   | "XmlItem" -> `Primitive `XmlItem
+                                                                   | "String"  -> `Primitive `String
+                                                                   | "Database"-> `DB
                                                                    | t         -> `TypeApplication (t, [])
                                                                }
 
@@ -1027,7 +1027,7 @@ fields:
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
-| field_label                                                  { $1, `Present `UnitType }
+| field_label                                                  { $1, `Present `Unit }
 | field_label fieldspec                                        { $1, $2 }
 
 field_label:
@@ -1045,7 +1045,7 @@ rfields:
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
-| record_label                                                 { $1, `Present `UnitType }
+| record_label                                                 { $1, `Present `Unit }
 | record_label fieldspec                                       { $1, $2 }
 
 record_label:
@@ -1058,7 +1058,7 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present `UnitType }
+| CONSTRUCTOR                                                  { $1, `Present `Unit }
 | CONSTRUCTOR fieldspec                                        { $1, $2 }
 
 efields:
@@ -1070,7 +1070,7 @@ efields:
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
-| effect_label                                                 { $1, `Present `UnitType }
+| effect_label                                                 { $1, `Present `Unit }
 | effect_label fieldspec                                       { $1, $2 }
 
 effect_label:

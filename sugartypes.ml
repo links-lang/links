@@ -103,19 +103,19 @@ type fieldconstraint = [ `Readonly | `Default ]
 
 type datatype =
   [ `TypeVar         of known_type_variable
-  | `FunctionType    of datatype list * row * datatype
-  | `LolliType       of datatype list * row * datatype
-  | `MuType          of name * datatype
-  | `ForallType      of quantifier list * datatype
-  | `UnitType
-  | `TupleType       of datatype list
-  | `RecordType      of row
-  | `VariantType     of row
-  | `TableType       of datatype * datatype * datatype
-  | `ListType        of datatype
+  | `Function        of datatype list * row * datatype
+  | `Lolli           of datatype list * row * datatype
+  | `Mu              of name * datatype
+  | `Forall          of quantifier list * datatype
+  | `Unit
+  | `Tuple           of datatype list
+  | `Record          of row
+  | `Variant         of row
+  | `Table           of datatype * datatype * datatype
+  | `List            of datatype
   | `TypeApplication of (string * type_arg list)
-  | `PrimitiveType   of Types.primitive
-  | `DBType
+  | `Primitive       of Types.primitive
+  | `DB
   | `Session         of session_type ]
 and row = (string * fieldspec) list * row_var
 and row_var =
