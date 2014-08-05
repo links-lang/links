@@ -36,15 +36,15 @@ fun draggableList(id, items)
   var manager = spawn {
     fun wait(c) {
       var s = accept(ap); 
-      <|case s {
-        MouseUp   : {wait(c)};
-        MouseDown : s(elem).{
+      <|offer s {
+        case MouseUp -> {wait(c)}
+        case MouseDown -> s(elem).{
           if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
             <|MouseDown c.c[elem].{drag(c)}|>
           } else {
             wait(c)
-          }};
-        MouseOut  : s(elem).{wait(c)}
+          }}
+        case MouseOut -> s(elem).{wait(c)}
       }|>
     }
 
