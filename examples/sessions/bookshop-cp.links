@@ -114,7 +114,7 @@ val getSonBook =
   |>;
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
-sig orderBooks : Quote(Shop, Up(String))
+sig orderBooks : Quote(Shop, /\String)
 val orderBooks = {
   var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
 

@@ -1,4 +1,4 @@
-typename Calc = [&|Add:?Up(Int).?Up(Int).!Up(Int).EndBang, Mul:?Up(Int).?Up(Int).!Up(Int).EndBang|&];
+typename Calc = [&|Add:?/\Int.?/\Int.!/\Int.EndBang, Mul:?/\Int.?/\Int.!/\Int.EndBang|&];
 
 # What to do about "distinguished return" channel?  Mention in quote type?
 
@@ -6,16 +6,16 @@ sig calc : Quote(Calc)
 val calc =
   <| s.
      offer(s) {
-       case Add -> s(x).down(x,xx).
-                   s(y).down(y,yy).
-                   s[sum].(up(sum, xx+yy) | s[])
-       case Mul -> s(x).down(x,xx).
-                   s(y).down(y,yy).
-                   s[product].(up(product, xx*yy) | s[]) } |>
+       case Add -> s(x).x \/ xx.
+                   s(y).y \/ yy.
+                   s[sum].(sum /\ xx+yy | s[])
+       case Mul -> s(x).x \/ xx.
+                   s(y).y \/ yy.
+                   s[product].(product /\ xx*yy | s[]) } |>
 
-sig user : Quote(~Calc, Up(Int))
+sig user : Quote(~Calc, /\Int)
 val user =
-  <| s, return. s[Mul].s[six].(up(six, 6) | s[seven].(up(seven, 7) | s(z).return[zz].(z<->zz | s().return[]))) |>;
+  <| s, return. s[Mul].s[six].(up(six, 6) | s[seven].(seven /\ 7 | s(z).return[zz].(z<->zz | s().return[]))) |>;
 
 
 run return <| nu s.({calc[s]}|{user[s, return]}) |>

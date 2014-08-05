@@ -1,4 +1,4 @@
-typename Shop  = mu a.[&|Add:?Up(String).a, Checkout:?Up(Int).?Up(String).EndBang|&];
+typename Shop  = mu a.[&|Add:?/\String.a, Checkout:?/\Int.?/\String.EndBang|&];
 
 sig waitForClient : (Shop) ~> EndBang
 fun waitForClient(s) client {
@@ -19,8 +19,8 @@ fun waitForClient(s) client {
 
 sig orderBooks : (~Shop) ~> ()
 fun orderBooks(c) client {
-  var c = send up("Alice in Wonderland") (select Add c);
-  var c = send up("Summerhall Square") (send up(8753) (select Checkout c));
+  var c = send (up("Alice in Wonderland")) (select Add c);
+  var c = send (up("Summerhall Square")) (send (up(8753)) (select Checkout c));
   wait(c);
   ()
 }
