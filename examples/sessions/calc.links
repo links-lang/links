@@ -1,31 +1,26 @@
-typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+typename Calc = [&|Add:?Up(Int).?Up(Int).!Up(Int).EndBang, Mul:?Up(Int).?Up(Int).!Up(Int).EndBang|&];
 
-sig calc : (Calc) ~> ()
+sig calc : (Calc) ~> EndBang
 fun calc(s) {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x+y,s);
-      ()
+      var (x,s) = receive s;
+      var (y,s) = receive s;
+      var s = send up(down(x)+down(y)) s;
+      s
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x*y,s);
-      ()
+      var (x,s) = receive s;
+      var (y,s) = receive s;
+      var s = send up(down(x)*down(y)) s;
+      s
   }
 }
 
 sig user : (~Calc) ~> Int
 fun user(s) {
-  var s = select Mul s;
-  grab(give(6,give(7,s))).1
+  var (x, s) = receive (send up(6) (send up(7) (select Mul s)));
+  wait(s);
+  down(x)
 }
 
-fun main() {
-  var a = new ();
-  var _ = spawn { calc(accept(a)) };
-  user(request(a))
-}
-
-main()
+user(fork(calc))

@@ -1,19 +1,21 @@
-typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+typename Calc = [&|Add:?Up(Int).?Up(Int).!Up(Int).EndBang, Mul:?Up(Int).?Up(Int).!Up(Int).EndBang|&];
 
-sig calc : (Calc) ~> ()
-fun calc(s) {
-  <| case s {
-       Add: s(x).s(y).s[x+y].{()};
-       Mul: s(x).s(y).s[x*y].{()}} |>
-}
+# What to do about "distinguished return" channel?  Mention in quote type?
 
-sig user : (~Calc) ~> Int
-fun user(s) {
-  <| Mul s.s[6].s[7].s(z).{z} |>
-}
+sig calc : Quote(Calc)
+val calc =
+  <| s.
+     offer(s) {
+       case Add -> s(x).down(x,xx).
+                   s(y).down(y,yy).
+                   s[sum].(up(sum, xx+yy) | s[])
+       case Mul -> s(x).down(x,xx).
+                   s(y).down(y,yy).
+                   s[product].(up(product, xx*yy) | s[]) } |>
 
-fun main() {
-  <| nu s.({calc(s)}|{user(s)}) |>
-}
+sig user : Quote(~Calc, Up(Int))
+val user =
+  <| s, return. s[Mul].s[six].(up(six, 6) | s[seven].(up(seven, 7) | s(z).return[zz].(z<->zz | s().return[]))) |>;
 
-main()
+
+run return <| nu s.({calc[s]}|{user[s, return]}) |>

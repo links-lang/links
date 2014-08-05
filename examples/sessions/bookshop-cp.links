@@ -2,10 +2,10 @@
 # In this code, it does not make difference, since they all are Strings, but suppose
 # at some later point it will be possible to distinguish them and assign different features.
 
-typename Book 		= String;
-typename Audio_Visual 	= String;
-typename Gadget 	= String;
-typename Product 	= [| Book:Book | Audio_Visual:Audio_Visual | Gadget:Gadget|];
+typename Book     = String;
+typename Audio_Visual   = String;
+typename Gadget   = String;
+typename Product   = [| Book:Book | Audio_Visual:Audio_Visual | Gadget:Gadget|];
 
 
 # Again, it is possible to directly put Int in the session type. This bit only reflects the paper better.
@@ -20,39 +20,41 @@ typename Address = (street:String, houseNo:Int, city:String);
 typename OrderSummary = String;
 
 # Session types for mother's choice.
-typename Shop = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].End|&];
+typename Shop = mu a.[&|Add:?/\Product.a, Remove:?/\Product.a, Checkout:?/\Card.?/\Address.!/\[OrderSummary].EndBang|&];
 
 # Session types for son's choice.
-typename Son = [&|Choice:!Product.End|&];
+typename Son = [&|Choice:!/\Product.EndBang|&];
 
+# Split this into its own function so that it can be spliced (not sure about splicing blocks)
+fun removeItem(item, orderedProducts, removedProducts) {
+  var updatedList = removeProduct(item, orderedProducts);
+  # See if the list is smaller (= an item to be removed was actually in a list).
+  if (length(updatedList) < length(orderedProducts))
+       waitForClient(updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
+  else
+       waitForClient(orderedProducts, removedProducts)};
+}
 
 # A shop. Accepts orders and allows checkout.
-#sig waitForClient : (Shop, [Product], String) ~> ()
-fun waitForClient(s, orderedProducts, removedProducts) client
+#sig waitForClient : ([Product], String) ~> Quote(Shop)
+fun waitForClient(orderedProducts, removedProducts) client
 {
-
- <| case s {
-	Add: s(item).{waitForClient(s, item::orderedProducts, removedProducts)};
-
-	Remove: s(item).{var updatedList = removeProduct(item, orderedProducts);
-		# See if the list is smaller (= an item to be removed was actually in a list).
-		if (length(updatedList) < length(orderedProducts))
-	   		waitForClient(s, updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
-		else
-	   		waitForClient(s, orderedProducts, removedProducts)};
-
-	Checkout: s(card).
-	  nu c.({shipper(c)} |
-	        c[s].c(addressFull).c(s).
-	        s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
-	        {()}) } |>
+  <| s.
+     offer(s) {
+       case Add -> s(itemc).itemc \/ item.{waitForClient(item::orderedProducts, removedProducts)[s]}
+       case Remove -> s(itemc).itemc \/ item.{removeItem(item, orderedProducts, removedProducts)[s]}
+       case Checkout -> s(card).
+         nu c.({shipper[c]} |
+               c[ss].(s <-> ss |
+                      c(addressFull).c(s).
+                      s[summary].(summary /\ summariseOrder(card, addressFull, orderedProducts, removedProducts) | s[]))) |>
 }
 
 # Turns order summary into a single readable string.
 sig summariseOrder : (Int, String, [Product], String) ~> ([String])
 fun summariseOrder(card, address, products, removed) client
 {
-	[concatenateProducts(products, ""), removed, intToString(card), address]
+  [concatenateProducts(products, ""), removed, intToString(card), address]
 }
 
 
@@ -60,104 +62,103 @@ fun summariseOrder(card, address, products, removed) client
 sig concatenateProducts : ([Product], String) ~> (String)
 fun concatenateProducts(products, fullList) client
 {
-	switch(products) {
-		case [] -> fullList
-		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
-	}
+  switch(products) {
+    case [] -> fullList
+    case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
+  }
 }
 
 # Convinces Links that any Product is also a String.
 fun turnProductToString(product) client
 {
-	switch(product) {
-		case Book(s) -> s
-		case Audio_Visual(s) -> s
-		case Gadget(s) -> s
-	}
+  switch(product) {
+    case Book(s) -> s
+    case Audio_Visual(s) -> s
+    case Gadget(s) -> s
+  }
 }
 
-#sig shipper : (?(?String.c).!String.!c.End) ~> ()
-fun shipper(c) {
-  <| c(s).s(address).
-     c["Street: " ^^ address.street ^^ ", House number: " ^^
-intToString(address.houseNo) ^^ ", City: " ^^ address.city].
-     c[s].
-     {()} |>
+# Doesn't need to be polymorphic, I just couldn't be arsed to figure out the instantiation of 's'
+sig shipper : Quote(?(?/\String.s).!/\String.!s.EndBang)
+val shipper =
+  <| c.
+     c(s).s(addressc).addressc \/ address.
+     c[fullAddress].(fullAddress /\ "Street: " ^^ address.street ^^ ", House number: " ^^ intToString(address.houseNo) ^^ ", City: " ^^ address.city |
+                     c[ss].(s <-> ss | c[]) |>
 }
 
 # Removes given element.
 sig removeProduct : (Product, [Product]) ~> ([Product])
 fun removeProduct(item, products) client
 {
-	switch (products) {
-     		case []    -> []
-     		case x::xs -> if (item == x) xs
-                   	      else x::removeProduct(item, xs)
+  switch (products) {
+         case []    -> []
+         case x::xs -> if (item == x) xs
+                       else x::removeProduct(item, xs)
   }
 }
 
 
 # Waits for signal to be able to choose and picks out the product.
-#sig waitForSon : (Son) ~> ()
-fun waitForSon(c) client
-{
-	<| case c {
-		Choice: c[Gadget("LED Water Speakers")].{()}
-	} |>
-}
+sig waitForSon : Quote(Son)
+val waitForSon =
+  <| c.
+     offer(c) {
+      case Choice -> c[choice].(choice /\ Gadget("LED Water Speakers") | c[]) } |>;
 
 # Sends a signal that it is time to choose a product.
-#sig getSonBook : (~Son) ~> (Product)
-fun getSonBook(s) client
-{
-	<| Choice s.s(choice).{choice} |>
-}
-
+sig getSonBook : Quote(~Son)
+val getSonBook =
+  <| s.
+     s[Choice].s(choice).s().return[cchoice].(choice <-> cchoice | return[])
+  |>;
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
-sig orderBooks : (~Shop) ~> ([String])
-fun orderBooks(c) client
-{
-	var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
+sig orderBooks : Quote(Shop, Up(String))
+val orderBooks = {
+  var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
 
-	<| Add c.c[Book("Alice in Wonderland")].
-           Add c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].{
-       var choice = <| nu s.({waitForSon(s)}|{getSonBook(s)}) |>;
-
-       <| Add c.c[choice].
-           Remove c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].
-           Remove c.c[Book("Rainbow Ponies")].
-           Checkout c.c[8753].c[myAddress].c(summary).{summary} |> } |>
-
-}
+  <| c, return.
+     c[Add].c[book].(book /\ Book("Alice in Wonderland") |
+     c[Add].c[dvd].(dvd /\ Audio_Visual("Hitchhiker's Guide to the Galaxy") |
+       nu s. ({waitForSon[s]} |
+              s[Choice].s(choice).s().
+              c[Add].c[choice].
+              c[Remove].c[dvd].(dvd /\ Audio_Visual("Hitchhiker's Guide to the Galaxy") |
+              c[Remove].c[book].(\book /\ Book("Rainbow Ponies") |
+              c[Checkout].c[card].(card /\ 8753 |
+                          c[address].(address /\ myAddress |
+                          c(summary).c().
+                          return[ssummary].(summary <-> ssummary | return[])))))) |>
+};
 
 # Creates a new access point and binds the ends of the channel to appropriate functions.
 sig main : () ~> ()
 fun main() client
 {
-	var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
+  var order = run return <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
 
-	appendChildren(stringToXml(order!!0), getNodeById("items"));
-	appendChildren(stringToXml(order!!1), getNodeById("removed"));
-	appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
-	appendChildren(stringToXml(order!!3), getNodeById("address"));
+  appendChildren(stringToXml(order!!0), getNodeById("items"));
+  appendChildren(stringToXml(order!!1), getNodeById("removed"));
+  appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
+  appendChildren(stringToXml(order!!3), getNodeById("address"));
 
 }
 
 page
-	<html>
-	<head><title>From Academic Papers</title></head>
-	<body bgcolor="#E6E6FA">
-	<form l:onsubmit="{main()}">
-	<h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-	<button type="submit">Start communication</button>
-	</form>
-	<p><b>Products ordered:</b></p>
-	<p id="items"></p>
-	<p><b>Products removed:</b></p>
-	<p id="removed"></p>
-	<p><b>Payment details:</b></p>
-	<p id="cardNo">Card number: </p>
-	<p id="address">Address: </p>
-	</body>
-	</html>
+  <html>
+  <head><title>From Academic Papers</title></head>
+  <body bgcolor="#E6E6FA">
+  <form l:onsubmit="{main()}">
+  <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
+  <button type="submit">Start communication</button>
+  </form>
+  <p><b>Products ordered:</b></p>
+  <p id="items"></p>
+  <p><b>Products removed:</b></p>
+  <p id="removed"></p>
+  <p><b>Payment details:</b></p>
+  <p id="cardNo">Card number: </p>
+  <p id="address">Address: </p>
+  </body>
+  </html>
