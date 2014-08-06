@@ -1,6 +1,4 @@
-typename Calc = [&|Add:?/\Int.?/\Int.!/\Int.EndBang, Mul:?/\Int.?/\Int.!/\Int.EndBang|&];
-
-# What to do about "distinguished return" channel?  Mention in quote type?
+typename Calc = [&|Add:?\/Int.?\/Int.!/\Int.EndBang, Mul:?\/Int.?\/Int.!/\Int.EndBang|&];
 
 sig calc : Quote(Calc)
 val calc =
@@ -15,7 +13,6 @@ val calc =
 
 sig user : Quote(~Calc, /\Int)
 val user =
-  <| s, return. s[Mul].s[six].(up(six, 6) | s[seven].(seven /\ 7 | s(z).return[zz].(z<->zz | s().return[]))) |>;
+  <| s, return. s[Mul].s[six].(up(six, 6) | s[seven].(seven /\ 7 | s(z).return <-> z)) |>;
 
-
-run return <| nu s.({calc[s]}|{user[s, return]}) |>
+down (run return <| nu s.({calc[s]}|{user[s, return]}) |>)

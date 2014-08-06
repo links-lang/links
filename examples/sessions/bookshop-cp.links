@@ -20,7 +20,7 @@ typename Address = (street:String, houseNo:Int, city:String);
 typename OrderSummary = String;
 
 # Session types for mother's choice.
-typename Shop = mu a.[&|Add:?/\Product.a, Remove:?/\Product.a, Checkout:?/\Card.?/\Address.!/\[OrderSummary].EndBang|&];
+typename Shop = mu a.[&|Add:?\/Product.a, Remove:?\/Product.a, Checkout:?\/Card.?\/Address.!/\[OrderSummary].EndBang|&];
 
 # Session types for son's choice.
 typename Son = [&|Choice:!/\Product.EndBang|&];
@@ -106,13 +106,6 @@ val waitForSon =
      offer(c) {
       case Choice -> c[choice].(choice /\ Gadget("LED Water Speakers") | c[]) } |>;
 
-# Sends a signal that it is time to choose a product.
-sig getSonBook : Quote(~Son)
-val getSonBook =
-  <| s.
-     s[Choice].s(choice).s().return[cchoice].(choice <-> cchoice | return[])
-  |>;
-
 # Mom picks out the products, allows the son to do it, goes to checkout.
 sig orderBooks : Quote(Shop, /\String)
 val orderBooks = {
@@ -129,14 +122,14 @@ val orderBooks = {
               c[Checkout].c[card].(card /\ 8753 |
                           c[address].(address /\ myAddress |
                           c(summary).c().
-                          return[ssummary].(summary <-> ssummary | return[])))))) |>
+                          return <-> summary))))))) |>
 };
 
 # Creates a new access point and binds the ends of the channel to appropriate functions.
 sig main : () ~> ()
 fun main() client
 {
-  var order = run return <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
+  var order = down (run return <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>);
 
   appendChildren(stringToXml(order!!0), getNodeById("items"));
   appendChildren(stringToXml(order!!1), getNodeById("removed"));

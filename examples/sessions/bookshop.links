@@ -1,26 +1,26 @@
-typename Shop  = mu a.[&|Add:?/\String.a, Checkout:?/\Int.?/\String.EndBang|&];
+typename Shop  = mu a.[&|Add:?\/String.a, Checkout:?\/Int.?\/String.EndBang|&];
 
 sig waitForClient : (Shop) ~> EndBang
 fun waitForClient(s) client {
   offer(s) {
     case Add(s) ->
       var (item, s) = receive s;
-      appendChildren(stringToXml("Book name received: " ^^ down(item)), getNodeById("items"));
+      appendChildren(stringToXml("Book name received: " ^^ down item), getNodeById("items"));
       waitForClient(s)
 
     case Checkout(s) ->
       var (card, s) = receive s;
-      appendChildren(stringToXml(", card number received: " ^^ intToString(down(card))), getNodeById("items"));
+      appendChildren(stringToXml(", card number received: " ^^ intToString(down card)), getNodeById("items"));
       var (address, s) = receive s;
-      appendChildren(stringToXml(", address received: " ^^ down(address)), getNodeById("items"));
+      appendChildren(stringToXml(", address received: " ^^ down address), getNodeById("items"));
       s
   }
 }
 
 sig orderBooks : (~Shop) ~> ()
 fun orderBooks(c) client {
-  var c = send (up("Alice in Wonderland")) (select Add c);
-  var c = send (up("Summerhall Square")) (send (up(8753)) (select Checkout c));
+  var c = send (up "Alice in Wonderland") (select Add c);
+  var c = send (up "Summerhall Square") (send (up 8753) (select Checkout c));
   wait(c);
   ()
 }
