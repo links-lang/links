@@ -229,12 +229,20 @@ and phrasenode = [
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
 | `FormBinding      of phrase * pattern
-(* choose *)
+(* Session terms *)
+| `Fuse             of phrase * phrase
+| `Link             of phrase * phrase
+| `Give             of phrase * phrase
+| `Grab             of phrase
 | `Select           of name * phrase
-(* choice *)
 | `Offer            of phrase * (pattern * phrase) list * Types.datatype option
-(* | `Fork             of binder * phrase *)
-| `CP               of cp_phrase
+| `Wait             of phrase
+| `Fork             of phrase
+| `In               of phrase
+| `Out              of phrase
+(* Quotation nonsense *)
+| `CP               of binder list * cp_phrase
+| `Run              of phrase
 ]
 and phrase = phrasenode * position
 and bindingnode = [
@@ -261,13 +269,17 @@ and sentence = [
 | `Expression  of phrase
 | `Directive   of directive ]
 and cp_phrasenode = [
-| `Unquote of binding list * phrase
+| `Unquote of phrase * string list
 | `Grab of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
-| `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+| `Give of (string * (Types.datatype * tyarg list) option) * binder * cp_phrase * cp_phrase
+| `GiveNothing of string
 | `Select of binder * string * cp_phrase
 | `Offer of binder * (string * cp_phrase) list
 | `Fuse of binder * binder
-| `Comp of binder * cp_phrase * cp_phrase ]
+| `Comp of binder * cp_phrase * cp_phrase
+| `In of binder * phrase
+| `Out of binder * binder * cp_phrase
+| `Link of binder * binder ]
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
 
@@ -343,7 +355,13 @@ struct
     | `Page p
     | `PagePlacement p
     | `Upcast (p, _, _)
+    | `Grab p
     | `Select (_, p)
+    | `Wait p
+    | `Fork p
+    | `In p
+    | `Out p
+    | `Run p
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit (ps, _)
@@ -403,7 +421,8 @@ struct
 (*                      diff (option_map phrase orderby) pat_bound] *)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
-    | `CP cp -> cp_phrase cp
+    | `Give (p, q) -> union (phrase p) (phrase q)
+    | `CP (vs, cp) -> diff (cp_phrase cp) (List.fold_right (fun (v, _, _) s -> add v s) vs empty)
     | `Receive (cases, _) -> union_map case cases
     | `DBDelete (pat, p, where) ->
         union (phrase p)
@@ -455,12 +474,15 @@ struct
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase (p, _pos) = match p with
-    | `Unquote e -> block e
+    | `Unquote (e, vs) -> union (phrase e) (List.fold_right add vs empty)
     | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
     | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
-    | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
+    | `Give ((c, _t), (d, _u, _), p, q) -> union (singleton c) (union (diff (cp_phrase p) (singleton d)) (cp_phrase q))
     | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
     | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
     | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
+    | `Link ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
+    | `In ((x, _, _), m) -> union (singleton x) (phrase m)
+    | `Out ((x, _, _), (y, _, _), p) -> union (singleton x) (diff (cp_phrase p) (singleton y))
 end

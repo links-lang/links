@@ -2436,3 +2436,7 @@ let make_record_type ts = `Record (make_closed_row ts)
 let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
+
+let make_cp_quote_type ts =
+  let real_type = `Function (make_tuple_type ts, make_empty_closed_row (), unit_type) in
+  `Alias (("Proc", List.map (fun t -> `Type t) ts), real_type)

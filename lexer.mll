@@ -171,6 +171,7 @@ let keywords = [
  "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
+ "fork"     , FORK;
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
@@ -183,20 +184,23 @@ let keywords = [
 (*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
+ "link"     , LINK;
  "mu"       , MU;
  "native"   , NATIVE;
  "nu"       , NU;
  "offer"    , OFFER;
  "orderby"  , ORDERBY;
  "op"       , OP;
+ "out"      , OUT;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
-
  "receive"  , RECEIVE;
  "returning", RETURNING;
+ "run"      , RUN;
  "select"   , SELECT;
  "server"   , SERVER;
+ "send"     , SEND;
  "set"      , SET;
  "sig"      , SIG;
  "spawn"    , SPAWN;
@@ -209,6 +213,7 @@ let keywords = [
  "update"   , UPDATE;
  "values"   , VALUES;
  "var"      , VAR;
+ "wait"     , WAIT;
  "where"    , WHERE;
  "with"     , WITH;
 ]
@@ -272,6 +277,7 @@ rule lex ctxt nl = parse
   | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
+  | "<->"                               { LEFTRIGHTARROW }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
   | "[|"                                { LBRACKETBAR }

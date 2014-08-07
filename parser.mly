@@ -176,13 +176,13 @@ let datatype d = d, None
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
-%token OFFER SELECT
+%token SEND RECEIVE OFFER SELECT LINK WAIT FORK OUT RUN
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token LBRACKETPLUSBAR BARPLUSRBRACKET
 %token LBRACKETAMPBAR BARAMPRBRACKET
-%token LEFTTRIANGLE RIGHTTRIANGLE NU
+%token LEFTTRIANGLE RIGHTTRIANGLE NU LEFTRIGHTARROW
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
@@ -392,6 +392,10 @@ atomic_expression:
 cp_name:
 | VARIABLE                                                     { $1, None, pos () }
 
+cp_names:
+|                                                              { [] }
+| cp_name COMMA cp_names                                       { $1 :: $3 }
+
 cp_label:
 | CONSTRUCTOR                                                  { $1 }
 
@@ -415,13 +419,18 @@ perhaps_exp:
 | exp                                                          { Some $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
+| LBRACE exp LBRACKET cp_names RBRACKET RBRACE                 { `Unquote ($2, List.map fst3 $4), pos () }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
-| cp_name LBRACKET perhaps_exp RBRACKET DOT cp_expression      { `Give ((fst3 $1, None), $3, $6), pos () }
+| cp_name LBRACKET cp_name RBRACKET DOT LPAREN cp_expression VBAR cp_expression RPAREN
+                                                               { `Give ((fst3 $1, None), $3, $7, $9), pos () }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
-| cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
-| cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
+| cp_name LBRACKET cp_label RBRACKET DOT cp_expression         { `Select ($1, $3, $6), pos () }
+| cp_name LBRACKET RBRACKET                                    { `GiveNothing (fst3 $1), pos () }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN
+                                                               { `Comp ($2, $5, $7), pos () }
+| cp_name LARROW exp                                           { `In ($1, $3), pos () }
+| cp_name RARROW cp_name DOT cp_expression                     { `Out ($1, $3, $5), pos () }
+| cp_name LEFTRIGHTARROW cp_name                               { `Link ($1, $3), pos () }
 
 primary_expression:
 | atomic_expression                                            { $1 }
@@ -431,7 +440,7 @@ primary_expression:
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
-| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| LEFTTRIANGLE cp_names DOT cp_expression RIGHTTRIANGLE        { `CP ($2, $4), pos () }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
@@ -686,8 +695,16 @@ page_placement:
 
 session_expression:
 | db_expression                                                { $1 }
-| SELECT field_label exp                                       { `Select ($2, $3) , pos() }
+| LINK exp exp                                                 { `Link ($2, $3), pos () }
+| SEND exp exp                                                 { `Give ($2, $3), pos () }
+| RECEIVE exp                                                  { `Grab $2, pos () }
+| SELECT field_label exp                                       { `Select ($2, $3) , pos () }
 | OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
+| WAIT exp                                                     { `Wait $2, pos () }
+| FORK exp                                                     { `Fork $2, pos () }
+| RUN exp                                                      { `Run $2, pos ()}
+| IN exp                                                       { `In $2, pos () }
+| OUT exp                                                      { `Out $2, pos ()}
 
 conditional_expression:
 | session_expression                                           { $1 }
@@ -707,7 +724,7 @@ perhaps_cases:
 case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
+/* | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() } */
 
 iteration_expression:
 | case_expression                                              { $1 }

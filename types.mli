@@ -313,6 +313,7 @@ val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype * datatype -> datatype
+val make_cp_quote_type : datatype list -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

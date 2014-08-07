@@ -76,8 +76,8 @@ object ('self)
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase * Types.datatype
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
-  method cp_phrase       : cp_phrase -> 'self * cp_phrase * Types.datatype
-  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype
+  method cp_phrase       : cp_phrase -> 'self * cp_phrase
+  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
   method sec             : sec -> 'self * sec * Types.datatype

@@ -255,9 +255,12 @@ class transform (env : Types.typing_environment) =
               bs in
           let (o, t) = o#datatype t in
             (o, `Offer (e, bs, Some t), t)
-      | `CP p ->
-         let (o, p, t) = o#cp_phrase p in
-         (o, `CP p, t)
+      | `CP (bs, p) ->
+         let envs = o#backup_envs in
+         let o, bs = listu o (fun o -> o#binder) bs in
+         let o, p = o#cp_phrase p in
+         let o = o#restore_envs envs in
+         o, `CP (bs, p), Types.make_cp_quote_type (List.map (fun (_, Some t, _) -> t) bs)
       | `Query (range, body, Some t) ->
           let (o, range) =
             optionu o
@@ -675,59 +678,57 @@ class transform (env : Types.typing_environment) =
         let var_env = TyEnv.bind var_env (name, t) in
           ({< var_env=var_env >}, (name, Some t, pos))
 
-    method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
+    method cp_phrase : cp_phrase -> 'self_type * cp_phrase =
       fun (p, pos) ->
-      let (o, p, t) = o#cp_phrasenode p in
-      (o, (p, pos), t)
+      let o, p = o#cp_phrasenode p in
+      o, (p, pos)
 
     (* TODO: should really invoke o#datatype on type annotations! *)
-    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
-      | `Unquote (bs, e) ->
-         let envs = o#backup_envs in
-         let (o, bs) = listu o (fun o -> o#binding) bs in
-         let (o, e, t) = o#phrase e in
-         let o = o#restore_envs envs in
-         {< var_env=var_env >}, `Unquote (bs, e), t
+    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) = function
+      | `Unquote (e, vs) ->
+         let o, e, _ = o#phrase e in
+         {< var_env=var_env >}, `Unquote (e, vs)
       | `Grab (cbind, None, p) ->
-         let (o, p, t) = o#cp_phrase p in
-         o, `Grab (cbind, None, p), t
+         let (o, p) = o#cp_phrase p in
+         o, `Grab (cbind, None, p)
       | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
-         let (o, b) = o#binder b in
+         let o, b = o#binder b in
          let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
          let o = {< var_env = venv >} in
-         let (o, p, t) = o#cp_phrase p in
+         let o, p = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Grab (cbind, Some b, p), t
-      | `Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
+         o, `Grab (cbind, Some b, p)
+      | `Give ((c, Some (`Output (_t, s), _tyargs) as cbind), d, p, q) ->  (* NB _t == u *)
          let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
-         let (o, e, _typ) = option o (fun o -> o#phrase) e in
-         let (o, p, t) = o#cp_phrase p in
+         let o, d = o#binder d in
+         let o, p = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Give (cbind, e, p), t
+         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
+         let o, q = o#cp_phrase q  in
+         let o = o#restore_envs envs in
+         o, `Give (cbind, d, p, q)
       | `Grab _ -> failwith "Malformed grab in TransformSugar"
       | `Give _ -> failwith "Malformed give in TransformSugar"
       | `Select (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in
-         let (o, p, t) = o#cp_phrase p in
+         let o, p = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Select (b, label, p), t
+         o, `Select (b, label, p)
       | `Offer (b, cases) ->
          let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
                                            let envs = o#backup_envs in
                                            let o, _ = o#binder b in
-                                           let (o, p, t) = o#cp_phrase p in
-                                           (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
-         let (cases, t :: ts) = List.split cases in
-         o, `Offer (b, cases), t
-      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
+                                           let o, p = o#cp_phrase p in
+                                           (o#restore_envs envs, (label, p) :: cases)) cases (o, []) in
+         o, `Offer (b, cases)
+      | `Fuse (c, d) -> o, `Fuse (c, d)
       | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
-         let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
+         let o, left = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
-         let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
+         let o, right = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (cbind, left, right), t
+         o, `Comp (cbind, left, right)
   end
