@@ -257,6 +257,9 @@ sig
 
   val splice_exp : griper
 
+  (* val fuse_session : griper *)
+  (* val fuse_dual : griper *)
+
   val offer_variant : griper
   val offer_patterns : griper
 
@@ -268,6 +271,9 @@ sig
   val cp_offer_choice : griper
   val cp_offer_branches : griper
   val cp_comp_left : griper
+  val cp_fuse_session : griper
+  val cp_fuse_dual : griper
+
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -817,6 +823,27 @@ but the expression here has type " ^ (show_type lt))
 
 
 (* session stuff *)
+(*     let fuse_session ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ = *)
+(*       die pos ("\ *)
+(* Only session types can be fused, but \ *)
+(* the expression" ^ nl() ^ *)
+(* tab() ^ code lexpr ^ nl() ^ *)
+(* "has type" ^ nl() ^ *)
+(* tab() ^ code (show_type lt) ^ nl() ^ *)
+(* "which is not a session type") *)
+
+(*     let fuse_dual ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ = *)
+(*       die pos ("\ *)
+(* Only dual session types can be fused, but \ *)
+(* the dual of the type of expression" ^ nl() ^ *)
+(* tab() ^ code lexpr ^ nl() ^ *)
+(* "is" ^ nl() ^ *)
+(* tab() ^ code (show_type lt) ^ nl() ^ *)
+(* "and the expression" ^ nl() ^ *)
+(* tab() ^ code rexpr ^ nl() ^ *)
+(* "has type" ^ nl() ^ *)
+(* tab() ^ code (show_type rt)) *)
+
     let selection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
       die pos ("\
 Only a label that is present in a session selection can be selected, but \
@@ -873,6 +900,21 @@ The branches of an offer expression have divergent types:" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "and" ^ nl () ^
 tab () ^ code (show_type rt))
+
+    let cp_fuse_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
+      die pos ("\
+Only session types can be fused, but \
+the type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"is not a session type")
+
+    let cp_fuse_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Only dual session types can be fused, but \
+the type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"is not the dual of the type" ^ nl() ^
+tab() ^ code (show_type rt))
 
     let cp_comp_left ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
@@ -1940,6 +1982,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
 
         (* session-based concurrency *)
+        (* | `Fuse (l, r) -> *)
+        (*   let l = tc l in *)
+        (*   let r = tc r in *)
+        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*       (pos_and_typ l, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
+        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*       (pos_and_typ r, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
+        (*     unify ~handle:Gripers.cp_fuse_dual *)
+        (*       ((exp_pos l, Types.dual_type (typ l)), pos_and_typ r); *)
+        (*     `Fuse (erase l, erase r), Types.unit_type, merge_usages [usages l; usages r] *)
         | `Select (l, e) ->
            let e = tc e in
            let selected_session = Types.fresh_type_variable (`Any, `Session) in
@@ -2873,6 +2925,15 @@ and type_cp (context : context) = fun (p, pos) ->
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some ctype), List.map (fun (x, _, _) -> x) branches), t', use c u
+    | `Fuse ((c, _), (d, _)) ->
+      let (_, tc, uc) = type_check context (`Var c, pos) in
+      let (_, td, ud) = type_check context (`Var d, pos) in
+        unify ~handle:Gripers.cp_fuse_session
+          (tc, Types.fresh_type_variable (`Any, `Session));
+        unify ~handle:Gripers.cp_fuse_session
+          (td, Types.fresh_type_variable (`Any, `Session));
+        unify ~handle:Gripers.cp_fuse_dual (Types.dual_type tc, td);
+        `Fuse ((c, Some tc), (d, Some td)), Types.unit_type, merge_usages [uc; ud]
     | `Comp ((c, _), left, right) ->
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in

@@ -84,6 +84,7 @@ let send_message msg pid =
 *)
 let awaken pid =
   try
+    Debug.print ("Awakening process: " ^ string_of_int pid);
     Queue.push (Hashtbl.find state.blocked pid) state.suspended;
     Hashtbl.remove state.blocked pid
   with Notfound.NotFound _ ->

@@ -793,7 +793,7 @@ let free_type_vars, free_row_type_vars =
       | `Primitive _             -> S.empty
       | `Function (f, m, t)      ->
           S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
-      | `Lolli (f, m, t)      ->
+      | `Lolli (f, m, t)         ->
           S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
       | `Record row
       | `Variant row             -> free_row_type_vars' rec_vars row

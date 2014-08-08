@@ -267,6 +267,7 @@ and cp_phrasenode = [
 | `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
 | `Select of typed_id * string * cp_phrase
 | `Offer of typed_id * (string * cp_phrase) list
+| `Fuse of typed_id * typed_id
 | `Comp of typed_id * cp_phrase * cp_phrase ]
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
@@ -461,5 +462,6 @@ struct
     | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
     | `Select ((c, _t), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | `Fuse ((c, _), (d, _)) -> union (singleton c) (singleton d)
     | `Comp ((c, _t), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end

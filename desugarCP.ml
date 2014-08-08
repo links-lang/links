@@ -83,6 +83,9 @@ object (o : 'self_type)
             o, `Offer (add_pos (`Var c),
                        cases,
                        Some t), t
+         | `Fuse ((c, Some ct), (d, Some dt)) ->
+            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "fuse", [`Type ct; `Row o#lookup_effects])),
+                        [add_pos (`Var c); add_pos (`Var d)]), Types.unit_type
          | `Comp ((c, Some s as cbind), left, right) ->
             let envs = o#backup_envs in
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
