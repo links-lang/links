@@ -26,7 +26,7 @@ object (o : 'self_type)
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos e), t
-         | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some (x, Some u), p) -> (* FYI: a = u *)
+         | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some (x, Some u, _), p) -> (* FYI: a = u *)
             let envs = o#backup_envs in
             let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
                                               (x, u))
@@ -61,7 +61,7 @@ object (o : 'self_type)
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos p), t
-         | `Select ((c, Some s as cbind), label, p) ->
+         | `Select ((c, Some s, _ as cbind), label, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
             let (o, p, t) = desugar_cp o p in
@@ -71,7 +71,7 @@ object (o : 'self_type)
                                   add_pos (`Select (label, (add_pos (`Var c)))),
                                   `Unknown, None))],
                   add_pos p), t
-         | `Offer ((c, Some s as cbind), cases) ->
+         | `Offer ((c, Some s, _ as cbind), cases) ->
             let desugar_branch (label, p) (o, cases) =
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
@@ -83,10 +83,10 @@ object (o : 'self_type)
             o, `Offer (add_pos (`Var c),
                        cases,
                        Some t), t
-         | `Fuse ((c, Some ct), (d, Some dt)) ->
+         | `Fuse ((c, Some ct, _), (d, Some dt, _)) ->
             o, `FnAppl (add_pos (Sugartypes.tappl (`Var "fuse", [`Type ct; `Row o#lookup_effects])),
                         [add_pos (`Var c); add_pos (`Var d)]), Types.unit_type
-         | `Comp ((c, Some s as cbind), left, right) ->
+         | `Comp ((c, Some s, _ as cbind), left, right) ->
             let envs = o#backup_envs in
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
