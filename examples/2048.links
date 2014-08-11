@@ -1,0 +1,276 @@
+# helper functions
+
+# reimplemented replicaate, because of a
+#Type error: The function
+#    replicaate
+#has type
+#    (AP (a::Session), (a::Session) ~b~> ()) ~b~> ()
+#while the arguments passed to it have types
+#    Int
+#and
+#    _::Any
+#and the currently allowed effects are
+#    |_::Any. In expression: replicaate(4, n).
+###
+# replicate is defined twice in prelude.links
+fun replica(x, y) {
+	if (x == 0) []
+	else y :: replica(x - 1, y)
+}
+
+sig transpose: ([[a]]) ~> [[a]]
+fun transpose(xs) {
+	switch (xs) {
+        case ([]::_) -> []
+        case x -> map(hd, x) :: transpose(map(tl, x))
+	}
+}
+
+# the game 2048
+# ported from https://github.com/gregorulm/h2048/blob/master/h2048.hs
+typename Grid = [[Int]];
+
+var leftKeyCode = 65;
+var rightKeyCode = 68;
+var upKeyCode = 87;
+var downKeyCode = 83;
+ 
+fun start() {
+	var gridprim = addTile(replica(4, [0, 0, 0, 0]));
+	addTile(gridprim)
+}
+
+fun merge(xs) {
+	fun combine(xx) {
+		switch (xx) {
+			case x::y::xs ->
+				if (x == y) {
+					(x * 2) :: combine(xs)
+				} else {
+					x :: combine(y::xs)
+				}
+			case x -> x
+		}
+
+	}
+
+	var merged = combine(filter(fun(x) { not(x == 0) }, xs));
+	var padding = replica(length(xs) - length(merged), 0);
+
+	merged ++ padding
+}
+
+fun move(m, grid) {
+	switch (m) {
+		case 65 -> map(merge, grid) # left
+		case 68 -> map(compose(reverse, compose(merge, reverse)), grid) # right
+		case 87 -> transpose(move(65, transpose(grid))) # up
+		case 83 -> transpose(move(68, transpose(grid))) # down
+		case _ -> grid
+	}
+}
+
+fun getZeroes(grid) {
+	fun singleRow(n) {
+		zip(replica(4, n), [0..3])
+	}
+ 
+	var coordinates = concatMap(singleRow, [0..3]);
+	filter(fun ((row, col)) { ((grid !! row) !! col) == 0 }, coordinates)
+}
+
+fun setSquare(grid, (row, col), val) {
+	var pre = take(row, grid);
+	var mid = take(col, (grid !! row)) ++ [val] ++ drop((col + 1), (grid !! row));
+	var post = drop((row + 1), grid);
+
+	pre ++ [mid] ++ post
+}
+
+fun isMoveLeft(grid) {
+	var directions = [leftKeyCode, rightKeyCode, upKeyCode, downKeyCode];
+	var allChoices = map(compose(length, compose(getZeroes, fun (dir) { move(dir, grid) })), directions);
+
+	sum(allChoices) > 0
+}
+
+fun printGrid(grid) client {
+	replaceNode(
+        <div id="grid">
+			{ concatMap(showRow, grid) }
+        </div>,
+        getNodeById("grid")
+	)
+}
+
+fun showRow(r) client {
+	<div style="clear:both">
+		{ showRowHelper(r) }
+	</div>
+}
+
+fun showRowHelper(r) client {
+	for (x <- r)
+		<#>
+			<span class="{ implode(explode("tile tile-") ++ explode(intToString(x))) }">
+				<span class="tile-top"> </span>
+				<span class="tile-bottom">{stringToXml(intToString(x))}</span>
+			</span>
+		</#>
+}
+
+fun check2048(grid) {
+	not([] == filter(fun (x) { x == 2048 }, concat(grid)))
+}
+
+fun addTile(grid) {
+	var candidates = getZeroes(grid);
+	var pick = choose(candidates);
+	var val = choose([2,2,2,2,2,2,2,2,2,4]);
+	var newGridprim = setSquare(grid, pick, val);
+	newGridprim
+}
+
+fun choose(xs) {
+	var i = floatToInt(random() *. intToFloat(length(xs) - 1));
+	xs !! i
+}
+
+fun newGrid(grid, msg) {
+	var newGridprim = move(msg, grid);
+	newGridprim
+}
+
+fun gameLoop(grid) {
+	printGrid(grid);
+	
+	if (isMoveLeft(grid)) {
+		if (check2048(grid)) {
+			mesg("You win!")
+		} else {
+			var newGridprim = move(recv(), grid);
+			if (not(grid == newGridprim)) {
+				var new = addTile(newGridprim);
+				gameLoop(new)
+			} else {
+				gameLoop(grid)
+			}
+		}
+	} else {
+		mesg("You lose!")
+	}
+}
+
+fun mesg(str) {
+	replaceNode(
+        <div id="msg">
+			{stringToXml(str)}
+        </div>,
+        getNodeById("msg")
+	)
+}
+
+fun main() {
+	var grid = start();
+	var gameProc = spawn { gameLoop(grid) };
+
+	page
+		<html>
+			<head>
+
+            <style>
+				.tile {{
+					display: block;
+					clear: none;
+					float: left;
+					width: 100px;
+					height: 100px;
+					font-size: 40px;
+					text-align: center;
+					outline-color: #000;
+					outline-width: 1px;
+					outline-style: solid;
+				}}
+				.tile-top {{
+					display: block;
+					width: 100px;
+					height: 10px;
+				}}
+				.tile-bottom {{
+					width: 100px;
+					height: 55px;
+				}}
+				.tile-0 {{
+					background-color: #888;
+				}}
+				.tile-2 {{
+					background-color: #f88;
+				}}
+				.tile-4 {{
+					background-color: #8f8;
+				}}
+				.tile-8 {{
+					background-color: #88f;
+				}}
+				.tile-16 {{
+					background-color: #ebb;
+				}}
+				.tile-32 {{
+					background-color: #beb;
+				}}
+				.tile-64 {{
+					background-color: #bbe;
+				}}
+				.tile-128 {{
+					background-color: #bee;
+				}}
+				.tile-256 {{
+					background-color: #ebe;
+				}}
+				.tile-512 {{
+					background-color: #eeb;
+				}}
+				.tile-1024 {{
+					background-color: #efe;
+				}}
+				.tile-2048 {{
+					background-color: #eef;
+				}}
+
+				body {{
+					background-color: #444;
+					color: #eee;
+					text-shadow:
+						-1px -1px 0 #000,
+						1px -1px 0 #000,
+						-1px 1px 0 #000,
+						1px 1px 0 #000;
+				}}
+
+				#container {{
+					width: 400px;
+					margin: 0 auto;
+				}}
+					
+            </style>
+			</head>
+
+			<body>
+				<div id="container">
+				<h1>2048 in Links</h1>
+
+                <div tabindex="1"
+					l:onkeydown="{ gameProc ! getCharCode(event) }"
+					l:onfocus="{mesg("Game on. Use WSAD.");}"
+					l:onblur="{mesg("Click on the board to play.");}"
+					style="width: 400px; height: 400px; border: 1px solid #484;">
+				<div id="grid"/>
+				<div id="msg">Click on the board to play.</div>
+				</div>
+	
+				</div>
+			</body>
+		</html>
+}
+
+main()
