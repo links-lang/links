@@ -25,7 +25,7 @@ fun user(ap, c) {
 fun main() {
   var ap = new ();
 # The need to spawn a process here suggests a bug in the desugaring of nu
-  <| nu c.(nu s.({calc(s)} | s <-> c) | {ignore(spawn {user(ap,c)})}) |>;
+  <| nu c.(nu s.(s <-> c | {calc(s)}) | {ignore(spawn {user(ap,c)})}) |>;
 #  <| nu c.(nu s.({calc(s)} | s <-> c) | {user(ap,c)}) |>;
 #  <| nu s.(nu c.({user(ap,c)} | s <-> c) | {calc(s)}) |>;
   var r = accept(ap);
