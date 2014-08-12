@@ -1,0 +1,811 @@
+### include "helper.links"
+
+### inlcude "coroutine.links"
+
+# Coroutine library
+# ported from https://github.com/RudolfVonKrugstein/jshaskell-blog/blob/master/4_Pong/code/Coroutine.hs
+
+#newtype Coroutine i o = Coroutine { runC :: i -> (o, Coroutine i o) }
+#typename Coroutine(i, o) = (i) ~> (o, Coroutine(i, o))
+
+#instance Functor (Coroutine i) where
+#    fmap f co = Coroutine $ \i ->
+#        let (o, co') = runC co i
+#        in (f o, fmap f co')
+        
+fun coMap(f, co) {
+	fun (i) {
+		var (o, coprim) = co(i);
+		(f(o), coMap(f, coprim))
+	}
+}
+
+#instance Applicative (Coroutine i) where
+#    pure x = Coroutine $ const (x, pure x)
+
+#    cof <*> cox = Coroutine $ \i ->
+#        let (f, cof') = runC cof i
+#            (x, cox') = runC cox i
+#        in (f x, cof' <*> cox')
+
+fun const(a, b) {
+	a
+}
+
+fun coPure(x) {
+	fun (y) { (x, coPure(x)) }
+}
+
+# sequential application
+# not sure if I should be implementing that
+fun coSeq(cof, cox) {
+	fun (i) {
+		var (f, cofprim) = cof(i);
+		var (x, coxprim) = cox(i);
+
+		(f(x), coSeq(cofprim, coxprim))
+	}
+}
+
+#instance Category Coroutine where
+#    id = Coroutine $ \i -> (i, id)
+
+#    cof . cog = Coroutine $ \i ->
+#        let (x, cog') = runC cog i
+#            (y, cof') = runC cof x
+#        in (y, cof' . cog')
+
+# identity morphism
+fun coId(x) {
+	fun (i) {
+		(i, coId(x))
+	}
+}
+
+# morphism composition
+fun coCom(cof, cog) {
+    fun (i) {
+		var (x, cogprim) = cog(i);
+		var (y, cofprim) = cof(x);
+		(y, coCom(cofprim, cogprim))
+    }
+}
+
+#instance Arrow Coroutine where
+#    arr f = Coroutine $ \i -> (f i, arr f)
+
+#    first co = Coroutine $ \(a,b) ->
+#        let (c, co') = runC co a
+#        in ((c,b), first co')
+
+fun coArr(f) {
+	fun (i) {
+		(f(i), coArr(f))
+	}
+}
+
+fun coFirst(co) {
+	fun ((a, b)) {
+		var (c, coprim) = co(a);
+		((c, b), coFirst(coprim))
+	}
+}
+
+#instance ArrowLoop Coroutine where
+#    loop co = Coroutine $ \b ->
+#        let ((c,d),co') = runC co (b,d)
+#        in (c, loop co')
+
+# so this won't work
+# cause of d
+
+# how to implement the loop?
+# maybe simulate laziness with a recursive function?
+fun coLoop(co) {
+	fun (b) {
+		var d = 0;
+		var ((c, d), coprim) = co((b, d));
+		(c, coLoop(coprim))
+		#(1, coLoop(co))
+	}
+}
+
+#-- Events
+#type Event a = [a]
+
+typename CoEvent(a) = [a];
+
+#-- | Map events into different kinds of events
+#mapE :: (e -> e') -> Coroutine (Event e) (Event e')
+#mapE = arr . map
+
+# coCom returns a one argument function
+fun coMapE(f) {
+	# not sure about the j, k, f
+	compose(coArr, fun(j) { fun (k) { map(f, j) } })
+}
+
+#-- | Filter events based on a predicate function
+#filterE :: (e -> Bool) -> Coroutine (Event e) (Event e)
+#filterE = arr . filter
+
+fun coFilterE(f) {
+	# not sure about filter
+	compose(coArr, fun (j) { fun (k) { filter(f, j) } })
+}
+
+#-- | Replace every event occurence with a fixed event
+#constE :: e -> Coroutine (Event e') (Event e)
+#constE = mapE . const
+
+fun constE(e) {
+	compose(coMapE, fun(k) { const(e, k) })
+}
+
+#-- | Merge two time varying values using a combining function
+#zipWithC :: (a -> b -> c) -> Coroutine (a, b) c
+#zipWithC = arr . uncurry
+
+# this is a mess
+fun coZipWith(f) {
+    # ?
+	#fun (i) { coCom(coArr, fun (j) { uncurry(fun (k) { j(k, l) } }) })(f) }
+	# don't know about this
+	# curry: function that returns a function -> function that takes a tuple
+	compose(coArr, fun (i) { fun ((j1, j2)) { uncurry(f)(j1, j2) } })
+}
+
+
+#-- | Merge two event streams together
+#zipE :: Coroutine (Event e, Event e) (Event e)
+#zipE = zipWithC (++)
+
+fun coZipE() {
+	coZipWith(fun (a) { fun (b) { a ++ b } })
+}
+
+#scanE :: (a -> e -> a) -> a -> Coroutine (Event e) a
+#scanE f i = Coroutine $ step i where
+#    step a e = let a' = foldl' f a e in (a', scanE f a')
+
+fun coScanE(f, i) {
+	fun (j) {
+		fun step(a, e) {
+			var aprim = fold_left(f, a, e);
+
+			(aprim, coScanE(f, aprim))
+		}
+
+		step(i, j)
+	}
+}
+
+#-- | Split a value into (current value, previous value) using the given
+#-- initial value as the previous value during first call.
+#withPrevious :: a -> Coroutine a (a, a)
+#withPrevious first = Coroutine $ \i -> ((i, first), step i) where
+#    step old = Coroutine $ \i -> ((i, old), step i)
+
+fun coWithPrevious(firstV) {
+	fun (i) {
+		fun step(old) {
+			fun (j) {
+				((j, old), step(j))
+			}
+		}
+
+		((i, firstV), step(i))
+	}
+}
+
+#-- | Delay the value by a single time-step, using the given initial value for
+#-- the first call.
+#delay :: a -> Coroutine a a
+#delay a = withPrevious a >>> arr snd
+
+# ! implement coArrCom (arrow composition)
+
+#(>>>) :: Category cat => cat a b -> cat b c -> cat a c
+#f >>> g = g . f
+
+fun coArrLeftCom(f, g) {
+	compose(g, f)
+}
+
+fun coDelay(a) {
+	coArrLeftCom(coWithPrevious(a), coArr(second))
+}
+
+#-- | Integrate a numerical value over time
+#integrate :: Num a => a -> Coroutine a a
+#integrate = scan (+)
+
+fun coIntegrate(a) {
+	coScan(fun(i, j) { i + j }, a)
+}
+
+#boundedIntegrate :: (Num a, Ord a) => (a,a) -> a -> Coroutine a a
+#boundedIntegrate (minV, maxV) = scan (\a b -> min maxV $ max minV $ (a+b))
+
+sig coMin: (Float, Float) -> Float
+fun coMin(a, b) {
+	if (a < b) a
+	else b
+}
+
+sig coMax: (Float, Float) -> Float
+fun coMax(a, b) {
+	if (a > b) a
+	else b
+}
+
+fun coBoundedIntegrate((minV, maxV), i) {
+	coScan(fun (a, b) { coMin(maxV, coMax(minV, (a +. b))) }, i)
+}
+
+#-- | Derivate a numerical value over time (i.e. return the delta between current
+#-- and previous time-step.
+#derivate :: Num a => Coroutine a a
+#derivate = withPrevious 0 >>> zipWithC (-)
+
+fun coDerivate() {
+	coArrLeftCom(coWithPrevious(0), coZipWith(fun(a) { fun (b) { a - b } }))
+}
+
+#-- | Trigger an event whenever the value satisfies the given predicate function
+#watch :: (a -> Bool) -> Coroutine a (Event a)
+#watch f = Coroutine $ \i ->
+#    if f i
+#        then ([i], watch f)
+#        else ([], watch f)
+
+fun coWatch(f) {
+	fun (i) {
+		if (f(i)) {
+			([i], coWatch(f))
+		} else {
+			([], coWatch(f))
+		}
+	}
+}
+
+#scan :: (a -> b -> a) -> a -> Coroutine b a
+#scan f i = Coroutine $ step i where
+#    step a b = let a' = f a b in (a', scan f a')
+
+fun coScan(f, i) {
+	fun step(a, b) {
+		var aprim = f(a, b);
+		(aprim, coScan(f, aprim)) 
+	}
+
+	fun (j) {
+		step(i, j)
+	}
+}
+
+
+#-- manages a set of coroutines which are deletet when returning Nothing
+#manager :: [Coroutine a (Maybe b)] -> Coroutine [a] [b]
+#manager cos = Coroutine $ \is ->
+#let res = map (\(co, i) -> runC co i) $ zip cos is
+#res' = filter (isJust . fst) res
+#(result, cos') = unzip res'
+#in (catMaybes result, manager cos')
+
+#catMaybes              :: [Maybe a] -> [a]
+#catMaybes ls = [x | Just x <- ls]
+
+sig catMaybes: ([Maybe(a)]) -> [a]
+fun catMaybes(ls) {
+	for (x <- ls) {
+		switch (x) {
+			case Just(x) -> [x]
+			case Nothing -> []
+		}
+	}
+}
+
+fun coManager(cos) {
+	fun (i) {
+		var res = map(fun((co, i)) { co(i) }, zip(cos, i));
+		var resprim = filter(compose(isJust, first), res);
+		var (result, cosprim) = unzip(resprim);
+		(catMaybes(result), coManager(cosprim))
+	}
+}
+
+#-- switcher, starts with a specific coroutine and switches whenever a new coroutine is send via an event
+#switch :: Coroutine a b -> Coroutine (Event (Coroutine a b), a) b
+#switch init = Coroutine $ \(e,i) ->
+#let init' = last $ init : e --the last coroutine sent through
+#(o, init'') = runC init' i
+#in (o, switch init'')
+
+fun coSwitch(init) {
+	fun ((e, i)) {
+		var initprim = last(init::e);
+		var (o, initbis) = initprim(i);
+		(o, coSwitch(initbis))
+	}
+}
+
+#-- replace the contents of an event
+#(<$) :: Event a -> b -> Event b
+#(<$) events content = map (\_ -> content) events
+
+fun coReplace(events, content) {
+	map(fun (x) { content }, events)
+}
+
+#
+# MATH
+#
+
+fun vectorAdd((v1x, v1y), (v2x, v2y)) {
+	(v1x +. v2x, v1y +. v2y)
+}
+
+sig fabs: (Float) -> Float
+fun fabs(x) {
+	if (x < 0.0) -.x else x
+}
+
+# Breakout/Arkanoid clone
+# ported from http://jshaskell.blogspot.co.uk
+
+# import Data.VectorSpace
+
+fun clear(ctx) {
+	jsClearRect(ctx, 0.0, 0.0, jsCanvasWidth(ctx), jsCanvasHeight(ctx))
+}
+
+typename State = [| State: (x:Float) |];
+
+typename Input = [| KeyUp: Int | KeyDown: Int |];
+typename Vector = (Float, Float);
+typename PlayerState = (xPos: Float);
+typename BallState = (pos: Vector, speed: Vector);
+typename BlockState = (blockPos: Vector, blockLives: Int);
+typename ProperGameState2 = (player: PlayerState, ball: BallState, blocks: [BlockState]);
+typename GameState = [| ProperGameState:(player: PlayerState, ball: BallState, blocks: [BlockState]) | StartScreen:Int |];
+typename BallCollision = [| LeftBounce | RightBounce | UpBounce | DownBounce |];
+typename BlockCollision = [| BlockCollision |];
+typename Rect = (x: Float, y: Float, width: Float, height: Float);
+
+#
+# CHEATING/evil wrappers
+#
+
+fun newIORef(name, v) {
+	jsSaveGlobalObject(name, v);
+	jsLoadGlobalObject(name)
+}
+
+fun writeIORef(name, v) {
+	jsSaveGlobalObject(name, v)
+}
+
+fun readIORef(name) {
+	jsLoadGlobalObject(name)
+}
+
+#
+# MAIN
+#
+
+fun main() client {
+	#
+	# CONSTANTS
+    #
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+	var screenWidth = 600.0;
+	var screenHeight = 400.0;
+
+	var playerHeight = 20.0;
+	var playerWidth = 60.0;
+	var playerYPos = screenHeight -. playerHeight;
+	var playerSpeed = 5.0;
+	var initialPlayerState = (xPos=(screenWidth -. playerWidth) /. 2.0):PlayerState;
+	var playerColor = "#44a";
+
+	var ballRadius = 7.5;
+	var initialBallState = (pos=((screenWidth /. 2.0), (screenHeight -. 50.0)), speed=(3.0, -.3.0)):BallState;
+	var initialBallSpeed = (3.0, -.3.0);
+	var ballColor = "#a44";
+
+	var blockWidth = 60.0;
+	var blockHeight = 20.0;
+	var initBlockStates =
+		(for (x <- [20.0, 140.0, 240.0, 340.0, 440.0, 520.0],
+				(y, lives) <- [(60.0,2), (100.0,1), (140.0,2), (180.0,1), (220.0,1), (260.0,1)])
+					[(blockPos=(x, y), blockLives=lives)]):[BlockState]; 
+	var blockColor1 = "black";
+	var blockColor2 = "gray";
+
+	var initialState = ProperGameState(player=initialPlayerState, ball=initialBallState, blocks=initBlockStates):GameState;
+
+	var leftKeyCode = 37;
+	var rightKeyCode = 39;
+	var restartKeyCode = 13;
+
+	#
+	# FUNCTIONS
+	#
+	fun updateState() {
+		var startFrameTime = clientTime();
+	
+		var co = readIORef("gameState");
+		var i = readIORef("inputState");
+		
+		writeIORef("inputState", ([]: [Input]));
+		var (gs, coprim) = co(i);
+		
+        writeIORef("gameState", coprim);
+        
+        draw(gs, startFrameTime);
+
+		jsRequestAnimationFrame(updateState)
+	}
+
+	fun draw(gameState:GameState, startTime) {
+        var (mainCanvas, dispCanvas) = if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none") (canvasId, canvas2Id)
+			else (canvas2Id, canvasId);
+		
+		var ctx = jsGetContext2D(getNodeById(mainCanvas));
+		clear(ctx);
+
+		switch (gameState) {
+			case StartScreen(_) ->
+					# double buffering not neccessary in this case, but ok
+					jsSetFillColor(ctx, "black");
+					jsFillText(ctx, "Press [Enter] to start playing", (screenWidth /. 2.0 -. 100.0), (screenHeight /. 2.0));
+
+                    var ctx2 = jsGetContext2D(getNodeById(dispCanvas));
+
+					jsDrawImage(ctx2, getNodeById(mainCanvas), 0.0, 0.0);
+
+					ignore(domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block"));
+					ignore(domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none"));
+					clear(ctx2)
+
+			case ProperGameState(gs) ->
+					jsSetFillColor(ctx, playerColor);
+					var playerRectangle = playerRect(gs.player.xPos);
+					jsFillRect(ctx, playerRectangle.x, playerRectangle.y, playerRectangle.width, playerRectangle.height);
+
+					ignore(map(fun (x) { drawBlock(ctx, x) }, gs.blocks));
+
+					jsSetFillColor(ctx, ballColor);
+					var (x, y) = (gs.ball).pos;
+					jsFillCircle(ctx, x, y, ballRadius);
+
+					# approximate FPS:
+					#jsFillText(ctx, "~FPS: " ^^ strsub(floatToString(1000.0 /. intToFloat(clientTime() - startTime)), 0, 7), 10.0, 10.0);
+
+					# debug, approximate average FPS
+					jsSaveGlobalObject("frameCount", jsLoadGlobalObject("frameCount") + 1);
+					
+					var dFps = 1000.0 /. intToFloat(clientTime() - startTime);
+					jsFillText(ctx, "~FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
+
+					if (jsLoadGlobalObject("loFps") > dFps) {
+						jsSaveGlobalObject("loFps", dFps);
+						jsSaveGlobalObject("loFpsFrame", jsLoadGlobalObject("frameCount") - 1)
+					}
+					else ();
+
+					if (jsLoadGlobalObject("hiFps") < dFps)
+						jsSaveGlobalObject("hiFps", dFps)
+					else ();
+
+                    jsSaveGlobalObject("fpsAcc", jsLoadGlobalObject("fpsAcc") +. dFps);
+					
+					var aFpsFrames = 100.0;
+					if (jsLoadGlobalObject("frameCount") > aFpsFrames) {
+						jsSaveGlobalObject("aFps", jsLoadGlobalObject("fpsAcc") /. aFpsFrames);
+						jsSaveGlobalObject("fpsAcc", 0.0);
+						jsSaveGlobalObject("frameCount", 0)
+					} else ();
+
+					jsFillText(ctx, "~AFPS: " ^^ strsub(floatToString(jsLoadGlobalObject("aFps")), 0, 7), 100.0, 10.0);
+					jsFillText(ctx, "~loFPS: " ^^ strsub(floatToString(jsLoadGlobalObject("loFps")), 0, 7), 200.0, 10.0);
+					jsFillText(ctx, "~hiFPS: " ^^ strsub(floatToString(jsLoadGlobalObject("hiFps")), 0, 7), 300.0, 10.0);
+					jsFillText(ctx, "loFPS@: " ^^ intToString(jsLoadGlobalObject("loFpsFrame")), 400.0, 10.0);
+					# /debug
+
+					var ctx2 = jsGetContext2D(getNodeById(dispCanvas));
+					jsDrawImage(ctx2, getNodeById(mainCanvas), 0.0, 0.0);
+					
+					ignore(domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block"));
+					ignore(domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none"));
+					clear(ctx2)
+		}
+		
+	}
+
+	fun drawBlock(ctx, bs) {
+		jsSetFillColor(ctx, if (bs.blockLives == 1) blockColor1 else blockColor2);
+		var r = blockRect(bs);
+		jsFillRect(ctx, r.x, r.y, r.width, r.height)
+	}
+
+	fun onKeyDown(inputState, e) {
+		var i = readIORef("inputState");
+		var iprim = i ++ [KeyDown(getCharCode(e))];
+        writeIORef("inputState", iprim);
+	}
+
+	fun onKeyUp(inputState, e) {
+		var i = readIORef("inputState");
+		var iprim = i ++ [KeyUp(getCharCode(e))];
+        writeIORef("inputState", iprim);
+	}
+
+	#
+	# PSEUDO-COROUTINES
+	#
+
+	#type MainCoroutineType = Coroutine (Event Input) GameState
+
+    fun mainGameCoroutine(gs:GameState) {
+		fun (inEvents) {
+			switch (gs) {
+				case StartScreen(1) -> (gs, mainGameCoroutine(gs))
+				case ProperGameState(other) ->
+					var plState = playerState(other.player.xPos)(inEvents).1;
+
+					var oldBallState = other.ball;
+					var oldBlockStates = other.blocks;
+
+					var (ballBlockColls, blockColls) = ballBlocksCollisions(oldBallState, oldBlockStates); # very expensive
+					
+					# expensive
+					var colls = ballWallCollisions(oldBallState) ++ ballPlayerCollisions(plState, oldBallState) ++ ballBlockColls;
+					
+					var currBallState = ballState(oldBallState)(colls).1;
+					var currBlockStates = blockStates(oldBlockStates)(blockColls).1; # very expensive
+					
+					var res = ProperGameState((player=((xPos=plState):PlayerState), ball=currBallState, blocks=currBlockStates));
+					(res, mainGameCoroutine(res))
+			}
+        }
+	}
+
+	fun mainStartScreenCoroutine(gs:GameState) {
+		fun (i) {
+			(StartScreen(1), mainStartScreenCoroutine(StartScreen(1)))
+		}
+	}
+
+	# doesn't work, isn't used
+	fun mainCoroutine(gs:GameState) {
+		fun (inEvents) {
+			var oldState = gs;
+			
+			var startEvent = coReplace(filter(fun (ke) { ke == KeyUp(restartKeyCode) }, inEvents), mainGameCoroutine(initialState));
+            var stopEvent = if (gameOver(oldState)) [mainStartScreenCoroutine(gs)] else [];
+			var state = coSwitch(mainStartScreenCoroutine(gs))((startEvent ++ stopEvent, inEvents)).1;
+			
+			(state, mainCoroutine(state))
+		}
+	}
+
+	# not a coroutine
+	fun gameOver(gs:GameState) {
+		switch(gs) {
+			case ProperGameState((player=_:PlayerState, ball=(pos=(_, ballY), speed=_):BallState, blocks=_:[BlockState])) -> ballY > screenHeight
+			case StartScreen(_) -> false
+		}
+	}
+
+	fun playerState(ps) {
+		fun (inEvents) {
+			var vel = playerVelocity()(inEvents);
+			var xPos = coBoundedIntegrate((0.0, screenWidth -. playerWidth), ps)(vel);
+			(xPos.1, playerState(xPos.1))
+		}
+	}
+
+	# not a coroutine
+	fun playerVelocity() {
+        fun (inEvents) {
+			var leftDown = keyDown(leftKeyCode)(inEvents);
+			var rightDown = keyDown(rightKeyCode)(inEvents);
+			
+			if (leftDown.1) -.playerSpeed
+			else if (rightDown.1) playerSpeed
+			else 0.0
+        }
+	}
+
+	fun ballState(bs:BallState) {
+		fun (collEvents) {
+			var vel = ballVelocity(bs.speed)(collEvents).1;
+			
+			var pos = coScan(vectorAdd, bs.pos)(vel).1;
+			
+			(((pos=pos, speed=vel):BallState), ballState((pos=pos, speed=vel)))
+		}
+	}
+
+	fun ballVelocity(bsp) {
+		fun bounce((vx, vy), coll) {
+			switch (coll) {
+				case LeftBounce -> (fabs(vx), vy)
+				case RightBounce -> (-.fabs(vx), vy)
+				case UpBounce -> (vx, fabs(vy))
+				case DownBounce -> (vx, -.fabs(vy))
+			}
+		}
+		
+		coScanE(bounce, bsp)
+	}
+
+	fun blockState(initState) {
+		fun updatef(x, y) {
+			switch (x) {
+				case Nothing -> Nothing
+				case Just(bs) -> if (bs.blockLives == 1) Nothing else Just((bs with blockLives = 1))
+			}
+		}
+	
+		coScanE(updatef, Just(initState))
+	}
+
+	fun blockStates(obs:[BlockState]) {
+		coManager(map(blockState, obs))
+	}
+
+	fun keyDown(code) {
+		fun step(old, inp) {
+			if (inp == KeyUp(code)) false
+			else if (inp == KeyDown(code)) true
+			else old
+		}
+
+		coScanE(step, false)
+	}
+
+	#
+	# HELPER FUNCTIONS
+	#
+
+	fun ballWallCollisions((pos=(ballX, ballY), speed=_):BallState) {
+		compose(fun (x) { map(second, x) }, fun (y) { filter(fun(z) { first(z) }, y) })
+			([
+				(ballX < ballRadius, LeftBounce),
+				(ballX > screenWidth -. ballRadius, RightBounce),
+				(ballY < ballRadius, UpBounce)
+			])
+	}
+
+	fun ballPlayerCollisions((playerState:Float), (ballState:(pos:(Float, Float), speed:Vector)):BallState) {
+		if (rectOverlap(playerRect(playerState), ballRect(ballState)))
+			ballRectCollisions(ballState, playerRect(playerState))
+		else []
+	}
+
+	fun ballRectCollisions((pos=(ballX, ballY), speed=_), (x=rx, y=ry, width=rw, height=rh)) {
+		compose(fun (x) { map(second, x) }, fun (x) { filter(fun(y) { first(y) }, x) })
+			([
+				(ballX >= rx +. rw, LeftBounce),
+				(ballY <= ry, DownBounce),
+				(ballY >= ry +. rh, UpBounce)
+			])
+	}
+
+	fun ballBlocksCollisions(ballState:BallState, blockStates:[BlockState]) {
+		var ballR = ballRect(ballState);
+		fun foldStep((ballC, blockC), blockState) {
+			if (rectOverlap(ballR, blockRect(blockState)))
+				(ballRectCollisions(ballState, blockRect(blockState)) ++ ballC, blockC ++ [[BlockCollision]])
+			else (ballC, blockC ++ [[]])
+		}
+
+		fold_left(foldStep, ([], []), blockStates)
+	}
+
+	fun playerRect(px) {
+		(x=px, y=playerYPos, width=playerWidth, height=playerHeight)
+	}
+
+	fun ballRect((pos=(ballX, ballY), speed=_)) {
+		(x=(ballX -. ballRadius), y=(ballY -. ballRadius), width=(2.0 *. ballRadius), height=(2.0 *. ballRadius))
+	}
+
+	fun blockRect((blockPos=(blockX, blockY), blockLives=_):BlockState) {
+		(x=blockX, y=blockY, width=blockWidth, height=blockHeight)
+	}
+
+	fun rectOverlap(r1, r2) {
+		if (r1.x >= r2.x +. r2.width) false
+		else if (r2.x >= r1.x +. r1.width) false
+		else if (r1.y >= r2.y +. r2.height) false
+		else if (r2.y >= r1.y +. r1.height) false
+		else true
+	}
+
+	#
+	# INITIALIZE
+	#
+
+	fun initialize() {
+		ignore(recv());
+		
+		var gameState = newIORef("gameState", mainGameCoroutine(initialState));
+		var inputState = newIORef("inputState", ([]: [Input]));
+		
+		jsSetOnKeyDown(containerId, fun(e) { onKeyDown(inputState, e) });
+		jsSetOnEvent(containerId, "keyup", fun(e) { onKeyUp(inputState, e) }, true);
+		jsRequestAnimationFrame(updateState);
+		#jsSetInterval(updateState, 60); # for Opera 12, instead of jsRequestAnimationFrame
+
+		# debug, approximate average FPS
+        jsSaveGlobalObject("frameCount", 0);
+		jsSaveGlobalObject("aFps", 0.0);
+		jsSaveGlobalObject("fpsAcc", 0.0);
+		jsSaveGlobalObject("loFps", 1000000.0);
+		jsSaveGlobalObject("hiFps", 0.0);
+		jsSaveGlobalObject("loFpsFrame", 0);
+		#/debug
+
+		ignore(domSetStyleAttrFromRef(getNodeById("info"), "display", "none"))
+	}
+
+	var initializeProc = spawn { initialize() };
+
+	page
+		<html>
+			<head>
+
+            <style>
+
+				#info {{
+					font-size: 36px;
+				}}
+
+				#{stringToXml(containerId)} {{
+					position: relative;
+					width: 600px;
+					height: 500px;
+					background-color: #ddd
+				}}
+
+				#{stringToXml(canvas2Id)} {{
+					display: none;
+					position: absolute;
+					top: 0px;
+					left: 0px;
+				}}
+
+				#{stringToXml(canvasId)} {{
+					display: block;
+					position: absolute;
+					top: 0px;
+					left: 0px;
+				}}
+			
+            </style>
+			</head>
+
+			<body>
+				<div id="container">
+					<h1>Breakout in Links</h1>
+
+					<div id="{containerId}" tabindex="1"
+						l:onfocus="{initializeProc ! 0}">
+						<canvas id="{canvas2Id}" width="600" height="500"></canvas>
+						<canvas id="{canvasId}" width="600" height="500"></canvas>
+						<div id="info">Click this rectangle to start the game.</div>
+					</div>
+					<div id="msg"></div> 
+				</div>
+			</body>
+		</html>
+}
+
+main()
