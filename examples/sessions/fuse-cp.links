@@ -2,30 +2,17 @@ typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
 
 sig calc : (Calc) ~> EndBang
 fun calc(s) {
-  offer (s) {
-    case Add(s) ->
-      var (x,s) = receive(s);
-      var (y,s) = receive(s);
-      send(x+y,s)
-    case Mul(s) ->
-      var (x,s) = receive(s);
-      var (y,s) = receive(s);
-      send(x*y,s)
-  }
+  <| offer s {
+       case Add -> s(x).s(y).s[x+y].s[]
+       case Mul -> s(x).s(y).s[x*y].s[]
+  } |>
 }
-
-#sig user : (~Calc, !Int.EndBang) ~> EndBang
-#fun user(c, return) {
-#  <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
-#}
 
 sig user : (~Calc, !Int.EndBang) ~> EndBang
 fun user(c, return) {
-  var c = select Mul c;
-  var (result, c) = receive(send(6,send(7,c)));
-  wait(c);
-  send(result, return)
+  <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
 }
 
-run (fun (return) {<| nu c.(nu s.(s <-> c | {calc(s)}) | {user(c,return)}) |>})
-#run (fun (return) {<| nu s.(nu c.(s <-> c | {user(c,return)}) | {calc(s)}) |>})
+var x = run (fun (return) {<| nu c.(nu s.(s <-> c | {calc(s)}) | {user(c,return)}) |>});
+var y = run (fun (return) {<| nu s.(nu c.(s <-> c | {user(c,return)}) | {calc(s)}) |>});
+(x, y)

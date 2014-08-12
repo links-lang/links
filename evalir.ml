@@ -93,7 +93,7 @@ module Session = struct
       Queue.push msg (Hashtbl.find buffers p)
 
   let rec receive p =
-    (* Debug.print ("Receiving on: " ^ string_of_int c); *)
+    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
     let buf = Hashtbl.find buffers p in
       if not (Queue.is_empty buf) then
         Some (Queue.pop buf)
@@ -465,27 +465,20 @@ module Eval = struct
               switch_context env
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
+      let unblock p =
+        match Session.unblock p with
+        | Some pid -> (*Debug.print("unblocked: "^string_of_int p); *)
+                      Proc.awaken pid
+        | None     -> () in
       Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
       let (out1, in1) = Session.unbox_chan chanl in
       let (out2, in2) = Session.unbox_chan chanr in
       (* HACK *)
       let end_bang = `Variable (Env.String.lookup (val_of !Lib.prelude_nenv) "makeEndBang") in
         Session.fuse (out1, in1) (out2, in2);
-        begin
-          match Session.unblock out1 with
-            Some pid -> Proc.awaken pid
-          | None     -> ();
-          match Session.unblock in1 with
-            Some pid -> Proc.awaken pid
-          | None     -> ();
-          match Session.unblock out2 with
-            Some pid -> Proc.awaken pid
-          | None     -> ();
-          match Session.unblock in2 with
-            Some pid -> Proc.awaken pid
-          | None     -> ()
-        end;
-       apply cont env (value env end_bang, [])
+        unblock out1;
+        unblock out2;
+        apply cont env (value env end_bang, [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
 	apply_cont cont env (Lib.apply_pfun n args)

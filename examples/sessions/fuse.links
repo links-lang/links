@@ -14,24 +14,14 @@ fun calc(s) {
   }
 }
 
-#sig user : (~Calc, !Int.EndBang) ~> EndBang
-#fun user(c, return) {
-#  var c = select Mul c;
-#  var (result, c) = receive(send(6,send(7,c)));
-#  wait(c);
-#  send(result, return)
-#}
-
 sig user : (~Calc, !Int.EndBang) ~> EndBang
 fun user(c, return) {
-  <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
+  var c = select Mul c;
+  var (result, c) = receive(send(6,send(7,c)));
+  wait(c);
+  send(result, return)
 }
 
-
-fun main() {
-  var x = run (fun (return) {link(linfork(linfun (s) {user(s, return)}), fork(calc))});
-  var y = 42; # run (fun (return) {link(fork(calc), linfork(linfun (s) {user(s, return)}))});
-  (x, y)
-}
-
-main()
+var x = run (fun (return) {link(linfork(linfun (s) {user(s, return)}), fork(calc))});
+var y = run (fun (return) {link(fork(calc), linfork(linfun (s) {user(s, return)}))});
+(x, y)
