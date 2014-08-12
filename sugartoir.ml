@@ -715,7 +715,7 @@ struct
           | `InfixAppl ((tyargs, `Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name "!"), e1, e2) ->
-              I.apply (instantiate "send" tyargs, [ev e1; ev e2])
+              I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
           | `InfixAppl ((tyargs, `Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | `InfixAppl ((tyargs, `Name n), e1, e2) ->

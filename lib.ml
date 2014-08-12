@@ -291,7 +291,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Xml, [(String, String)]) -> Xml",
    PURE);
 
-  "send",
+  "Send",
   (p2 (fun pid msg ->
          assert(false)), (* Now handled in evalir.ml *)
    datatype "(Process ({hear:a|_}), a) ~> ()",

@@ -49,7 +49,7 @@ let type_binary_op env tycon_env =
       let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
         `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
-  | `Name "!"     -> TyEnv.lookup env "send"
+  | `Name "!"     -> TyEnv.lookup env "Send"
   | `Name n       -> TyEnv.lookup env n
 
 let fun_effects t pss =

@@ -1013,7 +1013,7 @@ let type_binary_op ctxt =
         ([`Type a; `Row eff],
          `Function (Types.make_tuple_type [a; a], eff, `Primitive `Bool),
          StringMap.empty)
-  | `Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "send")
+  | `Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | `Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
 
 (** close a pattern type relative to a list of patterns

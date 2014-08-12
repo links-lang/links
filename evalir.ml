@@ -333,7 +333,7 @@ module Eval = struct
                 computation env cont body
           | None -> eval_error "Error looking up recursive function definition"
         end
-    | `PrimitiveFunction ("send",_), [pid; msg] ->
+    | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode then
            client_call "_sendWrapper" cont [pid; msg]
         else
