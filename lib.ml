@@ -1198,6 +1198,84 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() -> Float",
    IMPURE);
 
+	"setCookie",
+  (p2 (fun cookieName cookieVal ->
+         let cookieName = unbox_string cookieName in
+         let cookieVal = unbox_string cookieVal in
+           http_response_headers :=
+             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
+           `Record []
+             (* Note: perhaps this should affect cookies returned by
+                getcookie during the current request. *)),
+   datatype "(String, String) ~> ()",
+  IMPURE);
+
+	(* LINKS GAME LIBRARY *)
+
+	(* GENERAL JAVASCRIPT / EVENTS *)
+
+	"jsSetInterval",
+	(`Client, datatype "(() ~e~> (), Int) ~e~> ()", IMPURE);
+
+	"jsRequestAnimationFrame",
+	(`Client, datatype "(() ~e~> ()) ~e~> ()", IMPURE);
+
+	"jsSave",
+	(`Client, datatype "(a) ~> ()", IMPURE);
+
+	"jsRestore",
+	(`Client, datatype "(a) ~> ()", IMPURE);
+
+	"jsSetOnKeyDown",
+	(`Client, datatype "(String, (Event) ~e~> ()) ~e~> ()", IMPURE);
+
+	"jsSetOnEvent",
+	(`Client, datatype "(String, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
+
+	"jsSetOnLoad",
+	(`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
+
+	(* GLOBAL STATE MANIPULATION *)
+
+	"jsSaveGlobalObject",
+	(`Client, datatype "(String, a) ~> ()", IMPURE);
+
+	(* maybe that could be pure *)
+	"jsLoadGlobalObject",
+	(`Client, datatype "(String) ~> a", IMPURE);
+
+	(* CANVAS SPECIFIC *)
+
+	"jsGetContext2D",
+	(`Client, datatype "(DomNode) ~> a", IMPURE); (* the a here should be something like Context2D *)
+
+	"jsFillText",
+	(`Client, datatype "(a, String, Float, Float) ~> ()", IMPURE);
+
+	"jsDrawImage",
+	(`Client, datatype "(a, DomNode, Float, Float) ~> ()", IMPURE);
+
+	"jsFillRect",
+	(`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
+
+	"jsFillCircle",
+	(`Client, datatype "(a, Float, Float, Float) ~> ()", IMPURE);
+
+	"jsSetFillColor",
+	(`Client, datatype "(a, String) ~> ()", IMPURE);
+
+	"jsClearRect",
+	(`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
+
+	"jsCanvasWidth",
+	(`Client, datatype "(a) ~> Float", IMPURE);
+
+	"jsCanvasHeight",
+	(`Client, datatype "(a) ~> Float", IMPURE);
+
+	(* END OF LINKS GAME LIBRARY *)
+
+
     "dumpTypes",
   (`Server (p1 (fun code ->
                   try
