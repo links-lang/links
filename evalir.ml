@@ -2,28 +2,37 @@ open Notfound
 
 open Utility
 
+(* If true, then wait for all child processes to finish before
+   terminating *)
+let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", true, `System)
+
 module Session = struct
-  type apid = int
-  type cid = int
-  type pid = int
-  type chan = cid * cid
+  type apid = int              (* access point id *)
+  type portid = int
+  type pid = int               (* process id *)
+  type chan = portid * portid  (* a channel is a pair of ports *)
 
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
 
-  let flip_chan (c, d) = (d, c)
+  let flip_chan (outp, inp) = (inp, outp)
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
-  let channels = (Hashtbl.create 10000 : (cid, Value.t Queue.t) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
 
-  let blocked = (Hashtbl.create 10000 : (cid, pid) Hashtbl.t)
+  let forward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+  let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
 
-  let block cid pid = Hashtbl.add blocked cid pid
-  let unblock cid =
-    if Hashtbl.mem blocked cid then
+  let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
+
+  let block portid pid = Hashtbl.add blocked portid pid
+  let rec unblock portid =
+    if Hashtbl.mem forward portid then
+      unblock (Hashtbl.find forward portid)
+    else if Hashtbl.mem blocked portid then
       begin
-        let pid = Hashtbl.find blocked cid in
-        Hashtbl.remove blocked cid;
-        Some pid
+        let pid = Hashtbl.find blocked portid in
+        Hashtbl.remove blocked portid;
+          Some pid
       end
     else
       None
@@ -33,17 +42,17 @@ module Session = struct
       fun () -> incr i; !i
 
   let fresh_apid = generator ()
-  let fresh_cid = generator ()
+  let fresh_portid = generator ()
   let fresh_chan () =
-    let c = fresh_cid () in
-    let d = fresh_cid () in
-      (c, d)
+    let outp = fresh_portid () in
+    let inp = fresh_portid () in
+      (outp, inp)
 
   let new_channel () =
-    let (c, d) = fresh_chan () in
-      Hashtbl.add channels c (Queue.create ());
-      Hashtbl.add channels d (Queue.create ());
-      (c, d)
+    let (outp, inp) as c = fresh_chan () in
+      Hashtbl.add buffers outp (Queue.create ());
+      Hashtbl.add buffers inp (Queue.create ());
+      c
 
   let new_access_point () =
     let apid = fresh_apid () in
@@ -53,43 +62,63 @@ module Session = struct
   let accept : apid -> chan * bool =
     fun apid ->
       let state = Hashtbl.find access_points apid in
-      let (chan, state', blocked) =
+      let (c, state', blocked) =
         match state with
-        | Balanced                   -> let chan = new_channel () in (chan, Accepting [chan], true)
-        | Accepting chans            -> let chan = new_channel () in (chan, Accepting (chans @ [chan]), true)
-        | Requesting [chan]          -> (chan, Balanced, false)
-        | Requesting (chan :: chans) -> (chan, Requesting chans, false)
+        | Balanced             -> let c = new_channel () in (c, Accepting [c], true)
+        | Accepting cs         -> let c = new_channel () in (c, Accepting (cs @ [c]), true)
+        | Requesting [c]       -> (c, Balanced, false)
+        | Requesting (c :: cs) -> (c, Requesting cs, false)
       in
         Hashtbl.replace access_points apid state';
-        chan, blocked
+        c, blocked
 
   let request : apid -> chan * bool =
     fun apid ->
       let state = Hashtbl.find access_points apid in
-      let (chan, state', blocked) =
+      let (c, state', blocked) =
         match state with
-        | Balanced                  -> let chan = new_channel () in (chan, Requesting [chan], true)
-        | Requesting chans          -> let chan = new_channel () in (chan, Requesting (chans @ [chan]), true)
-        | Accepting [chan]          -> (chan, Balanced, false)
-        | Accepting (chan :: chans) -> (chan, Accepting chans, false)
+        | Balanced            -> let c = new_channel () in (c, Requesting [c], true)
+        | Requesting cs       -> let c = new_channel () in (c, Requesting (cs @ [c]), true)
+        | Accepting [c]       -> (c, Balanced, false)
+        | Accepting (c :: cs) -> (c, Accepting cs, false)
       in
         Hashtbl.replace access_points apid state';
-        flip_chan chan, blocked
+        flip_chan c, blocked
 
-  (* TODO: be consistent about checking lookup operations *)
-  exception UnknownChannelID of cid
+  let rec send msg p =
+    (* Debug.print ("Sending along: " ^ string_of_int p); *)
+    if Hashtbl.mem forward p then
+      send msg (Hashtbl.find forward p)
+    else
+      Queue.push msg (Hashtbl.find buffers p)
 
-  let send msg c =
-    try
-      Queue.push msg (Hashtbl.find channels c)
-    with Notfound.NotFound _ -> raise (UnknownChannelID c)
-
-  let receive c =
-    let channel = Hashtbl.find channels c in
-      if not (Queue.is_empty channel) then
-        Some (Queue.pop channel)
+  let rec receive p =
+    (* Debug.print ("Receiving on: " ^ string_of_int c); *)
+    let buf = Hashtbl.find buffers p in
+      if not (Queue.is_empty buf) then
+        Some (Queue.pop buf)
       else
-        None
+        if Hashtbl.mem backward p then
+          receive (Hashtbl.find backward p)
+        else
+          None
+      
+  let fuse (out1, in1) (out2, in2) =
+    let forward inp outp =
+      (* Debug.print ("Forwarding from: "^string_of_int inp^ " to: " ^ string_of_int outp); *)
+      Hashtbl.add backward outp inp;
+      Hashtbl.add forward inp outp
+    in
+      forward in1 out2;
+      forward in2 out1
+
+  let unbox_port = Num.int_of_num -<- Value.unbox_int
+  let unbox_chan' chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (Value.unbox_int outp, Value.unbox_int inp)
+  let unbox_chan chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (unbox_port outp, unbox_port inp)
 end
 
 
@@ -154,6 +183,8 @@ module Eval = struct
      It is currently used for running pure functions. *)
   let atomic = ref false
 
+  let toplevel_val = ref None
+
   let rec switch_context env =
     assert (not (!atomic));
     match Proc.pop_ready_proc() with
@@ -169,7 +200,9 @@ module Eval = struct
           (* Outside web mode, this case indicates deadlock:
                all running processes are blocked. *)
           else
-            exit 0
+            match !toplevel_val with
+            | None -> exit 0
+            | Some v -> raise (TopLevel v)
 
   and scheduler env state stepf =
     if !atomic || Proc.singlethreaded() then stepf()
@@ -347,6 +380,7 @@ module Eval = struct
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
       let (c, d), blocked = Session.accept apid in
+      Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
       let c' = Num.num_of_int c in
       let d' = Num.num_of_int d in
         if blocked then
@@ -375,6 +409,7 @@ module Eval = struct
     | `PrimitiveFunction ("request", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
       let (c, d), blocked = Session.request apid in
+      Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
       let c' = Num.num_of_int c in
       let d' = Num.num_of_int d in
         if blocked then
@@ -402,10 +437,10 @@ module Eval = struct
           end
     | `PrimitiveFunction ("give", _), [v; chan] ->
       Debug.print ("giving: " ^ Value.string_of_value v ^ " to: " ^ Value.string_of_value chan);
-      let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
-      Session.send v c;
+      let (outp, _) = Session.unbox_chan chan in
+      Session.send v outp;
       begin
-        match Session.unblock c with
+        match Session.unblock outp with
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
@@ -413,23 +448,42 @@ module Eval = struct
     | `PrimitiveFunction ("grab", _), [chan] ->
       begin
         Debug.print("grabbing from: " ^ Value.string_of_value chan);
-        let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
-        let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
-        let d = Num.int_of_num d' in
-          match Session.receive d with
+        let (out', in') = Session.unbox_chan' chan in
+        let inp = Num.int_of_num in' in
+          match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
             apply_cont cont env (Value.box_pair v chan)
           | None ->
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int c'))
-                                                                           (StringMap.add "2" (`Constant (`Int d'))
+              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int out'))
+                                                                           (StringMap.add "2" (`Constant (`Int in'))
                                                                             StringMap.empty), None)])
             in
               Proc.block_current (grab_frame::cont, `Record []);
-              Session.block d (Proc.get_current_pid ());
+              Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
+    | `PrimitiveFunction ("fuse", _), [chanl; chanr] ->
+      Debug.print ("fusing channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
+      let (out1, in1) = Session.unbox_chan chanl in
+      let (out2, in2) = Session.unbox_chan chanr in
+        Session.fuse (out1, in1) (out2, in2);
+        begin
+          match Session.unblock out1 with
+            Some pid -> Proc.awaken pid
+          | None     -> ();
+          match Session.unblock in1 with
+            Some pid -> Proc.awaken pid
+          | None     -> ();
+          match Session.unblock out2 with
+            Some pid -> Proc.awaken pid
+          | None     -> ();
+          match Session.unblock in2 with
+            Some pid -> Proc.awaken pid
+          | None     -> ()
+        end;
+        apply_cont cont env (`Record [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
 	apply_cont cont env (Lib.apply_pfun n args)
@@ -443,10 +497,19 @@ module Eval = struct
   and apply_cont cont env v : Value.t =
     let stepf() =
       match cont with
-        | [] when !atomic || Proc.current_is_main() ->
+        | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
+        | [] when Proc.current_is_main() ->
+            if not (Settings.get_value wait_for_child_processes) || Proc.singlethreaded () then
+              raise (TopLevel (Value.globals env, v))
+            else
+              begin
+                Debug.print ("Finished top level process (other processes still active)");
+                toplevel_val := Some (Value.globals env, v);
+                switch_context env
+              end
         | [] ->
-          Debug.print ("Finished process");
+          Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
           switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
@@ -606,32 +669,32 @@ module Eval = struct
         apply_cont cont env (`Record [])
     | `CallCC f                   ->
       apply cont env (value env f, [`Continuation cont])
+    (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
-      let c = (Num.int_of_num (Value.unbox_int (fst (Value.unbox_pair chan)))) in
-      Session.send (Value.box_string name) c;
+      let (outp, _) = Session.unbox_chan chan in
+      Session.send (Value.box_string name) outp;
       begin
-        match Session.unblock c with
+        match Session.unblock outp with
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
       apply_cont cont env chan
-    (* Session stuff *)
     | `Choice (v, cases) ->
       begin
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let c' = Value.unbox_int (fst (Value.unbox_pair chan)) in
-        let d' = Value.unbox_int (snd (Value.unbox_pair chan)) in
-          match Session.receive (Num.int_of_num d') with
+        let (out', in') = Session.unbox_chan' chan in
+        let inp = Num.int_of_num in' in
+          match Session.receive inp with
           | Some v ->
             Debug.print ("chose: " ^ Value.string_of_value v);
             let label = Value.unbox_string v in
               begin
                 match StringMap.lookup label cases with
-                | Some ((var,_), c) ->
-                  computation (Value.bind var (chan, `Local) env) cont c
+                | Some ((var,_), body) ->
+                  computation (Value.bind var (chan, `Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
             (* apply_cont cont env (Value.box_pair v chan) *)
@@ -640,7 +703,7 @@ module Eval = struct
               Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
               Proc.block_current (choice_frame::cont, `Record []);
-              Session.block (Num.int_of_num d') (Proc.get_current_pid ());
+              Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
     (*****************)

@@ -252,6 +252,9 @@ class map =
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
           in `Receive (_x, _x_i1)
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let _x = o#phrase _x in *)
+      (*     let _x_i1 = o#phrase _x_i1 in `Fuse ((_x, _x_i1)) *)
       | `Select ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#phrase _x_i1
@@ -267,10 +270,6 @@ class map =
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
           in `Offer (_x, _x_i1, _x_i2)
       | `CP p -> `CP (o#cp_phrase p)
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let _x = o#binder _x in *)
-      (*     let _x_i1 = o#phrase _x_i1 in *)
-      (*     `Fork (_x, _x_i1) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -353,6 +352,7 @@ class map =
       | `Give (c, e, p) -> `Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
       | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
       | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | `Fuse (c, d) -> `Fuse (c, d)
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
@@ -793,6 +793,10 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let o = o#phrase _x in *)
+      (*     let o = o#phrase _x_i1 *)
+      (*     in o *)
       | `Select ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#phrase _x_i1
@@ -807,9 +811,6 @@ class fold =
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
       | `CP p -> o#cp_phrase p
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let o = o#binder _x in *)
-      (*     o#phrase _x_i1 *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
@@ -882,6 +883,7 @@ class fold =
       | `Give (_c, e, p) -> (o#option (fun o -> o#phrase) e)#cp_phrase p
       | `Select (_c, _l, p) -> o#cp_phrase p
       | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | `Fuse (_c, _d) -> o
       | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
@@ -1350,6 +1352,9 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
           in (o, (`Receive ((_x, _x_i1))))
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let (o, _x) = o#phrase _x in *)
+      (*     let (o, _x_i1) = o#phrase _x in (o, (`Fuse(_x, _x_i1))) *)
       | `Select ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#phrase _x_i1
@@ -1367,10 +1372,6 @@ class fold_map =
       | `CP p ->
          let (o, p) = o#cp_phrase p in
          o, `CP p
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let (o, _x) = o#binder _x in *)
-      (*     let (o, _x_i1) = o#phrase _x_i1 in *)
-      (*     (o, `Fork (_x, _x_i1)) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1478,6 +1479,8 @@ class fold_map =
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
          o, `Offer (c, bs)
+      | `Fuse (c, d) ->
+         o, `Fuse (c, d)
       | `Comp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in

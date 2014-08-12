@@ -680,6 +680,7 @@ class transform (env : Types.typing_environment) =
       let (o, p, t) = o#cp_phrasenode p in
       (o, (p, pos), t)
 
+    (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
       | `Unquote (bs, e) ->
          let envs = o#backup_envs in
@@ -721,6 +722,7 @@ class transform (env : Types.typing_environment) =
                                            (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
          let (cases, t :: ts) = List.split cases in
          o, `Offer (b, cases), t
+      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
       | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in

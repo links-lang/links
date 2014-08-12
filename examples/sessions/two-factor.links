@@ -1,0 +1,114 @@
+typename Data = String;
+typename Error = String;
+typename Username = String;
+typename Password = String;
+typename User = (name:Username, password:Password);
+
+typename Checker(s::Session) = [+|Accept:s, Reject:!Error.End|+];
+typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.End));
+
+# We could use this slightly more general type for reportError:
+#
+#   typename ErrorReporter(r::Row(Any, Session)) = [+|Reject:!Error.End|r|+];
+
+# The unrolled type of TwoFactor:
+#
+#   typename TwoFactor = ?User.[+|Accept:!Int.?Int.[+|Accept:!Data.End,
+#                                                     Reject:!Error.End|+],
+#                                 Reject:!Error.End|+];
+# and its dual:
+#
+#           ~TwoFactor = !User.[&|Accept:?Int.!Int.[&|Accept:?Data.End,
+#                                                     Reject:?Error.End|&],
+#                                 Reject:?Error.End|&];
+
+sig validUser : (User) ~> Bool
+fun validUser(user) {
+  switch (user.name) {
+    case "me" -> true
+    case _    -> false
+  }
+}
+
+sig validHash : (Int, Int) ~> Bool
+fun validHash(h, nonce) {
+  h == 2 * nonce
+}
+
+sig generateNonce : () ~> Int
+fun generateNonce() {
+  floatToInt(random() *. 65536.0)
+}
+
+sig reportError : (Error, Checker(s::Session)) ~> ()
+fun reportError(e, s) {
+  var s = select Reject s;
+  ignore(give(e, s))
+}
+
+sig serve : (TwoFactor, Data) ~> ()
+fun serve(s, data) {
+  var (user, s) = grab(s);
+  if (validUser(user)) {
+    var s = select Accept s;
+    var nonce = generateNonce();
+    var s = give(nonce, s);
+    var (h, s) = grab(s);
+    if (validHash(h, nonce)) {
+      var s = select Accept s;
+      ignore(give(data, s))
+    } else {
+      reportError("Invalid hash", s);
+    }
+  } else {
+    reportError("Invalid username or password", s)
+  }
+}
+
+sig user1 : (~TwoFactor) ~> Data
+fun user1(c) {
+  var c = give((name="me", password="foo"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = grab(c);
+                      var c = give(2*x, c);
+                      offer (c) {
+                        case Accept(c) -> grab(c).1
+                        case Reject(c) -> error(grab(c).1)
+                      }
+    case Reject(c) -> error(grab(c).1)
+  }
+}
+
+sig user2 : (~TwoFactor) ~> Data
+fun user2(c) {
+  var c = give((name="you", password="bar"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = grab(c);
+                      var c = give(2*x, c);
+                      offer (c) {
+                        case Accept(c) -> grab(c).1
+                        case Reject(c) -> error(grab(c).1)
+                      }
+    case Reject(c) -> error(grab(c).1)
+  }
+}
+
+sig user3 : (~TwoFactor) ~> Data
+fun user3(c) {
+  var c = give((name="me", password="baz"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = grab(c);
+                      var c = give(-1, c);
+                      offer (c) {
+                        case Accept(c) -> grab(c).1
+                        case Reject(c) -> error(grab(c).1)
+                      }
+    case Reject(c) -> error(grab(c).1)
+  }
+}
+
+fun main() {
+  user1(fork(fun (s) {serve(s, "secret data")}));
+}
+
+main()

@@ -184,6 +184,7 @@ let datatype d = d, None
 %token LBRACKETAMPBAR BARAMPRBRACKET
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
+%token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
@@ -395,11 +396,15 @@ cp_label:
 | CONSTRUCTOR                                                  { $1 }
 
 cp_case:
-| cp_label COLON cp_expression                                 { $1, $3 }
+| CASE cp_label RARROW cp_expression                           { $2, $4 }
 
 cp_cases:
 | cp_case                                                      { [$1] }
-| cp_case SEMICOLON cp_cases                                   { $1 :: $3 }
+| cp_case cp_cases                                             { $1 :: $2 }
+
+perhaps_cp_cases:
+| /* empty */                                                  { [] }
+| cp_cases                                                     { $1 }
 
 perhaps_name:
 |                                                              { None }
@@ -413,8 +418,9 @@ cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
 | cp_name LBRACKET perhaps_exp RBRACKET DOT cp_expression      { `Give ((fst3 $1, None), $3, $6), pos () }
-| CASE cp_name LBRACE cp_cases RBRACE                          { `Offer ($2, $4), pos () }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
+| cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
 
 primary_expression:

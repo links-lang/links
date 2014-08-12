@@ -23,4 +23,13 @@ fun user(s) {
   down(x)
 }
 
+<<<<<<< HEAD
 user(fork(calc))
+=======
+fun main() {
+  var c = fork (calc);
+  user(c)
+}
+
+main()
+>>>>>>> sessions

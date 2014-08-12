@@ -1,5 +1,6 @@
 typename Calc = [&|Add:?\/Int.?\/Int.!/\Int.EndBang, Mul:?\/Int.?\/Int.!/\Int.EndBang|&];
 
+<<<<<<< HEAD
 sig calc : Quote(Calc)
 val calc =
   <| s.
@@ -10,6 +11,14 @@ val calc =
        case Mul -> s(x).x \/ xx.
                    s(y).y \/ yy.
                    s[product].(product /\ xx*yy | s[]) } |>
+=======
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  <| offer s {
+       case Add -> s(x).s(y).s[x+y].{()}
+       case Mul -> s(x).s(y).s[x*y].{()}} |>
+}
+>>>>>>> sessions
 
 sig user : Quote(~Calc, /\Int)
 val user =

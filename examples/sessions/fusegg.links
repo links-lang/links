@@ -1,0 +1,8 @@
+fun main() {
+  fuse(fork (fun (s) {ignore(give(42, s))}),
+       fork (fun (c) {print(intToString(grab(c).1))}));
+  fuse(fork (fun (c) {print(intToString(grab(c).1))}),
+       fork (fun (s) {ignore(give(42, s))}))
+}
+
+main()

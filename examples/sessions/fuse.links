@@ -1,0 +1,36 @@
+typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var _ = give(x+y,s);
+      ()
+    case Mul(s) ->
+      var (x,s) = grab(s);
+      var (y,s) = grab(s);
+      var _ = give(x*y,s);
+      ()
+  };
+}
+
+sig user : (AP(?Int.End), ~Calc) ~> ()
+fun user(ap, c) {
+  var c = select Mul c;
+  var out = request(ap);
+  var result = grab(give(6,give(7,c))).1;
+  ignore(give(result, out))
+}
+
+fun main() {
+  var ap = new ();
+  fuse(fork(fun (s) {user(ap, s)}), fork(calc));
+  fuse(fork(calc), fork(fun (s) {user(ap, s)}));
+  var x = grab(accept(ap)).1;
+  var y = grab(accept(ap)).1;
+  (x, y)
+}
+
+main()

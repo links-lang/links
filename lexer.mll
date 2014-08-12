@@ -267,8 +267,9 @@ rule lex ctxt nl = parse
   | '{'                                 { ctxt#push_lexer (lex ctxt nl); LBRACE }
   | "|}"                                { ctxt#pop_lexer (* fall back *); BARRBRACE }
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
-  | "<-"                                { LARROW }
+  | "<->"                               { LRARROW }
   | "<--"                               { LLARROW }
+  | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
