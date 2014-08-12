@@ -416,7 +416,8 @@ perhaps_exp:
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
-| cp_name LBRACKET perhaps_exp RBRACKET DOT cp_expression      { `Give ((fst3 $1, None), $3, $6), pos () }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ((fst3 $1, None), Some $3, $6), pos () }
+| cp_name LBRACKET RBRACKET                                    { `GiveNothing $1, pos () }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
 | cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }

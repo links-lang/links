@@ -1,19 +1,22 @@
-typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
 
-sig calc : (Calc) ~> ()
+sig calc : (Calc) ~> EndBang
 fun calc(s) {
   <| offer s {
-       case Add -> s(x).s(y).s[x+y].{()}
-       case Mul -> s(x).s(y).s[x*y].{()}} |>
+       case Add -> s(x).s(y).s[x+y].s[]
+       case Mul -> s(x).s(y).s[x*y].s[] } |>
 }
 
-sig user : (~Calc) ~> Int
-fun user(s) {
-  <| Mul s.s[6].s[7].s(z).{z} |>
+sig user : (~Calc,!Int.EndBang) ~> EndBang
+fun user(s, return) {
+  <| Mul s.s[6].s[7].s(z).s().return[z].return[] |>
 }
 
 fun main() {
-  <| nu s.({calc(s)}|{user(s)}) |>
+  var c = fork(fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>});
+  var (x, c) = grab(c);
+  wait(c);
+  x
 }
 
 main()

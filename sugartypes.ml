@@ -264,6 +264,7 @@ and cp_phrasenode = [
 | `Unquote of binding list * phrase
 | `Grab of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
 | `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+| `GiveNothing of binder
 | `Select of binder * string * cp_phrase
 | `Offer of binder * (string * cp_phrase) list
 | `Fuse of binder * binder
@@ -459,6 +460,7 @@ struct
     | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
     | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
     | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
+    | `GiveNothing (c, _, _) -> singleton c
     | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
     | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
