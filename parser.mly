@@ -230,7 +230,6 @@ let datatype d = d, None
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
-%type <Sugartypes.datatype> session_type
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
@@ -931,7 +930,12 @@ forall_datatype:
 | session_datatype                                             { $1 }
 
 session_datatype:
-| session_type_top                                             { $1 }
+| BANG datatype DOT datatype                                   { `Output ($2, $4) }
+| QUESTION datatype DOT datatype                               { `Input ($2, $4) }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
+| TILDE datatype                                               { `Dual $2 }
+| END                                                          { `End }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -944,7 +948,6 @@ primary_datatype:
                                                                    | [t] -> t
                                                                    | ts  -> `Tuple ts }
 | LPAREN rfields RPAREN                                        { `Record $2 }
-
 | TABLEHANDLE
      LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
 /* | TABLEHANDLE datatype perhaps_table_constraints               { `Table ($2, $3) } */
@@ -963,34 +966,7 @@ primary_datatype:
                                                                    | "Database"-> `DB
                                                                    | t         -> `TypeApplication (t, [])
                                                                }
-
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
-
-session_type_top:
-| BANG datatype DOT session_type                               { `Output ($2, $4) }
-| QUESTION datatype DOT session_type                           { `Input ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
-| TILDE session_type                                           { `Dual $2 }
-| END                                                          { `End }
-| CONSTRUCTOR                                                  { `TypeApplication ($1, []) }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
-
-
-session_type:
-| session_type_top                                             { $1 }
-| session_type_var                                             { $1 }
-| kinded_session_type_var                                      { $1 }
-| MU VARIABLE DOT session_type                                 { `Mu ($2, $4) }
-
-
-session_type_var:
-| VARIABLE                                                     { `TypeVar ($1, (`Any, `Any), `Rigid) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Any, `Any), `Flexible) }
-/* TODO: support underscore and percent; rationalise parsing of type variables */
-
-kinded_session_type_var:
-| session_type_var subkind                                     { attach_session_subkind (pos()) ($1, $2) }
 
 type_var:
 | VARIABLE                                                     { `TypeVar ($1, (`Unl, `Any), `Rigid) }
@@ -1054,7 +1030,11 @@ rfields:
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
-| record_label                                                 { $1, `Present `Unit }
+/* The following sugar is tempting, but it leads to a conflict. Is
+   the type (a,b,c) a record with fields a, b, c or a polymorphic tuple
+   with type variables a, b, c
+*/
+/*| record_label                                                 { $1, `Present `Unit } */
 | record_label fieldspec                                       { $1, $2 }
 
 record_label:
