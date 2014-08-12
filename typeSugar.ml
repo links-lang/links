@@ -265,6 +265,7 @@ sig
 
   val selection : griper
 
+  val cp_unquote : griper
   val cp_grab : griper
   val cp_give : griper
   val cp_select : griper
@@ -870,6 +871,13 @@ tab () ^ code (show_type lt) ^ nl () ^
 "while the subsequent patterns have type" ^ nl () ^
 tab () ^ code (show_type rt))
 
+    let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+A spliced expressions must have
+EndBang type, but has type" ^ nl () ^
+tab () ^ code (show_type lt) ^ nl () ^
+"instead.")
+
     let cp_grab ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
 The channel in a receive expression must have input type, but has type" ^ nl () ^
@@ -918,7 +926,8 @@ tab() ^ code (show_type rt))
 
     let cp_comp_left ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-The left-hand computation in a composition must have unit type, but has type" ^ nl () ^
+The left-hand computation in a composition must have
+EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type rt) ^ nl () ^
 "instead.")
 
@@ -2835,6 +2844,7 @@ and type_cp (context : context) = fun (p, pos) ->
     | `Unquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
+       unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
        `Unquote (bindings, e), t, usage_builder u
     | `Grab ((c, _), None, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
@@ -2901,6 +2911,10 @@ and type_cp (context : context) = fun (p, pos) ->
             end
          | _ -> assert false in
        `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
+    | `GiveNothing (c, _, binder_pos) ->
+       let _, t, _ = type_check context (`Var c, binder_pos) in
+       unify ~pos:pos ~handle:Gripers.cp_give (t, Types.make_endbang_type);
+       `GiveNothing (c, Some t, binder_pos), t, StringMap.singleton c 1
     | `Select ((c, _, binder_pos), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let s = Types.fresh_session_variable `Any in
@@ -2938,7 +2952,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
-       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.unit_type, t);
+       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
        `Comp ((c, Some s, binder_pos), left, right), t', merge_usages [u; u'] in
   (p, pos), t, u
 

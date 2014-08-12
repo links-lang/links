@@ -1033,27 +1033,6 @@ fun sendSuspend(pagef) {
 }
 
 #### SESSION TYPING STUFF ####
-sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> ()) ~e~> ~s
-fun fork(f) {
-  var ap = new();
-  var _ = spawn { f(accept(ap)) };
-  request(ap)
-}
-
-
-sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
-fun linfork(f) {
-  var ap = new();
-  var _ = spawn { f(accept(ap)) };
-  request(ap)
-}
-
-sig replicate : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
-fun replicate(ap, f) {
-  var x = accept(ap);
-  var _ = spawn {f(x)};
-  replicate(ap, f)
-}
 
 typename EndBang = !().End;
 typename EndQuery = ?().End;
@@ -1066,4 +1045,34 @@ fun wait(s) {
 sig close : (!().End) ~> ()
 fun close(s) {
   ignore(give((), s))
+}
+
+sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> EndBang) ~e~> ~s
+fun fork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+
+sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ EndBang) ~e~> ~s
+fun linfork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+sig replicate : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
+fun replicate(ap, f) {
+  var x = accept(ap);
+  var _ = spawn {f(x)};
+  replicate(ap, f)
 }

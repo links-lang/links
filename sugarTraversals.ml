@@ -350,6 +350,7 @@ class map =
       | `Unquote (bs, e) -> `Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
       | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
       | `Give (c, e, p) -> `Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | `GiveNothing c -> `GiveNothing (o#binder c)
       | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
       | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
       | `Fuse (c, d) -> `Fuse (c, d)
@@ -881,6 +882,7 @@ class fold =
       | `Unquote (bs, e) -> (o#list (fun o -> o#binding) bs)#phrase e
       | `Grab (_c, _x, p) -> o#cp_phrase p
       | `Give (_c, e, p) -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | `GiveNothing c -> o#binder c
       | `Select (_c, _l, p) -> o#cp_phrase p
       | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
       | `Fuse (_c, _d) -> o
@@ -1471,6 +1473,9 @@ class fold_map =
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
          o, `Give (c, e, p)
+      | `GiveNothing c ->
+         let o, c = o#binder c in
+         o, `GiveNothing c
       | `Select (c, l, p) ->
          let o, p = o#cp_phrase p in
          o, `Select (c, l, p)

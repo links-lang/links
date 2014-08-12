@@ -61,6 +61,8 @@ object (o : 'self_type)
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos p), t
+         | `GiveNothing ((c, Some t, _)) ->
+            o, `Var c, t
          | `Select ((c, Some s, _ as cbind), label, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
@@ -93,8 +95,12 @@ object (o : 'self_type)
             let o = o#restore_envs envs in
             let left_block = add_pos (`Spawn (add_pos (`Block ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
                                                                                add_pos (`FnAppl (add_pos (`Var "accept"), [add_pos (`Var c)])),
+                                                                               `Unknown, None));
+                                                                add_pos (`Val ([], add_pos (`Variable (c, Some Types.make_endbang_type, pos)),
+                                                                               add_pos left,
                                                                                `Unknown, None))],
-                                                               add_pos left)),
+                                                               add_pos (`FnAppl (add_pos (`Var "close"),
+                                                                                 [add_pos (`Var c)])))),
                                               Some (Types.make_singleton_closed_row ("wild", `Present Types.unit_type)))) in
             let o = o#restore_envs envs in
             o, `Block

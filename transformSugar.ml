@@ -706,6 +706,11 @@ class transform (env : Types.typing_environment) =
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, `Give (cbind, e, p), t
+      | `GiveNothing c ->
+         let envs = o#backup_envs in
+         let o, c = o#binder c in
+         let o = o#restore_envs envs in
+         o, `GiveNothing c, Types.make_endbang_type
       | `Grab _ -> failwith "Malformed grab in TransformSugar"
       | `Give _ -> failwith "Malformed give in TransformSugar"
       | `Select (b, label, p) ->
