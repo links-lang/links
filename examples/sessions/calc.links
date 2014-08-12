@@ -4,14 +4,14 @@ sig calc : (Calc) ~> EndBang
 fun calc(s) {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x+y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
       s
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x*y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
       s
   }
 }
@@ -19,14 +19,9 @@ fun calc(s) {
 sig user : (~Calc) ~> Int
 fun user(s) {
   var s = select Mul s;
-  var (x, s) = grab(give(6,give(7,s)));
+  var (x, s) = receive(send(6,send(7,s)));
   wait(s);
   x
 }
 
-fun main() {
-  var c = fork (calc);
-  user(c)
-}
-
-main()
+user(fork (calc))

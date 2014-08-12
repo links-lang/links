@@ -1,35 +1,31 @@
-typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
 
-sig calc : (Calc) ~> ()
+sig calc : (Calc) ~> EndBang
 fun calc(s) {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x+y,s);
-      ()
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x+y,s)
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x*y,s);
-      ()
-  };
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x*y,s)
+  }
 }
 
-sig user : (AP(?Int.End), ~Calc) ~> ()
-fun user(ap, c) {
-  var out = request(ap);
-  <| Mul c.c[7].c[6].c(result).out[result].{()} |>
+#sig user : (~Calc, !Int.EndBang) ~> EndBang
+#fun user(c, return) {
+#  <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
+#}
+
+sig user : (~Calc, !Int.EndBang) ~> EndBang
+fun user(c, return) {
+  var c = select Mul c;
+  var (result, c) = receive(send(6,send(7,c)));
+  wait(c);
+  send(result, return)
 }
 
-fun main() {
-  var ap = new ();
-# The need to spawn a process here suggests a bug in the desugaring of nu
-  <| nu c.(nu s.(s <-> c | {calc(s)}) | {ignore(spawn {user(ap,c)})}) |>;
-#  <| nu c.(nu s.({calc(s)} | s <-> c) | {user(ap,c)}) |>;
-#  <| nu s.(nu c.({user(ap,c)} | s <-> c) | {calc(s)}) |>;
-  var r = accept(ap);
-  grab(r).1
-}
-
-main()
+run (fun (return) {<| nu c.(nu s.(s <-> c | {calc(s)}) | {user(c,return)}) |>})
+#run (fun (return) {<| nu s.(nu c.(s <-> c | {user(c,return)}) | {calc(s)}) |>})

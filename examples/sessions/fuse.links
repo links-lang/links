@@ -1,35 +1,36 @@
-typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
 
-sig calc : (Calc) ~> ()
+sig calc : (Calc) ~> EndBang
 fun calc(s) {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x+y,s);
-      ()
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x+y,s)
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x*y,s);
-      ()
-  };
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x*y,s)
+  }
 }
 
-sig user : (AP(?Int.End), ~Calc) ~> ()
-fun user(ap, c) {
-  var c = select Mul c;
-  var out = request(ap);
-  var result = grab(give(6,give(7,c))).1;
-  ignore(give(result, out))
+#sig user : (~Calc, !Int.EndBang) ~> EndBang
+#fun user(c, return) {
+#  var c = select Mul c;
+#  var (result, c) = receive(send(6,send(7,c)));
+#  wait(c);
+#  send(result, return)
+#}
+
+sig user : (~Calc, !Int.EndBang) ~> EndBang
+fun user(c, return) {
+  <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
 }
+
 
 fun main() {
-  var ap = new ();
-  fuse(fork(fun (s) {user(ap, s)}), fork(calc));
-  fuse(fork(calc), fork(fun (s) {user(ap, s)}));
-  var x = grab(accept(ap)).1;
-  var y = grab(accept(ap)).1;
+  var x = run (fun (return) {link(linfork(linfun (s) {user(s, return)}), fork(calc))});
+  var y = 42; # run (fun (return) {link(fork(calc), linfork(linfun (s) {user(s, return)}))});
   (x, y)
 }
 

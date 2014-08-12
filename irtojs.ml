@@ -509,7 +509,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"; "grab"; "request"; "accept"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
@@ -823,7 +823,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
-             Call (Var "grab", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
+             Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa ->

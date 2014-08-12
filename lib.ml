@@ -354,20 +354,20 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (** Sessions *)
 
-  "give",
+  "send",
   (`PFun (fun _ -> assert false),
    (* datatype "(a::Any, !a::Any.s) ~> s::Session", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session).(a, !a.s) ~> s",
    IMPURE);
 
-  "grab",
+  "receive",
   (`PFun (fun _ -> assert false),
    datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
    IMPURE);
 
-  "fuse",
+  "link",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session),e::Row(Unl, Any).(s, ~s) ~e~> ()",
+   datatype "forall s::Type(Any, Session),e::Row(Unl, Any).(s, ~s) ~e~> EndBang",
    IMPURE);
 
   (* access points *)

@@ -435,8 +435,8 @@ module Eval = struct
                                    (Value.box_int (Num.num_of_int c))
                                    (Value.box_int (Num.num_of_int d)))
           end
-    | `PrimitiveFunction ("give", _), [v; chan] ->
-      Debug.print ("giving: " ^ Value.string_of_value v ^ " to: " ^ Value.string_of_value chan);
+    | `PrimitiveFunction ("send", _), [v; chan] ->
+      Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Session.unbox_chan chan in
       Session.send v outp;
       begin
@@ -445,9 +445,9 @@ module Eval = struct
         | None     -> ()
       end;
       apply_cont cont env chan
-    | `PrimitiveFunction ("grab", _), [chan] ->
+    | `PrimitiveFunction ("receive", _), [chan] ->
       begin
-        Debug.print("grabbing from: " ^ Value.string_of_value chan);
+        Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let (out', in') = Session.unbox_chan' chan in
         let inp = Num.int_of_num in' in
           match Session.receive inp with
@@ -456,18 +456,20 @@ module Eval = struct
             apply_cont cont env (Value.box_pair v chan)
           | None ->
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "grab" [`Extend (StringMap.add "1" (`Constant (`Int out'))
-                                                                           (StringMap.add "2" (`Constant (`Int in'))
-                                                                            StringMap.empty), None)])
+              Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
+                                                                                (StringMap.add "2" (`Constant (`Int in'))
+                                                                                   StringMap.empty), None)])
             in
               Proc.block_current (grab_frame::cont, `Record []);
               Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
-    | `PrimitiveFunction ("fuse", _), [chanl; chanr] ->
-      Debug.print ("fusing channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
+    | `PrimitiveFunction ("link", _), [chanl; chanr] ->
+      Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
       let (out1, in1) = Session.unbox_chan chanl in
       let (out2, in2) = Session.unbox_chan chanr in
+      (* HACK *)
+      let end_bang = `Variable (Env.String.lookup (val_of !Lib.prelude_nenv) "makeEndBang") in
         Session.fuse (out1, in1) (out2, in2);
         begin
           match Session.unblock out1 with
@@ -483,7 +485,7 @@ module Eval = struct
             Some pid -> Proc.awaken pid
           | None     -> ()
         end;
-        apply_cont cont env (`Record [])
+       apply cont env (value env end_bang, [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
 	apply_cont cont env (Lib.apply_pfun n args)

@@ -37,7 +37,7 @@ object (o : 'self_type)
             o, `Block
                   ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos)));
                                                           ("2", add_pos (`Variable (c, Some s, pos)))], None)),
-                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "grab", grab_tyargs)),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "receive", grab_tyargs)),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                   add_pos e), t
@@ -57,7 +57,7 @@ object (o : 'self_type)
             let o = o#restore_envs envs in
             o, `Block
                   ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
-                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "give", give_tyargs)),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "send", give_tyargs)),
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos p), t
@@ -86,7 +86,7 @@ object (o : 'self_type)
                        cases,
                        Some t), t
          | `Fuse ((c, Some ct, _), (d, Some dt, _)) ->
-            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "fuse", [`Type ct; `Row o#lookup_effects])),
+            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "link", [`Type ct; `Row o#lookup_effects])),
                         [add_pos (`Var c); add_pos (`Var d)]), Types.unit_type
          | `Comp ((c, Some s, _ as cbind), left, right) ->
             let envs = o#backup_envs in

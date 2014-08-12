@@ -387,6 +387,9 @@ atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
+/* HACK: allows us to support both mailbox receive syntax
+and receive for session types. */
+| RECEIVE                                                      { `Var "receive", pos() }
 
 cp_name:
 | VARIABLE                                                     { $1, None, pos () }
@@ -409,9 +412,12 @@ perhaps_name:
 |                                                              { None }
 | cp_name                                                      { Some $1 }
 
+/* currently unused */
+/*
 perhaps_exp:
 |                                                              { None }
 | exp                                                          { Some $1 }
+*/
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
@@ -1033,7 +1039,7 @@ rfields:
 rfield:
 /* The following sugar is tempting, but it leads to a conflict. Is
    the type (a,b,c) a record with fields a, b, c or a polymorphic tuple
-   with type variables a, b, c
+   with type variables a, b, c?
 */
 /*| record_label                                                 { $1, `Present `Unit } */
 | record_label fieldspec                                       { $1, $2 }

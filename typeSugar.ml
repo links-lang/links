@@ -2866,7 +2866,7 @@ and type_cp (context : context) = fun (p, pos) ->
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (`Var "grab", pos) in
+       let (_, grab_ty, _) = type_check context (`Var "receive", pos) in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, t) ->
@@ -2896,7 +2896,7 @@ and type_cp (context : context) = fun (p, pos) ->
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (`Var "give", pos) in
+       let (_, give_ty, _) = type_check context (`Var "send", pos) in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, t) ->
@@ -2947,7 +2947,7 @@ and type_cp (context : context) = fun (p, pos) ->
         unify ~handle:Gripers.cp_fuse_session
           (td, Types.fresh_type_variable (`Any, `Session));
         unify ~handle:Gripers.cp_fuse_dual (Types.dual_type tc, td);
-        `Fuse ((c, Some tc, cpos), (d, Some td, dpos)), Types.unit_type, merge_usages [uc; ud]
+        `Fuse ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
     | `Comp ((c, _, binder_pos), left, right) ->
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
