@@ -1107,6 +1107,11 @@ fun linknife(f) {
   request(ap)
 }
 
+sig fuse : forall s::Session.(s, ~s) ~> ()
+fun fuse(s, c) {
+  close(link(s, c))
+}
+
 sig reproduce : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
 fun reproduce(ap, f) {
   var x = accept(ap);
