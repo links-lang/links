@@ -4,23 +4,23 @@ typename Username = String;
 typename Password = String;
 typename User = (name:Username, password:Password);
 
-typename Checker(s::Session) = [+|Accept:s, Reject:!Error.End|+];
-typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.End));
+typename Checker(s::Session) = [+|Accept:s, Reject:!Error.EndBang|+];
+typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.EndBang));
 
 # We could use this slightly more general type for reportError:
 #
-#   typename ErrorReporter(r::Row(Any, Session)) = [+|Reject:!Error.End|r|+];
+#   typename ErrorReporter(r::Row(Any, Session)) = [+|Reject:!Error.EndBang|r|+];
 
 # The unrolled type of TwoFactor:
 #
-#   typename TwoFactor = ?User.[+|Accept:!Int.?Int.[+|Accept:!Data.End,
-#                                                     Reject:!Error.End|+],
-#                                 Reject:!Error.End|+];
+#   typename TwoFactor = ?User.[+|Accept:!Int.?Int.[+|Accept:!Data.EndBang,
+#                                                     Reject:!Error.EndBang|+],
+#                                 Reject:!Error.EndBang|+];
 # and its dual:
 #
-#           ~TwoFactor = !User.[&|Accept:?Int.!Int.[&|Accept:?Data.End,
-#                                                     Reject:?Error.End|&],
-#                                 Reject:?Error.End|&];
+#           ~TwoFactor = !User.[&|Accept:?Int.!Int.[&|Accept:?Data.EndBang,
+#                                                     Reject:?Error.EndBang|&],
+#                                 Reject:?Error.EndBang|&];
 
 sig validUser : (User) ~> Bool
 fun validUser(user) {
@@ -37,20 +37,20 @@ fun validHash(h, nonce) {
 
 sig generateNonce : () ~> Int
 fun generateNonce() {
-  floatToInt(random() *. 65536.0)
+  floatToInt(random() *. 2.0 ^. 32.0)
 }
 
-sig raiseError : (Error, Checker(s::Session)) ~> ()
-fun raiseError(e, s) {
-  <| Reject s.s[e].{()} |>
+sig raiseError : (Error, Checker(s::Session)) ~> EndBang
+fun raiseError(msg, s) {
+  <| Reject s.s[msg].s[] |>
 }
 
-sig serve : (TwoFactor, Data) ~> ()
+sig serve : (TwoFactor, Data) ~> EndBang
 fun serve(s, data) {
   <| s(user).{if (validUser(user)) {
                 var nonce = generateNonce();
                 <| Accept s.s[nonce].s(h).{if (validHash(h, nonce)) {
-                                             <| Accept s.s[data].{()} |>
+                                             <| Accept s.s[data].s[] |>
                                            } else {
                                              raiseError("Invalid hash", s)
                                            }} |>
@@ -59,48 +59,50 @@ fun serve(s, data) {
               }} |>
 }
 
-sig user1 : (~TwoFactor) ~> Data
-fun user1(c) {
+sig goodMe : (~TwoFactor, !Data.EndBang) ~> EndBang
+fun goodMe(c, return) {
   <| c[(name="me", password="foo")].
      offer c {
        case Accept -> c(x).c[2*x].
                       offer c {
-                        case Accept -> c(data).{data}
-                        case Reject -> c(e).{error(e)}
+                        case Accept -> c(data).c().return[data].return[]
+                        case Reject -> c(msg).c().{error(msg)(return)}
                       }
-       case Reject -> c(e).{error(e)}
+       case Reject -> c(msg).c().{error(msg)(return)}
      } |>
 }
 
-sig user2 : (~TwoFactor) ~> Data
-fun user2(c) {
+sig goodYou : (~TwoFactor, !Data.EndBang) ~> EndBang
+fun goodYou(c, return) {
   <| c[(name="you", password="bar")].
      offer c {
        case Accept -> c(x).c[2*x].
                       offer c {
-                        case Accept -> c(data).{data}
-                        case Reject -> c(e).{error(e)}
+                        case Accept -> c(data).c().return[data].return[]
+                        case Reject -> c(msg).c().{error(msg)(return)}
                       }
-       case Reject -> c(e).{error(e)}
+       case Reject -> c(msg).c().{error(msg)(return)}
      } |>
 }
 
-sig user3 : (~TwoFactor) ~> Data
-fun user3(c) {
-  <| c[(name="me", password="baz")].
+sig badMe : (~TwoFactor, !Data.EndBang) ~> EndBang
+fun badMe(c, return) {
+  <| c[(name="me", password="foo")].
      offer c {
-       case Accept -> c(x).c[-1].
+       case Accept -> c(x).c[-x].
                       offer c {
-                        case Accept -> c(data).{data}
-                        case Reject -> c(e).{error(e)}
+                        case Accept -> c(data).c().return[data].return[]
+                        case Reject -> c(msg).c().{error(msg)(return)}
                       }
-       case Reject -> c(e).{error(e)}
+       case Reject -> c(msg).c().{error(msg)(return)}
      } |>
 }
 
-sig main : () ~> Data
-fun main() {
-  <| nu x.({serve(x, "secret data")} | {user1(x)}) |>
+sig serveData : ((~TwoFactor, !Data.EndBang) ~e~> EndBang) ~e~> Data
+fun serveData(user) {
+  run (fun (return) {<| nu x.({serve(x, "secret data")} | {user(x, return)}) |>})
 }
 
-main()
+serveData(goodMe)
+#serveData(goodYou)
+#serveData(badMe)
