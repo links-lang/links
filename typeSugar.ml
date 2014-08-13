@@ -266,10 +266,10 @@ sig
   val selection : griper
 
   val cp_unquote : griper
-  val cp_grab : griper
-  val cp_give : griper
-  val cp_select : griper
-  val cp_offer_choice : griper
+  val cp_grab : string -> griper
+  val cp_give : string -> griper
+  val cp_select : string -> griper
+  val cp_offer_choice : string -> griper
   val cp_offer_branches : griper
   val cp_comp_left : griper
   val cp_fuse_session : griper
@@ -878,27 +878,31 @@ EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
-    let cp_grab ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_grab channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
       die pos ("\
-The channel in a receive expression must have input type, but has type" ^ nl () ^
+Channel " ^ channel ^ " was expected to have input type, " ^ nl () ^
+"but has type" ^ nl () ^
+tab () ^ code (show_type actual) ^ nl () ^
+"instead.")
+
+    let cp_give channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
+      die pos ("\
+Channel " ^ channel ^ " was expected to have output type," ^ nl () ^
+"but has type" ^ nl () ^
+tab () ^ code (show_type actual) ^ nl () ^
+"instead.")
+
+    let cp_select channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Channel " ^ channel ^ " was expected to have selection type," ^ nl () ^
+"but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
-    let cp_give ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_offer_choice channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-The channel in a send expression must have output type, but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
-
-    let cp_select ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The channel in a select expression must have selection type, but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
-
-    let cp_offer_choice ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The channel in an offer expression must have choice type, but has type" ^ nl () ^
+Channel " ^ channel ^ " was expected to have choice type," ^ nl () ^
+"but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
@@ -933,8 +937,9 @@ tab () ^ code (show_type rt) ^ nl () ^
 
     let non_linearity pos uses v t =
       die pos ("\
-Non-linear use (" ^ string_of_int uses ^ " uses) of variable " ^
-                  v ^ " of linear type " ^ Types.string_of_datatype t)
+Variable " ^ v ^ " has linear type " ^ nl () ^
+tab () ^ code (show_type t) ^ nl () ^
+"but is used " ^ string_of_int uses ^ " times.")
 end
 
 type context = Types.typing_environment = {
@@ -2849,7 +2854,7 @@ and type_cp (context : context) = fun (p, pos) ->
     | `Grab ((c, _), None, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let ctype = `Input (Types.unit_type, `End) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (t, ctype);
+       unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        `Grab ((c, Some (ctype, [])), None, p), pt, use c u
     | `Grab ((c, _), Some (x, _, binder_pos), p) ->
@@ -2857,7 +2862,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let a = Types.fresh_type_variable (`Any, `Any) in
        let s = Types.fresh_session_variable `Any in
        let ctype = `Input (a, s) in
-       unify ~pos:pos ~handle:Gripers.cp_grab
+       unify ~pos:pos ~handle:(Gripers.cp_grab c)
              (t, ctype);
        let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
        let uses = uses_of x u in
@@ -2875,7 +2880,7 @@ and type_cp (context : context) = fun (p, pos) ->
             begin
               match Instantiate.apply_type grab_ty tyargs with
               | `Function (fps, fe, rettpe) ->
-                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [ctype], fps);
+                 unify ~pos:pos ~handle:(Gripers.cp_grab "") (Types.make_tuple_type [ctype], fps);
                  tyargs
               | _ -> assert false
             end
@@ -2884,7 +2889,7 @@ and type_cp (context : context) = fun (p, pos) ->
     | `Give ((c, _), None, p) as p' ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let ctype = `Output (Types.unit_type, `End) in
-       unify ~pos:pos ~handle:Gripers.cp_give (t, ctype);
+       unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
        `Give ((c, Some (ctype, [])), None, p), t, use c u
     | `Give ((c, _), Some e, p) ->
@@ -2892,7 +2897,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable `Any in
        let ctype = `Output (t', s) in
-       unify ~pos:pos ~handle:Gripers.cp_give
+       unify ~pos:pos ~handle:(Gripers.cp_give c)
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
@@ -2905,7 +2910,7 @@ and type_cp (context : context) = fun (p, pos) ->
             begin
               match Instantiate.apply_type give_ty tyargs with
               | `Function (fps, fe, rettpe) ->
-                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [t'; ctype], fps);
+                 unify ~pos:pos ~handle:(Gripers.cp_give "") (Types.make_tuple_type [t'; ctype], fps);
                  tyargs
               | _ -> assert false
             end
@@ -2913,14 +2918,14 @@ and type_cp (context : context) = fun (p, pos) ->
        `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
     | `GiveNothing (c, _, binder_pos) ->
        let _, t, _ = type_check context (`Var c, binder_pos) in
-       unify ~pos:pos ~handle:Gripers.cp_give (t, Types.make_endbang_type);
+       unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
        `GiveNothing (c, Some t, binder_pos), t, StringMap.singleton c 1
     | `Select ((c, _, binder_pos), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let s = Types.fresh_session_variable `Any in
        let r = Types.make_singleton_open_row (label, `Present s) (`Any, `Session) in
        let ctype = `Select r in
-       unify ~pos:pos ~handle:Gripers.cp_select
+       unify ~pos:pos ~handle:(Gripers.cp_select c)
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
        `Select ((c, Some ctype, binder_pos), label, p), t, use c u
@@ -2933,7 +2938,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let ctypes, branches = List.split (List.map check_branch branches) in
        let crow = List.fold_right (fun (label, s) -> Types.row_with (label, `Present s)) ctypes (Types.make_empty_closed_row ()) in
        let ctype = `Choice crow in
-       unify ~pos:pos ~handle:Gripers.cp_offer_choice
+       unify ~pos:pos ~handle:(Gripers.cp_offer_choice c)
              (t, ctype);
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
