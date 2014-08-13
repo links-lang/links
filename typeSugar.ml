@@ -5,6 +5,8 @@ open Sugartypes
 let constrain_absence_types = Settings.add_bool ("constrain_absence_types",
                                                  false, `User)
 
+let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
+
 let check_top_level_purity =
   Settings.add_bool ("check_top_level_purity", false, `User)
 
@@ -873,7 +875,7 @@ tab () ^ code (show_type rt))
 
     let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-A spliced expressions must have
+Spliced expression should have
 EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
@@ -2849,8 +2851,9 @@ and type_cp (context : context) = fun (p, pos) ->
     | `Unquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
-       unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
-       `Unquote (bindings, e), t, usage_builder u
+         if Settings.get_value endbang_antiquotes then
+           unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
+         `Unquote (bindings, e), t, usage_builder u
     | `Grab ((c, _), None, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let ctype = `Input (Types.unit_type, `End) in
