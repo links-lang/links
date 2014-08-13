@@ -98,15 +98,15 @@ let rec select_type name t = match concrete_type t with
     error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
 
 let rec split_choice_type name t = match concrete_type t with
-  | `ForAll (_, t) -> split_variant_type name t
+  | `ForAll (_, t) -> split_choice_type name t
   | `Choice row ->
       let t, row = split_row name row in
         `Choice (make_singleton_closed_row (name, `Present t)), `Choice row
   | t ->
-      error ("Attempt to split non-session type "^string_of_datatype t)
+      error ("Attempt to split non-choice type "^string_of_datatype t)
 
 let rec choice_at name t = match concrete_type t with
-  | `ForAll (_, t) -> variant_at name t
+  | `ForAll (_, t) -> choice_at name t
   | `Choice row ->
       let t, _ = split_row name row in t
   | t ->
