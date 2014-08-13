@@ -1057,7 +1057,7 @@ fun makeEndBang() {
   request(ap)
 }
 
-sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> EndBang) ~e~> ~s
+sig fork : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
 fun fork(f) {
   var ap = new();
   var _ = spawn {
@@ -1068,7 +1068,7 @@ fun fork(f) {
   request(ap)
 }
 
-sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ EndBang) ~e~> ~s
+sig linfork : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
 fun linfork(f) {
   var ap = new();
   var _ = spawn {
@@ -1079,7 +1079,7 @@ fun linfork(f) {
   request(ap)
 }
 
-sig run : forall a,s::Type(Any,Session),e::Row(Unl,Any).((!a.EndBang) ~e~> EndBang) ~e~> a
+sig run : ((!a.EndBang) ~e~> EndBang) ~e~> a
 fun run(f) {
   var c = fork(f);
   var (v, c) = receive(c);
@@ -1087,7 +1087,7 @@ fun run(f) {
   v
 }
 
-sig knife : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> ()) ~e~> ~s
+sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun knife(f) {
   var ap = new();
   var _ = spawn {
@@ -1097,7 +1097,7 @@ fun knife(f) {
   request(ap)
 }
 
-sig linknife : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
+sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
 fun linknife(f) {
   var ap = new();
   var _ = spawn {
@@ -1112,7 +1112,7 @@ fun fuse(s, c) {
   close(link(s, c))
 }
 
-sig reproduce : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
 fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
