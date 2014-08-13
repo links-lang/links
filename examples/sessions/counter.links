@@ -3,14 +3,14 @@ typename Counter = AP (!Int.End);
 sig counter : (Counter, Int) ~> ()
 fun counter(p, i) {
   var s = accept(p);
-  var _ = give(i, s);
+  var _ = send(i, s);
   counter(p, i+1)  
 }
 
 sig readCounter : (Counter) ~> Int
 fun readCounter(p) {
   var c = request(p);
-  grab(c).1 
+  receive(c).1 
 }
 
 sig user : (Int, Counter, Process ({hear:(Int, (Int, Int))|_})) ~> ()

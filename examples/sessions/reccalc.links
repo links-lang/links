@@ -4,14 +4,14 @@ sig calc : (Calc) ~> ()
 fun calc(s) {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x+y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
       calc(s)
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x*y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
       calc(s)
     case Stop(s) ->
       ()
@@ -21,17 +21,11 @@ fun calc(s) {
 sig user : (~Calc) ~> Int
 fun user(s) {
   var s = select Mul s;
-  var (v, s) = grab(give(6,give(7,s)));
+  var (v, s) = receive(send(6,send(7,s)));
   var s = select Add s;
-  var (v, s) = grab(give(v,give(v,s)));
+  var (v, s) = receive(send(v,send(v,s)));
   var _ = select Stop s;
   v
 }
 
-fun main() {
-  var a = new ();
-  var _ = spawn { calc(accept(a)) };
-  user(request(a))
-}
-
-main()
+user(knife(calc))

@@ -1,21 +1,19 @@
 fun oneA(a)(c) {
-  var c = give(a, c);
-  var _ = close(c);
-  ()
+  send(a, c)
 }
 
 fun oneB(c) {
-  var (y, c) = grab(c);
+  var (y, c) = receive(c);
   var _ = wait(c);
   y
 }
 
 fun twoA(a)(c) {
-  <| c[a].c[].{()} |>
+  <| c[a].c[] |>
 }
 
-fun twoB(c) {
-  <| c(y).c().{y} |>
+fun twoB(c, return) {
+  <| c(y).c().return[y].return[] |>
 }
 
-(oneB(fork(oneA(1))), twoB(fork(twoA(2))))
+(oneB(fork(oneA(1))), run (fun (return) {<|nu c.({twoA(2)(c)}|{twoB(c, return)})|>}))

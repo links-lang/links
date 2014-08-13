@@ -1,8 +1,5 @@
-fun main() {
-  fuse(fork (fun (s) {ignore(give(42, s))}),
-       fork (fun (c) {print(intToString(grab(c).1))}));
-  fuse(fork (fun (c) {print(intToString(grab(c).1))}),
-       fork (fun (s) {ignore(give(42, s))}))
-}
-
-main()
+var x = fuse(knife (fun (s) {ignore(send(42, s))}),
+             knife (fun (c) {print(intToString(receive(c).1))}));
+var y = fuse(knife (fun (c) {print(intToString(receive(c).1))}),
+             knife (fun (s) {ignore(send(42, s))}));
+()

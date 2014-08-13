@@ -1,13 +1,13 @@
 fun main() {
   fun giver(x,y,a) {
-    (grab(give(y,give(x,request(a))))).1
+    (receive(send(y,send(x,request(a))))).1
   }
 
   fun grabber(a) {
     var s = accept(a);
-    var (x,s) = grab(s);
-    var (y,s) = grab(s);
-    var _ = give(x+y,s);
+    var (x,s) = receive(s);
+    var (y,s) = receive(s);
+    var _ = send(x+y,s);
     ()
   }
 

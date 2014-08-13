@@ -1,10 +1,10 @@
 fun (c) {
-  var (x, c) = grab(c);
+  var (x, c) = receive(c);
   if (x) {
-    ignore(give(1,c));
+    ignore(send(1,c));
     ()
   } else {
-    ignore(give(2,c));
+    ignore(send(2,c));
     ()
   }
 }

@@ -5,7 +5,7 @@ sig waiting : (String, Wait) ~> ()
 fun waiting(id, s) client {
   offer (s) {
     case MouseDown(s) ->
-      var (elem, s) = grab(s);
+      var (elem, s) = receive(s);
       dragging(id, elem, s)
   }
 }
@@ -15,7 +15,7 @@ fun dragging(id, elem, s) {
   offer(s) {
     case MouseUp(s)   -> waiting(id, s)
     case MouseOut(s)  -> {
-      var (toElem, s) = grab(s);
+      var (toElem, s) = receive(s);
       swapNodes(elem, toElem);
       dragging(id, elem, s)
     }
@@ -61,7 +61,7 @@ fun draggableList(id, items)
       }
     }
     
-    wait(linfork (linfun (s) {waiting(id, s)}));
+    wait(linknife (linfun (s) {waiting(id, s)}));
   };
 
   fun mouseUp() {

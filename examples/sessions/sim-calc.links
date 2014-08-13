@@ -1,35 +1,34 @@
 # Selection and Choice are redundant in Links
 
-typename Calc = [|Add:?Int.?Int.!Int.End | Mul:?Int.?Int.!Int.End|];
-typename CalcSelect = !Calc.End;
-typename CalcOffer  = ?Calc.End;
+typename CalcOptions = [|Add:?Int.?Int.!Int.End | Mul:?Int.?Int.!Int.End|];
+typename Calc  = ?CalcOptions.End;
 
-sig calc : (CalcOffer) ~> ()
+sig calc : (Calc) ~> ()
 fun calc(s) {
-  switch (grab(s).1) {
+  switch (receive(s).1) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x+y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var _ = send(x+y,s);
       ()
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var _ = give(x*y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var _ = send(x*y,s);
       ()
   }
 }
 
-sig sel_Add : (CalcSelect) ~> !Int.!Int.?Int.End
-fun sel_Add(c) {linfork (linfun (d) {ignore(give(Add(d), c))})}
+sig sel_Add : (~Calc) ~> !Int.!Int.?Int.End
+fun sel_Add(c) {linknife (linfun (d) {ignore(send(Add(d), c))})}
 
-sig sel_Mul : (CalcSelect) ~> !Int.!Int.?Int.End
-fun sel_Mul(c) {linfork (linfun (d) {ignore(give(Mul(d), c))})}
+sig sel_Mul : (~Calc) ~> !Int.!Int.?Int.End
+fun sel_Mul(c) {linknife (linfun (d) {ignore(send(Mul(d), c))})}
 
-sig user : (CalcSelect) ~> Int
+sig user : (~Calc) ~> Int
 fun user(s) {
   var s = sel_Mul(s);
-  grab(give(6,give(7,s))).1
+  receive(send(6,send(7,s))).1
 }
 
 fun main() {
@@ -42,4 +41,4 @@ main()
 
 
 #sig sel : ((s::Session) ~e~@ c::Any) -> (!c::Any.End) ~e~> ~s::Session
-#fun sel(f)(c) {fork (linfun (d) {ignore(give(f(d), c))})}
+#fun sel(f)(c) {knife (linfun (d) {ignore(send(f(d), c))})}
