@@ -12,11 +12,4 @@ fun user(s, return) {
   <| Mul s.s[6].s[7].s(z).s().return[z].return[] |>
 }
 
-fun main() {
-  var c = fork(fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>});
-  var (x, c) = receive(c);
-  wait(c);
-  x
-}
-
-main()
+run (fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>})
