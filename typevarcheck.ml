@@ -138,6 +138,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `Output (t, s) -> isn t && isn s
         | `Select row -> isnr row
         | `Choice row -> isnr row
+	| `End -> false
         | `Dual s -> isn s
 and is_negative_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var, dual) ->
@@ -200,8 +201,8 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `Output (t, s) -> isp t && isp s
         | `Select row -> ispr row
         | `Choice row -> ispr row
+        | `End -> false
         | `Dual s -> isp s
-        | `End -> true
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
   fun bound_vars var (field_env, row_var, dual) ->
     is_positive_field_env bound_vars var field_env || is_positive_row_var bound_vars var row_var
