@@ -4,7 +4,7 @@ open Utility
 
 (* If true, then wait for all child processes to finish before
    terminating *)
-let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", true, `System)
+let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
 
 module Session = struct
   type apid = int              (* access point id *)
