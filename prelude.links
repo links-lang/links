@@ -1068,7 +1068,6 @@ fun fork(f) {
   request(ap)
 }
 
-
 sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ EndBang) ~e~> ~s
 fun linfork(f) {
   var ap = new();
@@ -1088,9 +1087,29 @@ fun run(f) {
   v
 }
 
-sig replicate : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
-fun replicate(ap, f) {
+sig knife : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> ()) ~e~> ~s
+fun knife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig linknife : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
+fun linknife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig reproduce : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
+fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
-  replicate(ap, f)
+  reproduce(ap, f)
 }
