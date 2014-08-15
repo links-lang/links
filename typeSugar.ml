@@ -2934,19 +2934,23 @@ and type_cp (context : context) = fun (p, pos) ->
        `Select ((c, Some ctype, binder_pos), label, p), t, use c u
     | `Offer ((c, _, binder_pos), branches) ->
        let (_, t, _) = type_check context (`Var c, pos) in
+       (*
        let crow = Types.make_empty_open_row (`Any, `Session) in
        let ctype = `Choice crow in
        unify ~pos:pos ~handle:(Gripers.cp_offer_choice c)
              (t, ctype);
+        *)
        let check_branch (label, body) =
-         let s = TypeUtils.choice_at label ctype in
+         let s = Types.fresh_type_variable (`Any, `Session) in
+         let r = Types.make_singleton_open_row (label, `Present s) (`Any, `Session) in
+         unify ~pos:pos ~handle:(Gripers.cp_offer_choice c) (t, `Choice r);
          let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) body) in
          (label, p), t, u in
        let branches = List.map check_branch branches in
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
-       `Offer ((c, Some ctype, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
+       `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
     | `Fuse ((c, _, cpos), (d, _, dpos)) ->
       let (_, tc, uc) = type_check context (`Var c, pos) in
       let (_, td, ud) = type_check context (`Var d, pos) in
