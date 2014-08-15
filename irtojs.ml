@@ -810,7 +810,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
       | `Select (l, c) ->
-         Call (kappa, [Call (Var "_give", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
+         Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
 	(* TODO: JS generation for session types *)
       | `Choice (c, bs) ->
          let result = gensym () in
