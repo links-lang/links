@@ -335,7 +335,7 @@ module Eval = struct
         end
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode then
-           client_call "_sendWrapper" cont [pid; msg]
+           client_call "_SendWrapper" cont [pid; msg]
         else
           let pid = Num.int_of_num (Value.unbox_int pid) in
             (try
