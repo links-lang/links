@@ -56,7 +56,35 @@ fun valid(address) {
 
 sig mailClient : (~SMTPServer) ~> ()
 fun mailClient(c) {
-  # To implement!
+  var c = send("starlight@domain.com", select MAIL c);
+  offer (c) {
+    case REJECT(c) ->
+      var (error, c) = receive(c);
+      print("C: client sent MAIL, server replied: " ^^ error);
+      wait(c);
+      ()
+
+    case ACCEPT(c) ->
+      var (reply, c) = receive(c);
+      print("C: client sent MAIL, server replied: " ^^ reply);
+
+      var c = send("pink@cloud", select RCPT c);
+      offer (c) {
+        case REJECT(c) ->
+          var (error, c) = receive(c);
+          print("C: client sent RCPT, server replied: " ^^ error);
+          wait(c);
+          ()
+        case ACCEPT(c) ->
+          var (reply, c) = receive(c);
+          print("C: client sent RCPT, server replied: " ^^ reply);
+          var c = send("Hello to bravest warriors!", select DATA c);
+          var (reply, c) = receive(c);
+          print("C: client sent DATA, server replied: " ^^ reply);
+          wait(c);
+          ()
+      }
+  }
 }
 
 fun main() {
