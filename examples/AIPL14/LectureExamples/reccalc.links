@@ -1,6 +1,6 @@
-typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
+typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:EndBang|&];
 
-sig calc : (Calc) ~> ()
+sig calc : (Calc) ~> EndBang
 fun calc(s) {
   offer (s) {
     case Add(s) ->
@@ -14,7 +14,7 @@ fun calc(s) {
       var s = send(x*y,s);
       calc(s)
     case Stop(s) ->
-      ()
+      s
   }
 }
 
@@ -24,8 +24,9 @@ fun user(s) {
   var (v, s) = receive(send(6,send(7,s)));
   var s = select Add s;
   var (v, s) = receive(send(v,send(v,s)));
-  var _ = select Stop s;
+  var s = select Stop s;
+  wait(s);
   v
 }
 
-user(knife(calc))
+user(fork(calc))
