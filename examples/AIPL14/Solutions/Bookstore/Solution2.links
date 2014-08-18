@@ -1,0 +1,67 @@
+typename Shop  = mu a.[&|Add:?String.a, Checkout:?Int.?String.EndBang|&];
+typename Friend = !String.EndBang;
+
+
+sig waitForClient : (Shop) ~> EndBang
+fun waitForClient(s) {
+  offer(s) {
+    case Add(s) ->
+      var (item, s) = receive(s);
+      print("Book name received: " ^^ item);
+      waitForClient(s)
+
+    case Checkout(s) ->
+      var (card, s)    = receive(s);
+      print("Card number received: " ^^ intToString(card));
+      var s = shipper(s);
+      s
+  }
+}
+
+
+fun shipper(s) 
+{
+  var (address, s) = receive(s);
+  print("Address received: " ^^ address);
+  s
+}
+
+
+sig waitForFriend : (Friend) ~> EndBang
+fun waitForFriend(c) 
+{
+    send("Scotland in XX century", c)
+}
+
+
+sig getFriendBook : (~Friend) ~> (String)
+fun getFriendBook(s) 
+{
+  var (choice, s) = receive(s);
+  wait(s);
+  choice
+}
+
+
+
+sig orderBooks : (~Shop) ~> ()
+fun orderBooks(c) {
+  var c = send("Alice in Wonderland", select Add c);
+  var c = send("The Hitchhiker's Guide to the Galaxy", select Add c);
+
+  # Parallel choice:
+  var choice = getFriendBook(fork(waitForFriend));
+  var c = send(choice, select Add c);
+  
+  var c = send("Summerhall Square", send(8753, select Checkout c));
+  wait(c);
+  ()
+}
+
+
+sig main : () ~> ()
+fun main() {
+  orderBooks(fork(waitForClient))
+}
+
+main()

@@ -1,0 +1,71 @@
+typename Domain = String;
+typename Address = String;
+typename Accept = String;
+typename Message = String;
+
+typename SMTPServer = [&|EHLO:?Domain.!Accept.
+					    [&|MAIL:?Address.!Accept.
+					      [&|RCPT:?Address.!Accept.
+					        [&|DATA:?Message.!Accept.
+					          [&|QUIT:EndBang|&]|&]|&]|&]|&];
+
+
+#typename SMTPClient = [+|EHLO:!Domain.?Accept.
+#                        [+|MAIL:!Address.?Accept.
+#                          [+|RCPT:!Address.?Accept.
+#                            [+|DATA:!Message.?Accept.
+#                              [+|QUIT:EndBang|+]|+]|+]|+]|+];
+
+
+sig mailServer : (SMTPServer) ~> EndBang
+fun mailServer(s) {
+	offer (s) {
+   	case EHLO(s) ->
+     		var (x, s) = receive(s);
+     		print("S: received domain: " ^^ x);
+     		var s = send("C: 250 OK", s);
+    		offer(s) {
+    			case MAIL(s) ->
+     				var (x, s) = receive(s);
+     				print("S: received address from: " ^^ x);
+     				var s = send("C: 250 OK", s);
+    				
+    				offer(s) {
+    					case RCPT(s) ->
+     							var (x, s) = receive(s);
+     							print("S: received address to: " ^^ x);
+     							var s = send("C: 250 OK", s);
+    							
+    							offer(s) {
+    								case DATA(s) ->
+     									var (x, s) = receive(s);
+     									print("S: received message: " ^^ x);
+     									var s = send("C: 250 OK", s);
+    									
+    								    offer(s) {
+                                            case QUIT(s) -> s
+    									}
+    							}
+    				}
+    		}
+     }
+     
+}
+
+sig mailClient : (~SMTPServer, !().EndBang) ~> EndBang
+fun mailClient(c, return) {
+
+    <| EHLO c.c["mydomain.com"].c(response).{print(response); <|
+        MAIL c.c["starlight@domain.com"].c(response).{print(response); <|
+         RCPT c.c["friend@galaxy.com"].c(response).{print(response); <|
+          DATA c.c["Hello to bravest warriors!"].c(response).{print(response); <|
+            QUIT c.
+             c().return[()].return[] |> } |> } |> } |> } |>
+}
+
+
+fun main() {
+    run (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, return)}) |>})
+}
+
+main()

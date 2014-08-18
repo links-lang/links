@@ -1,0 +1,171 @@
+# Multiple recipients.
+
+typename Domain = String;
+typename Address = String;
+typename Accept = String;
+typename Message = String;
+typename Error = String;
+typename Response = String;
+
+
+#typename SMTPClient = [+| EHLO:!Domain.?Response.
+#								mu outer.[+| MAIL:!Address.[&| REJECT:?Error.outer, ACCEPT:
+#									mu rcptLoop.
+#									[+| RCPT:!Address.[&| REJECT:?Error.rcptLoop, ACCEPT: 
+#										mu inner.[+| RCPT:!Address.[&| REJECT:?Error.inner, ACCEPT:inner |&], 	
+#										DATA:!Message.outer |+] |&] |+] |&], QUIT:EndBang |+] |+];
+
+
+typename SMTPServer = [&| EHLO:?Domain.!Response.
+								mu outer.[&| MAIL:?Address.[+| REJECT:!Error.outer, ACCEPT:
+									mu rcptLoop.
+									[&| RCPT:?Address.[+| REJECT:!Error.rcptLoop, ACCEPT: 
+										mu inner.[&| RCPT:?Address.[+| REJECT:!Error.inner, ACCEPT:inner |+], 		DATA:?Message.outer |&] |+] |&] |+], QUIT:EndBang |&] |&];
+
+
+
+
+sig mailServer : (SMTPServer) ~> EndBang
+fun mailServer(s) {
+ offer(s) {
+   	case EHLO(s) ->
+   					var (domain, s) = receive(s);
+   					print("S: received domain: " ^^ domain);
+   					var s = send("C: Session started successfully.", s);
+   					outer(s)
+  }
+}
+
+fun outer(s) {
+  offer(s) {
+  	case MAIL(s) ->
+  					var (address, s) = receive(s);
+  					print("S: received from: " ^^ address);
+  					if (valid(address)) {
+  						var s = select ACCEPT s;
+  						rcptLoop(s)
+  					}
+  					else {
+  						var s = send("S: Invalid address.", select REJECT s);
+  						outer(s)
+  					}
+
+  	case QUIT(s) -> s
+  }
+}
+
+fun rcptLoop(s) {
+	offer(s) {
+		case RCPT(s) ->
+						var (recipient, s) = receive(s);
+						print("S: received recipient: " ^^ recipient);
+						if (valid(recipient)) {
+							var s = select ACCEPT s;
+							inner(s)
+						}
+						else {
+							var s = send("S: Invalid recipient.", select REJECT s);
+							rcptLoop(s)
+						}
+	}
+}
+
+
+fun inner(s) {
+	offer(s) {
+		case RCPT(s) ->
+						var (recipient, s) = receive(s);
+						print("S: received recipient: " ^^ recipient);
+						if (valid(recipient)) {
+							var s = select ACCEPT s;
+							inner(s)
+						}
+						else {
+							var s = send("S: Invalid recipient.", select REJECT s);
+							inner(s)
+						}
+		case DATA(s) ->
+						var (message, s) = receive(s);
+						print("S: received message: " ^^ message);
+						outer(s)
+	}
+}
+
+
+# Returns true, if the given String is a valid e-mail address.
+sig valid : (String) ~> Bool
+fun valid(address) {
+	address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
+}
+
+
+sig mailClient : (~SMTPServer) ~> ()
+fun mailClient(c) {
+		var (response, c) = receive(send("mydomain.com", select EHLO c));
+		print(response);
+		outerClient(c)
+}
+
+
+fun outerClient(c) {
+		var c = send("starlight@domain.com", select MAIL c);
+		offer (c) {
+			case REJECT(c) ->	
+								var (error, c) = receive(c);
+								print(error);
+								outerClient(c)
+	
+			case ACCEPT(c) ->	
+								rcptLoopClient(c)
+		}
+}
+
+fun innerClient(c, addRcpt) {
+	# Either one more recipient or data
+	if (addRcpt) {
+		addRecipient(c)
+	}
+	else {
+		addData(c)
+	}
+}
+
+fun addData(c) {
+	var c = send("Hello to bravest warriors!", select DATA c);
+	var c = select QUIT c;
+	wait(c);
+	()
+}
+
+fun addRecipient(c) {
+	var c = send("pink@cloud", select RCPT c);
+	offer (c) {
+		case REJECT(c) -> 
+						var (error, c) = receive(c);
+						print(error);
+						innerClient(c, false)
+		case ACCEPT(c) ->
+						innerClient(c, false)
+	}
+}
+
+
+fun rcptLoopClient(c) {
+	var c = send("friend@galaxy.com", select RCPT c);
+	offer(c) {
+			case REJECT(c) -> 
+								var (error, c) = receive(c);
+								rcptLoopClient(c)
+			case ACCEPT(c) ->
+								innerClient(c, true)
+	}
+}
+
+
+fun main() {
+	mailClient(fork(mailServer))
+}
+
+main()
+
+
