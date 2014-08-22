@@ -2,7 +2,7 @@
 module AliasEnv = Env.String
 
 let alias_env : Types.tycon_environment =
-  List.fold_left 
+  List.fold_left
     AliasEnv.bind
     AliasEnv.empty
     [
@@ -14,4 +14,5 @@ let alias_env : Types.tycon_environment =
       "DomNode" , `Abstract Types.dom_node;
       "AP"      , `Abstract Types.access_point;
       "EndBang" , `Alias ([], Types.make_endbang_type);
+      "Socket"  , `Abstract Types.socket
     ]

@@ -106,6 +106,12 @@ let access_point = {
   arity      = [`Type, (`Any, `Session)] ;
 }
 
+let socket = {
+  Abstype.id = "Socket";
+  name = "Socket";
+  arity = []
+}
+
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't
     | `Output of 't * 't

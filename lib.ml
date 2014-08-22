@@ -1231,7 +1231,47 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
                )),
             datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
-            IMPURE)
+            IMPURE);
+    "connectSocket",
+    (`Server (p2 (fun serverv portv ->
+                  try
+                    let server = unbox_string serverv in
+                    let port = unbox_int portv in
+                    let server_addr =
+                      try  Unix.inet_addr_of_string server
+                      with Failure("inet_addr_of_string") ->
+                        (Unix.gethostbyname server).Unix.h_addr_list.(0) in
+                    let sockaddr = Unix.ADDR_INET(server_addr, Num.int_of_num port) in
+                    let domain = Unix.domain_of_sockaddr sockaddr in
+                    let sock = Unix.socket domain Unix.SOCK_STREAM 0 in
+                    Unix.connect sock sockaddr;
+                    `Variant ("Just", box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
+                  with exn -> `Variant ("Nothing", `Record []))),
+     datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
+     IMPURE);
+    "writeToSocket",
+    (`Server (p2 (fun messagev socketv ->
+                  let message = unbox_string messagev in
+                  let (_, outc) = unbox_socket socketv in
+                  output_string outc message;
+                  flush outc;
+                  `Record [])),
+     datatype "(String, Socket) ~> ()",
+     IMPURE);
+    "readFromSocket",
+    (`Server (p1 (fun socketv ->
+                  let (inc, _) = unbox_socket socketv in
+                  let r = input_line inc in
+                  box_string r)),
+     datatype "(Socket) ~> String",
+     IMPURE);
+    "closeSocket",
+    (`Server (p1 (fun socketv ->
+                  let (inc, _) = unbox_socket socketv in
+                  Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
+                  `Record [])),
+     datatype "(Socket) ~> ()",
+     IMPURE)
 ]
 
 (* HACK
