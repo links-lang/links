@@ -1245,6 +1245,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     let domain = Unix.domain_of_sockaddr sockaddr in
                     let sock = Unix.socket domain Unix.SOCK_STREAM 0 in
                     Unix.connect sock sockaddr;
+                    Unix.set_nonblock sock;
                     `Variant ("Just", box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
                   with exn -> `Variant ("Nothing", `Record []))),
      datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
@@ -1261,9 +1262,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "readFromSocket",
     (`Server (p1 (fun socketv ->
                   let (inc, _) = unbox_socket socketv in
-                  let r = input_line inc in
-                  box_string r)),
-     datatype "(Socket) ~> String",
+                  try
+                    let r = input_line inc in
+                    `Variant ("Just", box_string r)
+                  with
+                    Sys_blocked_io ->
+                    `Variant ("Nothing", `Record []))),
+     datatype "(Socket) ~> [|Nothing|Just:String|]",
      IMPURE);
     "closeSocket",
     (`Server (p1 (fun socketv ->
