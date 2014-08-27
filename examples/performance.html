@@ -1,0 +1,513 @@
+<!doctype html>
+<html>
+<head>
+
+<style>
+
+	#info {
+		font-size: 96px;
+	}
+
+	#gameContainer {
+		position: relative;
+		width: 600px;
+		height: 500px;
+		background-color: #ddd
+	}
+
+	#gameCanvas {
+		display: none;
+		position: absolute;
+		top: 0px;
+		left: 0px;
+	}
+
+	#gameCanvas2 {
+		display: block;
+		position: absolute;
+		top: 0px;
+		left: 0px;
+	}
+</style>
+
+<script>
+	//
+	// Performance chart
+	//
+
+	//
+	// JSLIB STUFF, ETC.
+	//
+
+	(function() {
+		var timeouts = [];
+		var messageName = "0TMsg";
+
+		function setZeroTimeout(fn) {
+			timeouts.push(fn);
+			window.postMessage(messageName, "*");
+		}
+
+		function handleMessage(event) {
+			if (event.source == window && event.data == messageName) {
+				event.stopPropagation();
+				if (timeouts.length > 0)
+					timeouts.shift()();
+			}
+		}
+		window.addEventListener("message", handleMessage, true);
+
+		window.setZeroTimeout = setZeroTimeout;
+	})();
+
+	function getCharCode(e) {
+        return e.keyCode;
+	}
+	//~ getCharCode: function(ev) {
+		//~ var code = ev.keyCode || ev.charCode || 0;
+//~ 
+		//~ // webkit key normalization
+		//~ if (YAHOO.env.ua.webkit && (code in webkitKeymap)) {
+			//~ code = webkitKeymap[code];
+		//~ }
+		//~ return code;
+	//~ },
+
+	//
+	// CONSTANTS
+    //
+
+    // CANVAS PARAMETERS
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+    var canvasWidth = 600;
+    var canvasHeight = 500;
+
+	// KEYCODES
+	var leftKeyCode = 37;
+	var rightKeyCode = 39;
+	var upKeyCode = 38;
+	var downKeyCode = 40;
+	var restartKeyCode = 113;
+    
+
+	// INITIAL STATE
+	var initialFpsInfo = {frameCount: 0, dFps: 0.0, avgFps: 0.0, fpsAcc: 0.0,
+							loFps: 1000000.0, hiFps: 0.0, loFpsFrame: 0, upFrames: 0, downFrames: 0};
+
+	var initialChartParams = {measure: 0.5, xScale: canvasWidth, yScale: canvasHeight, snap: false, round: 0};
+
+	var initialDatapoints = [];
+	for (var x = 0, y = 0; x < initialChartParams.xScale; ++x) {
+		initialDatapoints.push({x: x, y: y});
+	}
+
+	var xAxis = [];
+	for (x = 0, y = initialChartParams.yScale - 1; x < initialChartParams.xScale; ++x) {
+         if ((x % 60) == 0) {
+			xAxis.push({x: x, y: y});
+		}
+	}
+
+	var doubleBuffer = false;
+
+	// TIMESTEP
+    var step = 1.0 / 60.0;
+
+	//
+	// GLOBAL SETUP
+	//
+	var initialized = false;
+
+	//
+	// PSEUDOTYPES
+	//
+	function KeyDown(i) {
+		return ['KeyDown', i];
+	}
+
+	function KeyUp(i) {
+		return ['KeyUp', i];
+	}
+
+	//
+	// LIBRARY FUNCTIONS
+	//
+
+	function last(x) {
+		return x[x.length - 1];
+	}
+
+	//
+	// AUX FUNCTIONS
+	//
+	
+	function clear(ctx) {
+		ctx.clearRect(0.0, 0.0, ctx.canvas.width, ctx.canvas.height);
+	}
+
+	function putPixel(ctx, x, y) {
+		ctx.fillRect(x, y, 2.0, 2.0);
+	}
+
+	function arraysEqual(a, b) {
+		if (a === b) return true;
+		if (a == null || b == null) return false;
+		if (a.length != b.length) return false;
+
+		for (var i = 0; i < a.length; ++i) {
+			if (a[i] !== b[i]) return false;
+		}
+		return true;
+	}
+
+	//
+	// FUNCTIONS
+	//
+
+	// logic, depends on masterProc
+	function updateLogic(dt, chartParams, i) {
+		while (dt > step) {
+			// handle input
+			var lastInput;
+			
+			if (i.length > 0) { lastInput = i[0]; }
+			else { lastInput = KeyDown(-1); }
+
+			if (arraysEqual(lastInput, KeyDown(upKeyCode)))
+				chartParams.measure = chartParams.measure + 0.01;
+			else if (arraysEqual(lastInput, KeyDown(downKeyCode)))
+				chartParams.measure = chartParams.measure - 0.01;
+			else if (arraysEqual(lastInput, KeyDown(leftKeyCode)))
+				chartParams.xScale = chartParams.xScale - 1.0;
+			else if (arraysEqual(lastInput, KeyDown(rightKeyCode)))
+				chartParams.measure = chartParams.xScale + 1.0;
+
+			//masterProcId ! (dumProcId, KeyDown(-1):Input); # reset input
+			globalInput = [];
+			
+			dt -= step;
+			i = [];
+			//updateLogic(dt - step, chartParams, []);
+		}
+		return {1: chartParams, 2: dt};
+	}
+
+	var globalInput = [];
+
+	function updateState() {
+		function mainLoop(chartParams, dt, lastTime, fpsInfo, datapoints) {
+			var now = Date.now();
+			var dt = dt + Math.min(1.0, now - lastTime / 1000.0);
+
+			var i = globalInput; // possibly should be copied
+
+			var lastInput = last(i);
+			 
+			if (!arraysEqual(lastInput, KeyUp(restartKeyCode))) {
+				if (arraysEqual(lastInput, KeyDown(-3)))
+					chartParams.snap = true;
+				else
+					chartParams.snap = false;
+				
+				var updatedLogic = updateLogic(dt, chartParams, i);
+
+				var drawInfo = draw(datapoints, lastTime, now, fpsInfo, updatedLogic["1"]);
+				updatedLogic["1"].round += 1;
+
+				
+				window.requestAnimationFrame(function() { mainLoop(updatedLogic["1"], updatedLogic["2"], now, drawInfo["1"], drawInfo["2"]) });
+			} else requestAnimationFrame(updateState);
+		}
+
+		mainLoop(initialChartParams, 0.0, Date.now(), initialFpsInfo, initialDatapoints);
+
+		//if (not(haveMail())) self() ! ([]: [Input]) else ();
+		//updateState()
+	}
+	//var updateProcId = spawn { updateState() };
+
+	//setInterval(updateState, 
+
+	// sending messages would mean reimplementing the mechanism from jslib.js
+	// other option: global input object modified directly by onkeydown/up/etc.
+	//function inputStateLoop(i) {
+		//var r = recv();
+
+		//var i = if (not(r == KeyDown(-1))) i ++ [r] else ([]:[Input]);
+
+		//if (not(r == KeyDown(-1)))
+			//updateProcId ! i
+		//else ();
+		
+		//inputStateLoop(i)
+	//}
+
+	function onKeyDown(e) {
+		//setZeroTimeout(function() { inputStateLoop(KeyDown(getCharCode(e))) });// inputProcId ! (KeyDown(getCharCode(e)):Input); 
+		globalInput.push(KeyDown(getCharCode(e)));
+	}
+
+	function onKeyUp(e) {
+		//setZeroTimeout(function() { inputStateLoop(KeyDown(getCharCode(e))) });// inputProcId ! (KeyUp(getCharCode(e)):Input); 
+		globalInput.push(KeyUp(getCharCode(e)));
+	}
+
+    // could also do everything using messages in javascript
+	function initialize() {
+		if (!initialized) {
+			//
+			// HTML/CSS SETUP
+			//
+			document.getElementById(canvasId).style.width = canvasWidth + "px";
+			document.getElementById(canvas2Id).style.width = canvasWidth + "px";
+			document.getElementById(containerId).style.width = canvasWidth + "px";
+
+			document.getElementById(containerId).addEventListener("keydown", onKeyDown, true);
+			document.getElementById(containerId).addEventListener("keyup", onKeyUp, true);
+
+            document.getElementById("info").style.display = "none";
+
+			setZeroTimeout(updateState);
+			initialized = true;
+		}
+
+		// updateProcId ! ([]:[Input])
+		// setZeroTimeout(function () { updateState([]) })
+	}
+	
+
+	//var containerElement = document.getElementById(containerId);
+
+	//
+	// DRAWING
+	//	
+	function draw(datapoints, lastTime, now, fpsInfo, chartParams) {
+        // prepare canvas
+		if (document.getElementById(canvasId).style["display"] == "none" || !doubleBuffer) {
+			var mainCanvas = canvasId;
+			var dispCanvas = canvas2Id;
+		} else {
+			var mainCanvas = canvas2Id;
+			var dispCanvas = canvasId;
+		}
+		document.getElementById(canvasId).style["display"] = "block";
+
+		var ctx = document.getElementById(mainCanvas).getContext("2d");
+
+		clear(ctx);
+		
+        // HELPER FUNCTIONS
+		function scalePoint(p) {
+			return {x: p.x, y: chartParams.yScale - (p.y / fpsInfo.hiFps) * chartParams.yScale};
+		}
+
+		function drawChartLine(ctx, color, y, msg) {
+			ctx.strokeStyle = color;
+			ctx.beginPath();
+			var scaledP = scalePoint({x: 0, y: y});
+			ctx.moveTo(0.0, scaledP.y);
+			ctx.lineTo(chartParams.xScale, scaledP.y);
+			ctx.stroke();
+			ctx.fillText(msg + (y + "").substring(0, 5), 10, scaledP.y);
+		    return scaledP.y;
+		}
+
+		function markYAxis(fraction) {
+			var scaledP = scalePoint({x: 0, y: fraction * fpsInfo.hiFps});
+			for (var i = 0; i < 6; ++i) {
+				putPixel(ctx, i, scaledP.y);
+			}
+
+			ctx.fillText(((fraction * fpsInfo.hiFps) + "").substring(0, 7), 10.0, scaledP.y);
+        }
+
+		// prepare datapoints
+		var offset = fpsInfo.frameCount;
+
+		var dFps = 1000.0 / ((now - lastTime) + 1.0);
+
+		var leftPoints = datapoints.slice(0, offset);
+		
+		var middlePoint = [{x: offset + 1, y: dFps}];
+
+		var datapointsLength = datapoints.length;
+        var diff = chartParams.xScale - datapointsLength;
+			
+		var rightPoints = datapoints.slice(0, chartParams.xScale).slice(offset + 1);
+
+		// debug info
+		//ctx.fillText("granularity: " ^^ intToString(debugGetStats("yieldGranularity")), 230.0, 10.0);
+		//ctx.fillText("yieldCount: " ^^ intToString(debugGetStats("yieldCount")), 320.0, 10.0);
+		ctx.fillText("double buffering: " + (doubleBuffer? "on" : "off"), 470.0, 10.0);
+		ctx.fillText(document.getElementById("otherInfo").value, 10.0, 30.0);
+
+		// chart reference lines
+		drawChartLine(ctx, "red", fpsInfo.loFps, "lowest FPS: ");
+		
+		drawChartLine(ctx, "blue", fpsInfo.avgFps, "average FPS: ");
+
+		var measure = fpsInfo.avgFps * chartParams.measure;
+		var mesPoint = drawChartLine(ctx, "green", measure, "reference FPS: ");
+
+		// draw x axis (frame numbers)
+		ctx.fillText("frame", chartParams.xScale - 40.0, chartParams.yScale - 20.0);
+
+		ctx.fillStyle = "black";
+
+        for (var loopCounter = 0; loopCounter < xAxis.length; ++loopCounter) {
+			for (var loopCounter2 = 0; loopCounter2 < 6; ++loopCounter2) {
+                putPixel(ctx, xAxis[loopCounter].x, xAxis[loopCounter].y - loopCounter2);
+			}
+
+			ctx.fillText(xAxis[loopCounter].x + "", xAxis[loopCounter].x, xAxis[loopCounter].y - 10);
+		}
+
+		// draw datapoints
+		ctx.beginPath();
+		var firstPoint = scalePoint(datapoints[0]);
+		
+		ctx.moveTo(firstPoint.x, firstPoint.y);
+
+		var midPoint = scalePoint(middlePoint[0]);
+
+		// helper:
+        function plotPoint(p) {
+			var scaledP = scalePoint(p);
+			putPixel(ctx, scaledP.x, scaledP.y);
+			if (scaledP.y < mesPoint) return 1;
+			else return -1;
+		}
+		
+		ctx.fillStyle = "#222";
+		//var plottedLeftPoints = [];
+
+		//for (loopCounter = 0; loopCounter < leftPoints.length; ++loopCounter) {
+			//plottedLeftPoints.push(plotPoint(leftPoints[loopCounter]));
+		//}
+		var plottedLeftPoints = leftPoints.map(plotPoint);
+
+		// calculate additional data for saving to file
+		if (chartParams.snap) {
+			var leftPointsAboveMeasureCount = plottedLeftPoints.filter(function (x) { return x == 1; }).length;
+			var leftPointsBelowMeasureCount = plottedLeftPoints.length - leftPointsAboveMeasureCount;
+			ctx.fillText("frames above: " + leftPointsAboveMeasureCount, 10.0, mesPoint + 15.0);
+			ctx.fillText("frames below: " + leftPointsBelowMeasureCount, 150.0, mesPoint + 15.0);
+			ctx.fillText("ratio: " + ((leftPointsAboveMeasureCount / leftPointsBelowMeasureCount) + "").substring(0, 7), 300.0, mesPoint + 15.0);
+		}
+		
+		ctx.fillStyle = "#2a2";
+		plotPoint(middlePoint[0]);
+		
+		ctx.fillStyle = "#888";
+		// plot right points
+		//for (loopCounter = 0; loopCounter < rightPoints.length; ++loopCounter) {
+			//plotPoint(rightPoints[loopCounter]);
+		//}
+		rightPoints.map(plotPoint);
+
+		ctx.stroke();
+
+		// draw y axis (FPS)
+        ctx.fillStyle = "#770";
+        markYAxis(0.25);
+        markYAxis(0.50);
+        markYAxis(0.75);
+
+		// calculate and draw new fpsInfo
+		var fpsInfo = drawFps(ctx, fpsInfo, dFps, chartParams);
+
+		// new datapoints
+		var datapoints = leftPoints.concat(middlePoint).concat(rightPoints);
+
+		// double buffering
+		if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas);
+
+		// save canvas to file
+		if (chartParams.snap) {
+			document.getElementById("download").setAttribute("download", document.getElementById("otherInfo").value
+				+ "-round-"
+				+ chartParams.round
+				+ "-timestamp-"
+				+ Date.now());
+
+			var imageData = document.getElementById(mainCanvas).toDataURL("image/png");//.replace("image/png", "image/octet-stream");;
+			document.getElementById("download").href = imageData;
+		}
+
+		return {1: fpsInfo, 2: datapoints};
+	}
+
+	function drawFps(ctx, fpsInfo, dFps, chartParams) {
+		fpsInfo.frameCount += 1;
+		fpsInfo.dFps = dFps;
+
+		ctx.fillStyle = "#000";
+		ctx.fillText("FPS: " + (dFps + "").substring(0, 7), 10.0, 10.0);
+		
+		if (fpsInfo.loFps > dFps) {
+			fpsInfo.loFps = dFps;
+			fpsInfo.loFpsFrame = fpsInfo.frameCount - 1;
+		}
+
+		if (fpsInfo.hiFps < dFps)
+			fpsInfo.hiFps = dFps;
+
+		fpsInfo.fpsAcc = fpsInfo.fpsAcc + dFps;
+		
+		var aFpsFrames = chartParams.xScale;
+
+		if (fpsInfo.frameCount > aFpsFrames) {
+			fpsInfo.avgFps = fpsInfo.fpsAcc / aFpsFrames;
+			fpsInfo.fpsAcc = 0.0;
+			fpsInfo.frameCount = 0;
+		}
+
+		if (fpsInfo.avgFps > 0.0) {
+			if (dFps < fpsInfo.avgFps * chartParams.measure)
+				fpsInfo.downFrames = fpsInfo.downFrames + 1;
+			else fpsInfo.upFrames = fpsInfo.upFrames + 1;
+		} else fpsInfo.hiFps = 0.0;
+
+		if (fpsInfo.hiFps == 0.0)
+			ctx.fillText("loading data: " + fpsInfo.frameCount + "/" + aFpsFrames, 100.0, 10.0)
+		else
+			ctx.fillText("highest FPS: " + (fpsInfo.hiFps + "").substring(0, 7), 100.0, 10.0);
+		
+		return fpsInfo;
+	}
+
+	function swapBuffers(mainCanvas, dispCanvas) {
+		var mainCanvasElement = document.getElementById(mainCanvas);
+		var dispCanvasElement = document.getElementById(dispCanvas);
+		var ctx = dispCanvasElement.getContext("2d");
+		ctx.drawImage(mainCanvasElement, 0.0, 0.0);
+		
+		mainCanvasElement.style["display"] = "block";
+		dispCanvasElement.style["display"] = "none";
+		clear(ctx);
+	}
+
+</script>
+
+</head>
+<body>
+<div id="container">
+	<h1>JavaScript performance benchmark</h1>
+
+	<div id="gameContainer" tabindex="1"
+		onfocus="initialize()">
+		<canvas id="gameCanvas" width="600" height="500"></canvas>
+		<canvas id="gameCanvas2" width="600" height="500"></canvas>
+		<div id="info">Click this rectangle to start.</div>
+	</div>
+	<div id="msg"></div>
+	<a id="download" tabindex="2" download="1.png" onfocus="setZeroTimeout(function() { globalInput.push(KeyDown(-3)) })">Download as image</a>
+	<form>
+		Other info: <input type="text" id="otherInfo" style="width:500px" />
+	</form> 
+</div>
+</body>
+</html>
