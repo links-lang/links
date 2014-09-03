@@ -29,7 +29,8 @@ sig mailServer : (SMTPServer) ~> EndBang
 fun mailServer(s) {
   var realServer = connectSocket("smtp.inf.ed.ac.uk", 25);
   var realServer = fromJust(realServer);
-  var welcomeMessage = readFromSocket(realServer);
+  #var welcomeMessage = readFromSocket(realServer);
+  var welcomeMessage = readServer(realServer);
   print("S: " ^^ welcomeMessage);
   start(s, realServer) 
 }
@@ -39,7 +40,8 @@ fun start(s, realServer) {
 <| offer s {
 	case HELO -> s(domain).{
 					writeToSocket("HELO " ^^ domain ^^ "\n", realServer);
-					var smtpAnswer = readFromSocket(realServer);
+					#var smtpAnswer = readFromSocket(realServer);
+          var smtpAnswer = readServer(realServer);
 					print("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
@@ -56,7 +58,8 @@ fun outer(s, realServer) {
 <| offer s {
 	case MAIL -> s(address).{
 					writeToSocket("MAIL FROM:<" ^^ address ^^ ">\n", realServer);
-					var smtpAnswer = readFromSocket(realServer);
+					#var smtpAnswer = readFromSocket(realServer);
+          var smtpAnswer = readServer(realServer);
 					print("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
@@ -69,7 +72,8 @@ fun outer(s, realServer) {
 	case QUIT -> { 
 	     print("C: QUIT");
        writeToSocket("QUIT\n", realServer);
-       print("S: " ^^ readFromSocket(realServer));
+       var smtpAnswer = readServer(realServer);
+       print("S: " ^^ smtpAnswer);
        closeSocket(realServer); <| s[] |> } 
 
   } |>
@@ -79,7 +83,8 @@ fun rcptLoop(s, realServer) {
 <| offer s {
 	case RCPT -> s(rcpt).{
 					writeToSocket("RCPT TO:<" ^^ rcpt ^^ ">\n", realServer);
-					var smtpAnswer = readFromSocket(realServer);
+					#var smtpAnswer = readFromSocket(realServer);
+          var smtpAnswer = readServer(realServer);
 					print("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
@@ -96,8 +101,9 @@ fun inner(s, realServer) {
 <| offer s {
 	case RCPT -> s(rcpt).{
 					writeToSocket("RCPT TO:<" ^^ rcpt ^^ ">\n", realServer);
-					var smtpAnswer = readFromSocket(realServer);
-					print("S: " ^^ smtpAnswer);
+					#var smtpAnswer = readFromSocket(realServer);
+					var smtpAnswer = readServer(realServer);
+          print("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
 						<| REJECT s.{print("S: " ^^ smtpAnswer); <|{ {inner(s, realServer)} }|> } |>
@@ -108,7 +114,8 @@ fun inner(s, realServer) {
 	}
 	case DATA -> s(subject).s(message).{
 	  writeToSocket("DATA\n", realServer);
-      var smtpAnswer = readFromSocket(realServer);
+      #var smtpAnswer = readFromSocket(realServer);
+      var smtpAnswer = readServer(realServer);
       print("S: " ^^ smtpAnswer);   
       writeToSocket("SUBJECT: " ^^ subject ^^ "\n", realServer);
       print("C: SUBJECT: " ^^ subject);
@@ -116,7 +123,8 @@ fun inner(s, realServer) {
       print("C: " ^^ message);
       writeToSocket("\n.\n", realServer);
       print("C: .");
-      var smtpAnswer = readFromSocket(realServer);
+      #var smtpAnswer = readFromSocket(realServer);
+      var smtpAnswer = readServer(realServer);
       print("S: " ^^ smtpAnswer);
       outer(s, realServer) } 
 
@@ -145,6 +153,14 @@ fun extractDomain0(address) {
       case x::xs -> if (x == '@') xs
              else extractDomain0(xs)
     }
+}
+
+fun readServer(realServer) {
+  #var smtpAnswer = readFromSocket(realServer);
+  switch(readFromSocket(realServer)) {
+    case Just(s) -> s
+    case Nothing -> readServer(realServer)
+  }
 }
 
 sig mailClient : (~SMTPServer, (1:String, 2:[String], 3:String, 4:String), !().EndBang) ~> EndBang
