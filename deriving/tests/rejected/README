@@ -1,4 +1,0 @@
-This directory contains programs that are syntactically correct but
-that are rejected by deriving because the types invovled don't meet
-the requirements for the classses in the deriving list.  They're here
-so that it's easy to check the quality of the error messages produced.

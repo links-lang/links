@@ -16,7 +16,7 @@ end
 =
 struct
   let show s program =
-    Debug.print (s ^ ": " ^ Show.show Sugartypes.show_program program);
+    Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
     program
 
   (* (These functions correspond to 'first' in an arrow) *)
@@ -26,7 +26,7 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
-        Debug.print ("program: " ^ Show.show Sugartypes.show_program program);
+        Debug.print ("program: " ^ Sugartypes.Show_program.show program);
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
