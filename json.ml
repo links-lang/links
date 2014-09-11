@@ -23,7 +23,7 @@ let json_of_table ((db, params), name, row) =
   "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
   "\",row:\"" ^ Types.string_of_datatype (`Record row) ^ "\"}}"
 
-let js_dq_escape_string str = 
+let js_dq_escape_string str =
   (* escape for placement in double-quoted string *)
   Str.global_replace (Str.regexp_string "\"") "\\\""
     (Str.global_replace (Str.regexp_string "\n") "\\n"
@@ -72,25 +72,26 @@ let rec jsonize_value : Value.t -> string = function
   | `RecFunction(defs, env, f, _scope) ->
       "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
       " \"location\":\"server\"," ^
-      " \"environment\": {" ^ 
-        String.concat "," (IntMap.to_list(fun k (v,_) -> 
+      " \"environment\": {" ^
+        String.concat "," (IntMap.to_list(fun k (v,_) ->
                                             string_of_int k ^ ":" ^
                                               jsonize_value v) (Value.get_parameters env))
       ^ "}}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
   | `Record fields ->
-      "{" ^ 
+      "{" ^
         mapstrcat "," (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields
       ^ "}"
   | `List [] -> "[]"
   | `List (elems) ->
       "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
+  | `Socket _ -> failwith "Cannot jsonize sockets"
 
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let jsonize_value value = 
+let jsonize_value value =
   Debug.if_set show_json
     (fun () -> "jsonize_value => " ^ Value.string_of_value value);
   let rv = jsonize_value value in
@@ -107,9 +108,9 @@ let jsonize_value value =
     type so we can't inspect it here. Consider changing this.
 *)
 let jsonize_call continuation name args =
-  Printf.sprintf 
+  Printf.sprintf
     "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
-    (encode_continuation continuation) 
+    (encode_continuation continuation)
     name
     (Utility.mapstrcat ", " jsonize_value args)
 

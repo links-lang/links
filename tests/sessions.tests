@@ -18,18 +18,18 @@ fun (x) {(x, x)}
 stdout : fun : (a) -> (a, a)
 exit : 0
 
-Grab value
-fun (c) {grab(c).1}
+Receive value
+fun (c) {receive(c).1}
 stdout : fun : (?a::Any._::(Unl,Session)) ~> a::Any
 exit : 0
 
-Grab channel
-fun (c) {grab(c).2}
+Receive channel
+fun (c) {receive(c).2}
 stdout : fun : (?_.b::Session) ~> b::Session
 exit : 0
 
-Ignore give
-fun (c) {ignore(give(42, c))}
+Ignore send
+fun (c) {ignore(send(42, c))}
 stdout : fun : (!Int._::(Unl,Session)) ~> ()
 exit : 0
 

@@ -5,14 +5,14 @@ sig calc : (CalcOffer) ~> ()
 fun calc(s) client {
   offer (s) {
     case Add(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x+y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
       calc(s)
     case Mul(s) ->
-      var (x,s) = grab(s);
-      var (y,s) = grab(s);
-      var s = give(x*y,s);
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
       calc(s)
     case Stop(s) ->
       ()
@@ -21,17 +21,15 @@ fun calc(s) client {
 
 sig user : (CalcSelect) ~> Int
 fun user(s) client {
-  var (x, s) = grab(give(6,give(7,select Mul s)));
-  var (y, s) = grab(give(6,give(7,select Mul s)));
-  var (z, s) = grab(give(x,give(y,select Add s)));
+  var (x, s) = receive(send(6,send(7,select Mul s)));
+  var (y, s) = receive(send(6,send(7,select Mul s)));
+  var (z, s) = receive(send(x,send(y,select Add s)));
   var _ = select Stop s;
   z
 }
 
 fun main() client {
-  var a = new ();
-  var _ = spawn { calc(accept(a)) };
-  user(request(a))
+  user(knife(calc))
 }
 
 

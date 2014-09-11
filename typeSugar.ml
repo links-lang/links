@@ -5,6 +5,8 @@ open Sugartypes
 let constrain_absence_types = Settings.add_bool ("constrain_absence_types",
                                                  false, `User)
 
+let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
+
 let check_top_level_purity =
   Settings.add_bool ("check_top_level_purity", false, `User)
 
@@ -257,17 +259,24 @@ sig
 
   val splice_exp : griper
 
+  (* val fuse_session : griper *)
+  (* val fuse_dual : griper *)
+
   val offer_variant : griper
   val offer_patterns : griper
 
   val selection : griper
 
-  val cp_grab : griper
-  val cp_give : griper
-  val cp_select : griper
-  val cp_offer_choice : griper
+  val cp_unquote : griper
+  val cp_grab : string -> griper
+  val cp_give : string -> griper
+  val cp_select : string -> griper
+  val cp_offer_choice : string -> griper
   val cp_offer_branches : griper
   val cp_comp_left : griper
+  val cp_fuse_session : griper
+  val cp_fuse_dual : griper
+
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -817,6 +826,27 @@ but the expression here has type " ^ (show_type lt))
 
 
 (* session stuff *)
+(*     let fuse_session ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ = *)
+(*       die pos ("\ *)
+(* Only session types can be fused, but \ *)
+(* the expression" ^ nl() ^ *)
+(* tab() ^ code lexpr ^ nl() ^ *)
+(* "has type" ^ nl() ^ *)
+(* tab() ^ code (show_type lt) ^ nl() ^ *)
+(* "which is not a session type") *)
+
+(*     let fuse_dual ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ = *)
+(*       die pos ("\ *)
+(* Only dual session types can be fused, but \ *)
+(* the dual of the type of expression" ^ nl() ^ *)
+(* tab() ^ code lexpr ^ nl() ^ *)
+(* "is" ^ nl() ^ *)
+(* tab() ^ code (show_type lt) ^ nl() ^ *)
+(* "and the expression" ^ nl() ^ *)
+(* tab() ^ code rexpr ^ nl() ^ *)
+(* "has type" ^ nl() ^ *)
+(* tab() ^ code (show_type rt)) *)
+
     let selection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
       die pos ("\
 Only a label that is present in a session selection can be selected, but \
@@ -843,27 +873,38 @@ tab () ^ code (show_type lt) ^ nl () ^
 "while the subsequent patterns have type" ^ nl () ^
 tab () ^ code (show_type rt))
 
-    let cp_grab ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-The channel in a receive expression must have input type, but has type" ^ nl () ^
+Spliced expression should have
+EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
-    let cp_give ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_grab channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
       die pos ("\
-The channel in a send expression must have output type, but has type" ^ nl () ^
+Channel " ^ channel ^ " was expected to have input type, " ^ nl () ^
+"but has type" ^ nl () ^
+tab () ^ code (show_type actual) ^ nl () ^
+"instead.")
+
+    let cp_give channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
+      die pos ("\
+Channel " ^ channel ^ " was expected to have output type," ^ nl () ^
+"but has type" ^ nl () ^
+tab () ^ code (show_type actual) ^ nl () ^
+"instead.")
+
+    let cp_select channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Channel " ^ channel ^ " was expected to have selection type," ^ nl () ^
+"but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
-    let cp_select ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_offer_choice channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-The channel in a select expression must have selection type, but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
-
-    let cp_offer_choice ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The channel in an offer expression must have choice type, but has type" ^ nl () ^
+Channel " ^ channel ^ " was expected to have choice type," ^ nl () ^
+"but has type" ^ nl () ^
 tab () ^ code (show_type lt) ^ nl () ^
 "instead.")
 
@@ -874,16 +915,33 @@ tab () ^ code (show_type lt) ^ nl () ^
 "and" ^ nl () ^
 tab () ^ code (show_type rt))
 
+    let cp_fuse_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
+      die pos ("\
+Only session types can be fused, but \
+the type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"is not a session type")
+
+    let cp_fuse_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+Only dual session types can be fused, but \
+the type" ^ nl() ^
+tab() ^ code (show_type lt) ^ nl() ^
+"is not the dual of the type" ^ nl() ^
+tab() ^ code (show_type rt))
+
     let cp_comp_left ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-The left-hand computation in a composition must have unit type, but has type" ^ nl () ^
+The left-hand computation in a composition must have
+EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type rt) ^ nl () ^
 "instead.")
 
     let non_linearity pos uses v t =
       die pos ("\
-Non-linear use (" ^ string_of_int uses ^ " uses) of variable " ^
-                  v ^ " of linear type " ^ Types.string_of_datatype t)
+Variable " ^ v ^ " has linear type " ^ nl () ^
+tab () ^ code (show_type t) ^ nl () ^
+"but is used " ^ string_of_int uses ^ " times.")
 end
 
 type context = Types.typing_environment = {
@@ -971,7 +1029,7 @@ let type_binary_op ctxt =
         ([`Type a; `Row eff],
          `Function (Types.make_tuple_type [a; a], eff, `Primitive `Bool),
          StringMap.empty)
-  | `Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "send")
+  | `Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | `Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
 
 (** close a pattern type relative to a list of patterns
@@ -1115,7 +1173,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
       | `Lolli _
       | `Table _
       (* TODO: do we need to do something special for session types? *)
-      | `Session _
+      | #Types.session_type
        (* TODO: expand applications? *)
       | `Application _ -> t
 
@@ -1940,20 +1998,30 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
 
         (* session-based concurrency *)
+        (* | `Fuse (l, r) -> *)
+        (*   let l = tc l in *)
+        (*   let r = tc r in *)
+        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*       (pos_and_typ l, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
+        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*       (pos_and_typ r, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
+        (*     unify ~handle:Gripers.cp_fuse_dual *)
+        (*       ((exp_pos l, Types.dual_type (typ l)), pos_and_typ r); *)
+        (*     `Fuse (erase l, erase r), Types.unit_type, merge_usages [usages l; usages r] *)
         | `Select (l, e) ->
            let e = tc e in
            let selected_session = Types.fresh_type_variable (`Any, `Session) in
            unify ~handle:Gripers.selection
-                 (pos_and_typ e, no_pos (`Session (`Select (Types.make_singleton_open_row
+                 (pos_and_typ e, no_pos (`Select (Types.make_singleton_open_row
                                                               (l, `Present selected_session)
-                                                              (`Any, `Session)))));
+                                                              (`Any, `Session))));
            `Select (l, erase e), selected_session, usages e
         | `Offer (e, branches, _) ->
            let e = tc e in
            let branches, pattern_type, body_type = type_cases branches in
            let r = Types.make_empty_open_row (`Any, `Session) in
              unify ~handle:Gripers.offer_variant (no_pos pattern_type, no_pos (`Variant r));
-             unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (`Session (`Choice r)));
+             unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (`Choice r));
              `Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
 
         (* No comment *)
@@ -2769,10 +2837,10 @@ and type_bindings (globals : context)  bindings =
 and type_cp (context : context) = fun (p, pos) ->
   let with_channel = fun c s (p, t, u) ->
     if uses_of c u <> 1 then
-      if Types.session_can_be_unl s then
-        Types.make_session_unl s
+      if Types.type_can_be_unl s then
+        Types.make_type_unl s
       else
-        Gripers.non_linearity pos (uses_of c u) c (`Session s);
+        Gripers.non_linearity pos (uses_of c u) c s;
     (p, t, StringMap.remove c u) in
 
   let use s u = StringMap.add s 1 u in
@@ -2783,28 +2851,30 @@ and type_cp (context : context) = fun (p, pos) ->
     | `Unquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
-       `Unquote (bindings, e), t, usage_builder u
+         if Settings.get_value endbang_antiquotes then
+           unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
+         `Unquote (bindings, e), t, usage_builder u
     | `Grab ((c, _), None, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
-       let ctype = `Session (`Input (Types.unit_type, `End)) in
-       unify ~pos:pos ~handle:Gripers.cp_grab (t, ctype);
+       let ctype = `Alias (("EndQuery", []), `Input (Types.unit_type, `End)) in
+       unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        `Grab ((c, Some (ctype, [])), None, p), pt, use c u
-    | `Grab ((c, _), Some (x, _), p) ->
+    | `Grab ((c, _), Some (x, _, binder_pos), p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let a = Types.fresh_type_variable (`Any, `Any) in
-       let s = Types.fresh_session_variable (`Any, `Session) in
-       let ctype = `Session (`Input (a, s)) in
-       unify ~pos:pos ~handle:Gripers.cp_grab
+       let s = Types.fresh_session_variable `Any in
+       let ctype = `Input (a, s) in
+       unify ~pos:pos ~handle:(Gripers.cp_grab c)
              (t, ctype);
-       let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, `Session s)) (x, a)) p) in
+       let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
        let uses = uses_of x u in
        if uses <> 1 then
          if Types.type_can_be_unl a then
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (`Var "grab", pos) in
+       let (_, grab_ty, _) = type_check context (`Var "receive", pos) in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, t) ->
@@ -2813,28 +2883,28 @@ and type_cp (context : context) = fun (p, pos) ->
             begin
               match Instantiate.apply_type grab_ty tyargs with
               | `Function (fps, fe, rettpe) ->
-                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [ctype], fps);
+                 unify ~pos:pos ~handle:(Gripers.cp_grab "") (Types.make_tuple_type [ctype], fps);
                  tyargs
               | _ -> assert false
             end
          | _ -> assert false in
-       `Grab ((c, Some (ctype, tyargs)), Some (x, Some a), p), pt, use c (StringMap.remove x u)
+       `Grab ((c, Some (ctype, tyargs)), Some (x, Some a, binder_pos), p), pt, use c (StringMap.remove x u)
     | `Give ((c, _), None, p) as p' ->
        let (_, t, _) = type_check context (`Var c, pos) in
-       let ctype = `Session (`Output (Types.unit_type, `End)) in
-       unify ~pos:pos ~handle:Gripers.cp_give (t, ctype);
+       let ctype = `Output (Types.unit_type, `End) in
+       unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
        `Give ((c, Some (ctype, [])), None, p), t, use c u
     | `Give ((c, _), Some e, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
        let (e, t', u) = type_check context e in
-       let s = Types.fresh_session_variable (`Any, `Session) in
-       let ctype = `Session (`Output (t', s)) in
-       unify ~pos:pos ~handle:Gripers.cp_give
+       let s = Types.fresh_session_variable `Any in
+       let ctype = `Output (t', s) in
+       unify ~pos:pos ~handle:(Gripers.cp_give c)
              (t, ctype);
-       let (p, t, u') = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
+       let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (`Var "give", pos) in
+       let (_, give_ty, _) = type_check context (`Var "send", pos) in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, t) ->
@@ -2843,42 +2913,59 @@ and type_cp (context : context) = fun (p, pos) ->
             begin
               match Instantiate.apply_type give_ty tyargs with
               | `Function (fps, fe, rettpe) ->
-                 unify ~pos:pos ~handle:Gripers.cp_grab (Types.make_tuple_type [t'; ctype], fps);
+                 unify ~pos:pos ~handle:(Gripers.cp_give "") (Types.make_tuple_type [t'; ctype], fps);
                  tyargs
               | _ -> assert false
             end
          | _ -> assert false in
        `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
-    | `Select ((c, _), label, p) ->
+    | `GiveNothing (c, _, binder_pos) ->
+       let _, t, _ = type_check context (`Var c, binder_pos) in
+       unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
+       `GiveNothing (c, Some t, binder_pos), t, StringMap.singleton c 1
+    | `Select ((c, _, binder_pos), label, p) ->
        let (_, t, _) = type_check context (`Var c, pos) in
-       let s = Types.fresh_session_variable (`Any, `Session) in
-       let r = Types.make_singleton_open_row (label, `Present (`Session s)) (`Any, `Session) in
-       let ctype = `Session (`Select r) in
-       unify ~pos:pos ~handle:Gripers.cp_select
+       let s = Types.fresh_session_variable `Any in
+       let r = Types.make_singleton_open_row (label, `Present s) (`Any, `Session) in
+       let ctype = `Select r in
+       unify ~pos:pos ~handle:(Gripers.cp_select c)
              (t, ctype);
-       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) p) in
-       `Select ((c, Some ctype), label, p), t, use c u
-    | `Offer ((c, _), branches) ->
+       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
+       `Select ((c, Some ctype, binder_pos), label, p), t, use c u
+    | `Offer ((c, _, binder_pos), branches) ->
        let (_, t, _) = type_check context (`Var c, pos) in
+       (*
+       let crow = Types.make_empty_open_row (`Any, `Session) in
+       let ctype = `Choice crow in
+       unify ~pos:pos ~handle:(Gripers.cp_offer_choice c)
+             (t, ctype);
+        *)
        let check_branch (label, body) =
-         let s = Types.fresh_session_variable (`Any, `Session) in
-         let (p, t, u) = with_channel c s (type_cp (bind_var context (c, `Session s)) body) in
-         (label, s), ((label, p), t, u) in
-       let ctypes, branches = List.split (List.map check_branch branches) in
-       let crow = List.fold_right (fun (label, s) -> Types.row_with (label, `Present (`Session s))) ctypes (Types.make_empty_closed_row ()) in
-       let ctype = `Session (`Choice crow) in
-       unify ~pos:pos ~handle:Gripers.cp_offer_choice
-             (t, ctype);
+         let s = Types.fresh_type_variable (`Any, `Session) in
+         let r = Types.make_singleton_open_row (label, `Present s) (`Any, `Session) in
+         unify ~pos:pos ~handle:(Gripers.cp_offer_choice c) (t, `Choice r);
+         let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) body) in
+         (label, p), t, u in
+       let branches = List.map check_branch branches in
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
-       `Offer ((c, Some ctype), List.map (fun (x, _, _) -> x) branches), t', use c u
-    | `Comp ((c, _), left, right) ->
-       let s = Types.fresh_session_variable (`Any, `Session) in
-       let left, t, u = with_channel c s (type_cp (bind_var context (c, `Session s)) left) in
-       let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Session (`Dual s))) right) in
-       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.unit_type, t);
-       `Comp ((c, Some (`Session s)), left, right), t', merge_usages [u; u'] in
+       `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
+    | `Fuse ((c, _, cpos), (d, _, dpos)) ->
+      let (_, tc, uc) = type_check context (`Var c, pos) in
+      let (_, td, ud) = type_check context (`Var d, pos) in
+        unify ~handle:Gripers.cp_fuse_session
+          (tc, Types.fresh_type_variable (`Any, `Session));
+        unify ~handle:Gripers.cp_fuse_session
+          (td, Types.fresh_type_variable (`Any, `Session));
+        unify ~handle:Gripers.cp_fuse_dual (Types.dual_type tc, td);
+        `Fuse ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
+    | `Comp ((c, _, binder_pos), left, right) ->
+       let s = Types.fresh_session_variable `Any in
+       let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
+       let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
+       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
+       `Comp ((c, Some s, binder_pos), left, right), t', merge_usages [u; u'] in
   (p, pos), t, u
 
 let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",

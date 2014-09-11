@@ -1,24 +1,21 @@
-typename WaitSelect = mu a.[+|MouseDown:!DomNode.mu b.[+|MouseOut:!DomNode.b, MouseUp:a|+]|+];
-typename WaitOffer  = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseOut:?DomNode.b, MouseUp:a|&]|&];
+typename Wait = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseOut:?DomNode.b, MouseUp:a|&]|&];
+typename Drag = mu b.[&|MouseOut:?DomNode.b, MouseUp:Wait|&];
 
-typename DragSelect = mu b.[+|MouseOut:!DomNode.b, MouseUp:[+|MouseDown:!DomNode.b|+]|+];
-typename DragOffer  = mu b.[&|MouseOut:?DomNode.b, MouseUp:[&|MouseDown:?DomNode.b|&]|&];
-
-sig waiting : (String, WaitOffer) ~> ()
+sig waiting : (String, Wait) ~> ()
 fun waiting(id, s) client {
   offer (s) {
     case MouseDown(s) ->
-      var (elem, s) = grab(s);
+      var (elem, s) = receive(s);
       dragging(id, elem, s)
   }
 }
 
-sig dragging : (String, DomNode, DragOffer) ~> ()
+sig dragging : (String, DomNode, Drag) ~> ()
 fun dragging(id, elem, s) {
   offer(s) {
     case MouseUp(s)   -> waiting(id, s)
     case MouseOut(s)  -> {
-      var (toElem, s) = grab(s);
+      var (toElem, s) = receive(s);
       swapNodes(elem, toElem);
       dragging(id, elem, s)
     }
@@ -39,15 +36,15 @@ fun draggableList(id, items)
   var manager = spawn {
     fun wait(c) {
       var s = accept(ap); 
-      <|case s {
-        MouseUp   : {wait(c)};
-        MouseDown : s(elem).{
+      <|offer s {
+        case MouseUp -> {wait(c)}
+        case MouseDown -> s(elem).{
           if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
             <|MouseDown c.c[elem].{drag(c)}|>
           } else {
             wait(c)
-          }};
-        MouseOut  : s(elem).{wait(c)}
+          }}
+        case MouseOut -> s(elem).{wait(c)}
       }|>
     }
 
@@ -64,7 +61,7 @@ fun draggableList(id, items)
       }
     }
     
-    wait(fork (linfun (s) {waiting(id, s)}));
+    wait(linknife (linfun (s) {waiting(id, s)}));
   };
 
   fun mouseUp() {

@@ -18,14 +18,14 @@ fun f(c) {
     var c = accept(ap);
     f(c);
   });
-  f(give(request(ap), c))
+  f(send(request(ap), c))
 }
 
 # The recipient receives copies forever; of course, it has to fork copies of itself to receive the
 # copies from the copies.
 sig g: (Forkee) ~> ()
 fun g(c) {
-  var (d,c) = grab(c);
+  var (d,c) = receive(c);
   ignore(spawn {
     g(d);
   });

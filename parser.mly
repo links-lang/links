@@ -10,11 +10,11 @@ let type_variable_counter = ref 0
 
 let fresh_type_variable : subkind -> datatype =
   function subkind ->
-    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+    incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_type_variable : subkind -> datatype =
   function subkind ->
-    incr type_variable_counter; TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+    incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_row_variable : subkind -> row_var =
   function subkind ->
@@ -123,8 +123,8 @@ let attach_subkind_helper update pos (l, r) = update l r
 let attach_subkind pos (t, subkind) =
   let update lin rest =
     match t with
-    | TypeVar (x, (_linearity, _restriction), freedom) ->
-       TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, (_linearity, _restriction), freedom) ->
+       `TypeVar (x, (lin, rest), freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -184,6 +184,7 @@ let datatype d = d, None
 %token LBRACKETAMPBAR BARAMPRBRACKET
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
+%token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
@@ -229,7 +230,6 @@ let datatype d = d, None
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
-%type <Sugartypes.session_type> session_type
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
@@ -387,34 +387,46 @@ atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
+/* HACK: allows us to support both mailbox receive syntax
+and receive for session types. */
+| RECEIVE                                                      { `Var "receive", pos() }
 
 cp_name:
-| VARIABLE                                                     { $1, None }
+| VARIABLE                                                     { $1, None, pos () }
 
 cp_label:
 | CONSTRUCTOR                                                  { $1 }
 
 cp_case:
-| cp_label COLON cp_expression                                 { $1, $3 }
+| CASE cp_label RARROW cp_expression                           { $2, $4 }
 
 cp_cases:
 | cp_case                                                      { [$1] }
-| cp_case SEMICOLON cp_cases                                   { $1 :: $3 }
+| cp_case cp_cases                                             { $1 :: $2 }
+
+perhaps_cp_cases:
+| /* empty */                                                  { [] }
+| cp_cases                                                     { $1 }
 
 perhaps_name:
 |                                                              { None }
 | cp_name                                                      { Some $1 }
 
+/* currently unused */
+/*
 perhaps_exp:
 |                                                              { None }
 | exp                                                          { Some $1 }
+*/
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst $1, None), $3, $6), pos () }
-| cp_name LBRACKET perhaps_exp RBRACKET DOT cp_expression      { `Give ((fst $1, None), $3, $6), pos () }
-| CASE cp_name LBRACE cp_cases RBRACE                          { `Offer ($2, $4), pos () }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ((fst3 $1, None), Some $3, $6), pos () }
+| cp_name LBRACKET RBRACKET                                    { `GiveNothing $1, pos () }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
+| cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
 
 primary_expression:
@@ -867,65 +879,70 @@ squig_arrow_prefix:
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", `Present UnitType)
+                                                                   ("wild", `Present `Unit)
                                                                    (row_with
                                                                       ("hear", `Present $3)
                                                                       $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present UnitType);
+| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present UnitType);
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present UnitType);
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present `Unit);
                                                                    ("hear", `Present $3)],
                                                                   $5) }
 
 straight_arrow:
 | parenthesized_datatypes
-  straight_arrow_prefix RARROW datatype                        { FunctionType ($1, $2, $4) }
+  straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { LolliType ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { FunctionType ($1,
+  straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1,
                                                                                ([], fresh_rigid_row_variable (`Unl, `Any)),
                                                                                $3) }
-| parenthesized_datatypes LOLLI datatype                       { LolliType ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { FunctionType ($1,
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1,
                                                                                row_with
-                                                                                 ("wild", `Present UnitType)
+                                                                                 ("wild", `Present `Unit)
                                                                                  $2,
                                                                                $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { LolliType ($1,
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli ($1,
                                                                             row_with
-                                                                              ("wild", `Present UnitType)
+                                                                              ("wild", `Present `Unit)
                                                                             $2,
                                                                             $4) }
 /*| parenthesized_datatypes hear_arrow_prefix
-  SQUIGRARROW datatype                                         { FunctionType ($1, $2, $4) }
+  SQUIGRARROW datatype                                         { `Function ($1, $2, $4) }
 */
-| parenthesized_datatypes SQUIGRARROW datatype                 { FunctionType ($1,
-                                                                               ([("wild", `Present UnitType)],
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
+                                                                               ([("wild", `Present `Unit)],
                                                                                  fresh_rigid_row_variable (`Unl, `Any)),
                                                                                 $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { LolliType ($1,
-                                                                            ([("wild", `Present UnitType)],
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
+                                                                            ([("wild", `Present `Unit)],
                                                                              fresh_rigid_row_variable (`Unl, `Any)),
                                                                             $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { MuType ($2, $4) }
+| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { ForallType (List.map fst $2, $4) }
+| FORALL varlist DOT datatype                                  { `Forall (List.map fst $2, $4) }
 | session_datatype                                             { $1 }
 
 session_datatype:
-| session_type_top                                             { Session $1 }
+| BANG datatype DOT datatype                                   { `Output ($2, $4) }
+| QUESTION datatype DOT datatype                               { `Input ($2, $4) }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
+| TILDE datatype                                               { `Dual $2 }
+| END                                                          { `End }
 | primary_datatype                                             { $1 }
 
 parenthesized_datatypes:
@@ -934,58 +951,33 @@ parenthesized_datatypes:
 
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
-                                                                   | [] -> UnitType
+                                                                   | [] -> `Unit
                                                                    | [t] -> t
-                                                                   | ts  -> TupleType ts }
-| LPAREN rfields RPAREN                                        { RecordType $2 }
-
+                                                                   | ts  -> `Tuple ts }
+| LPAREN rfields RPAREN                                        { `Record $2 }
 | TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { TableType ($3, $5, $7) }
-/* | TABLEHANDLE datatype perhaps_table_constraints               { TableType ($2, $3) } */
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
+/* | TABLEHANDLE datatype perhaps_table_constraints               { `Table ($2, $3) } */
 
-| LBRACKETBAR vrow BARRBRACKET                                 { VariantType $2 }
-| LBRACKET datatype RBRACKET                                   { ListType $2 }
+| LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
+| LBRACKET datatype RBRACKET                                   { `List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { match $1 with
-                                                                   | "Bool"    -> PrimitiveType `Bool
-                                                                   | "Int"     -> PrimitiveType `Int
-                                                                   | "Char"    -> PrimitiveType `Char
-                                                                   | "Float"   -> PrimitiveType `Float
-                                                                   | "XmlItem" -> PrimitiveType `XmlItem
-                                                                   | "String"  -> PrimitiveType `String
-                                                                   | "Database"-> DBType
-                                                                   | t         -> TypeApplication (t, [])
+                                                                   | "Bool"    -> `Primitive `Bool
+                                                                   | "Int"     -> `Primitive `Int
+                                                                   | "Char"    -> `Primitive `Char
+                                                                   | "Float"   -> `Primitive `Float
+                                                                   | "XmlItem" -> `Primitive `XmlItem
+                                                                   | "String"  -> `Primitive `String
+                                                                   | "Database"-> `DB
+                                                                   | t         -> `TypeApplication (t, [])
                                                                }
-
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { TypeApplication ($1, $3) }
-
-session_type_top:
-| BANG datatype DOT session_type                               { `Output ($2, $4) }
-| QUESTION datatype DOT session_type                           { `Input ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
-| TILDE session_type                                           { `Dual $2 }
-| END                                                          { `End }
-
-session_type:
-| session_type_top                                             { $1 }
-| session_type_var                                             { $1 }
-| kinded_session_type_var                                      { $1 }
-| MU VARIABLE DOT session_type                                 { `Recursive ($2, $4) }
-
-
-session_type_var:
-| VARIABLE                                                     { `TypeVar ($1, (`Any, `Any), `Rigid) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Any, `Any), `Flexible) }
-/* TODO: support underscore and percent; rationalise parsing of type variables */
-
-kinded_session_type_var:
-| session_type_var subkind                                     { attach_session_subkind (pos()) ($1, $2) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { TypeVar ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { TypeVar ($1, (`Unl, `Any), `Flexible) }
+| VARIABLE                                                     { `TypeVar ($1, (`Unl, `Any), `Rigid) }
+| PERCENTVAR                                                   { `TypeVar ($1, (`Unl, `Any), `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
 | PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
 
@@ -1027,7 +1019,7 @@ fields:
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
-| field_label                                                  { $1, `Present UnitType }
+| field_label                                                  { $1, `Present `Unit }
 | field_label fieldspec                                        { $1, $2 }
 
 field_label:
@@ -1045,7 +1037,11 @@ rfields:
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
-| record_label                                                 { $1, `Present UnitType }
+/* The following sugar is tempting, but it leads to a conflict. Is
+   the type (a,b,c) a record with fields a, b, c or a polymorphic tuple
+   with type variables a, b, c?
+*/
+/*| record_label                                                 { $1, `Present `Unit } */
 | record_label fieldspec                                       { $1, $2 }
 
 record_label:
@@ -1058,7 +1054,7 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present UnitType }
+| CONSTRUCTOR                                                  { $1, `Present `Unit }
 | CONSTRUCTOR fieldspec                                        { $1, $2 }
 
 efields:
@@ -1070,7 +1066,7 @@ efields:
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
-| effect_label                                                 { $1, `Present UnitType }
+| effect_label                                                 { $1, `Present `Unit }
 | effect_label fieldspec                                       { $1, $2 }
 
 effect_label:

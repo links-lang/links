@@ -49,7 +49,7 @@ let type_binary_op env tycon_env =
       let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
         `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
-  | `Name "!"     -> TyEnv.lookup env "send"
+  | `Name "!"     -> TyEnv.lookup env "Send"
   | `Name n       -> TyEnv.lookup env n
 
 let fun_effects t pss =
@@ -680,6 +680,7 @@ class transform (env : Types.typing_environment) =
       let (o, p, t) = o#cp_phrasenode p in
       (o, (p, pos), t)
 
+    (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
       | `Unquote (bs, e) ->
          let envs = o#backup_envs in
@@ -690,39 +691,44 @@ class transform (env : Types.typing_environment) =
       | `Grab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, `Grab (cbind, None, p), t
-      | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), Some (x, Some u), p) -> (* FYI: a = u *)
+      | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
-         let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
-                                           (x, u))
-                               (c, `Session s) in
+         let (o, b) = o#binder b in
+         let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Grab (cbind, Some (x, Some u), p), t
-      | `Give ((c, Some (`Session (`Output (_t, s)), _tyargs) as cbind), e, p) ->
+         o, `Grab (cbind, Some b, p), t
+      | `Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
+         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, `Give (cbind, e, p), t
+      | `GiveNothing c ->
+         let envs = o#backup_envs in
+         let o, c = o#binder c in
+         let o = o#restore_envs envs in
+         o, `GiveNothing c, Types.make_endbang_type
       | `Grab _ -> failwith "Malformed grab in TransformSugar"
       | `Give _ -> failwith "Malformed give in TransformSugar"
-      | `Select ((c, Some s as cbind), label, p) ->
+      | `Select (b, label, p) ->
          let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
+         let o, b = o#binder b in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Select (cbind, label, p), t
-      | `Offer ((c, Some s as cbind), cases) ->
+         o, `Select (b, label, p), t
+      | `Offer (b, cases) ->
          let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
                                            let envs = o#backup_envs in
-                                           let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
+                                           let o, _ = o#binder b in
                                            let (o, p, t) = o#cp_phrase p in
                                            (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
          let (cases, t :: ts) = List.split cases in
-         o, `Offer (cbind, cases), t
-      | `Comp ((c, Some s as cbind), left, right) ->
+         o, `Offer (b, cases), t
+      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
+      | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in

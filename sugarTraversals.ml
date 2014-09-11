@@ -252,6 +252,9 @@ class map =
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
           in `Receive (_x, _x_i1)
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let _x = o#phrase _x in *)
+      (*     let _x_i1 = o#phrase _x_i1 in `Fuse ((_x, _x_i1)) *)
       | `Select ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#phrase _x_i1
@@ -267,10 +270,6 @@ class map =
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
           in `Offer (_x, _x_i1, _x_i2)
       | `CP p -> `CP (o#cp_phrase p)
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let _x = o#binder _x in *)
-      (*     let _x_i1 = o#phrase _x_i1 in *)
-      (*     `Fork (_x, _x_i1) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -351,8 +350,10 @@ class map =
       | `Unquote (bs, e) -> `Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
       | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
       | `Give (c, e, p) -> `Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | `GiveNothing c -> `GiveNothing (o#binder c)
       | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
       | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | `Fuse (c, d) -> `Fuse (c, d)
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
@@ -442,63 +443,53 @@ class map =
 
     method datatype : datatype -> datatype =
       function
-      | TypeVar _x ->
-          let _x = o#known_type_variable _x in TypeVar _x
-      | FunctionType (_x, _x_i1, _x_i2) ->
+      | `TypeVar _x ->
+          let _x = o#known_type_variable _x in `TypeVar _x
+      | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in FunctionType (_x, _x_i1, _x_i2)
-      | LolliType (_x, _x_i1, _x_i2) ->
+          let _x_i2 = o#datatype _x_i2 in `Function (_x, _x_i1, _x_i2)
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in LolliType (_x, _x_i1, _x_i2)
-      | MuType (_x, _x_i1) ->
+          let _x_i2 = o#datatype _x_i2 in `Lolli (_x, _x_i1, _x_i2)
+      | `Mu (_x, _x_i1) ->
           let _x = o#name _x in
-          let _x_i1 = o#datatype _x_i1 in MuType (_x, _x_i1)
-      | ForallType (_x, _x_i1) ->
+          let _x_i1 = o#datatype _x_i1 in `Mu (_x, _x_i1)
+      | `Forall (_x, _x_i1) ->
           let _x = _x in (*o#list (fun o -> o#quantifier) _x in*)
-          let _x_i1 = o#datatype _x_i1 in ForallType (_x, _x_i1)
-      | UnitType -> UnitType
-      | TupleType _x ->
-          let _x = o#list (fun o -> o#datatype) _x in TupleType _x
-      | RecordType _x -> let _x = o#row _x in RecordType _x
-      | VariantType _x -> let _x = o#row _x in VariantType _x
-      | TableType (_x, _x_i1, _x_i2) ->
+          let _x_i1 = o#datatype _x_i1 in `Forall (_x, _x_i1)
+      | `Unit -> `Unit
+      | `Tuple _x ->
+          let _x = o#list (fun o -> o#datatype) _x in `Tuple _x
+      | `Record _x -> let _x = o#row _x in `Record _x
+      | `Variant _x -> let _x = o#row _x in `Variant _x
+      | `Table (_x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in TableType (_x, _x_i1, _x_i2)
-      | ListType _x -> let _x = o#datatype _x in ListType _x
-      | TypeApplication _x ->
+         let _x_i2 = o#datatype _x_i2 in `Table (_x, _x_i1, _x_i2)
+      | `List _x -> let _x = o#datatype _x in `List _x
+      | `TypeApplication _x ->
           let _x =
             (fun (_x, _x_i1) ->
                let _x = o#name _x in
                let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
               _x
-          in TypeApplication _x
-      | PrimitiveType _x -> let _x = o#unknown _x in PrimitiveType _x
-      | DBType -> DBType
-      | Session _x ->
-          let _x = o#session_type _x in Session _x
-
-    method session_type : session_type -> session_type =
-      function
+          in `TypeApplication _x
+      | `Primitive _x -> let _x = o#unknown _x in `Primitive _x
+      | `DB -> `DB
       | `Input (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#session_type _x_i1 in `Input (_x, _x_i1)
+        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
       | `Output (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#session_type _x_i1 in `Output (_x, _x_i1)
+        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
       | `Select _x ->
         let _x = o#row _x in `Select _x
       | `Choice _x ->
         let _x = o#row _x in `Choice _x
-      | `TypeVar _x ->
-        let _x = o#known_type_variable _x in `TypeVar _x
-      | `Recursive (_x, _x_i1) ->
-        let _x = o#name _x in
-        let _x_i1 = o#session_type _x_i1 in `Recursive (_x, _x_i1)
       | `Dual _x ->
-        let _x = o#session_type _x in `Dual _x
+        let _x = o#datatype _x in `Dual _x
       | `End -> `End
 
     method type_arg : type_arg -> type_arg =
@@ -803,6 +794,10 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let o = o#phrase _x in *)
+      (*     let o = o#phrase _x_i1 *)
+      (*     in o *)
       | `Select ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#phrase _x_i1
@@ -817,9 +812,6 @@ class fold =
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
       | `CP p -> o#cp_phrase p
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let o = o#binder _x in *)
-      (*     o#phrase _x_i1 *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
@@ -890,8 +882,10 @@ class fold =
       | `Unquote (bs, e) -> (o#list (fun o -> o#binding) bs)#phrase e
       | `Grab (_c, _x, p) -> o#cp_phrase p
       | `Give (_c, e, p) -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | `GiveNothing c -> o#binder c
       | `Select (_c, _l, p) -> o#cp_phrase p
       | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | `Fuse (_c, _d) -> o
       | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
@@ -972,57 +966,46 @@ class fold =
 
     method datatype : datatype -> 'self_type =
       function
-      | TypeVar _x ->
+      | `TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | FunctionType (_x, _x_i1, _x_i2) ->
+      | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | LolliType (_x, _x_i1, _x_i2) ->
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | MuType (_x, _x_i1) ->
+      | `Mu (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
-      | ForallType (_x, _x_i1) ->
+      | `Forall (_x, _x_i1) ->
           let o = o (*o#list (fun o -> o#quantifier) _x*) in let o = o#datatype _x_i1 in o
-      | UnitType -> o
-      | TupleType _x -> let o = o#list (fun o -> o#datatype) _x in o
-      | RecordType _x -> let o = o#row _x in o
-      | VariantType _x -> let o = o#row _x in o
-      | TableType (_x, _x_i1, _x_i2) ->
+      | `Unit -> o
+      | `Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
+      | `Record _x -> let o = o#row _x in o
+      | `Variant _x -> let o = o#row _x in o
+      | `Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
-      | ListType _x -> let o = o#datatype _x in o
-      | TypeApplication _x ->
+      | `List _x -> let o = o#datatype _x in o
+      | `TypeApplication _x ->
           let o =
             (fun (_x, _x_i1) ->
                let o = o#name _x in
                let o = o#list (fun o -> o#type_arg) _x_i1 in o)
               _x
           in o
-      | PrimitiveType _x -> let o = o#unknown _x in o
-      | DBType -> o
-      | Session _x ->
-          let o = o#session_type _x
-          in o
-
-    method session_type : session_type -> 'self_type =
-      function
+      | `Primitive _x -> let o = o#unknown _x in o
+      | `DB -> o
       | `Input (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#session_type _x_i1 in o
+        let o = o#datatype _x_i1 in o
       | `Output (_x, _x_i1) ->
         let o = o#datatype _x in
-        let o = o#session_type _x_i1 in o
+        let o = o#datatype _x_i1 in o
       | `Select _x ->
         let o = o#row _x in o
       | `Choice _x ->
         let o = o#row _x in o
-      | `TypeVar _x ->
-        let o = o#known_type_variable _x in o
-      | `Recursive (_x, _x_i1) ->
-        let o = o#name _x in
-        let o = o#session_type _x_i1 in o
       | `Dual _x ->
-        let o = o#session_type _x in o
+        let o = o#datatype _x in o
       | `End -> o
 
     method type_arg : type_arg -> 'self_type =
@@ -1371,6 +1354,9 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
           in (o, (`Receive ((_x, _x_i1))))
+      (* | `Fuse ((_x, _x_i1)) -> *)
+      (*     let (o, _x) = o#phrase _x in *)
+      (*     let (o, _x_i1) = o#phrase _x in (o, (`Fuse(_x, _x_i1))) *)
       | `Select ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#phrase _x_i1
@@ -1388,10 +1374,6 @@ class fold_map =
       | `CP p ->
          let (o, p) = o#cp_phrase p in
          o, `CP p
-      (* | `Fork ((_x, _x_i1)) -> *)
-      (*     let (o, _x) = o#binder _x in *)
-      (*     let (o, _x_i1) = o#phrase _x_i1 in *)
-      (*     (o, `Fork (_x, _x_i1)) *)
       | `DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1491,6 +1473,9 @@ class fold_map =
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
          o, `Give (c, e, p)
+      | `GiveNothing c ->
+         let o, c = o#binder c in
+         o, `GiveNothing c
       | `Select (c, l, p) ->
          let o, p = o#cp_phrase p in
          o, `Select (c, l, p)
@@ -1499,6 +1484,8 @@ class fold_map =
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
          o, `Offer (c, bs)
+      | `Fuse (c, d) ->
+         o, `Fuse (c, d)
       | `Comp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in
@@ -1602,68 +1589,58 @@ class fold_map =
 
     method datatype : datatype -> ('self_type * datatype) =
       function
-      | TypeVar _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (TypeVar _x))
-      | FunctionType (_x, _x_i1, _x_i2) ->
+      | `TypeVar _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
+      | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (FunctionType (_x, _x_i1, _x_i2)))
-      | LolliType (_x, _x_i1, _x_i2) ->
+          in (o, (`Function (_x, _x_i1, _x_i2)))
+      | `Lolli (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (LolliType (_x, _x_i1, _x_i2)))
-      | MuType (_x, _x_i1) ->
+          in (o, (`Lolli (_x, _x_i1, _x_i2)))
+      | `Mu (_x, _x_i1) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (MuType (_x, _x_i1)))
-      | ForallType (_x, _x_i1) ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Mu (_x, _x_i1)))
+      | `Forall (_x, _x_i1) ->
           (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (ForallType (_x, _x_i1)))
-      | UnitType -> (o, UnitType)
-      | TupleType _x ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Forall (_x, _x_i1)))
+      | `Unit -> (o, `Unit)
+      | `Tuple _x ->
           let (o, _x) = o#list (fun o -> o#datatype) _x
-          in (o, (TupleType _x))
-      | RecordType _x -> let (o, _x) = o#row _x in (o, (RecordType _x))
-      | VariantType _x -> let (o, _x) = o#row _x in (o, (VariantType _x))
-      | TableType (_x, _x_i1, _x_i2) ->
+          in (o, (`Tuple _x))
+      | `Record _x -> let (o, _x) = o#row _x in (o, (`Record _x))
+      | `Variant _x -> let (o, _x) = o#row _x in (o, (`Variant _x))
+      | `Table (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (TableType (_x, _x_i1, _x_i2)))
-      | ListType _x -> let (o, _x) = o#datatype _x in (o, (ListType _x))
-      | TypeApplication _x ->
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (`Table (_x, _x_i1, _x_i2)))
+      | `List _x -> let (o, _x) = o#datatype _x in (o, (`List _x))
+      | `TypeApplication _x ->
           let (o, _x) =
             (fun (_x, _x_i1) ->
                let (o, _x) = o#string _x in
                let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
                in (o, (_x, _x_i1)))
               _x
-          in (o, (TypeApplication _x))
-      | PrimitiveType _x ->
-          let (o, _x) = o#unknown _x in (o, (PrimitiveType _x))
-      | DBType -> (o, DBType)
-      | Session _x ->
-          let (o, _x) = o#session_type _x in (o, Session _x)
-
-    method session_type : session_type -> ('self_type * session_type) =
-      function
+          in (o, (`TypeApplication _x))
+      | `Primitive _x ->
+          let (o, _x) = o#unknown _x in (o, (`Primitive _x))
+      | `DB -> (o, `DB)
       | `Input (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, `Input (_x, _x_i1))
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
       | `Output (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, `Output (_x, _x_i1))
+        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
       | `Select _x ->
         let (o, _x) = o#row _x in (o, `Select _x)
       | `Choice _x ->
         let (o, _x) = o#row _x in (o, `Choice _x)
-      | `TypeVar _x ->
-        let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `Recursive (_x, _x_i1) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#session_type _x_i1 in (o, (`Recursive (_x, _x_i1)))
       | `Dual _x ->
-        let (o, _x) = o#session_type _x in (o, `Dual _x)
+        let (o, _x) = o#datatype _x in (o, `Dual _x)
       | `End -> (o, `End)
 
     method type_arg : type_arg -> ('self_type * type_arg) =

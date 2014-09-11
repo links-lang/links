@@ -102,15 +102,15 @@ let rec eq_types : (datatype * datatype) -> bool =
                   eq_types (t, t')
             | _ -> false
           end
-      | `Session l ->
+      | #session_type as l ->
         begin match unalias t2 with
-        | `Session r -> eq_sessions (l, r)
+        | #session_type as r -> eq_sessions (l, r)
         | _          -> false
         end
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
-and eq_sessions : (session_type * session_type) -> bool =
+and eq_sessions : (datatype * datatype) -> bool =
   function
   | `Input (lt, ls), `Input (rt, rs)
   | `Output (lt, ls), `Output (rt, rs) ->
@@ -118,11 +118,9 @@ and eq_sessions : (session_type * session_type) -> bool =
   | `Select l, `Select r
   | `Choice l, `Choice r ->
     eq_rows (l, r)
-  | `MetaSessionVar lpoint, `MetaSessionVar rpoint ->
-    Unionfind.equivalent lpoint rpoint
   (* TODO: do we need to actually perform any dualisation here? *)
   | `Dual l, `Dual r ->
-    eq_sessions (l, r)
+    eq_types (l, r)
   | `End, `End -> true
   | _, _ -> false
 and eq_quantifier : (quantifier * quantifier) -> bool =
@@ -272,15 +270,12 @@ fun rec_env ->
 
       let ut = unify' rec_env in
       let ur = unify_rows' rec_env in
-      let us = unify_sessions rec_env in
       counter := !counter+1;
         let counter' = "(" ^ string_of_int !counter ^ ")" in
       Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2 ^ counter');
       begin
         match (t1, t2) with
           | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
-          | `Session (`MetaSessionVar point), _ -> unify' rec_env (`MetaTypeVar point, t2)
-          | _, `Session (`MetaSessionVar point) -> unify' rec_env (t1, `MetaTypeVar point)
           | `Primitive x, `Primitive y when x = y -> ()
           | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
               if Unionfind.equivalent lpoint rpoint then
@@ -534,7 +529,6 @@ fun rec_env ->
                                 "' with abstract type '"^string_of_datatype t2^"'")))
           | `Application (l, ls), `Application (r, rs) ->
               List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
-          | `Session s, `Session s' -> us (s, s')
           | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
               (* Check that all quantifiers that were originally rigid
                  are still distinct *)
@@ -707,6 +701,19 @@ fun rec_env ->
               else
                 raise (Failure (`Msg ("Can't unify unquantified type " ^ string_of_datatype t1 ^
                                         " with quantified type " ^ string_of_datatype t2)))
+          | `Input (t, s), `Input (t', s')
+          | `Output (t, s), `Output (t', s')
+            -> unify' rec_env (t, t'); ut (s, s')
+          | `Select row, `Select row'
+          | `Choice row, `Choice row' ->
+             unify_rows' rec_env (row, row')
+          | `Dual s, `Dual s' -> ut (s, s')
+          (* DODGEYNESS: dual_type doesn't doesn't necessarily make
+           the type smaller - the following could potentially lead to
+           non-termination *)
+          | `Dual s, s' -> ut (s, dual_type s')
+          | s, `Dual s' -> ut (dual_type s, s')
+          | `End, `End -> ()
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))
        end;
@@ -1256,29 +1263,6 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
       | `Presence lf, `Presence rf -> unify_presence' rec_env (lf, rf)
       | l, r ->
           raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
-
-and unify_sessions : unify_env -> (session_type * session_type) -> unit =
-  fun rec_env (s, s') ->
-    let us = unify_sessions rec_env in
-      match (s, s') with
-      | `Input (t, s), `Input (t', s')
-      | `Output (t, s), `Output (t', s')
-        -> unify' rec_env (t, t'); us (s, s')
-      | `Select row, `Select row'
-      | `Choice row, `Choice row' ->
-        unify_rows' rec_env (row, row')
-      | `MetaSessionVar point, s' -> unify' rec_env (`MetaTypeVar point, `Session s')
-      | s, `MetaSessionVar point -> unify' rec_env (`Session s, `MetaTypeVar point)
-      (* NOTE: the order of pattern matching is important
-         - duality must come after type variables *)
-      | `Dual (`MetaSessionVar point), s' -> us (`MetaSessionVar point, dual_session s')
-      | s, `Dual (`MetaSessionVar point) ->
-        let s' = dual_session s in
-          us (s', `MetaSessionVar point)
-      | `Dual s, s'
-      | s, `Dual s' -> us (s, dual_session s')
-      | `End, `End -> ()
-      | s, s' -> raise (Failure (`Msg ("Unable to unify disparate session types " ^ string_of_session_type s ^ " and " ^ string_of_session_type s')))
 
 let unify (t1, t2) =
   unify' {tenv=IntMap.empty; renv=IntMap.empty; qs=(0, IntMap.empty, IntMap.empty)} (t1, t2)

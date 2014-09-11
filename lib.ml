@@ -291,7 +291,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Xml, [(String, String)]) -> Xml",
    PURE);
 
-  "send",
+  "Send",
   (p2 (fun pid msg ->
          assert(false)), (* Now handled in evalir.ml *)
    datatype "(Process ({hear:a|_}), a) ~> ()",
@@ -354,16 +354,20 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (** Sessions *)
 
-  "give",
+  "send",
   (`PFun (fun _ -> assert false),
    (* datatype "(a::Any, !a::Any.s) ~> s::Session", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session).(a, !a.s) ~> s",
    IMPURE);
 
-  "grab",
+  "receive",
   (`PFun (fun _ -> assert false),
-   (* datatype "(?a::Any.s) ~> (a::Any, s::Session)", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
+   IMPURE);
+
+  "link",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session),e::Row(Unl, Any).(s, ~s) ~e~> EndBang",
    IMPURE);
 
   (* access points *)
@@ -1305,7 +1309,52 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     `Variant ("Failure", box_string(Errors.format_exception e ^ "\n"))
                )),
             datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
-            IMPURE)
+            IMPURE);
+    "connectSocket",
+    (`Server (p2 (fun serverv portv ->
+                  try
+                    let server = unbox_string serverv in
+                    let port = unbox_int portv in
+                    let server_addr =
+                      try  Unix.inet_addr_of_string server
+                      with Failure("inet_addr_of_string") ->
+                        (Unix.gethostbyname server).Unix.h_addr_list.(0) in
+                    let sockaddr = Unix.ADDR_INET(server_addr, Num.int_of_num port) in
+                    let domain = Unix.domain_of_sockaddr sockaddr in
+                    let sock = Unix.socket domain Unix.SOCK_STREAM 0 in
+                    Unix.connect sock sockaddr;
+                    Unix.set_nonblock sock;
+                    `Variant ("Just", box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
+                  with exn -> `Variant ("Nothing", `Record []))),
+     datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
+     IMPURE);
+    "writeToSocket",
+    (`Server (p2 (fun messagev socketv ->
+                  let message = unbox_string messagev in
+                  let (_, outc) = unbox_socket socketv in
+                  output_string outc message;
+                  flush outc;
+                  `Record [])),
+     datatype "(String, Socket) ~> ()",
+     IMPURE);
+    "readFromSocket",
+    (`Server (p1 (fun socketv ->
+                  let (inc, _) = unbox_socket socketv in
+                  try
+                    let r = input_line inc in
+                    `Variant ("Just", box_string r)
+                  with
+                    Sys_blocked_io ->
+                    `Variant ("Nothing", `Record []))),
+     datatype "(Socket) ~> [|Nothing|Just:String|]",
+     IMPURE);
+    "closeSocket",
+    (`Server (p1 (fun socketv ->
+                  let (inc, _) = unbox_socket socketv in
+                  Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
+                  `Record [])),
+     datatype "(Socket) ~> ()",
+     IMPURE)
 ]
 
 (* HACK

@@ -56,7 +56,7 @@ PATH := $(PATH):$(DERIVING_DIR)/syntax
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae-44-45 -g
+OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
 OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
@@ -64,7 +64,7 @@ TRASH=*.tmp *.output *.cache
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
-      getopt.ml getopt.mli PP.ml
+      getopt.ml getopt.mli PP.ml unix.cma
 
 SOURCES = $(OPC)                                \
           notfound.ml                           \

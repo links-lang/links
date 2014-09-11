@@ -606,7 +606,7 @@ and match_variant
               begin
                 match default_type with
                   | `Variant row
-                  | `Session (`Choice row) ->
+                  | `Choice row ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], `Case (`Variable var, cases, None))
                       else

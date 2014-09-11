@@ -1033,37 +1033,88 @@ fun sendSuspend(pagef) {
 }
 
 #### SESSION TYPING STUFF ####
-sig fork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~> ()) ~e~> ~s
-fun fork(f) {
-  var ap = new();
-  var _ = spawn { f(accept(ap)) };
-  request(ap)
-}
-
-
-sig linfork : forall s::Type(Any,Session),e::Row(Unl,Any).((s) ~e~@ ()) ~e~> ~s
-fun linfork(f) {
-  var ap = new();
-  var _ = spawn { f(accept(ap)) };
-  request(ap)
-}
-
-sig replicate : forall s::Type(Any,Session),e::Row(Unl,Any).(AP(s), (s) ~e~> ()) ~e~> ()
-fun replicate(ap, f) {
-  var x = accept(ap);
-  var _ = spawn {f(x)};
-  replicate(ap, f)
-}
 
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
 sig wait : (?().End) ~> ()
 fun wait(s) {
-  ignore(grab(s))
+  ignore(receive(s))
 }
 
 sig close : (!().End) ~> ()
 fun close(s) {
-  ignore(give((), s))
+  ignore(send((), s))
+}
+
+sig makeEndBang : () ~> EndBang
+fun makeEndBang() {
+  var ap = new();
+  var _ = spawn {
+     var c = accept(ap);
+     wait(c)
+  };
+  request(ap)
+}
+
+sig fork : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+fun fork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+sig linfork : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+fun linfork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+sig run : ((!a.EndBang) ~e~> EndBang) ~e~> a
+fun run(f) {
+  var c = fork(f);
+  var (v, c) = receive(c);
+  wait(c);
+  v
+}
+
+sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+fun knife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+fun linknife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig fuse : forall s::Session.(s, ~s) ~> ()
+fun fuse(s, c) {
+  close(link(s, c))
+}
+
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+fun reproduce(ap, f) {
+  var x = accept(ap);
+  var _ = spawn {f(x)};
+  reproduce(ap, f)
 }

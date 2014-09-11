@@ -26,18 +26,18 @@ object (o : 'self_type)
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos e), t
-         | `Grab ((c, Some (`Session (`Input (_a, s)), grab_tyargs) as cbind), Some (x, Some u), p) -> (* FYI: a = u *)
+         | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some (x, Some u, _), p) -> (* FYI: a = u *)
             let envs = o#backup_envs in
             let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ())
                                               (x, u))
-                                  (c, `Session s) in
+                                  (c, s) in
             let o = {< var_env = venv >} in
             let (o, e, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, `Block
                   ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos)));
-                                                          ("2", add_pos (`Variable (c, Some (`Session s), pos)))], None)),
-                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "grab", grab_tyargs)),
+                                                          ("2", add_pos (`Variable (c, Some s, pos)))], None)),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "receive", grab_tyargs)),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                   add_pos e), t
@@ -49,19 +49,21 @@ object (o : 'self_type)
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos e), t
-         | `Give ((c, Some (`Session (`Output (_t, s)), give_tyargs) as cbind), Some e, p) ->
+         | `Give ((c, Some (`Output (_t, s), give_tyargs) as cbind), Some e, p) ->
             let envs = o#backup_envs in
-            let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, `Session s) >} in
+            let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
             let (o, e, _typ) = o#phrase e in
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, `Block
-                  ([add_pos (`Val ([], add_pos (`Variable (c, Some (`Session s), pos)),
-                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "give", give_tyargs)),
+                  ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
+                                   add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "send", give_tyargs)),
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos p), t
-         | `Select ((c, Some s as cbind), label, p) ->
+         | `GiveNothing ((c, Some t, _)) ->
+            o, `Var c, t
+         | `Select ((c, Some s, _ as cbind), label, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
             let (o, p, t) = desugar_cp o p in
@@ -71,7 +73,7 @@ object (o : 'self_type)
                                   add_pos (`Select (label, (add_pos (`Var c)))),
                                   `Unknown, None))],
                   add_pos p), t
-         | `Offer ((c, Some s as cbind), cases) ->
+         | `Offer ((c, Some s, _ as cbind), cases) ->
             let desugar_branch (label, p) (o, cases) =
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
@@ -83,15 +85,22 @@ object (o : 'self_type)
             o, `Offer (add_pos (`Var c),
                        cases,
                        Some t), t
-         | `Comp ((c, Some s as cbind), left, right) ->
+         | `Fuse ((c, Some ct, _), (d, Some dt, _)) ->
+            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "link", [`Type ct; `Row o#lookup_effects])),
+                        [add_pos (`Var c); add_pos (`Var d)]), Types.unit_type
+         | `Comp ((c, Some s, _ as cbind), left, right) ->
             let envs = o#backup_envs in
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
             let left_block = add_pos (`Spawn (add_pos (`Block ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
                                                                                add_pos (`FnAppl (add_pos (`Var "accept"), [add_pos (`Var c)])),
+                                                                               `Unknown, None));
+                                                                add_pos (`Val ([], add_pos (`Variable (c, Some Types.make_endbang_type, pos)),
+                                                                               add_pos left,
                                                                                `Unknown, None))],
-                                                               add_pos left)),
+                                                               add_pos (`FnAppl (add_pos (`Var "close"),
+                                                                                 [add_pos (`Var c)])))),
                                               Some (Types.make_singleton_closed_row ("wild", `Present Types.unit_type)))) in
             let o = o#restore_envs envs in
             o, `Block

@@ -51,9 +51,9 @@ object (self)
     | b          -> super#bindingnode b
 
   method datatype = function
-    | TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
-    | MuType (v, t)       -> let o = self#bind (v, (`Type, (`Any, `Any)), `Rigid) in o#datatype t
-    | ForallType (qs, t)  ->
+    | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
+    | `Mu (v, t)       -> let o = self#bind (v, (`Type, (`Any, `Any)), `Rigid) in o#datatype t
+    | `Forall (qs, t)  ->
         let o =
           List.fold_left
             (fun o q ->
@@ -63,11 +63,6 @@ object (self)
         in
           o#datatype t
     | dt                  -> super#datatype dt
-
-  method session_type = function
-    (* TODO: the wildcard on the restriction indicates a bug in the parser *)
-    | `TypeVar (x, (lin, _), freedom) -> self#add (x, (`Type, (lin, `Session)), freedom)
-    | st -> super#session_type st
 
   method row_var = function
     | `Closed               -> self
@@ -94,23 +89,23 @@ struct
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t var_env.tenv in
       match t with
-        | TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
+        | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
-        | FunctionType (f, e, t) ->
+        | `Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
                        row var_env alias_env e,
                        datatype var_env t)
-        | LolliType (f, e, t) ->
+        | `Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
                        row var_env alias_env e,
                        datatype var_env t)
-        | MuType (name, t) ->
+        | `Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
-        | ForallType (qs, t) ->
+        | `Forall (qs, t) ->
             let desugar_quantifier (var_env, qs) =
               fun (name, kind, freedom) ->
                 match kind with
@@ -138,18 +133,18 @@ struct
             let qs = List.rev qs in
             let t = datatype var_env t in
               `ForAll (Types.box_quantifiers qs, t)
-        | UnitType -> Types.unit_type
-        | TupleType ks ->
+        | `Unit -> Types.unit_type
+        | `Tuple ks ->
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
             let present (s, x) = (s, `Present x)
             in
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
-        | RecordType r -> `Record (row var_env alias_env r)
-        | VariantType r -> `Variant (row var_env alias_env r)
-        | TableType (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
-        | ListType k -> `Application (Types.list, [`Type (datatype var_env k)])
-        | TypeApplication (tycon, ts) ->
+        | `Record r -> `Record (row var_env alias_env r)
+        | `Variant r -> `Variant (row var_env alias_env r)
+        | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
+        | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
+        | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
               | Some (`Alias _) -> let ts = List.map (type_arg var_env alias_env) ts in
@@ -159,31 +154,32 @@ struct
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
-        | PrimitiveType k -> `Primitive k
-        | DBType -> `Primitive `DB
-        | Session s -> `Session (session_type var_env alias_env s)
+        | `Primitive k -> `Primitive k
+        | `DB -> `Primitive `DB
+        | (`Input _ | `Output _ | `Select _ | `Choice _ | `Dual _ | `End) as s -> session_type var_env alias_env s
   and session_type var_env alias_env =
     let lookup_type t = StringMap.find t var_env.tenv in
     (* HACKY *)
     function
-    | `Input (t, s) -> `Input (datatype var_env alias_env t, session_type var_env alias_env s)
-    | `Output (t, s) -> `Output (datatype var_env alias_env t, session_type var_env alias_env s)
+    | `Input (t, s) -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
+    | `Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
     | `Select r -> `Select (row var_env alias_env r)
     | `Choice r -> `Choice (row var_env alias_env r)
-    | `TypeVar (name, _, _) ->
-      begin
-        try `MetaSessionVar (lookup_type name)
-        with NotFound _ -> raise (UnexpectedFreeVar name)
-      end
-    | `Recursive (name, s) ->
-      let var = Types.fresh_raw_variable () in
-      let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in
-      let tenv = StringMap.add name point var_env.tenv in
-      let _ = Unionfind.change point (`Recursive (var,
-                                                  `Session (session_type {var_env with tenv=tenv} alias_env s))) in
-        `MetaSessionVar point
-    | `Dual s -> `Dual (session_type var_env alias_env s)
+    (* | `TypeVar (name, _, _) -> *)
+    (*   begin *)
+    (*     try `MetaSessionVar (lookup_type name) *)
+    (*     with NotFound _ -> raise (UnexpectedFreeVar name) *)
+    (*   end *)
+    (* | `Mu (name, s) -> *)
+    (*   let var = Types.fresh_raw_variable () in *)
+    (*   let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in *)
+    (*   let tenv = StringMap.add name point var_env.tenv in *)
+    (*   let _ = Unionfind.change point (`Recursive (var, *)
+    (*                                               `Session (session_type {var_env with tenv=tenv} alias_env s))) in *)
+    (*     `MetaSessionVar point *)
+    | `Dual s -> `Dual (datatype var_env alias_env s)
     | `End -> `End
+    | _ -> assert false
 
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in

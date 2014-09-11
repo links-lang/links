@@ -102,21 +102,26 @@ type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type datatype =
-  | TypeVar         of known_type_variable
-  | FunctionType    of datatype list * row * datatype
-  | LolliType       of datatype list * row * datatype
-  | MuType          of name * datatype
-  | ForallType      of quantifier list * datatype
-  | UnitType
-  | TupleType       of (datatype list)
-  | RecordType      of row
-  | VariantType     of row
-  | TableType       of datatype * datatype * datatype
-  | ListType        of datatype
-  | TypeApplication of (string * type_arg list)
-  | PrimitiveType   of Types.primitive
-  | DBType
-  | Session         of session_type
+  [ `TypeVar         of known_type_variable
+  | `Function        of datatype list * row * datatype
+  | `Lolli           of datatype list * row * datatype
+  | `Mu              of name * datatype
+  | `Forall          of quantifier list * datatype
+  | `Unit
+  | `Tuple           of datatype list
+  | `Record          of row
+  | `Variant         of row
+  | `Table           of datatype * datatype * datatype
+  | `List            of datatype
+  | `TypeApplication of (string * type_arg list)
+  | `Primitive       of Types.primitive
+  | `DB
+  | `Input           of datatype * datatype
+  | `Output          of datatype * datatype
+  | `Select          of row
+  | `Choice          of row
+  | `Dual            of datatype
+  | `End ]
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
@@ -130,15 +135,6 @@ and type_arg =
     [ `Type of datatype
     | `Row of row
     | `Presence of fieldspec ]
-and session_type =
-    [ `Input of datatype * session_type
-    | `Output of datatype * session_type
-    | `Select of row
-    | `Choice of row
-    | `TypeVar of known_type_variable
-    | `Recursive of name * session_type
-    | `Dual of session_type
-    | `End ]
       deriving (Show)
 
 (* Store the denotation along with the notation once it's computed *)
@@ -264,14 +260,15 @@ and sentence = [
 | `Definitions of binding list
 | `Expression  of phrase
 | `Directive   of directive ]
-and typed_id = string * Types.datatype option
 and cp_phrasenode = [
 | `Unquote of binding list * phrase
-| `Grab of (string * (Types.datatype * tyarg list) option) * typed_id option * cp_phrase
+| `Grab of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
 | `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
-| `Select of typed_id * string * cp_phrase
-| `Offer of typed_id * (string * cp_phrase) list
-| `Comp of typed_id * cp_phrase * cp_phrase ]
+| `GiveNothing of binder
+| `Select of binder * string * cp_phrase
+| `Offer of binder * (string * cp_phrase) list
+| `Fuse of binder * binder
+| `Comp of binder * cp_phrase * cp_phrase ]
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
 
@@ -460,10 +457,12 @@ struct
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase (p, _pos) = match p with
     | `Unquote e -> block e
-    | `Grab ((c, _t), Some (x, _u), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
+    | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
     | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
     | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
-    | `Select ((c, _t), _label, p) -> union (singleton c) (cp_phrase p)
-    | `Offer ((c, _t), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | `Comp ((c, _t), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
+    | `GiveNothing (c, _, _) -> singleton c
+    | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
+    | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
+    | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end
