@@ -181,15 +181,14 @@ fun main() {
 					font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
 					display: inline-block;
 					float: left;
-					width: 100px;
-					height: 100px;
-					line-height: 100px;
+					width: 90px;
+					height: 90px;
+					line-height: 90px;
 					font-size: 45px;
 					font-weight: bold;
 					text-align: center;
-					outline-color: #bbada0;
-					outline-width: 10px;
-					outline-style: solid;
+					border: #bbada0 5px solid;
+					border-radius: 7px;
 					vertical-align: middle;
 				}}
 				.tile-0 {{
@@ -255,12 +254,13 @@ fun main() {
 				}}
 
 				#supercontainer {{
-					border: #bbada0 4px solid;
+					border: #bbada0 5px solid;
+					background-color: #bbada0;
 					border-radius: 10px;
-					padding-top: 10px;
-					padding-left: 10px;
-					width: 410px;
-					height: 410px;
+					padding-top: 0px;
+					padding-left: 0px;
+					width: 400px;
+					height: 400px;
 					margin: 0 auto;
 				}}
 
@@ -287,10 +287,11 @@ fun main() {
 				}}
 
 				#m {{
-					width: 430px;
-					height: 430px;
+					width: 410px;
+					height: 410px;
 					position: absolute;
-					margin: -15px -15px;
+					margin: -5px -5px;
+					border-radius: 10px;
 					z-index: 999;
 					background-color: #ddb132;
 					opacity: 0.5;
