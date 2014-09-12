@@ -362,6 +362,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "receive",
   (`PFun (fun _ -> assert false),
+   (* datatype "(?a::Any.s) ~> (a::Any, s::Session)", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
    IMPURE);
 
@@ -1231,10 +1232,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	(`Client, datatype "(a) ~> ()", IMPURE);
 
 	"jsSetOnKeyDown",
-	(`Client, datatype "(String, (Event) ~e~> ()) ~e~> ()", IMPURE);
+	(`Client, datatype "(DomNode, (Event) ~e~> ()) ~e~> ()", IMPURE);
 
 	"jsSetOnEvent",
-	(`Client, datatype "(String, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
+	(`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
 
 	"jsSetOnLoad",
 	(`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
@@ -1244,7 +1245,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	"jsSaveGlobalObject",
 	(`Client, datatype "(String, a) ~> ()", IMPURE);
 
-	(* maybe that could be pure *)
 	"jsLoadGlobalObject",
 	(`Client, datatype "(String) ~> a", IMPURE);
 
@@ -1256,6 +1256,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	"jsFillText",
 	(`Client, datatype "(a, String, Float, Float) ~> ()", IMPURE);
 
+	"jsCanvasFont",
+	(`Client, datatype "(a, String) ~> ()", IMPURE);
+
 	"jsDrawImage",
 	(`Client, datatype "(a, DomNode, Float, Float) ~> ()", IMPURE);
 
@@ -1264,6 +1267,39 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	"jsFillCircle",
 	(`Client, datatype "(a, Float, Float, Float) ~> ()", IMPURE);
+
+	"jsBeginPath",
+	(`Client, datatype "(a) ~> ()", IMPURE);
+
+	"jsClosePath",
+	(`Client, datatype "(a) ~> ()", IMPURE);
+
+	"jsFill",
+	(`Client, datatype "(a) ~> ()", IMPURE);
+
+	"jsArc",
+	(`Client, datatype "(a, Float, Float, Float, Float, Float, Bool) ~> ()", IMPURE);
+
+	"jsMoveTo",
+	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+
+	"jsLineTo",
+	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+
+	"jsLineWidth",
+	(`Client, datatype "(a, Float) ~> ()", IMPURE);
+
+	"jsScale",
+	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+
+	"jsTranslate",
+	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+
+	"jsStrokeStyle",
+	(`Client, datatype "(a, a) ~> ()", IMPURE);
+
+	"jsStroke",
+	(`Client, datatype "(a) ~> ()", IMPURE);
 
 	"jsSetFillColor",
 	(`Client, datatype "(a, String) ~> ()", IMPURE);
@@ -1277,7 +1313,100 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	"jsCanvasHeight",
 	(`Client, datatype "(a) ~> Float", IMPURE);
 
+	"jsSaveCanvas",
+	(`Client, datatype "(DomNode, DomNode, String) ~> ()", IMPURE);
+
 	(* END OF LINKS GAME LIBRARY *)
+
+	(* FOR DEBUGGING *)
+
+	"debugGetStats",
+	(`Client, datatype "(String) ~> a", IMPURE);
+
+	"debugChromiumGC",
+	(`Client, datatype "() ~> ()", IMPURE);
+
+	(* END OF DEBUGGING FUNCTIONS *)
+
+	(* FOR MANIPULATING LISTS *)
+
+	"lsTake",
+	(`Client, datatype "(Int, a) -> a", PURE);
+
+	"lsDrop",
+	(`Client, datatype "(Int, a) -> a", PURE);
+
+	(* 1 *)
+
+	"lsLength",
+	(`Client, datatype "(a) -> Int", PURE);
+
+	"lsHead",
+	(`Client, datatype "(a) -> b", PURE);
+
+	"lsTail",
+	(`Client, datatype "(a) -> a", PURE);
+
+	"lsLast",
+	(`Client, datatype "(a) -> b", PURE);
+
+	
+	"lsNilF",
+	(`Client, datatype "() -> a", PURE);
+	
+	"lsCons",
+	(`Client, datatype "(a, b) -> c", PURE);
+	
+	"lsAt",
+	(`Client, datatype "(a, Int) -> c", PURE);
+	
+	"lsEmpty",
+	(`Client, datatype "(a) -> Bool", PURE);
+	
+	"lsZip",
+	(`Client, datatype "(a, b) -> c", PURE);
+(*	
+	"lsMap",
+	(`Client, datatype "((a) -b-> c, d) -b-> e", IMPURE);
+
+	"lsFilter",
+	(`Client, datatype "((a) -> Bool, b) -> b", PURE);
+
+	"lsMapIgnore",
+	(`Client, datatype "((a) -b-> c, d) -b-> ()", IMPURE);
+*)
+	(*("map", datatype "((a) -b-> c, [a]) -b-> [c]");  *)
+
+	"lsAppend",
+	(`Client, datatype "(a, a) -> a", PURE);
+
+	"lsRange",
+	(`Client, datatype "(Int, Int) -> a", PURE);
+
+	"ls",
+	(`Client, datatype "([a]) -> b", PURE);
+
+	(* END OF LIST MANIPULATING FUNCTIONS *)
+
+	(* EQUALITY *)
+
+	"stringEq",
+	(`Client, datatype "(String, String) -> Bool", PURE);
+
+	"intEq",
+	(`Client, datatype "(Int, Int) -> Bool", PURE);
+
+	"floatEq",
+	(`Client, datatype "(Float, Float) -> Bool", PURE);
+
+	"floatNotEq",
+	(`Client, datatype "(Float, Float) -> Bool", PURE);
+
+	"objectEq",
+	(`Client, datatype "(a, a) -> Bool", PURE);
+
+
+	(* END OF EQUALITY FUNCTIONS *)
 
 
     "dumpTypes",
@@ -1310,6 +1439,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                )),
             datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
             IMPURE);
+
     "connectSocket",
     (`Server (p2 (fun serverv portv ->
                   try

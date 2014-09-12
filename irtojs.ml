@@ -35,6 +35,7 @@ type code = | Var    of string
             | Case   of (string * (string * code) stringmap * (string * code) option)
             | Dict   of ((string * code) list)
             | Lst    of (code list)
+            | Lst2   of (code list)
 
             | Bind   of (string * code * code)
             | Seq    of (code * code)
@@ -94,6 +95,7 @@ struct
       | Call _
       | Dict _
       | Lst _
+      | Lst2 _
       | Seq _
       | Bind _
       | Die _
@@ -122,6 +124,7 @@ struct
         | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
         | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
         | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
+        | Call (Var "_yield", [fn;args;kappa]) -> Printf.sprintf "_yield(function() { %s(%s %s) })" (paren fn) (paren args) (paren kappa)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
         | Unop (op, body) -> op ^ paren body
         | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
@@ -131,7 +134,9 @@ struct
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Lst [] -> "[]"
+        | Lst2 [] -> ""
         | Lst elems -> "[" ^ arglist elems ^ "]"
+        | Lst2 elems -> "" ^ arglist elems ^ ", "
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Seq (l, r) -> show l ^"; "^ show r
         | Nothing -> ""
@@ -171,6 +176,7 @@ struct
       | Call _
       | Dict _
       | Lst _
+      | Lst2 _
       | Seq _
       | Bind _
       | Die _
@@ -200,6 +206,8 @@ struct
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
         | Call (Var "tl", [list;kappa]) ->
             (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
+        | Call (Var "_yield", [fn;args;kappa]) ->	
+            PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^ parens (maybe_parenise args ^^ maybe_parenise kappa) ^^ PP.text " }"))
         | Call (fn, args) -> maybe_parenise fn ^^
             (PP.arglist (List.map show args))
         | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
@@ -221,6 +229,7 @@ struct
                                                 PP.text "':" ^^ show value))
                                   elems)))
         | Lst elems -> brackets(hsep(punctuate "," (List.map show elems)))
+        | Lst2 elems -> hsep(punctuate "," (List.map show elems)) ^^ PP.text (if ((List.length elems) == 0) then "" else ", ")
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
@@ -755,10 +764,10 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                               then
                                 Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
                               else
-                                apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
+                                apply_yielding (gv (`Variable f), [Lst2 (List.map gv vs); kappa])
                       end
                 | _ ->
-                    apply_yielding (gv f, [Lst (List.map gv vs); kappa])
+                    apply_yielding (gv f, [Lst2 (List.map gv vs); kappa])
             end
       | `Special special ->
           generate_special env special kappa
@@ -790,7 +799,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       (* | `App (f, vs) -> *)
       (*     Call (Var "_yield", *)
       (*           Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa]) *)
-      | `Wrong _ -> Die "Internal Error: Pattern matching failed"
+      | `Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
           callk_yielding kappa (Dict [])
@@ -808,7 +817,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Delete _ -> Die "Attempt to run a database delete on the client"
       | `CallCC v ->
           bind_continuation kappa
-            (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
+            (fun kappa -> apply_yielding (gv v, [Lst2 [kappa]; kappa]))
       | `Select (l, c) ->
          Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
 	(* TODO: JS generation for session types *)
