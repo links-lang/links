@@ -247,7 +247,7 @@ fun mappend(l, r) {
 # Tetris clone
 # inspired by and partially ported from https://github.com/isomorphism/lazy-tetrominoes
 #
-# all the intMap* functions can be optimized (away)
+# all the intMap* functions can be optimized (away?)
 # some unneccessary jsSave-jsRestore, etc.
 
 typename Input = [| KeyUp: Int | KeyDown: Int | CarryOn |];
@@ -296,6 +296,7 @@ fun main() client {
     var step = 1.0 /. 60.0;
 	var initialFpsInfo = (frameCount=0, dFps=0.0, avgFps=0.0, fpsAcc=0.0,
 							loFps=1000000.0, hiFps=0.0, loFpsFrame=0, upFrames=0, downFrames=0);
+	var debug = false;
 
 	# INITIAL GAME STATE
 	var stackHeight = 20;
@@ -475,7 +476,7 @@ fun main() client {
 
 		# calculate and draw new fpsInfo
 		var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
-		var fpsInfo = drawFps(ctx, fpsInfo, dFps); # debug
+		var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
 
 		# double buffering
 		if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();

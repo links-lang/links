@@ -120,14 +120,16 @@ fun main() client {
 		var ctx = jsGetContext2D(mainCanvasNode);
 		clear(ctx);
 
+		jsCanvasFont(ctx, "28px Helvetica");
+
 		switch (gameState) {
 			case LostScreen ->
 					jsSetFillColor(ctx, "black");
-					jsFillText(ctx, "You lost. Press [R] to restart.", (screenWidth /. 2.0 -. 100.0), (screenHeight /. 2.0))
+					jsFillText(ctx, "You lost. Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
 
 			case WonScreen ->
 					jsSetFillColor(ctx, "black");
-					jsFillText(ctx, "You won! Press [R] to restart.", (screenWidth /. 2.0 -. 100.0), (screenHeight /. 2.0))
+					jsFillText(ctx, "You won! Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
 
 			case ProperGameState(gs) ->
 					# draw the player:
@@ -489,11 +491,16 @@ fun main() client {
 					font-size: 96px;
 				}}
 
+				#container {{
+					text-align: center;
+				}}
+
 				#{stringToXml(containerId)} {{
 					position: relative;
 					width: 600px;
 					height: 500px;
-					background-color: #ddd
+					background-color: #ddd;
+					margin: 0 auto;
 				}}
 
 				#{stringToXml(canvas2Id)} {{

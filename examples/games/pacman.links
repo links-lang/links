@@ -506,6 +506,7 @@ fun main() client {
     var step = 1.0 /. 60.0;
 	var initialFpsInfo = (frameCount=0, dFps=0.0, avgFps=0.0, fpsAcc=0.0,
 							loFps=1000000.0, hiFps=0.0, loFpsFrame=0, upFrames=0, downFrames=0);
+	var debug = false;
 
 	# INITIAL GAME STATE
 	var rr = (bottomPlanet.r +. pillmanR +. margin);
@@ -813,7 +814,7 @@ fun main() client {
 		# calculate and draw new fpsInfo
 		var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
 		jsSetFillColor(ctx, textColor);
-		var fpsInfo = drawFps(ctx, fpsInfo, dFps); # debug
+		var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
 
 		# double buffering
 		if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();

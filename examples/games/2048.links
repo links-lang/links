@@ -1,18 +1,5 @@
 # helper functions
 
-# reimplemented replicaate, because of a
-#Type error: The function
-#    replicaate
-#has type
-#    (AP (a::Session), (a::Session) ~b~> ()) ~b~> ()
-#while the arguments passed to it have types
-#    Int
-#and
-#    _::Any
-#and the currently allowed effects are
-#    |_::Any. In expression: replicaate(4, n).
-###
-# replicate is defined twice in prelude.links
 fun replica(x, y) {
 	if (x == 0) []
 	else y :: replica(x - 1, y)
@@ -30,10 +17,10 @@ fun transpose(xs) {
 # ported from https://github.com/gregorulm/h2048/blob/master/h2048.hs
 typename Grid = [[Int]];
 
-var leftKeyCode = 65;
-var rightKeyCode = 68;
-var upKeyCode = 87;
-var downKeyCode = 83;
+var leftKeyCode = 37;
+var rightKeyCode = 39;
+var upKeyCode = 38;
+var downKeyCode = 40;
  
 fun start() {
 	var gridprim = addTile(replica(4, [0, 0, 0, 0]));
@@ -62,10 +49,10 @@ fun merge(xs) {
 
 fun move(m, grid) {
 	switch (m) {
-		case 65 -> map(merge, grid) # left
-		case 68 -> map(compose(reverse, compose(merge, reverse)), grid) # right
-		case 87 -> transpose(move(65, transpose(grid))) # up
-		case 83 -> transpose(move(68, transpose(grid))) # down
+		case 37 -> map(merge, grid) # left
+		case 39 -> map(compose(reverse, compose(merge, reverse)), grid) # right
+		case 38 -> transpose(move(37, transpose(grid))) # up
+		case 40 -> transpose(move(39, transpose(grid))) # down
 		case _ -> grid
 	}
 }
@@ -112,10 +99,9 @@ fun showRow(r) client {
 fun showRowHelper(r) client {
 	for (x <- r)
 		<#>
-			<span class="{ implode(explode("tile tile-") ++ explode(intToString(x))) }">
-				<span class="tile-top"> </span>
-				<span class="tile-bottom">{stringToXml(intToString(x))}</span>
-			</span>
+			<div class="{ implode(explode("tile tile-") ++ explode(intToString(x))) }">
+			{ if (x == 0) stringToXml("") else stringToXml(intToString(x)) }
+			</div>
 		</#>
 }
 
@@ -146,7 +132,8 @@ fun gameLoop(grid) {
 	
 	if (isMoveLeft(grid)) {
 		if (check2048(grid)) {
-			mesg("You win!")
+			replaceNode(<div id="win" class="win-lose">You win!</div>, getNodeById("win"));
+			replaceNode(<div id="m" />, getNodeById("n"))
 		} else {
 			var newGridprim = move(recv(), grid);
 			if (not(grid == newGridprim)) {
@@ -157,7 +144,8 @@ fun gameLoop(grid) {
 			}
 		}
 	} else {
-		mesg("You lose!")
+		replaceNode(<div id="lose" class="win-lose">You lose!</div>, getNodeById("lose"));
+		replaceNode(<div id="m" />, getNodeById("n"))
 	}
 }
 
@@ -179,95 +167,157 @@ fun main() {
 			<head>
 
             <style>
+				body {{
+					font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
+					background-color: #faf8ef;
+					color: #7f7469;
+					text-align: center;
+				}}
+
+				#grid {{
+				}}
+            
 				.tile {{
-					display: block;
-					clear: none;
+					font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
+					display: inline-block;
 					float: left;
 					width: 100px;
 					height: 100px;
-					font-size: 40px;
+					line-height: 100px;
+					font-size: 45px;
+					font-weight: bold;
 					text-align: center;
-					outline-color: #000;
-					outline-width: 1px;
+					outline-color: #bbada0;
+					outline-width: 10px;
 					outline-style: solid;
-				}}
-				.tile-top {{
-					display: block;
-					width: 100px;
-					height: 10px;
-				}}
-				.tile-bottom {{
-					width: 100px;
-					height: 55px;
+					vertical-align: middle;
 				}}
 				.tile-0 {{
-					background-color: #888;
+					background-color: #cdc0b4;
 				}}
 				.tile-2 {{
-					background-color: #f88;
+					background-color: #eee4da;
+					font-size: 50px;
 				}}
 				.tile-4 {{
-					background-color: #8f8;
+					background-color: #ede0c8;
+					font-size: 50px;
 				}}
 				.tile-8 {{
-					background-color: #88f;
+					background-color: #f2b179;
+					color: #f9f6f2;
+					font-size: 50px;
 				}}
 				.tile-16 {{
-					background-color: #ebb;
+					background-color: #f59563;
+					color: #f9f6f2;
+					font-size: 50px;
 				}}
 				.tile-32 {{
-					background-color: #beb;
+					background-color: #f67c5f;
+					color: #f9f6f2;
+					font-size: 50px;
 				}}
 				.tile-64 {{
-					background-color: #bbe;
+					background-color: #f65e3b;
+					color: #f9f6f2;
+					font-size: 50px;
 				}}
 				.tile-128 {{
-					background-color: #bee;
+					background-color: #edcf72;
+					color: #f9f6f2;
+					font-size: 40px;
 				}}
 				.tile-256 {{
-					background-color: #ebe;
+					background-color: #edcc61;
+					color: #f9f6f2;
+					font-size: 40px;
 				}}
 				.tile-512 {{
-					background-color: #eeb;
+					background-color: #edc850;
+					color: #f9f6f2;
+					font-size: 40px;
 				}}
 				.tile-1024 {{
-					background-color: #efe;
+					background-color: #edc53f;
+					color: #f9f6f2;
+					font-size: 30px;
 				}}
 				.tile-2048 {{
-					background-color: #eef;
+					background-color: #edc22e;
+					color: #f9f6f2;
+					font-size: 30px;
 				}}
 
-				body {{
-					background-color: #444;
-					color: #eee;
-					text-shadow:
-						-1px -1px 0 #000,
-						1px -1px 0 #000,
-						-1px 1px 0 #000,
-						1px 1px 0 #000;
-				}}
-
-				#container {{
-					width: 400px;
+				#ultracontainer {{
+					width: 450px;
 					margin: 0 auto;
 				}}
-					
+
+				#supercontainer {{
+					border: #bbada0 4px solid;
+					border-radius: 10px;
+					padding-top: 10px;
+					padding-left: 10px;
+					width: 410px;
+					height: 410px;
+					margin: 0 auto;
+				}}
+
+				.win-lose {{
+					position: absolute;
+					top: 270px;
+					font-weight: bold;
+					color: #f9f6f2;
+				}}
+
+				#win {{
+					z-index: 1001;
+					font-size: 96px;
+				}}
+				
+				#lose {{
+					z-index: 1000;
+					font-size: 90px;
+				}}
+
+				h1 {{
+					font-size: 64px;
+					margin: 10px auto;
+				}}
+
+				#m {{
+					width: 430px;
+					height: 430px;
+					position: absolute;
+					margin: -15px -15px;
+					z-index: 999;
+					background-color: #ddb132;
+					opacity: 0.5;
+				}}
             </style>
 			</head>
 
 			<body>
-				<div id="container">
-				<h1>2048 in Links</h1>
-
-                <div tabindex="1"
+				<div id="ultracontainer"
+					tabindex="1"
 					l:onkeydown="{ gameProc ! getCharCode(event) }"
-					l:onfocus="{mesg("Game on. Use WSAD.");}"
-					l:onblur="{mesg("Click on the board to play.");}"
-					style="width: 400px; height: 400px; border: 1px solid #484;">
-				<div id="grid"/>
-				<div id="msg">Click on the board to play.</div>
-				</div>
-	
+					l:onfocus="{mesg("Game on. Use arrow keys.");}"
+					l:onblur="{mesg("Click on the board to play.");}">
+					<h1>2048 in Links</h1>
+					<div id="msg">Click on the board to play.</div>
+					<div>The board must be focused for the input to work.</div>
+					
+					<div id="supercontainer">
+						<div id="n" />
+						<div id="container">
+							<div id="main">
+								<div id="lose" class="win-lose"></div>
+								<div id="win" class="win-lose"></div>
+								<div id="grid"/>
+							</div>
+						</div>
+					</div>
 				</div>
 			</body>
 		</html>
