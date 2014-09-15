@@ -257,7 +257,7 @@ fun rec_env ->
               | `MetaTypeVar point' ->
                   Unionfind.union point point'
               | _ ->
-                  Unionfind.change point (`Body t)
+                  () (*Unionfind.change point (`Body t)*)
           end
       | _ -> () in
 
@@ -419,12 +419,13 @@ fun rec_env ->
                                                    " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint))))
                          else
                            unify_rec ((var, t'), t)
-                       end
+                       end;
                        (*
                           it is critical that the arguments to Unionfind.union are in this order
-                          otherwise we might get unguarded recursion
+                          to ensure that we keep the recursive type rather than its unwinding
                        *)
-(*                        Unionfind.union rpoint lpoint *)
+                       (* union keeps the data associated with its second argument *)
+                       Unionfind.union rpoint lpoint
                    | `Body t, `Recursive (var, t') ->
                        Debug.if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
                        begin
@@ -434,8 +435,8 @@ fun rec_env ->
                                                    " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
                          else
                            unify_rec ((var, t'), t)
-                       end
-(*                        Unionfind.union lpoint rpoint *)
+                       end;
+                       Unionfind.union lpoint rpoint
                    | `Body t, `Body t' ->
                        ut (t, t')
                        (*
@@ -711,8 +712,8 @@ fun rec_env ->
           (* DODGEYNESS: dual_type doesn't doesn't necessarily make
            the type smaller - the following could potentially lead to
            non-termination *)
-          | `Dual s, s' -> ut (s, dual_type s')
-          | s, `Dual s' -> ut (dual_type s, s')
+          | `Dual s, s' -> ut (dual_type s, s')
+          | s, `Dual s' -> ut (s, dual_type s')
           | `End, `End -> ()
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))

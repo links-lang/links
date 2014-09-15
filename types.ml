@@ -150,6 +150,8 @@ and type_arg =
 type session_type = (typ, row) session_type_basis
   deriving (Show)
 
+let dummy_type = `Primitive `Int
+
 let is_present =
   function
   | `Present _           -> true
@@ -960,44 +962,120 @@ let normalise_field_spec = concrete_field_spec
 let normalise_fields =
   FieldEnv.map normalise_field_spec
 
-let rec dual_type : var_set -> datatype -> datatype =
-  fun rec_vars ->
-    function
-    | `Input (t, s)         -> `Output (t, dual_type rec_vars s)
-    | `Output (t, s)        -> `Input (t, dual_type rec_vars s)
-    | `Select row           -> `Choice (dual_row rec_vars row)
-    | `Choice row           -> `Select (dual_row rec_vars row)
-    | `MetaTypeVar point ->
-      begin
-        match Unionfind.find point with
-        | `Var _                     -> `Dual (`MetaTypeVar point)
-        | `Recursive (var, t)        ->
-          if TypeVarSet.mem var rec_vars then
-            `Dual (`MetaTypeVar point)
-          else
-            dual_type (TypeVarSet.add var rec_vars) t
-        | `Body s                    -> dual_type rec_vars s
-        | `Body (`MetaTypeVar point) -> dual_type rec_vars (`MetaTypeVar point)
-      end
-    | `Dual s               -> s
-    | `End                  -> `End
-    (* it sometimes seems tempting to preserve aliases here, but it
-       won't always work - e.g. when we use dual_type to expose a
-       concrete type *)
-    (* | `Alias _ as t         -> `Dual t *)
-    | `Alias (_, t)         -> dual_type rec_vars t
-    | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show.show show_typ t))
-and dual_row : var_set -> row -> row =
-  fun rec_vars row ->
+type var_map = (bool * meta_type_var) TypeVarMap.t 
+
+let rec dual_type : var_map -> datatype -> datatype =
+  fun rec_points ->
+    let dt s = dual_type rec_points s in
+    let sdt t = subst_dual_type rec_points t in
+      function
+      | `Input (t, s) -> `Output (sdt t, dt s)
+      | `Output (t, s) -> `Input (sdt t, dt s)
+      | `Select row -> `Choice (dual_row rec_points row)
+      | `Choice row -> `Select (dual_row rec_points row)
+      | `MetaTypeVar point ->
+        begin
+          match Unionfind.find point with
+          | `Var _ -> `Dual (`MetaTypeVar point)
+          | `Recursive (var, t) ->
+            if TypeVarMap.mem var rec_points then
+              `MetaTypeVar (snd (TypeVarMap.find var rec_points))
+            else
+              let var' = fresh_raw_variable () in
+              let point = Unionfind.fresh (`Recursive (var', dummy_type)) in
+                Unionfind.change point (`Recursive (var', dual_type (TypeVarMap.add var (true, point) rec_points) t));
+                `MetaTypeVar point
+          | `Body s -> dt s
+        end
+      | `Dual s ->
+        (* TODO: is this correct? *)
+        sdt s
+      | `End -> `End
+      (* it sometimes seems tempting to preserve aliases here, but it
+         won't always work - e.g. when we use dual_type to expose a
+         concrete type *)
+      (* | `Alias _ as t         -> `Dual t *)
+      (* Still, we might hope to find a way of preserving 'dual
+         aliases' in order to simplify the pretty-printing of types... *)
+      | `Alias (_, t)         -> dt t
+      | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show.show show_typ t))
+and dual_row : var_map -> row -> row =
+  fun rec_points row ->
     let (fields, row_var, dual) = fst (unwrap_row row) in
     let fields' =
       StringMap.map (function
       | `Absent -> `Absent
       | `Present t ->
-        `Present (dual_type rec_vars t)
+        `Present (dual_type rec_points t)
       | `Var _ -> (* TODO: what should happen here? *) assert false) fields
     in
       (fields', row_var, not dual)
+
+and subst_dual_type : var_map -> datatype -> datatype =
+  fun rec_points ->
+    let sdt t = subst_dual_type rec_points t in
+    let sdr r = subst_dual_row rec_points r in
+      fun t ->
+        match t with
+        | `Not_typed
+        | `Primitive _ -> t
+        | `Function (f, m, t) -> `Function (sdt f, sdr m, sdt t)
+        | `Lolli (f, m, t) -> `Lolli (sdt f, sdr m, sdt t)
+        | `Record row -> `Record (sdr row)
+        | `Variant row -> `Variant (sdr row)
+        | `Table (r, w, n) -> `Table (sdt r, sdt w, sdt n)
+        (* TODO: we could do a check to see if we can preserve aliases here *)
+        | `Alias (_, t) -> sdt t
+        | `Application (abs, ts) -> `Application (abs, List.map (subst_dual_type_arg rec_points) ts)
+        | `ForAll (qs, body) -> `ForAll (qs, sdt body)
+        | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+            | `Var _ -> `MetaTypeVar point
+            | `Recursive (var, t) ->
+              if TypeVarMap.mem var rec_points then
+                let (dual, point) = TypeVarMap.find var rec_points in
+                  if dual then `Dual (`MetaTypeVar point)
+                  else `MetaTypeVar point
+              else
+                let var' = fresh_raw_variable () in
+                let point = Unionfind.fresh (`Recursive (var', dummy_type)) in
+                  Unionfind.change point (`Recursive (var', subst_dual_type (TypeVarMap.add var (false, point) rec_points) t));
+                  `MetaTypeVar point
+            | `Body s -> sdt s
+          end
+        | `Input (t, s) -> `Input (sdt t, sdt s)
+        | `Output (t, s) -> `Output (sdt t, sdt s)
+        | `Select row -> `Select (sdr row)
+        | `Choice row -> `Choice (sdr row)
+        | `Dual s ->
+          begin
+            match sdt s with
+            | `Dual s' -> s'
+            | s' -> `Dual s'
+          end
+        | `End                  -> `End
+and subst_dual_row : var_map -> row -> row =
+  fun rec_points row ->
+    let (fields, row_var, dual) = fst (unwrap_row row) in
+    let fields' =
+      StringMap.map
+        (subst_dual_field_spec rec_points)
+        fields
+    in
+      (fields', row_var, dual)
+and subst_dual_field_spec : var_map -> field_spec -> field_spec =
+  fun rec_points ->
+    function
+    | `Absent -> `Absent
+    | `Present t -> `Present (subst_dual_type rec_points t)
+    | `Var _ -> (* TODO: what should happen here? *) assert false
+and subst_dual_type_arg : var_map -> type_arg -> type_arg =
+  fun rec_points ->
+    function
+    | `Type t -> `Type (subst_dual_type rec_points t)
+    | `Row row -> `Row (subst_dual_row rec_points row)
+    | `Presence f -> `Presence (subst_dual_field_spec rec_points f)
 
 (*
  convert a row to the form (field_env, row_var)
@@ -1007,7 +1085,7 @@ and dual_row : var_set -> row -> row =
   | `Recursive (var, body)
  *)
 and flatten_row : row -> row = fun (field_env, row_var, dual) ->
-  let dual_if r = if dual then dual_row TypeVarSet.empty r else r in
+  let dual_if r = if dual then dual_row TypeVarMap.empty r else r in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
     fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
@@ -1044,7 +1122,7 @@ then it is unwrapped. This ensures that all the fields are exposed
 in field_env.
  *)
 and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) ->
-  let dual_if r = if dual then dual_row TypeVarSet.empty r else r in
+  let dual_if r = if dual then dual_row TypeVarMap.empty r else r in
   let rec unwrap_row' : meta_row_var IntMap.t -> row -> (row * row_var option) =
     fun rec_env ((field_env, row_var, dual) as row) ->
       let row' =
@@ -1074,8 +1152,8 @@ and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) 
     (field_env, row_var, dual), rec_row
 
 
-let dual_type = dual_type TypeVarSet.empty
-let dual_row = dual_row TypeVarSet.empty
+let dual_type = dual_type TypeVarMap.empty
+let dual_row = dual_row TypeVarMap.empty
 
 
 (* TODO: tidy up all this normalisation / concretisation code *)
@@ -1833,8 +1911,8 @@ struct
                           "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
                 else
                   "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-          | `Input (t, s) -> "?" ^ datatype bound_vars p t ^ "." ^ datatype bound_vars p s
-          | `Output (t, s) -> "!" ^ datatype bound_vars p t ^ "." ^ datatype bound_vars p s
+          | `Input (t, s) -> "?(" ^ datatype bound_vars p t ^ ")." ^ datatype bound_vars p s
+          | `Output (t, s) -> "!(" ^ datatype bound_vars p t ^ ")." ^ datatype bound_vars p s
           | `Select bs -> "[+|" ^ row "," bound_vars p bs ^ "|+]"
           | `Choice bs -> "[&|" ^ row "," bound_vars p bs ^ "|&]"
           | `Dual s -> "~" ^ datatype bound_vars p s
