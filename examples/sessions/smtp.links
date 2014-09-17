@@ -184,7 +184,7 @@ fun mailClient(c, message) {
 }
 ###
 
-#sig sendMail : (~ReceiveMail, Message) ~> ()
+sig sendMail : (~ReceiveMail, Message) ~> ()
 fun sendMail(c, message) {
   var c = send(message.sender, select MAIL c);
   print("C: MAIL FROM:<" ^^ message.sender ^^ ">");
@@ -197,7 +197,7 @@ fun sendMail(c, message) {
   }
 }
 
-#sig sendRecipient : (~ReceiveRecipient, Message) ~> ()
+sig sendRecipient : (~ReceiveRecipient, Message) ~> ()
 fun sendRecipient(c, message) {
   switch(message.recipients) {
     case []    -> error("Messages must be sent to at least one recipient")(c)
@@ -214,7 +214,7 @@ fun sendRecipient(c, message) {
     }
 }
 
-#sig sendBody : (~ReceiveBody, Message) ~> ()
+sig sendBody : (~ReceiveBody, Message) ~> ()
 fun sendBody(c, message) {
   switch(message.recipients) {
     case []    ->
