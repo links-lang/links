@@ -133,10 +133,6 @@ SOURCES = $(OPC)                                \
 
 LIBS    = $(DB_LIBS)
 
-ifndef THREADS
-LIBS += unix
-endif
-
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
