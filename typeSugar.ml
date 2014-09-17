@@ -1147,8 +1147,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Var _ -> `Variant (fields, Unionfind.fresh `Closed, false)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
-      | `Application (l, [`Type t])
-          when Eq.eq Types.Abstype.eq_t l Types.list ->
+      | `Application (l, [`Type t]) 
+          when Types.Abstype.Eq_t.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
               | `Variable _ | `Any -> [p]
@@ -1420,8 +1420,8 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
 
 let show_context : context -> context =
   fun context ->
-    Printf.fprintf stderr "Types  : %s\n" (Show.show Env.Dom.show_t (Env.domain context.tycon_env));
-    Printf.fprintf stderr "Values : %s\n" (Show.show Env.Dom.show_t (Env.domain context.var_env));
+    Printf.fprintf stderr "Types  : %s\n" (Env.Dom.Show_t.show (Env.domain context.tycon_env));
+    Printf.fprintf stderr "Values : %s\n" (Env.Dom.Show_t.show (Env.domain context.var_env));
     flush stderr;
     context
 
@@ -2983,7 +2983,7 @@ struct
     try
       Debug.if_set show_pre_sugar_typing
         (fun () ->
-           "before type checking: \n"^Show.show show_program (bindings, body));
+           "before type checking: \n"^ Show_program.show (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
         if Settings.get_value check_top_level_purity then

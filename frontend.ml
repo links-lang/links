@@ -16,7 +16,7 @@ end
 =
 struct
   let show s program =
-    Debug.print (s ^ ": " ^ Show.show Sugartypes.show_program program);
+    Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
     program
 
   (* (These functions correspond to 'first' in an arrow) *)

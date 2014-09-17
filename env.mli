@@ -1,3 +1,4 @@
+(*pp deriving *)
 (** Environments. *)
 
 module type S =
@@ -6,6 +7,7 @@ sig
   (** The type of names. *)
 
   type 'a t
+    deriving (Show)
   (** The type of environments. *)
 
   val empty : 'a t
@@ -46,9 +48,6 @@ sig
   val iter : (name -> 'a -> unit) -> 'a t -> unit
 
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-
-  val show_t : 'a Show.show -> 'a t Show.show
-  (** Printing for environments *)
 end
 (** Output signature of the functor {!Env.Make}. *)
 

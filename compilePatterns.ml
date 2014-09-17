@@ -29,7 +29,7 @@ type pattern = [
 module Const = struct
   type t = Constant.constant
   let compare = Pervasives.compare
-  let show_t = Constant.show_constant
+  module Show_t = Constant.Show_constant
 end
 
 module type CONSTSET = Set with type elt = Constant.constant

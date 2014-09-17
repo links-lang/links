@@ -762,7 +762,7 @@ struct
                   with
                       Instantiate.ArityMismatch ->
                         prerr_endline ("Arity mismatch in type application (Sugartoir)");
-                        prerr_endline ("expression: " ^ Show.show Sugartypes.show_phrasenode (`TAppl (e, tyargs)));
+                        prerr_endline ("expression: " ^ Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));
                         prerr_endline ("type: "^Types.string_of_datatype vt);
                         prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
                         failwith "fatal internal error"
@@ -913,7 +913,7 @@ struct
           | `PagePlacement _
           | `FormBinding _
           | `CP _ ->
-              Debug.print ("oops: " ^ Show.show Sugartypes.show_phrasenode e);
+              Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false
 
   and eval_bindings scope env bs' e =
@@ -1046,7 +1046,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Show.show Ir.show_program r);
+          Debug.if_set show_compiled_ir (fun () -> Ir.Show_program.show r);
           r, I.sem_type s
 end
 

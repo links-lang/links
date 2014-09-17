@@ -56,7 +56,7 @@ type 't meta_presence_var_basis =
 type 't meta_max_basis = 't meta_row_var_basis
 
 type istring = string deriving (Show)
-let eq_istring : istring Eq.eq = { Eq.eq = (=) }
+module Eq_istring = Deriving_Eq.Eq_immutable(struct type a = istring end)
 
 module Abstype =
 struct
@@ -998,7 +998,7 @@ let rec dual_type : var_map -> datatype -> datatype =
       (* Still, we might hope to find a way of preserving 'dual
          aliases' in order to simplify the pretty-printing of types... *)
       | `Alias (_, t) -> dt t
-      | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show.show show_typ t))
+      | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show_typ.show t))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
     let (fields, row_var, dual) = fst (unwrap_row row) in
@@ -1955,7 +1955,7 @@ struct
           (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
           | `Alias ((s,[]), t) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
-          | `Application (l, [elems]) when Abstype.eq_t.Eq.eq l list ->  "["^ (type_arg bound_vars p) elems ^"]"
+          | `Application (l, [elems]) when Abstype.Eq_t.eq l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
 
@@ -2209,13 +2209,21 @@ let string_of_type_arg arg = string_of_type_arg arg
 let string_of_row_var r = string_of_row_var r
 let string_of_tycon_spec s = string_of_tycon_spec s
 
-let show_datatype =
-  { format = fun fmt a ->
-      Format.pp_print_string fmt (string_of_datatype a) }
+module Show_datatype =
+  Deriving_Show.Defaults
+    (struct
+      type a = datatype
+      let format fmt a =
+        Format.pp_print_string fmt (string_of_datatype a)
+     end)
 
-let show_tycon_spec =
-  { format = fun fmt a ->
-      Format.pp_print_string fmt (string_of_tycon_spec a) }
+module Show_tycon_spec =
+  Deriving_Show.Defaults
+    (struct
+      type a = tycon_spec
+      let format fmt a =
+        Format.pp_print_string fmt (string_of_tycon_spec a)
+     end)
 
 type environment        = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
@@ -2236,7 +2244,7 @@ let extend_typing_environment
     {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
   {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
 
-let string_of_environment = Show.show show_environment
+let string_of_environment = Show_environment.show
 
 let string_of_typing_environment {var_env=env} = string_of_environment env
 

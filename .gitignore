@@ -1,3 +1,4 @@
+*~
 *.o
 *.a
 *.cma
@@ -20,4 +21,4 @@ xmlParser.mli
 ._d
 ._ncdi
 ._bcdi
-*.cache
+*.links.cache

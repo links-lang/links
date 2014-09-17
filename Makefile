@@ -2,6 +2,11 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime
+export OCAMLFLAGS=-syntax camlp4o
+
+PATH := $(PATH):deriving
+
 ifdef SQLITE_LIBDIR
    DB_CODE    += lite_database.ml
    DB_AUXLIBS += $(SQLITE_LIBDIR)
@@ -36,28 +41,17 @@ ifdef MONETDB5_LIBDIR
 	THREADS = yes
 endif
 
-DERIVING_DIR=deriving
-
-AUXLIB_DIRS = $(DB_AUXLIBS) $(DERIVING_DIR)/lib
+AUXLIB_DIRS = $(DB_AUXLIBS)
 
 ifdef PROF
-OCAMLOPT := ocamlopt.opt -p -inline 0
-else
-OCAMLOPT := ocamlopt.opt
+OCAMLOPT := ocamlopt -p -inline 0
 endif
-OCAMLC := ocamlc.opt
-
-# use ocamldep.opt if it exists
-# (it doesn't exist for all OCaml installations)
-OCAMLDEP := $(shell if ocamldep.opt > /dev/null 2>&1; then echo 'ocamldep.opt'; else echo 'ocamldep'; fi)
-
-PATH := $(PATH):$(DERIVING_DIR)/syntax
 
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
 OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
-OCAMLDOCFLAGS=-pp deriving
+#OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
 TRASH=*.tmp *.output *.cache
@@ -139,11 +133,7 @@ SOURCES = $(OPC)                                \
 #          tests.ml                              \
 
 
-LIBS    = bigarray nums str $(DB_LIBS) deriving
-
-ifndef THREADS
-LIBS += unix
-endif
+LIBS    = $(DB_LIBS)
 
 RESULT  = links
 CLIBS 	= $(DB_CLIBS)
@@ -151,16 +141,7 @@ CLIBS 	= $(DB_CLIBS)
 INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
 LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
 
-PRE_TARGETS = $(DERIVING_DIR)/built
-
 include $(OCAMLMAKEFILE)
-
-.PHONY : $(DERIVING_DIR)/built
-$(DERIVING_DIR)/built:
-	cd $(DERIVING_DIR) && make
-
-deriving-clean:
-	cd $(DERIVING_DIR) && make clean
 
 test-raw:
 	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
@@ -195,7 +176,7 @@ byte-code: cache-clean
 
 native-code: cache-clean
 
-clean :: deriving-clean docs-clean cache-clean
+clean :: docs-clean cache-clean
 
 .PHONY: install
 install: nc
