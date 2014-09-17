@@ -997,7 +997,7 @@ let rec dual_type : var_map -> datatype -> datatype =
       (* | `Alias _ as t         -> `Dual t *)
       (* Still, we might hope to find a way of preserving 'dual
          aliases' in order to simplify the pretty-printing of types... *)
-      | `Alias (_, t)         -> dt t
+      | `Alias (_, t) -> dt t
       | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ Show.show show_typ t))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
