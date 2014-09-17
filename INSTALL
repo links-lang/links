@@ -29,6 +29,14 @@ does the trick, with appropriate modifications according to whether or
 not you have root access, or want to install OCaml in a non-standard
 location.
 
+DERIVING
+
+The Links source code depends on Jeremy Yallop's deriving library, now
+maintained by the Ocsigen project. The easiest way to install it is
+through the OCaml package manager OPAM. Having installed OPAM, do:
+
+  opam install deriving
+
 BUILDING LINKS
 
 To build, move to the Links source directory (wherever this INSTALL
