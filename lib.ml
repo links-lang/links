@@ -356,13 +356,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (`PFun (fun _ -> assert false),
-   (* datatype "(a::Any, !a::Any.s) ~> s::Session", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session).(a, !a.s) ~> s",
    IMPURE);
 
   "receive",
   (`PFun (fun _ -> assert false),
-   (* datatype "(?a::Any.s) ~> (a::Any, s::Session)", *)
    datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
    IMPURE);
 
@@ -1203,18 +1201,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() -> Float",
    IMPURE);
 
-	"setCookie",
-  (p2 (fun cookieName cookieVal ->
-         let cookieName = unbox_string cookieName in
-         let cookieVal = unbox_string cookieVal in
-           http_response_headers :=
-             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
-           `Record []
-             (* Note: perhaps this should affect cookies returned by
-                getcookie during the current request. *)),
-   datatype "(String, String) ~> ()",
-  IMPURE);
-
 	(* LINKS GAME LIBRARY *)
 
 	(* GENERAL JAVASCRIPT / EVENTS *)
@@ -1350,7 +1336,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	"lsLast",
 	(`Client, datatype "(a) -> b", PURE);
 
-	
+
 	"lsNilF",
 	(`Client, datatype "() -> a", PURE);
 	
@@ -1359,10 +1345,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 	
 	"lsAt",
 	(`Client, datatype "(a, Int) -> c", PURE);
-	
+
 	"lsEmpty",
 	(`Client, datatype "(a) -> Bool", PURE);
-	
+
 	"lsZip",
 	(`Client, datatype "(a, b) -> c", PURE);
 (*	

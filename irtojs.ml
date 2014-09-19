@@ -34,8 +34,8 @@ type code = | Var    of string
             | If     of (code * code * code)
             | Case   of (string * (string * code) stringmap * (string * code) option)
             | Dict   of ((string * code) list)
+            | Arr    of (code list)
             | Lst    of (code list)
-            | Lst2   of (code list)
 
             | Bind   of (string * code * code)
             | Seq    of (code * code)
@@ -94,8 +94,8 @@ struct
       | Lit _
       | Call _
       | Dict _
+      | Arr _
       | Lst _
-      | Lst2 _
       | Seq _
       | Bind _
       | Die _
@@ -133,10 +133,10 @@ struct
         | Case (v, cases, default) ->
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
-        | Lst [] -> "[]"
-        | Lst2 [] -> ""
-        | Lst elems -> "[" ^ arglist elems ^ "]"
-        | Lst2 elems -> "" ^ arglist elems ^ ", "
+        | Arr [] -> "[]"
+        | Lst [] -> ""
+        | Arr elems -> "[" ^ arglist elems ^ "]"
+        | Lst elems -> "" ^ arglist elems ^ ", "
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Seq (l, r) -> show l ^"; "^ show r
         | Nothing -> ""
@@ -175,8 +175,8 @@ struct
       | Lit _
       | Call _
       | Dict _
+      | Arr _
       | Lst _
-      | Lst2 _
       | Seq _
       | Bind _
       | Die _
@@ -228,8 +228,8 @@ struct
                                        group (PP.text "'" ^^ PP.text name ^^
                                                 PP.text "':" ^^ show value))
                                   elems)))
-        | Lst elems -> brackets(hsep(punctuate "," (List.map show elems)))
-        | Lst2 elems -> hsep(punctuate "," (List.map show elems)) ^^ PP.text (if ((List.length elems) == 0) then "" else ", ")
+        | Arr elems -> brackets(hsep(punctuate "," (List.map show elems)))
+        | Lst elems -> hsep(punctuate "," (List.map show elems)) ^^ PP.text (if ((List.length elems) == 0) then "" else ", ")
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
@@ -605,7 +605,7 @@ let rec generate_value env : Ir.value -> code =
           Call (Var "LINKS.project", [gv v; strlit name])
       | `Erase (names, v) ->
           Call (Var "LINKS.erase",
-                [gv v; Lst (List.map strlit (StringSet.elements names))])
+                [gv v; Arr (List.map strlit (StringSet.elements names))])
       | `Inject (name, v, _t) ->
           Dict [("_label", strlit name);
                 ("_value", gv v)]
@@ -653,7 +653,7 @@ and generate_xml env tag attrs children =
        [strlit tag;
         Dict (StringMap.fold (fun name v bs ->
                                 (name, generate_value env v) :: bs) attrs []);
-        Lst (List.map (generate_value env) children)])
+        Arr (List.map (generate_value env) children)])
 
 let generate_remote_call f_name xs_names env =
   Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
@@ -764,10 +764,10 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                               then
                                 Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
                               else
-                                apply_yielding (gv (`Variable f), [Lst2 (List.map gv vs); kappa])
+                                apply_yielding (gv (`Variable f), [Lst (List.map gv vs); kappa])
                       end
                 | _ ->
-                    apply_yielding (gv f, [Lst2 (List.map gv vs); kappa])
+                    apply_yielding (gv f, [Lst (List.map gv vs); kappa])
             end
       | `Special special ->
           generate_special env special kappa
@@ -798,7 +798,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
     match sp with
       (* | `App (f, vs) -> *)
       (*     Call (Var "_yield", *)
-      (*           Call (Var "app", [gv f]) :: [Lst ([gv vs]); kappa]) *)
+      (*           Call (Var "app", [gv f]) :: [Arr ([gv vs]); kappa]) *)
       | `Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
@@ -817,7 +817,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Delete _ -> Die "Attempt to run a database delete on the client"
       | `CallCC v ->
           bind_continuation kappa
-            (fun kappa -> apply_yielding (gv v, [Lst2 [kappa]; kappa]))
+            (fun kappa -> apply_yielding (gv v, [Lst [kappa]; kappa]))
       | `Select (l, c) ->
          Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
 	(* TODO: JS generation for session types *)
