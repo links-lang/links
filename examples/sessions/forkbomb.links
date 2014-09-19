@@ -11,7 +11,7 @@ typename Forkee = mu a.?a.a;
 #                  = mu a.?a.a
 
 # The initiator of a fork bomb spawns copies of itself forever.
-sig f: (Forker) ~> ()
+sig f : (Forker) ~> ()
 fun f(c) {
   var ap = new();
   ignore(spawn {
@@ -23,7 +23,7 @@ fun f(c) {
 
 # The recipient receives copies forever; of course, it has to fork copies of itself to receive the
 # copies from the copies.
-sig g: (Forkee) ~> ()
+sig g : (Forkee) ~> ()
 fun g(c) {
   var (d,c) = receive(c);
   ignore(spawn {
@@ -35,8 +35,8 @@ fun g(c) {
 # If those are dual, we should be able to connect them via an access point.
 fun forever() {
   var ap = new();
-  ignore(spawn{f(request(ap))});
-  g(accept(ap));
+  ignore(spawn{f(accept(ap))});
+  g(request(ap))
 }
 
 # And that this file typechecks indicates that duality and recursion are properly interacting.  (At

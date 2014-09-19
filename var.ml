@@ -7,7 +7,7 @@ type scope = [ `Local | `Global ]
   deriving (Show)
 (** Term variables *)
 type var = int
-  deriving (Show, Eq, Hash, Typeable, Pickle, Dump)
+  deriving (Show, Eq, Typeable, Pickle, Dump)
 type var_info = Types.datatype * string * scope
   deriving (Show)
 type binder = var * var_info

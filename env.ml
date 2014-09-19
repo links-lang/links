@@ -4,6 +4,8 @@ module type S =
 sig
   type name
   type 'a t
+  module Show_t (A : Deriving_Show.Show) :
+    Deriving_Show.Show with type a = A.a t
   val empty : 'a t
   val bind : 'a t -> name * 'a -> 'a t
   val unbind : 'a t -> name -> 'a t
@@ -18,7 +20,6 @@ sig
   val map : ('a -> 'b) -> 'a t -> 'b t
   val iter : (name -> 'a -> unit) -> 'a t -> unit
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-  val show_t : 'a Show.show -> 'a t Show.show
 end
 
 module Make (Ord : Utility.OrderedShow) :
@@ -43,7 +44,7 @@ struct
   let map = M.map
   let iter = M.iter
   let fold = M.fold
-  let show_t = M.show_t
+  module Show_t = M.Show_t
 end
 
 module String

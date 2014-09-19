@@ -25,9 +25,9 @@ class virtual database :
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
   end
 
-val eq_database : database Eq.eq
-val typeable_database : database Typeable.typeable
-val show_database : database Show.show
+module Eq_database : Deriving_Eq.Eq with type a = database
+module Typeable_database : Deriving_Typeable.Typeable with type a = database 
+module Show_database : Deriving_Show.Show with type a = database
 
 type db_constructor = string -> database * string
 
@@ -55,7 +55,7 @@ type primitive_value = [
 | `XML of xmlitem
 | `String of string ]
 
-val show_primitive_value : primitive_value Show.show
+module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
 (* jcheney: Added value function component to PrimitiveFunction *)
 type t = [

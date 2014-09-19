@@ -114,7 +114,7 @@ let check_type_application (e, t) k =
       k ()
     with Instantiate.ArityMismatch ->
       prerr_endline ("Arity mismatch in type application");
-      prerr_endline ("Expression: " ^ Show.show show_phrasenode e);
+      prerr_endline ("Expression: " ^ Show_phrasenode.show e);
       prerr_endline ("Type: "^Types.string_of_datatype t);
       raise Instantiate.ArityMismatch
   end
@@ -505,8 +505,8 @@ class transform (env : Types.typing_environment) =
           let o = {< var_env=var_env;
                      formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
             (o, `FormBinding (f, p), Types.xml_type)
-      | e -> failwith ("oops: "^Show.show show_phrasenode e)
-
+      | e -> failwith ("oops: "^Show_phrasenode.show  e)
+      
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
         let (o, e, t) = o#phrasenode e in (o, (e, pos), t)

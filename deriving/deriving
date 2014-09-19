@@ -1,0 +1,6 @@
+#!/bin/sh -e
+DERIVING_LIB=$(ocamlfind query deriving.syntax)
+camlp4o $DERIVING_LIB/pa_deriving_common.cma \
+        $DERIVING_LIB/pa_deriving_classes.cma \
+        $DERIVING_LIB/pa_deriving_std.cma "$@"
+

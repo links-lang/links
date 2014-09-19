@@ -9,10 +9,8 @@ type 'a field_env = 'a stringmap deriving (Show)
 module TypeVarSet : Utility.INTSET
 
 (* points *)
-type 'a point = 'a Unionfind.point
-
-val show_point : 'a Show.show -> 'a Unionfind.point Show.show
-
+type 'a point = 'a Unionfind.point 
+  deriving (Show)
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
