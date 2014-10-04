@@ -1,5 +1,12 @@
 open Utility
 open Sugartypes
+open Printf
+
+
+(* Helper function: add a group to a list of groups *)
+let add group groups = match group with
+  | [] -> groups
+  | _  -> List.rev group::groups
 
 (** [refine_bindings] locates mutually-recursive sccs in sequences of
     bindings.  (As a side effect we also dispense with [`Infix]
@@ -9,15 +16,14 @@ let refine_bindings : binding list -> binding list =
   fun bindings ->
     (* Group sequences of functions together *)
     let initial_groups =
-      let add group groups = match group with
-        | [] -> groups
-        | _  -> List.rev group::groups in
+
       (* Technically it shouldn't be necessary to ensure that the
          order of functions defined within a group is preserved (the
          List.rev above), but it helps with debugging, and it turns
          out to be necessary in order for desugaring of for
          comprehensions to work properly in the prelude - which
          defines concatMap. *)
+      (* group: the group we're currently working on, groups = the groups we've processed *)
       let group, groups =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
@@ -44,9 +50,10 @@ let refine_bindings : binding list -> binding list =
       (* build a callgraph *)
     let callgraph : _ -> (string * (string list)) list
       = fun defs ->
-        let defs = List.map (function
-                               | `Fun ((name,_,_), _, (_, funlit), _, _), _ -> (name, funlit)
-                               | _ -> assert false) defs in
+        let defs = List.map
+          (function
+            | `Fun ((name,_,_), _, (_, funlit), _, _), _ -> (name, funlit)
+            | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
             (fun (name, body) -> name,
@@ -55,6 +62,7 @@ let refine_bindings : binding list -> binding list =
             defs in
       (* refine a group of function bindings *)
     let groupFuns pos (funs : binding list) : binding list =
+      (* Unwrap from the bindingnode type *)
       let unFun = function
         | `Fun (b, lin, (_, funlit), location, dt), pos -> (b, lin, (([], None), funlit), location, dt, pos)
         | _ -> assert false in
@@ -76,15 +84,307 @@ let refine_bindings : binding list -> binding list =
           sccs
     in
       (* refine a group of bindings *)
-    let group = function
+    let groupBindings = function
         (* TODO:
 
            Compute the position corresponding to the whole collection
            of functions.
         *)
       | (`Fun _, _)::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
-      | binds                    -> binds in
-      concat_map group initial_groups
+      | binds -> binds in
+    concat_map groupBindings initial_groups
+
+(*
+  * We need three traversals:
+  * 1) Fold: find all type references within a type.
+  * 2) Map: Replace all type applications of one name with another name
+  * 3) Map: Inline a type application with a type.
+*)
+let find_type_references =
+object (self)
+  inherit SugarTraversals.fold as super
+
+  val references : string list = []
+  method add x = {< references = x :: references >}
+
+  method references =
+    StringSet.elements (StringSet.from_list (List.rev references))
+
+  method datatype = function
+    | `TypeApplication (tyAppName, argList) as tyApp ->
+          let o =
+            List.fold_left (fun acc ta -> acc#type_arg ta) self argList
+          in
+            o#add tyAppName
+    | x -> super#datatype x
+
+  method row_var = function
+    | `Open (x, _, _) -> self#add x
+    | `Recursive (x, row) as rrv ->
+        let o = self#add x in o#row row
+    | x -> super#row_var x
+
+end
+
+let findTyRefs ty =
+  (find_type_references#datatype ty)#references
+
+
+(* Type application substitution *)
+let subst_ty_app refFrom refTo =
+object(self)
+  inherit SugarTraversals.map as super
+
+  method datatype : datatype -> datatype = function
+    | `TypeApplication (tyAppName, argList) as tyApp ->
+        if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
+        else tyApp
+    | dt -> super#datatype dt
+end
+
+let substTyApp ty refFrom refTo =
+  (subst_ty_app refFrom refTo)#datatype ty
+
+(* Type inlining *)
+let inline_ty toFind toInline =
+object(self)
+  inherit SugarTraversals.map as super
+
+
+  method datatype : datatype -> datatype =
+    fun dt ->
+      match dt with
+        | `TypeApplication (tyAppName, argList) as tyApp ->
+            if tyAppName = toFind && List.length argList = 0 then
+              toInline
+            else
+              tyApp
+        | x -> super#datatype x
+
+  (*
+  method datatype : datatype -> datatype =
+    fun dt ->
+      let substDTArgs dt subs =
+        List.fold_right (fun (subFrom, subTo) accDt ->
+          substTyArg accDt subFrom subTo
+        ) dt subs in
+      match dt with
+        | `TypeApplication (tyAppName, argList) as tyApp ->
+            if tyAppName = toFind then
+              (* Two passes of variable substitution: the first substitutes type variables
+               * from the argument list for that in the alias list.
+               * This substitution is then added to the environment.
+               *)
+              let aliasTyArgs = fst (List.assoc tyAppName aliasEnv) in
+              let newSubs = List.combine argList aliasTyArgs in
+              let dt' = substDTArgs dt newSubs in
+              (* The second pass then performs the substitutions according to the type
+               * environment.
+               *)
+              substDTArgs dt' tyEnv
+            else tyApp
+        | p -> super#datatype p
+
+  method row_var
+  *)
+end
+
+let inlineTy ty tyRef refinedTy =
+  (inline_ty tyRef refinedTy)#datatype ty
+
+(* Similar to refine_bindings, RefineTypeBindings.refineTypeBindings finds
+ * sequences of mutually recursive types, and rewrites them as explicit mus. *)
+module RefineTypeBindings = struct
+
+  (* Type synonyms *)
+  type type_name = string
+  type type_ty = name * (quantifier * tyvar option) list * datatype'
+  type mu_alias = string
+  type reference_info = (type_name, (type_name list * bool * position)) Hashtbl.t
+  type type_hashtable = (type_name, type_ty) Hashtbl.t
+
+  (* Type synonyms for substitution environments *)
+  type alias_env = (type_name * mu_alias) list
+  type type_env = (type_variable * type_arg) list
+
+  (*
+   * Split binding list into groups for the purposes of type refinement.
+   * A "group" is defined as a block of type bindings uninterrupted by any
+   * other bindings.
+  *)
+  let initialGroups : binding list -> binding list list =
+    fun bindings ->
+      let group, groups =
+        List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
+          match binding with
+          | `Funs _
+          | `Fun _
+          | `Foreign _
+          | `Include _
+          | `Val _
+          | `Exp _
+          | `Infix ->
+              (* Collapse and start a new group *)
+              ([], (currentGroup :: [bind] :: otherGroups))
+          | `Type _ ->
+              (* Add to this group *)
+              (bind :: currentGroup, otherGroups)
+        ) bindings ([], [])
+      in add group groups
+
+  (* typeReferences gets us a list of type names referenced by a given type. *)
+  let typeReferences : type_ty -> type_hashtable -> type_name list =
+    fun (_, _, (sugaredDT, _)) ht ->
+      List.filter (fun x -> Hashtbl.mem ht x)
+        (findTyRefs sugaredDT)
+
+  (* Does a type refer to itself? *)
+  let refersToSelf : type_ty -> type_name list -> bool =
+    fun (name, tyVars, (sugaredDT, _)) refs ->
+      let qExists =
+        List.exists (fun (quant, _) ->
+            let (qName, _, _) = quant in name = qName
+          ) tyVars in
+      let selfInDT = List.exists (fun x -> x = name) refs in
+        qExists || selfInDT
+
+  (* Gets the name of a type. *)
+  let getName : type_ty -> type_name =
+    fun (name, _, _) -> name
+
+  (* Gets the sugared datatype from a type binding. *)
+  let getDT : type_ty -> datatype =
+    fun (_, _, (dt, _)) -> dt
+
+  (* Updates the datatype in a type binding. *)
+  let updateDT : type_ty -> datatype -> type_ty =
+    fun (name, tyArgs, (_, unsugaredDT)) newDT ->
+      (name, tyArgs, (newDT, unsugaredDT))
+
+  let referenceInfo : binding list -> type_hashtable -> reference_info =
+    fun binds typeHt ->
+      let ht = Hashtbl.create 30 in
+      List.iter (fun (bind, pos) ->
+        match bind with
+          | `Type (name, _, _ as tyTy) ->
+              let refs = typeReferences tyTy typeHt in
+              let referencesSelf = refersToSelf tyTy refs in
+              Hashtbl.add ht name (refs, referencesSelf, pos)
+          | _ -> assert false;
+      ) binds;
+      ht
+
+  let refGraph : reference_info -> (type_name * type_name list) list =
+    fun riTable ->
+      (* Massively irritating, there's no toList function... *)
+      List.rev (Hashtbl.fold (fun k (adj, _, _) acc ->
+        (k, adj) :: acc
+      ) riTable [])
+
+  let isSelfReferential : type_name -> reference_info -> bool =
+    fun name riTable ->
+      snd3 (Hashtbl.find riTable name)
+
+
+  (* Performs the inlining transformation on a given type. *)
+  let rec refineType :
+      type_ty ->
+      alias_env ->
+      type_hashtable ->
+      type_name list -> (* Other components in the SCC list *)
+      reference_info ->
+      type_ty =
+    fun ty env ht sccs ri ->
+      let tyName = getName ty in
+      let rts = isSelfReferential tyName ri in
+      let sugaredDT = getDT ty in
+      (* printf "Type %s refers to types: \n" tyName; *)
+      (* List.iter (fun tyRef -> printf "%s\n" tyRef) refs; *)
+      (* If we're self-referential, then add in a top-level mu *)
+      let (env', dt) =
+        (* printf "Type: %s\n%s\n" tyName (Show.show show_datatype sugaredDT);
+        print_string "Type args: \n";
+        List.iter (fun x ->
+          printf "%s\n" (Show.show show_quantifier (fst x));
+        ) (snd3 ty);
+        *)
+        if List.mem_assoc tyName env then assert false else
+        if rts then
+          let muName = gensym ~prefix:"refined_mu" () in
+            ((tyName, muName) :: env, `Mu (muName, sugaredDT))
+        else (env, sugaredDT) in
+      (* Now, we go through the list of type references.
+       * If the reference is in the substitution environment, we replace it
+       * with the mu variable we've created.
+       * If not, then we'll need to refine that type, and inline it.
+       *)
+      let refinedTy = List.fold_right (fun tyRef curDataTy ->
+        (* Only perform this transformation on other types in the group, and to self if self-referential. *)
+        let shouldApply = Hashtbl.mem ht tyRef && (tyName <> tyRef || rts) in
+        if shouldApply then
+        (* if (tyName <> tyRef) && Hashtbl.mem ht tyRef then *)
+          try
+            (* Simple tyApp substitution *)
+            let muName = List.assoc tyRef env' in
+            substTyApp curDataTy tyRef muName
+          with Notfound.NotFound _ ->
+            assert (tyName <> tyRef);
+            (* Otherwise, we'll need to refine and inline *)
+            let (_, _, (refinedRef, _)) = refineType (Hashtbl.find ht tyRef) env' ht sccs ri in
+            inlineTy curDataTy tyRef refinedRef
+        else
+          curDataTy
+      ) sccs dt in
+
+    updateDT ty refinedTy
+
+  let refineSCCGroup :
+      reference_info ->
+      (type_name, type_ty) Hashtbl.t ->
+      type_name list ->
+      binding list =
+    fun ri ht sccs ->
+      let getPos name =
+        thd3 (Hashtbl.find ri name) in
+      List.map (fun name ->
+        let rts = isSelfReferential name ri in
+        let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
+        (* printf "Type %s\n%s\n\n" name (Show.show show_datatype (getDT res));
+        printf "Type %s refers to self? %b\n" name rts; *)
+        (`Type res, getPos name)
+      ) sccs
+
+  let isTypeGroup : binding list -> bool = function
+    | (`Type _, _) :: xs -> true
+    | _ -> false
+
+  (* Performs type refinement on a binding group. *)
+  let refineGroup : binding list -> binding list = function
+    | binds when isTypeGroup binds ->
+      (* Create a hashtable mapping names to type bindings. *)
+      let ht = Hashtbl.create 30 in
+      List.iter (fun (x, _) ->
+        match x with
+          | `Type (name, _, _ as tyTy) ->
+            Hashtbl.add ht name tyTy;
+          | _ -> assert false;
+      ) binds;
+      let refInfoTable = referenceInfo binds ht in
+      let graph = refGraph refInfoTable in
+      let sccList = Graph.topo_sort_sccs graph in
+      (* Irritatingly we need to reattach the bindings with a position *)
+      List.concat (
+        List.map
+          (fun sccGroup ->
+            refineSCCGroup refInfoTable ht sccGroup
+          ) sccList
+      )
+    | xs -> xs
+  (* Refines a list of bindings. *)
+  let refineTypeBindings : binding list -> binding list =
+    fun binds ->
+      List.concat (List.map refineGroup (initialGroups binds))
+end
 
 let refine_bindings =
 object (self)
@@ -93,18 +393,28 @@ object (self)
     |`Block (bindings, body) ->
        let bindings = self#list (fun o -> o#binding) bindings in
        let body = self#phrase body in
-         `Block (refine_bindings bindings, body)
+       let refined_bindings = 
+         (RefineTypeBindings.refineTypeBindings ->-
+         refine_bindings) bindings in
+       `Block (refined_bindings, body)
     | p -> super#phrasenode p
 
   method program : program -> program =
     fun (bindings, body) ->
       let bindings = self#list (fun o -> o#binding) bindings in
       let body = self#option (fun o -> o#phrase) body in
-        refine_bindings bindings, body
+      let refined_bindings = 
+        (RefineTypeBindings.refineTypeBindings ->-
+        refine_bindings) bindings in
+      refined_bindings, body
 
   method sentence : sentence -> sentence = function
     |`Definitions defs ->
        let defs = self#list (fun o -> o#binding) defs in
-         `Definitions (refine_bindings defs)
+       let refined_bindings = 
+         (RefineTypeBindings.refineTypeBindings ->-
+         refine_bindings) defs in 
+       `Definitions (refined_bindings)
     | d -> super#sentence d
+
 end

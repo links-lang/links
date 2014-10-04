@@ -5,34 +5,32 @@ typename MessageBody = String;
 
 typename Message = (sender:Address, recipients:[Address], subject:Subject, body:MessageBody);
 
-typename ReceiveMail =
-  mu mail.[&|MAIL:?Address.
-              [+|REJECT:mail,
-                 ACCEPT:mu first.[&|RCPT:?Address.
-                                     [+|REJECT:first,
-                                        ACCEPT:mu body.
-                                          [&|RCPT:?Address.[+|REJECT:body, ACCEPT:body|+],
-                                             DATA:?Subject.?MessageBody.mail|&]
-                                     |+]
-                                 |&]
-              |+],
-             QUIT:EndBang
-          |&];
-
 typename SMTPServer =
-  mu greet.[&|HELO:?Domain.[+|ACCEPT:ReceiveMail, REJECT:greet|+],
-              QUIT:EndBang
-           |&];
+  [&|
+    HELO: ?Domain . [+| ACCEPT: ReceiveMail, REJECT: SMTPServer |+],
+    QUIT: EndBang
+  |&];
 
-typename ReceiveBody = 
-  mu body.[&|RCPT:?Address.[+|REJECT:body, ACCEPT:body|+],
-             DATA:?Subject.?MessageBody.ReceiveMail
-          |&];
+typename ReceiveMail =
+  [&|
+    MAIL:?Address.
+      [+|
+        REJECT: ReceiveMail,
+        ACCEPT: ReceiveRecipient
+      |+],
+    QUIT:EndBang
+  |&];
+
+typename ReceiveBody =
+  [&|
+    RCPT: ?Address . [+| REJECT: ReceiveBody, ACCEPT: ReceiveBody |+],
+    DATA: ?Subject . ?MessageBody . ReceiveMail
+  |&];
 
 typename ReceiveRecipient =
-  mu recipient.[&|RCPT:?Address.
-                   [+|REJECT:recipient, ACCEPT:ReceiveBody|+]
-               |&];
+  [&|
+    RCPT:?Address . [+| REJECT: ReceiveRecipient, ACCEPT:ReceiveBody |+]
+  |&];
 
 ### the server
 sig mailServer : (SMTPServer) ~> EndBang
@@ -42,7 +40,7 @@ fun mailServer(s) {
   var welcomeMessage = read(socket);
   print("S: " ^^ welcomeMessage);
   offer(s) {
-    case HELO(s) ->             
+    case HELO(s) ->
       var (domain, s) = receive(s);
       write("HELO " ^^ domain ^^ "\n", socket);
       var smtpAnswer = read(socket);
@@ -101,7 +99,7 @@ fun receiveRecipient(s, socket) {
         var s = select REJECT s;
         print("S: " ^^ smtpAnswer);
         receiveRecipient(s, socket)
-      } else {    
+      } else {
         var s = select ACCEPT s;
         receiveBody(s, socket)
       }
@@ -121,7 +119,7 @@ fun receiveBody(s, socket) {
         var s = select REJECT s;
         print("S: " ^^ smtpAnswer);
         receiveBody(s, socket)
-      } else {    
+      } else {
         var s = select ACCEPT s;
         receiveBody(s, socket)
       }
@@ -130,7 +128,7 @@ fun receiveBody(s, socket) {
       var (message, s) = receive(s);
       write("DATA\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);   
+      print("S: " ^^ smtpAnswer);
       write("SUBJECT: " ^^ subject ^^ "\n", socket);
       print("C: SUBJECT: " ^^ subject);
       write(message ^^ "\n", socket);
@@ -243,6 +241,6 @@ fun startCommunication(message) {
   mailClient(fork(mailServer), message)
 }
 
-startCommunication((sender="foo@bar.com", recipients=[ # fill in some recipients...
-                                                     ],
-                    subject="Links SMTP test", body="Hello ABCD.\nHow are you?"))
+startCommunication((sender="foo@bar.com",
+  recipients= [ "simon.fowler@ed.ac.uk", "simon@simonjf.com" ],
+  subject="Links SMTP test", body="Hello ABCD.\nHow are you?"))
