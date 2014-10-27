@@ -323,8 +323,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (p1 (fun f ->
-         if Settings.get_value Basicsettings.web_mode then
-           failwith("Can't spawn at the server in web mode.");
+         (* if Settings.get_value Basicsettings.web_mode then *)
+         (*   failwith("Can't spawn at the server in web mode."); *)
          let var = Var.dummy_var in
          let cont = (`Local, var, Value.empty_env IntMap.empty,
                      ([], `Apply (`Variable var, []))) in

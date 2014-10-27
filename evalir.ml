@@ -2,10 +2,6 @@ open Notfound
 
 open Utility
 
-(* If true, then wait for all child processes to finish before
-   terminating *)
-let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
-
 module Session = struct
   type apid = int              (* access point id *)
   type portid = int
@@ -334,7 +330,7 @@ module Eval = struct
           | None -> eval_error "Error looking up recursive function definition"
         end
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
-        if Settings.get_value Basicsettings.web_mode then
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
         else
           let pid = Num.int_of_num (Value.unbox_int pid) in
@@ -347,7 +343,7 @@ module Eval = struct
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
-        if Settings.get_value Basicsettings.web_mode then
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
         else
           apply_cont cont env (Lib.apply_pfun "spawn" [func])
@@ -358,7 +354,7 @@ module Eval = struct
            scheduler choose a different thread.  *)
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
-        if Settings.get_value Basicsettings.web_mode then
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_recvWrapper" cont []
         else
         begin match Proc.pop_message() with
@@ -495,7 +491,7 @@ module Eval = struct
         | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
         | [] when Proc.current_is_main() ->
-            if not (Settings.get_value wait_for_child_processes) || Proc.singlethreaded () then
+            if not (Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
               raise (TopLevel (Value.globals env, v))
             else
               begin
