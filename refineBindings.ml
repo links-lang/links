@@ -298,18 +298,10 @@ module RefineTypeBindings = struct
       let tyName = getName ty in
       let rts = isSelfReferential tyName ri in
       let sugaredDT = getDT ty in
-      (* printf "Type %s refers to types: \n" tyName; *)
-      (* List.iter (fun tyRef -> printf "%s\n" tyRef) refs; *)
       (* If we're self-referential, then add in a top-level mu *)
       let (env', dt) =
-        (* printf "Type: %s\n%s\n" tyName (Show.show show_datatype sugaredDT);
-        print_string "Type args: \n";
-        List.iter (fun x ->
-          printf "%s\n" (Show.show show_quantifier (fst x));
-        ) (snd3 ty);
-        *)
         if List.mem_assoc tyName env then assert false else
-        if rts then
+        if rts || List.length sccs > 1 then
           let muName = gensym ~prefix:"refined_mu" () in
             ((tyName, muName) :: env, `Mu (muName, sugaredDT))
         else (env, sugaredDT) in
@@ -322,16 +314,19 @@ module RefineTypeBindings = struct
         (* Only perform this transformation on other types in the group, and to self if self-referential. *)
         let shouldApply = Hashtbl.mem ht tyRef && (tyName <> tyRef || rts) in
         if shouldApply then
-        (* if (tyName <> tyRef) && Hashtbl.mem ht tyRef then *)
-          try
+          (if List.mem_assoc tyRef env' then
             (* Simple tyApp substitution *)
             let muName = List.assoc tyRef env' in
             substTyApp curDataTy tyRef muName
-          with Notfound.NotFound _ ->
-            assert (tyName <> tyRef);
+           else
+            (* assert (tyName <> tyRef); *)
             (* Otherwise, we'll need to refine and inline *)
-            let (_, _, (refinedRef, _)) = refineType (Hashtbl.find ht tyRef) env' ht sccs ri in
-            inlineTy curDataTy tyRef refinedRef
+             if Hashtbl.mem ht tyRef then
+               let (_, _, (refinedRef, _)) = refineType (Hashtbl.find ht tyRef) env' ht sccs ri in
+               inlineTy curDataTy tyRef refinedRef
+             else
+               let () = printf "Fatal: couldn't find %s in type hashtable" tyRef in
+               assert false)
         else
           curDataTy
       ) sccs dt in
@@ -349,8 +344,6 @@ module RefineTypeBindings = struct
       List.map (fun name ->
         let rts = isSelfReferential name ri in
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        (* printf "Type %s\n%s\n\n" name (Show.show show_datatype (getDT res));
-        printf "Type %s refers to self? %b\n" name rts; *)
         (`Type res, getPos name)
       ) sccs
 
@@ -393,7 +386,7 @@ object (self)
     |`Block (bindings, body) ->
        let bindings = self#list (fun o -> o#binding) bindings in
        let body = self#phrase body in
-       let refined_bindings = 
+       let refined_bindings =
          (RefineTypeBindings.refineTypeBindings ->-
          refine_bindings) bindings in
        `Block (refined_bindings, body)
@@ -403,7 +396,7 @@ object (self)
     fun (bindings, body) ->
       let bindings = self#list (fun o -> o#binding) bindings in
       let body = self#option (fun o -> o#phrase) body in
-      let refined_bindings = 
+      let refined_bindings =
         (RefineTypeBindings.refineTypeBindings ->-
         refine_bindings) bindings in
       refined_bindings, body
@@ -411,9 +404,9 @@ object (self)
   method sentence : sentence -> sentence = function
     |`Definitions defs ->
        let defs = self#list (fun o -> o#binding) defs in
-       let refined_bindings = 
+       let refined_bindings =
          (RefineTypeBindings.refineTypeBindings ->-
-         refine_bindings) defs in 
+         refine_bindings) defs in
        `Definitions (refined_bindings)
     | d -> super#sentence d
 

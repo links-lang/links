@@ -242,5 +242,5 @@ fun startCommunication(message) {
 }
 
 startCommunication((sender="foo@bar.com",
-  recipients= [ "simon.fowler@ed.ac.uk", "simon@simonjf.com" ],
+  recipients= [ ]
   subject="Links SMTP test", body="Hello ABCD.\nHow are you?"))
