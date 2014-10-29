@@ -8,11 +8,11 @@ let type_section env =
     | `Minus -> TyEnv.lookup env "-"
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
-        let ab, a = Types.fresh_type_quantifier `Any in
-        let rhob, (fields, rho) = Types.fresh_row_quantifier `Any in
-        let eb, e = Types.fresh_row_quantifier `Any in
+        let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
+        let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
 
-        let r = `Record (StringMap.add label (`Present a) fields, rho) in
+        let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
           `ForAll (Types.box_quantifiers [ab; rhob; eb],
                    `Function (Types.make_tuple_type [r], e, a))
     | `Name var -> TyEnv.lookup env var
@@ -27,9 +27,9 @@ let type_binary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
   | `Minus        -> TyEnv.lookup env "-"
   | `FloatMinus   -> TyEnv.lookup env "-."
-  | `RegexMatch flags -> 
+  | `RegexMatch flags ->
       let nativep  = List.exists ((=) `RegexNative)  flags
-      and listp    = List.exists ((=) `RegexList)    flags 
+      and listp    = List.exists ((=) `RegexList)    flags
       and replacep = List.exists ((=) `RegexReplace) flags in
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
@@ -45,11 +45,11 @@ let type_binary_op env tycon_env =
   | `Name "<"
   | `Name "<="
   | `Name "<>" ->
-      let ab, a = Types.fresh_type_quantifier `Any in
-      let eb, e = Types.fresh_row_quantifier `Any in
+      let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
+      let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
         `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
-  | `Name "!"     -> TyEnv.lookup env "send"
+  | `Name "!"     -> TyEnv.lookup env "Send"
   | `Name n       -> TyEnv.lookup env n
 
 let fun_effects t pss =
@@ -57,6 +57,8 @@ let fun_effects t pss =
     function
       | `Function (_, effects, _), [_] -> effects
       | `Function (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
+      | `Lolli (_, effects, _), [_] -> effects
+      | `Lolli (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
@@ -83,7 +85,7 @@ let optionu :
     function
       | None -> (o, None)
       | Some x -> let (o, x) = f o x in (o, Some x)
-                                          
+
 let rec list :
     'self_type ->
     ('self_type -> 'a -> 'self_type * 'a * Types.datatype) ->
@@ -94,7 +96,7 @@ let rec list :
           | x :: xs ->
               let (o, x, t) = f o x in
               let (o, xs, ts) = list o f xs in (o, x::xs, t::ts)
-                                                 
+
 let rec listu :
     'self_type ->
     ('self_type -> 'a -> 'self_type * 'a) ->
@@ -167,7 +169,7 @@ class transform (env : Types.typing_environment) =
     method sec : sec -> ('self_type * sec * Types.datatype) =
       fun sec ->
         (o, sec, type_section var_env sec)
-     
+
     method sentence : sentence -> ('self_type * sentence) =
       function
       | `Definitions defs ->
@@ -197,7 +199,7 @@ class transform (env : Types.typing_environment) =
             let (o, r) = o#regex r in
             let (o, e, _) = o#phrase e in
               (o, `Replace (r, `Splice e))
-      
+
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->
         let (o, bs) = listu o (fun o -> o#binding) bs in
@@ -208,8 +210,8 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lam) ->
-          let inner_e = snd (last argss) in
+      | `FunLit (Some argss, lin, lam) ->
+          let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right
@@ -220,7 +222,7 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lam), t)
+            (o, `FunLit (Some argss, lin, lam), t)
       | `Spawn (body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -240,6 +242,22 @@ class transform (env : Types.typing_environment) =
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
             (o, `SpawnWait (body, Some inner_effects), body_type)
+      | `Select (l, e) ->
+         let (o, e, t) = o#phrase e in
+         (o, (`Select (l, e)), TypeUtils.select_type l t)
+      | `Offer (e, bs, Some t) ->
+          let (o, e, _) = o#phrase e in
+          let (o, bs) =
+            listu o
+              (fun o (p, e) ->
+                 let (o, p) = o#pattern p in
+                 let (o, e, _) = o#phrase e in (o, (p, e)))
+              bs in
+          let (o, t) = o#datatype t in
+            (o, `Offer (e, bs, Some t), t)
+      | `CP p ->
+         let (o, p, t) = o#cp_phrase p in
+         (o, `CP p, t)
       | `Query (range, body, Some t) ->
           let (o, range) =
             optionu o
@@ -247,7 +265,7 @@ class transform (env : Types.typing_environment) =
                  let (o, limit, _) = o#phrase limit in
                  let (o, offset, _) = o#phrase offset in
                    (o, (limit, offset)))
-              range in                   
+              range in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
             (o, (`Query (range, body, Some t)), t)
@@ -323,7 +341,7 @@ class transform (env : Types.typing_environment) =
                    (o, `TAppl (e, tyargs), t))
       | `TupleLit [e] ->
           (* QUESTION:
-             
+
              Why do we type 1-tuples as if they aren't tuples?
           *)
           let (o, e, t) = o#phrase e in
@@ -361,7 +379,7 @@ class transform (env : Types.typing_environment) =
             (o, `RecordLit (fields, base), t)
       | `Projection (e, name) ->
           let (o, e, t) = o#phrase e in
-            (o, `Projection (e, name), TypeUtils.project_type name t)
+          (o, `Projection (e, name), TypeUtils.project_type name t)
       | `With (e, fields) ->
           let (o, e, t) = o#phrase e in
           let (o, fields) =
@@ -385,7 +403,7 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = o#phrase e in
           let (o, to_type) = o#datatype' to_type in
           let (o, from_type) = o#datatype' from_type in
-          let (_, Some t) = to_type in 
+          let (_, Some t) = to_type in
             (o, `Upcast (e, to_type, from_type), t)
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
@@ -427,7 +445,7 @@ class transform (env : Types.typing_environment) =
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
             (* BUG:
-               
+
                We should really reset the environment: variables bound
                by p shouldn't be visible in subsequent expression.
 
@@ -492,7 +510,7 @@ class transform (env : Types.typing_environment) =
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
         let (o, e, t) = o#phrasenode e in (o, (e, pos), t)
-      
+
     method patternnode : patternnode -> ('self_type * patternnode) =
       function
       | `Any -> (o, `Any)
@@ -523,11 +541,11 @@ class transform (env : Types.typing_environment) =
           let (o, p) = o#pattern p in (o, (`As (x, p)))
       | `HasType (p, t) ->
           let (o, p) = o#pattern p in (o, (`HasType (p, t)))
-      
+
     method pattern : pattern -> ('self_type * pattern) =
       fun (p, pos) ->
         let (o, p) = o#patternnode p in (o, (p, pos))
-            
+
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
       | `List (p, e) ->
@@ -538,7 +556,7 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
            (o, `Table (p, e))
-      
+
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_eff (pss, e) ->
         let envs = o#backup_envs in
@@ -555,54 +573,54 @@ class transform (env : Types.typing_environment) =
         | `String v -> (o, `String v, Types.string_type)
         | `Bool v -> (o, `Bool v, Types.bool_type)
         | `Char v -> (o, `Char v, Types.char_type)
-            
+
     method quantifiers : Types.quantifier list -> ('self_type * Types.quantifier list) =
       fun qs -> (o, qs)
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       ('self_type *
-         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
           | [] -> (o, [])
-          | (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+          | (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-                (o, (f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+                (o, (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
       in
         list o
 
     method rec_activate_outer_bindings :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       ('self_type *
-         (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
       let rec list o =
         function
           | [] -> o, []
-          | (f, body, location, t, pos)::defs ->
+          | (f, lin, body, location, t, pos)::defs ->
               let (o, f) = o#binder f in
               let (o, defs) = list o defs in
               let (o, t) = optionu o (fun o -> o#datatype') t in
-                o, (f, body, location, t, pos)::defs
+                o, (f, lin, body, location, t, pos)::defs
       in
         list o
 
     method rec_activate_inner_bindings :
-      (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       'self_type =
-      let bt (name, _, pos) t = (name, Some t, pos) in        
+      let bt (name, _, pos) t = (name, Some t, pos) in
       let rec list o =
         function
           | [] -> o
-          | (f, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
+          | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
               let (o, _) = o#binder (bt f inner) in
                 list o defs
       in
@@ -618,7 +636,7 @@ class transform (env : Types.typing_environment) =
             let (o, p) = o#pattern p in
             let (o, t) = optionu o (fun o -> o#datatype') t in
               (o, `Val (tyvars, p, e, location, t))
-        | `Fun ((_, Some ft, _) as f, (tyvars, lam), location, t) ->
+        | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
             let outer_tyvars = o#backup_quantifiers in
             let (o, tyvars) = o#quantifiers tyvars in
             let inner_effects = fun_effects ft (fst lam) in
@@ -626,14 +644,14 @@ class transform (env : Types.typing_environment) =
             let o = o#restore_quantifiers outer_tyvars in
             let (o, f) = o#binder f in
             let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Fun (f, (tyvars, lam), location, t))
+              (o, `Fun (f, lin, (tyvars, lam), location, t))
         | `Funs defs ->
             (* put the inner bindings in the environment *)
             let o = o#rec_activate_inner_bindings defs in
 
             (* transform the function bodies *)
             let (o, defs) = o#rec_bodies defs in
-              
+
             (* put the outer bindings in the environment *)
             let o, defs = o#rec_activate_outer_bindings defs in
               (o, (`Funs defs))
@@ -647,13 +665,74 @@ class transform (env : Types.typing_environment) =
             {< tycon_env=tycon_env >}, e
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
-      
+
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
         let (o, b) = o#bindingnode b in (o, (b, pos))
-      
+
     method binder : binder -> ('self_type * binder) =
       fun (name, Some t, pos) ->
         let var_env = TyEnv.bind var_env (name, t) in
           ({< var_env=var_env >}, (name, Some t, pos))
+
+    method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
+      fun (p, pos) ->
+      let (o, p, t) = o#cp_phrasenode p in
+      (o, (p, pos), t)
+
+    (* TODO: should really invoke o#datatype on type annotations! *)
+    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
+      | `Unquote (bs, e) ->
+         let envs = o#backup_envs in
+         let (o, bs) = listu o (fun o -> o#binding) bs in
+         let (o, e, t) = o#phrase e in
+         let o = o#restore_envs envs in
+         {< var_env=var_env >}, `Unquote (bs, e), t
+      | `Grab (cbind, None, p) ->
+         let (o, p, t) = o#cp_phrase p in
+         o, `Grab (cbind, None, p), t
+      | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+         let envs = o#backup_envs in
+         let (o, b) = o#binder b in
+         let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
+         let o = {< var_env = venv >} in
+         let (o, p, t) = o#cp_phrase p in
+         let o = o#restore_envs envs in
+         o, `Grab (cbind, Some b, p), t
+      | `Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
+         let envs = o#backup_envs in
+         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
+         let (o, e, _typ) = option o (fun o -> o#phrase) e in
+         let (o, p, t) = o#cp_phrase p in
+         let o = o#restore_envs envs in
+         o, `Give (cbind, e, p), t
+      | `GiveNothing c ->
+         let envs = o#backup_envs in
+         let o, c = o#binder c in
+         let o = o#restore_envs envs in
+         o, `GiveNothing c, Types.make_endbang_type
+      | `Grab _ -> failwith "Malformed grab in TransformSugar"
+      | `Give _ -> failwith "Malformed give in TransformSugar"
+      | `Select (b, label, p) ->
+         let envs = o#backup_envs in
+         let o, b = o#binder b in
+         let (o, p, t) = o#cp_phrase p in
+         let o = o#restore_envs envs in
+         o, `Select (b, label, p), t
+      | `Offer (b, cases) ->
+         let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
+                                           let envs = o#backup_envs in
+                                           let o, _ = o#binder b in
+                                           let (o, p, t) = o#cp_phrase p in
+                                           (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
+         let (cases, t :: ts) = List.split cases in
+         o, `Offer (b, cases), t
+      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
+      | `Comp ((c, Some s, _ as cbind), left, right) ->
+         let envs = o#backup_envs in
+         let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
+         let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
+         let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
+         let o = o#restore_envs envs in
+         o, `Comp (cbind, left, right), t
   end

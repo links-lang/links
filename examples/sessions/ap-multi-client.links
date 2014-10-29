@@ -1,0 +1,31 @@
+fun grabber(ap) client {
+  var s = accept(ap);
+  var t = accept(ap);
+  <| s(x).t(y).s(z).t(w).s[x+y].t[z+w].{()} |>;
+  grabber(ap);
+}
+
+fun giver(x, y, a, b) client {
+  var s = request(a);
+  var z = receive(send(y,send(x,s))).1;
+  var t = accept(b);
+  ignore(send(z, t));
+}
+
+fun main() client {
+  var a = new();
+  var _ = spawn { grabber(a) };
+  var b = new ();
+  var c = new ();
+  var _ = spawn { giver(6, 7, a, b) };
+  var _ = spawn { giver(8, 9, a, c) };
+  var x = receive(request(b)).1;
+  var y = receive(request(c)).1;
+
+  page
+    <html><body>
+      Hey, hi.  Also {stringToXml(intToString(x))} and {stringToXml(intToString(y))}.
+    </body></html>
+}
+
+main()

@@ -14,12 +14,12 @@ val optionu :
     'self_type ->
     ('self_type -> 'a -> ('self_type * 'a)) ->
   'a option -> ('self_type * ('a option))
-                                          
+
 val list :
     'self_type ->
     ('self_type -> 'a -> 'self_type * 'a * Types.datatype) ->
   'a list -> 'self_type * 'a list * Types.datatype list
-                                                 
+
 val listu :
     'self_type ->
     ('self_type -> 'a -> 'self_type * 'a) ->
@@ -38,7 +38,7 @@ object ('self)
 
   method backup_envs     : Types.environment * Types.tycon_environment * Types.environment * Types.row
   method restore_envs    : (Types.environment * Types.tycon_environment * Types.environment * Types.row) -> 'self
-    
+
   method lookup_type     : name -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self
@@ -56,15 +56,15 @@ object ('self)
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
   method rec_bodies :
-    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     ('self *
-       (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)    
+       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
   method rec_activate_outer_bindings :
-    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     ('self *
-       (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)    
+       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
   method rec_activate_inner_bindings :
-    (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     'self
 
   method sugar_datatype   : datatype -> 'self * datatype
@@ -76,6 +76,8 @@ object ('self)
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase * Types.datatype
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
+  method cp_phrase       : cp_phrase -> 'self * cp_phrase * Types.datatype
+  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
   method sec             : sec -> 'self * sec * Types.datatype

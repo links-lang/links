@@ -1,0 +1,10 @@
+fun (c) {
+  var (x, c) = receive(c);
+  if (x) {
+    ignore(send(1,c));
+    ()
+  } else {
+    ignore(send(2,c));
+    ()
+  }
+}

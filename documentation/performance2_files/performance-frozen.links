@@ -1,0 +1,477 @@
+#
+# MATH
+#
+sig fabs: (Float) -> Float
+fun fabs(x) {
+	if (x < 0.0) -.x else x
+}
+
+sig fmin: (Float, Float) -> Float
+fun fmin(a, b) {
+	if (a < b) a
+	else b
+}
+
+sig fmax: (Float, Float) -> Float
+fun fmax(a, b) {
+	if (a > b) a
+	else b
+}
+
+#
+# Performance chart
+#
+
+typename Input = [| KeyUp: Int | KeyDown: Int |];
+typename Datapoints = [(Int, Float)];
+
+#
+# AUX
+#
+fun clear(ctx) {
+	jsClearRect(ctx, 0.0, 0.0, jsCanvasWidth(ctx), jsCanvasHeight(ctx))
+}
+
+fun putPixel(ctx, x:Float, y:Float) {
+	jsFillRect(ctx, x, y, 2.0, 2.0);
+	#jsFillCircle(ctx, x, y, 1.0);
+}
+
+#
+# MAIN
+#
+fun main() client {
+	#
+	# CONSTANTS
+    #
+
+    # CANVAS PARAMETERS
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+    var canvasWidth = 600.0;
+    var canvasHeight = 500.0;
+
+	# KEYCODES
+	var leftKeyCode = 37;
+	var rightKeyCode = 39;
+	var upKeyCode = 38;
+	var downKeyCode = 40;
+	var restartKeyCode = 113;
+    
+
+	# INITIAL STATE
+	var initialFpsInfo = (frameCount=0, dFps=0.0, avgFps=0.0, fpsAcc=0.0,
+							loFps=1000000.0, hiFps=0.0, loFpsFrame=0, upFrames=0, downFrames=0);
+
+	var initialChartParams = (measure=0.5, xScale=canvasWidth, yScale=canvasHeight, snap=false, round=0);
+
+	var initialDatapoints =
+		(for (x <- [0..floatToInt(initialChartParams.xScale)], y <- [0.0])
+			[(x, y)]):Datapoints;
+
+	var xAxis =
+		for (x <- [0..floatToInt(initialChartParams.xScale)], y <- [initialChartParams.yScale -. 1.0])
+		where ((x `mod` 60) == 0)
+			[(intToFloat(x), y)];
+
+	var doubleBuffer = true;
+
+	# TIMESTEP
+    var step = 1.0 /. 60.0;
+
+	#
+	# DRAWING
+	#	
+	fun draw(datapoints:Datapoints, lastTime, now, fpsInfo, chartParams) {
+        # prepare canvas
+        var (mainCanvas, dispCanvas) =
+			if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none" || not(doubleBuffer))
+				(canvasId, canvas2Id)
+			else (canvas2Id, canvasId);
+#~ 				(canvas2Id, canvasId)
+#~ 			else (canvasId, canvas2Id);
+
+		var ctx = jsGetContext2D(getNodeById(mainCanvas));
+
+		clear(ctx);
+		
+        # HELPER FUNCTIONS
+		fun scalePoint((x, y)) {
+			(x, chartParams.yScale -. (y /. fpsInfo.hiFps) *. chartParams.yScale)
+		}
+
+		fun drawChartLine(ctx, color, y, msg) {
+			jsStrokeStyle(ctx, color);
+			jsBeginPath(ctx);
+			var (_, scaledY) = scalePoint((0.0, y));#yScale -. (fpsInfo.loFps /. fpsInfo.hiFps) *. yScale;
+			jsMoveTo(ctx, 0.0, scaledY);
+			jsLineTo(ctx, chartParams.xScale, scaledY);
+			jsStroke(ctx);
+			jsFillText(ctx, msg ^^ strsub(floatToString(y), 0, 5), 10.0, scaledY);
+		    scaledY
+		}
+
+		fun markYAxis (fraction) {
+			var (_, yP) = scalePoint((0.0, fraction *. fpsInfo.hiFps));
+			ignore(map(fun (x) { putPixel(ctx, intToFloat(x), yP) }, [0..6]));
+			jsFillText(ctx, strsub(floatToString(fraction *. fpsInfo.hiFps), 0, 7), 10.0, yP);
+        }
+
+		# prepare datapoints
+		var offset = fpsInfo.frameCount;
+
+		var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
+
+		var leftPoints = take(offset, datapoints);
+		
+		var middlePoint = [(offset + 1, dFps)]; # ;>
+
+		var datapointsLength = length(datapoints);
+        var diff = floatToInt(chartParams.xScale) - datapointsLength;
+
+        # TODO?: increasing chart width
+#~ 		var newPoints =
+#~ 			if (diff > 0)
+#~ 				for (x <- [datapointsLength..datapointsLength + diff], y <- [0.0]) [(x, y)]
+#~ 			else
+#~ 				[];
+			
+		var rightPoints = drop(offset + 1, take(floatToInt(chartParams.xScale), datapoints));# ++ newPoints));
+
+		# debug info
+		jsFillText(ctx, "granularity: " ^^ intToString(debugGetStats("yieldGranularity")), 230.0, 10.0);
+		jsFillText(ctx, "yieldCount: " ^^ intToString(debugGetStats("yieldCount")), 320.0, 10.0);
+		jsFillText(ctx, "double buffering: " ^^ (if (doubleBuffer) "on" else "off"), 470.0, 10.0);
+		jsFillText(ctx, domGetNodeValueFromRef(getNodeById("otherInfo")), 10.0, 30.0);
+
+		# chart reference lines
+		var _ = drawChartLine(ctx, "red", fpsInfo.loFps, "lowest FPS: ");
+		
+		var _ = drawChartLine(ctx, "blue", fpsInfo.avgFps, "average FPS: ");
+
+		var measure = fpsInfo.avgFps *. chartParams.measure;
+		var mesPoint = drawChartLine(ctx, "green", measure, "reference FPS: ");
+
+		# draw x axis (frame numbers)
+		jsFillText(ctx, "frame", chartParams.xScale -. 40.0, chartParams.yScale -. 20.0);
+
+		jsSetFillColor(ctx, "black");
+		ignore(map(
+			fun ((x, y)) {
+				ignore(map(fun (i) { putPixel(ctx, x, y -. intToFloat(i)) }, [0..6]));
+
+				jsFillText(ctx, floatToString(x), x, (y-.10.0));
+			},
+		xAxis));
+
+		# draw datapoints
+		jsBeginPath(ctx);
+		var firstPoint = scalePoint(hd(datapoints));
+		
+		jsMoveTo(ctx, intToFloat(firstPoint.1), firstPoint.2);
+
+		var (midPointx, midPointy) = scalePoint(middlePoint !! 0);
+
+		# helper:
+        fun plotPoint(p) {
+			var (x, y) = scalePoint(p);
+			putPixel(ctx, intToFloat(x), y);
+			if (y < mesPoint) 1
+			else -1
+		}
+		
+		jsSetFillColor(ctx, "#222");
+		var plottedLeftPoints = map(plotPoint, leftPoints);
+
+		# calculate additional data for saving to file
+		if (chartParams.snap) {
+			var leftPointsAboveMeasureCount = length(filter(fun (x) { x == 1 }, plottedLeftPoints));
+			var leftPointsBelowMeasureCount = length(plottedLeftPoints) - leftPointsAboveMeasureCount;
+			jsFillText(ctx, "frames above: " ^^ intToString(leftPointsAboveMeasureCount), 10.0, mesPoint +. 15.0);
+			jsFillText(ctx, "frames below: " ^^ intToString(leftPointsBelowMeasureCount), 150.0, mesPoint +. 15.0);
+			jsFillText(ctx, "ratio: " ^^ strsub(floatToString(intToFloat(leftPointsAboveMeasureCount) /. intToFloat(leftPointsBelowMeasureCount)), 0, 7), 300.0, mesPoint +. 15.0);
+		} else ();
+		
+		jsSetFillColor(ctx, "#2a2");
+		ignore(map(plotPoint, middlePoint)); # oh well
+		
+		jsSetFillColor(ctx, "#888");
+		ignore(map(plotPoint, rightPoints)); # filter is here to even out the performance
+		jsStroke(ctx);
+
+		# draw y axis (FPS)
+        jsSetFillColor(ctx, "#770");
+        markYAxis(0.25);
+        markYAxis(0.50);
+        markYAxis(0.75);
+
+		# calculate and draw new fpsInfo
+		var fpsInfo = drawFps(ctx, fpsInfo, dFps, chartParams); # debug
+
+		# new datapoints
+		var datapoints = leftPoints ++ middlePoint ++ rightPoints;
+
+		# double buffering
+		if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();
+
+		# save canvas to file
+		if (chartParams.snap) {
+			var _ = domSetAttributeFromRef(getNodeById("download"), "download",
+				domGetNodeValueFromRef(getNodeById("otherInfo"))
+				^^ "-round-"
+				^^ intToString(chartParams.round)
+				^^ "-timestamp-"
+				^^ intToString(clientTime())); 
+			jsSaveCanvas(getNodeById(mainCanvas), getNodeById("download"), "image/png");
+		}
+		else ();
+
+		# return
+		(fpsInfo, datapoints)
+	}
+
+	fun drawFps(ctx, fpsInfo, dFps, chartParams) {
+		var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1, dFps = dFps);
+
+		jsSetFillColor(ctx, "#000");
+		jsFillText(ctx, "FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
+		
+		var fpsInfo = if (fpsInfo.loFps > dFps) {
+			(fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
+		}
+		else fpsInfo;
+
+		var fpsInfo = if (fpsInfo.hiFps < dFps)
+			(fpsInfo with hiFps = dFps)
+		else fpsInfo;
+
+		var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
+		
+		var aFpsFrames = floatToInt(chartParams.xScale);
+		var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
+			(fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
+		} else fpsInfo;
+
+		var fpsInfo = if (fpsInfo.avgFps > 0.0) {
+			if (dFps < fpsInfo.avgFps *. chartParams.measure)
+				(fpsInfo with downFrames = fpsInfo.downFrames + 1)
+			else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
+		} else (fpsInfo with hiFps = 0.0);
+
+		if (fpsInfo.hiFps == 0.0)
+			jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
+		else
+			jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
+		
+		fpsInfo
+	}
+
+	fun swapBuffers(mainCanvas, dispCanvas) {
+		var ctx = jsGetContext2D(getNodeById(dispCanvas));
+		jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
+		
+		ignore(domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block"));
+		ignore(domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none"));
+		clear(ctx)
+	}
+
+	#
+	# PROCESSES
+	#
+
+	# masterProc and dumProc are neccessary for mutual communication between the update and the input processes 
+	fun masterProc() {
+		fun masterLoop(procId) {
+			procId ! (recv().2:Input);
+			masterLoop(procId)
+		}
+
+		masterLoop(recv().1)
+	}
+	var masterProcId = spawn { masterProc() };
+
+	fun dumProc(i) {
+		var i = i ++ [recv()];
+		()
+	}
+	var dumProcId = spawn { dumProc([]:[Input]) };
+
+    # logic, depends on masterProc
+	fun updateLogic(dt, chartParams, i) {
+		if (dt > step) {			
+			# handle input
+			var lastInput = switch (i) {
+				case [] -> KeyDown(-1)
+				case (x::xs) -> x
+				case _ -> KeyDown(-1)
+			};
+            var chartParams =
+				if (lastInput == KeyDown(upKeyCode))
+					(chartParams with measure = chartParams.measure +. 0.01)
+				else if (lastInput == KeyDown(downKeyCode))
+					(chartParams with measure = chartParams.measure -. 0.01)
+				else if (lastInput == KeyDown(leftKeyCode))
+					(chartParams with xScale = chartParams.xScale -. 1.0)
+				else if (lastInput == KeyDown(rightKeyCode))
+					(chartParams with measure = chartParams.xScale +. 1.0)
+				else
+					chartParams;
+
+			masterProcId ! (dumProcId, KeyDown(-1):Input); # reset input
+			
+			updateLogic(dt -. step, chartParams, []: [Input])
+		} else (chartParams, dt)
+	}
+
+	fun updateState() {
+		fun mainLoop(chartParams, dt, lastTime, fpsInfo, datapoints) {
+			var now = clientTime();
+			var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
+
+			var i = if (haveMail())
+				recv()
+			else {
+				masterProcId ! (dumProcId, KeyDown(-2):Input);
+				recv()
+			};
+
+			var lastInput = last(i); 
+			if (lastInput == KeyUp(restartKeyCode)) {
+				()
+			} else {
+                var chartParams =
+					if (lastInput == KeyDown(-3))
+						(chartParams with snap = true)
+					else
+						(chartParams with snap = false);
+				
+				var (chartParamsPrim, dtprim) = updateLogic(dt, chartParams, i);
+
+				var (fpsInfo, datapoints) = draw(datapoints, lastTime, now, fpsInfo, chartParamsPrim);
+				var chartParamsPrim = (chartParamsPrim with round = chartParamsPrim.round + 1);
+
+				mainLoop(chartParamsPrim, dtprim, now, fpsInfo, datapoints) # requestAnimationFrame
+			}
+		}
+
+		ignore(recv());
+		mainLoop(initialChartParams, 0.0, clientTime(), initialFpsInfo, initialDatapoints);
+
+		if (not(haveMail())) self() ! ([]: [Input]) else ();
+		updateState()
+	}
+	var updateProcId = spawn { updateState() };
+
+	fun inputStateLoop(i) {
+		var r = recv();
+
+		#var j = i;
+		var i = if (not(r == KeyDown(-1))) i ++ [r] else ([]:[Input]);
+
+		# why does this not work? // Pattern matching failed
+		#var i = if (not(r == KeyDown(-2))) ([]:[Input]) else j;
+
+		if (not(r == KeyDown(-1)))
+			updateProcId ! i
+		else ();
+		
+		inputStateLoop(i)
+	}
+	var inputProcId = spawn { inputStateLoop([]:[Input]) };
+
+	
+	fun onKeyDown(e) {
+		inputProcId ! (KeyDown(getCharCode(e)):Input); 
+	}
+
+	fun onKeyUp(e) {
+		inputProcId ! (KeyUp(getCharCode(e)):Input);
+	}
+
+	# initialize masterProc
+	masterProcId ! (inputProcId, KeyDown(-2):Input);
+
+	fun downloadCanvas() {#(e:Event) {
+		var canvas = 
+			if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none")
+				canvas2Id
+			else canvasId;
+		jsSaveCanvas(getNodeById(canvas), getNodeById("download"), "image/png");
+
+		#replaceNode(<div></div>, getNodeById("download"))
+	}
+
+	fun initialize() {
+		ignore(recv());
+		
+		jsSetOnKeyDown(containerId, onKeyDown);
+		jsSetOnEvent(containerId, "keyup", onKeyUp, true);
+
+		ignore(domSetStyleAttrFromRef(getNodeById("info"), "display", "none"));
+
+		#jsSetOnEvent("download", "focus", downloadCanvas, false);
+
+		updateProcId ! ([]:[Input])
+	}
+	var initializeProcId = spawn { initialize() };
+
+	
+
+	#
+	# PAGE
+	#
+	page
+		<html>
+			<head>
+            <style>
+
+				#info {{
+					font-size: 96px;
+				}}
+
+				#{stringToXml(containerId)} {{
+					position: relative;
+					width: {stringToXml(floatToString(canvasWidth))}px;
+					height: 500px;
+					background-color: #ddd
+				}}
+
+				#{stringToXml(canvas2Id)} {{
+					display: none;
+					position: absolute;
+					top: 0px;
+					left: 0px;
+				}}
+
+				#{stringToXml(canvasId)} {{
+					display: block;
+					position: absolute;
+					top: 0px;
+					left: 0px;
+				}}
+            </style>
+			</head>
+
+			<body>
+				<div id="container">
+					<h1>Links performance benchmark</h1>
+
+					<div id="{containerId}" tabindex="1"
+						l:onfocus="{initializeProcId ! 0; }">
+						<canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="500"></canvas>
+						<canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="500"></canvas>
+						<div id="info">Click this rectangle to start.</div>
+					</div>
+					<div id="msg"></div>
+					<a id="download" tabindex="2" download="1.png" l:onfocus="{ inputProcId ! (KeyDown(-3)) }">Download as image</a>
+					<form>
+						Other info: <input type="text" id="otherInfo" style="width:500px" />
+					</form> 
+				</div>
+			</body>
+		</html>
+}
+
+main()

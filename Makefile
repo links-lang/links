@@ -50,14 +50,15 @@ endif
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae-44-45
+OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
+#OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
-      getopt.ml getopt.mli PP.ml
+      getopt.ml getopt.mli PP.ml unix.cma
 
 SOURCES = $(OPC)                                \
           notfound.ml                           \
@@ -103,6 +104,7 @@ SOURCES = $(OPC)                                \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
+	  desugarCP.mli desugarCP.ml                     \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \
@@ -189,10 +191,9 @@ install: nc
 	@echo "your environment to enable calling Links from any directory."
 
 .PHONY: uninstall
-uninstall: 
+uninstall:
 	@echo "Uninstalling Links from $(LINKS_PREFIX)"
-	@echo "Removing $(LINKS_BIN)/links"	
+	@echo "Removing $(LINKS_BIN)/links"
 	rm -f $(LINKS_BIN)/links
 	@echo "Removing $(LINKS_LIB)/prelude.links"
 	rm -f $(LINKS_LIB)/prelude.links
-

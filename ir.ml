@@ -76,14 +76,16 @@ and binding =
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
-  | `Database of value 
+  | `Database of value
   | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation
   | `Delete of (binder * value) * computation option
-  | `CallCC of (value) ]
+  | `CallCC of (value)
+  | `Select of (name * value)
+  | `Choice of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
-  deriving (Show)  
+  deriving (Show)
 
 let tapp (v, tyargs) =
   match tyargs with
@@ -155,13 +157,13 @@ sig
     method name_map :
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type        
+      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type
     method var : var -> (var * Types.datatype * 'self_type)
     method value : value -> (value * Types.datatype * 'self_type)
-      
+
     method tail_computation :
       tail_computation -> (tail_computation * Types.datatype * 'self_type)
-    method special : special -> (special * Types.datatype * 'self_type)      
+    method special : special -> (special * Types.datatype * 'self_type)
     method bindings : binding list -> (binding list * 'self_type)
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
@@ -192,7 +194,7 @@ struct
 
     method lookup_type : var -> datatype = fun var ->
       Env.lookup tyenv var
-        
+
     method constant : constant -> (constant * datatype * 'self_type) = fun c ->
       match c with
         | `Bool _ -> c, bool_type, o
@@ -223,7 +225,7 @@ struct
           | Some v ->
               let v, t, o = f o v in
                 Some v, Some t, o
-                  
+
     method list :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -238,7 +240,7 @@ struct
             v
         in
           List.rev vs, List.rev ts, o
-            
+
     method name_map :
       'a.
       ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
@@ -255,7 +257,7 @@ struct
 
     method var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
-        
+
     method value : value -> (value * datatype * 'self_type) =
       function
         | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
@@ -311,7 +313,7 @@ struct
                 let _ = assert (StringMap.for_all (fun t -> t=string_type) attribute_types) in
                 let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
               *)
-              `XmlNode (tag, attributes, children), xml_type, o            
+              `XmlNode (tag, attributes, children), xml_type, o
         | `ApplyPure (f, args) ->
             let (f, ft, o) = o#value f in
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
@@ -363,7 +365,7 @@ struct
             let left, t, o = o#computation left in
             let right, _, o = o#computation right in
               `If (v, left, right), t, o
-                 
+
     method special : special -> (special * datatype * 'self_type) =
       function
         | `Wrong t -> `Wrong t, t, o
@@ -398,7 +400,19 @@ struct
         | `CallCC v ->
             let v, t, o = o#value v in
               `CallCC v, deconstruct return_type t, o
-      
+        | `Select (l, v) ->
+           let v, t, o = o#value v in
+           `Select (l, v), t, o
+        | `Choice (v, bs) ->
+           let v, _, o = o#value v in
+           let bs, branch_types, o =
+             o#name_map (fun o (b, c) ->
+                         let b, o = o#binder b in
+                         let c, t, o = o#computation c in
+                         (b, c), t, o) bs in
+           let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+           `Choice (v, bs), t, o
+
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
         let bs, o =
@@ -416,7 +430,7 @@ struct
         let bs, o = o#bindings bs in
         let tc, t, o = o#tail_computation tc in
           (bs, tc), t, o
-                                                       
+
     method binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, (tyvars, tc)) ->
@@ -496,7 +510,7 @@ struct
       | `Erase (_, v)
       | `Inject (_, v, _)
       | `TAbs (_, v)
-      | `TApp (v, _) -> is_inlineable_value v 
+      | `TApp (v, _) -> is_inlineable_value v
       | _ -> false
 
   let inliner tyenv env =
@@ -510,7 +524,7 @@ struct
 
     method value =
       function
-        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o          
+        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
         | v -> super#value v
 
     method bindings =
@@ -551,7 +565,7 @@ end
   If we partition mutually recursive bindings into strongly connected
   components beforehand then this will help eliminate more recursive
   bindings.
-  
+
   A much more effective approach is to use one of Appel and Jim's
   algorithms described in `Shrinking lambda reductions in linear
   time'.
@@ -591,11 +605,11 @@ struct
   let counter tyenv =
   object (o)
     inherit Transform.visitor(tyenv) as super
-      
+
     val env = IntMap.empty
     val rec_env = IntMap.empty
     val mutrec_env = IntMap.empty
-      
+
     method private with_env env =
       {< env = env >}
 
@@ -606,13 +620,13 @@ struct
       {< mutrec_env = mutrec_env >}
 
     method with_envs (env, rec_env, mutrec_env) =
-       (* This three-stage update is a workaround for a camlp4 parsing bug 
+       (* This three-stage update is a workaround for a camlp4 parsing bug
           http://caml.inria.fr/mantis/view.php?id=4673
        *)
       ((o#with_env env)
          #with_rec_env rec_env)
          #with_mutrec_env mutrec_env
-        
+
     method init (x, (_, name, _)) =
       o#with_env (IntMap.add x 0 env)
 
@@ -657,7 +671,7 @@ struct
         o#with_env (IntMap.add x 1 env)
 
     method var =
-      fun x ->         
+      fun x ->
         if IntMap.mem x env then
           x, o#lookup_type x, o#inc x
         else
@@ -708,11 +722,11 @@ struct
   let eliminator tyenv (env, rec_env, mutrec_env) =
   object (o)
     inherit Transform.visitor(tyenv) as super
-      
+
     val env = env
     val rec_env = rec_env
     val mutrec_env = mutrec_env
-      
+
     method is_dead x =
       IntMap.mem x env && (IntMap.find x env = 0)
 
@@ -761,7 +775,7 @@ struct
                             | defs ->
                                 let bs, o = o#bindings bs in
                                   `Rec defs :: bs, o
-                        end                              
+                        end
                   | _ ->
                       let bs, o = o#bindings bs in
                         b :: bs, o
@@ -785,7 +799,7 @@ struct
   class visitor tenv bound_vars =
   object (o)
     inherit Transform.visitor(tenv) as super
-      
+
     val free_vars = IntSet.empty
     val bound_vars = bound_vars
 
@@ -800,12 +814,12 @@ struct
       fun b ->
         let b, o = super#binder b in
           b, o#bound (Var.var_of_binder b)
-            
+
     method var =
       fun x ->
         let x, t, o = super#var x in
           x, t, o#free x
-            
+
     method get_free_vars = free_vars
   end
 
@@ -837,7 +851,7 @@ end
 type closures = intset intmap
     deriving (Show)
 
-(** Compute the closures in an IR expression 
+(** Compute the closures in an IR expression
 
   This computes the free variables for every function
   and every continuation in an IR expression.
@@ -849,7 +863,7 @@ struct
   class visitor tyenv bound_vars =
   object (o)
     inherit Transform.visitor(tyenv) as super
-      
+
     val globals = bound_vars
     val relevant_vars = IntMap.empty
 
@@ -925,7 +939,7 @@ struct
               o#close_cont (IntSet.union fvs fvs') bs
         | `Alien (f, _language)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
-              o#close_cont fvs bs            
+              o#close_cont fvs bs
         | `Module _::bs ->
             assert false
 
@@ -981,7 +995,7 @@ struct
 (*             let defs = List.rev defs in *)
 (*               `Rec defs, o *)
         | _ -> super#binding b
-            
+
     method get_relevant_vars = relevant_vars
   end
 
@@ -1007,13 +1021,13 @@ end
 
 let var_appln env name args =
   (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
-  
+
 let rec funcmap_of_binding = function
   | `Let (b, (_, tc)) -> funcmap_of_tailcomp tc
-  | (`Fun (b, (_,_,body), _) as f) -> 
+  | (`Fun (b, (_,_,body), _) as f) ->
       (Var.var_of_binder b, f) :: funcmap_of_computation body
-  | `Rec defs -> concat_map (fun ((b, (_,_,body), _) as def) -> 
-                               (Var.var_of_binder b, `Rec defs) :: 
+  | `Rec defs -> concat_map (fun ((b, (_,_,body), _) as def) ->
+                               (Var.var_of_binder b, `Rec defs) ::
                                  funcmap_of_computation body) defs
   | `Alien (b, _lang) -> []
   | `Module _ -> failwith "Not implemented."

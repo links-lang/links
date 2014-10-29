@@ -36,8 +36,8 @@ let rec desugar_page (o, page_type) =
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
-            let a = Types.fresh_type_variable `Any in
-            let b = Types.fresh_type_variable `Any in
+            let a = Types.fresh_type_variable (`Any, `Any) in
+            let b = Types.fresh_type_variable (`Any, `Any) in
             let template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
@@ -50,6 +50,7 @@ let rec desugar_page (o, page_type) =
               (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Row (o#lookup_effects)]), pos),
                         [(`FunLit
                             (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
+                             `Unl,
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
                                      [`Block ([], (`Var x, pos)), pos]), pos))), pos);

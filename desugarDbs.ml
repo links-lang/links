@@ -11,7 +11,7 @@ open Utility
       t = e
       rows = query {for (p as r <-- t) where b [r]}
     in
-      DeleteRows (t, rows) 
+      DeleteRows (t, rows)
 
     update (p <-- e) where b set (l1=e1, ..., lk=ek)
   -->
@@ -33,7 +33,7 @@ move insert into the IR
 
     insert table values rows returning e
   -->
-    InsertReturning (table, rows, field)   
+    InsertReturning (table, rows, field)
 
 *)
 
@@ -118,7 +118,7 @@ object (o : 'self_type)
 (*              ([(`TupleLit *)
 (*                   [r; *)
 (*                    (`RecordLit (fields, None), dp)]), dp], Some pair_type)), dp in *)
-         
+
 (*         let row_pairs = *)
 (*           `Iteration ([`List ((`As (rb, pattern), dp), rows)], body, None, None), dp in *)
 
@@ -135,22 +135,22 @@ object (o : 'self_type)
         let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
         let read_type = TypeUtils.table_read_type table_type in
-        (* let write_type = TypeUtils.table_write_type table_type in *)
-        (* let needed_type = TypeUtils.table_needed_type table_type in *)
+        let write_type = TypeUtils.table_write_type table_type in
+        let needed_type = TypeUtils.table_needed_type table_type in
 
         (* HACK
-           
+
            We need value_type as our type system is not expressive
            enough to give InsertRows a more accurate type. This isn't
            too much of a problem as InsertRows can only be generated
            from well-typed insert expressions. An alternative approach
            would be to maintain some kind of insert expression in the
            IR. *)
-        let value_type = `Record (Types.make_empty_open_row `Any) in
+        let value_type = `Record (Types.make_empty_open_row (`Any, `Any)) in
         let o, rows, _ = o#phrase rows in
         let o, (e : Sugartypes.phrasenode) =
           match returning with
-            | None -> 
+            | None ->
                 (o,
                  `FnAppl
                    ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type value_type; `Row eff]), dp),
@@ -159,8 +159,8 @@ object (o : 'self_type)
                 let o, field, _ = o#phrase field in
                   (o,
                    `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type value_type; `Row eff]), dp),
-                      [table; rows; field]))                  
+                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                      [table; rows; field]))
         in
           o, e, Types.unit_type
     | e -> super#phrasenode e

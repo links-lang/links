@@ -28,3 +28,8 @@ val quantifiers : Types.datatype -> Types.quantifier list
 
 val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 
+(* Session stuff *)
+(* val session_of_type : Types.datatype -> Types.session_type *)
+val select_type : string -> Types.datatype -> Types.datatype
+val split_choice_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
+val choice_at : string -> Types.datatype -> Types.datatype

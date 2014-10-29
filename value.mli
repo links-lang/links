@@ -44,7 +44,7 @@ and xml = xmlitem list
 
 type table = (database * string) * string * Types.row
   deriving (Show)
-    
+
 type primitive_value = [
 | `Bool of bool
 | `Char of char
@@ -52,7 +52,7 @@ type primitive_value = [
 | `Table of table
 | `Float of float
 | `Int of Num.num
-| `XML of xmlitem 
+| `XML of xmlitem
 | `String of string ]
 
 module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
@@ -62,13 +62,15 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Variant of string * t 
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list * 
+| `Variant of string * t
+| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-| `Continuation of continuation ]
+| `Continuation of continuation
+| `Socket of in_channel * out_channel
+]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
@@ -111,9 +113,12 @@ val box_string : string -> t
 val unbox_string : t -> string
 val box_list : t list -> t
 val unbox_list : t -> t list
-val box_unit : unit -> t 
+val box_unit : unit -> t
 val unbox_unit : t -> unit
+val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_socket : in_channel * out_channel -> t
+val unbox_socket : t -> in_channel * out_channel
 
 val intmap_of_record : t -> t Utility.intmap option
 
@@ -138,7 +143,7 @@ val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
 val unmarshal_value : unmarshal_envs -> string -> t
 
-val expr_to_contframe : env -> Ir.tail_computation -> 
+val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)
 
 val value_of_xml : xml -> t

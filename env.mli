@@ -1,7 +1,7 @@
 (*pp deriving *)
 (** Environments. *)
 
-module type S = 
+module type S =
 sig
   type name
   (** The type of names. *)
@@ -9,12 +9,15 @@ sig
   type 'a t
     deriving (Show)
   (** The type of environments. *)
-    
+
   val empty : 'a t
   (** The empty environment. *)
 
   val bind : 'a t -> name * 'a -> 'a t
   (** Extend an environment with a new entry. *)
+
+  val unbind : 'a t -> name -> 'a t
+  (** Remove an entry from an environment. *)
 
   val extend : 'a t -> 'a t -> 'a t
   (** Extend an environment with another.  Bindings from the right
@@ -22,11 +25,11 @@ sig
 
   val has : 'a t -> name -> bool
   (** Whether a particular name is in an environment *)
-    
+
   val lookup : 'a t -> name -> 'a
   (** Look up a name in an environment.  Raise [NotFound name] if the
      name is not present. *)
-    
+
   val find : 'a t -> name -> 'a option
   (** Look up a name in an environment.  Return [None] if the name
       is not present. *)
@@ -42,11 +45,13 @@ sig
 
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  val iter : (name -> 'a -> unit) -> 'a t -> unit
+
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 end
 (** Output signature of the functor {!Env.Make}. *)
 
-module Make (Ord : Utility.OrderedShow) 
+module Make (Ord : Utility.OrderedShow)
 : S with type name = Ord.t
     and module Dom = Utility.Set.Make(Ord)
 (** Functor building an implementation of the env structure given a
@@ -54,13 +59,13 @@ module Make (Ord : Utility.OrderedShow)
 
 (** Some pre-built environments with common key types *)
 
-module String : S 
+module String : S
   with type name = string
   and module Dom = Utility.Set.Make(Utility.String)
   and module Dom = Utility.StringSet
 (** Pre-built environment with strings for names *)
 
-module Int : S 
+module Int : S
   with type name = int
   and module Dom = Utility.Set.Make(Utility.Int)
   and module Dom = Utility.IntSet

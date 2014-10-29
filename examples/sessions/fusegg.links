@@ -1,0 +1,5 @@
+var x = fuse(knife (fun (s) {ignore(send(42, s))}),
+             knife (fun (c) {print(intToString(receive(c).1))}));
+var y = fuse(knife (fun (c) {print(intToString(receive(c).1))}),
+             knife (fun (s) {ignore(send(42, s))}));
+()

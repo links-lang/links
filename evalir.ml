@@ -2,6 +2,122 @@ open Notfound
 
 open Utility
 
+module Session = struct
+  type apid = int              (* access point id *)
+  type portid = int
+  type pid = int               (* process id *)
+  type chan = portid * portid  (* a channel is a pair of ports *)
+
+  type ap_state = Balanced | Accepting of chan list | Requesting of chan list
+
+  let flip_chan (outp, inp) = (inp, outp)
+
+  let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
+
+  let forward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+  let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+
+  let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
+
+  let block portid pid = Hashtbl.add blocked portid pid
+  let rec unblock portid =
+    if Hashtbl.mem forward portid then
+      unblock (Hashtbl.find forward portid)
+    else if Hashtbl.mem blocked portid then
+      begin
+        let pid = Hashtbl.find blocked portid in
+        Hashtbl.remove blocked portid;
+          Some pid
+      end
+    else
+      None
+
+  let generator () =
+    let i = ref 0 in
+      fun () -> incr i; !i
+
+  let fresh_apid = generator ()
+  let fresh_portid = generator ()
+  let fresh_chan () =
+    let outp = fresh_portid () in
+    let inp = fresh_portid () in
+      (outp, inp)
+
+  let new_channel () =
+    let (outp, inp) as c = fresh_chan () in
+      Hashtbl.add buffers outp (Queue.create ());
+      Hashtbl.add buffers inp (Queue.create ());
+      c
+
+  let new_access_point () =
+    let apid = fresh_apid () in
+      Hashtbl.add access_points apid Balanced;
+      apid
+
+  let accept : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (c, state', blocked) =
+        match state with
+        | Balanced             -> let c = new_channel () in (c, Accepting [c], true)
+        | Accepting cs         -> let c = new_channel () in (c, Accepting (cs @ [c]), true)
+        | Requesting [c]       -> (c, Balanced, false)
+        | Requesting (c :: cs) -> (c, Requesting cs, false)
+      in
+        Hashtbl.replace access_points apid state';
+        c, blocked
+
+  let request : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (c, state', blocked) =
+        match state with
+        | Balanced            -> let c = new_channel () in (c, Requesting [c], true)
+        | Requesting cs       -> let c = new_channel () in (c, Requesting (cs @ [c]), true)
+        | Accepting [c]       -> (c, Balanced, false)
+        | Accepting (c :: cs) -> (c, Accepting cs, false)
+      in
+        Hashtbl.replace access_points apid state';
+        flip_chan c, blocked
+
+  let rec send msg p =
+    (* Debug.print ("Sending along: " ^ string_of_int p); *)
+    if Hashtbl.mem forward p then
+      send msg (Hashtbl.find forward p)
+    else
+      Queue.push msg (Hashtbl.find buffers p)
+
+  let rec receive p =
+    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
+    let buf = Hashtbl.find buffers p in
+      if not (Queue.is_empty buf) then
+        Some (Queue.pop buf)
+      else
+        if Hashtbl.mem backward p then
+          receive (Hashtbl.find backward p)
+        else
+          None
+      
+  let fuse (out1, in1) (out2, in2) =
+    let forward inp outp =
+      (* Debug.print ("Forwarding from: "^string_of_int inp^ " to: " ^ string_of_int outp); *)
+      Hashtbl.add backward outp inp;
+      Hashtbl.add forward inp outp
+    in
+      forward in1 out2;
+      forward in2 out1
+
+  let unbox_port = Num.int_of_num -<- Value.unbox_int
+  let unbox_chan' chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (Value.unbox_int outp, Value.unbox_int inp)
+  let unbox_chan chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (unbox_port outp, unbox_port inp)
+end
+
+
 module Eval = struct
   open Ir
 
@@ -9,7 +125,7 @@ module Eval = struct
   exception Wrong
   exception TopLevel of (Value.env * Value.t)
 
-  let eval_error fmt = 
+  let eval_error fmt =
     let error msg = raise (EvaluationError msg) in
       Printf.kprintf error fmt
 
@@ -30,15 +146,15 @@ module Eval = struct
 *)
 
 (* Alternative, faster version *)
-   let lookup_var var env = 
-     if Lib.is_primitive_var var 
+   let lookup_var var env =
+     if Lib.is_primitive_var var
      then Lib.primitive_stub_by_code var
      else Value.find var env
 
 
-   let serialize_call_to_client (continuation, name, arg) = 
+   let serialize_call_to_client (continuation, name, arg) =
      Json.jsonize_call continuation name arg
-       
+
    let client_call : string -> Value.continuation -> Value.t list -> 'a =
      fun name cont args ->
        if not(Settings.get_value Basicsettings.web_mode) then
@@ -55,37 +171,50 @@ module Eval = struct
   (** {0 Scheduling} *)
 
   (** {1 Scheduler parameters} *)
-  (** [switch_granularity]: The number of steps to take before 
+  (** [switch_granularity]: The number of steps to take before
       switching threads.  *)
   let switch_granularity = 5
 
-  let atomic = ref false (* FIXME: This needs some documentation *)
+  (* If this flag is set then context switching is prohibited.
+     It is currently used for running pure functions. *)
+  let atomic = ref false
 
-  let rec switch_context env = 
+  let toplevel_val = ref None
+
+  let rec switch_context env =
+    assert (not (!atomic));
     match Proc.pop_ready_proc() with
         Some((cont, value), pid) -> (
+          (* Debug.print ("Switching context (pid = " ^ string_of_int pid ^ ")"); *)
+          (* Debug.print ("  Continuation: " ^ Value.string_of_cont cont); *)
+          (* Debug.print ("  Value: " ^ Value.string_of_value value); *)
           Proc.activate pid;
           apply_cont cont env value)
-      | None -> 
+      | None ->
           if not(Proc.singlethreaded()) then
             failwith("Server stuck with suspended threads, none runnable.")
           (* Outside web mode, this case indicates deadlock:
                all running processes are blocked. *)
-          else 
-            exit 0
+          else
+            match !toplevel_val with
+            | None -> exit 0
+            | Some v -> raise (TopLevel v)
 
-  and scheduler env state stepf = 
-(*     if Proc.singlethreaded() then stepf() else (* No need to schedule if
-                                                     there are no threads...*)*)
-    let step_ctr = Proc.count_step() in
-      if step_ctr mod switch_granularity == 0 then
-        begin
-          Proc.reset_step_counter();
-          Proc.suspend_current state;
-          switch_context env
-        end
-      else
-        stepf()
+  and scheduler env state stepf =
+    if !atomic || Proc.singlethreaded() then stepf()
+    else (* No need to schedule if we're in an atomic section or there are no threads *)
+      let step_ctr = Proc.count_step() in
+        if step_ctr mod switch_granularity == 0 then
+          begin
+            (* Debug.print ("Scheduled context switch"); *)
+            (* Debug.print ("  Continuation: " ^ Value.string_of_cont (fst state)); *)
+            (* Debug.print ("  Value: " ^ Value.string_of_value (snd state)); *)
+            Proc.reset_step_counter();
+            Proc.suspend_current state;
+            switch_context env
+          end
+        else
+          stepf()
 
   (** {0 Evaluation} *)
   and value env : Ir.value -> Value.t = function
@@ -102,7 +231,7 @@ module Eval = struct
             | _      -> eval_error "Variable not found: %d" var
         end
 *)
-    | `Extend (fields, r) -> 
+    | `Extend (fields, r) ->
         begin
           match opt_app (value env) (`Record []) r with
             | `Record fs ->
@@ -114,7 +243,7 @@ module Eval = struct
                    order on the "Your Shopping Cart" page of the
                    winestore example. *)
                 `Record (List.rev
-                           (StringMap.fold 
+                           (StringMap.fold
                               (fun label v fs ->
                                  if List.mem_assoc label fs then
                                    (* (label, value env v) :: (List.remove_assoc label fs) *)
@@ -157,7 +286,7 @@ module Eval = struct
                  List.map Value.unbox_xml (Value.unbox_list v) @ children)
             children [] in
         let children =
-          StringMap.fold 
+          StringMap.fold
             (fun name v attrs ->
                Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
             attrs children
@@ -168,6 +297,7 @@ module Eval = struct
         begin
           try (
             atomic := true;
+            (* Debug.print ("Applying pure function"); *)
             ignore (apply [] env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
@@ -177,17 +307,17 @@ module Eval = struct
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
-    | `RecFunction (recs, locals, n, scope), ps -> 
+    | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
           | Some (args, body) ->
               (* unfold recursive definitions once *)
-              
+
               (* extend env with locals *)
               let env = Value.shadow env ~by:locals in
- 
+
               (* extend env with recs *)
 
-              let env =	      
+              let env =
 	        List.fold_right
                   (fun (name, _) env ->
                       Value.bind name
@@ -199,23 +329,23 @@ module Eval = struct
                 computation env cont body
           | None -> eval_error "Error looking up recursive function definition"
         end
-    | `PrimitiveFunction ("send",_), [pid; msg] ->
-        if Settings.get_value Basicsettings.web_mode then
-           client_call "_sendWrapper" cont [pid; msg]
+    | `PrimitiveFunction ("Send",_), [pid; msg] ->
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+           client_call "_SendWrapper" cont [pid; msg]
         else
           let pid = Num.int_of_num (Value.unbox_int pid) in
-            (try 
+            (try
                Proc.send_message msg pid;
                Proc.awaken pid
              with
-                 Proc.UnknownProcessID pid -> 
+                 Proc.UnknownProcessID pid ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
-        if Settings.get_value Basicsettings.web_mode then
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
-        else 
+        else
           apply_cont cont env (Lib.apply_pfun "spawn" [func])
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -224,23 +354,131 @@ module Eval = struct
            scheduler choose a different thread.  *)
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
-        if Settings.get_value Basicsettings.web_mode then
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_recvWrapper" cont []
-        else 
+        else
         begin match Proc.pop_message() with
-            Some message -> 
+            Some message ->
               Debug.print("delivered message.");
               apply_cont cont env message
-          | None -> 
-              let recv_frame = Value.expr_to_contframe 
+          | None ->
+              let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
-              in 
+              in
+                (* the value passed to block_current is ignored, so can be anything *)
                 Proc.block_current (recv_frame::cont, `Record []);
                 switch_context env
         end
-    | `PrimitiveFunction (n,None), args -> 
+    (* Session stuff *)
+    | `PrimitiveFunction ("new", _), [] ->
+      let apid = Session.new_access_point () in
+        apply_cont cont env (`Int (Num.num_of_int apid))
+    | `PrimitiveFunction ("accept", _), [ap] ->
+      let apid = Num.int_of_num (Value.unbox_int ap) in
+      let (c, d), blocked = Session.accept apid in
+      Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
+      let c' = Num.num_of_int c in
+      let d' = Num.num_of_int d in
+        if blocked then
+          let accept_frame =
+              Value.expr_to_contframe env
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
+                                     (StringMap.add "2" (`Constant (`Int d'))
+                                        StringMap.empty), None)))
+            in
+              Proc.block_current (accept_frame::cont, `Record []);
+              (* block my end of the channel *)
+              Session.block c (Proc.get_current_pid ());
+              switch_context env
+        else
+          begin
+            begin
+              (* unblock the other end of the channel *)
+              match Session.unblock d with
+              | Some pid -> Proc.awaken pid
+              | None     -> assert false
+            end;
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int (Num.num_of_int c))
+                                   (Value.box_int (Num.num_of_int d)))
+          end
+    | `PrimitiveFunction ("request", _), [ap] ->
+      let apid = Num.int_of_num (Value.unbox_int ap) in
+      let (c, d), blocked = Session.request apid in
+      Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
+      let c' = Num.num_of_int c in
+      let d' = Num.num_of_int d in
+        if blocked then
+          let request_frame =
+              Value.expr_to_contframe env
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
+                                     (StringMap.add "2" (`Constant (`Int d'))
+                                        StringMap.empty), None)))
+            in
+              Proc.block_current (request_frame::cont, `Record []);
+              (* block my end of the channel *)
+              Session.block c (Proc.get_current_pid ());
+              switch_context env
+        else
+          begin
+            begin
+              (* unblock the other end of the channel *)
+              match Session.unblock d with
+              | Some pid -> Proc.awaken pid
+              | None     -> assert false
+            end;
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int (Num.num_of_int c))
+                                   (Value.box_int (Num.num_of_int d)))
+          end
+    | `PrimitiveFunction ("send", _), [v; chan] ->
+      Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
+      let (outp, _) = Session.unbox_chan chan in
+      Session.send v outp;
+      begin
+        match Session.unblock outp with
+          Some pid -> Proc.awaken pid
+        | None     -> ()
+      end;
+      apply_cont cont env chan
+    | `PrimitiveFunction ("receive", _), [chan] ->
+      begin
+        Debug.print("receiving from channel: " ^ Value.string_of_value chan);
+        let (out', in') = Session.unbox_chan' chan in
+        let inp = Num.int_of_num in' in
+          match Session.receive inp with
+          | Some v ->
+            Debug.print ("grabbed: " ^ Value.string_of_value v);
+            apply_cont cont env (Value.box_pair v chan)
+          | None ->
+            let grab_frame =
+              Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
+                                                                                (StringMap.add "2" (`Constant (`Int in'))
+                                                                                   StringMap.empty), None)])
+            in
+              Proc.block_current (grab_frame::cont, `Record []);
+              Session.block inp (Proc.get_current_pid ());
+              switch_context env
+      end
+    | `PrimitiveFunction ("link", _), [chanl; chanr] ->
+      let unblock p =
+        match Session.unblock p with
+        | Some pid -> (*Debug.print("unblocked: "^string_of_int p); *)
+                      Proc.awaken pid
+        | None     -> () in
+      Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
+      let (out1, in1) = Session.unbox_chan chanl in
+      let (out2, in2) = Session.unbox_chan chanr in
+      (* HACK *)
+      let end_bang = `Variable (Env.String.lookup (val_of !Lib.prelude_nenv) "makeEndBang") in
+        Session.fuse (out1, in1) (out2, in2);
+        unblock out1;
+        unblock out2;
+        apply cont env (value env end_bang, [])
+    (*****************)
+    | `PrimitiveFunction (n,None), args ->
 	apply_cont cont env (Lib.apply_pfun n args)
-    | `PrimitiveFunction (n,Some code), args -> 
+    | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont args
     | `Continuation c,      [p] -> apply_cont c env p
@@ -248,11 +486,22 @@ module Eval = struct
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont env v : Value.t =
-    let stepf() = 
+    let stepf() =
       match cont with
-        | [] when !atomic || Proc.current_is_main() ->
+        | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
-        | [] -> switch_context env
+        | [] when Proc.current_is_main() ->
+            if not (Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+              raise (TopLevel (Value.globals env, v))
+            else
+              begin
+                Debug.print ("Finished top level process (other processes still active)");
+                toplevel_val := Some (Value.globals env, v);
+                switch_context env
+              end
+        | [] ->
+          Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+          switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
               computation env cont comp
@@ -273,10 +522,10 @@ module Eval = struct
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), _) -> 
+          | `Fun ((f, _) as fb, (_, args, body), _) ->
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
-              let env' = 
+              let env' =
                 Value.bind f
                   (`RecFunction ([f, (List.map fst args, body)],
                                  locals, f, scope), scope) env
@@ -288,7 +537,7 @@ module Eval = struct
                 List.partition (function
                                   | (_fb, _lam, (`Client | `Native)) -> true
                                   | _ -> false) defs in
-              
+
               let locals =
                 match defs with
                   | [] -> Value.empty_env (Value.get_closures env)
@@ -320,6 +569,13 @@ module Eval = struct
               computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
+    (* | `Return (`ApplyPure _ as v) -> *)
+    (*   let w = (value env v) in *)
+    (*     Debug.print ("ApplyPure"); *)
+    (*     Debug.print ("  value term: " ^ Show.show Ir.show_value v); *)
+    (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
+    (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
+    (*     apply_cont cont env w *)
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
@@ -363,7 +619,7 @@ module Eval = struct
         match Query.compile env (range, e) with
           | None -> computation env cont e
           | Some (db, q, t) ->
-            let (fieldMap, _), _ = 
+            let (fieldMap, _, _), _ =
               Types.unwrap_row(TypeUtils.extract_row t) in
             let fields =
               StringMap.fold
@@ -381,7 +637,7 @@ module Eval = struct
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _)) ->
+          | `Table ((db, _), table, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)
@@ -393,7 +649,7 @@ module Eval = struct
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _)) ->
+          | `Table ((db, _), table, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)
@@ -402,9 +658,48 @@ module Eval = struct
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
-    | `CallCC f                   -> 
+    | `CallCC f                   ->
       apply cont env (value env f, [`Continuation cont])
-  let eval : Value.env -> program -> Value.t = 
+    (* Session stuff *)
+    | `Select (name, v) ->
+      let chan = value env v in
+      Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
+      let (outp, _) = Session.unbox_chan chan in
+      Session.send (Value.box_string name) outp;
+      begin
+        match Session.unblock outp with
+          Some pid -> Proc.awaken pid
+        | None     -> ()
+      end;
+      apply_cont cont env chan
+    | `Choice (v, cases) ->
+      begin
+        let chan = value env v in
+        Debug.print("choosing from: " ^ Value.string_of_value chan);
+        let (out', in') = Session.unbox_chan' chan in
+        let inp = Num.int_of_num in' in
+          match Session.receive inp with
+          | Some v ->
+            Debug.print ("chose: " ^ Value.string_of_value v);
+            let label = Value.unbox_string v in
+              begin
+                match StringMap.lookup label cases with
+                | Some ((var,_), body) ->
+                  computation (Value.bind var (chan, `Local) env) cont body
+                | None -> eval_error "Choice pattern matching failed"
+              end
+            (* apply_cont cont env (Value.box_pair v chan) *)
+          | None ->
+            let choice_frame =
+              Value.expr_to_contframe env (`Special (`Choice (v, cases)))
+            in
+              Proc.block_current (choice_frame::cont, `Record []);
+              Session.block inp (Proc.get_current_pid ());
+              switch_context env
+      end
+    (*****************)
+
+  let eval : Value.env -> program -> Value.t =
     fun env -> computation env Value.toplevel_cont
 end
 
@@ -412,52 +707,52 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
   (Value.env * Value.t) =
   fun cont env program ->
     try (
-      ignore 
+      ignore
         (Eval.computation env cont program);
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                    " while interpreting.")
 
 let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
   fun env program ->
     try (
-      ignore 
+      ignore
         (Eval.eval env program);
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                    " while interpreting.")
       | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
 let run_defs : Value.env -> Ir.binding list -> Value.env =
   fun env bs ->
-    let env, _value = 
+    let env, _value =
       run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
       env
 
 (** [apply_cont_toplevel cont env v] applies a continuation to a value
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
-let apply_cont_toplevel cont env v = 
+let apply_cont_toplevel cont env v =
   try Eval.apply_cont cont env v
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
   try Eval.apply [] env (f, vs)
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let eval_toplevel env program =
   try Eval.eval env program
   with
     | Eval.TopLevel s -> snd s
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^ 
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")

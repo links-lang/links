@@ -88,5 +88,5 @@ stderr : @.
 exit : 1
 
 Possibly absent label in a closed row
-fun (x : (a{?}|?)) {x : ()}
+fun (x : (a{%b}|%c)) {x : ()}
 stdout : fun : (()) -> ()

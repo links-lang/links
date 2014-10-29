@@ -15,27 +15,38 @@ type 'a point = 'a Unionfind.point
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
 
-type subkind = [ `Any | `Base ]
-    deriving (Show)
+type restriction = [ `Any | `Base | `Session ]
+    deriving (Eq, Show)
+type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
 
-type kind = [ `Type | `BaseType | `Row | `BaseRow | `Presence ]
-    deriving (Show)
+type subkind = linearity * restriction
+    deriving (Eq, Show)
+
+type freedom = [`Rigid | `Flexible]
+    deriving (Eq, Show)
+
+type primary_kind = [ `Type | `Row | `Presence ]
+    deriving (Eq, Show)
+
+type kind = primary_kind * subkind
+    deriving (Eq, Show)
+
+type 't meta_type_var_non_rec_basis =
+    [ `Var of (int * subkind * freedom)
+    | `Body of 't ]
+      deriving (Show)
 
 type 't meta_type_var_basis =
-    [ `Flexible of (int * subkind)
-    | `Rigid of (int * subkind)
-    | `Recursive of (int * 't)
-    | `Body of 't ]
+    [ 't meta_type_var_non_rec_basis
+    | `Recursive of (int * 't) ]
       deriving (Show)
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
       deriving (Show)
 
-type 't meta_presence_var_basis = 
-    [ `Flexible of int
-    | `Rigid of int
-    | `Body of 't ]
+type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
       deriving (Show)
 
 module Abstype :
@@ -47,43 +58,58 @@ sig
   val compare : t -> t -> int
 end
 
-val process  : Abstype.t
-val list     : Abstype.t 
-val event    : Abstype.t 
-val dom_node : Abstype.t
+val process      : Abstype.t
+val list         : Abstype.t
+val event        : Abstype.t
+val dom_node     : Abstype.t
+val access_point : Abstype.t
+val socket       : Abstype.t
+
+type ('t, 'r) session_type_basis =
+    [ `Input of 't * 't
+    | `Output of 't * 't
+    | `Select of 'r
+    | `Choice of 'r
+    | `Dual of 't
+    | `End ]
+      deriving (Show)
 
 type typ =
     [ `Not_typed
     | `Primitive of primitive
     | `Function of (typ * row * typ)
+    | `Lolli of (typ * row * typ)
     | `Record of row
     | `Variant of row
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `MetaTypeVar of meta_type_var 
-    | `ForAll of (quantifier list ref * typ)]
+    | `MetaTypeVar of meta_type_var
+    | `ForAll of (quantifier list ref * typ)
+    | (typ, row) session_type_basis ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
-and row = field_spec_map * row_var
+and row = field_spec_map * row_var * bool
 and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
-and quantifier =
-    [ `TypeVar of (int * subkind) * meta_type_var
-    | `RowVar of (int * subkind) * meta_row_var
-    | `PresenceVar of int * meta_presence_var ]
-and type_arg = 
+and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
+and quantifier = int * subkind * meta_var
+and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
       deriving (Show)
+
+type session_type = (typ, row) session_type_basis
+  deriving (Show)
 
 type datatype = typ
       deriving (Show)
 
-type type_variable =
-    (int * [`Rigid | `Flexible] *
-       [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var])
+type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
+      deriving (Show)
+
+type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
       deriving (Show)
 
 (* base kind stuff *)
@@ -95,6 +121,32 @@ val is_baseable_row : row -> bool
 
 val basify_type : datatype -> unit
 val basify_row : row -> unit
+
+(* unl stuff *)
+val is_unl_type : datatype -> bool
+val is_unl_row : row -> bool
+
+val type_can_be_unl : datatype -> bool
+val row_can_be_unl : row -> bool
+(* val session_can_be_unl : datatype -> bool *)
+
+val make_type_unl : datatype -> unit
+val make_row_unl : row -> unit
+(* val make_session_unl : datatype -> unit *)
+
+(* session kind stuff *)
+val is_session_type : datatype -> bool
+val is_session_row : row -> bool
+
+val is_sessionable_type : datatype -> bool
+val is_sessionable_row : row -> bool
+
+val sessionify_type : datatype -> unit
+val sessionify_row : row -> unit
+
+(* val dual_session : datatype -> datatype *)
+val dual_row : row -> row
+val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
 
@@ -141,9 +193,13 @@ val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 
 val var_of_quantifier : quantifier -> int
+val primary_kind_of_quantifier : quantifier -> primary_kind
+val kind_of_quantifier : quantifier -> kind
 val type_arg_of_quantifier : quantifier -> type_arg
 val freshen_quantifier : quantifier -> quantifier * type_arg
 val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
+
+val primary_kind_of_type_arg : type_arg -> primary_kind
 
 val quantifiers_of_type_args : type_arg list -> quantifier list
 
@@ -170,8 +226,10 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_presence_variable : unit -> field_spec
-val fresh_rigid_presence_variable : unit -> field_spec
+val fresh_session_variable : linearity -> datatype
+
+val fresh_presence_variable : subkind -> field_spec
+val fresh_rigid_presence_variable : subkind -> field_spec
 
 (** fresh quantifiers *)
 val fresh_type_quantifier : subkind -> quantifier * datatype
@@ -180,8 +238,8 @@ val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
 val fresh_row_quantifier : subkind -> quantifier * row
 val fresh_flexible_row_quantifier : subkind -> quantifier * row
 
-val fresh_presence_quantifier : unit -> quantifier * field_spec
-val fresh_flexible_presence_quantifier : unit -> quantifier * field_spec
+val fresh_presence_quantifier : subkind -> quantifier * field_spec
+val fresh_flexible_presence_quantifier : subkind -> quantifier * field_spec
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -254,6 +312,7 @@ val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype * datatype -> datatype
+val make_endbang_type : datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
@@ -279,6 +338,7 @@ val string_of_datatype : datatype -> string
 val string_of_row : row -> string
 val string_of_presence : field_spec -> string
 val string_of_type_arg : type_arg -> string
+(* val string_of_session_type : datatype -> string *)
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string

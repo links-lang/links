@@ -27,6 +27,10 @@ class map :
     method sentence        : sentence -> sentence
     method sec             : sec -> sec
     method subkind         : subkind -> subkind
+    method kind            : kind -> kind
+    method freedom         : freedom -> freedom
+    method type_variable   : type_variable -> type_variable
+    method known_type_variable   : known_type_variable -> known_type_variable
     method row_var         : row_var -> row_var
     method row             : row -> row
     method replace_rhs     : replace_rhs -> replace_rhs
@@ -35,6 +39,8 @@ class map :
     method position        : position -> position
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
+    method cp_phrasenode   : cp_phrasenode -> cp_phrasenode
+    method cp_phrase       : cp_phrase -> cp_phrase
     method patternnode     : patternnode -> patternnode
     method pattern         : pattern -> pattern
     method operator        : operator -> operator
@@ -45,7 +51,6 @@ class map :
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
     method fieldspec       : fieldspec -> fieldspec
-    method quantifier      : quantifier -> quantifier
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
@@ -60,7 +65,7 @@ class map :
     method unknown         : 'a. 'a -> 'a
   end
 
-(* Reduce a value.  See 
+(* Reduce a value.  See
 
    http://brion.inria.fr/gallium/index.php/Camlp4FoldGenerator
 
@@ -68,7 +73,7 @@ class map :
 
    This example counts all the names in a datatype.
 
-   object 
+   object
      inherit fold
      val count = 0
      method count = count
@@ -89,6 +94,10 @@ class fold :
     method sentence        : sentence -> 'self
     method sec             : sec -> 'self
     method subkind         : subkind -> 'self
+    method kind            : kind -> 'self
+    method freedom         : freedom -> 'self
+    method type_variable   : type_variable -> 'self
+    method known_type_variable : known_type_variable -> 'self
     method row_var         : row_var -> 'self
     method row             : row -> 'self
     method replace_rhs     : replace_rhs -> 'self
@@ -97,6 +106,8 @@ class fold :
     method position        : position -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
+    method cp_phrasenode   : cp_phrasenode -> 'self
+    method cp_phrase       : cp_phrase -> 'self
     method patternnode     : patternnode -> 'self
     method pattern         : pattern -> 'self
     method operator        : operator -> 'self
@@ -106,7 +117,7 @@ class fold :
     method location        : location -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
-    method quantifier      : quantifier -> 'self
+    (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
@@ -122,7 +133,7 @@ class fold :
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
-  
+
 
 (*
   The special casse of a predicate class
@@ -164,9 +175,11 @@ object ('self)
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase
   method phrasenode      : phrasenode -> 'self * phrasenode
+  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
+  method cp_phrase       : cp_phrase -> 'self * cp_phrase
   method position        : position -> 'self * position
   method program         : program -> 'self * program
-  method quantifier      : quantifier -> 'self * quantifier
+  (* method quantifier      : quantifier -> 'self * quantifier *)
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs
@@ -176,6 +189,10 @@ object ('self)
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
   method subkind         : subkind -> 'self * subkind
+  method kind            : kind -> 'self * kind
+  method freedom         : freedom -> 'self * freedom
+  method type_variable   : type_variable -> 'self * type_variable
+  method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : type_arg -> 'self * type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op

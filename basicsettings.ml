@@ -7,6 +7,19 @@ let interacting = Settings.add_bool ("interacting", true, `System)
 (** [true] if we're in web mode *)
 let web_mode = Settings.add_bool ("web_mode", false, `System)
 
+(** If [true], then wait for all child processes to finish before
+    terminating *)
+let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
+
+(** If [true], then enable concurrency on the server:
+
+    - Child processes are abandoned if the main process ends.
+
+    - A run-time error results if the server tries to call the client
+    with child processes still running.
+*)
+let concurrent_server = Settings.add_bool ("concurrent_server", true, `System)
+
 (** Set this to [true] to print types when printing results. *)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
@@ -23,7 +36,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links version 0.5 (Murrayfield)", `System)
+Welcome to Links with session types", `System)
 
 (* (* Alternative banner designs *)
 "  _     _ __    _ _  __  ___

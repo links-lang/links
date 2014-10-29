@@ -21,7 +21,7 @@ object (o : 'self_type)
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `Spawn (body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
-           outer effects afterwards *)       
+           outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
 
         let outer_eff = o#lookup_effects in
@@ -32,7 +32,7 @@ object (o : 'self_type)
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "spawn", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body)), dp)])
         in
           (o, e, process_type)
     | `SpawnWait (body, Some inner_eff) ->
@@ -43,16 +43,16 @@ object (o : 'self_type)
         let o = o#with_effects inner_eff in
         let (o, body, body_type) = o#phrase body in
         let o = o#with_effects outer_eff in
-          
+
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "spawnWait", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body)), dp)])
         in
           (o, e, body_type)
     | `Receive (cases, Some t) ->
-        let fields, row_var = o#lookup_effects in
-        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var in          
+        let fields, row_var, false = o#lookup_effects in
+        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
               | (`Present mbt) ->
@@ -61,8 +61,8 @@ object (o : 'self_type)
                        ((`FnAppl
                            ((`TAppl ((`Var "recv", dp), [`Type mbt; `Row other_effects]), dp),
                             []), dp),
-                        cases, 
-                        Some t))                  
+                        cases,
+                        Some t))
               | _ -> assert false
         end
     | e -> super#phrasenode e

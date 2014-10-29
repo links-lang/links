@@ -16,12 +16,7 @@ let rec add_extras =
     | [], [] -> []
     | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
     | Some q::extras, tyargs ->
-        begin
-          match q with
-            | `TypeVar (_, point) -> `Type (`MetaTypeVar point) :: add_extras (extras, tyargs)
-            | `RowVar (_, row_var) -> `Row (StringMap.empty, row_var) :: add_extras (extras, tyargs)
-            | `PresenceVar (_, point) -> `Presence (`Var point) :: add_extras (extras, tyargs)
-        end
+      (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
 
 class desugar_inners env =
 object (o : 'self_type)
@@ -50,7 +45,7 @@ object (o : 'self_type)
     | `UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))         
+          super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))
             (* HACK: manage the lexical scope of extras *)
     | `Spawn _ as e ->
         let extra_env = extra_env in
@@ -69,7 +64,7 @@ object (o : 'self_type)
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
-        
+
   method funlit =
     (* HACK: manage the lexical scope of extras *)
     fun inner_mb lam ->
@@ -85,26 +80,26 @@ object (o : 'self_type)
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o ((f, _, _), ((_tyvars, Some (_, extras)), _), _, _, _) ->
+            (fun o ((f, _, _), _, ((_tyvars, Some (_, extras)), _), _, _, _) ->
                o#bind f extras)
             o defs in
-         
+
         (* unify inner and outer types for each def *)
         let (o, defs) =
           let rec list o =
             function
               | [] -> (o, [])
-              | ((_, Some outer, _) as f, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+              | ((_, Some outer, _) as f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
                   let (o, defs) = list o defs in
                   let extras = List.map (fun _ -> None) extras in
-                    (o, (f, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+                    (o, (f, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
           in
-            list o defs in        
+            list o defs in
 
         (* transform the function bodies *)
         let (o, defs) = o#rec_bodies defs in
 
-        (* 
+        (*
            It is important to explicitly remove the extras from the
            environment as any existing functions with the same name
            will now be shadowed by the functions defined in this
@@ -114,7 +109,7 @@ object (o : 'self_type)
         (* remove the extras from the environment *)
         let o =
           List.fold_left
-            (fun o ((f, _, _), ((_tyvars, _), _), _, _, _) ->
+            (fun o ((f, _, _), _, ((_tyvars, _), _), _, _, _) ->
                o#unbind f)
             o defs
         in
@@ -140,7 +135,7 @@ object
     | `Funs defs ->
         {< has_no_inners =
             List.for_all
-              (fun (_f, ((_tyvars, Some (_inner, extras)), _), _, _, _) ->
+              (fun (_f, _, ((_tyvars, Some (_inner, extras)), _), _, _, _) ->
                  List.for_all (function
                                  | None -> true
                                  | Some _ -> false) extras)

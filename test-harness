@@ -6,7 +6,7 @@ import sys, re, time
 from subprocess import Popen, PIPE
 
 successes = failures = 0
-TIMEOUT = 8 # seconds before a test is timed out.
+TIMEOUT = 15 # seconds before a test is timed out.
 
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
@@ -36,7 +36,7 @@ def parse(stream):
             name = str.strip(test.pop(0))
       	    code = str.strip(test.pop(0))
             opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
-            yield name, code, opts                
+            yield name, code, opts
 
 def check_expected(name, item, got, expected, errors):
     """Check some data against an expected value or predicate.  If it
@@ -83,7 +83,7 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
         else:
             time.sleep(0.01)
     failures += 1
-    print '!FAILURE: %s [TIMED OUT]' % name        
+    print '!FAILURE: %s [TIMED OUT]' % name
 
 def main():
     try:
@@ -96,4 +96,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

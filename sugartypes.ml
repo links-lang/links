@@ -42,7 +42,7 @@ let string_of_binop =
     | `RegexMatch _ -> "<some regex nonsense>"
     | `And -> "&&"
     | `Or -> "||"
-    | `Cons -> "::"    
+    | `Cons -> "::"
     | `Name name -> name
 
 type position = SourceCode.pos
@@ -69,56 +69,68 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
-type subkind = [`Any | `Base]
+
+type restriction = [ `Any | `Base | `Session ]
+    deriving (Eq, Show)
+type linearity   = [ `Any | `Unl ]
+    deriving (Eq, Show)
+
+type subkind = linearity * restriction
+    deriving (Eq, Show)
+
+type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
-type type_variable =
-    [ `TypeVar of name * subkind | `RigidTypeVar of name * subkind
-    | `RowVar of name * subkind | `RigidRowVar of name * subkind
-    | `PresenceVar of name | `RigidPresenceVar of name ]
-      deriving (Show)
+type primary_kind = [`Type | `Row | `Presence]
+    deriving (Show)
 
-type quantifier =
-    [ `TypeVar of name * subkind
-    | `RowVar of name * subkind
-    | `PresenceVar of name ]
-      deriving (Show)
+type kind = primary_kind * subkind
+    deriving (Show)
 
-let type_variable_of_quantifier =
-  function
-    | `TypeVar v -> `RigidTypeVar v
-    | `RowVar v -> `RigidRowVar v
-    | `PresenceVar v -> `RigidPresenceVar v
+type type_variable = name * kind * freedom
+    deriving (Show)
+
+type known_type_variable = name * subkind * freedom
+    deriving (Show)
+
+type quantifier = type_variable
+  deriving (Show)
+
+let rigidify (name, kind, _) = (name, kind, `Rigid)
 
 type fieldconstraint = [ `Readonly | `Default ]
     deriving (Show)
 
 type datatype =
-  | TypeVar         of name * subkind
-  | RigidTypeVar    of name * subkind
-  | FunctionType    of datatype list * row * datatype
-  | MuType          of name * datatype
-  | ForallType      of quantifier list * datatype
-  | UnitType
-  | TupleType       of (datatype list)
-  | RecordType      of row
-  | VariantType     of row
-  | TableType       of datatype * datatype * datatype
-  | ListType        of datatype
-  | TypeApplication of (string * type_arg list)
-  | PrimitiveType   of Types.primitive
-  | DBType
+  [ `TypeVar         of known_type_variable
+  | `Function        of datatype list * row * datatype
+  | `Lolli           of datatype list * row * datatype
+  | `Mu              of name * datatype
+  | `Forall          of quantifier list * datatype
+  | `Unit
+  | `Tuple           of datatype list
+  | `Record          of row
+  | `Variant         of row
+  | `Table           of datatype * datatype * datatype
+  | `List            of datatype
+  | `TypeApplication of (string * type_arg list)
+  | `Primitive       of Types.primitive
+  | `DB
+  | `Input           of datatype * datatype
+  | `Output          of datatype * datatype
+  | `Select          of row
+  | `Choice          of row
+  | `Dual            of datatype
+  | `End ]
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed
-    | `Open of name * subkind
-    | `OpenRigid of name * subkind
+    | `Open of known_type_variable
     | `Recursive of name * row ]
 and fieldspec =
     [ `Present of datatype
     | `Absent
-    | `RigidVar of name
-    | `Var of name ]
+    | `Var of known_type_variable ]
 and type_arg =
     [ `Type of datatype
     | `Row of row
@@ -152,7 +164,7 @@ and pattern = patternnode * position
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
-] 
+]
 and regex = [
 | `Range     of char * char
 | `Simply    of string
@@ -165,25 +177,26 @@ and regex = [
 | `Group     of regex
 | `Repeat    of Regex.repeat * regex
 | `Splice    of phrase
-| `Replace   of regex * replace_rhs 
+| `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
-and iterpatt = [ 
+and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
 ]
 and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
+and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.row) list) option * funlit
+| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
 | `Spawn            of phrase * Types.row option
 | `SpawnWait        of phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
-    * (*where:*)   phrase option 
+    * (*where:*)   phrase option
                     * (*orderby:*) phrase option
 | `Escape           of binder * phrase
 | `Section          of sec
@@ -216,6 +229,12 @@ and phrasenode = [
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
 | `FormBinding      of phrase * pattern
+(* choose *)
+| `Select           of name * phrase
+(* choice *)
+| `Offer            of phrase * (pattern * phrase) list * Types.datatype option
+(* | `Fork             of binder * phrase *)
+| `CP               of cp_phrase
 ]
 and phrase = phrasenode * position
 and bindingnode = [
@@ -227,8 +246,8 @@ and bindingnode = [
        let p=/\X.e in ...
 *)
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
-| `Fun     of binder * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
+| `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
+| `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
@@ -237,13 +256,24 @@ and bindingnode = [
 ]
 and binding = bindingnode * position
 and directive = string * string list
-and sentence = [ 
+and sentence = [
 | `Definitions of binding list
 | `Expression  of phrase
 | `Directive   of directive ]
+and cp_phrasenode = [
+| `Unquote of binding list * phrase
+| `Grab of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
+| `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+| `GiveNothing of binder
+| `Select of binder * string * cp_phrase
+| `Offer of binder * (string * cp_phrase) list
+| `Fuse of binder * binder
+| `Comp of binder * cp_phrase * cp_phrase ]
+and cp_phrase = cp_phrasenode * position
     deriving (Show)
 
-type program = binding list * phrase option 
+
+type program = binding list * phrase option
   deriving (Show)
 
 
@@ -259,7 +289,7 @@ exception RedundantPatternMatch of SourceCode.pos
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _ -> 
+    | _ ->
         `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
@@ -295,7 +325,7 @@ struct
   let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
     | `Xml (_, _, _, children) -> union_map formlet_bound children
     | `FormBinding (_, pat) -> pattern pat
-    | _ -> empty 
+    | _ -> empty
 
   let rec phrase (p, _ : phrase) : StringSet.t = match p with
     | `Var v -> singleton v
@@ -314,6 +344,7 @@ struct
     | `Page p
     | `PagePlacement p
     | `Upcast (p, _, _)
+    | `Select (_, p)
     | `TypeAnnotation (p, _) -> phrase p
 
     | `ListLit (ps, _)
@@ -343,8 +374,8 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2) 
-    | `Xml (_, attrs, attrexp, children) -> 
+    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2)
+    | `Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;
            option_map phrase attrexp;
@@ -352,7 +383,7 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit (_, fnlit) -> funlit fnlit
+    | `FunLit (_, _, fnlit) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -363,7 +394,7 @@ struct
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
-                     diff (option_map phrase orderby) pat_bound]                     
+                     diff (option_map phrase orderby) pat_bound]
             (*     | `Iteration (`List (pat, source), body, where, orderby) *)
 (*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
 (*         let pat_bound = pattern pat in *)
@@ -371,13 +402,15 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Switch (p, cases, _) -> union (phrase p) (union_map case cases)
-    | `Receive (cases, _) -> union_map case cases 
-    | `DBDelete (pat, p, where) -> 
-        union (phrase p) 
+    | `Switch (p, cases, _)
+    | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
+    | `CP cp -> cp_phrase cp
+    | `Receive (cases, _) -> union_map case cases
+    | `DBDelete (pat, p, where) ->
+        union (phrase p)
           (diff (option_map phrase where)
              (pattern pat))
-    | `DBUpdate (pat, from, where, fields) -> 
+    | `DBUpdate (pat, from, where, fields) ->
         let pat_bound = pattern pat in
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
@@ -386,11 +419,11 @@ struct
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Fun ((name,_,_), (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
-    | `Funs funs -> 
-        let names, rhss = 
+    | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Funs funs ->
+        let names, rhss =
           List.fold_right
-            (fun ((n,_,_), (_, rhs), _, _, _) (names, rhss) ->
+            (fun ((n,_,_), _, (_, rhs), _, _, _) (names, rhss) ->
                (add n names, rhs::rhss))
             funs
             (empty, []) in
@@ -402,7 +435,7 @@ struct
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and block (binds, expr : binding list * phrase) : StringSet.t = 
+  and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->
             let patbound, exprfree = binding bind in
@@ -422,4 +455,14 @@ struct
     | `Splice p -> phrase p
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
+  and cp_phrase (p, _pos) = match p with
+    | `Unquote e -> block e
+    | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
+    | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
+    | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
+    | `GiveNothing (c, _, _) -> singleton c
+    | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
+    | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
+    | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end

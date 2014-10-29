@@ -35,7 +35,7 @@ fun sortBy (f, l) {
   }
 }
 
-# need to be careful to make sure this doesn't get 
+# need to be careful to make sure this doesn't get
 # optimised away - it does if we eta reduce it
 sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
@@ -47,14 +47,14 @@ fun all(p, l) {
    }
 }
 
-fun and(l) { 
+fun and(l) {
    switch (l) {
      case [] -> true
      case x::xs -> x && and(xs)
    }
 }
 
-fun or(l) { 
+fun or(l) {
    switch (l) {
      case [] -> false
      case x::xs -> x || or(xs)
@@ -94,12 +94,12 @@ fun intRange(m,n) {
 #fun null(l) { l == [] }
 
 # return element at index i of xs
-fun select(xs, i) {
+fun selectElem(xs, i) {
   hd(drop(i, xs))
 }
 
-# infix operator for 'select'
-op xs !! n { select(xs, n) }
+# infix operator for 'selectElem'
+op xs !! n { selectElem(xs, n) }
 
 # swap all instances of x1 and x2 in xs
 fun swap(xs, x1, x2) {
@@ -135,7 +135,7 @@ fun fold_right1(f, l) {
 fun unzip(l) {
   switch (l) {
     case [] -> ([], [])
-    case (a,b)::xs -> { 
+    case (a,b)::xs -> {
      var (c,d) = unzip(xs);
      (a :: c, b :: d)
     }
@@ -146,7 +146,7 @@ sig zip : ([a], [b]) ~> [(a, b)]
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
-    case (lh::lt, rh::rt) -> 
+    case (lh::lt, rh::rt) ->
         (lh, rh) :: zip (lt, rt)
     case (_, _) -> []
   }
@@ -211,7 +211,7 @@ fun substAt(xs, i, y) {
     case x::xs -> if (i <= 0) {y :: xs}
                   else {x :: substAt(xs, i-1, y)}
   }
-} 
+}
 
 fun reverse(l) {
   fun aux(l,o) {
@@ -251,7 +251,7 @@ sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
   switch (list) {
     case [] -> []
-    case (h::t) -> 
+    case (h::t) ->
       switch (pred(h)) {
         case true -> h :: takeWhile(pred, t)
         case false -> []
@@ -263,7 +263,7 @@ sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
   switch (list) {
     case [] -> []
-    case (h::t) -> 
+    case (h::t) ->
       switch (pred(h)) {
         case true -> dropWhile(pred, t)
         case false -> list
@@ -283,18 +283,18 @@ fun ignore (_) { }
 # lcm :: Int -> Int -> Int
 # subtract :: Int -> Int -> Int
 # quot :: Int -> Int -> Int
+#
+# # sig signum : (Int) -> Int
+# fun signum(i) {
+#   if (i>0) 1
+#   else if (i < 0) -1
+#   else 0
+# }
 
-sig signum : (Int) -> Int
-fun signum(i) {
-  if (i>0) 1
-  else if (i < 0) -1
-  else 0
+sig abs : (Int) -> Int
+fun abs(i) {
+  if (i < 0) -i else i
 }
-
-#sig abs : (Int) -> Int
-#fun abs(i) {
-#  if (i < 0) -i else i
-#}
 
 sig init : ([a]) ~> [a]
 fun init(list) {
@@ -334,14 +334,14 @@ fun last(list) {
 # (^.) :: Float -> Int -> Float
 # (/=.) :: Float -> Float -> Bool
 # (==.) :: Float -> Float -> Bool
-
+#
 # (**.) :: Float -> Float -> Float
 # exp :: Float -> Float
 # pi :: Float
 # signumFloat :: Float -> Int
 # round :: Float -> Int
 # truncate :: Float -> Int
-
+#
 # Option types
 typename Maybe (a) = [|Nothing | Just:a|];
 
@@ -431,7 +431,7 @@ fun removeAssoc(x,l) {
   switch (l) {
     case [] -> []
     case (k,v)::xs -> if(k == x) xs
-                      else (k,v)::removeAssoc(x, xs) 
+                      else (k,v)::removeAssoc(x, xs)
   }
 }
 
@@ -439,7 +439,7 @@ sig assocAll : (String,[(String,b)]) ~> [b]
 fun assocAll(x,l) {
   switch (l) {
     case []    -> []
-    case (k,v)::xs -> if (k == x) 
+    case (k,v)::xs -> if (k == x)
                         (v::assocAll(x,xs))
                       else
                         assocAll(x,xs)
@@ -456,7 +456,7 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
-# #### FORMLETS ####
+#### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax
 ####   TBD: move to a namespaced module
 
@@ -483,11 +483,11 @@ sig $ : ((a) -b-> c, a) -b-> c
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a), d) -?-> (a,d)
+sig runState : (State (d,a), d) -%-> (a,d)
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : (State (d,a), (a) -?-> State(d,b)) -?-> State (d,b)
+sig >>= : (State (d,a), (a) -%-> State(d,b)) -%-> State (d,b)
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
@@ -495,8 +495,8 @@ op x >>= f {
 sig return : (a) -> State (b,a)
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : ((a) -?-> b, State (c,a)) -?-> State (c,b)
-fun fmap(f, x) { x >>= return `compose` f } 
+sig fmap : ((a) -%-> b, State (c,a)) -%-> State (c,b)
+fun fmap(f, x) { x >>= return `compose` f }
 
 sig pure : (a) -> Formlet(a)
 fun pure(v) {
@@ -506,24 +506,24 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe ((a) -?-> b), Maybe (a)) -?-> Maybe (b)
+sig applyE : (Maybe ((a) -%-> b), Maybe (a)) -%-> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
-    case (_       , _       ) -> Nothing    
+    case (_       , _       ) -> Nothing
   }
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet ((a) -?-> b)) -?-> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a) -%-> b)) -%-> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
-  return((x++y, 
-          fun(e){ 
+  return((x++y,
+          fun(e){
                   var (fx, f) = f(e);
                   var (cx, c) = c(e);
-                  (cx++fx,  f `applyE` c) 
+                  (cx++fx,  f `applyE` c)
          }))}}
 }
 
@@ -531,7 +531,7 @@ op m @@@ k {
 #   Returns a formlet that post-processes the formlet x by running its
 #   output through f.   (This is fmap for the Formlet functor.)
 #   (This could be written more efficiently.)
-sig @@=> : (Formlet(a), (a) -?-> b) -?-> Formlet(b)
+sig @@=> : (Formlet(a), (a) -%-> b) -%-> Formlet(b)
 op m @@=> f {
   m @@@ pure(f)
 }
@@ -542,10 +542,10 @@ fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 sig text : (String) ~> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : (XmlContext, Formlet (a)) -?-> Formlet (a)
+sig plug : (XmlContext, Formlet (a)) -%-> Formlet (a)
 op f `plug` m {
   m >>= fun((x,collector)){ return((f(x),
-    fun (env) { var (xml,c) = collector (env); 
+    fun (env) { var (xml,c) = collector (env);
                 (f(xml), c) }))}
 }
 
@@ -559,21 +559,21 @@ sig sequence : ([State(a,b)]) ~> State(a,[b])
 fun sequence(xs) {
   switch (xs) {
     case [] -> return([])
-    case x::xs -> x >>= (fun (x) { 
-                  sequence(xs) >>= (fun (xs) { 
+    case x::xs -> x >>= (fun (x) {
+                  sequence(xs) >>= (fun (xs) {
                     return (x :: xs)})})
   }
 }
 
 sig formlets : ([Formlet (a)]) ~> Formlet ([a])
-fun formlets(fs) { 
+fun formlets(fs) {
   switch (fs) {
     case []    -> formlet <#/> yields []
     case [x]   -> formlet <#>{x -> f}</#> yields [f]
     case x::xs -> formlet <#>{x -> f}{formlets(xs) -> fs}</#> yields f::fs
   }
 }
-
+#
 # Page stuff
 typename RecForms = [mu a.(([a]) {}~> Xml)];
 typename MultiXmlContext = ([Xml]) {}~> Xml;
@@ -636,7 +636,7 @@ fun mkForm(cont, contents, attributes) {
     {contents}
   </form>
 }
-
+#
 sig renderPagePure : (Page) {}~> Xml
 fun renderPagePure((n, k, fs)) {
   var (ms, _) = fs(0);
@@ -647,12 +647,12 @@ fun renderPagePure((n, k, fs)) {
 sig renderPage : (Page) ~> Xml
 fun renderPage(p) {
   # HACK: this allows us to use renderPage in effectful contexts
-  (renderPagePure : ((Page) ~?~> Xml) <- ((Page) {}~> Xml))(p)
+  (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
 }
 
 sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
 fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
-  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)   
+  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
 }
 
 sig validate :
@@ -825,8 +825,8 @@ var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroup : ([a], a, ([(Xml, a)]) -?-> Xml) -?-> 
-                      Formlet (a) 
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) -%-> Xml) -%->
+                     Formlet (a)
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
   sequence (for (x <- items) [nextName]) >>= fun (keys) {
@@ -852,8 +852,8 @@ fun inputRadiogroup(items, selected, layout) {
 # preludeOptionKeyed: A utility function for the <select> formlets
 # ('choice' and 'choices'). Constructs an <option> element and an associated
 # function for determining whether this option was selected.
-sig preludeOptionKeyed : (String, (a,String), Bool) ~> 
-                         (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
+sig preludeOptionKeyed : (String, (a,String), Bool) ~>
+                        (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
 fun preludeOptionKeyed (key, (data,text), selected) {
   if (selected) {
      ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
@@ -864,8 +864,8 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) ~> 
-                          (Xml, (String) -> [a])
+sig preludeOptionsKeyed : ([(String,(a,String))], a) ~>
+                         (Xml, (String) -> [a])
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -877,7 +877,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-     : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
+    : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -955,14 +955,14 @@ typename Either (a,b) = [|Left:a | Right : b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.
-sig satisfies : (Formlet (a), (a,Xml) -?-> Either(Xml,Xml)) ~> Formlet(a)
+sig satisfies : (Formlet (a), (a,Xml) -%-> Either(Xml,Xml)) ~> Formlet(a)
 fun satisfies(f, validate) {
    f >>= fun((xml,collector)) {
-   return((xml, fun (env) { 
+   return((xml, fun (env) {
        var (cxml, val) = collector(env);
        switch (val) {
          case Nothing  -> (cxml, Nothing)
-         case Just (v) -> 
+         case Just (v) ->
             switch (validate(v, cxml)) {
                case Right (xml) -> (xml, Nothing)
                case Left (xml)  -> (xml, Just (v)) }}}))}
@@ -978,7 +978,7 @@ fun errorMsg (f, msg) (x,xml) {
 
 infixr 5 `errorMsg`;
 
-sig transform : (Formlet(a), (a) -?-> Bool, (a) -?-> String, (a) ~b~> c) ~b~> Formlet(c)
+sig transform : (Formlet(a), (a) -%-> Bool, (a) -%-> String, (a) ~b~> c) ~b~> Formlet(c)
 fun transform(f, predicate, error, g) {
   formlet
     <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
@@ -1009,8 +1009,8 @@ var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a f
 # [freshResource] is a bit of magic that makes the subsequent actions a
 # new resource.  That is, it redirects the user to a new URL for the
 # continuation. If you call this immediately after doing a destructive
-# action (e.g. database updates) then reloading and the back button 
-# are made "safe": the visible URL does not refer to the action, but 
+# action (e.g. database updates) then reloading and the back button
+# are made "safe": the visible URL does not refer to the action, but
 # only to what follows the freshResource call.
 # Note: doesn't presently work in client context, but could.
 sig freshResource : () ~> ()
@@ -1030,4 +1030,91 @@ fun sendSuspend(pagef) {
   escape returnf in {
     exit(renderPage(pagef(returnf)))
   }
+}
+
+#### SESSION TYPING STUFF ####
+
+typename EndBang = !().End;
+typename EndQuery = ?().End;
+
+sig wait : (?().End) ~> ()
+fun wait(s) {
+  ignore(receive(s))
+}
+
+sig close : (!().End) ~> ()
+fun close(s) {
+  ignore(send((), s))
+}
+
+sig makeEndBang : () ~> EndBang
+fun makeEndBang() {
+  var ap = new();
+  var _ = spawn {
+     var c = accept(ap);
+     wait(c)
+  };
+  request(ap)
+}
+
+sig fork : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+fun fork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+sig linfork : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+fun linfork(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c);
+  };
+  request(ap)
+}
+
+sig run : ((!a.EndBang) ~e~> EndBang) ~e~> a
+fun run(f) {
+  var c = fork(f);
+  var (v, c) = receive(c);
+  wait(c);
+  v
+}
+
+sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+fun knife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+fun linknife(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    f(c);
+  };
+  request(ap)
+}
+
+sig fuse : forall s::Session.(s, ~s) ~> ()
+fun fuse(s, c) {
+  close(link(s, c))
+}
+
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+fun reproduce(ap, f) {
+  var x = accept(ap);
+  var _ = spawn {f(x)};
+  reproduce(ap, f)
 }

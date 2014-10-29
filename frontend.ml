@@ -26,13 +26,13 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
-        Debug.print ("program: " ^ Sugartypes.Show_program.show program);
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv
         ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)
+        ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
         ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
         ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
         ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#program ->- snd3)
@@ -52,6 +52,7 @@ struct
         ->- DesugarDatatypes.sentence tyenv
         ->- uncurry TypeSugar.Check.sentence
         ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarCP.desugar_cp tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#sentence ->- snd)
