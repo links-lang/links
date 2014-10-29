@@ -145,6 +145,34 @@ end
 let substTyApp ty refFrom refTo =
   (subst_ty_app refFrom refTo)#datatype ty
 
+
+(* Type variable substitution *)
+let subst_ty_var varFrom taTo =
+object(self)
+  inherit SugarTraversals.map as super
+
+  (* varFrom: Type variable to substitute from.
+   *  - This is the one in the tyTy
+   * taTo: Type arg to replace with.
+   *  - This is the one found in the application
+   *)
+
+  method type_arg : type_arg -> type_arg = function
+    | `Type (`TypeVar (n, _, _)) when n = varFrom -> taTo
+    | ta -> super#type_arg ta
+
+  method fieldspec : fieldspec -> fieldspec =
+    fun fs ->
+      match taTo with
+        | `Presence fsTo ->
+            match fs with
+              | `Var (n, _, _) when n = varFrom -> fsTo
+              | _ -> super#fieldspec fs
+        | _ -> super#fieldspec fs
+
+  method row_var : row_var -> row
+end
+
 (* Type inlining *)
 let inline_ty toFind toInline =
 object(self)
@@ -161,32 +189,6 @@ object(self)
               tyApp
         | x -> super#datatype x
 
-  (*
-  method datatype : datatype -> datatype =
-    fun dt ->
-      let substDTArgs dt subs =
-        List.fold_right (fun (subFrom, subTo) accDt ->
-          substTyArg accDt subFrom subTo
-        ) dt subs in
-      match dt with
-        | `TypeApplication (tyAppName, argList) as tyApp ->
-            if tyAppName = toFind then
-              (* Two passes of variable substitution: the first substitutes type variables
-               * from the argument list for that in the alias list.
-               * This substitution is then added to the environment.
-               *)
-              let aliasTyArgs = fst (List.assoc tyAppName aliasEnv) in
-              let newSubs = List.combine argList aliasTyArgs in
-              let dt' = substDTArgs dt newSubs in
-              (* The second pass then performs the substitutions according to the type
-               * environment.
-               *)
-              substDTArgs dt' tyEnv
-            else tyApp
-        | p -> super#datatype p
-
-  method row_var
-  *)
 end
 
 let inlineTy ty tyRef refinedTy =
@@ -358,7 +360,8 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun (x, _) ->
         match x with
-          | `Type (name, _, _ as tyTy) ->
+          | `Type (name, _, _ as tyTy) as ty ->
+            printf "Type...\n %s \n" (Sugartypes.Show_bindingnode.show ty);
             Hashtbl.add ht name tyTy;
           | _ -> assert false;
       ) binds;
