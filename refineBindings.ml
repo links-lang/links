@@ -157,33 +157,68 @@ object(self)
    *  - This is the one found in the application
    *)
 
-  method type_arg : type_arg -> type_arg = function
-    | `Type (`TypeVar (n, _, _)) when n = varFrom -> taTo
-    | ta -> super#type_arg ta
+  method datatype : datatype -> datatype =
+    fun dt ->
+      match dt with
+        | `TypeVar (n, _, _) when n = varFrom ->
+            match taTo with
+              | `Type dtTo -> dtTo
+              | _ -> super#datatype dt
+        | `Forall (qs, quantDt) as fa ->
+            match taTo with
+              | `Type (`TypeVar (n, _, _)) ->
+                  let qs' =
+                    List.map (fun (tv, k, f as q) ->
+                      if tv = varFrom then
+                        (n, k, f)
+                      else q) qs in 
+                  (qs', self#datatype quantDt)
+              | _ -> super#datatype fa
+        | _ -> super#datatype dt
 
-  method fieldspec : fieldspec -> fieldspec =
+  method fieldspec : fieldspec -> fieldspec = 
     fun fs ->
-      match taTo with
-        | `Presence fsTo ->
-            match fs with
-              | `Var (n, _, _) when n = varFrom -> fsTo
-              | _ -> super#fieldspec fs
-        | _ -> super#fieldspec fs
+      | `Var (n, _, _) when n = varFrom ->
+          match taTo with
+            | `Presence (`Var ktv) as fsTo -> fsTo
+            | _ -> super#fieldspec fs
+      | _ -> super#fieldspec fs
 
-  method row_var : row_var -> row
+  method row_var : row_var -> row_var = function
+    | `Open (n, _, _) as rv when n = varFrom ->
+        match taTo with
+          | `Row (_, (`Open _ as rv2)) -> rv2
+          | _ -> super#row_var rv
+    | rv -> super#row_var rv
+
 end
 
+let substTyArg varFrom taTo ty =
+  (subst_ty_var varFrom taTo)#datatype ty
+
 (* Type inlining *)
-let inline_ty toFind toInline =
+let inline_ty toFind inlineArgs toInline =
 object(self)
   inherit SugarTraversals.map as super
-
 
   method datatype : datatype -> datatype =
     fun dt ->
       match dt with
         | `TypeApplication (tyAppName, argList) as tyApp ->
-            if tyAppName = toFind && List.length argList = 0 then
+            if tyAppName = toFind then (* && List.length argList = 0 then *)
+              (* Ok, so what we need to do:
+                * We have a list of the type arguments of the type to inline,
+                * and also have a list of type arguments within the type app.
+                * What we need to do is for every ty arg in the type,
+                * substitute it for the corresponding arg in the arg list.
+                * Bit like a fold / zip. There's probably some funky
+                * category theory name for it, but blah.
+                *)
+              if (List.length inlineArgs = List.length argList) then
+                List.fold_right(fun ) (
+              else
+                (* Arity error, let something else pick it up *)
+                tyApp 
               toInline
             else
               tyApp
@@ -191,7 +226,7 @@ object(self)
 
 end
 
-let inlineTy ty tyRef refinedTy =
+let inlineTy ty tyRef inlineArgs refinedTy =
   (inline_ty tyRef refinedTy)#datatype ty
 
 (* Similar to refine_bindings, RefineTypeBindings.refineTypeBindings finds
