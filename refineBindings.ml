@@ -138,59 +138,98 @@ object(self)
   method datatype : datatype -> datatype = function
     | `TypeApplication (tyAppName, argList) as tyApp ->
         if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
-        else tyApp
+        else super#datatype tyApp
     | dt -> super#datatype dt
 end
 
 let substTyApp ty refFrom refTo =
   (subst_ty_app refFrom refTo)#datatype ty
 
-(* Type inlining *)
-let inline_ty toFind toInline =
+
+(* Type variable substitution *)
+let subst_ty_var varFrom (taTo : type_arg) =
 object(self)
   inherit SugarTraversals.map as super
 
+  (* varFrom: Type variable to substitute from.
+   *  - This is the one in the tyTy
+   * taTo: Type arg to replace with.
+   *  - This is the one found in the application
+   *)
 
   method datatype : datatype -> datatype =
     fun dt ->
       match dt with
-        | `TypeApplication (tyAppName, argList) as tyApp ->
-            if tyAppName = toFind && List.length argList = 0 then
-              toInline
-            else
-              tyApp
-        | x -> super#datatype x
+        | `TypeVar (n, _, _) when n = varFrom ->
+            (match taTo with
+               | `Type dtTo -> dtTo
+               | _ -> super#datatype dt)
+        | `Forall (qs, quantDt) ->
+            (match taTo with
+              | `Type (`TypeVar (n, _, _)) ->
+                  let qs' =
+                    List.map (fun (tv, k, f as q) ->
+                      if tv = varFrom then
+                        (n, k, f)
+                      else q) qs in `Forall (qs', self#datatype quantDt)
+              | _ -> super#datatype dt)
+        | _ -> super#datatype dt
 
-  (*
-  method datatype : datatype -> datatype =
-    fun dt ->
-      let substDTArgs dt subs =
-        List.fold_right (fun (subFrom, subTo) accDt ->
-          substTyArg accDt subFrom subTo
-        ) dt subs in
-      match dt with
-        | `TypeApplication (tyAppName, argList) as tyApp ->
-            if tyAppName = toFind then
-              (* Two passes of variable substitution: the first substitutes type variables
-               * from the argument list for that in the alias list.
-               * This substitution is then added to the environment.
-               *)
-              let aliasTyArgs = fst (List.assoc tyAppName aliasEnv) in
-              let newSubs = List.combine argList aliasTyArgs in
-              let dt' = substDTArgs dt newSubs in
-              (* The second pass then performs the substitutions according to the type
-               * environment.
-               *)
-              substDTArgs dt' tyEnv
-            else tyApp
-        | p -> super#datatype p
+  method fieldspec : fieldspec -> fieldspec =
+    fun fs ->
+      match fs with
+        | `Var (n, _, _) when n = varFrom ->
+            (match taTo with
+              | `Presence (`Var _ as fsTo) -> fsTo
+              | _ -> super#fieldspec fs)
+        | _ -> super#fieldspec fs
 
-  method row_var
-  *)
+  method row_var : row_var -> row_var = function
+    | `Open (n, _, _) as rv when n = varFrom ->
+        (match taTo with
+          | `Row (_, (`Open _ as rv2)) -> rv2
+          | _ -> super#row_var rv)
+    | rv -> super#row_var rv
+
 end
 
-let inlineTy ty tyRef refinedTy =
-  (inline_ty tyRef refinedTy)#datatype ty
+let substTyArg varFrom taTo ty =
+  (subst_ty_var varFrom taTo)#datatype ty
+
+(* Type inlining *)
+let inline_ty toFind inlineArgs toInline =
+object(self)
+  inherit SugarTraversals.map as super
+
+  method datatype : datatype -> datatype =
+    fun dt ->
+      match dt with
+        | `TypeApplication (tyAppName, argList) as tyApp ->
+            if tyAppName = toFind then (* && List.length argList = 0 then *)
+              (* Ok, so what we need to do:
+                * We have a list of the type arguments of the type to inline,
+                * and also have a list of type arguments within the type app.
+                * What we need to do is for every ty arg in the type,
+                * substitute it for the corresponding arg in the arg list.
+                * Bit like a fold / zip. There's probably some funky
+                * category theory name for it, but blah.
+                *)
+              if (List.length inlineArgs = List.length argList) then
+                List.fold_right (fun ((from_arg, _, _), to_arg) ty ->
+                  (* We only want to work with type / row / presence *variables* here *)
+                    substTyArg from_arg to_arg ty
+                  ) (List.combine inlineArgs argList) toInline
+              else
+                (* Arity error, let something else pick it up *)
+                 tyApp
+            else
+              super#datatype dt
+        | x -> super#datatype x
+
+end
+
+let inlineTy ty tyRef inlineArgs refinedTy =
+  (inline_ty tyRef inlineArgs refinedTy)#datatype ty
 
 (* Similar to refine_bindings, RefineTypeBindings.refineTypeBindings finds
  * sequences of mutually recursive types, and rewrites them as explicit mus. *)
@@ -319,14 +358,12 @@ module RefineTypeBindings = struct
             let muName = List.assoc tyRef env' in
             substTyApp curDataTy tyRef muName
            else
-            (* assert (tyName <> tyRef); *)
             (* Otherwise, we'll need to refine and inline *)
-             if Hashtbl.mem ht tyRef then
-               let (_, _, (refinedRef, _)) = refineType (Hashtbl.find ht tyRef) env' ht sccs ri in
-               inlineTy curDataTy tyRef refinedRef
-             else
-               let () = printf "Fatal: couldn't find %s in type hashtable" tyRef in
-               assert false)
+               let to_refine = Hashtbl.find ht tyRef in
+               let (_, arg_list, _) = to_refine in
+               let to_refine_args = List.map fst arg_list in
+               let (_, _, (refinedRef, _)) = refineType to_refine env' ht sccs ri in
+               inlineTy curDataTy tyRef to_refine_args refinedRef)
         else
           curDataTy
       ) sccs dt in
@@ -344,6 +381,8 @@ module RefineTypeBindings = struct
       List.map (fun name ->
         let rts = isSelfReferential name ri in
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
+        let (_, _, (res_dt, _)) = res in
+        (* printf "Refined type %s: \n %s \n\n" name (Sugartypes.Show_datatype.show res_dt); *)
         (`Type res, getPos name)
       ) sccs
 
@@ -358,7 +397,7 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun (x, _) ->
         match x with
-          | `Type (name, _, _ as tyTy) ->
+          | `Type (name, _, _ as tyTy) as ty ->
             Hashtbl.add ht name tyTy;
           | _ -> assert false;
       ) binds;
