@@ -223,7 +223,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
           List.fold_left
             (fun (gs', env') (x, source) ->
               let y = Var.fresh_raw_var () in
-                ((y, ffb source)::gs', Env.Int.bind env (x, y)))
+                ((y, ffb source)::gs', Env.Int.bind env' (x, y)))
             ([], env)
             gs
         in
