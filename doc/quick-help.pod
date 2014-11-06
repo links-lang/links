@@ -1148,18 +1148,18 @@ applied. A I<flexible> type variable (also called a I<weak> type
 variable or I<unification> type variable) is a monomorphic meta-level
 variable that will be instantiated to a object-level type by the type
 inference algorithm. A flexible type variable is indicated by
-prefixing a type variable with a question mark C<?>. Flexible type
+prefixing a type variable with a percent sign C<%>. Flexible type
 variables are useful if you want to assert the shape of the type of an
 expression, but you want type inference to fill in some of the type
 for you.
 
-  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, ?a, Bool);
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, %a, Bool);
   (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool)
 
 If you only want to use a flexible type variable once, then you don't
 need to name it.
 
-  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, ?, Bool);
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, %, Bool);
   (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool
 
 A rigid type variable that is only used once is written as C<_>. This
