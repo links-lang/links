@@ -14,18 +14,20 @@
 
 (defvar links-mode-hook nil)
 
-(defvar links-mode-syntax-table nil
-  "Syntax table for links-mode buffers")
-(if links-mode-syntax-table
-    ()
-  (setq links-mode-syntax-table (make-syntax-table))
-  (modify-syntax-entry ?\\ "\\" links-mode-syntax-table)
-  (modify-syntax-entry ?# "<" links-mode-syntax-table)
-  (modify-syntax-entry ?\n ">" links-mode-syntax-table)
-  (modify-syntax-entry ?{ "(}" links-mode-syntax-table)
-  (modify-syntax-entry ?} "){" links-mode-syntax-table)
-  (modify-syntax-entry ?_ "w" links-mode-syntax-table)
-  )
+(defvar links-mode-syntax-table
+  (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?\  " " st)
+    (modify-syntax-entry ?# "<" st)
+    (modify-syntax-entry ?\n ">" st)
+    (modify-syntax-entry ?\\ "\\" st)
+    (modify-syntax-entry ?( "()" st)
+    (modify-syntax-entry ?) ")(" st)
+    (modify-syntax-entry ?{ "(}" st)
+    (modify-syntax-entry ?} "){" st)
+    (modify-syntax-entry ?[ "(]" st)
+    (modify-syntax-entry ?] ")[" st)
+    (modify-syntax-entry ?_ "w" st)
+    st))
 
 (defconst links-font-lock-keywords
   (list
