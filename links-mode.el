@@ -11,6 +11,7 @@
 ;;;    * syntax highlighting of XML quasis.
 ;;;
 ;;; Report problems to e.e.k.cooper@sms.ed.ac.uk
+(require 'compile)
 
 (defvar links-mode-hook nil)
 
@@ -87,6 +88,36 @@
   (setq-local font-lock-defaults
               '(links-font-lock-keywords)))
 
+;; TODO make these customizable
+(defvar links-executable "links")
+
+(defvar links-cli-arguments '("--config=config"))
+
+(defun links-compilation-errors ()
+  ;; TODO For some unknown reason, adding 'links to the alist does not work.
+  ;; Replacing the entire list by only '(links) works, so we do that for now.
+  ;; Of course that breaks every other user of compilation mode...
+  ;;(add-to-list 'compilation-error-regexp-alist 'links)
+  (setq-local compilation-error-regexp-alist '(links-parse links-type))
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(links-parse "^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2))
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(links-type "^\\(.*\\):\\([0-9]+\\): Type error:" 1 2)))
+
+(defun links-compile-and-run-file ()
+  "Compile the current file in Links. This may execute sideeffecting code, so be careful."
+  (interactive)
+  (let ((command (combine-and-quote-strings
+                  `(,links-executable
+                    ,@links-cli-arguments
+                    ,buffer-file-name))))
+    (compile command)))
+
+(defvar links-mode-map
+  (let ((m (make-keymap)))
+    (define-key m (kbd "C-c C-k") 'links-compile-and-run-file)
+    m))
+
 (define-derived-mode links-mode fundamental-mode "Links"
   "Major mode for Links."
   :syntax-table links-mode-syntax-table
@@ -95,6 +126,7 @@
   (setq-local comment-start-skip "#+\\s-*")
   (setq-local require-final-newline t)
   (initialize-font-lock-defaults)
+  (links-compilation-errors)
   (run-hooks 'links-mode-hook)
   )
 
