@@ -12,6 +12,7 @@
 ;;;
 ;;; Report problems to e.e.k.cooper@sms.ed.ac.uk
 
+(defvar links-mode-hook nil)
 
 (defvar links-mode-syntax-table nil
   "Syntax table for links-mode buffers")
