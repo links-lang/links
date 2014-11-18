@@ -27,6 +27,7 @@
     (modify-syntax-entry ?[ "(]" st)
     (modify-syntax-entry ?] ")[" st)
     (modify-syntax-entry ?_ "w" st)
+    (modify-syntax-entry ?' "w" st)
     st))
 
 (defconst links-keywords
@@ -37,13 +38,19 @@
     "for"
     "form"
     "from"
+    "fun"
     "if"
+    "infixl"
+    "infixr"
     "insert"
+    "op"
     "query"
+    "sig"
     "switch"
     "table"
     "typename"
     "values"
+    "var"
     "where"
     "with"
     "yields"
@@ -51,37 +58,34 @@
 
 (defconst links-font-lock-keywords
   (list
-   ; comments
+   ;; comments
    '("\\(^\\|[^</]\\)#.*$" . font-lock-comment-face)
-   ; XML forests
+   ;; XML forests
    '("<#>.*</#>" . font-lock-xml-face)
-   ; XML tags
+   ;; XML tags
    '("</?[a-z][^>]*>" 0 font-lock-xml-face t)
-   ; XML escapes (attributes)
+   ;; XML escapes (attributes)
    '("\"{[^}]*}\"" 0 font-lock-normal-face t)
-   ; declarations
-   '("\\<fun\\|var\\|sig\\>" . font-lock-type-face)
-   ; special operations
+   ;; special operations
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
-   ; types & variant tags
-   '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-function-name-face)
-   ; variable names
-   '("\\<\\(fun\\|var\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>" 
-     2 font-lock-variable-name-face)
-   ; variable names
-   '("\\<\\(l:name\\)=\"\\([a-z][A-Za-z0-9_]*\\)\"" 
-     2 font-lock-variable-name-face t)
-   ; type operators
+   ;; types & variant tags
+   '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-type-face)
+   ;; variable names
+   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+     (1 font-lock-keyword-face)
+     (2 font-lock-variable-name-face))
+   ;; function names
+   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+     (1 font-lock-keyword-face)
+     (2 font-lock-function-name-face))
+   ;; type operators
+   ;; TODO other arrow types, and decide on a face
    '("->" . font-lock-function-name-face)
    ))
 
 (defun initialize-font-lock-defaults ()
-  (make-local-variable 'font-lock-defaults)
-  (setq font-lock-defaults
-        '(links-font-lock-keywords nil nil ((?' . "w") (?_ . "w")) nil))
-  ; TBD: the last argument is SYNTAX-BEGIN, for determining the
-  ; beginning of a syntactic feature.
-  )
+  (setq-local font-lock-defaults
+              '(links-font-lock-keywords)))
 
 (defun links-mode ()
   (interactive)
