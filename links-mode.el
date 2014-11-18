@@ -87,24 +87,18 @@
   (setq-local font-lock-defaults
               '(links-font-lock-keywords)))
 
-(defun links-mode ()
-  (interactive)
-  (kill-all-local-variables)
-
-  (setq major-mode 'links-mode)
-  (setq mode-name "Links")
-
-  (make-local-variable 'require-final-newline)
-  (setq require-final-newline t)
-  (make-local-variable 'comment-start)
-  (setq comment-start "#")
-
-  (make-local-variable 'comment-start-skip)
-  (setq comment-start-skip "#+ *")
-  
+(define-derived-mode links-mode fundamental-mode "Links"
+  "Major mode for Links."
+  :syntax-table links-mode-syntax-table
+  (setq-local mode-name "Links")
+  (setq-local comment-start "#")
+  (setq-local comment-start-skip "#+\\s-*")
+  (setq-local require-final-newline t)
   (initialize-font-lock-defaults)
-
   (run-hooks 'links-mode-hook)
   )
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.links\\'" . links-mode))
 
 (provide 'links-mode)
