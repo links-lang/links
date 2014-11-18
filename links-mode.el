@@ -29,6 +29,26 @@
     (modify-syntax-entry ?_ "w" st)
     st))
 
+(defconst links-keywords
+  '(
+    "case"
+    "database"
+    "else"
+    "for"
+    "form"
+    "from"
+    "if"
+    "insert"
+    "query"
+    "switch"
+    "table"
+    "typename"
+    "values"
+    "where"
+    "with"
+    "yields"
+    ))
+
 (defconst links-font-lock-keywords
   (list
    ; comments
@@ -42,8 +62,7 @@
    ; declarations
    '("\\<fun\\|var\\|sig\\>" . font-lock-type-face)
    ; special operations
-   '("\\<\\(table\\|with\\|from\\|for\\|where\\|switch\\|case\\|database\\|if\\|else\\|insert\\|values\\|form\\|yields\\)\\>" 
-     . font-lock-keyword-face)
+   `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
    ; types & variant tags
    '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-function-name-face)
    ; variable names
