@@ -1,0 +1,53 @@
+# an encoding of an asynchronous pi calculus using
+# access points and recursive types
+
+typename Channel = AP (!Channel.End);
+typename Proc = () {}~> ();
+
+sig newChannel : ((Channel) {}~> Proc) {}~> Proc
+fun newChannel(p)() {
+  p(new())()
+}
+
+sig sendChannel : (Channel, Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun sendChannel(c, d, p)() {
+  ignore(send(c, accept(d)));
+  p(c, d)()
+}
+
+sig receiveChannel : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun receiveChannel(d, p)() {
+  p(d, receive(request(d)).1)()
+}
+
+sig par : (Proc, Proc) {}~> Proc
+fun par(p, q)() {
+  var _ = spawn { p() }; q()
+#  var _ = spawn { q() };
+#  ()
+}
+
+sig stop : Proc
+fun stop() {()}
+
+# unsafe replication
+sig repeat : (Proc) {}~> Proc
+fun repeat(p)() {
+  var _ = spawn { p() };
+  repeat(p)()
+}
+
+# guarded replication
+sig repeatReceive : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun repeatReceive(d, p)() {
+  var s = request(d);
+  var _ = spawn {p(d, receive(s).1)()};
+  repeatReceive(d, p)()
+}
+
+
+fun test1() {
+  newChannel(fun (x) {par(sendChannel(x, x, fun (x, y) {stop}),
+                          receiveChannel(x, fun (x, y) {stop}))})()
+}
+test1()
