@@ -1112,29 +1112,28 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       let closed =
         begin
           match Unionfind.find lrow_var', Unionfind.find rrow_var' with
-            | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind &&
-                                                           (lvar=rvar ||
-                                                               compatible_quantifiers (lvar, rvar) rec_env.qs) ->
-            (* FIXME:
-
-               why is the lvar=rvar test sometimes necessary?
-            *)
-              Unionfind.union lrow_var' rrow_var'; false
-            (*
-               Both rows are rigid!
-            *)
             | `Var (_, _, `Flexible), _ | _, `Var (_, _, `Flexible) ->
-              assert false
-            | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when lvar <> rvar ->
+              assert false (* both row variables must be rigid! *)
+            | `Recursive _, _ | _, `Recursive _ ->
+              assert false (* the rows must be unwrapped *)
+            | `Closed, `Closed -> true
+            | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind <> rkind ->
               raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
-                                    ^"\nand\n "^ string_of_row lrow
+                                    ^"\nand\n "^ string_of_row rrow
+                                    ^"\n could not be unified because they have different kinds")))
+            | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when
+                                                           (lvar=rvar ||
+                                                            compatible_quantifiers (lvar, rvar) rec_env.qs) ->
+              Unionfind.union lrow_var' rrow_var'; false
+            | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) ->
+              raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
+                                    ^"\nand\n "^ string_of_row rrow
                                     ^"\n could not be unified because they have distinct rigid row variables")))
-            | `Var (_, _, `Rigid), _
-            | _, `Var (_, _, `Rigid) ->
+            | `Var (_, _, `Rigid), `Closed
+            | `Closed, `Var (_, _, `Rigid) ->
               raise (Failure (`Msg ("Rows\n "^ string_of_row lrow
-                                    ^"\nand\n "^ string_of_row lrow
+                                    ^"\nand\n "^ string_of_row rrow
                                     ^"\n could not be unified because one is closed and the other has a rigid row variable")))
-            | _, _ -> true
         end in
 (*        if fields_are_compatible (lrow', rrow') then *)
       let rec_env' =
