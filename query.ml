@@ -227,7 +227,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
             ([], env)
             gs
         in
-          `For (List.rev gs', List.map ffb os, freshen_for_bindings env' b)
+          `For (List.rev gs', List.map (freshen_for_bindings env') os, freshen_for_bindings env' b)
       | `If (c, t, e) -> `If (ffb c, ffb t, ffb e)
       | `Table t -> `Table t
       | `Singleton v -> `Singleton (ffb v)
