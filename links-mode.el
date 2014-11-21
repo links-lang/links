@@ -94,15 +94,20 @@
 (defvar links-cli-arguments '("--config=config"))
 
 (defun links-compilation-errors ()
-  ;; TODO For some unknown reason, adding 'links to the alist does not work.
-  ;; Replacing the entire list by only '(links) works, so we do that for now.
-  ;; Of course that breaks every other user of compilation mode...
-  ;;(add-to-list 'compilation-error-regexp-alist 'links)
-  (setq-local compilation-error-regexp-alist '(links-parse links-type))
-  (add-to-list 'compilation-error-regexp-alist-alist
-               '(links-parse "^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2))
-  (add-to-list 'compilation-error-regexp-alist-alist
-               '(links-type "^\\(.*\\):\\([0-9]+\\): Type error:" 1 2)))
+  ;; TODO : fix our compilation-error-regexp-alist use
+  ;; For some reason adding to c-e-r-a and c-e-r-a-a does not work. Only adding
+  ;; to c-e-r-a also does not work. For now we just replace the whole c-e-r-a
+  ;; without even using c-e-r-a-a. This, of course, breaks all other users...
+  ;; 
+  ;; (add-to-list 'compilation-error-regexp-alist 'links-parse)
+  ;; (add-to-list 'compilation-error-regexp-alist 'links-type)
+  ;; (add-to-list 'compilation-error-regexp-alist
+  ;;              '(links-parse "^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2))
+  ;; (add-to-list 'compilation-error-regexp-alist-alist
+  ;;              '(links-type "^\\(.*\\):\\([0-9]+\\): Type error:" 1 2))
+  (setq compilation-error-regexp-alist
+        '(("^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2)
+          ("^\\(.*\\):\\([0-9]+\\): Type error:" 1 2))))
 
 (defun links-compile-and-run-file ()
   "Compile the current file in Links. This may execute sideeffecting code, so be careful."
