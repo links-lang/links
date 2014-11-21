@@ -123,7 +123,8 @@
     (define-key m (kbd "C-c C-k") 'links-compile-and-run-file)
     m))
 
-(define-derived-mode links-mode fundamental-mode "Links"
+;;;###autoload
+(define-derived-mode links-mode prog-mode "Links"
   "Major mode for Links."
   :syntax-table links-mode-syntax-table
   (setq-local mode-name "Links")
