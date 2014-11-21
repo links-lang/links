@@ -253,6 +253,23 @@ To build Links with database support, follow these steps:
 
      where the password may be blank.
 
+EMACS MODE
+
+There is a pretty minimal emacs mode in links-mode.el
+To use it make sure emacs knows where to look for it, and require it.
+For example:
+
+  (add-to-list 'load-path "~/src/links") ; where ~/src/links is the directory containing links' sources
+  (require 'links-mode)
+
+C-c C-k will run links on the buffer's file. Be careful, this may have side effecs!
+
+There are two customization options, the path to links and the command line arguments.
+You might want to change the latter to suit your needs. From my emacs config:
+
+(custom-set-variables
+  '(links-cli-arguments "--config=config"))
+
 QUESTIONS
 
 To learn more about Links, get help with installing or using Links, or

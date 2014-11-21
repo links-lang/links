@@ -13,7 +13,20 @@
 ;;; Report problems to e.e.k.cooper@sms.ed.ac.uk
 (require 'compile)
 
-(defvar links-mode-hook nil)
+(defgroup links nil
+  "Links-mode customization.")
+
+(defcustom links-mode-hook nil
+  "Hook run when entering Links mode."
+  :type 'hook)
+
+(defcustom links-executable "links"
+  "Path to Links executable."
+  :type '(string))
+
+(defcustom links-cli-arguments ""
+  "Command line arguments (as a string) passed to links."
+  :type '(string))
 
 (defvar links-mode-syntax-table
   (let ((st (make-syntax-table)))
@@ -88,11 +101,6 @@
   (setq-local font-lock-defaults
               '(links-font-lock-keywords)))
 
-;; TODO make these customizable
-(defvar links-executable "links")
-
-(defvar links-cli-arguments '("--config=config"))
-
 (defun links-compilation-errors ()
   ;; TODO : fix our compilation-error-regexp-alist use
   ;; For some reason adding to c-e-r-a and c-e-r-a-a does not work. Only adding
@@ -114,7 +122,7 @@
   (interactive)
   (let ((command (combine-and-quote-strings
                   `(,links-executable
-                    ,@links-cli-arguments
+                    ,links-cli-arguments
                     ,buffer-file-name))))
     (compile command)))
 
