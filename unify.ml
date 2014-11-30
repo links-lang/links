@@ -1178,7 +1178,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                  ("Rows\n "^ string_of_row rigid_row
                                   ^"\nand\n "^ string_of_row open_row
                                   ^"\n could not be unified because the former is rigid"
-                                  ^" and the latter contains fields not present in the former")))
+                                  ^" and the latter contains fields not present in the former, namely `"
+                                  ^ label ^"'.")))
           ) open_field_env';
 
         let rec_env' =
