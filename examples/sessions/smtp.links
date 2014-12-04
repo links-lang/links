@@ -64,7 +64,7 @@ fun sendRecipient(c, message) {
       print("C: RCPT TO:<" ^^ x ^^ ">");
       offer(c) {
         case REJECT(c) ->
-          # ignore rejection
+          # bad recipient
           sendRecipient(c, (message with recipients=xs))
         case ACCEPT(c) ->
           sendBody(c, (message with recipients=xs))
@@ -86,7 +86,7 @@ fun sendBody(c, message) {
       print("C: RCPT TO:<" ^^ x ^^ ">");
       offer (c) {
         case REJECT(c) ->
-          # ignore rejection
+          # bad recipient
           sendBody(c, (message with recipients=xs))
         case ACCEPT(c) ->
           sendBody(c, (message with recipients=xs))
