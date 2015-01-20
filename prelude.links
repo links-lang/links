@@ -1063,7 +1063,7 @@ fun fork(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c);
+    close(c)
   };
   request(ap)
 }
@@ -1074,7 +1074,7 @@ fun linfork(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c);
+    close(c)
   };
   request(ap)
 }
@@ -1087,12 +1087,12 @@ fun run(f) {
   v
 }
 
+
 sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun knife(f) {
   var ap = new();
   var _ = spawn {
-    var c = accept(ap);
-    f(c);
+    f(accept(ap))
   };
   request(ap)
 }
@@ -1101,8 +1101,7 @@ sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
 fun linknife(f) {
   var ap = new();
   var _ = spawn {
-    var c = accept(ap);
-    f(c);
+    f(accept(ap))
   };
   request(ap)
 }
@@ -1117,4 +1116,22 @@ fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
   reproduce(ap, f)
+}
+
+# Here we use an additional access point to synchronise on termination
+# of communicating threads. This synchronisation can be useful because
+# we do not have an explicit close function and by default the
+# top-level process does not wait for running threads to terminate.
+
+sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+fun connect(f, g) {
+  var ap = new();
+  var done = new();
+  var _ = spawn {
+    f(accept(ap));
+    ignore(send((), accept(done)))
+  };
+  var result = g(request(ap));
+  ignore(receive(request(done)));
+  result
 }
