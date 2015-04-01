@@ -1738,9 +1738,9 @@ struct
                       | `Var (var, _, `Flexible) when policy.flavours ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
-                              "-?->"
+                              "-%->"
                             else
-                              "-?" ^ name ^ "->"
+                              "-%" ^ name ^ "->"
                       | `Var (var, _, _) ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
@@ -1760,9 +1760,9 @@ struct
                       | `Var (var, _, `Flexible) when policy.flavours ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
-                              "~?~>"
+                              "~%~>"
                             else
-                              "~?" ^ name ^ "~>"
+                              "~%" ^ name ^ "~>"
                       | `Var (var, _, _) ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
@@ -1790,9 +1790,9 @@ struct
                         | `Var (var, _, `Flexible) when policy.flavours ->
                             let name, spec = Vars.find_spec var vars in
                               if hide_fresh_check var spec then
-                                "{:" ^ ht ^ "|?}~>"
+                                "{:" ^ ht ^ "|%}~>"
                               else
-                                "{:" ^ ht ^ "|?" ^ name ^ "}~>"
+                                "{:" ^ ht ^ "|%" ^ name ^ "}~>"
                         | `Var (var, _, _) ->
                             let name, spec = Vars.find_spec var vars in
                               if hide_fresh_check var spec then
@@ -1819,9 +1819,9 @@ struct
                       | `Var (var, _, `Flexible) when policy.flavours ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
-                              "-?-@"
+                              "-%-@"
                             else
-                              "-?" ^ name ^ "-@"
+                              "-%" ^ name ^ "-@"
                       | `Var (var, _, _) ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
@@ -1841,9 +1841,9 @@ struct
                       | `Var (var, _, `Flexible) when policy.flavours ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
-                              "~?~@"
+                              "~%~@"
                             else
-                              "~?" ^ name ^ "~@"
+                              "~%" ^ name ^ "~@"
                       | `Var (var, _, _) ->
                           let name, spec = Vars.find_spec var vars in
                             if hide_fresh_check var spec then
@@ -1870,9 +1870,9 @@ struct
                         | `Var (var, _, `Flexible) when policy.flavours ->
                             let name, spec = Vars.find_spec var vars in
                               if hide_fresh_check var spec then
-                                "{:" ^ ht ^ "|?}~@"
+                                "{:" ^ ht ^ "|%}~@"
                               else
-                                "{:" ^ ht ^ "|?" ^ name ^ "}~@"
+                                "{:" ^ ht ^ "|%" ^ name ^ "}~@"
                         | `Var (var, _, _) ->
                             let name, spec = Vars.find_spec var vars in
                               if hide_fresh_check var spec then
@@ -1973,8 +1973,8 @@ struct
             match Unionfind.find point with
               | `Var (var, _, `Flexible) when policy.flavours ->
                   let name, (_, _, count) = Vars.find_spec var vars in
-                    if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "{?}"
-                    else "{?" ^ name ^ "}"
+                    if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "{%}"
+                    else "{%" ^ name ^ "}"
               | `Var (var, _, _) ->
                   let name, (_, _, count) = Vars.find_spec var vars in
                     if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then "{_}"
