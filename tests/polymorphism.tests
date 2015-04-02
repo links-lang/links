@@ -104,3 +104,16 @@ stdout : [fun] : [forall a,b::Row.(a) -b-> a]
 Bad polymorphism behaviour (2)
 sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
 stdout : [fun] : [(a::Any) -> a::Any]
+
+Nested polymorphism
+sig foo : (forall a.((a) {}~> a)) {}~> (Int) {}~> Int fun foo(f){f} foo(id)(42)
+stdout : 42 : Int
+
+Top-level ill-typed polymorphism
+sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}
+stderr : @..*
+exit : 1
+
+Polymorphic type aliases (Church numerals)
+typename Nat = forall a.(a) {}-> ((a) {}-> a) {}-> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) {}-> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(zero))(0)(fun (x) {x+1})
+stdout : 2 : Int

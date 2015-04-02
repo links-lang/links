@@ -6,6 +6,7 @@ val quantified_instantiation : bool Settings.setting
 val var : Types.environment -> string -> (Types.type_arg list * Types.datatype)
 val rigid : Types.environment -> string -> (Types.type_arg list * Types.datatype)
 val typ : Types.datatype -> (Types.type_arg list * Types.datatype)
+val typ_rigid : Types.datatype -> (Types.type_arg list * Types.datatype)
 val datatype :
   Types.datatype Utility.IntMap.t * Types.row Utility.IntMap.t * Types.field_spec Utility.IntMap.t ->
   Types.datatype -> Types.datatype

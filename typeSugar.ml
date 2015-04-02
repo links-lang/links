@@ -2577,10 +2577,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
               | None ->
                   make_ft lin pats effects return_type
               | Some (_, Some ft) ->
+                  (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-                  let _, fti = Instantiate.typ ft in
+                  let _, fti = Instantiate.typ_rigid ft in
+                  (* Debug.print ("fti: " ^ Types.string_of_datatype fti); *)
                   let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos fti) in
+                    (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
                     ft in
 
           (* type check the body *)

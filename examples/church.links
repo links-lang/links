@@ -1,0 +1,21 @@
+typename Nat = forall a.(a) {}-> ((a) {}-> a) {}-> a;
+
+sig zero : Nat
+var zero = fun (z)(s) {z};
+
+sig succ : (Nat) {}-> Nat
+fun succ(n) {fun (z)(s){s(n(z)(s))}}
+
+sig add : (Nat) {}-> (Nat) {}-> Nat
+fun add(m)(n) {fun (z)(s) {m(n(z)(s))(s)}}
+
+sig two : Nat
+var two = succ(succ(zero));
+
+sig four : Nat
+var four = add(two)(two);
+
+sig natToInt : (Nat) {}-> Int
+fun natToInt(n) {n(0)(fun (x) {x+1})}
+
+natToInt(four)

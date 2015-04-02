@@ -18,6 +18,12 @@ type inst_env = inst_type_env * inst_row_env
 
 exception ArityMismatch
 
+(* TODO: rationalise instantiation
+     - do we need all of instantiate_datatype, instantiate_typ, etc?
+     - what should they be named?
+     - is instantiation for first-class polymorphism correct?
+*)
+
 let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap.t) -> datatype -> datatype =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
@@ -209,7 +215,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
 (*             if rigid then *)
 (*               tys, body *)
 (*             else *)
-          if Settings.get_value quantified_instantiation then
+          if Settings.get_value quantified_instantiation && not(rigid) then
               tys, `ForAll (box_quantifiers qs, body)
           else
             tys, body
@@ -287,6 +293,7 @@ let rigid : environment -> string -> type_arg list * datatype =
 
 let var = instantiate
 let typ = instantiate_typ
+let typ_rigid = instantiate_rigid
 let datatype = instantiate_datatype
 
 module SEnv = Env.String
@@ -406,16 +413,23 @@ let alias name tyargs env =
             tyargs
             (IntMap.empty, IntMap.empty, IntMap.empty) in
 
-        (* freshen any free flexible type variables in the type alias *)
-        let bound_vars =
-          List.fold_right (Types.var_of_quantifier ->- TypeVarSet.add) vars TypeVarSet.empty in
-        let ftvs = Types.flexible_type_vars bound_vars body in
+        (* TODO: the following commented out code appears to be
+           rubbish. There should never be any free flexible variables in
+           a type alias. Delete it? *)
 
-        let qs = IntMap.fold (fun _ q qs -> q::qs) ftvs [] in
-        let body =
-          match freshen_quantifiers (`ForAll (Types.box_quantifiers qs, body)) with
-            | `ForAll (_, body) -> body
-            | t -> t
-        in
-          `Alias ((name, tyargs),
-                  instantiate_datatype (tenv, renv, penv) body)
+        (* freshen any free flexible type variables in the type alias *)
+        (* let bound_vars = *)
+        (*   List.fold_right (Types.var_of_quantifier ->- TypeVarSet.add) vars TypeVarSet.empty in *)
+        (* let ftvs = Types.flexible_type_vars bound_vars body in *)
+
+        (* let qs = IntMap.fold (fun _ q qs -> q::qs) ftvs [] in *)
+        (* let body = *)
+        (*   match freshen_quantifiers (`ForAll (Types.box_quantifiers qs, body)) with *)
+        (*     | `ForAll (_, body) -> body *)
+        (*     | t -> t *)
+
+        (* instantiate the type variables bound by the alias
+           definition with the type arguments *and* instantiate any
+           top-level quantifiers *)
+        let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
+          `Alias ((name, tyargs), body)
