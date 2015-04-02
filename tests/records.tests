@@ -75,7 +75,8 @@ exit : 1
 
 Uninhabited recursive rows (questionable)
 (fun (x : (|(mu b . b))) {x})(())
-stdout : () : ()
+stderr : @.
+exit : 1
 
 Missing absent label (1)
 fun (r : (|a)) {(l=42|r)}
