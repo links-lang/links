@@ -1,4 +1,6 @@
-typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
+typename Calc = [&|Add:?Int.?Int.!Int.Calc,
+                   Mul:?Int.?Int.!Int.Calc,
+                   Done:End|&];
 
 sig calc : (Calc) ~> ()
 fun calc(s) {
@@ -13,7 +15,7 @@ fun calc(s) {
       var (y,s) = receive(s);
       var s = send(x*y,s);
       calc(s)
-    case Stop(s) ->
+    case Done(s) ->
       ()
   }
 }
@@ -24,8 +26,8 @@ fun user(s) {
   var (v, s) = receive(send(6,send(7,s)));
   var s = select Add s;
   var (v, s) = receive(send(v,send(v,s)));
-  var _ = select Stop s;
+  var _ = select Done s;
   v
 }
 
-user(knife(calc))
+connect(calc, user)

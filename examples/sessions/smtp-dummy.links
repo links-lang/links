@@ -161,7 +161,7 @@ fun receiveBody(s) {
       print("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
-        receiveBody(select REJECT s)
+        receiveMail(select REJECT s)
       } else {
         receiveBody(select ACCEPT s)
       }

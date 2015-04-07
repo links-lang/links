@@ -7,29 +7,25 @@ typename Message = (sender:Address, recipients:[Address], subject:Subject, body:
 
 typename SMTPClient =
   [+|
-    HELO: !Domain . [&| ACCEPT: SendMail, REJECT: SMTPClient |&],
-    QUIT: EndQuery
+    HELO:!Domain.[&|ACCEPT:SendMail, REJECT:SMTPClient|&],
+    QUIT:EndQuery
   |+];
 
 typename SendMail =
   [+|
-    MAIL:!Address.
-      [&|
-        REJECT: SendMail,
-        ACCEPT: SendRecipient
-      |&],
+    MAIL:!Address.[&|REJECT:SendMail, ACCEPT:SendRecipient|&],
     QUIT:EndQuery
   |+];
 
 typename SendRecipient =
   [+|
-    RCPT:!Address . [&| REJECT: SendRecipient, ACCEPT:SendBody |&]
+    RCPT:!Address.[&|REJECT:SendRecipient, ACCEPT:SendBody|&]
   |+];
 
 typename SendBody =
   [+|
-    RCPT: !Address . [&| REJECT: SendBody, ACCEPT: SendBody |&],
-    DATA: !Subject . !MessageBody . SendMail
+    RCPT:!Address.[&|REJECT:SendBody, ACCEPT:SendBody|&],
+    DATA:!Subject.!MessageBody.SendMail
   |+];
 
 ### the client
@@ -79,8 +75,7 @@ fun sendBody(c, message) {
       var c = send(message.subject, select DATA c);
       var c = send(message.body, c);
       var c = select QUIT c;
-      wait(c);
-      ()
+      wait(c)
     case x::xs ->
       var c = send(x, select RCPT c);
       print("C: RCPT TO:<" ^^ x ^^ ">");

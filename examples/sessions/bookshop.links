@@ -1,4 +1,4 @@
-typename Shop  = mu a.[&|Add:?String.a, Checkout:?Int.?String.End|&];
+typename Shop = [&|Add:?String.Shop, Checkout:?Int.?String.End|&];
 
 
 sig waitForClient : (Shop) ~> ()

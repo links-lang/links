@@ -46,6 +46,34 @@ fun repeatReceive(d, p)() {
 }
 
 
+## replication isn't really entirely satisfactory yet
+
+#typename Service(s) = AP(s);
+#
+#sig serve : forall s::Session.((~s) ~e~> ()) ~> Service(s)
+#fun serve(f) {
+#  var p = new();
+#  fun reproduce(ap, f) {
+#    var x = request(ap);
+#    var _ = spawn {f(x)};
+#    reproduce(ap, f)
+#  }
+#  var _ = spawn {reproduce(p, f)};
+#  p
+#}
+#
+#sig req : forall s::Session.(Service(s)) ~> s
+#fun req(s) {
+#  accept(s)
+#}
+#
+##sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+#sig rep : (Proc) {}~> Proc
+#fun rep(p)() {
+#  reproduce(new(), fun (s) {p()}) 
+#}
+
+
 fun test1() {
   newChannel(fun (x) {par(sendChannel(x, x, fun (x, y) {stop}),
                           receiveChannel(x, fun (x, y) {stop}))})()
