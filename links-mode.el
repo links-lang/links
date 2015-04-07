@@ -10,7 +10,6 @@
 ;;; Things that don't work:
 ;;;    * syntax highlighting of XML quasis.
 ;;;
-;;; Report problems to e.e.k.cooper@sms.ed.ac.uk
 (require 'compile)
 
 (defgroup links nil
@@ -102,20 +101,29 @@
               '(links-font-lock-keywords)))
 
 (defun links-compilation-errors ()
-  ;; TODO : fix our compilation-error-regexp-alist use
+  ;; TODO: fix our compilation-error-regexp-alist use
+  ;;
   ;; For some reason adding to c-e-r-a and c-e-r-a-a does not work. Only adding
-  ;; to c-e-r-a also does not work. For now we just replace the whole c-e-r-a
-  ;; without even using c-e-r-a-a. This, of course, breaks all other users...
-  ;; 
+  ;; to c-e-r-a also does not work. I tried these and a cople more things. If
+  ;; you understand how this works, please tell me/fix it.
+  ;;
   ;; (add-to-list 'compilation-error-regexp-alist 'links-parse)
   ;; (add-to-list 'compilation-error-regexp-alist 'links-type)
   ;; (add-to-list 'compilation-error-regexp-alist
   ;;              '(links-parse "^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2))
   ;; (add-to-list 'compilation-error-regexp-alist-alist
   ;;              '(links-type "^\\(.*\\):\\([0-9]+\\): Type error:" 1 2))
-  (setq compilation-error-regexp-alist
-        '(("^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2)
-          ("^\\(.*\\):\\([0-9]+\\): Type error:" 1 2))))
+  ;;
+  ;;
+  ;; For now, if you don't care about breaking error parsing for all other
+  ;; compilers, you can just uncomment the next lines. They replace the whole
+  ;; c-e-r-a without even using c-e-r-a-a. This, of course, breaks all other
+  ;; users. You have been warned.
+  ;;
+  ;; (setq compilation-error-regexp-alist
+  ;;       '(("^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2)
+  ;;         ("^\\(.*\\):\\([0-9]+\\): Type error:" 1 2)))
+  )
 
 (defun links-compile-and-run-file ()
   "Compile the current file in Links. This may execute sideeffecting code, so be careful."
