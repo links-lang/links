@@ -1,129 +1,158 @@
-;; Mode for editing Links files.
-;; Will eventually provide at least:
-;;   * syntax highlighting
-;;   * indentation
-;;   * interpreter integration (send commands to interpreter, jump to
-;;     error in source code buffer)
-;;   * block navigation
-;; and perhaps
-;;   * context-sensitive completion (ala Slime, nxml-mode)
-;;   * type checking as you type (ala Java mode in Eclipse)
-;;   * context-sensitive help
-;;   * jump to definition (M-.)
-;;   * other stuff
+;;; links-mode.el -- A first gasp at an Emacs mode for Links
+;;;                  (Horribly broken, for sure.)
+;;; by Ezra Cooper 2007
+;;; Many bits copped from caml.el by Leroy et al.
+;;;
+;;; Things that work:
+;;;    * some syntax highlighting
+;;;    * (un)comment-region
+;;;
+;;; Things that don't work:
+;;;    * syntax highlighting of XML quasis.
+;;;
+(require 'compile)
 
-(defun links-mode ()
-  "Major mode for editing Links files
+(defgroup links nil
+  "Links-mode customization.")
 
-Key bindings
-\\{links-mode-map}
-"	; TODO: expand this docstring
-  (interactive)
-  (kill-all-local-variables)
-  (setq major-mode 'links-mode
- 	mode-name "Links"
- 	indent-line-function 'links-indent-line)
-    (make-local-variable 'font-lock-defaults)
-  (setq font-lock-defaults '(links-font-lock-keywords t))
-  ;;(set (make-local-variable 'imenu-generic-expression) 'links-mode-imenu-thing)
-  (set-syntax-table links-mode-syntax-table)
-  (use-local-map links-mode-map)
-  
-  ;;   ;; last thing to do
-  (run-hooks 'links-mode-hook))
+(defcustom links-mode-hook nil
+  "Hook run when entering Links mode."
+  :type 'hook)
 
+(defcustom links-executable "links"
+  "Path to Links executable."
+  :type '(string))
 
-(defun links-indent-line ())
+(defcustom links-cli-arguments ""
+  "Command line arguments (as a string) passed to links."
+  :type '(string))
 
-(defun links-internal-fontlock-set (face &rest disjuncts)
-  (cons (format "\\<\\(%s\\)\\>" (regexp-opt disjuncts)) face))
+(defvar links-mode-syntax-table
+  (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?\  " " st)
+    (modify-syntax-entry ?# "<" st)
+    (modify-syntax-entry ?\n ">" st)
+    (modify-syntax-entry ?\\ "\\" st)
+    (modify-syntax-entry ?( "()" st)
+    (modify-syntax-entry ?) ")(" st)
+    (modify-syntax-entry ?{ "(}" st)
+    (modify-syntax-entry ?} "){" st)
+    (modify-syntax-entry ?[ "(]" st)
+    (modify-syntax-entry ?] ")[" st)
+    (modify-syntax-entry ?_ "w" st)
+    (modify-syntax-entry ?' "w" st)
+    st))
 
-(defvar links-font-lock-keywords
-  (list 
-   ;; builtin functions/operators
-   (links-internal-fontlock-set 'font-lock-function-name-face
-				"string_of_bool" "float_of_int" "float_of_string" "int_of_string"
-				"bool_of_string" "string_of_int" "string_of_float"
-				"pre" "abs")
-   ;; keywords
-   (links-internal-fontlock-set 'font-lock-builtin-face
-				"exit" "def" "defrec" "let" "letrec" "in" "and"
-				"fun" "if" "then" "else" "case" "of" "or" "for"
-				"sort_up" "sort_down" "table" "from" "with"
-				"unique" "order" "asc" "desc" "database")
-   ;; constants
-   (links-internal-fontlock-set 'font-lock-constant-face
-				"true" "false")
+(defconst links-keywords
+  '(
+    "case"
+    "database"
+    "else"
+    "for"
+    "form"
+    "from"
+    "fun"
+    "if"
+    "infixl"
+    "infixr"
+    "insert"
+    "op"
+    "query"
+    "sig"
+    "switch"
+    "table"
+    "typename"
+    "values"
+    "var"
+    "where"
+    "with"
+    "yields"
+    ))
 
-   ;; types
-   (links-internal-fontlock-set 'font-lock-type-face
-				"bool" "int" "float" "string")))
-   
-(defvar links-mode-font-lock-thing 
-  '(links-font-lock-keywords 		; keywords
-    nil 				; keywords-only
-    nil					; case-fold
-    nil                       	       	; syntax-alist
-    nil)				; syntax-begin
- "Links mode highlighting information")
+(defconst links-font-lock-keywords
+  (list
+   ;; comments
+   '("\\(^\\|[^</]\\)#.*$" . font-lock-comment-face)
+   ;; XML forests
+   '("<#>.*</#>" . font-lock-xml-face)
+   ;; XML tags
+   '("</?[a-z][^>]*>" 0 font-lock-xml-face t)
+   ;; XML escapes (attributes)
+   '("\"{[^}]*}\"" 0 font-lock-normal-face t)
+   ;; special operations
+   `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
+   ;; types & variant tags
+   '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-type-face)
+   ;; variable names
+   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+     (1 font-lock-keyword-face)
+     (2 font-lock-variable-name-face))
+   ;; function names
+   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+     (1 font-lock-keyword-face)
+     (2 font-lock-function-name-face))
+   ;; type operators
+   ;; TODO other arrow types, and decide on a face
+   '("->" . font-lock-function-name-face)
+   ))
 
-(defvar links-mode-map
-  (let ((links-mode-map (make-keymap)))
-    (define-key links-mode-map "\C-j" 'newline-and-indent)
-    (define-key links-mode-map "\C-c\C-c" 'links-evaluate-region)
-    links-mode-map))
+(defun initialize-font-lock-defaults ()
+  (setq-local font-lock-defaults
+              '(links-font-lock-keywords)))
 
-
-
-
-(defvar links-mode-syntax-table 
-  (let ((links-mode-syntax-table (make-syntax-table)))
-    (modify-syntax-entry ?_ "w" links-mode-syntax-table)
-    (modify-syntax-entry ?( "(" links-mode-syntax-table)
-    (modify-syntax-entry ?{ "(" links-mode-syntax-table)
-    (modify-syntax-entry ?[ "(" links-mode-syntax-table)
-    (modify-syntax-entry ?< "(" links-mode-syntax-table)
-    (modify-syntax-entry ?) ")" links-mode-syntax-table)
-    (modify-syntax-entry ?} ")" links-mode-syntax-table)
-    (modify-syntax-entry ?] ")" links-mode-syntax-table)
-    (modify-syntax-entry ?> ")" links-mode-syntax-table)
-
-    links-mode-syntax-table))
-
-(defvar links-mode-abbrev-table nil "Links mode abbrev table")
-(defvar links-mode-imenu-thing nil "Links mode imenu information")
-(defvar links-mode-hook nil "Links mode hook")
-
-
-(defvar links-program-name "/home/s0456219/code/links/gilles/2005-01-10/code 0.6.5 (no-opt)/slinks")
-
-(defun run-links ()
-  "Run an inferior Links process, input and output via buffer *slinks*."
-  (interactive)
-  (switch-to-buffer-other-window (make-comint "slinks" links-program-name nil "-i"))
+(defun links-compilation-errors ()
+  ;; TODO: fix our compilation-error-regexp-alist use
+  ;;
+  ;; For some reason adding to c-e-r-a and c-e-r-a-a does not work. Only adding
+  ;; to c-e-r-a also does not work. I tried these and a cople more things. If
+  ;; you understand how this works, please tell me/fix it.
+  ;;
+  ;; (add-to-list 'compilation-error-regexp-alist 'links-parse)
+  ;; (add-to-list 'compilation-error-regexp-alist 'links-type)
+  ;; (add-to-list 'compilation-error-regexp-alist
+  ;;              '(links-parse "^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2))
+  ;; (add-to-list 'compilation-error-regexp-alist-alist
+  ;;              '(links-type "^\\(.*\\):\\([0-9]+\\): Type error:" 1 2))
+  ;;
+  ;;
+  ;; For now, if you don't care about breaking error parsing for all other
+  ;; compilers, you can just uncomment the next lines. They replace the whole
+  ;; c-e-r-a without even using c-e-r-a-a. This, of course, breaks all other
+  ;; users. You have been warned.
+  ;;
+  ;; (setq compilation-error-regexp-alist
+  ;;       '(("^*** Parse error: \\(.*\\):\\([0-9]+\\)$" 1 2)
+  ;;         ("^\\(.*\\):\\([0-9]+\\): Type error:" 1 2)))
   )
 
-(defun inferior-links-mode ()
-  "Major mode for interacting with the Links interpreter"
+(defun links-compile-and-run-file ()
+  "Compile the current file in Links. This may execute sideeffecting code, so be careful."
   (interactive)
-  (require 'comint)
-  (comint-mode)
-  (setq comint-prompt-regexp "^ *? *")
-  (use-local-map links-mode-map)
-  (run-hooks 'links-mode-hook))
+  (let ((command (combine-and-quote-strings
+                  `(,links-executable
+                    ,links-cli-arguments
+                    ,buffer-file-name))))
+    (compile command)))
 
-(defun links-evaluate-region ()
-  (interactive)
-  (let ((beg nil)
-	(end nil))
-    (if mark-active
-	(setq beg (region-beginning)
-	      end (region-end))
-      (setq beg (line-beginning-position)
-	    end (line-end-position)))
-    (save-excursion
-      (send-region "slinks" beg end)
-      (send-string "slinks" ";;\n")
-      (display-buffer "*slinks*"))))
+(defvar links-mode-map
+  (let ((m (make-keymap)))
+    (define-key m (kbd "C-c C-k") 'links-compile-and-run-file)
+    m))
+
+;;;###autoload
+(define-derived-mode links-mode prog-mode "Links"
+  "Major mode for Links."
+  :syntax-table links-mode-syntax-table
+  (setq-local mode-name "Links")
+  (setq-local comment-start "#")
+  (setq-local comment-start-skip "#+\\s-*")
+  (setq-local require-final-newline t)
+  (initialize-font-lock-defaults)
+  (links-compilation-errors)
+  (run-hooks 'links-mode-hook)
+  )
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.links\\'" . links-mode))
 
 (provide 'links-mode)
