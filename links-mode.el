@@ -1,6 +1,7 @@
 ;;; links-mode.el -- A first gasp at an Emacs mode for Links
 ;;;                  (Horribly broken, for sure.)
 ;;; by Ezra Cooper 2007
+;;; updated by Stefan Fehrenbach 2015
 ;;; Many bits copped from caml.el by Leroy et al.
 ;;;
 ;;; Things that work:
@@ -49,6 +50,7 @@
     "database"
     "else"
     "for"
+    "forall"
     "form"
     "from"
     "fun"
@@ -56,9 +58,11 @@
     "infixl"
     "infixr"
     "insert"
+    "linfun"
     "op"
     "query"
     "sig"
+    "spawn"
     "switch"
     "table"
     "typename"
@@ -92,8 +96,12 @@
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; type operators
-   ;; TODO other arrow types, and decide on a face
-   '("->" . font-lock-function-name-face)
+   '("\\(-\\|~\\)\\(>\\|@\\)" . font-lock-function-name-face)
+   '("\\(-\\|~\\)\\([a-z]+\\)\\(-\\|~\\)\\(>\\|@\\)"
+     (1 font-lock-function-name-face)
+     (2 font-lock-variable-name-face)
+     (3 font-lock-function-name-face)
+     (4 font-lock-function-name-face))
    ))
 
 (defun initialize-font-lock-defaults ()
