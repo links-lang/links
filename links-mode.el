@@ -71,6 +71,8 @@
     "where"
     "with"
     "yields"
+    "offer"
+    "select"
     ))
 
 (defconst links-font-lock-keywords
