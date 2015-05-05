@@ -13,10 +13,10 @@ type proc_state = Value.continuation * Value.t
 
 type scheduler_state =
     { suspended : (proc_state * pid) Queue.t;
-      blocked : (pid, proc_state * pid) Hashtbl.t;
+      blocked : (pid, proc_state) Hashtbl.t;
       message_queues : (pid, Value.t Queue.t) Hashtbl.t;
       current_pid : pid ref;
-      step_counter : int ref
+      step_counter : int ref;
     }
 
 let state = {
@@ -85,7 +85,7 @@ let send_message msg pid =
 let awaken pid =
   try
     Debug.print ("Awakening process: " ^ string_of_int pid);
-    Queue.push (Hashtbl.find state.blocked pid) state.suspended;
+    Queue.push (Hashtbl.find state.blocked pid, pid) state.suspended;
     Hashtbl.remove state.blocked pid
   with Notfound.NotFound _ ->
     Debug.print ("Attempt to awaken non existent process");
@@ -102,7 +102,7 @@ let suspend_current pstate =
     blocking suspended (i.e. runnable) processes *)
 let block_current pstate =
   let pid = !(state.current_pid) in
-  Hashtbl.add state.blocked pid (pstate, pid)
+  Hashtbl.add state.blocked pid pstate
 
 (** Make the given process the active one. Assumes you have already 
     blocked/suspended the previously-active process. *)
