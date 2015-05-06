@@ -5,8 +5,130 @@ open Proc
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
+module Session = struct
+  type apid = int              (* access point id *)
+  type portid = int
+  type pid = int               (* process id *)
+  type chan = portid * portid  (* a channel is a pair of ports *)
+
+  type ap_state = Balanced | Accepting of chan list | Requesting of chan list
+
+  let flip_chan (outp, inp) = (inp, outp)
+
+  let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
+
+  let forward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+  let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+
+  let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
+
+  let block portid pid = Hashtbl.add blocked portid pid
+  let rec unblock portid =
+    if Hashtbl.mem forward portid then
+      unblock (Hashtbl.find forward portid)
+    else if Hashtbl.mem blocked portid then
+      begin
+        let pid = Hashtbl.find blocked portid in
+        Hashtbl.remove blocked portid;
+          Some pid
+      end
+    else
+      None
+
+  let generator () =
+    let i = ref 0 in
+      fun () -> incr i; !i
+
+  let fresh_apid = generator ()
+  let fresh_portid = generator ()
+  let fresh_chan () =
+    let outp = fresh_portid () in
+    let inp = fresh_portid () in
+      (outp, inp)
+
+  let new_channel () =
+    let (outp, inp) as c = fresh_chan () in
+      Hashtbl.add buffers outp (Queue.create ());
+      Hashtbl.add buffers inp (Queue.create ());
+      c
+
+  let new_access_point () =
+    let apid = fresh_apid () in
+      Hashtbl.add access_points apid Balanced;
+      apid
+
+  let accept : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (c, state', blocked) =
+        match state with
+        | Balanced             -> let c = new_channel () in (c, Accepting [c], true)
+        | Accepting cs         -> let c = new_channel () in (c, Accepting (cs @ [c]), true)
+        | Requesting [c]       -> (c, Balanced, false)
+        | Requesting (c :: cs) -> (c, Requesting cs, false)
+      in
+        Hashtbl.replace access_points apid state';
+        c, blocked
+
+  let request : apid -> chan * bool =
+    fun apid ->
+      let state = Hashtbl.find access_points apid in
+      let (c, state', blocked) =
+        match state with
+        | Balanced            -> let c = new_channel () in (c, Requesting [c], true)
+        | Requesting cs       -> let c = new_channel () in (c, Requesting (cs @ [c]), true)
+        | Accepting [c]       -> (c, Balanced, false)
+        | Accepting (c :: cs) -> (c, Accepting cs, false)
+      in
+        Hashtbl.replace access_points apid state';
+        flip_chan c, blocked
+
+  let rec send msg p =
+    (* Debug.print ("Sending along: " ^ string_of_int p); *)
+    if Hashtbl.mem forward p then
+      send msg (Hashtbl.find forward p)
+    else
+      Queue.push msg (Hashtbl.find buffers p)
+
+  let rec receive p =
+    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
+    let buf = Hashtbl.find buffers p in
+      if not (Queue.is_empty buf) then
+        Some (Queue.pop buf)
+      else
+        if Hashtbl.mem backward p then
+          receive (Hashtbl.find backward p)
+        else
+          None
+
+  let fuse (out1, in1) (out2, in2) =
+    let forward inp outp =
+      (* Debug.print ("Forwarding from: "^string_of_int inp^ " to: " ^ string_of_int outp); *)
+      Hashtbl.add backward outp inp;
+      Hashtbl.add forward inp outp
+    in
+      forward in1 out2;
+      forward in2 out1
+
+  let unbox_port = Num.int_of_num -<- Value.unbox_int
+  let unbox_chan' chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (Value.unbox_int outp, Value.unbox_int inp)
+  let unbox_chan chan =
+    let (outp, inp) = Value.unbox_pair chan in
+      (unbox_port outp, unbox_port inp)
+end
+
 module Eval = struct
   open Ir
+
+  open Lwt
+  open Cohttp
+  open Cohttp_lwt_unix
+
+  type routing_table = (bool * string * Value.t) list (* directory? path (handler : (string)~>Page) *)
+  let rt = ref ([] : routing_table)
 
   exception EvaluationError of string
   exception Wrong
@@ -349,6 +471,45 @@ module Eval = struct
         unblock out2;
         apply cont env (value env end_bang, [])
     (* end of session stuff *)
+    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
+       begin
+         match pathv with
+         | `String path -> rt := (path.[String.length path - 1] = '/',
+                                  path,
+                                  handler) :: !rt;
+                           apply_cont cont env (`Record [])
+         | _ -> assert false
+       end
+    | `PrimitiveFunction ("startServer", _), [] ->
+       let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
+       let callback rt env conn req body =
+         let query_args = List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req)) in
+         let cgi_args = query_args @ Header.to_list (Request.headers req) in
+         let path = Uri.path (Request.uri req) in
+
+         let rec iter = function
+           | [] -> Server.respond_string ~status:`Not_found ~body:"<h1>Nope</h1>" ()
+           | ((dir, s, f) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
+              begin
+                Lib.cgi_parameters := cgi_args;
+                try (
+                  apply cont env (f, [`String (Uri.path (Request.uri req))]);
+                  assert false
+                ) with
+                | TopLevel (_, `List [`XML body]) ->
+                   Lib.cohttp_server_response [] (Value.string_of_value (`XML body))
+              end
+           | (_ :: rest) -> iter rest in
+         iter rt in
+
+       let start_server host port rt env =
+         Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
+         let ctx = Cohttp_lwt_unix_net.init ~ctx () in
+         Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt env) ()) in
+
+       Lwt_main.run (start_server (Settings.get_value Basicsettings.host_name) (Settings.get_value Basicsettings.port) !rt env);
+       assert false
+    (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
@@ -423,9 +584,9 @@ module Eval = struct
            already been applied here *)
         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
-	      let unboxed_keys = 
-		List.map 
-		  (fun key -> 
+	      let unboxed_keys =
+		List.map
+		  (fun key ->
 		    List.map Value.unbox_string (Value.unbox_list key))
 		  (Value.unbox_list keys)
 	      in

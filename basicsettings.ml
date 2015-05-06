@@ -10,6 +10,9 @@ let web_mode = Settings.add_bool ("web_mode", false, `System)
 (** If [true], then wait for all child processes to finish before
     terminating *)
 let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
+let host_name = Settings.add_string ("host", "0.0.0.0", `User)
+let port = Settings.add_int ("port", 8080, `User)
+
 
 (** If [true], then enable concurrency on the server:
 
@@ -95,7 +98,7 @@ let database_args = Settings.add_string("database_args", "", `User)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
 (** Caching *)
-let cache_directory = 
+let cache_directory =
   Settings.add_string ("cache_directory", "", `User)
 let use_cache = Settings.add_bool("use_cache", true, `System)
 let make_cache = Settings.add_bool("make_cache", true, `System)

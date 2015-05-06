@@ -1149,7 +1149,7 @@ fun lf(f) {
 
 sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
 fun groupByFlat(project, ts) {
-  for(t <- ts) 
+  for(t <- ts)
     [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
 }
 
@@ -1166,3 +1166,7 @@ fun assertEq (actual, expected) server {
       sysexit(2);
   }
 }
+
+####
+sig addRoute : (String, (String) ~> Page) ~> ()
+fun addRoute(path,f) { unsafeAddRoute(path,fun (p) {renderPage (f(p))}) }
