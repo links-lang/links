@@ -184,21 +184,20 @@ module Eval = struct
   let rec switch_context env =
     assert (not (!atomic));
     match Proc.pop_ready_proc() with
-        Some((cont, value), pid) -> (
-          (* Debug.print ("Switching context (pid = " ^ string_of_int pid ^ ")"); *)
-          (* Debug.print ("  Continuation: " ^ Value.string_of_cont cont); *)
-          (* Debug.print ("  Value: " ^ Value.string_of_value value); *)
-          Proc.activate pid;
-          apply_cont cont env value)
-      | None ->
-          if not(Proc.singlethreaded()) then
-            failwith("Server stuck with suspended threads, none runnable.")
-          (* Outside web mode, this case indicates deadlock:
-               all running processes are blocked. *)
-          else
-            match !toplevel_val with
-            | None -> exit 0
-            | Some v -> raise (TopLevel v)
+    | Some((cont, value), pid) when Proc.active_main() || Proc.active_angels() ->
+      begin
+        Proc.activate pid;
+        apply_cont cont env value
+      end
+    | _ ->
+      if not(Proc.singlethreaded()) then
+        failwith("Server stuck with suspended threads, none runnable.")
+        (* Outside web mode, this case indicates deadlock:
+           all running processes are blocked. *)
+      else
+        match !toplevel_val with
+        | None -> exit 0
+        | Some v -> raise (TopLevel v)
 
   and scheduler env state stepf =
     if !atomic || Proc.singlethreaded() then stepf()
@@ -347,6 +346,11 @@ module Eval = struct
            client_call "_spawnWrapper" cont [func]
         else
           apply_cont cont env (Lib.apply_pfun "spawn" [func])
+    | `PrimitiveFunction ("spawnAngel",_), [func] ->
+        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+           client_call "_spawnWrapper" cont [func]
+        else
+          apply_cont cont env (Lib.apply_pfun "spawnAngel" [func])
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its
@@ -491,16 +495,18 @@ module Eval = struct
         | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
         | [] when Proc.current_is_main() ->
-            if not (Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+            if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
               raise (TopLevel (Value.globals env, v))
             else
               begin
                 Debug.print ("Finished top level process (other processes still active)");
                 toplevel_val := Some (Value.globals env, v);
+                Proc.finish_current();
                 switch_context env
               end
         | [] ->
           Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+          Proc.finish_current();
           switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in

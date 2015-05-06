@@ -78,7 +78,6 @@ struct
     | `FormBinding _
     | `InfixAppl _
     | `Spawn _
-    | `SpawnWait _
     | `Query _
     | `FnAppl _
     | `Switch _
@@ -1954,7 +1953,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (p, _) ->
+        | `Spawn (`Wait, p, _) ->
+            (* (() -{b}-> d) -> d *)
+            let inner_effects = Types.make_empty_open_row (`Any, `Any) in
+            let pid_type = `Application (Types.process, [`Row inner_effects]) in
+            let () =
+              let outer_effects =
+                Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
+              in
+                unify ~handle:Gripers.spawn_wait_outer
+                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+            let p = type_check (bind_effects context inner_effects) p in
+            let return_type = typ p in
+              `Spawn (`Wait, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, p, _) ->
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -1967,20 +1979,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (erase p, Some inner_effects), pid_type, usages p
-        | `SpawnWait (p, _) ->
-            (* (() -{b}-> d) -> d *)
-            let inner_effects = Types.make_empty_open_row (`Any, `Any) in
-            let pid_type = `Application (Types.process, [`Row inner_effects]) in
-            let () =
-              let outer_effects =
-                Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
-              in
-                unify ~handle:Gripers.spawn_wait_outer
-                  (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
-            let p = type_check (bind_effects context inner_effects) p in
-            let return_type = typ p in
-              `SpawnWait (erase p, Some inner_effects), return_type, usages p
+            `Spawn (k, erase p, Some inner_effects), pid_type, usages p
 
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in

@@ -13,12 +13,16 @@ val activate : pid -> unit
 val send_message : Value.t -> pid -> unit
 val awaken : pid -> unit
 val get_current_pid : unit -> pid
-val create_process : proc_state -> pid
+val create_process : bool -> proc_state -> pid
+val finish_current : unit -> unit
 val suspend_current : proc_state -> unit
 val block_current : proc_state -> unit
 
 val count_step : unit -> int
 val reset_step_counter : unit -> unit
+
+val active_main : unit -> bool
+val active_angels : unit -> bool
 
 val is_main : pid -> bool
 val current_is_main : unit -> bool

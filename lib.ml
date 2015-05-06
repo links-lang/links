@@ -310,7 +310,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "recv",
   (* This function is not used, as its application is a special case
-     in the interpreter. But we need it here (for now) to asign it a
+     in the interpreter. But we need it here (for now) to assign it a
      type. Ultimately we should probably not special-case it, but
      rather provide a way to implement this primitive from here.
      (Ultimately, it should perhaps be a true primitive (an AST node),
@@ -328,7 +328,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          let var = Var.dummy_var in
          let cont = (`Local, var, Value.empty_env IntMap.empty,
                      ([], `Apply (`Variable var, []))) in
-         let new_pid = Proc.create_process (cont::Value.toplevel_cont, f) in
+         let new_pid = Proc.create_process false (cont::Value.toplevel_cont, f) in
+           (`Int (num_of_int new_pid))),
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   IMPURE);
+
+  "spawnAngel",
+  (p1 (fun f ->
+         (* if Settings.get_value Basicsettings.web_mode then *)
+         (*   failwith("Can't spawn at the server in web mode."); *)
+         let var = Var.dummy_var in
+         let cont = (`Local, var, Value.empty_env IntMap.empty,
+                     ([], `Apply (`Variable var, []))) in
+         let new_pid = Proc.create_process true (cont::Value.toplevel_cont, f) in
            (`Int (num_of_int new_pid))),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);

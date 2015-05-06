@@ -51,10 +51,6 @@ object (o : 'self_type)
         let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `SpawnWait _ as e ->
-        let extra_env = extra_env in
-        let (o, e, t) = super#phrasenode e in
-          (o#with_extra_env extra_env, e, t)
     | `Escape _ as e ->
         let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
