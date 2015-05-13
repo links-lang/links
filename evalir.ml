@@ -16,7 +16,7 @@ module Session = struct
   let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
 
   let forward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
-  let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
+  (* let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t) *)
 
   let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
 
@@ -88,21 +88,36 @@ module Session = struct
     else
       Queue.push msg (Hashtbl.find buffers p)
 
+
   let rec receive p =
-    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
     let buf = Hashtbl.find buffers p in
       if not (Queue.is_empty buf) then
         Some (Queue.pop buf)
       else
-        if Hashtbl.mem backward p then
-          receive (Hashtbl.find backward p)
-        else
-          None
+        None
+
+  (* let rec receive p = *)
+  (*   (\* Debug.print ("Receiving on: " ^ string_of_int p); *\) *)
+  (*   let buf = Hashtbl.find buffers p in *)
+  (*     if Hashtbl.mem backward p then *)
+  (*       match receive (Hashtbl.find backward p) with *)
+  (*       | Some _ as r -> r *)
+  (*       | None -> *)
+  (*         if not (Queue.is_empty buf) then *)
+  (*           Some (Queue.pop buf) *)
+  (*         else *)
+  (*           None *)
       
   let fuse (out1, in1) (out2, in2) =
+    (* In order for the concatenation thing to work on its own we'd
+       need to use a union-find structure. *)
+    (* In a sense, the current implementation simulates an inefficient
+       union-find structure. *)
+    Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
+    Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
     let forward inp outp =
       (* Debug.print ("Forwarding from: "^string_of_int inp^ " to: " ^ string_of_int outp); *)
-      Hashtbl.add backward outp inp;
+      (* Hashtbl.add backward outp inp; *)
       Hashtbl.add forward inp outp
     in
       forward in1 out2;
