@@ -13,25 +13,10 @@ module Session = struct
   let flip_chan (outp, inp) = (inp, outp)
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
+
   let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
-
-  let forward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t)
-  (* let backward = (Hashtbl.create 10000 : (portid, portid) Hashtbl.t) *)
-
   let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
-
-  let block portid pid = Hashtbl.add blocked portid pid
-  let rec unblock portid =
-    if Hashtbl.mem forward portid then
-      unblock (Hashtbl.find forward portid)
-    else if Hashtbl.mem blocked portid then
-      begin
-        let pid = Hashtbl.find blocked portid in
-        Hashtbl.remove blocked portid;
-          Some pid
-      end
-    else
-      None
+  let forward = (Hashtbl.create 10000 : (portid, portid Unionfind.point) Hashtbl.t)
 
   let generator () =
     let i = ref 0 in
@@ -48,6 +33,8 @@ module Session = struct
     let (outp, inp) as c = fresh_chan () in
       Hashtbl.add buffers outp (Queue.create ());
       Hashtbl.add buffers inp (Queue.create ());
+      Hashtbl.add forward outp (Unionfind.fresh outp);
+      Hashtbl.add forward inp (Unionfind.fresh inp);
       c
 
   let new_access_point () =
@@ -81,45 +68,47 @@ module Session = struct
         Hashtbl.replace access_points apid state';
         flip_chan c, blocked
 
+  let rec find_active p =
+    Unionfind.find (Hashtbl.find forward p)
+
+  let forward inp outp =
+    Unionfind.union (Hashtbl.find forward inp) (Hashtbl.find forward outp)
+
+  let block portid pid =
+    let portid = find_active portid in
+      Hashtbl.add blocked portid pid
+  let rec unblock portid =
+    let portid = find_active portid in
+      if Hashtbl.mem blocked portid then
+        begin
+          let pid = Hashtbl.find blocked portid in
+            Hashtbl.remove blocked portid;
+            Some pid
+        end
+      else
+        None
+
   let rec send msg p =
     (* Debug.print ("Sending along: " ^ string_of_int p); *)
-    if Hashtbl.mem forward p then
-      send msg (Hashtbl.find forward p)
-    else
+    let p = find_active p in
       Queue.push msg (Hashtbl.find buffers p)
 
-
   let rec receive p =
+    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
+    let p = find_active p in
     let buf = Hashtbl.find buffers p in
       if not (Queue.is_empty buf) then
         Some (Queue.pop buf)
       else
         None
 
-  (* let rec receive p = *)
-  (*   (\* Debug.print ("Receiving on: " ^ string_of_int p); *\) *)
-  (*   let buf = Hashtbl.find buffers p in *)
-  (*     if Hashtbl.mem backward p then *)
-  (*       match receive (Hashtbl.find backward p) with *)
-  (*       | Some _ as r -> r *)
-  (*       | None -> *)
-  (*         if not (Queue.is_empty buf) then *)
-  (*           Some (Queue.pop buf) *)
-  (*         else *)
-  (*           None *)
-      
   let fuse (out1, in1) (out2, in2) =
-    (* In order for the concatenation thing to work on its own we'd
-       need to use a union-find structure. *)
-    (* In a sense, the current implementation simulates an inefficient
-       union-find structure. *)
-    Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
-    Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
-    let forward inp outp =
-      (* Debug.print ("Forwarding from: "^string_of_int inp^ " to: " ^ string_of_int outp); *)
-      (* Hashtbl.add backward outp inp; *)
-      Hashtbl.add forward inp outp
-    in
+    let out1 = find_active out1 in
+    let in1 = find_active in1 in
+    let out2 = find_active out2 in
+    let in2 = find_active in2 in
+      Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
+      Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
       forward in1 out2;
       forward in2 out1
 
