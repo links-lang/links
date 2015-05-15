@@ -1169,4 +1169,4 @@ fun assertEq (actual, expected) server {
 
 ####
 sig addRoute : (String, (String) ~> Page) ~> ()
-fun addRoute(path,f) { unsafeAddRoute(path,fun (p) {renderPage (f(p))}) }
+fun addRoute(path,f) { unsafeAddRoute(path, fun(p){f(p)}) }

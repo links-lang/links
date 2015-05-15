@@ -1,4 +1,5 @@
 open Notfound
+open List
 open Utility
 open Proc
 
@@ -14,6 +15,9 @@ module Eval = struct
 
   type routing_table = (bool * string * Value.t) list (* directory? path (handler : (string)~>Page) *)
   let rt = ref ([] : routing_table)
+  let ir_toplevel_bindings : Ir.binding list ref = ref []
+  let unmarshal_envs : Value.env ref = ref Value.empty_env
+  let render_cont : (Value.env -> (Ir.scope * Ir.var * Value.env * Ir.computation)) ref = ref (fun _ -> assert false)
 
   exception EvaluationError of string
   exception Wrong
@@ -367,27 +371,135 @@ module Eval = struct
        end
     | `PrimitiveFunction ("startServer", _), [] ->
        let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
+
+       let parse_post_body s =
+         let assocs = Cgi.split '&' s in
+         let one_assoc s =
+           try
+             let i = String.index s '=' in
+             String.sub s 0 i,
+             Cgi.decode (String.sub s (succ i) (String.length s - i - 1))
+           with
+           | Not_found -> s,"" in
+         List.map one_assoc assocs in
+
        let callback rt env conn req body =
          let query_args = List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req)) in
-         let cgi_args = query_args @ Header.to_list (Request.headers req) in
+         Cohttp_lwt_body.to_string body >>= fun body_string ->
+         let body_args = parse_post_body body_string in
+         let cgi_args = body_args @ query_args @ Header.to_list (Request.headers req) in
+         Lib.cgi_parameters := cgi_args;
+         Lib.cookies := Cohttp.Cookie.Cookie_hdr.extract (Request.headers req);
+         Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
+         List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
          let path = Uri.path (Request.uri req) in
 
-         let rec iter = function
+         (* lifted from webif *)
+         let parse_request =
+           let is_remote_call params =
+             mem_assoc "__name" params && mem_assoc "__args" params in
+
+           let is_client_return params =
+             mem_assoc "__continuation" params && mem_assoc "__result" params in
+
+           let is_cont_apply params =
+             mem_assoc "_cont" params in
+
+           let is_expr_eval args =
+             mem_assoc "_k" args in
+
+           let parse_remote_call = `Unimplemented in
+           let parse_client_return = `Unimplemented in
+           let parse_cont_apply = `Unimplemented in
+           let parse_expr_eval params =
+             match Value.unmarshal_value !unmarshal_envs (assoc "_k" params) with
+(*
+             | `RecFunction ([(f, (_xs, _body))], locals, _, _) as v ->
+                let json_env =
+                  if mem_assoc "_jsonArgs" params then
+                    match Json.parse_json_b64 (assoc "_jsonArgs" params) with
+                    | `Record fields ->
+                       fold_left
+                         (fun env (name, v) ->
+                          Value.bind (int_of_string name) (v, `Local) env)
+                         env
+                         fields
+                    | _ -> assert false
+                  else env in
+
+                let env = Value.shadow (Value.bind f (v, `Local) locals) ~by:json_env in
+                `ExprEval (lookup_var f env, env)
+ *)
+             | _ -> assert false in
+
+           if is_remote_call cgi_args
+           then parse_remote_call
+           else if is_client_return cgi_args
+           then parse_client_return
+           else if is_cont_apply cgi_args
+           then parse_cont_apply
+           else if is_expr_eval cgi_args
+           then parse_expr_eval cgi_args
+           else `Not_special in
+
+         let rec route = function
            | [] -> Server.respond_string ~status:`Not_found ~body:"<h1>Nope</h1>" ()
-           | ((dir, s, f) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
+(*           | ((dir, s, `RecFunction (ir_bindings, val_env, name, _)) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
               begin
-                Lib.cgi_parameters := cgi_args;
-                apply cont env (f, [`String (Uri.path (Request.uri req))]) >>= fun (_, `List [`XML body]) ->
-                Lib.cohttp_server_response [] (Value.string_of_value (`XML body))
+                (* Really, we should only be taking this branch if we can't execute entirely on the server. *)
+                let binder_of_name name =
+                  (name, (`Not_typed, string_of_int name, `Local)) in
+                let to_ir_bindings =
+                  let to_ir_binding (name, (params, body)) =
+                    `Fun (binder_of_name name, ([], List.map binder_of_name params, body), None, `Unknown) in
+                  List.map to_ir_binding in
+                let env' = Value.extend env (Value.get_parameters val_env) in  (* Is this okay? What about the 'closures' bit of val_env? *)
+                let ir_program = Irtojs.premarshal env' @ to_ir_bindings ir_bindings,
+                                 `Apply (`Variable name, [`Constant (`String (Uri.path (Request.uri req)))]) in
+                Debug.if_set Sugartoir.show_compiled_ir (fun () -> "IR for compilation:\n" ^ Ir.Show_program.show ir_program);
+                let response =
+                  try
+                    Irtojs.generate_program_page ~cgi_env:cgi_args
+                                                 (Lib.nenv, Lib.typing_env)
+                                                 ir_program
+                  with
+                    e -> "All blowed up\n" ^ Printexc.to_string e ^ "\n" ^ Printexc.get_backtrace () in
+                Lib.cohttp_server_response [] response
               end
-           | (_ :: rest) -> iter rest in
-         iter rt in
+              (*
+              begin
+                try (
+                  apply (!render_cont env :: cont) env (f, [`String (Uri.path (Request.uri req))]);
+                  assert false
+                ) with
+                | TopLevel (_, `List [`XML body]) ->
+                   Lib.cohttp_server_response [] (Value.string_of_value (`XML body))
+                | TopLevel (_, v) ->
+                   Lib.cohttp_server_response [] (Value.string_of_value v)
+              end
+ *) *)
+           | (_ :: rest) -> route rest in
+
+         match parse_request with
+         | `ExprEval (f, expr_locals) ->
+            begin
+              let env = Value.shadow env ~by:expr_locals in
+              apply (!render_cont env :: cont) env (f, []) >>= fun (_, v) ->
+              match v with
+              | `List [`XML body] ->
+                 Lib.cohttp_server_response [] (Value.string_of_value (`XML body))
+              | _ ->
+                 Lib.cohttp_server_response [] (Value.string_of_value v)
+            end
+         | `Not_special -> route rt
+         | `Unimplemented -> Server.respond_string ~status:`Internal_server_error ~body:"Why did you imagine this would work?" () in
 
        let start_server host port rt env =
          Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
          let ctx = Cohttp_lwt_unix_net.init ~ctx () in
          Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt env) ()) in
 
+       Settings.set_value Basicsettings.web_mode true;
        Lwt_main.run (start_server (Settings.get_value Basicsettings.host_name) (Settings.get_value Basicsettings.port) !rt env);
        assert false
     (*****************)
