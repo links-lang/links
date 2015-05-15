@@ -43,3 +43,4 @@ val primitive_names : string list
 val prim_appln : Env.String.name -> Ir.value list -> Ir.tail_computation
 
 val cgi_parameters : (string * string) list ref
+val cookies : (string * string) list ref

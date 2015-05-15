@@ -265,6 +265,20 @@ let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
   let cgi_args = get_cgi_args() in
   Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
   Lib.cgi_parameters := cgi_args;
+  Lib.cookies :=
+    begin
+      match getenv "HTTP_COOKIE" with
+      | Some header ->
+         let cookies = Str.split (Str.regexp "[ \t]*;[ \t]*") header in
+         concat_map
+           (fun str ->
+            match Str.split (Str.regexp "[ \t]*=[ \t]*") str with
+            | [nm; vl] -> [nm, vl]
+            | _ -> Debug.print ("Warning: ill-formed cookie: "^str); [])
+           cookies
+      | None ->
+         []
+    end;
 
   (* Compute cacheable stuff in one call *)
   let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
