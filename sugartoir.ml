@@ -899,7 +899,6 @@ struct
 
                   (* These things should all have been desugared already *)
           | `Spawn _
-          | `SpawnWait _
           | `Receive _
           | `Section (`Project _)
           | `FunLit _

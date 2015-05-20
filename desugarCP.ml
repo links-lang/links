@@ -93,7 +93,7 @@ object (o : 'self_type)
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
-            let left_block = add_pos (`Spawn (add_pos (`Block ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
+            let left_block = add_pos (`Spawn (`Angel, add_pos (`Block ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
                                                                                add_pos (`FnAppl (add_pos (`Var "accept"), [add_pos (`Var c)])),
                                                                                `Unknown, None));
                                                                 add_pos (`Val ([], add_pos (`Variable (c, Some Types.make_endbang_type, pos)),

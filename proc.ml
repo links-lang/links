@@ -7,22 +7,26 @@ type pid = int
 
 let main_process_pid = 0
 
+let main_running = ref true
+
 (** A process state is a pair of a continuation and a value; running
     the process means applying the continuation to the value. *)
 type proc_state = Value.continuation * Value.t 
 
 type scheduler_state =
     { suspended : (proc_state * pid) Queue.t;
-      blocked : (pid, proc_state * pid) Hashtbl.t;
+      blocked : (pid, proc_state) Hashtbl.t;
       message_queues : (pid, Value.t Queue.t) Hashtbl.t;
+      angels : (pid, unit) Hashtbl.t;
       current_pid : pid ref;
-      step_counter : int ref
+      step_counter : int ref;
     }
 
 let state = {
   suspended      = Queue.create ();
   blocked        = Hashtbl.create 10000;
   message_queues = Hashtbl.create 10000;
+  angels         = Hashtbl.create 10000;
   current_pid    = ref 0;
   step_counter   = ref 0;
 }
@@ -85,7 +89,7 @@ let send_message msg pid =
 let awaken pid =
   try
     Debug.print ("Awakening process: " ^ string_of_int pid);
-    Queue.push (Hashtbl.find state.blocked pid) state.suspended;
+    Queue.push (Hashtbl.find state.blocked pid, pid) state.suspended;
     Hashtbl.remove state.blocked pid
   with Notfound.NotFound _ ->
     Debug.print ("Attempt to awaken non existent process");
@@ -102,7 +106,7 @@ let suspend_current pstate =
     blocking suspended (i.e. runnable) processes *)
 let block_current pstate =
   let pid = !(state.current_pid) in
-  Hashtbl.add state.blocked pid (pstate, pid)
+  Hashtbl.add state.blocked pid pstate
 
 (** Make the given process the active one. Assumes you have already 
     blocked/suspended the previously-active process. *)
@@ -113,12 +117,25 @@ let activate pid =
 let get_current_pid () = !(state.current_pid)
 
 (** Given a process state, create a new process and return its identifier. *)
-let create_process pstate = 
+let create_process angel pstate =
   let new_pid = fresh_pid () in
+    if angel then Hashtbl.add state.angels new_pid ();
     Hashtbl.add state.message_queues new_pid (Queue.create ());
     Queue.push (pstate, new_pid) state.suspended;
     new_pid
+
+let active_main () = !main_running
+
+let active_angels () =
+  Hashtbl.length state.angels > 0
       
+let finish_current () =
+  let pid = get_current_pid() in
+    if pid = main_process_pid then
+      main_running := false
+    else if Hashtbl.mem state.angels pid then
+      Hashtbl.remove state.angels pid
+
 (** If there is any ready (runnable/suspended) process, remove it from
     the suspended queue and return it (under [Some]). Otherwise return
     [None]. *)

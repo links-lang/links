@@ -175,7 +175,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNWAIT
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT
 %token OFFER SELECT
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
@@ -493,8 +493,10 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN block                                                  { `Spawn ((`Block $2, pos()), None), pos () }
-| SPAWNWAIT block                                              { `SpawnWait ((`Block $2, pos()), None), pos () }
+| SPAWN block                                                  { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
+| SPAWNANGEL block                                             { `Spawn (`Angel, (`Block $2, pos()), None), pos () }
+| SPAWNDEMON block                                             { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
+| SPAWNWAIT block                                              { `Spawn (`Wait, (`Block $2, pos()), None), pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int (Num.num_of_int 0)), pos ())),

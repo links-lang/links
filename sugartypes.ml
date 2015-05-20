@@ -161,6 +161,9 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
+type spawn_kind = [ `Angel | `Demon | `Wait ]
+    deriving (Show)
+    
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
@@ -190,8 +193,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
-| `Spawn            of phrase * Types.row option
-| `SpawnWait        of phrase * Types.row option
+| `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -335,8 +337,7 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (p, _)
-    | `SpawnWait (p, _)
+    | `Spawn (_, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)

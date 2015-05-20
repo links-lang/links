@@ -1091,7 +1091,7 @@ fun run(f) {
 sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun knife(f) {
   var ap = new();
-  var _ = spawn {
+  var _ = spawnAngel {
     f(accept(ap))
   };
   request(ap)
@@ -1100,7 +1100,7 @@ fun knife(f) {
 sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
 fun linknife(f) {
   var ap = new();
-  var _ = spawn {
+  var _ = spawnAngel {
     f(accept(ap))
   };
   request(ap)
@@ -1122,6 +1122,10 @@ fun reproduce(ap, f) {
 # of communicating threads. This synchronisation can be useful because
 # we do not have an explicit close function and by default the
 # top-level process does not wait for running threads to terminate.
+#
+# (In fact, this gymnastics is no longer necessary now that we have
+# spawnAngel which allows us to spawn a process that will continue to
+# run even if the main process terminates.)
 
 sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
