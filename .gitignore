@@ -22,3 +22,4 @@ xmlParser.mli
 ._ncdi
 ._bcdi
 *.links.cache
+Makefile.config
