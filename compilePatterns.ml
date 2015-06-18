@@ -858,16 +858,18 @@ let compile_cases
     ([], `Special (`Handle (`Variable var,
 			    List.fold_left
 			      (fun cases ([(annotation, pattern)], body) ->
-			        let (name, ((x, y) as b)) =
+			        let (opname, ((x, _) as b)) =
 			          match pattern with
                                   | `Variant ("Return", `Variable b) -> ("Return", b) (* Special case: 'case Return x -> ...' *)
-				  | `Variant (opname, `Record r) -> (opname, (`Record r,"")) (* case OpName(arg, cont) -> ... *)
+				  | `Variant ("Return", _)           -> failwith "Return must have exactly one argument."
+				  | `Variant (opname, `Record r)     -> (opname, (`Record r, THIS IS WRONG)) (* case OpName(arg, cont) -> ... *)
+				  
                                   | _ -> failwith "Handlers: Pattern matching error." in
-				let body = apply_annotation (`Variable x) (annotation, body) in
-   				  StringMap.add name (b, body env) cases) (* End of fun *)
+				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate value *)
+   				  StringMap.add opname (b, body env) cases) (* End of fun *)
 			        StringMap.empty (* fold seed *)
 			        clauses))) (* Structure we're folding over *)
-    *)
+ *)
 let rec match_handle_cases : var -> clause list -> bound_computation =
   fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"
 				  
