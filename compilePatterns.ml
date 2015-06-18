@@ -851,6 +851,38 @@ let compile_cases
       result
 
 
+(* Handler typing cases compilation *)
+(*let rec match_handle_cases : var -> clause list -> bound_computation =
+  fun var clauses env ->
+    let t = lookup_type var env in
+    ([], `Special (`Handle (`Variable var,
+			    List.fold_left
+			      (fun cases ([(annotation, pattern)], body) ->
+			        let (name, ((x, y) as b)) =
+			          match pattern with
+                                  | `Variant ("Return", `Variable b) -> ("Return", b) (* Special case: 'case Return x -> ...' *)
+				  | `Variant (opname, `Record r) -> (opname, (`Record r,"")) (* case OpName(arg, cont) -> ... *)
+                                  | _ -> failwith "Handlers: Pattern matching error." in
+				let body = apply_annotation (`Variable x) (annotation, body) in
+   				  StringMap.add name (b, body env) cases) (* End of fun *)
+			        StringMap.empty (* fold seed *)
+			        clauses))) (* Structure we're folding over *)
+    *)
+let rec match_handle_cases : var -> clause list -> bound_computation =
+  fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"
+				  
+let compile_handle_cases : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, var, raw_clauses) ->
+    let clauses = List.map reduce_clause raw_clauses in
+    let initial_env = (nenv, tenv, eff, PEnv.empty) in
+    let result =
+      match_handle_cases var clauses initial_env
+    in
+      Debug.if_set (show_pattern_compilation)
+        (fun () -> "Compiled handler cases: "^(string_of_computation result));
+      result
+(*    failwith "compilePatterns.ml: Handle cases not yet implemented!"*)
+				  
 (* Session typing choice compilation *)
 let rec match_choices : var -> clause list -> bound_computation =
   fun var clauses env ->

@@ -174,6 +174,7 @@ let keywords = [
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
+ "handle"   , HANDLE;
  "if"       , IF;
  "in"       , IN;
  "include"  , INCLUDE;

@@ -133,6 +133,8 @@ sig
   val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
 
+  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+														 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
@@ -624,6 +626,22 @@ struct
     in
       M.bind (rec_binding defs) rest
 
+  let handle env (v, cases, t) =
+    let cases =
+      List.map
+        (fun (p, body) -> ([p], fun env -> reify (body env))) cases
+    in
+      bind v
+        (fun e ->
+           M.bind
+             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (fun var ->
+                let nenv, tenv, eff = env in
+                let tenv = TEnv.bind tenv (var, sem_type v) in
+                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, var, cases) in
+                  reflect (bs, (tc, t))))
+    
+	     
   let switch env (v, cases, t) =
     let cases =
       List.map
@@ -798,6 +816,16 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
 
+          | `Handle (e, cases, Some t) ->
+              let cases =
+                List.map
+                  (fun (p, body) ->
+                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                       (p, fun env ->  eval (env ++ penv) body))
+                  cases
+              in
+                I.handle env (ev e, cases, t)
+		   
           | `Switch (e, cases, Some t) ->
               let cases =
                 List.map

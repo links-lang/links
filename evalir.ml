@@ -669,7 +669,9 @@ module Eval = struct
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f                   ->
-      apply cont env (value env f, [`Continuation cont])
+       apply cont env (value env f, [`Continuation cont])
+    (* Handlers *)
+    | `Handle _ -> failwith "evalir.ml: Handlers not yet implemented!"	     
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in

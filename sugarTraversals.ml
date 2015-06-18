@@ -1,3 +1,4 @@
+(* This file is generated mostly automatically using Hand in Left-or-right-handed 1.0.0 *)
 (* Generated mostly automatically using Camlp4 in OCaml 3.10.0.
 
    NB: DO NOT EDIT (except to keep it in line with sugartypes.ml).
@@ -232,6 +233,17 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1, _x_i2))
+      (* Handle-case is a copy of the Switch-case *)	      
+      | `Handle ((_x, _x_i1, _x_i2)) ->
+          let _x = o#phrase _x in
+          let _x_i1 =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let _x = o#pattern _x in
+                 let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
+              _x_i1 in
+          let _x_i2 = o#option (fun o -> o#unknown) _x_i2
+          in `Handle ((_x, _x_i1, _x_i2))
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -775,6 +787,16 @@ class fold =
       | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
+      (* Handle-case is a copy of the Switch-case. *)
+      | `Handle ((_x, _x_i1, _x_i2)) ->
+          let o = o#phrase _x in
+          let o =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let o = o#pattern _x in let o = o#phrase _x_i1 in o)
+              _x_i1 in
+          let o = o#option (fun o -> o#unknown) _x_i2
+          in o							  
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -1332,6 +1354,17 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
           in (o, (`ConstructorLit ((_x, _x_i1, _x_i2))))
+      (* Handle-case is a copy of the Switch-case *)	       
+      | `Handle ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let (o, _x) = o#pattern _x in
+                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
+              _x_i1 in
+          let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
+          in (o, (`Handle ((_x, _x_i1, _x_i2))))	       
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =

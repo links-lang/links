@@ -83,7 +83,8 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of (value)
   | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map)
+  | `Handle of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -412,6 +413,7 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
+	| `Handle _ -> failwith "ir.ml: Handle not yet implemented!"
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

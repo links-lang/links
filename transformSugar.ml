@@ -409,6 +409,17 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
             (o, `ConstructorLit (name, e, Some t), t)
+      (* Handle-case is a copy of the Switch-case *)	    
+      | `Handle (v, cases, Some t) ->
+          let (o, v, _) = o#phrase v in
+          let (o, cases) =
+            listu o
+              (fun o (p, e) ->
+                 let (o, p) = o#pattern p in
+                 let (o, e, _) = o#phrase e in (o, (p, e)))
+              cases in
+          let (o, t) = o#datatype t in
+            (o, `Handle (v, cases, Some t), t)	    
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
