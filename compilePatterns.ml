@@ -850,28 +850,37 @@ let compile_cases
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
 
-
 (* Handler typing cases compilation *)
-(*let rec match_handle_cases : var -> clause list -> bound_computation =
-  fun var clauses env ->
-    let t = lookup_type var env in
-    ([], `Special (`Handle (`Variable var,
-			    List.fold_left
-			      (fun cases ([(annotation, pattern)], body) ->
-			        let (opname, ((x, _) as b)) =
-			          match pattern with
-                                  | `Variant ("Return", `Variable b) -> ("Return", b) (* Special case: 'case Return x -> ...' *)
-				  | `Variant ("Return", _)           -> failwith "Return must have exactly one argument."
-				  | `Variant (opname, `Record r)     -> (opname, (`Record r, THIS IS WRONG)) (* case OpName(arg, cont) -> ... *)
-				  
-                                  | _ -> failwith "Handlers: Pattern matching error." in
-				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate value *)
-   				  StringMap.add opname (b, body env) cases) (* End of fun *)
-			        StringMap.empty (* fold seed *)
-			        clauses))) (* Structure we're folding over *)
- *)
 let rec match_handle_cases : var -> clause list -> bound_computation =
-  fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"
+  fun var clauses env ->
+  (* Construct a Handle by folding over the clauses *)
+  ([], `Special (`Handle (`Variable var,
+			  List.fold_left
+			    (fun cases ([(annotation, pattern)], body) ->
+			     match pattern with
+			     | `Variant ("Return", `Variable b) -> (* case Return(x) -> ... *)
+				let (x,_) = b in
+				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate body *)
+				StringMap.add "Return" (b, body env) cases (* Add 'effect' Return to the environment *)
+                             | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
+                             | `Variant (opname, `Record (smap, _)) ->
+			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
+				if StringMap.size smap = 2
+				then let (Some x) = StringMap.lookup "1" smap in
+				     let (Some k) = StringMap.lookup "2" smap in
+				     let (`Variable b) = x in (* I'd expect to be able to decompose "x"; but this does not compile. *)
+				     failwith "Something is rotten here..."
+				else failwith "Operations must take exactly two arguments."				  
+			       (*failwith "Effects not yet implemented!" (* case OpName(x1,..,xN,continuation) -> ... *)*)
+                             | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
+			    )
+			    StringMap.empty (* Fold seed *)
+			    clauses (* Structure we're folding over *)
+			 )))
+					    
+ (*
+let rec match_handle_cases : var -> clause list -> bound_computation =
+  fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"*)
 				  
 let compile_handle_cases : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
   fun (nenv, tenv, eff) (output_type, var, raw_clauses) ->

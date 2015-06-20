@@ -413,7 +413,17 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle _ -> failwith "ir.ml: Handle not yet implemented!"
+	(* Input arguments: (value, (binder, computation)) 
+         * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
+	| `Handle (v, bs) ->
+	   let (v, _, o) = o#value v in
+	   let (bs, branch_types, o) =
+	     o#name_map (fun o (b, c) ->
+	    	         let (b, o) = o#binder b in
+			 let (c, t, o) = o#computation c in
+			 (b, c), t, o) bs in
+    		         let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+			 `Handle (v, bs), t, o			
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
