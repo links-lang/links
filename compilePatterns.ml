@@ -861,7 +861,7 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 			     | `Variant ("Return", `Variable b) -> (* case Return(x) -> ... *)
 				let (x,_) = b in
 				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate body *)
-				StringMap.add "Return" (b, body env) cases (* Add 'effect' Return to the environment *)
+				StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
                              | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
                              | `Variant (opname, `Record (smap, _)) ->
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
