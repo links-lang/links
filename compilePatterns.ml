@@ -859,19 +859,40 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 			    (fun cases ([(annotation, pattern)], body) ->
 			     match pattern with
 			     | `Variant ("Return", `Variable b) -> (* case Return(x) -> ... *)
-				let (x,_) = b in
-				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate body *)
+				(*let (x,_) = b in
+				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate body *)*)
 				StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
                              | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
-                             | `Variant (opname, `Record (smap, _)) ->
+                             | `Variant (opname, `Record (smap, _)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
-				if StringMap.size smap = 2
-				then let (Some x) = StringMap.lookup "1" smap in
+				if StringMap.size smap = 2 then
+				  let xs = StringMap.to_list (fun _ x -> x) smap in
+				  List.fold_left
+				    (fun smap x ->
+				     let x = match x with
+				       | `Variable x -> x
+				       | _ -> assert false
+				     in
+				     let env' = body env in
+				     StringMap.add opname (x, env') smap)
+				    cases
+				    xs				 
+					       
+(*				then let (Some x) = StringMap.lookup "1" smap in
 				     let (Some k) = StringMap.lookup "2" smap in
-				     let (`Variable b) = x in (* I'd expect to be able to decompose "x"; but this does not compile. *)
-				     failwith "Something is rotten here..."
-				else failwith "Operations must take exactly two arguments."				  
-			       (*failwith "Effects not yet implemented!" (* case OpName(x1,..,xN,continuation) -> ... *)*)
+				     let x =
+				       match x with
+					 | `Variable x -> x
+				         | _ -> assert false
+				     in
+				     let k =
+				       match k with
+				       | `Variable k -> k
+				       | _ -> assert false		  
+				     in
+				     let cases = StringMap.add opname (x, body env) cases in (* Env should be extended? *)
+				     StringMap.add opname (k, body env) cases*)
+				else failwith "Operations must take exactly two arguments."
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )
 			    StringMap.empty (* Fold seed *)
