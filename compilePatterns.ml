@@ -850,6 +850,7 @@ let compile_cases
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
 
+				 
 (* Handler typing cases compilation *)
 let rec match_handle_cases : var -> clause list -> bound_computation =
   fun var clauses env ->
@@ -860,23 +861,24 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 			     match pattern with
 			     | `Variant ("Return", `Variable b) -> (* case Return(x) -> ... *)
 				(*let (x,_) = b in
-				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate body *)*)
+				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate computation *)*)
 				StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
                              | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
                              | `Variant (opname, `Record (smap, _)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
 				  let xs = StringMap.to_list (fun _ x -> x) smap in
-				  List.fold_left
-				    (fun smap x ->
+				  let (smap, env) = List.fold_left
+				    (fun (smap, env) x ->
 				     let x = match x with
 				       | `Variable x -> x
 				       | _ -> assert false
 				     in
 				     let env' = body env in
-				     StringMap.add opname (x, env') smap)
-				    cases
-				    xs				 
+				     (StringMap.add opname (x, env') smap, env))
+				    (cases, env)
+				    xs
+				     in smap				 
 					       
 (*				then let (Some x) = StringMap.lookup "1" smap in
 				     let (Some k) = StringMap.lookup "2" smap in
