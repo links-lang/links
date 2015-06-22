@@ -183,7 +183,7 @@ module Eval = struct
      It is currently used for running pure functions. *)
   let atomic = ref false
 
-  let toplevel_val = ref None
+  (* let toplevel_val = ref None *)
 
   let rec switch_context env =
     assert (not (!atomic));
@@ -199,9 +199,14 @@ module Eval = struct
         (* Outside web mode, this case indicates deadlock:
            all running processes are blocked. *)
       else
-        match !toplevel_val with
-        | None -> exit 0
-        | Some v -> raise (TopLevel v)
+        (* TODO: should we really be exiting here? *)
+        exit 0
+        (* match !toplevel_val with *)
+        (* | None -> exit 0 *)
+        (* | Some v -> *)
+        (*   Debug.print "Finished angels"; *)
+        (*   toplevel_val := None; *)
+        (*   raise (TopLevel v) *)
 
   and scheduler env state stepf =
     if !atomic || Proc.singlethreaded() then stepf()
@@ -504,8 +509,9 @@ module Eval = struct
             else
               begin
                 Debug.print ("Finished top level process (other processes still active)");
-                toplevel_val := Some (Value.globals env, v);
-                Proc.finish_current();
+                Proc.suspend_current ([], v);
+                (* toplevel_val := Some (Value.globals env, v); *)
+                (* Proc.finish_current(); *)
                 switch_context env
               end
         | [] ->
