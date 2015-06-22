@@ -1,5 +1,5 @@
-typename Wait = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseOut:?DomNode.b, MouseUp:a|&]|&];
-typename Drag = mu b.[&|MouseOut:?DomNode.b, MouseUp:Wait|&];
+typename Wait = [&|MouseDown:?DomNode.Drag|&];
+typename Drag = [&|MouseOut:?DomNode.Drag, MouseUp:Wait|&];
 
 sig waiting : (String, Wait) ~> ()
 fun waiting(id, s) client {
@@ -60,8 +60,8 @@ fun draggableList(id, items)
           }}|>
       }
     }
-    
-    wait(linknife (linfun (s) {waiting(id, s)}));
+
+    wait(knife (fun (s) {waiting(id, s)}));
   };
 
   fun mouseUp() {
