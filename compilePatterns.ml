@@ -868,17 +868,17 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
 				  let xs = StringMap.to_list (fun _ x -> x) smap in
-				  let (smap, env) = List.fold_left
-				    (fun (smap, env) x ->
+				  List.fold_left
+				    (fun smap x ->
 				     let x = match x with
 				       | `Variable x -> x
 				       | _ -> assert false
 				     in
 				     let env' = body env in
-				     (StringMap.add opname (x, env') smap, env))
-				    (cases, env)
+				     StringMap.add opname (x, env') smap)
+				    cases
 				    xs
-				     in smap				 
+				    
 					       
 (*				then let (Some x) = StringMap.lookup "1" smap in
 				     let (Some k) = StringMap.lookup "2" smap in
