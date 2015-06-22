@@ -107,7 +107,7 @@ let rec is_atom =
 (*
   This can only be an atom if
   Erase is just an upcast, and our language
-  is properly parameteric.
+  is properly parametric.
 *)
 (*    | `Erase (_, v) *)
     | `Coerce (v, _) -> is_atom v

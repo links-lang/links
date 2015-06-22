@@ -867,17 +867,31 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
                              | `Variant (opname, `Record (smap, _)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
-				  let xs = StringMap.to_list (fun _ x -> x) smap in
+				  let t = lookup_type var env in
+				  let get_binder b = match b with
+				    | `Variable b -> b
+				    | _ -> assert false
+				  in
+				  let strmap_to_set strmap = StringMap.fold (* Compute set of record names *)
+							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty
+				  in
+				  let names = strmap_to_set smap in
+				  let rectt = TypeUtils.erase_type names t in         (* Type of flattened record continuation *)
+				  let (rectb, rectv) = Var.fresh_var_of_type rectt in (* (binder, value) *)
+				  
+				  StringMap.fold
+				    (fun name elem names ->
+				     let x = get_binder elem in
+				     StringMap.add name (x, body env) names)
+				    smap cases
+				  (*let xs = StringMap.to_list (fun _ x -> x) smap in
 				  List.fold_left
 				    (fun smap x ->
-				     let x = match x with
-				       | `Variable x -> x
-				       | _ -> assert false
-				     in
+				     let x = get_binder x in
 				     let env' = body env in
 				     StringMap.add opname (x, env') smap)
 				    cases
-				    xs
+				    xs*)
 				    
 					       
 (*				then let (Some x) = StringMap.lookup "1" smap in
