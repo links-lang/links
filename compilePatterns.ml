@@ -872,10 +872,31 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 				    | `Variable b -> b
 				    | _ -> assert false
 				  in
-				  let strmap_to_set strmap = StringMap.fold (* Compute set of record names *)
+				  let lookup x = match StringMap.lookup x smap with
+				    | Some x -> get_binder x
+				    | _ -> failwith "Lookup failure"
+				  in
+				  let strmap_names strmap = StringMap.fold (* Compute set of record names *)
+							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty in
+				  let names = strmap_names smap in
+				  let tnames = TypeUtils.erase_type names t in
+
+				  let x = lookup "1" in
+				  let x_tyvars = [] in
+				  let k_tyvars = [] in
+				  let k = lookup "2" in
+				  
+				  let expr = `Let (x, x_tyvars, `Let (k, k_tyvars, `Return x)) in (* `Return x should be something else *)
+				  let (yb, y) = Var.fresh_var_of_type tnames in
+				  
+				  StringMap.add opname (yb, body env) cases
+				  
+
+				(* General approach *)
+				(*let strmap_names strmap = StringMap.fold (* Compute set of record names *)
 							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty
 				  in
-				  let names = strmap_to_set smap in
+				  let names = strmap_names smap in
 				  let rectt = TypeUtils.erase_type names t in         (* Type of flattened record continuation *)
 				  let (rectb, rectv) = Var.fresh_var_of_type rectt in (* (binder, value) *)
 				  
@@ -883,31 +904,7 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 				    (fun name elem names ->
 				     let x = get_binder elem in
 				     StringMap.add name (x, body env) names)
-				    smap cases
-				  (*let xs = StringMap.to_list (fun _ x -> x) smap in
-				  List.fold_left
-				    (fun smap x ->
-				     let x = get_binder x in
-				     let env' = body env in
-				     StringMap.add opname (x, env') smap)
-				    cases
-				    xs*)
-				    
-					       
-(*				then let (Some x) = StringMap.lookup "1" smap in
-				     let (Some k) = StringMap.lookup "2" smap in
-				     let x =
-				       match x with
-					 | `Variable x -> x
-				         | _ -> assert false
-				     in
-				     let k =
-				       match k with
-				       | `Variable k -> k
-				       | _ -> assert false		  
-				     in
-				     let cases = StringMap.add opname (x, body env) cases in (* Env should be extended? *)
-				     StringMap.add opname (k, body env) cases*)
+				    smap cases*)
 				else failwith "Operations must take exactly two arguments."
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )
