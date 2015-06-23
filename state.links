@@ -1,0 +1,13 @@
+fun stateHandler(x) {
+    handle(x) {
+    	      case Get(p,k) -> fun (s) {
+	      	   	       	   k(s)(s)
+	      	             }
+	      case Put(p,k) -> fun(s) {
+	                           k(())(p)
+	                     }
+	      case Return(x) -> fun(s) {
+	                         x
+	                     }
+    }
+}

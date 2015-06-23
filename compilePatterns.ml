@@ -852,8 +852,8 @@ let compile_cases
 
 				 
 (* Handler typing cases compilation *)
-let rec match_handle_cases : var -> clause list -> bound_computation =
-  fun var clauses env ->
+let rec match_handle_cases : var -> clause list -> Types.datatype -> bound_computation =
+  fun var clauses output_type env ->
   (* Construct a Handle by folding over the clauses *)
   ([], `Special (`Handle (`Variable var,
 			  List.fold_left
@@ -867,7 +867,13 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
                              | `Variant (opname, `Record (smap, _)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
-				  let t = lookup_type var env in
+				  (* Lookup the type of the computation *)
+				  let compt = TypeUtils.concrete_type(lookup_type var env) in
+				  let (optype,_) = TypeUtils.split_row opname (TypeUtils.effect_row compt) in (* Retrieve the operation's type, i.e. the effect row from the computation type *)
+				  (* Auxiliary functions:
+                                     get_binder returns the binder from a `Variable
+                                     lookup retrieves an element from the record (row)
+                                  *)
 				  let get_binder b = match b with
 				    | `Variable b -> b
 				    | _ -> assert false
@@ -876,22 +882,22 @@ let rec match_handle_cases : var -> clause list -> bound_computation =
 				    | Some x -> get_binder x
 				    | _ -> failwith "Lookup failure"
 				  in
-				  let strmap_names strmap = StringMap.fold (* Compute set of record names *)
-							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty in
-				  let names = strmap_names smap in
-				  let tnames = TypeUtils.erase_type names t in
-
-				  let x = lookup "1" in
-				  let x_tyvars = [] in
-				  let k_tyvars = [] in
-				  let k = lookup "2" in
+				  let p = lookup "1" in (* Lookup the first parameter *)
+				  let k = lookup "2" in (* Lookup the continuation *)
+				  let (p_tyvars,k_tyvars) = ([],[]) in (* Type quantifiers for p and k *)
+				  (* Code generation:                                     
+                                     Essentially, we generate the expression:
+                                     let p = proj(r,1)
+                                         k = proj(r,2)
+                                     in (body env)
+                                     where proj is the projection of a member from the record (row).
+				   *)
+				  let (yb, y) = Var.fresh_var_of_type optype in				  
+				  let bp = `Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))  in
+				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
+				  (* Bind yb to the above expression *)
+				  StringMap.add opname (yb, with_bindings [bp;bk] (body env)) cases
 				  
-				  let expr = `Let (x, x_tyvars, `Let (k, k_tyvars, `Return x)) in (* `Return x should be something else *)
-				  let (yb, y) = Var.fresh_var_of_type tnames in
-				  
-				  StringMap.add opname (yb, body env) cases
-				  
-
 				(* General approach *)
 				(*let strmap_names strmap = StringMap.fold (* Compute set of record names *)
 							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty
@@ -921,7 +927,7 @@ let compile_handle_cases : raw_env -> (Types.datatype * var * raw_clause list) -
     let clauses = List.map reduce_clause raw_clauses in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let result =
-      match_handle_cases var clauses initial_env
+      match_handle_cases var clauses output_type initial_env
     in
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled handler cases: "^(string_of_computation result));

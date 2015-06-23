@@ -2504,7 +2504,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Handle (exp, cases, _) ->
 	   let exp = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_cases cases in
-	   let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos pattern_type) in
+	   let t = `Function (Types.unit_type, TypeUtils.extract_row pattern_type, Types.fresh_type_variable (`Unl, `Any)) in
+	   let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos t) in
 	       `Handle (erase exp, erase_cases cases, Some body_type), body_type, merge_usages [usages exp; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
