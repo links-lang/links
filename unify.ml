@@ -712,8 +712,19 @@ fun rec_env ->
           (* DODGEYNESS: dual_type doesn't doesn't necessarily make
            the type smaller - the following could potentially lead to
            non-termination *)
-          | `Dual s, s' -> ut (dual_type s, s')
-          | s, `Dual s' -> ut (s, dual_type s')
+          | `Dual s, s' ->
+            begin
+              (* if dual_type yields `Dual s then s must be a type variable *)
+              match dual_type s with
+              | `Dual s -> ut (s, dual_type s')
+              | s -> ut (s, s')
+            end
+          | s, `Dual s' ->
+            begin
+              match dual_type s' with
+              | `Dual s' -> ut (dual_type s, s')
+              | s' -> ut (s, s')
+            end
           | `End, `End -> ()
           | _, _ ->
               raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))
