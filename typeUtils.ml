@@ -222,3 +222,128 @@ let record_without t names =
              row_var,
              dual)
     | _ -> assert false
+
+
+
+(* Handlers *)
+let wrap_in_record t =
+  Types.make_record_type (StringMap.add "1" t StringMap.empty)
+   
+let unwrap_from_record r =
+  match r with
+  | `Record (smap,_,_) ->
+     begin
+       let xs = StringMap.to_list (fun _ e -> e) smap in
+       match List.hd xs with
+       | `Present p -> p
+       | _ -> failwith "Error: Attempt to unwrap non-present type"
+     end
+  | _ -> failwith "Error: non-record type given as input to unwrap_type_from_record"
+
+
+let disassemble_operation_record : Types.datatype -> (Types.datatype * Types.datatype) option
+  = fun op ->
+  let get_operation_type map =
+    match StringMap.lookup "1" map with
+    | Some (`Present p) -> Some p
+    | _                 -> None
+  in
+  let get_continuation_type map =
+    match StringMap.lookup "2" map with
+    | Some (`Present (`MetaTypeVar point)) ->
+       begin
+	 match Unionfind.find point with
+	 | `Body k -> Some k
+	 | _       -> None
+       end
+    | _ -> None
+  in
+  match op with
+  | `Record (map,_,_) when StringMap.size map = 2 ->
+     let (Some p) = get_operation_type map in
+     match get_continuation_type map with
+     | Some ((`Function _) as k) -> Some (p,k)
+     | _                         -> None
+     | _ -> None
+	           
+type operation_analysis = Invalid
+			| WithContinuation of Types.datatype * Types.datatype
+			| UnusedContinuation of Types.datatype
+			| Single of Types.datatype
+
+
+let simplify_operation_signature : (string * operation_analysis) -> (string * Types.datatype)
+  = fun (name, analysis) ->
+  match analysis with
+   WithContinuation (p, `Function (k_in,_,_)) ->
+     let new_input =
+       match p with
+       | `Record _ -> p
+       | _ -> wrap_in_record p
+     in
+     let new_output =
+       match k_in with
+       | `Record _ -> unwrap_from_record k_in
+       | _ -> k_in
+     in
+     (name, Types.make_pure_function_type new_input new_output)
+  | UnusedContinuation p
+  | Single p -> (name, p)
+  | _ -> failwith "TypeUtils.ml: Case for invalid is not yet implemented"
+				      
+let simplify_operation_signatures : (string * operation_analysis) list -> (string * Types.datatype) list
+  = fun ops -> List.map (simplify_operation_signature) ops
+      
+let analyse_operation_signature  : Types.datatype -> operation_analysis
+  = fun op ->
+  let get_operation_arg_type map =
+    match StringMap.lookup "1" map with
+    | Some (`Present p) -> Some p
+    | _                 -> None
+  in
+  let get_continuation_type map =
+    match StringMap.lookup "2" map with
+    | Some (`Present (`MetaTypeVar point)) ->
+       begin
+	 match Unionfind.find point with
+	 | `Body k -> Some k
+	 | _       -> None
+       end
+    | _ -> None
+  in
+  match op with
+  | `Record (map,_,_) when StringMap.size map = 2 ->
+     begin
+       let (Some p) = get_operation_arg_type map in
+       match get_continuation_type map with
+       | Some ((`Function _) as k) -> WithContinuation (p,k)
+       | _                         -> UnusedContinuation p
+     end
+  | `Record (map,_,_) when StringMap.size map = 1 ->
+     let (Some p) = get_operation_arg_type map in
+     Single p
+  | _ -> Invalid
+
+let analyse_operation_signatures : Types.row -> (string * operation_analysis) list
+  = fun (smap,_,_) ->
+  let smap = StringMap.filter (fun _ t -> match t with
+					 | `Present _ -> true
+					 | _          -> false
+			      ) smap
+  in
+  let smap = StringMap.to_list (fun k t -> (k,t)) smap in
+  let ops  = List.map (fun (k,t) -> match t with
+				    | `Present p -> (k,p)
+				    | _          -> assert false (* cannot occur *)
+		      ) smap
+  in
+  List.map (fun (name, op) -> (name, analyse_operation_signature op)) ops
+
+let reconstruct_effect_signature : (string * Types.datatype) list -> Types.row
+  = fun ops ->
+  let fields = List.fold_left
+		 (fun fields (opname,signature) -> StringMap.add opname signature fields)
+		 StringMap.empty
+		 ops
+  in
+  Types.make_closed_row fields

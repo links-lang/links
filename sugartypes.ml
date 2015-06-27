@@ -217,8 +217,8 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
-(* Handle:             expression, list of cases, and a optional datatype *)
-| `Handle           of phrase * (pattern * phrase) list * Types.datatype option 
+(* Handle:             expression, list of cases, and optional (output type and effects) *)
+| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option 
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)

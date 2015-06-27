@@ -133,7 +133,7 @@ sig
   val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
 
-  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype * Types.row) -> tail_computation sem
 														 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -626,7 +626,7 @@ struct
     in
       M.bind (rec_binding defs) rest
 
-  let handle env (v, cases, t) =
+  let handle env (v, cases, t, effects) =
     let cases =
       List.map
         (fun (p, body) -> ([p], fun env -> reify (body env))) cases
@@ -638,7 +638,7 @@ struct
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, var, cases) in
+                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, var, cases) in
                   reflect (bs, (tc, t))))
     
 	     
@@ -816,7 +816,7 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
 
-          | `Handle (e, cases, Some t) ->
+          | `Handle (e, cases, Some (t,effects)) ->
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -824,7 +824,7 @@ struct
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
-                I.handle env (ev e, cases, t)
+                I.handle env (ev e, cases, t, effects)
 		   
           | `Switch (e, cases, Some t) ->
               let cases =

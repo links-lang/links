@@ -852,8 +852,8 @@ let compile_cases
 
 				 
 (* Handler typing cases compilation *)
-let rec match_handle_cases : var -> clause list -> Types.datatype -> bound_computation =
-  fun var clauses output_type env ->
+let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) -> bound_computation =
+  fun var clauses (output_type,effects) env ->
   (* Construct a Handle by folding over the clauses *)
   ([], `Special (`Handle (`Variable var,
 			  List.fold_left
@@ -868,8 +868,10 @@ let rec match_handle_cases : var -> clause list -> Types.datatype -> bound_compu
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
 				  (* Lookup the type of the computation *)
-				  let compt = TypeUtils.concrete_type(lookup_type var env) in
-				  let (optype,_) = TypeUtils.split_row opname (TypeUtils.effect_row compt) in (* Retrieve the operation's type, i.e. the effect row from the computation type *)
+				  (*let () = failwith (Types.string_of_row effects) in
+				  let () = failwith (Types.string_of_datatype (TypeUtils.concrete_type (lookup_type var env))) in*)
+				  let ty = TypeUtils.concrete_type(lookup_type var env) in
+				  let (optype,_) = TypeUtils.split_row opname effects in (* Retrieve the operation's type, i.e. the effect row from the computation type *) (* (TypeUtils.effect_row ty) *)
 				  (* Auxiliary functions:
                                      get_binder returns the binder from a `Variable
                                      lookup retrieves an element from the record (row)
@@ -895,22 +897,8 @@ let rec match_handle_cases : var -> clause list -> Types.datatype -> bound_compu
 				  let (yb, y) = Var.fresh_var_of_type optype in				  
 				  let bp = `Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))  in
 				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
-				  (* Bind yb to the above expression *)
+				  (* Bind yb to the above expression *)				  
 				  StringMap.add opname (yb, with_bindings [bp;bk] (body env)) cases
-				  
-				(* General approach *)
-				(*let strmap_names strmap = StringMap.fold (* Compute set of record names *)
-							       (fun name _ names -> StringSet.add name names) strmap StringSet.empty
-				  in
-				  let names = strmap_names smap in
-				  let rectt = TypeUtils.erase_type names t in         (* Type of flattened record continuation *)
-				  let (rectb, rectv) = Var.fresh_var_of_type rectt in (* (binder, value) *)
-				  
-				  StringMap.fold
-				    (fun name elem names ->
-				     let x = get_binder elem in
-				     StringMap.add name (x, body env) names)
-				    smap cases*)
 				else failwith "Operations must take exactly two arguments."
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )
@@ -922,12 +910,12 @@ let rec match_handle_cases : var -> clause list -> Types.datatype -> bound_compu
 let rec match_handle_cases : var -> clause list -> bound_computation =
   fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"*)
 				  
-let compile_handle_cases : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
-  fun (nenv, tenv, eff) (output_type, var, raw_clauses) ->
+let compile_handle_cases : raw_env -> (Types.datatype * Types.row * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, effects, var, raw_clauses) ->
     let clauses = List.map reduce_clause raw_clauses in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let result =
-      match_handle_cases var clauses output_type initial_env
+      match_handle_cases var clauses (output_type,effects) initial_env
     in
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled handler cases: "^(string_of_computation result));

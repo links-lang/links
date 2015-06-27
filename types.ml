@@ -1808,7 +1808,7 @@ struct
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
                     string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
-                  | t' -> assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)
+                  | t' -> "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t (*assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)*)
                 end
           | `Lolli (args, effects, t) ->
               let arrow =
@@ -2529,3 +2529,14 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+					   
+let make_function_type : datatype -> row -> datatype -> datatype
+  = fun domain effs range -> `Function (domain, effs, range)
+
+let make_pure_function_type : datatype -> datatype -> datatype
+  = fun domain range -> make_function_type domain (make_empty_closed_row ()) range
+			      
+let make_thunk_type : row -> datatype -> datatype
+  = fun effs rtype ->
+  let unit = make_record_type (StringMap.add "1" unit_type StringMap.empty) in
+    make_function_type unit effs rtype

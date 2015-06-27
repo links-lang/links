@@ -33,3 +33,16 @@ val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 val select_type : string -> Types.datatype -> Types.datatype
 val split_choice_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
 val choice_at : string -> Types.datatype -> Types.datatype
+
+(* Handler stuff *)
+type operation_analysis = Invalid
+			| WithContinuation of Types.datatype * Types.datatype (* (argument type, continuation type) *)
+			| UnusedContinuation of Types.datatype (* argument type *)
+			| Single of Types.datatype (* argument type *)
+
+val analyse_operation_signatures   : Types.row -> (string * operation_analysis) list
+val simplify_operation_signatures  : (string * operation_analysis) list -> (string * Types.datatype) list
+val reconstruct_effect_signature   : (string * Types.datatype) list -> Types.row
+val wrap_in_record                 : Types.datatype -> Types.datatype
+val unwrap_from_record             : Types.datatype -> Types.datatype
+					       
