@@ -42,7 +42,7 @@ struct
     | `TableLit _
     | `TextNode _
     | `Section _ -> true
-
+    
     | `ListLit (ps, _)
     | `TupleLit ps -> List.for_all is_pure ps
     | `RangeLit (e1, e2) -> is_pure e1 && is_pure e2
@@ -90,8 +90,9 @@ struct
     | `DBDelete _
     | `DBInsert _
     | `DBUpdate _ -> false
+    | `DoOperation _ -> false		       
   and is_pure_binding (bind, _ : binding) = match bind with
-      (* need to check that pattern matching cannot fail *)
+    (* need to check that pattern matching cannot fail *)  
     | `Fun _
     | `Funs _
     | `Infix
@@ -1598,7 +1599,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                     Gripers.die pos ("Unknown variable " ^ v ^ ".")
             )
         | `Section _ as s   -> type_section context s
-
+        | `DoOperation ((`Variant (opname, Some (args, pos')), pos), None) as doOp ->
+	   let t = `Not_typed in (* Lookup t in some environment *)
+	     (match args with
+		`Variable _ -> (doOp, t, StringMap.empty) (* Type check variable? *)
+	      | `Tuple _ -> (doOp, t, StringMap.empty)    (* Case where unit, i.e. (), is passed as argument *)
+              | _ -> Gripers.die pos (opname ^ " must take exactly one argument")
+	     )
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->
@@ -2562,6 +2569,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
+      | `Op (name, (_, Some datatype)) as opsig ->
+	 begin
+	 match datatype with
+	   `Function _ ->
+	   let ctxt = {empty_context with var_env = Env.bind Env.empty (name, datatype)} in
+	   (opsig, ctxt, StringMap.empty) (* Todo: Check function type *)
+	 | _ -> Gripers.die pos ("Type error: Operation '" ^ name ^ "' must be of the type 'a {}-> b'")
+	 end
       | `Include _ -> assert false
       | `Val (_, pat, body, location, datatype) ->
           let body = tc body in

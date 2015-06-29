@@ -166,6 +166,7 @@ let keywords = [
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
+ "do"       , DOOP;
  "else"     , ELSE;
  "escape"   , ESCAPE;
  "false"    , FALSE;

@@ -27,23 +27,24 @@ let refine_bindings : binding list -> binding list =
       let group, groups =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
-            match binding with
-              | `Funs _ -> assert false
-              | `Exp _
-              | `Foreign _
-              | `Include _
-              | `Type _
-              | `Val _ ->
-                  (* collapse the group we're collecting, then start a
+           match binding with	   
+           | `Funs _ -> assert false
+           | `Exp _
+           | `Foreign _
+           | `Include _
+           | `Type _
+	   | `Op _
+           | `Val _ ->
+              (* collapse the group we're collecting, then start a
                      new empty group *)
-                  ([], add [bind] (add thisgroup othergroups))
-                | `Fun _ ->
-                     (* Add binding to group *)
-                  (bind::thisgroup, othergroups)
-                | `Infix ->
-                     (* discard binding *)
-                  (thisgroup, othergroups))
-            bindings ([], [])
+              ([], add [bind] (add thisgroup othergroups))
+           | `Fun _ ->
+              (* Add binding to group *)
+              (bind::thisgroup, othergroups)
+           | `Infix ->
+              (* discard binding *)
+              (thisgroup, othergroups))
+          bindings ([], [])
       in
         add group groups
     in
@@ -255,7 +256,8 @@ module RefineTypeBindings = struct
     fun bindings ->
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
-          match binding with
+	  match binding with
+          | `Op _ 
           | `Funs _
           | `Fun _
           | `Foreign _

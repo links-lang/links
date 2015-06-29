@@ -1010,6 +1010,7 @@ struct
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | `Include _ -> assert false
+                | `Op (name, datatype) -> assert false
             end
 
   and evalv env e =

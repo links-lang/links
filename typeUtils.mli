@@ -43,6 +43,4 @@ type operation_analysis = Invalid
 val analyse_operation_signatures   : Types.row -> (string * operation_analysis) list
 val simplify_operation_signatures  : (string * operation_analysis) list -> (string * Types.datatype) list
 val reconstruct_effect_signature   : (string * Types.datatype) list -> Types.row
-val wrap_in_record                 : Types.datatype -> Types.datatype
-val unwrap_from_record             : Types.datatype -> Types.datatype
 					       

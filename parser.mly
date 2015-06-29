@@ -177,6 +177,7 @@ let datatype d = d, None
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE
 %token OFFER SELECT
+%token DOOP       
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -304,6 +305,7 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+| opdecl SEMICOLON                                             { $1 }	   
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -504,6 +506,7 @@ postfix_expression:
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
+		     
 
 arg_spec:
 | LPAREN RPAREN                                                { [] }
@@ -519,6 +522,7 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
+| doop_expression					       { $1 } 
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -1203,3 +1207,12 @@ multi_args:
 arg_lists:
 | multi_args                                                { [$1] }
 | multi_args arg_lists                                      { $1 :: $2 }
+
+opdecl:
+| OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }
+
+doop_expression:
+| DOOP operation_pattern                                    { `DoOperation ($2, None), pos() }
+
+operation_pattern:
+| CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }

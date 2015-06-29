@@ -217,6 +217,7 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
+| `DoOperation      of pattern * Types.datatype option
 (* Handle:             expression, list of cases, and optional (output type and effects) *)
 | `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option 
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
@@ -255,6 +256,7 @@ and bindingnode = [
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
+| `Op      of name * datatype' (* Effect operation *)							  
 | `Infix
 | `Exp     of phrase
 ]
@@ -419,6 +421,7 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
+    | `DoOperation (op, _) -> pattern op
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
@@ -437,6 +440,7 @@ struct
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
+    | `Op _  -> failwith "sugartypes.ml: Operation declaration is not yet supported"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t =

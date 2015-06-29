@@ -408,7 +408,10 @@ class transform (env : Types.typing_environment) =
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
-            (o, `ConstructorLit (name, e, Some t), t)
+          (o, `ConstructorLit (name, e, Some t), t)
+      | `DoOperation (op, Some datatype) ->
+	 let (o, op) = o#pattern op in
+	 (o, `DoOperation (op, Some datatype), datatype)
       (* Handle-case is a copy of the Switch-case *)	    
       | `Handle (expr, cases, Some (t, effects)) ->
           let (o, expr, _) = o#phrase expr in
@@ -677,6 +680,15 @@ class transform (env : Types.typing_environment) =
             {< tycon_env=tycon_env >}, e
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
+      | `Op (name, ((_, Some dt) as dt')) as op ->
+	 let lc_name                            = String.lowercase name in
+	 let binder   : Sugartypes.binder       = (lc_name, Some dt, SourceCode.dummy_pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
+	 let linearity: Sugartypes.declared_linearity = `Unl in
+	 let tyvars   : Sugartypes.tyvar list   = [] in
+	 let funlit   : Sugartypes.funlit       = ([[]], (`Var "dummy", SourceCode.dummy_pos)) in
+	 let location : Sugartypes.location     = `Unknown in (* Possibly `Native ? *)
+	 let funop    : Sugartypes.bindingnode  = `Fun (binder, linearity, (tyvars, funlit), location, Some dt') in	 
+	 (o, funop)	   
 
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
