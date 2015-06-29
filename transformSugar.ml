@@ -411,7 +411,7 @@ class transform (env : Types.typing_environment) =
           (o, `ConstructorLit (name, e, Some t), t)
       | `DoOperation (op, Some datatype) ->
 	 let (o, op) = o#pattern op in
-	 (o, `DoOperation (op, Some datatype), datatype)
+	 (o, `DoOperation (op, Some datatype), datatype) (* The type has to be looked up in some environment. *)
       (* Handle-case is a copy of the Switch-case *)	    
       | `Handle (expr, cases, Some (t, effects)) ->
           let (o, expr, _) = o#phrase expr in
@@ -681,11 +681,13 @@ class transform (env : Types.typing_environment) =
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
       | `Op (name, ((_, Some dt) as dt')) as op ->
+	 let pos  = SourceCode.dummy_pos in
 	 let lc_name                            = String.lowercase name in
-	 let binder   : Sugartypes.binder       = (lc_name, Some dt, SourceCode.dummy_pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
+	 let binder   : Sugartypes.binder       = (lc_name, Some dt, pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
 	 let linearity: Sugartypes.declared_linearity = `Unl in
 	 let tyvars   : Sugartypes.tyvar list   = [] in
-	 let funlit   : Sugartypes.funlit       = ([[]], (`Var "dummy", SourceCode.dummy_pos)) in
+	 let funbody                            = `DoOperation ((`Nil, pos), None), pos in (* Fix body *)
+	 let funlit   : Sugartypes.funlit       = ([[]], funbody) in
 	 let location : Sugartypes.location     = `Unknown in (* Possibly `Native ? *)
 	 let funop    : Sugartypes.bindingnode  = `Fun (binder, linearity, (tyvars, funlit), location, Some dt') in	 
 	 (o, funop)	   

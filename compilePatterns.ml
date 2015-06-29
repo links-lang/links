@@ -899,7 +899,7 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
 				  (* Bind yb to the above expression *)				  
 				  StringMap.add opname (yb, with_bindings [bp;bk] (body env)) cases
-				else failwith "Operations must take exactly two arguments."
+				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )
 			    StringMap.empty (* Fold seed *)
@@ -920,7 +920,6 @@ let compile_handle_cases : raw_env -> (Types.datatype * Types.row * var * raw_cl
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled handler cases: "^(string_of_computation result));
       result
-(*    failwith "compilePatterns.ml: Handle cases not yet implemented!"*)
 				  
 (* Session typing choice compilation *)
 let rec match_choices : var -> clause list -> bound_computation =

@@ -2510,8 +2510,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _) ->
 	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
-	   let is_invalid (n,status) =
-	     match status with
+	   let is_invalid (n,analysis) = (* Predicate indicating whether an "operation" is well-typed. *)
+	     match analysis with
 	     | TypeUtils.Invalid -> true
 	     | _                 -> false
 	   in
@@ -2522,7 +2522,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let opsig_analysis = TypeUtils.analyse_operation_signatures ops in
 	   if (any is_invalid opsig_analysis) then
 	     let (opname,_) = List.find is_invalid opsig_analysis in
-	     failwith (opname ^ " is not a valid operation")
+	     Gripers.die pos (opname ^ " is not a valid operation")
 	   else
 	     let simplified_ops = TypeUtils.simplify_operation_signatures opsig_analysis in
 	     let operations     = TypeUtils.reconstruct_effect_signature simplified_ops in
