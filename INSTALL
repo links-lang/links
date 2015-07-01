@@ -22,6 +22,21 @@ follow instructions there to install OCaml.  Once you have OCaml compiler run:
 This will install Links with all the required dependencies.
 
 
+DERIVING
+
+The Links source code depends on Jeremy Yallop's deriving library, now
+maintained by the Ocsigen project. The easiest way to install it is
+through the OCaml package manager OPAM. Having installed OPAM, do:
+
+  opam install deriving
+
+LWT, CONDUIT, COHTTP
+
+The app server version of Links depends a number of third-party
+libraries:
+
+  opam install lwt conduit cohttp
+
 BUILDING LINKS FROM SOURCE
 
 To build, move to the Links source directory (wherever this INSTALL
