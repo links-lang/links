@@ -23,3 +23,4 @@ xmlParser.mli
 ._bcdi
 *.links.cache
 Makefile.config
+\#*\#

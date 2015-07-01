@@ -2528,19 +2528,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		 ()
 	   in    
 	   let exp = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type = type_cases cases in (* Type check cases. *)
-	   let effects            = TypeUtils.extract_row pattern_type in
-	   if TypeUtils.handles_operation effects TypeUtils.return_case then (* Checks that the Return-case exists *)
-	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects in
-	     let operations       = TypeUtils.extract_operations ops in
-	     if (any is_invalid operations) then
-	       let (opname,_)     = List.find is_invalid operations in
+	   let cases, pattern_type, body_type = type_cases cases                             in  (* Type check cases. *)
+	   let effects            = TypeUtils.extract_row pattern_type                       in  (* Extract inferrred effect row *)
+	   if TypeUtils.handles_operation effects TypeUtils.return_case then                     (* Checks that the Return-case exists *)
+	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects        in
+	     let operations       = TypeUtils.extract_operations ops                         in
+	     if (any is_invalid operations) then                                                 (* If there's any 'invalid' operations then print an error message. *)
+	       let (opname,_)     = List.find is_invalid operations                          in
 	       Gripers.die pos (opname ^ " is not a valid operation.")
 	     else	       
-	       let operations     = TypeUtils.simplify_operation_signatures operations in
-	       let ()             = unify_all (get_signature_tails operations) in
-	       let operations     = TypeUtils.construct_effectrow_from_operations operations in
-	       let thunk_type     = Types.make_thunk_type operations ret in (* type: (()) {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
+	       let operations     = TypeUtils.simplify_operation_signatures operations       in  (* Simplify the operation signatures *)
+	       let ()             = unify_all (get_signature_tails operations)               in  (* Ensure proper typing of operation signatures *)
+	       let operations     = TypeUtils.construct_effectrow_from_operations operations in (* Reconstruct the effect row *)
+	       let thunk_type     = Types.make_thunk_type operations ret                     in (* type: (()) {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
 	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
 	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
 	   else
