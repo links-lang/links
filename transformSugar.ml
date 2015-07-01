@@ -409,7 +409,7 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
-      | `DoOperation (op, Some datatype) ->
+      | `DoOperation (op, Some datatype) -> (* Currently the second component is always None, so the pattern-matching fails.  *)
 	 let (o, op) = o#pattern op in
 	 (o, `DoOperation (op, Some datatype), datatype) (* The type has to be looked up in some environment. *)
       (* Handle-case is a copy of the Switch-case *)	    
@@ -682,7 +682,8 @@ class transform (env : Types.typing_environment) =
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
       | `Op (name, ((_, Some dt) as dt')) as op ->
 	 let pos  = SourceCode.dummy_pos in
-	 let lc_name                            = String.lowercase name in
+	 let capitalised_name                   = String.capitalize name in (* Label name *)
+	 let lc_name                            = String.lowercase name in  (* Function name *)
 	 let binder   : Sugartypes.binder       = (lc_name, Some dt, pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
 	 let linearity: Sugartypes.declared_linearity = `Unl in
 	 let tyvars   : Sugartypes.tyvar list   = [] in

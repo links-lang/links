@@ -11,3 +11,17 @@ fun stateHandler(x) {
 	                     }
     }
 }
+
+# k1 : (a1) -> r
+# k2 : (a2) -> r
+
+fun stateHandler2(x) {
+    switch(x) {
+    	      case Get(p,k) -> fun (s) {
+	      	   	       	   k(s)(s)
+	      	             }
+	      case Put(p,k) -> fun(s) {
+	                           k(())(p)
+	                     }	     
+    }
+}

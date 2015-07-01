@@ -35,12 +35,14 @@ val split_choice_type : string -> Types.datatype -> (Types.datatype * Types.data
 val choice_at : string -> Types.datatype -> Types.datatype
 
 (* Handler stuff *)
-type operation_analysis = Invalid
-			| WithContinuation of Types.datatype * Types.datatype (* (argument type, continuation type) *)
-			| UnusedContinuation of Types.datatype (* argument type *)
-			| Single of Types.datatype (* argument type *)
+type operation_signature = Single of Types.datatype  (* Takes a single parameter.  *)
+			 | Binary of Types.datatype * Types.datatype (* Takes two parameters: one regular parameter and the continuation. *)
+			 | Invalid (* Cannot be an operation, i.e. the entity is not well-formed. *)
 
-val analyse_operation_signatures   : Types.row -> (string * operation_analysis) list
-val simplify_operation_signatures  : (string * operation_analysis) list -> (string * Types.datatype) list
-val reconstruct_effect_signature   : (string * Types.datatype) list -> Types.row
-					       
+type operation           = string * operation_signature
+					   
+val handles_operation                   : Types.row -> string -> bool
+val return_case                         : string
+val extract_operations                  : Types.row -> operation list
+val simplify_operation_signatures       : operation list -> operation list						
+val construct_effectrow_from_operations : operation list -> Types.row

@@ -233,116 +233,116 @@ let unwrap_from_record r =
   match r with
   | `Record (smap,_,_) ->
      begin
-       let xs = StringMap.to_list (fun _ e -> e) smap in
-       match List.hd xs with
+       let (p,_) = StringMap.pop "1" smap in
+       match p with
        | `Present p -> p
        | _ -> failwith "Error: Attempt to unwrap non-present type"
      end
   | _ -> failwith "Error: non-record type given as input to unwrap_type_from_record"
 
 
-let disassemble_operation_record : Types.datatype -> (Types.datatype * Types.datatype) option
-  = fun op ->
-  let get_operation_type map =
-    match StringMap.lookup "1" map with
-    | Some (`Present p) -> Some p
-    | _                 -> None
-  in
-  let get_continuation_type map =
-    match StringMap.lookup "2" map with
-    | Some (`Present (`MetaTypeVar point)) ->
-       begin
-	 match Unionfind.find point with
-	 | `Body k -> Some k
-	 | _       -> None
-       end
-    | _ -> None
-  in
-  match op with
-  | `Record (map,_,_) when StringMap.size map = 2 ->
-     let (Some p) = get_operation_type map in
-     match get_continuation_type map with
-     | Some ((`Function _) as k) -> Some (p,k)
-     | _                         -> None
-     | _ -> None
-	           
-type operation_analysis = Invalid
-			| WithContinuation of Types.datatype * Types.datatype
-			| UnusedContinuation of Types.datatype
-			| Single of Types.datatype
+let handles_operation : Types.row -> string -> bool
+  = fun (fields,_,_) opname -> StringMap.mem opname fields
 
+let return_case = "Return"
 
-let simplify_operation_signature : (string * operation_analysis) -> (string * Types.datatype)
-  = fun (name, analysis) ->
-  match analysis with
-   WithContinuation (p, `Function (k_in,_,_)) ->
-     let new_input =
-       match p with
-       | `Record _ -> p
-       | _ -> wrap_in_record p
-     in
-     let new_output =
-       match k_in with
-       | `Record _ -> unwrap_from_record k_in
-       | _ -> k_in
-     in
-     (name, Types.make_pure_function_type new_input new_output)
-  | UnusedContinuation p
-  | Single p -> (name, p)
-  | _ -> failwith "TypeUtils.ml: Case for invalid is not yet implemented"
-				      
-let simplify_operation_signatures : (string * operation_analysis) list -> (string * Types.datatype) list
-  = fun ops -> List.map (simplify_operation_signature) ops
-      
-let analyse_operation_signature  : Types.datatype -> operation_analysis
-  = fun op ->
-  let get_operation_arg_type map =
-    match StringMap.lookup "1" map with
-    | Some (`Present p) -> Some p
-    | _                 -> None
-  in
-  let get_continuation_type map =
-    match StringMap.lookup "2" map with
-    | Some (`Present (`MetaTypeVar point)) ->
-       begin
-	 match Unionfind.find point with
-	 | `Body k -> Some k
-	 | _       -> None
-       end
-    | _ -> None
-  in
-  match op with
-  | `Record (map,_,_) when StringMap.size map = 2 ->
-     begin
+type operation_signature = Single of Types.datatype
+			 | Binary of Types.datatype * Types.datatype
+			 | Invalid
+
+type operation           = string * operation_signature
+		    
+
+(* Extracts and normalises operations from an effect row. 
+ * Definition of "normalised operation signature":
+ *   If an operation signature is on either
+ *    > Binary (p, k) where k is function type,
+ *    > or Single p
+ *  form, then its said to be normalised.
+ *)
+let extract_operations : Types.row -> operation list
+  = fun (fields,_,_) -> 
+  let normalise_operation_signature : Types.datatype -> operation_signature
+    = fun op ->
+    let get_operation_arg_type map =
+      match StringMap.lookup "1" map with
+	Some (`Present p) -> Some p
+      | _                 -> None
+    in
+    let get_continuation_type map =
+      match StringMap.lookup "2" map with
+	Some (`Present (`MetaTypeVar point)) ->
+	begin
+	  match Unionfind.find point with
+            `Body k -> Some k
+	  | _       -> None
+	end
+      | _ -> None
+    in
+    match op with
+      `Record (map,_,_) when StringMap.size map = 2 ->
+      begin
+	let (Some p) = get_operation_arg_type map in
+	match get_continuation_type map with
+          Some ((`Function _) as k) -> Binary (p,k) (* Is already normalised *)
+	| _                         -> (* Needs to be normalised: Construct new function type *)
+	   let inp  = Types.fresh_type_variable (`Unl, `Any) in
+	   let out  = Types.fresh_type_variable (`Unl, `Any) in
+	   Binary (p, make_pure_function_type inp out)
+      end
+    | `Record (map,_,_) when StringMap.size map = 1 ->
        let (Some p) = get_operation_arg_type map in
-       match get_continuation_type map with
-       | Some ((`Function _) as k) -> WithContinuation (p,k)
-       | _                         -> UnusedContinuation p
-     end
-  | `Record (map,_,_) when StringMap.size map = 1 ->
-     let (Some p) = get_operation_arg_type map in
-     Single p
-  | _ -> Invalid
-
-let analyse_operation_signatures : Types.row -> (string * operation_analysis) list
-  = fun (smap,_,_) ->
-  let smap = StringMap.filter (fun _ t -> match t with
-					 | `Present _ -> true
-					 | _          -> false
-			      ) smap
+       Single p (* Already normalised *)
+    | _ -> Invalid (* The signature is not a valid operation signature *)
   in
-  let smap = StringMap.to_list (fun k t -> (k,t)) smap in
-  let ops  = List.map (fun (k,t) -> match t with
-				    | `Present p -> (k,p)
-				    | _          -> assert false (* cannot occur *)
-		      ) smap
+  let fields = StringMap.filter (fun _ t -> match t with
+					  `Present _ -> true
+					 | _         -> false
+				) fields (* Note: This step should not be necessary. *)
   in
-  List.map (fun (name, op) -> (name, analyse_operation_signature op)) ops
+  let fields = StringMap.to_list (fun k t -> (k,t)) fields in
+  List.map (fun (k,t) -> match t with
+			   `Present p -> (k, normalise_operation_signature p)
+			 | _          -> assert false (* cannot occur *)
+	   ) fields
 
-let reconstruct_effect_signature : (string * Types.datatype) list -> Types.row
+let extract_function_tail : Types.datatype -> Types.datatype
+  = fun f ->
+  match f with
+    `Function (_,_,t) -> t
+  | _ -> assert false	       
+
+(* Simplifies the operation signatures, e.g. {Get:((), (a) -> (b) -> c)} becomes {Get:( () -> (b) -> c)} 
+ * After simplication the signature 'tails' might need to get unified in order to resolve the correct type.
+ *)
+let simplify_operation_signatures  : operation list -> operation list
   = fun ops ->
-  let fields = List.fold_left
-		 (fun fields (opname,signature) -> StringMap.add opname signature fields)
+  let simplify_operation_signature : operation -> operation
+    = fun (name,signature) ->
+    match signature with
+      Binary (p, k) -> let p  = wrap_in_record p in
+		       let r = extract_function_tail k in
+		       let p  = make_pure_function_type p r in
+			(name, Binary (p, k))
+    | Single p     -> (name, Single p)
+    | Invalid      -> assert false
+  in
+  List.map simplify_operation_signature ops (* Unify continuation types *)		 
+
+(* Constructs an effect row from a list operation 
+ * Its assumed that the operations are normalised.
+ *)
+let construct_effectrow_from_operations : operation list -> Types.row
+  = fun ops ->
+  let fields = List.fold_left (* Fold over the operation list *)
+		 (fun fields (opname,signature) ->
+		  let signature =
+		    match signature with
+		      Binary (p,_) -> p (* Normalised. Ignore continuation. *)
+		    | Single p     -> p
+		    | Invalid      -> assert false
+		  in
+		    StringMap.add opname signature fields)
 		 StringMap.empty
 		 ops
   in

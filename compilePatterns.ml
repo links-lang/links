@@ -864,9 +864,10 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate computation *)*)
 				StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
                              | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
-                             | `Variant (opname, `Record (smap, _)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
+                             | `Variant (opname, `Record (smap,_) as r) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
 				if StringMap.size smap = 2 then
+
 				  (* Lookup the type of the computation *)
 				  (*let () = failwith (Types.string_of_row effects) in
 				  let () = failwith (Types.string_of_datatype (TypeUtils.concrete_type (lookup_type var env))) in*)
@@ -876,9 +877,13 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
                                      get_binder returns the binder from a `Variable
                                      lookup retrieves an element from the record (row)
                                   *)
-				  let get_binder b = match b with
-				    | `Variable b -> b
-				    | _ -> assert false
+				  let get_binder (b : pattern) = match b with
+				    | `Variable b    -> b
+				    | `Variant     _ -> failwith "It is `Variant"
+				    | `Record      _ -> failwith "It is `Record"
+				    | `Constant    _ -> failwith "It is `Constant"
+				    | `Any           -> failwith "It is `Any"
+				    | _              -> failwith "Something else"
 				  in
 				  let lookup x = match StringMap.lookup x smap with
 				    | Some x -> get_binder x

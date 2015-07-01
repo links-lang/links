@@ -1,0 +1,6 @@
+fun optionalize(x) {
+    handle(x) {
+    	      case Exception(y,k) -> Nothing
+	      case Return(x)      -> Just(x)
+    }
+}

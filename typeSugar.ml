@@ -2510,25 +2510,41 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _) ->
 	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
-	   let is_invalid (n,analysis) = (* Predicate indicating whether an "operation" is well-typed. *)
+	   let is_invalid (n,analysis) = (* Predicate indicating whether an "operation" is well-formed. *)
 	     match analysis with
 	     | TypeUtils.Invalid -> true
 	     | _                 -> false
 	   in
+	   let get_signature_tails ops =
+	     List.map (fun (name, signature) ->
+		       match signature with
+			 TypeUtils.Binary (`Function (_,_,t),_) -> t
+		       | _ -> assert false) ops in
+	   let unify_all types
+	     = if List.length types > 1 then
+		 let t    = List.hd types in
+		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_pattern (no_pos t, no_pos t')) () types
+	       else
+		 ()
+	   in    
 	   let exp = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_cases cases in (* Type check cases. *)
-	   let inferred_ops   = TypeUtils.extract_row pattern_type in
-	   let (ret,ops)      = TypeUtils.split_row "Return" inferred_ops in (* TODO: Check that "Return" is present first *)
-	   let opsig_analysis = TypeUtils.analyse_operation_signatures ops in
-	   if (any is_invalid opsig_analysis) then
-	     let (opname,_) = List.find is_invalid opsig_analysis in
-	     Gripers.die pos (opname ^ " is not a valid operation")
+	   let effects            = TypeUtils.extract_row pattern_type in
+	   if TypeUtils.handles_operation effects TypeUtils.return_case then (* Checks that the Return-case exists *)
+	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects in
+	     let operations       = TypeUtils.extract_operations ops in
+	     if (any is_invalid operations) then
+	       let (opname,_)     = List.find is_invalid operations in
+	       Gripers.die pos (opname ^ " is not a valid operation.")
+	     else	       
+	       let operations     = TypeUtils.simplify_operation_signatures operations in
+	       let ()             = unify_all (get_signature_tails operations) in
+	       let operations     = TypeUtils.construct_effectrow_from_operations operations in
+	       let thunk_type     = Types.make_thunk_type operations ret in (* type: (()) {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
+	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
+	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
 	   else
-	     let simplified_ops = TypeUtils.simplify_operation_signatures opsig_analysis in
-	     let operations     = TypeUtils.reconstruct_effect_signature simplified_ops in
-	     let thunk_type     = Types.make_thunk_type operations ret in (* type: () {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
-	     let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
-	     `Handle (erase exp, erase_cases cases, Some (body_type, inferred_ops)), body_type, merge_usages [usages exp; usages_cases cases]
+	     Gripers.die pos ("The handler must include a " ^ TypeUtils.return_case ^ "-case.")
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
@@ -2573,7 +2589,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 	 begin
 	 match datatype with
 	   `Function _ ->
-	   let ctxt = {empty_context with var_env = Env.bind Env.empty (name, datatype)} in
+	   let ctxt = {empty_context with var_env = Env.bind Env.empty (name, datatype)} in (* Is this correct? *)
 	   (opsig, ctxt, StringMap.empty) (* Todo: Check function type *)
 	 | _ -> Gripers.die pos ("Type error: Operation '" ^ name ^ "' must be of the type 'a {}-> b'")
 	 end
