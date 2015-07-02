@@ -451,10 +451,11 @@ module Eval = struct
                   (name, (`Not_typed, string_of_int name, `Local)) in
                 let to_ir_bindings =
                   let to_ir_binding (name, (params, body)) =
-                    `Fun (binder_of_name name, ([], List.map binder_of_name params, body), None, `Unknown) in
-                  List.map to_ir_binding in
+                    (binder_of_name name, ([], List.map binder_of_name params, body), `Unknown)
+                  in
+                    List.map to_ir_binding in
                 let env' = Value.extend env (Value.get_parameters val_env) in  (* Is this okay? What about the 'closures' bit of val_env? *)
-                let ir_program = Irtojs.premarshal env' @ to_ir_bindings ir_bindings,
+                let ir_program = Irtojs.premarshal env' @ [`Rec (to_ir_bindings ir_bindings)],
                                  `Apply (`Variable name, [`Constant (`String (Uri.path (Request.uri req)))]) in
                 Debug.if_set Sugartoir.show_compiled_ir (fun () -> "IR for compilation:\n" ^ Ir.Show_program.show ir_program);
                 let response =
