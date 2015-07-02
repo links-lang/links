@@ -878,7 +878,7 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
                                      lookup retrieves an element from the record (row)
                                   *)
 				  let get_binder (b : pattern) = match b with
-				    | `Variable b    -> b
+				      `Variable b    -> b
 				    | `Variant     _ -> failwith "It is `Variant"
 				    | `Record      _ -> failwith "It is `Record"
 				    | `Constant    _ -> failwith "It is `Constant"
@@ -886,11 +886,33 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				    | _              -> failwith "Something else"
 				  in
 				  let lookup x = match StringMap.lookup x smap with
-				    | Some x -> get_binder x
+				    | Some x -> x
 				    | _ -> failwith "Lookup failure"
 				  in
-				  let p = lookup "1" in (* Lookup the first parameter *)
-				  let k = lookup "2" in (* Lookup the continuation *)
+				  let (yb, y) = Var.fresh_var_of_type optype in					  
+				  (*let codegen p = 
+				    let gen_continuation_code = 
+				      let k        = lookup "2" in
+				      match k with 
+					`Variable k -> let k_tyvars = [] in
+						       [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
+				       | `Any        -> []
+				       | _ -> assert false							 
+				    in
+				    match get_pattern_type p with
+				      `Variable    -> 
+				      begin
+				      match p with
+					`Variable b -> [`Let(b, ([], `Return (`Project ("1", `Variable y))))] @ continuation_code
+				      | `Any        -> gen_continuation_code
+				      end
+				    | `Variant     -> failwith "It is `Variant"
+				    | `Record      -> failwith "It is `Record"
+				    | `Constant    -> failwith "It is `Constant"				    
+				    | _            -> failwith "Something else"
+				  in*)
+				  let p = get_binder (lookup "1") in (* Lookup the first parameter *)
+				  let k = get_binder (lookup "2") in (* Lookup the continuation *)
 				  let (p_tyvars,k_tyvars) = ([],[]) in (* Type quantifiers for p and k *)
 				  (* Code generation:                                     
                                      Essentially, we generate the expression:
@@ -899,10 +921,10 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
                                      in (body env)
                                      where proj is the projection of a member from the record (row).
 				   *)
-				  let (yb, y) = Var.fresh_var_of_type optype in				  
+				 (* let (yb, y) = Var.fresh_var_of_type optype in  *)
 				  let bp = `Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))  in
 				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
-				  (* Bind yb to the above expression *)				  
+				  (* Bind yb to the above expression *)		   
 				  StringMap.add opname (yb, with_bindings [bp;bk] (body env)) cases
 				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
