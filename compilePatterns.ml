@@ -851,8 +851,53 @@ let compile_cases
       result
 
 				 
-(* Handler typing cases compilation *)
+(* Handler cases compilation *)
 let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) -> bound_computation =
+  fun var clauses (output_type,effects) env ->
+  (* Construct a Handle by folding over the clauses *)
+  ([], `Special (`Handle (`Variable var,
+			  List.fold_left
+			    (fun cases ([(annotation, pattern)], body) ->
+			     match pattern with
+			     | `Variant ("Return", p) -> (* case Return(x) -> ... *)
+				begin
+				  match p with 
+				    `Variable b -> StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
+				  | _ -> let (nenv,tenv,eff,_) = env in
+					 let (optype,_) = TypeUtils.split_row "Return" effects in
+					 let (yb,y) = Var.fresh_var_of_type optype in
+					 let comp = let_pattern (nenv,tenv,eff) p (`Variable y, optype) (body env, output_type) in
+					 StringMap.add "Return" (yb, comp) cases
+				end
+                             | `Variant (opname, `Record (fields,_) as r) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
+			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
+				if StringMap.size fields = 2 then
+				  (* Lookup the type of the computation *)
+				  let (optype,_) = TypeUtils.split_row opname effects in (* Retrieve the operation's type, i.e. the effect row from the computation type *) (* (TypeUtils.effect_row ty) *)
+				  let (yb, y) = Var.fresh_var_of_type optype in
+				  let computation =
+				    let Some p = StringMap.lookup "1" fields in
+				    let (nenv,tenv,eff,_) = env in
+				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), optype) (body env, output_type)
+				  in
+				  let continuation_binder =
+				    let Some k = StringMap.lookup "2" fields in
+				    match k with
+				      `Variable k -> let k_tyvars = [] in
+						     [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
+				    | `Any        -> []
+				    | _           -> failwith "Pattern-matching failure on continuation."
+				  in				  
+				  let computation = with_bindings continuation_binder computation in
+				  StringMap.add opname (yb, computation) cases
+				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
+                             | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
+			    )
+			    StringMap.empty (* Fold seed *)
+			    clauses (* Structure we're folding over *)
+			 )))
+
+(*let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) -> bound_computation =
   fun var clauses (output_type,effects) env ->
   (* Construct a Handle by folding over the clauses *)
   ([], `Special (`Handle (`Variable var,
@@ -922,17 +967,17 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
                                      where proj is the projection of a member from the record (row).
 				   *)
 				 (* let (yb, y) = Var.fresh_var_of_type optype in  *)
-				  let bp = `Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))  in
+				  let (bps,_) = (match_var [fst p] [([(annotation, pattern)], body)] (fun _ -> ([],(`Return (`Project ("2", `Variable y)))))) var env (*`Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))*)  in
 				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
 				  (* Bind yb to the above expression *)		   
-				  StringMap.add opname (yb, with_bindings [bp;bk] (body env)) cases
+				  StringMap.add opname (yb, with_bindings (bps @ [bk]) (body env)) cases
 				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )
 			    StringMap.empty (* Fold seed *)
 			    clauses (* Structure we're folding over *)
 			 )))
-					    
+ *)					    
  (*
 let rec match_handle_cases : var -> clause list -> bound_computation =
   fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"*)
