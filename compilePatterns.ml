@@ -880,19 +880,19 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				    let (nenv,tenv,eff,_) = env in
 				    let t =
 				      match optype with
-					  `Record (fields,row_var,dual) -> 
-					  let Some fields = StringMap.lookup "1" fields in
-					  begin
-					    match fields with
-					      `Present p ->
-					      begin
-						match p with
-						  `Record (fields,_,_) -> `Record (fields,row_var,dual)
-						 | _ -> assert false
-					      end
-					    | _ -> assert false
-					  end
-					| _ -> assert false in
+					`Record (fields,row_var,dual) -> 
+					let Some fields = StringMap.lookup "1" fields in
+					begin
+					  match fields with
+					    `Present p ->
+					    begin
+					      match p with
+						`Record (fields,_,_) -> `Record (fields,row_var,dual)
+					      | _ -> p
+					    end
+					  | _ -> assert false
+					end
+				      | _ -> assert false in
 				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)
 				  in
 				  let continuation_binder =
