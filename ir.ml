@@ -84,7 +84,8 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map) ]
+  | `Handle of (value * (binder * computation) name_map)
+  | `DoOperation of value * Types.datatype ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -423,7 +424,8 @@ struct
 			 let (c, t, o) = o#computation c in
 			 (b, c), t, o) bs in
     		         let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-			 `Handle (v, bs), t, o			
+			 `Handle (v, bs), t, o
+	| `DoOperation (v, t) -> failwith "ir.ml: DoOperation not yet implemented"
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

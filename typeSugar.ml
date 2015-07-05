@@ -1599,13 +1599,43 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                     Gripers.die pos ("Unknown variable " ^ v ^ ".")
             )
         | `Section _ as s   -> type_section context s
-        | `DoOperation ((`Variant (opname, Some (args, pos')), pos), None) as doOp ->
-	   let t = `Not_typed in (* Lookup t in some environment *)
-	     (match args with
-		`Variable _ -> (doOp, t, StringMap.empty) (* Type check variable? *)
-	      | `Tuple _ -> (doOp, t, StringMap.empty)    (* Case where unit, i.e. (), is passed as argument *)
-              | _ -> Gripers.die pos (opname ^ " must take exactly one argument")
-	     )
+	(* Two possible typing rules for "do op(x)": 
+	 * 1. do op: (a) { op: (a) {}-> b | p }-> b
+	 * 2. do op(x) : b
+         *
+         * For now, we use the second which 'captures' the operation's argument.
+	 *)
+        | `DoOperation ((p,pos) as op, None) ->
+	   let opname =
+	     match p with
+	       `ConstructorLit (opname, None, _) -> Gripers.die pos ("expected " ^ opname ^ " to take one argument, but none were given.") (* Todo: Refactor this along with the below code *)
+	     | `ConstructorLit (opname, _, _) -> opname
+	     | _ -> assert false (* This case *should* never happen as syntax tree is built such that it guarantees the phrasenode p to be a `ConstructorLit *)
+	   in
+	   let p = tc op in (* Type-check the operation expression *)
+	   let t = typ p in (* Retrieve inferred expression type *)
+	   let num_args =
+	     match t with
+	       `Variant (fields,_,_) -> let Some fields = StringMap.lookup opname fields in
+					begin
+					  match fields with
+					    `Present p ->
+					    begin
+					      match p with
+						`Record (fields,_,_) -> let num_args = StringMap.size fields in
+									if num_args == 0 then 1 else num_args		  
+					      | _ -> 1
+					    end
+					  | _ -> assert false
+					end
+	     | _ -> failwith (Types.string_of_datatype t)					  
+	   in
+	   let () = print_string ((Types.string_of_datatype t) ^ " # args: " ^ (string_of_int num_args) ^ "\n") in
+	   if (num_args <> 1) then
+	     Gripers.die pos ("expected 1 argument to " ^ opname ^ ", but " ^ (string_of_int num_args) ^ " were given.")
+	   else
+	     let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is decided by the handler; for now let the return type be a fresh type variable *)
+	     (`DoOperation (erase p, Some t), return_type, usages p)
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->

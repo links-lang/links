@@ -440,6 +440,7 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
@@ -522,7 +523,6 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
-| doop_expression					       { $1 } 
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -1210,9 +1210,3 @@ arg_lists:
 
 opdecl:
 | OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }
-
-doop_expression:
-| DOOP operation_pattern                                    { `DoOperation ($2, None), pos() }
-
-operation_pattern:
-| CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }

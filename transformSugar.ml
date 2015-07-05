@@ -409,9 +409,10 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
-      | `DoOperation (op, Some datatype) -> (* Currently the second component is always None, so the pattern-matching fails.  *)
-	 let (o, op) = o#pattern op in
-	 (o, `DoOperation (op, Some datatype), datatype) (* The type has to be looked up in some environment. *)
+      | `DoOperation (op, Some datatype) ->
+	 let (o, op, _) = o#phrase op in
+	 let (o, t) = o#datatype datatype in
+	 (o, `DoOperation (op, Some t), t)
       (* Handle-case is a copy of the Switch-case *)	    
       | `Handle (expr, cases, Some (t, effects)) ->
           let (o, expr, _) = o#phrase expr in
@@ -681,7 +682,7 @@ class transform (env : Types.typing_environment) =
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
       | `Op (name, ((_, Some dt) as dt')) as op ->
-	 let pos  = SourceCode.dummy_pos in
+(*	 let pos  = SourceCode.dummy_pos in
 	 let capitalised_name                   = String.capitalize name in (* Label name *)
 	 let lc_name                            = String.lowercase name in  (* Function name *)
 	 let binder   : Sugartypes.binder       = (lc_name, Some dt, pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
@@ -691,7 +692,8 @@ class transform (env : Types.typing_environment) =
 	 let funlit   : Sugartypes.funlit       = ([[]], funbody) in
 	 let location : Sugartypes.location     = `Unknown in (* Possibly `Native ? *)
 	 let funop    : Sugartypes.bindingnode  = `Fun (binder, linearity, (tyvars, funlit), location, Some dt') in	 
-	 (o, funop)	   
+	 (o, funop)*)
+	 failwith "transformSugar.ml: Operation declaration support not yet implemented!"
 
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
