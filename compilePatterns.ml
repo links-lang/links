@@ -881,9 +881,9 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				    let t =
 				      match optype with
 					`Record (fields,row_var,dual) -> 
-					let Some fields = StringMap.lookup "1" fields in
+					let Some p = StringMap.lookup "1" fields in
 					begin
-					  match fields with
+					  match p with
 					    `Present p ->
 					    begin
 					      match p with

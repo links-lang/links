@@ -85,7 +85,7 @@ and special =
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
   | `Handle of (value * (binder * computation) name_map)
-  | `DoOperation of value * Types.datatype ]
+  | `DoOperation of (value * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -425,7 +425,9 @@ struct
 			 (b, c), t, o) bs in
     		         let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
 			 `Handle (v, bs), t, o
-	| `DoOperation (v, t) -> failwith "ir.ml: DoOperation not yet implemented"
+	| `DoOperation (v, t) ->
+	   let (v, _, o) = o#value v in
+	   (`DoOperation (v, t), t, o)
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

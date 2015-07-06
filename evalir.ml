@@ -673,7 +673,7 @@ module Eval = struct
     (* Handlers *)
     | `Handle (v, cases) ->
        failwith "evalir.ml: Handlers not yet implemented!"
-    | `DoOperation _ -> failwith "evalir.ml: DoOperation not yet implemented!"
+    | `DoOperation _ -> eval_error "Unhandled operation"
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in

@@ -628,8 +628,9 @@ struct
     in
       M.bind (rec_binding defs) rest
 
-  let do_operation (v, t) = failwith "sugartoir.ml: do_operation not yet implemented."
-	     
+  let do_operation (v, t) =
+    bind v (fun v -> lift (`Special (`DoOperation (v, t)), t))
+	 
   let handle env (v, cases, t, effects) =
     let cases =
       List.map
@@ -821,11 +822,7 @@ struct
               cofv (I.inject (name, ev e, t))
 
 	  | `DoOperation (op, Some t) ->
-	     let v =
-	       match op with
-		 (`ConstructorLit (name, Some e, Some t'),_) -> I.inject (name, ev e, t')
-	       | _ -> assert false
-	     in
+	     let v = ev op in
 	     I.do_operation (v, t)
 
           | `Handle (e, cases, Some (t,effects)) ->
