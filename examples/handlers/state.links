@@ -21,6 +21,18 @@ fun scomp(s) {
 	var x = do Get();	
 	do Put(x(()) + 1);
 	var y = do Get();
-	do Put(y(()) + y(()))
+	do Put(y(()) * 2)
     }
+}
+
+fun stateless(x) {
+    handle(x) {
+    	      case Get((),k) -> fun(s) { 0 }
+	      case Put(p,k) -> fun(s) { 0 }
+	      case Return(x) -> fun(s) { 0 }
+    }
+}
+
+fun comp2() {
+    do Get();
 }

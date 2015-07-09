@@ -320,7 +320,7 @@ let simplify_operation_signatures  : operation list -> operation list
   let simplify_operation_signature : operation -> operation
     = fun (name,signature) ->
     match signature with
-      Binary (p, k) -> let p  = wrap_in_record p in
+      Binary (p, k) -> let p  = p in
 		       let r = extract_function_tail k in
 		       let p  = make_pure_function_type p r in
 			(name, Binary (p, k))
