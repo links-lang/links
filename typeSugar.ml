@@ -1647,7 +1647,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     let optype = Types.make_pure_function_type t' return_type in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     (*let () = failwith (Types.string_of_row effects) in*)	     
-             let ()   = unify ~handle:Gripers.handle_pattern
+             let ()   = unify ~handle:Gripers.handle_pattern (* TODO: change handle! *)
                   (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
 	     (`DoOperation (erase p, Some optype), return_type, usages p)
         (* literals *)
