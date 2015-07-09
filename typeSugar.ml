@@ -1600,8 +1600,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             )
         | `Section _ as s   -> type_section context s
 	(* Two possible typing rules for "do op(x)": 
-	 * 1. do op: (a) { op: (a) {}-> b | p }-> b
-	 * 2. do op(x) : b
+	 * 1. do op    : (a) { op: (a) {}-> b | p }-> b
+	 * 2. do op(x) : ()  { op:  A  {}-> b | p }-> b where A is the type of x
          *
          * For now, we use the second which 'captures' the operation's argument.
 	 *)
@@ -1630,11 +1630,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 					end
 	     | _ -> failwith (Types.string_of_datatype t)					  
 	   in
-	   let () = print_string ((Types.string_of_datatype t) ^ " # args: " ^ (string_of_int num_args) ^ "\n") in
-	   if (num_args <> 1) then
+	   (*let () = print_string ((Types.string_of_datatype t) ^ " # args: " ^ (string_of_int num_args) ^ "\n") in*)
+	 (*  if (num_args < 1) then
 	     Gripers.die pos ("expected 1 argument to " ^ opname ^ ", but " ^ (string_of_int num_args) ^ " were given.")
-	   else
+	   else*)
 	     let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is decided by the handler; for now let the return type be a fresh type variable *)
+	     let t' = match t with
+		      `Variant (fields,_,_) ->
+		      let Some t = StringMap.lookup opname fields in
+		      (match t with
+			  `Present t -> t
+			| _ -> assert false 
+		      )
+		    | _ -> assert false
+	     in
+	     let optype = Types.make_pure_function_type t' return_type in
+	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Any, `Any) in
+	     (*let () = failwith (Types.string_of_row effects) in*)	     
+             let ()   = unify ~handle:Gripers.handle_pattern
+                  (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
 	     (`DoOperation (erase p, Some t), return_type, usages p)
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
