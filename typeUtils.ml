@@ -285,10 +285,12 @@ let extract_operations : Types.row -> operation list
 	let (Some p) = get_operation_arg_type map in
 	match get_continuation_type map with
           Some ((`Function _) as k) -> Binary (p,k) (* Is already normalised *)
-	| _                         -> (* Needs to be normalised: Construct new function type *)
+        | Some (`Primitive _) -> Invalid (* Continuation cannot have a primitive type. TODO: Add meaningful error messages to Invalid-type  *)
+	| None -> (* Needs to be normalised: Construct new function type. *)
 	   let inp  = Types.fresh_type_variable (`Unl, `Any) in
 	   let out  = Types.fresh_type_variable (`Unl, `Any) in
-	   Binary (p, make_pure_function_type inp out)
+	   let k    = make_pure_function_type inp out in	   
+	   Binary (p, k)
       end
     | `Record (map,_,_) when StringMap.size map = 1 ->
        let (Some p) = get_operation_arg_type map in
