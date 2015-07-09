@@ -334,7 +334,7 @@ let simplify_operation_signatures  : operation list -> operation list
 (* Constructs an effect row from a list operation 
  * Its assumed that the operations are normalised.
  *)
-let construct_effectrow_from_operations : operation list -> Types.row
+let effectrow_of_oplist : operation list -> Types.row
   = fun ops ->
   let fields = List.fold_left (* Fold over the operation list *)
 		 (fun fields (opname,signature) ->

@@ -45,4 +45,4 @@ val handles_operation                   : Types.row -> string -> bool
 val return_case                         : string
 val extract_operations                  : Types.row -> operation list
 val simplify_operation_signatures       : operation list -> operation list						
-val construct_effectrow_from_operations : operation list -> Types.row
+val effectrow_of_oplist                 : operation list -> Types.row

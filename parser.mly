@@ -440,9 +440,7 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| DOOP CONSTRUCTOR parenthesized_thing                         { let constructor = `ConstructorLit($2, Some $3, None), pos() in 
-								     `DoOperation (constructor, None), pos() }
-
+       
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
@@ -507,8 +505,7 @@ postfix_expression:
                                                                          (`Block $5, pos ()), None), pos () }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
-| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
-| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }
+| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }		     
 		     
 
 arg_spec:
@@ -525,6 +522,7 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
+| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }
 
 infixr_9:
 | unary_expression                                             { $1 }
