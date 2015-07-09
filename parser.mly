@@ -305,7 +305,7 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
-| opdecl SEMICOLON                                             { $1 }	   
+/*| opdecl SEMICOLON                                             { $1 }	   */
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -440,6 +440,8 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| DOOP CONSTRUCTOR parenthesized_thing                         { let constructor = `ConstructorLit($2, Some $3, None), pos() in 
+								     `DoOperation (constructor, None), pos() }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
@@ -1208,5 +1210,5 @@ arg_lists:
 | multi_args                                                { [$1] }
 | multi_args arg_lists                                      { $1 :: $2 }
 
-opdecl:
-| OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }
+/*opdecl:
+| OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }*/
