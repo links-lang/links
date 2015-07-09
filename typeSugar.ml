@@ -1645,11 +1645,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		    | _ -> assert false
 	     in
 	     let optype = Types.make_pure_function_type t' return_type in
-	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Any, `Any) in
+	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     (*let () = failwith (Types.string_of_row effects) in*)	     
              let ()   = unify ~handle:Gripers.handle_pattern
                   (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
-	     (`DoOperation (erase p, Some t), return_type, usages p)
+	     (`DoOperation (erase p, Some optype), return_type, usages p)
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->
