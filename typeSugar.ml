@@ -1640,12 +1640,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		      let Some t = StringMap.lookup opname fields in
 		      (match t with
 			  `Present t -> t
+(*			  begin
+			    match t with
+			      `Record (fields,_,_) as r -> if StringMap.size fields = 0 then
+							     HandlerUtils.wrap_in_record r
+							   else
+							     r
+			    | _ -> t
+			  end*)
 			| _ -> assert false 
 		      )
 		    | _ -> assert false
 	     in
 	     let optype = Types.make_pure_function_type t' return_type in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
+	     let effects = HandlerUtils.fix_operation_arity effects in
 	     (*let () = failwith (Types.string_of_row effects) in*)	     
              let ()   = unify ~handle:Gripers.handle_pattern (* TODO: change handle! *)
                   (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
@@ -2577,14 +2586,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let () = print_string ((Types.string_of_row effects) ^ "\n") in
 	   if TypeUtils.handles_operation effects TypeUtils.return_case then                     (* Checks that the Return-case exists *)
 	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects        in
-	     let operations       = TypeUtils.extract_operations ops                         in
-	     if (any is_invalid operations) then                                                 (* If there's any 'invalid' operations then print an error message. *)
-	       let (opname,_)     = List.find is_invalid operations                          in
-	       Gripers.die pos (opname ^ " is not a valid operation.")
-	     else	       
-	       let operations     = TypeUtils.simplify_operation_signatures operations       in  (* Simplify the operation signatures *)
+	     let raw_operations   = HandlerUtils.extract_operations ops                         in
+	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
+	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
+	       Gripers.die pos msg
+	     else
+	       let operations       = HandlerUtils.simplify_operations raw_operations in
+	       let ()               = unify_all (HandlerUtils.extract_continuation_tails raw_operations) in
+	       let operations       = HandlerUtils.effectrow_of_oplist operations in
+	       (*let operations     = TypeUtils.simplify_operation_signatures operations       in  (* Simplify the operation signatures *)
 	       (*	       let ()             = unify_all (get_signature_tails operations)               in  (* Ensure proper typing of operation signatures *)*)
-	       let operations     = TypeUtils.effectrow_of_oplist operations in (* Reconstruct the effect row *)
+	       let operations     = TypeUtils.effectrow_of_oplist operations in (* Reconstruct the effect row *)*)
 	       let thunk_type     = Types.make_thunk_type operations ret                     in (* type: () {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
 	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
 	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
