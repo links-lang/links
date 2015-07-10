@@ -153,7 +153,7 @@ object (o : 'self_type)
             | None ->
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type value_type; `Row eff]), dp),
+                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in
