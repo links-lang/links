@@ -2574,6 +2574,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let exp = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_cases cases                             in  (* Type check cases. *)
 	   let effects            = TypeUtils.extract_row pattern_type                       in  (* Extract inferrred effect row *)
+	   let () = print_string ((Types.string_of_row effects) ^ "\n") in
 	   if TypeUtils.handles_operation effects TypeUtils.return_case then                     (* Checks that the Return-case exists *)
 	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects        in
 	     let operations       = TypeUtils.extract_operations ops                         in
@@ -2582,9 +2583,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       Gripers.die pos (opname ^ " is not a valid operation.")
 	     else	       
 	       let operations     = TypeUtils.simplify_operation_signatures operations       in  (* Simplify the operation signatures *)
-	       let ()             = unify_all (get_signature_tails operations)               in  (* Ensure proper typing of operation signatures *)
+	       (*	       let ()             = unify_all (get_signature_tails operations)               in  (* Ensure proper typing of operation signatures *)*)
 	       let operations     = TypeUtils.effectrow_of_oplist operations in (* Reconstruct the effect row *)
-	       let thunk_type     = Types.make_thunk_type operations ret                     in (* type: (()) {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
+	       let thunk_type     = Types.make_thunk_type operations ret                     in (* type: () {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
 	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
 	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
 	   else

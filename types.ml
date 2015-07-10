@@ -2534,7 +2534,7 @@ let make_function_type : datatype -> row -> datatype -> datatype
   = fun domain effs range ->
   let domain = 
     match domain with
-      `Record _ -> domain
+      `Record _ as r -> r
     | _ -> make_record_type (StringMap.add "1" domain StringMap.empty)
   in
     `Function (domain, effs, range)
@@ -2544,5 +2544,4 @@ let make_pure_function_type : datatype -> datatype -> datatype
 			      
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
-  (* let unit = make_record_type (StringMap.add "1" unit_type StringMap.empty) in *)
-    make_function_type unit_type effs rtype
+  make_function_type unit_type effs rtype

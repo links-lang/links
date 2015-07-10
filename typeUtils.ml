@@ -280,20 +280,20 @@ let extract_operations : Types.row -> operation list
       | _ -> None
     in
     match op with
-      `Record (map,_,_) when StringMap.size map = 2 ->
+      `Record (fields,_,_) when StringMap.size fields = 2 ->
       begin
-	let (Some p) = get_operation_arg_type map in
-	match get_continuation_type map with
-          Some ((`Function _) as k) -> Binary (p,k) (* Is already normalised *)
-        | Some (`Primitive _) -> Invalid (* Continuation cannot have a primitive type. TODO: Add meaningful error messages to Invalid-type  *)
+	let (Some p) = get_operation_arg_type fields in
+	match get_continuation_type fields with
+          Some ((`Function _) as k) -> Binary (p,k) (* Is already normalised *)       
 	| None -> (* Needs to be normalised: Construct new function type. *)
 	   let inp  = Types.fresh_type_variable (`Unl, `Any) in
 	   let out  = Types.fresh_type_variable (`Unl, `Any) in
 	   let k    = make_pure_function_type inp out in	   
 	   Binary (p, k)
+	| _ -> Invalid (* Continuation must be a function type. TODO: Add meaningful error messages to Invalid-type  *)		  
       end
-    | `Record (map,_,_) when StringMap.size map = 1 ->
-       let (Some p) = get_operation_arg_type map in
+    | `Record (fields,_,_) when StringMap.size fields = 1 ->
+       let (Some p) = get_operation_arg_type fields in
        Single p (* Already normalised *)
     | _ -> Invalid (* The signature is not a valid operation signature *)
   in
@@ -311,10 +311,10 @@ let extract_operations : Types.row -> operation list
 let extract_function_tail : Types.datatype -> Types.datatype
   = fun f ->
   match f with
-    `Function (_,_,t) -> t
+    `Function (t,_,_) -> t
   | _ -> assert false	       
 
-(* Simplifies the operation signatures, e.g. {Get:((), (a) -> (b) -> c)} becomes {Get:( () -> (b) -> c)} 
+(* Simplifies the operation signatures, e.g. {Get:((), (a) -> (b) -> c)} becomes {Get:(() -> (b) -> c)} 
  * After simplication the signature 'tails' might need to get unified in order to resolve the correct type.
  *)
 let simplify_operation_signatures  : operation list -> operation list
@@ -322,14 +322,14 @@ let simplify_operation_signatures  : operation list -> operation list
   let simplify_operation_signature : operation -> operation
     = fun (name,signature) ->
     match signature with
-      Binary (p, k) -> let p  = p in
-		       let r = extract_function_tail k in
+      Binary (p, k) -> let p  = wrap_in_record p in
+		       let r  = extract_function_tail k in
 		       let p  = make_pure_function_type p r in
 			(name, Binary (p, k))
     | Single p     -> (name, Single p)
     | Invalid      -> assert false
   in
-  List.map simplify_operation_signature ops (* Unify continuation types *)		 
+  List.map simplify_operation_signature ops
 
 (* Constructs an effect row from a list operation 
  * Its assumed that the operations are normalised.

@@ -1063,3 +1063,18 @@ and funcmap_of_computation =
     concat_map funcmap_of_binding bs @ funcmap_of_tailcomp tc
 
 let funcmap = funcmap_of_computation
+
+(** TODO:
+  Turn continuation into a computation. 		
+let comp_of_cont_tail m : Ir.computation -> Ir.binding list -> continuation -> Ir.computation
+  = fun (bs', tc) bs ->
+  function
+  | [] -> m
+  | (scope, x, env, m) :: xs ->	comp_of_cont
+
+let comp_of_cont : Ir.computation -> continuation -> Ir.computation
+  = fun m ->
+  function
+  | [] -> m
+  | (scope, x, env, n) :: (`Let (x,m), comp_of_cont n)
+ *)

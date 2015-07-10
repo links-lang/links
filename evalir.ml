@@ -672,8 +672,27 @@ module Eval = struct
        apply cont env (value env f, [`Continuation cont])
     (* Handlers *)
     | `Handle (v, cases) ->
+       let value  = value env v in
+       let case =
+	 match value with
+	   `Variant (label, _) as v ->
+	   begin
+	     match StringMap.lookup label cases, value with
+	       Some ((var,_), c), `Variant (_, v)  -> computation (Value.bind var (v, `Local) env) cont c
+	     (* Needs to handle Return-case too *)
+             | None, #Value.t -> eval_error "Pattern matching failed"
+             | _ -> assert false (* v not a variant *)
+	   end
+       | _ -> eval_error "Case of non-variant"
+       in
+       (*let locals = Value.localise env value in*)
+       (*let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
+                           ::cont) : Value.continuation) in
+                tail_computation env cont' tc*) 
        failwith "evalir.ml: Handlers not yet implemented!"
-    | `DoOperation _ -> eval_error "Unhandled operation"
+    | `DoOperation (v, t) ->     (* Strategy: Pop handlers' stack, and invoke the popped handler with the operation. *)
+       let op = value env v in
+       eval_error "Unhandled operation: %s"  (Value.string_of_value op)
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
