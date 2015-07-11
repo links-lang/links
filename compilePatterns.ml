@@ -894,13 +894,15 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 					end
 				      | _ -> assert false in*)				   
 				    (*				    let () = failwith ("Projected type: " ^ (Types.string_of_datatype t)) in*)
-				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)
+				    (*let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)*)
+				    let_pattern (nenv,tenv,eff) p (`Variable y, t) (body env, output_type)
 				  in
 				  let continuation_binder =
 				    let Some k = StringMap.lookup "2" fields in
 				    match k with
 				      `Variable k  -> let k_tyvars = [] in
-						     [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
+				    (*[`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]*)
+						      [`Let (k, (k_tyvars, `Return (`Variable y)))]
 				    | `Any         -> []
 				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  
