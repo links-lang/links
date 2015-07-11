@@ -672,8 +672,9 @@ module Eval = struct
        apply cont env (value env f, [`Continuation cont])
     (* Handlers *)
     | `Handle (v, cases) ->
-       let value  = value env v in
-       let case =
+       let v' = value env v in
+       eval_error "Not yet supported: %s" (Value.string_of_value v')
+       (*let case =
 	 match value with
 	   `Variant (label, _) as v ->
 	   begin
@@ -689,7 +690,7 @@ module Eval = struct
        (*let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
                 tail_computation env cont' tc*) 
-       failwith "evalir.ml: Handlers not yet implemented!"
+       failwith "evalir.ml: Handlers not yet implemented!"*)
     | `DoOperation (v, t) ->     (* Strategy: Pop handlers' stack, and invoke the popped handler with the operation. *)
        let op = value env v in
        eval_error "Unhandled operation: %s"  (Value.string_of_value op)
