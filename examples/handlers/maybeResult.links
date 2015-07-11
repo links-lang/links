@@ -1,0 +1,10 @@
+fun maybeResult(x) {
+    handle(x) {
+    	      case Fail(_,_)  -> Nothing
+	      case Return(x)  -> Just(x)
+    }
+}
+
+fun comp() {
+    do Fail()
+}

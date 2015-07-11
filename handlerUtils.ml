@@ -1,17 +1,7 @@
 open Utility
 open TypeUtils
 
-(*type operation_signature = Single of Types.datatype
-			 | Binary of Types.datatype * Types.datatype
-			 | Invalid
-
-type operation           = string * operation_signature*)
-
 type operation           = string * Types.datatype
-
-(*type operation_signature_raw = Single of Types.datatype
-                             | Binary of Types.datatype * Types.datatype
-                             | Invalid*)
 
 type operation_raw       = RawOperation of string * Types.datatype * Types.datatype
 			 (*| RawSpecial   of string * Types.datatype*)
@@ -51,6 +41,15 @@ let get_operation : string -> Types.row -> operation option
     end
   | _ -> None
 
+
+(* Extracts and normalises operations from an effect row. 
+ * Definition of "normalised operation signature":
+ *   If an operation signature is on the form:
+ *    Op:(x,k) where k has a function type.
+ *  then its said to be normalised.
+ *  In other words, the continuation parameter is guaranteed 
+ *  to have a function type.
+ *)	   
 let extract_operations : Types.row -> operation_raw list
   = fun (fields,_,_) -> 
   let normalise_operation_signature name optype =
@@ -168,9 +167,11 @@ let is_operation_invalid : operation_raw -> bool
 let extract_continuation_tails : operation_raw list -> Types.datatype list
   = fun ops ->
   List.map (function
-	       | RawOperation (_, _, `Function (_,_,t)) -> t
+	       | RawOperation (_, _, (`Function (_,_,t) as f)) -> t
 	       | _ -> assert false
 	   ) ops
+
+let return_case = "Return"	   
 
 (*let oplist_of_effectrow : Types.row -> operation list
  = fun row -> failwith ""*)

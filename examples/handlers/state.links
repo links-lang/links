@@ -1,4 +1,4 @@
-fun stateHandler(x) {
+fun stateful(x) {
     handle(x) {
     	      case Get(p,k) -> fun (s) {
 	      	   	       	   k(s)(s)
