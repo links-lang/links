@@ -1634,7 +1634,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	 (*  if (num_args < 1) then
 	     Gripers.die pos ("expected 1 argument to " ^ opname ^ ", but " ^ (string_of_int num_args) ^ " were given.")
 	   else*)
-	     let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is decided by the handler; for now let the return type be a fresh type variable *)
+	     let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
 	     let t' = match t with
 		      `Variant (fields,_,_) ->
 		      let Some t = StringMap.lookup opname fields in

@@ -878,32 +878,33 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				  let computation =
 				    let Some p = StringMap.lookup "1" fields in
 				    let (nenv,tenv,eff,_) = env in
-				    let t =
-				      match optype with
+				    let t = TypeUtils.project_type "1" optype in 
+				      (*match optype with
 					`Record (fields,row_var,dual) -> 
 					let Some p = StringMap.lookup "1" fields in
 					begin
 					  match p with
-					    `Present p ->
-					    begin
+					    `Present p -> p
+					    (*begin
 					      match p with
 						`Record (fields,_,_) -> `Record (fields,row_var,dual)
 					      | _ -> p
-					    end
+					    end*)
 					  | _ -> assert false
 					end
-				      | _ -> assert false in
+				      | _ -> assert false in*)				   
+				    (*				    let () = failwith ("Projected type: " ^ (Types.string_of_datatype t)) in*)
 				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)
 				  in
 				  let continuation_binder =
 				    let Some k = StringMap.lookup "2" fields in
 				    match k with
-				      `Variable k -> let k_tyvars = [] in
+				      `Variable k  -> let k_tyvars = [] in
 						     [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
-				    | `Any        -> []
-				    | _           -> failwith "Pattern-matching failure on continuation."
+				    | `Any         -> []
+				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  
-				  let computation = with_bindings continuation_binder computation in
+				  let computation = with_bindings continuation_binder computation  in
 				  StringMap.add opname (yb, computation) cases
 				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)

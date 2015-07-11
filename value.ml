@@ -201,8 +201,10 @@ and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.
 (* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
   deriving (Show)
 
-let toplevel_cont : continuation = []
-
+type handler_stack = ((Ir.binder * Ir.computation) Ir.name_map) list
+  
+let toplevel_cont : continuation  = []
+let toplevel_hs   = []
 (** {1 Environment stuff} *)
 (** {2 IntMap-based implementation with global memoization} *)
 

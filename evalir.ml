@@ -121,6 +121,11 @@ module Session = struct
       (unbox_port outp, unbox_port inp)
 end
 
+let hempty = [] (* Empty handler stack *)
+let hpush h hs = h :: hs
+let hpop = function
+  | h :: hs -> (Some h, hs)
+  | [] -> (None, [])
 
 module Eval = struct
   open Ir
@@ -191,7 +196,7 @@ module Eval = struct
     | Some((cont, value), pid) when Proc.active_main() || Proc.active_angels() ->
       begin
         Proc.activate pid;
-        apply_cont cont env value
+        apply_cont cont hempty env value (* TODO: Should handler stack be wrapped along with cont and value? *)
       end
     | _ ->
       if not(Proc.singlethreaded()) then
@@ -301,14 +306,14 @@ module Eval = struct
           try (
             atomic := true;
             (* Debug.print ("Applying pure function"); *)
-            ignore (apply [] env (value env f, List.map (value env) args));
+            ignore (apply [] hempty env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
             | TopLevel (_, v) -> atomic := previousAtomic; v
         end
     | `Coerce (v, t) -> value env v
 
-  and apply cont env : Value.t * Value.t list -> Value.t =
+  and apply cont hs env : Value.t * Value.t list -> Value.t =
     function
     | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
@@ -329,7 +334,7 @@ module Eval = struct
 
               (* extend env with arguments *)
               let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
-                computation env cont body
+                computation env cont hs body
           | None -> eval_error "Error looking up recursive function definition"
         end
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
@@ -344,17 +349,17 @@ module Eval = struct
                  Proc.UnknownProcessID pid ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
-            apply_cont cont env (`Record [])
+            apply_cont cont hs env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
         else
-          apply_cont cont env (Lib.apply_pfun "spawn" [func])
+          apply_cont cont hs env (Lib.apply_pfun "spawn" [func])
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
         else
-          apply_cont cont env (Lib.apply_pfun "spawnAngel" [func])
+          apply_cont cont hs env (Lib.apply_pfun "spawnAngel" [func])
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its
@@ -368,7 +373,7 @@ module Eval = struct
         begin match Proc.pop_message() with
             Some message ->
               Debug.print("delivered message.");
-              apply_cont cont env message
+              apply_cont cont hs env message
           | None ->
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
@@ -380,7 +385,7 @@ module Eval = struct
     (* Session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
-        apply_cont cont env (`Int (Num.num_of_int apid))
+        apply_cont cont hs env (`Int (Num.num_of_int apid))
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
       let (c, d), blocked = Session.accept apid in
@@ -406,7 +411,7 @@ module Eval = struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env (Value.box_pair
+            apply_cont cont hs env (Value.box_pair
                                    (Value.box_int (Num.num_of_int c))
                                    (Value.box_int (Num.num_of_int d)))
           end
@@ -435,7 +440,7 @@ module Eval = struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env (Value.box_pair
+            apply_cont cont hs env (Value.box_pair
                                    (Value.box_int (Num.num_of_int c))
                                    (Value.box_int (Num.num_of_int d)))
           end
@@ -448,7 +453,7 @@ module Eval = struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env chan
+      apply_cont cont hs env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
@@ -457,7 +462,7 @@ module Eval = struct
           match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
-            apply_cont cont env (Value.box_pair v chan)
+            apply_cont cont hs env (Value.box_pair v chan)
           | None ->
             let grab_frame =
               Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
@@ -482,18 +487,18 @@ module Eval = struct
         Session.fuse (out1, in1) (out2, in2);
         unblock out1;
         unblock out2;
-        apply cont env (value env end_bang, [])
+        apply cont hs env (value env end_bang, [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-	apply_cont cont env (Lib.apply_pfun n args)
+	apply_cont cont hs env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
-	apply_cont cont env (Lib.apply_pfun_by_code code args)
+	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont args
-    | `Continuation c,      [p] -> apply_cont c env p
+    | `Continuation c,      [p] -> apply_cont c hs env p
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
-  and apply_cont cont env v : Value.t =
+  and apply_cont cont hs env v : Value.t =
     let stepf() =
       match cont with
         | [] when !atomic ->
@@ -514,24 +519,23 @@ module Eval = struct
           switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-              computation env cont comp
+              computation env cont hs comp
     in
       scheduler env (cont, v) stepf
-
-  and computation env cont (bindings, tailcomp) : Value.t =
+  and computation env cont hs (bindings, tailcomp) : Value.t =
     match bindings with
-      | [] -> tail_computation env cont tailcomp
+      | [] -> tail_computation env cont hs tailcomp
       | b::bs -> match b with
           | `Let ((var, _) as b, (_, tc)) ->
               let locals = Value.localise env var in
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
-                tail_computation env cont' tc
+                tail_computation env cont' hs tc
           | `Fun ((f, _) as fb, (_, args, body), `Client) ->
               let env' = Value.bind f (`ClientFunction
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
-                computation env' cont (bs, tailcomp)
+                computation env' cont hs (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), _) ->
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
@@ -540,7 +544,7 @@ module Eval = struct
                   (`RecFunction ([f, (List.map fst args, body)],
                                  locals, f, scope), scope) env
               in
-                computation env' cont (bs, tailcomp)
+                computation env' cont hs (bs, tailcomp)
           | `Rec defs ->
               (* partition the defs into client defs and non-client defs *)
               let client_defs, defs =
@@ -574,11 +578,11 @@ module Eval = struct
                           scope)
                          env) defs env
               in
-                computation env cont (bs, tailcomp)
+                computation env cont hs (bs, tailcomp)
           | `Alien _ -> (* just skip it *)
-              computation env cont (bs, tailcomp)
+              computation env cont hs (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env cont : Ir.tail_computation -> Value.t = function
+  and tail_computation env cont hs : Ir.tail_computation -> Value.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -586,37 +590,37 @@ module Eval = struct
     (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
     (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
     (*     apply_cont cont env w *)
-    | `Return v      -> apply_cont cont env (value env v)
+    | `Return v      -> apply_cont cont hs env (value env v)
     | `Apply (f, ps) ->
-        apply cont env (value env f, List.map (value env) ps)
-    | `Special s     -> special env cont s
+        apply cont hs env (value env f, List.map (value env) ps)
+    | `Special s     -> special env cont hs s
     | `Case (v, cases, default) ->
         begin match value env v with
            | `Variant (label, _) as v ->
                (match StringMap.lookup label cases, default, v with
                   | Some ((var,_), c), _, `Variant (_, v)
                   | _, Some ((var,_), c), v ->
-                      computation (Value.bind var (v, `Local) env) cont c
+                      computation (Value.bind var (v, `Local) env) cont hs c
                   | None, _, #Value.t -> eval_error "Pattern matching failed"
                   | _ -> assert false (* v not a variant *))
            | _ -> eval_error "Case of non-variant"
         end
     | `If (c,t,e)    ->
-        computation env cont
+        computation env cont hs
           (match value env c with
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env cont : Ir.special -> Value.t = function
+  and special env cont hs : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
-    | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
+    | `Database v                 -> apply_cont cont hs env (`Database (db_connect (value env v)))
     | `Table (db, name, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
         match value env db, value env name, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, `Record row ->
-            apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+            apply_cont cont hs env (`Table ((db, params), Value.unbox_string name, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -627,7 +631,7 @@ module Eval = struct
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
       let result =
         match Query.compile env (range, e) with
-          | None -> computation env cont e
+          | None -> computation env cont hs e
           | Some (db, q, t) ->
             let (fieldMap, _, _), _ =
               Types.unwrap_row(TypeUtils.extract_row t) in
@@ -643,7 +647,7 @@ module Eval = struct
             in
               Database.execute_select fields q db
       in
-        apply_cont cont env result
+        apply_cont cont hs env result
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
@@ -655,7 +659,7 @@ module Eval = struct
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
-        apply_cont cont env (`Record [])
+        apply_cont cont hs env (`Record [])
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
@@ -667,13 +671,15 @@ module Eval = struct
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
-        apply_cont cont env (`Record [])
+        apply_cont cont hs env (`Record [])
     | `CallCC f                   ->
-       apply cont env (value env f, [`Continuation cont])
+       apply cont hs env (value env f, [`Continuation cont])
     (* Handlers *)
     | `Handle (v, cases) ->
-       let v' = value env v in
-       eval_error "Not yet supported: %s" (Value.string_of_value v')
+       let hs = hpush cases hs in
+       let comp = value env v in
+       let comp = apply cont hs env (comp, []) in
+       eval_error "Not yet supported: %s" (Value.string_of_value comp)
        (*let case =
 	 match value with
 	   `Variant (label, _) as v ->
@@ -693,7 +699,10 @@ module Eval = struct
        failwith "evalir.ml: Handlers not yet implemented!"*)
     | `DoOperation (v, t) ->     (* Strategy: Pop handlers' stack, and invoke the popped handler with the operation. *)
        let op = value env v in
-       eval_error "Unhandled operation: %s"  (Value.string_of_value op)
+       (match hs with
+	  h :: hs -> handle env cont h hs op
+	| []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
+       )
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -705,7 +714,7 @@ module Eval = struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env chan
+      apply_cont cont hs env chan
     | `Choice (v, cases) ->
       begin
         let chan = value env v in
@@ -719,7 +728,7 @@ module Eval = struct
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->
-                  computation (Value.bind var (chan, `Local) env) cont body
+                  computation (Value.bind var (chan, `Local) env) cont hs body
                 | None -> eval_error "Choice pattern matching failed"
               end
             (* apply_cont cont env (Value.box_pair v chan) *)
@@ -731,10 +740,24 @@ module Eval = struct
               Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
-    (*****************)
+  (*****************)
+  and  handle env cont h hs op =
+    let case =
+	 match op with
+	   `Variant (label, _) as v ->
+	   begin
+	     match StringMap.lookup label h, op with
+	       Some ((var,_), c), `Variant (_, v)  -> computation (Value.bind var (v, `Local) env) cont hs c
+	     (* Needs to handle Return-case too *)
+             | None, #Value.t -> eval_error "Pattern matching failed"
+             | _ -> assert false (* v not a variant *)
+	   end
+       | _ -> eval_error "Case of non-variant"
+       in
+       failwith "Handling not yet implemented."
 
   let eval : Value.env -> program -> Value.t =
-    fun env -> computation env Value.toplevel_cont
+    fun env -> computation env Value.toplevel_cont Value.toplevel_hs
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
@@ -742,7 +765,7 @@ let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
   fun cont env program ->
     try (
       ignore
-        (Eval.computation env cont program);
+        (Eval.computation env cont hempty program); (* TODO: Figure out whether the handler stack should be an input parameter *)
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
@@ -771,14 +794,14 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
 let apply_cont_toplevel cont env v =
-  try Eval.apply_cont cont env v
+  try Eval.apply_cont cont hempty env v
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
-  try Eval.apply [] env (f, vs)
+  try Eval.apply [] hempty env (f, vs)
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^

@@ -75,6 +75,9 @@ and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
+type handler_stack = ((Ir.binder * Ir.computation) Ir.name_map) list
+    
+val toplevel_hs   : handler_stack    
 val toplevel_cont : continuation
 
 val empty_env : Ir.closures -> env
