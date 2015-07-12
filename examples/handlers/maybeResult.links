@@ -5,6 +5,17 @@ fun maybeResult(x) {
     }
 }
 
+fun maybeResult2(x) {
+    handle(x) {
+    	      case Fail(_,k) -> Just(k)   # This is the problem "do Fail("Hello")" translates to let "k = "Hello" in ..."
+    	      case Return(x) -> Nothing
+    }
+}
+
+fun comp2() {
+    do Fail("Hello")
+}
+
 fun comp() {
     do Fail()
 }

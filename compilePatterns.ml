@@ -896,7 +896,7 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				    (*				    let () = failwith ("Projected type: " ^ (Types.string_of_datatype t)) in*)
 				    (*let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)*)
 				    let_pattern (nenv,tenv,eff) p (`Variable y, t) (body env, output_type)
-				  in
+				  in				  
 				  let continuation_binder =
 				    let Some k = StringMap.lookup "2" fields in
 				    match k with
@@ -907,7 +907,7 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  
 				  let computation = with_bindings continuation_binder computation  in
-				  StringMap.add opname (yb, computation) cases
+				  StringMap.add opname (yb, computation) cases (* This overrides previous definitions when using multiple specialised pattern-matching on the same variant name *)
 				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
                              | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
 			    )

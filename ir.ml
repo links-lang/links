@@ -420,11 +420,13 @@ struct
 	   let (v, _, o) = o#value v in
 	   let (bs, branch_types, o) =
 	     o#name_map (fun o (b, c) ->
-	    	         let (b, o) = o#binder b in
+			 let (b, o) = o#binder b in
 			 let (c, t, o) = o#computation c in
-			 (b, c), t, o) bs in
-    		         let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-			 `Handle (v, bs), t, o
+			 (b, c), t, o)
+			bs
+	   in
+    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+	   `Handle (v, bs), t, o
 	| `DoOperation (v, t) ->
 	   let (v, _, o) = o#value v in
 	   (`DoOperation (v, t), t, o)

@@ -741,20 +741,20 @@ module Eval = struct
               switch_context env
       end
   (*****************)
-  and  handle env cont h hs op =
+  and handle env cont h hs op =
     let case =
-	 match op with
-	   `Variant (label, _) as v ->
-	   begin
-	     match StringMap.lookup label h, op with
-	       Some ((var,_), c), `Variant (_, v)  -> computation (Value.bind var (v, `Local) env) cont hs c
-	     (* Needs to handle Return-case too *)
-             | None, #Value.t -> eval_error "Pattern matching failed"
-             | _ -> assert false (* v not a variant *)
-	   end
-       | _ -> eval_error "Case of non-variant"
-       in
-       failwith "Handling not yet implemented."
+      match op with
+	`Variant (label, v) ->
+	begin
+	  match StringMap.lookup label h with
+	    Some ((var,_), c) -> let env = Value.bind var (v, `Local) env in
+				 computation env cont hs c
+	  (* Needs to handle Return-case too *)
+          | None -> eval_error "Pattern matching failed"
+	end
+      | _ -> eval_error "Case of non-variant"
+    in
+    failwith "Handling not yet implemented."
 
   let eval : Value.env -> program -> Value.t =
     fun env -> computation env Value.toplevel_cont Value.toplevel_hs
