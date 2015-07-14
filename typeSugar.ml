@@ -1781,6 +1781,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               (pos_and_typ from, no_pos (`Table (read, write, needed))) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
 
+            let hide =
+              let bs = Env.domain (pattern_env pat) in
+              StringMap.filter (fun b _ -> not (StringSet.mem b bs)) in
+
             let inner_effects = Types.make_empty_closed_row () in
             let context' = bind_effects (context ++ pattern_env pat) inner_effects in
 
@@ -1798,7 +1802,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               `DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type,
-              merge_usages [usages from; from_option StringMap.empty (opt_map usages where)]
+              merge_usages [usages from; hide (from_option StringMap.empty (opt_map usages where))]
         | `DBInsert (into, labels, values, id) ->
             let into   = tc into in
             let values = tc values in
@@ -1881,6 +1885,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.update_table
               (pos_and_typ from, no_pos (`Table (read, write, needed))) in
 
+            let hide =
+              let bs = Env.domain (pattern_env pat) in
+              StringMap.filter (fun b _ -> not (StringSet.mem b bs)) in
+
             (* the pattern should match the read type *)
             let () = unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read) in
 
@@ -1931,7 +1939,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             in
               `DBUpdate (erase_pat pat, erase from, opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
               Types.unit_type,
-              merge_usages (usages from :: from_option StringMap.empty (opt_map usages where) :: List.map (usages -<- snd) set)
+              merge_usages (usages from :: hide (from_option StringMap.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
         | `Query (range, p, _) ->
             let range, outer_effects, range_usages =
               match range with
