@@ -869,40 +869,24 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 					 let comp = let_pattern (nenv,tenv,eff) p (`Variable y, optype) (body env, output_type) in
 					 StringMap.add "Return" (yb, comp) cases
 				end
-                             | `Variant (opname, `Record (fields,_) as r) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
+                             | `Variant (opname, `Record (patterns,_) as r) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
 			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
-				if StringMap.size fields = 2 then
+				if StringMap.size patterns = 2 then
 				  (* Lookup the type of the computation *)
 				  let (optype,_) = TypeUtils.split_row opname effects in (* Retrieve the operation's type, i.e. the effect row from the computation type *) (* (TypeUtils.effect_row ty) *)
 				  let (yb, y) = Var.fresh_var_of_type optype in
 				  let computation =
-				    let Some p = StringMap.lookup "1" fields in
+				    let Some p = StringMap.lookup "1" patterns in
 				    let (nenv,tenv,eff,_) = env in
 				    let t = TypeUtils.project_type "1" optype in 
-				      (*match optype with
-					`Record (fields,row_var,dual) -> 
-					let Some p = StringMap.lookup "1" fields in
-					begin
-					  match p with
-					    `Present p -> p
-					    (*begin
-					      match p with
-						`Record (fields,_,_) -> `Record (fields,row_var,dual)
-					      | _ -> p
-					    end*)
-					  | _ -> assert false
-					end
-				      | _ -> assert false in*)				   
-				    (*				    let () = failwith ("Projected type: " ^ (Types.string_of_datatype t)) in*)
-				    (*let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)*)
-				    let_pattern (nenv,tenv,eff) p (`Variable y, t) (body env, output_type)
+				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)
+						(*let_pattern (nenv,tenv,eff) p (`Variable y, t) (body env, output_type)*)
 				  in				  
 				  let continuation_binder =
-				    let Some k = StringMap.lookup "2" fields in
+				    let Some k = StringMap.lookup "2" patterns in
 				    match k with
-				      `Variable k  -> let k_tyvars = [] in
-				    (*[`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]*)
-						      [`Let (k, (k_tyvars, `Return (`Variable y)))]
+				      `Variable k  -> let k_tyvars = [] in				    
+						      [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
 				    | `Any         -> []
 				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  
@@ -914,91 +898,6 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 			    StringMap.empty (* Fold seed *)
 			    clauses (* Structure we're folding over *)
 			 )))
-
-(*let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) -> bound_computation =
-  fun var clauses (output_type,effects) env ->
-  (* Construct a Handle by folding over the clauses *)
-  ([], `Special (`Handle (`Variable var,
-			  List.fold_left
-			    (fun cases ([(annotation, pattern)], body) ->
-			     match pattern with
-			     | `Variant ("Return", `Variable b) -> (* case Return(x) -> ... *)
-				(*let (x,_) = b in
-				let body = apply_annotation (`Variable x) (annotation, body) in (* Annotate computation *)*)
-				StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
-                             | `Variant ("Return", _) -> failwith "Return must have exactly one argument." (* semantic error: Return(x1,...,xN) -> ... *)
-                             | `Variant (opname, `Record (smap,_) as r) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
-			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
-				if StringMap.size smap = 2 then
-
-				  (* Lookup the type of the computation *)
-				  (*let () = failwith (Types.string_of_row effects) in
-				  let () = failwith (Types.string_of_datatype (TypeUtils.concrete_type (lookup_type var env))) in*)
-				  let ty = TypeUtils.concrete_type(lookup_type var env) in
-				  let (optype,_) = TypeUtils.split_row opname effects in (* Retrieve the operation's type, i.e. the effect row from the computation type *) (* (TypeUtils.effect_row ty) *)
-				  (* Auxiliary functions:
-                                     get_binder returns the binder from a `Variable
-                                     lookup retrieves an element from the record (row)
-                                  *)
-				  let get_binder (b : pattern) = match b with
-				      `Variable b    -> b
-				    | `Variant     _ -> failwith "It is `Variant"
-				    | `Record      _ -> failwith "It is `Record"
-				    | `Constant    _ -> failwith "It is `Constant"
-				    | `Any           -> failwith "It is `Any"
-				    | _              -> failwith "Something else"
-				  in
-				  let lookup x = match StringMap.lookup x smap with
-				    | Some x -> x
-				    | _ -> failwith "Lookup failure"
-				  in
-				  let (yb, y) = Var.fresh_var_of_type optype in					  
-				  (*let codegen p = 
-				    let gen_continuation_code = 
-				      let k        = lookup "2" in
-				      match k with 
-					`Variable k -> let k_tyvars = [] in
-						       [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
-				       | `Any        -> []
-				       | _ -> assert false							 
-				    in
-				    match get_pattern_type p with
-				      `Variable    -> 
-				      begin
-				      match p with
-					`Variable b -> [`Let(b, ([], `Return (`Project ("1", `Variable y))))] @ continuation_code
-				      | `Any        -> gen_continuation_code
-				      end
-				    | `Variant     -> failwith "It is `Variant"
-				    | `Record      -> failwith "It is `Record"
-				    | `Constant    -> failwith "It is `Constant"				    
-				    | _            -> failwith "Something else"
-				  in*)
-				  let p = get_binder (lookup "1") in (* Lookup the first parameter *)
-				  let k = get_binder (lookup "2") in (* Lookup the continuation *)
-				  let (p_tyvars,k_tyvars) = ([],[]) in (* Type quantifiers for p and k *)
-				  (* Code generation:                                     
-                                     Essentially, we generate the expression:
-                                     let p = proj(r,1)
-                                         k = proj(r,2)
-                                     in (body env)
-                                     where proj is the projection of a member from the record (row).
-				   *)
-				 (* let (yb, y) = Var.fresh_var_of_type optype in  *)
-				  let (bps,_) = (match_var [fst p] [([(annotation, pattern)], body)] (fun _ -> ([],(`Return (`Project ("2", `Variable y)))))) var env (*`Let (p, (p_tyvars, `Return (`Project ("1", `Variable y))))*)  in
-				  let bk = `Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))  in
-				  (* Bind yb to the above expression *)		   
-				  StringMap.add opname (yb, with_bindings (bps @ [bk]) (body env)) cases
-				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
-                             | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
-			    )
-			    StringMap.empty (* Fold seed *)
-			    clauses (* Structure we're folding over *)
-			 )))
- *)					    
- (*
-let rec match_handle_cases : var -> clause list -> bound_computation =
-  fun var clauses env -> failwith "Handlers cases compilation not yet implemented!"*)
 				  
 let compile_handle_cases : raw_env -> (Types.datatype * Types.row * var * raw_clause list) -> Ir.computation =
   fun (nenv, tenv, eff) (output_type, effects, var, raw_clauses) ->

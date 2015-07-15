@@ -69,15 +69,23 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
+| `GContinuation of gcontinuation
 | `Socket of in_channel * out_channel
 ]
-and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+and continuation_frame = (Ir.scope * Ir.var * env * Ir.computation)
+and continuation = continuation_frame list
+and gcontinuation = continuation list							       
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
-type handler_stack = ((Ir.binder * Ir.computation) Ir.name_map) list
+(** Continuation helpers **)    
+val generalise_cont   : continuation -> gcontinuation
+val toplevel_gcont    : gcontinuation
+val append_cont_frame : continuation_frame -> gcontinuation -> gcontinuation
+val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> continuation_frame
+type handlers = ((Ir.binder * Ir.computation) Ir.name_map) list
     
-val toplevel_hs   : handler_stack    
+val toplevel_hs   : handlers
 val toplevel_cont : continuation
 
 val empty_env : Ir.closures -> env
@@ -134,6 +142,7 @@ val string_of_cont : continuation -> string
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
+val marshal_gcontinuation : gcontinuation -> string					     
 
 type unmarshal_envs =
     env * Ir.scope Utility.IntMap.t *
@@ -144,6 +153,7 @@ val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
   -> Ir.program -> unmarshal_envs
 
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
+val unmarshal_gcontinuation : unmarshal_envs -> string -> gcontinuation
 val unmarshal_value : unmarshal_envs -> string -> t
 
 val expr_to_contframe : env -> Ir.tail_computation ->

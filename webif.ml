@@ -61,6 +61,7 @@ let rec resolve_functions closures funcmap =
                         f, scope)
     | `ClientFunction _ as x -> x
     | `Continuation _ as x -> assert false      (* Unimplemented. Traverse it? *)
+    | `GContinuation _ as x -> assert false (* Same as above *)
     | `PrimitiveFunction _ as x -> x
     | #Value.primitive_value as x -> x
     | `Socket _ as x -> x

@@ -13,7 +13,7 @@ let lookup_present_safe : string -> Types.field_spec_map -> Types.datatype optio
     Some (`Present p) -> Some p
   | _ -> None
 
-let get_operation_type : string -> Types.field_spec_map -> Types.datatype option 
+let get_operation_arg_type : string -> Types.field_spec_map -> Types.datatype option 
   = fun index fields ->
   match lookup_present_safe index fields with
     Some ((`MetaTypeVar point) as p) -> 
@@ -33,7 +33,7 @@ let get_operation : string -> Types.row -> operation option
       match p with
 	`Record (fields,_,_) ->
 	begin 
-	  match get_operation_type "1" fields with
+	  match get_operation_arg_type "1" fields with
 	    Some p -> Some (name, p)
 	  | _ -> None
 	end
@@ -57,8 +57,8 @@ let extract_operations : Types.row -> operation_raw list
       `Record (fields,_,_) ->
       let num_params = StringMap.size fields in
       if num_params = 2 then
-	let (Some p) = get_operation_type "1" fields in
-	match get_operation_type "2" fields  with
+	let (Some p) = get_operation_arg_type "1" fields in
+	match get_operation_arg_type "2" fields  with
           Some ((`Function _) as k) -> RawOperation (name, p, k) (* Is already normalised *)       
 	| _ -> (* Needs to be normalised: Construct new function type. *)
 	   let inp  = Types.fresh_type_variable (`Unl, `Any) in

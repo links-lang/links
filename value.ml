@@ -182,7 +182,9 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
    end)
 
 (*jcheney: Added function component to PrimitiveFunction *)
-type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+type continuation = continuation_frame list
+and continuation_frame = (Ir.scope * Ir.var * env * Ir.computation)
+and gcontinuation = continuation list							       
 and t = [
 | primitive_value
 | `List of t list
@@ -194,17 +196,28 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
+| `GContinuation of gcontinuation
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
 (* and env = (t * Ir.scope) Utility.intmap  * Ir.closures *)
 (* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
   deriving (Show)
-
-type handler_stack = ((Ir.binder * Ir.computation) Ir.name_map) list
+					     
+type handlers = ((Ir.binder * Ir.computation) Ir.name_map) list
   
 let toplevel_cont : continuation  = []
 let toplevel_hs   = []
+
+(** Continuation helpers **)
+let generalise_cont cont : gcontinuation = [cont]
+let toplevel_gcont = generalise_cont toplevel_cont					     
+let append_cont_frame cf cfss =
+  match cfss with
+    cfs :: cfss -> (cf :: cfs) :: cfss
+  | [] -> [[cf]]
+let make_cont_frame scope var env comp : continuation_frame = (scope, var, env, comp)
+
 (** {1 Environment stuff} *)
 (** {2 IntMap-based implementation with global memoization} *)
 
@@ -327,8 +340,10 @@ and compressed_t = [
 | `GlobalFunction of (Ir.var list * Ir.var)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Continuation of compressed_continuation ]
+| `Continuation of compressed_continuation
+| `GContinuation of compressed_gcontinuation ]
 and compressed_env = (Ir.var * compressed_t) list
+and compressed_gcontinuation = compressed_continuation list					     
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
@@ -370,6 +385,7 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `GContinuation cont -> `GContinuation (compress_gcontinuation cont) (* Hacky, GContinuation and Continuation should be merged eventually *)
       | `Socket (inc, outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -381,9 +397,10 @@ and compress_env env : compressed_env =
             (name, compress_t v)::compressed)
        env
        [])
-
-(* let string_of_value : t -> string = *)
-(*   fun v -> Show.show show_compressed_t (compress_t v) *)
+    (* let string_of_value : t -> string = *)
+    (*   fun v -> Show.show show_compressed_t (compress_t v) *)
+and compress_gcontinuation cont : compressed_gcontinuation =
+  List.map compress_continuation cont
 
 type unmarshal_envs =
     env * Ir.scope IntMap.t *
@@ -405,7 +422,7 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
         let driver, params = parse_db_string s in
         let database = db_connect driver params in
           `Database database
-
+  
 let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont
     : continuation =
   List.map
@@ -436,6 +453,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
+      | `GContinuation cont -> `GContinuation (uncompress_gcontinuation envs cont) (* Hacky, similar to the compress-case *)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
   try
   List.fold_left
@@ -444,7 +462,9 @@ and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
     (empty_env (get_closures globals))
     env
   with NotFound str -> failwith("In uncompress_env: " ^ str)
-
+and uncompress_gcontinuation envs cont : gcontinuation =
+  List.map (uncompress_continuation envs) cont
+			       
 let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
     : unmarshal_envs =
   let tyenv =
@@ -587,7 +607,7 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-  | `Continuation cont -> "Continuation" ^ string_of_cont cont
+  | `Continuation cont -> "Continuation" ^ string_of_cont cont							  
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -699,6 +719,19 @@ type 'a serialiser = {
 let marshal_save : 'a -> string = fun v -> Marshal.to_string v []
 and marshal_load : string -> 'a = fun v -> Marshal.from_string v 0
 
+let gcontinuation_serialisers : (string * compressed_gcontinuation serialiser) list = [
+  "Marshal",
+  { save = marshal_save ; load = marshal_load };
+
+  "Pickle",
+  { save = Pickle.to_string<compressed_gcontinuation> ;
+    load = Pickle.from_string<compressed_gcontinuation> };
+
+  "Dump",
+  { save = Dump.to_string<compressed_gcontinuation> ;
+    load = Dump.from_string<compressed_gcontinuation> }
+]							       
+							       
 let continuation_serialisers : (string * compressed_continuation serialiser) list = [
   "Marshal",
   { save = marshal_save ; load = marshal_load };
@@ -734,9 +767,24 @@ let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =
 let continuation_serialiser : unit -> compressed_continuation serialiser =
   fun () -> retrieve_serialiser continuation_serialisers
 
+let gcontinuation_serialiser : unit -> compressed_gcontinuation serialiser =
+  fun () -> retrieve_serialiser gcontinuation_serialisers				
+
 let value_serialiser : unit -> compressed_t serialiser =
   fun () -> retrieve_serialiser value_serialisers
 
+let marshal_gcontinuation (c : gcontinuation) : string =
+  let cs = compress_gcontinuation c in
+  let { save = save } = gcontinuation_serialiser () in
+  let pickle = save cs in
+  if String.length pickle > 4096 then
+    prerr_endline "Marshalled continuation larger than 4K:";
+    base64encode pickle
+
+let unmarshal_gcontinuation (envs : unmarshal_envs) : string -> gcontinuation =
+    let { load = load } = gcontinuation_serialiser () in
+    base64decode ->- load ->- uncompress_gcontinuation envs		 
+		 
 let marshal_continuation (c : continuation) : string =
   let cs = compress_continuation c in
   let { save = save } = continuation_serialiser () in
@@ -762,10 +810,11 @@ let unmarshal_value envs : string -> t =
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)
 let expr_to_contframe env expr =
-  ((`Local        : Ir.scope),
+  make_cont_frame `Local Var.dummy_var env ([], expr)
+(*  ((`Local        : Ir.scope),
    (Var.dummy_var : Ir.var),
    (env           : env),
-   (([], expr)    : Ir.computation))
+   (([], expr)    : Ir.computation))*)
 
 let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
 and value_of_xmlitem =

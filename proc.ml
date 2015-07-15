@@ -11,7 +11,8 @@ let main_running = ref true
 
 (** A process state is a pair of a continuation and a value; running
     the process means applying the continuation to the value. *)
-type proc_state = Value.continuation * Value.t 
+(*type proc_state = Value.continuation * Value.t *)
+type proc_state = Value.gcontinuation * Value.handlers * Value.t		       
 
 type scheduler_state =
     { suspended : (proc_state * pid) Queue.t;

@@ -1608,57 +1608,29 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `DoOperation ((p,pos) as op, None) ->
 	   let opname =
 	     match p with
-	       `ConstructorLit (opname, None, _) -> Gripers.die pos ("expected " ^ opname ^ " to take one argument, but none were given.") (* Todo: Refactor this along with the below code *)
-	     | `ConstructorLit (opname, _, _) -> opname
+	       `ConstructorLit (opname, _, _) -> opname
 	     | _ -> assert false (* This case *should* never happen as syntax tree is built such that it guarantees the phrasenode p to be a `ConstructorLit *)
 	   in
 	   let p = tc op in (* Type-check the operation expression *)
-	   let t = typ p in (* Retrieve inferred expression type *)
-	   let num_args =
-	     match t with
-	       `Variant (fields,_,_) -> let Some fields = StringMap.lookup opname fields in
-					begin
-					  match fields with
-					    `Present p ->
-					    begin
-					      match p with
-						`Record (fields,_,_) -> let num_args = StringMap.size fields in
-									if num_args == 0 then 1 else num_args		  
-					      | _ -> 1
-					    end
-					  | _ -> assert false
-					end
-	     | _ -> failwith (Types.string_of_datatype t)					  
+	   let pt = typ p in (* Retrieve inferred expression type *)
+	   let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
+	   let pt' = match pt with
+	       `Variant (fields,_,_) ->
+	       let Some t = StringMap.lookup opname fields in
+	       (match t with
+		  `Present t -> t
+		| _ -> assert false 
+	       )
+	     | _ -> assert false
 	   in
-	   (*let () = print_string ((Types.string_of_datatype t) ^ " # args: " ^ (string_of_int num_args) ^ "\n") in*)
-	 (*  if (num_args < 1) then
-	     Gripers.die pos ("expected 1 argument to " ^ opname ^ ", but " ^ (string_of_int num_args) ^ " were given.")
-	   else*)
-	     let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
-	     let t' = match t with
-		      `Variant (fields,_,_) ->
-		      let Some t = StringMap.lookup opname fields in
-		      (match t with
-			  `Present t -> t
-(*			  begin
-			    match t with
-			      `Record (fields,_,_) as r -> if StringMap.size fields = 0 then
-							     HandlerUtils.wrap_in_record r
-							   else
-							     r
-			    | _ -> t
-			  end*)
-			| _ -> assert false 
-		      )
-		    | _ -> assert false
-	     in
-	     let optype = Types.make_pure_function_type t' return_type in
-	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Any, `Any) in
-	     let effects = HandlerUtils.fix_operation_arity effects in
-	     (*let () = failwith (Types.string_of_row effects) in*)	     
-             let ()   = unify ~handle:Gripers.handle_pattern (* TODO: change handle! *)
-                  (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
-	     (`DoOperation (erase p, Some optype), return_type, usages p)
+	   let optype = Types.make_pure_function_type pt' return_type in
+	   let () = if (opname <> "Return") then
+		      let effects = Types.make_singleton_open_row (opname, `Present optype) (`Any, `Any) in
+		      let effects = HandlerUtils.fix_operation_arity effects in
+		      unify ~handle:Gripers.handle_pattern (* TODO: change handle! *)
+				     (no_pos (`Record context.effect_row), no_pos (`Record effects))
+	   in
+	   (`DoOperation (erase p, Some optype), return_type, usages p)
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->
