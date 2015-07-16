@@ -750,13 +750,13 @@ module Eval = struct
 	begin
 	  match StringMap.lookup label h with
 	    Some ((var,_) as b, comp) -> let p    = v in
-					 let k    = `GContinuation (cont) in (* Need to prepend current frame *)
+					 let k    = `GContinuation (cont) in (* The problem is HERE! *)
 					 (*let ()   = print_endline ("GCont: " ^ (Value.string_of_gcont cont)) in*)
 					 let pair = Value.box_pair p k in
 					 let env  = Value.bind var (pair, `Local) env in
 					 begin
 					   match cont with
-					     [] :: cs -> computation env cs (List.tl hs) comp
+					     [] :: cs -> computation env cs (List.tl hs) comp (* The continuation is not invoked, so we return *)
 					   | _        -> computation env cont hs comp
 					 end
           | None -> eval_error "Pattern matching failed"
