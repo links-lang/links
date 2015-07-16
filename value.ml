@@ -607,7 +607,8 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-  | `Continuation cont -> "Continuation" ^ string_of_cont cont							  
+  | `Continuation cont -> "Continuation" ^ string_of_cont cont
+  | `GContinuation cont -> "GContinuation" ^ string_of_gcont cont
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -638,7 +639,12 @@ and string_of_cont : continuation -> string =
     let frame (_scope, var, _env, body) =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
-      "[" ^ mapstrcat ", " frame cont ^ "]"
+    "[" ^ mapstrcat ", " frame cont ^ "]"
+and string_of_gcont : gcontinuation -> string =
+  fun cont ->
+  let first = List.hd cont in
+  let cont' = List.tl cont in
+  "[<" ^ (List.fold_left (fun acc x -> acc ^ ";" ^ x) (string_of_cont first) (List.map string_of_cont cont')) ^ ">]"
 
 
 (* let string_of_cont : continuation -> string = *)

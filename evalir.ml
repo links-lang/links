@@ -499,7 +499,7 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont hs args
-    | `GContinuation c,    [p] -> apply_cont c hs env p
+    | `GContinuation c,    [p]  -> apply_cont c hs env p
     | `Continuation c,      p   -> let c = Value.generalise_cont c in
 				   apply cont hs env (`GContinuation c, p) (* Legacy / backwards compatibility *)
     | `GContinuation _,       _  ->
@@ -531,7 +531,7 @@ module Eval = struct
              let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
              computation env (cont :: conts) hs comp
 	end
-      | _ -> failwith "Edge case: Stack of continuations is empty"
+      | _ -> failwith ("Edge case: Stack of continuations is empty (value: " ^ (Value.string_of_value v))
     in
   scheduler env (gcont, hs, v) stepf
   and computation env cont hs (bindings, tailcomp) : Value.t =
@@ -602,8 +602,9 @@ module Eval = struct
     (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
     (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
     (*     apply_cont cont env w *)
-    | `Return v      -> apply_cont cont hs env (value env v) (*let v = (value env v) in
-			handle_return env cont hs v*)
+    | `Return v      -> (*apply_cont cont hs env (value env v)*)
+       let v = (value env v) in
+       handle_return env cont hs v
     | `Apply (f, ps) -> apply cont hs env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont hs s
     | `Case (v, cases, default) ->
@@ -688,10 +689,11 @@ module Eval = struct
     apply cont hs env (value env f, [`GContinuation cont])
     (* Handlers *)
     | `Handle (v, cases) ->
-       let hs = hpush cases hs in
+       let hs = cases :: hs in
+       let cont = [] :: cont in 
        let comp = value env v in
        apply cont hs env (comp, [])
-    | `DoOperation (v, t) ->     (* Strategy: Pop handlers' stack, and invoke the popped handler with the operation. *)
+    | `DoOperation (v, t) ->
        let op = value env v in
        handle env cont hs op
     (* Session stuff *)
@@ -734,43 +736,49 @@ module Eval = struct
       end
   (*****************)
   and handle env cont hs op =
-    let match_pattern h op =      
+    let transform h op =
+      let () = print_endline ("Handling " ^ (Value.string_of_value op)) in
       match op with
-	`Variant ("Return", v) ->
+	(*`Variant ("Return", v) ->
 	begin
 	  match StringMap.lookup "Return" h with
 	    Some ((var,_),c) -> let x = v in
 				let env = Value.bind var (x, `Local) env in
 				computation env cont hs c
-	end
+	end*)
 	
        | `Variant (label, v) ->
 	begin
 	  match StringMap.lookup label h with
-	    Some ((var,_), c) -> let p = v in
-				 let k = `Continuation (List.hd cont) in
-				 let pair = Value.box_pair p k in
-				 let env = Value.bind var (pair, `Local) env in
-				 computation env cont hs c
-	  (* Needs to handle Return-case too *)
+	    Some ((var,_) as b, c) -> let p    = v in
+				      let k    = `GContinuation (cont) in (* Need to prepend current frame *)
+				      (*let ()   = print_endline ("GCont: " ^ (Value.string_of_gcont cont)) in*)
+				      let pair = Value.box_pair p k in
+				      let env  = Value.bind var (pair, `Local) env in
+				      begin
+					match cont with
+					  [] :: cs -> computation env (cs) (List.tl hs) c
+					| _    -> computation env cont hs c
+				      end
           | None -> eval_error "Pattern matching failed"
 	end
       | _ -> eval_error "Case of non-variant"
     in
     match hs with
-      h :: hs -> match_pattern h op
+      h :: hs -> transform h op
     | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
-  and handle_return env cont hs v = failwith ""
-    (*let transform h v =      
+  and handle_return env cont hs v =    
+    let transform cont hs h v =
+      let () = print_endline ("Handling return " ^ (Value.string_of_value v)) in
       match StringMap.lookup "Return" h with
-	Some ((var,_), c) -> let env = Value.bind var (v, `Local) env in
-			     
-      (* Needs to handle Return-case too *)
+	Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
+				computation env cont hs comp
       | None -> eval_error "Pattern matching failed"      
     in
-    match hs with
-      h :: hs -> transform h v
-    | []      -> apply_cont cont hs env v*)
+    match cont, hs with
+    (* [[]], [h] -> transform [[]] [] h v*)
+    | [] :: cs, h :: hs -> transform cs hs h v 
+    | _, _              -> apply_cont cont hs env v
 
   let eval : Value.env -> program -> Value.t =
     fun env ->

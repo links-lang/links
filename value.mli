@@ -139,6 +139,7 @@ val string_of_value : t -> string
 val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
 val string_of_cont : continuation -> string
+val string_of_gcont : gcontinuation -> string				       
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
