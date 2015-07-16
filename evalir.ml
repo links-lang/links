@@ -768,7 +768,7 @@ module Eval = struct
     | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
   and handle_return env cont hs v =    
     let transform cont hs h v =
-      let () = print_endline ("Handling return " ^ (Value.string_of_value v)) in
+      (*let () = print_endline ("Handling return " ^ (Value.string_of_value v)) in*)
       match StringMap.lookup "Return" h with
 	Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
 				computation env cont hs comp
