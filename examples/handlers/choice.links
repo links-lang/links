@@ -1,6 +1,6 @@
 fun enumerate(x) {
     handle(x) {
-    	      case Choose(_,k)  -> [9] ++ k(false) ++ [3]
+    	      case Choose(_,k)  -> {[9] ++ k(true) ++ [3]}
     	      case Return(x)    -> [x]
     }
 }
@@ -25,7 +25,7 @@ fun comp() {
     x + y
 }
 
-# enumerate(comp) should yield [42, 40, 32, 30]
+# enumerate(comp) should yield [42, 45, 32, 35]
 
 # General enumeration
 fun chooseAll(x) {

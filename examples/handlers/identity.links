@@ -1,0 +1,9 @@
+fun identity(x) {
+    handle(x) {
+    	      case Return(x) -> x
+    }
+}
+
+fun comp() {
+    42
+}

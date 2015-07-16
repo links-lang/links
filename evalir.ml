@@ -685,8 +685,8 @@ module Eval = struct
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont hs env (`Record [])
-    | `CallCC f                   ->
-    apply cont hs env (value env f, [`GContinuation cont])
+    | `CallCC f ->
+       apply cont hs env (value env f, [`GContinuation cont])
     (* Handlers *)
     | `Handle (v, cases) ->
        let hs = cases :: hs in
@@ -736,8 +736,7 @@ module Eval = struct
       end
   (*****************)
   and handle env cont hs op =
-    let transform h op =
-      let () = print_endline ("Handling " ^ (Value.string_of_value op)) in
+    let transform h op =      
       match op with
 	(*`Variant ("Return", v) ->
 	begin
@@ -750,16 +749,16 @@ module Eval = struct
        | `Variant (label, v) ->
 	begin
 	  match StringMap.lookup label h with
-	    Some ((var,_) as b, c) -> let p    = v in
-				      let k    = `GContinuation (cont) in (* Need to prepend current frame *)
-				      (*let ()   = print_endline ("GCont: " ^ (Value.string_of_gcont cont)) in*)
-				      let pair = Value.box_pair p k in
-				      let env  = Value.bind var (pair, `Local) env in
-				      begin
-					match cont with
-					  [] :: cs -> computation env (cs) (List.tl hs) c
-					| _    -> computation env cont hs c
-				      end
+	    Some ((var,_) as b, comp) -> let p    = v in
+					 let k    = `GContinuation (cont) in (* Need to prepend current frame *)
+					 (*let ()   = print_endline ("GCont: " ^ (Value.string_of_gcont cont)) in*)
+					 let pair = Value.box_pair p k in
+					 let env  = Value.bind var (pair, `Local) env in
+					 begin
+					   match cont with
+					     [] :: cs -> computation env cs (List.tl hs) comp
+					   | _        -> computation env cont hs comp
+					 end
           | None -> eval_error "Pattern matching failed"
 	end
       | _ -> eval_error "Case of non-variant"

@@ -5,21 +5,10 @@ fun maybeResult(x) {
     }
 }
 
-fun maybeResult2(x) {
-    handle(x) {
-    	      case Fail(p,_) -> Just(p)
-    	      case Return(x) -> Nothing
-    }
-}
-
-fun comp2() {
-    do Fail("Hello")
-}
-
 fun comp() {
     do Fail()
 }
 
-fun comp3() {
+fun comp2() {
     42
 }
