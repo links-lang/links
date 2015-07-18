@@ -2551,7 +2551,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
 	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
 	       Gripers.die pos msg
-	     else	       
+	     else
 	       let operations       = HandlerUtils.simplify_operations raw_operations in
 	       let ()               = unify_all (HandlerUtils.extract_continuation_tails raw_operations) in
 	       let operations       = HandlerUtils.effectrow_of_oplist operations in	      
