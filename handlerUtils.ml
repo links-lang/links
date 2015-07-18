@@ -63,7 +63,7 @@ let extract_operations : Types.row -> operation_raw list
 	   let inp  = Types.fresh_type_variable (`Unl, `Any) in
 	   let out  = Types.fresh_type_variable (`Unl, `Any) in
 	   let k    = Types.make_pure_function_type inp out in
-	   RawOperation (name, p, inp)
+	   RawOperation (name, p, k)
 (*	| _ -> RawFailure ("expected last parameter in operation " ^ name ^ " to have a function type.") (* Continuation must be a function type. *)*)
       else
 	RawFailure ("Operation " ^ name ^ " accepts " ^ (string_of_int num_params) ^ " argument(s), but operations must 2 arguments.")
