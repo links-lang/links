@@ -143,14 +143,14 @@ let rec erase_type names t =
       in
         `Record (field_env, row_var, duality)
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
-
+	       
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t
   | `Function (_, _, t) -> t
   | `Lolli (_, _, t) -> t
   | t ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
-
+	    
 let rec arg_types t = match concrete_type t with
   | `ForAll (_, t) -> arg_types t
   | `Function (`Record row, _, _) ->
