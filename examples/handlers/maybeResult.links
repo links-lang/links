@@ -5,6 +5,30 @@ fun maybeResult(x) {
     }
 }
 
+fun listify(x) {
+    handle (x) {
+    	   case Return(x) -> [x]
+    }
+}
+
+fun concat(x) {
+    handle(x) {
+    	      case Return(x) -> x ++ [Just(0)]
+    }
+}
+
+fun maybeResult_t(x) {
+    fun() {
+    	  maybeResult(x)
+    }
+}
+
+fun maybeResult_t2(x) {
+    fun() {
+    	  listify(maybeResult_t(x))
+    }
+}
+
 fun comp() {
     do Fail()
 }

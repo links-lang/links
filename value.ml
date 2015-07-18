@@ -180,7 +180,7 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
     type t = out_channel
     let magic = "out_channel"
    end)
-
+ 
 (*jcheney: Added function component to PrimitiveFunction *)
 type continuation = continuation_frame list
 and continuation_frame = (Ir.scope * Ir.var * env * Ir.computation)
@@ -196,15 +196,15 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `GContinuation of gcontinuation
+| `GContinuation of gcontinuation * handlers
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
 (* and env = (t * Ir.scope) Utility.intmap  * Ir.closures *)
 (* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
-  deriving (Show)
-					     
-type handlers = ((Ir.binder * Ir.computation) Ir.name_map) list
+and handler  = (Ir.binder * Ir.computation) Ir.name_map (* Collection of cases *)
+and handlers = handler list
+  deriving (Show)					    
   
 let toplevel_cont : continuation  = []
 let toplevel_hs   = []
@@ -385,7 +385,7 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-      | `GContinuation cont -> `GContinuation (compress_gcontinuation cont) (* Hacky, GContinuation and Continuation should be merged eventually *)
+      | `GContinuation (cont,_) -> `GContinuation (compress_gcontinuation cont) (* Hacky, GContinuation and Continuation should be merged eventually *)
       | `Socket (inc, outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -453,7 +453,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
-      | `GContinuation cont -> `GContinuation (uncompress_gcontinuation envs cont) (* Hacky, similar to the compress-case *)
+      | `GContinuation (cont) -> `GContinuation (uncompress_gcontinuation envs cont, toplevel_hs) (* Hacky, similar to the compress-case *)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
   try
   List.fold_left
@@ -608,7 +608,7 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
-  | `GContinuation cont -> "GContinuation" ^ string_of_gcont cont
+  | `GContinuation (cont,hs) -> "GContinuation" ^ string_of_gcont cont ^ "$ #handlers: " ^ string_of_int (List.length hs)
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value

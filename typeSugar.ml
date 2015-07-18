@@ -2535,16 +2535,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _) ->
 	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
-	   let is_invalid (n,analysis) = (* Predicate indicating whether an "operation" is well-formed. *)
-	     match analysis with
-	     | TypeUtils.Invalid -> true
-	     | _                 -> false
-	   in
-	   let get_signature_tails ops =
-	     List.map (fun (name, signature) ->
-		       match signature with
-			 TypeUtils.Binary (`Function (_,_,t),_) -> t
-		       | _ -> assert false) ops in
 	   let unify_all types
 	     = if List.length types > 1 then
 		 let t    = List.hd types in
@@ -2557,21 +2547,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let effects            = TypeUtils.extract_row pattern_type                       in  (* Extract inferrred effect row *)
 	   if TypeUtils.handles_operation effects TypeUtils.return_case then                     (* Checks that the Return-case exists *)
 	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects        in
-	     let raw_operations   = HandlerUtils.extract_operations ops                         in
+	     let raw_operations   = HandlerUtils.extract_operations ops            in
 	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
 	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
 	       Gripers.die pos msg
-	     else
-	       (*	       let () = print_string ("Inferred: " ^ (Types.string_of_row effects) ^ "\n") in*)
+	     else	       
 	       let operations       = HandlerUtils.simplify_operations raw_operations in
 	       let ()               = unify_all (HandlerUtils.extract_continuation_tails raw_operations) in
-	       let operations       = HandlerUtils.effectrow_of_oplist operations in
-	       (*let operations     = TypeUtils.simplify_operation_signatures operations       in  (* Simplify the operation signatures *)
-	       (*	       let ()             = unify_all (get_signature_tails operations)               in  (* Ensure proper typing of operation signatures *)*)
-	       let operations     = TypeUtils.effectrow_of_oplist operations in (* Reconstruct the effect row *)*)
-	       let thunk_type     = Types.make_thunk_type operations ret                     in (* type: () {e}-> a *) (* Types.fresh_type_variable (`Unl, `Any) *)
+	       let operations       = HandlerUtils.effectrow_of_oplist operations in	      
+	       let thunk_type       = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
 	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
-	       (*	       let () = failwith ("Constructed: " ^ (Types.string_of_row operations) ^ "\n" ^ "Body type: " ^ (Types.string_of_datatype body_type) ^ "\n") in*)
 	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
 	   else
 	     Gripers.die pos ("The handler must include a " ^ TypeUtils.return_case ^ "-case.")

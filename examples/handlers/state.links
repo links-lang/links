@@ -23,15 +23,3 @@ fun comp() {
     do Put(s2 + s2);
     do Get()
 }
-
-fun stateless(x) {
-    handle(x) {
-    	      case Get((),k) -> fun(s) { 0 }
-	      case Put(p,k) -> fun(s) { 0 }
-	      case Return(x) -> fun(s) { 0 }
-    }
-}
-
-fun comp2() {
-    do Get();
-}

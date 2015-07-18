@@ -69,12 +69,14 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `GContinuation of gcontinuation
+| `GContinuation of gcontinuation * handlers
 | `Socket of in_channel * out_channel
 ]
 and continuation_frame = (Ir.scope * Ir.var * env * Ir.computation)
 and continuation = continuation_frame list
-and gcontinuation = continuation list							       
+and gcontinuation = continuation list
+and handler  = (Ir.binder * Ir.computation) Ir.name_map
+and handlers = handler list				 
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
@@ -83,7 +85,6 @@ val generalise_cont   : continuation -> gcontinuation
 val toplevel_gcont    : gcontinuation
 val append_cont_frame : continuation_frame -> gcontinuation -> gcontinuation
 val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> continuation_frame
-type handlers = ((Ir.binder * Ir.computation) Ir.name_map) list
     
 val toplevel_hs   : handlers
 val toplevel_cont : continuation

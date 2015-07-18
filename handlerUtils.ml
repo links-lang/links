@@ -41,7 +41,6 @@ let get_operation : string -> Types.row -> operation option
     end
   | _ -> None
 
-
 (* Extracts and normalises operations from an effect row. 
  * Definition of "normalised operation signature":
  *   If an operation signature is on the form:
@@ -59,12 +58,12 @@ let extract_operations : Types.row -> operation_raw list
       if num_params = 2 then
 	let (Some p) = get_operation_arg_type "1" fields in
 	match get_operation_arg_type "2" fields  with
-          Some ((`Function _) as k) -> RawOperation (name, p, k) (* Is already normalised *)       
+          Some ((`Function _) as k) -> RawOperation (name, p, k) (* Is already normalised *)   
 	| _ -> (* Needs to be normalised: Construct new function type. *)
 	   let inp  = Types.fresh_type_variable (`Unl, `Any) in
 	   let out  = Types.fresh_type_variable (`Unl, `Any) in
-	   let k    = Types.make_pure_function_type inp out in	   
-	   RawOperation (name, p, k)
+	   let k    = Types.make_pure_function_type inp out in
+	   RawOperation (name, p, inp)
 (*	| _ -> RawFailure ("expected last parameter in operation " ^ name ^ " to have a function type.") (* Continuation must be a function type. *)*)
       else
 	RawFailure ("Operation " ^ name ^ " accepts " ^ (string_of_int num_params) ^ " argument(s), but operations must 2 arguments.")
@@ -167,8 +166,8 @@ let is_operation_invalid : operation_raw -> bool
 let extract_continuation_tails : operation_raw list -> Types.datatype list
   = fun ops ->
   List.map (function
-	       | RawOperation (_, _, (`Function (_,_,t) as f)) -> t
-	       | _ -> assert false
+	     | RawOperation (_, _, (`Function (_,_,t) as f)) -> t
+	     | _ -> assert false
 	   ) ops
 
 let return_case = "Return"	   

@@ -1,0 +1,16 @@
+# The following handler gets typed as
+#   (() {Op1:(a) {}-> b}-> b) -> [b]
+# but it *should* have type
+#   (() {Op1:(a) {}-> b}-> b) -> [[b]]
+fun mapk(x) {
+    handle(x) {
+    	      case Op1(p,k)  -> map(k,p)
+	      case Return(x) -> [x]
+    }
+}
+
+# type: () {Op1:([Int]) {}-> Int}-> Int
+fun comp2() {
+    var x = do Op1([1,2,3,4]);
+    x `mod` 2
+}

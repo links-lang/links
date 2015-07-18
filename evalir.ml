@@ -498,50 +498,56 @@ module Eval = struct
 	apply_cont cont hs env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
-    | `ClientFunction name, args -> client_call name cont hs args
-    | `GContinuation c,    [p]  -> apply_cont c hs env p
-    | `Continuation c,      p   -> let c = Value.generalise_cont c in
-				   apply cont hs env (`GContinuation c, p) (* Legacy / backwards compatibility *)
-    | `GContinuation _,       _  ->
+    | `ClientFunction name, args   -> client_call name cont hs args
+    | `GContinuation (c, []), [p]  -> apply_cont (c) hs env p
+    | `GContinuation (c, [h]), [p] -> apply_cont (c @ cont) (h :: hs) env p
+    | `Continuation c,      p      -> let c = Value.generalise_cont c in
+				      let gcont = `GContinuation (c, hempty) in
+				      apply cont hs env (gcont, p) (* Legacy / backwards compatibility *)
+    | `GContinuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
-  and apply_cont gcont hs env v : Value.t =
+  and apply_cont cont hs env v : Value.t =
     let stepf() =
-      match gcont with
-	cont :: conts ->
-	begin
-	  match cont with
-          | [] when !atomic ->
+      match cont, hs with
+      | [] :: conts, h :: hs ->
+	 invoke_return_clause conts hs env h v
+      | [], [] ->
+	 if !atomic then
+           raise (TopLevel (Value.globals env, v))
+	 else if Proc.current_is_main() then
+           if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
              raise (TopLevel (Value.globals env, v))
-          | [] when Proc.current_is_main() ->
-             if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
-               raise (TopLevel (Value.globals env, v))
-             else
-               begin
-                 Debug.print ("Finished top level process (other processes still active)");
-                 toplevel_val := Some (Value.globals env, v);
-                 Proc.finish_current();
-                 switch_context env
-               end
-          | [] ->
+           else
+             begin
+	       Debug.print ("Finished top level process (other processes still active)");
+	       toplevel_val := Some (Value.globals env, v);
+	       Proc.finish_current();
+	       switch_context env
+             end  
+	 else
+	   begin
              Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
              Proc.finish_current();
              switch_context env
-          | (scope, var, locals, comp)::cont ->
-             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-             computation env (cont :: conts) hs comp
-	end
-      | _ -> failwith ("Edge case: Stack of continuations is empty (value: " ^ (Value.string_of_value v))
+	   end
+      | [] :: conts, [] -> apply_cont conts hs env v
+      | cont :: conts, _ ->
+	 let (scope, var, locals, comp) = List.hd cont in 
+         let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
+	 let conts = (List.tl cont) :: conts in
+         computation env conts hs comp
+      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")
     in
-  scheduler env (gcont, hs, v) stepf
+    scheduler env (cont, hs, v) stepf  (* TODO: What about state in a multithreaded context? *)
   and computation env cont hs (bindings, tailcomp) : Value.t =
     match bindings with
       | [] -> tail_computation env cont hs tailcomp
       | b::bs -> match b with
 		 | `Let ((var, _) as b, (_, tc)) ->
 		    let locals = Value.localise env var in	     
-		    let contf = Value.make_cont_frame (Var.scope_of_binder b) var locals (bs, tailcomp) in
-		    let cont  = Value.append_cont_frame contf cont in
+		    let contf  = Value.make_cont_frame (Var.scope_of_binder b) var locals (bs, tailcomp) in
+		    let cont   = Value.append_cont_frame contf cont in
                     tail_computation env cont hs tc
 		 | `Fun ((f, _) as fb, (_, args, body), `Client) ->
 		    let env' = Value.bind f (`ClientFunction
@@ -594,7 +600,7 @@ module Eval = struct
 		 | `Alien _ -> (* just skip it *)
 		    computation env cont hs (bs, tailcomp)
 		 | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env (cont : Value.gcontinuation) hs : Ir.tail_computation -> Value.t = function
+  and tail_computation env cont hs : Ir.tail_computation -> Value.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -602,9 +608,7 @@ module Eval = struct
     (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
     (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
     (*     apply_cont cont env w *)
-    | `Return v      -> (*apply_cont cont hs env (value env v)*)
-       let v = (value env v) in
-       handle_return env cont hs v
+    | `Return v      -> apply_cont cont hs env (value env v)
     | `Apply (f, ps) -> apply cont hs env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont hs s
     | `Case (v, cases, default) ->
@@ -686,7 +690,7 @@ module Eval = struct
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont hs env (`Record [])
     | `CallCC f ->
-       apply cont hs env (value env f, [`GContinuation cont])
+       apply cont hs env (value env f, [`GContinuation (cont, hs)])
     (* Handlers *)
     | `Handle (v, cases) ->
        let hs = cases :: hs in
@@ -729,60 +733,39 @@ module Eval = struct
             let choice_frame =
               Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
-	      let cont = Value.append_cont_frame choice_frame cont in
+	    let cont = Value.append_cont_frame choice_frame cont in
               Proc.block_current (cont, hs, `Record []);
               Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
   (*****************)
   and handle env cont hs op =
-    let transform h op =      
+    let transform (delim :: cont) (h :: hs) op =
       match op with
-	(*`Variant ("Return", v) ->
-	begin
-	  match StringMap.lookup "Return" h with
-	    Some ((var,_),c) -> let x = v in
-				let env = Value.bind var (x, `Local) env in
-				computation env cont hs c
-	end*)
-	
        | `Variant (label, v) ->
 	begin
 	  match StringMap.lookup label h with
 	    Some ((var,_) as b, comp) -> let p    = v in
-					 let k    = `GContinuation (cont) in (* The problem is HERE! *)
-					 (*let ()   = print_endline ("GCont: " ^ (Value.string_of_gcont cont)) in*)
+					 let k    = `GContinuation ([delim], [h]) in
 					 let pair = Value.box_pair p k in
 					 let env  = Value.bind var (pair, `Local) env in
-					 begin
-					   match cont with
-					     [] :: cs -> computation env cs (List.tl hs) comp (* The continuation is not invoked, so we return *)
-					   | _        -> computation env cont hs comp
-					 end
+					 computation env cont hs comp 
           | None -> eval_error "Pattern matching failed"
 	end
-      | _ -> eval_error "Case of non-variant"
+       | _ -> assert false (* This can never happen as all operations are variants. *)
     in
     match hs with
-      h :: hs -> transform h op
+      h :: _  -> transform cont hs op
     | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
-  and handle_return env cont hs v =    
-    let transform cont hs h v =
-      (*let () = print_endline ("Handling return " ^ (Value.string_of_value v)) in*)
-      match StringMap.lookup "Return" h with
-	Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
-				computation env cont hs comp
-      | None -> eval_error "Pattern matching failed"      
-    in
-    match cont, hs with
-    (* [[]], [h] -> transform [[]] [] h v*)
-    | [] :: cs, h :: hs -> transform cs hs h v 
-    | _, _              -> apply_cont cont hs env v
+  and invoke_return_clause cont hs env h v =    
+    match StringMap.lookup "Return" h with
+      Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
+			      computation env cont hs comp
+    | None -> eval_error "Pattern matching failed"      
 
   let eval : Value.env -> program -> Value.t =
     fun env ->
-    let toplevel_cont = Value.toplevel_gcont in
-    computation env toplevel_cont Value.toplevel_hs
+    computation env Value.toplevel_gcont Value.toplevel_hs
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
@@ -820,7 +803,7 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
 let apply_cont_toplevel cont env v =
-  let cont = Value.toplevel_gcont in
+  let cont = Value.generalise_cont cont in
   try Eval.apply_cont cont hempty env v
   with
     | Eval.TopLevel s -> snd s
@@ -828,8 +811,7 @@ let apply_cont_toplevel cont env v =
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
-  let cont = Value.toplevel_gcont in 
-  try Eval.apply cont hempty env (f, vs)
+  try Eval.apply Value.toplevel_gcont hempty env (f, vs)
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
