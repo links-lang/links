@@ -16,7 +16,7 @@ fun stateful(x) {
 # k2 : (a2) -> r 
 
 fun comp() {
-    do Put(2);
+#    do Put(2);
     var s1 = do Get();
     do Put(s1 + 1);
     var s2 = do Get();
