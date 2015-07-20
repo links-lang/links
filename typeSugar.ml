@@ -154,8 +154,10 @@ sig
   val if_branches  : griper
 
   val handle_patterns : griper
-  val handle_pattern  : griper
-
+  val handle_branches : griper			  
+  val handle_computation : griper
+  val handle_continuations : griper			     
+			  
   val discharge_operation : griper
 		       
   val switch_pattern : griper
@@ -359,14 +361,45 @@ tab() ^ code (show_type rt) ^ "."
       with_but2 pos ("Both branches of an " ^ code "if (...) ... else ..." ^
                        " expression should have the same type") l r
 
-    let handle_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("Handle (pattern) type check error.")
+    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,_) ~error:_ =
+      die pos ("\
+		Handler cases can only pattern match on operation types, but
+		the pattern" ^ nl () ^
+		 tab () ^ code lexpr ^ nl () ^
+		   "has type" ^ nl () ^
+		     tab () ^ code (show_type lt) ^ nl ())
 
-    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("Handle (patterns) type check error.")
+    let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("\
+		All handler cases must have the same type, but
+		the expression" ^ nl() ^
+		 tab() ^ code lexpr ^ nl() ^
+		   "has type" ^ nl() ^
+		     tab() ^ code (show_type lt) ^ nl() ^
+		       "while the subsequent expressions have type" ^ nl() ^
+			 tab() ^ code (show_type rt))
+    let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
+      die pos ("Cannot unify computation type " ^ nl() ^
+		 tab() ^ code (show_type lt) ^ nl() ^
+		   "and constructed type" ^ nl() ^
+		     tab() ^ code (show_type rt)
+	      )
 
+    let handle_continuations ~pos ~t1:(_,body_type) ~t2:(_,rt)	~error:_ =
+      die pos ("Unexpected continuation return type" ^ nl() ^
+		 tab() ^ code (show_type rt) ^ nl() ^
+		   "a type compatible with" ^ nl() ^
+		     tab() ^ code(show_type body_type) ^ nl() ^
+	               "was expected.")
+	
+	  
     let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
-      die pos ("failed to unify operation type with current effect context.")
+      die pos ("Unification failure: The operation " ^ nl() ^
+		 tab() ^ code rexpr ^ nl() ^
+		   "has type" ^ nl() ^
+		     tab() ^ code (show_type rt) ^
+		       "while current effect context has type" ^ nl()
+		       ^ tab() ^ code (show_type lt))
 	  
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
@@ -1550,7 +1583,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
     and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
-    let type_cases binders =
+    let type_cases' binders hpatterns hbranches = (* Generalised type_cases; two additional parameters are Griper handles *)
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
       let binders, pats =
@@ -1558,7 +1591,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           (fun (pat, body) (binders, pats) ->
              let pat = tpo pat in
              let () =
-               unify ~handle:Gripers.switch_patterns
+               unify ~handle:hpatterns
                  (ppos_and_typ pat, no_pos pt)
              in
                (pat, body)::binders, pat :: pats)
@@ -1572,7 +1605,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         List.fold_right
           (fun (pat, body) binders ->
              let body = type_check (context ++ pattern_env pat) body in
-             let () = unify ~handle:Gripers.switch_branches
+             let () = unify ~handle:hbranches
                (pos_and_typ body, no_pos bt) in
              let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
                                            if uses <> 1 then
@@ -1587,7 +1620,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           binders []
       in
         binders, pt, bt in
-
+    let type_cases binders = type_cases' binders Gripers.switch_patterns Gripers.switch_branches in
+    
     let e, t, usages =
       match (expr : phrasenode) with
         | `Var v            ->
@@ -2538,29 +2572,33 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let unify_all types
 	     = if List.length types > 1 then
 		 let t    = List.hd types in
-		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_patterns (no_pos t, no_pos t')) () types
+		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_continuations (no_pos t, no_pos t')) () types
 	       else
 		 ()
 	   in
 	   let m = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type = type_cases cases     in  (* Type check cases. *)
-	   let effects            = TypeUtils.extract_row pattern_type in  (* Extract inferrred effect row *)
-	   if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
-	     let (ret,ops)        = TypeUtils.split_row HandlerUtils.return_case effects in
-	     let raw_operations   = HandlerUtils.extract_operations ops in
-	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
-	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
-	       Gripers.die pos msg
-	     else
-	       let conttails        = HandlerUtils.extract_continuation_tails raw_operations in
-	       let ()               = unify_all (body_type :: conttails) in
-	       let operations       = HandlerUtils.simplify_operations raw_operations in
-	       let operations       = HandlerUtils.effectrow_of_oplist operations in	      
-	       let thunk_type       = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
-	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
-	       `Handle (erase m, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages m; usages_cases cases]
-	   else
-	     Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
+	   let cases, pattern_type, body_type = type_cases' cases Gripers.handle_patterns Gripers.handle_branches     in  (* Type check cases. *)
+	   begin
+	     match pattern_type with
+	       `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferrred effect row *)
+			     if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
+			       let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
+			       let raw_operations  = HandlerUtils.extract_operations ops in
+			       if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
+				 let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
+				 Gripers.die pos msg
+			       else
+				 let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
+				 let ()         = unify_all (body_type :: conttails) in
+				 let operations = HandlerUtils.simplify_operations raw_operations in
+				 let operations = HandlerUtils.effectrow_of_oplist operations in	      
+				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
+				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
+				 `Handle (erase m, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages m; usages_cases cases]
+			     else
+			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
+	     | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
+	   end
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
