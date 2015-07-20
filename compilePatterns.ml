@@ -854,6 +854,10 @@ let compile_cases
 (* Handler cases compilation *)
 let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row * bool) -> bound_computation =
   fun var clauses (output_type,effects,isclosed) env ->
+  let codegen pat v body =
+    let (nenv,tenv,eff,_) = env in
+    let_pattern (nenv,tenv,eff) pat v  (body env, output_type)
+  in
   (* Construct a Handle by folding over the clauses *)
   ([], `Special (`Handle (`Variable var,
 			  List.fold_left
@@ -877,17 +881,19 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row *
 				  let (yb, y) = Var.fresh_var_of_type optype in
 				  let computation =
 				    let Some p = StringMap.lookup "1" patterns in
-				    let (nenv,tenv,eff,_) = env in
-				    let t = TypeUtils.project_type "1" optype in 
-				    let_pattern (nenv,tenv,eff) p (`Project ("1", `Variable y), t) (body env, output_type)
-						(*let_pattern (nenv,tenv,eff) p (`Variable y, t) (body env, output_type)*)
+				    let pt = TypeUtils.project_type "1" optype in
+				    codegen p (`Project ("1", `Variable y), pt) body
 				  in				  
 				  let continuation_binder =
 				    let Some k = StringMap.lookup "2" patterns in
+				    let kt = TypeUtils.project_type "2" optype in
 				    match k with
 				      `Variable k  -> let k_tyvars = [] in				    
 						      [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
 				    | `Any         -> []
+				    | `As _ as p   -> let (bs,_) = codegen k (`Project ("2", `Variable y), kt) body in
+						      bs
+				    | `HasType _   -> failwith "It is not possible to type annotate the continuation."
 				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  
 				  let computation = with_bindings continuation_binder computation  in
