@@ -154,7 +154,9 @@ sig
   val if_branches  : griper
 
   val handle_patterns : griper
-  val handle_pattern  : griper			  
+  val handle_pattern  : griper
+
+  val discharge_operation : griper
 		       
   val switch_pattern : griper
   val switch_patterns : griper
@@ -361,7 +363,10 @@ tab() ^ code (show_type rt) ^ "."
       die pos ("Handle (pattern) type check error.")
 
     let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("Handle (patterns) type check error.")	  
+      die pos ("Handle (patterns) type check error.")
+
+    let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+      die pos ("failed to unify operation type with current effect context.")
 	  
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
@@ -1604,31 +1609,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	 * 2. do op(x) : ()  { op:  A  {}-> b | p }-> b where A is the type of x
          *
          * For now, we use the second which 'captures' the operation's argument.
+         *
+         * Naming convention: the expression p always refers to the operation
+         * argument, e.g. do Op(p). Furthermore, the expression pt refers to the
+         * type of p.
 	 *)
-        | `DoOperation ((p,pos) as op, None) ->
+        | `DoOperation ((pn,pos) as op, None) ->
 	   let opname =
-	     match p with
-	       `ConstructorLit (opname, _, _) -> opname
-	     | _ -> assert false (* This case *should* never happen as syntax tree is built such that it guarantees the phrasenode p to be a `ConstructorLit *)
+	     match pn with
+	       `ConstructorLit ("Return", _, _) -> Gripers.die pos "the implicit effect Return cannot be discharged"
+	     |  `ConstructorLit (opname, _, _) -> opname
+	     | _ -> assert false (* This case *should* never happen as syntax tree is constructed such that it guarantees the phrasenode pn to be a `ConstructorLit *)
 	   in
 	   let p = tc op in (* Type-check the operation expression *)
-	   let pt = typ p in (* Retrieve inferred expression type *)
+	   let pt = TypeUtils.variant_at opname (typ p) in (* Retrieve inferred expression type *)
 	   let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
-	   let pt' = match pt with
-	       `Variant (fields,_,_) ->
-	       let Some t = StringMap.lookup opname fields in
-	       (match t with
-		  `Present t -> t
-		| _ -> assert false 
-	       )
-	     | _ -> assert false
-	   in
-	   let optype = Types.make_pure_function_type pt' return_type in
-	   let () = if (opname <> "Return") then
-		      let effects = Types.make_singleton_open_row (opname, `Present optype) (`Any, `Any) in
-		      let effects = HandlerUtils.fix_operation_arity effects in
-		      unify ~handle:Gripers.handle_pattern (* TODO: change handle! *)
-				     (no_pos (`Record context.effect_row), no_pos (`Record effects))
+	   let optype = Types.make_pure_function_type pt return_type in
+	   let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in (* TODO: rho: `Any, `Any or `Unl, `Any here? *)
+	   let effects = HandlerUtils.fix_operation_arity effects in
+	   let () = unify ~handle:Gripers.discharge_operation
+			  (no_pos (`Record context.effect_row), no_pos (`Record effects))
 	   in
 	   (`DoOperation (erase p, Some optype), return_type, usages p)
         (* literals *)
@@ -2538,28 +2538,74 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let unify_all types
 	     = if List.length types > 1 then
 		 let t    = List.hd types in
-		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_pattern (no_pos t, no_pos t')) () types
+		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_patterns (no_pos t, no_pos t')) () types
 	       else
 		 ()
-	   in    
+	   in
+	   let is_function_type t =
+	     let () = print_endline ("is_function_type: " ^ (Types.string_of_datatype t)) in
+	     match TypeUtils.concrete_type t with
+	       `Function _ -> true
+	     | _ -> print_endline ("False"); false
+	   in
+	   (* The following is an adapted version of type_cases *)
+	   let type_cases binders =
+	     let pt = Types.fresh_type_variable (`Any, `Any) in
+	     let bt = Types.fresh_type_variable (`Any, `Any) in
+	     let binders, pats =
+               List.fold_right
+		 (fun (pat, body) (binders, pats) ->
+		  let pat = tpo pat in
+		  let () =
+		    unify ~handle:Gripers.switch_patterns
+			  (ppos_and_typ pat, no_pos pt)
+		  in
+		  (pat, body)::binders, pat :: pats)
+		 binders ([], []) in
+	     let pt = close_pattern_type (List.map fst3 pats) pt in
+
+	     (* NOTE: it is important to type the patterns in isolation first in order
+               to allow them to be closed before typing the bodies *)
+
+	     let binders =
+               List.fold_right
+		 (fun (pat, body) binders ->
+		  let body = type_check (context ++ pattern_env pat) body in
+		  let () = unify ~handle:Gripers.switch_branches
+				 (pos_and_typ body, no_pos bt) in
+		  let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
+						if uses <> 1 then
+						  if Types.type_can_be_unl t then
+						    Types.make_type_unl t
+						  else
+						    Gripers.non_linearity pos uses v t)
+				    (pattern_env pat) in
+		  let vs = Env.domain (pattern_env pat) in
+		  let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+		  (pat, update_usages body us)::binders)
+		 binders []
+	     in
+             binders, pt, bt
+	   in
 	   let exp = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type = type_cases cases                             in  (* Type check cases. *)
+	   let cases, pattern_type, body_type = type_cases cases     in  (* Type check cases. *)
 	   let effects            = TypeUtils.extract_row pattern_type                       in  (* Extract inferrred effect row *)
-	   if TypeUtils.handles_operation effects TypeUtils.return_case then                     (* Checks that the Return-case exists *)
-	     let (ret,ops)        = TypeUtils.split_row TypeUtils.return_case effects        in
+	   if HandlerUtils.handles_operation effects HandlerUtils.return_case then                     (* Checks that the Return-case exists *)
+	     let (ret,ops)        = TypeUtils.split_row HandlerUtils.return_case effects     in
 	     let raw_operations   = HandlerUtils.extract_operations ops            in
 	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
 	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
 	       Gripers.die pos msg
 	     else
+	       let conttails        = HandlerUtils.extract_continuation_tails raw_operations in
+	       let ()               = unify_all (body_type :: conttails) in
 	       let operations       = HandlerUtils.simplify_operations raw_operations in
-	       let ()               = unify_all (HandlerUtils.extract_continuation_tails raw_operations) in
 	       let operations       = HandlerUtils.effectrow_of_oplist operations in	      
 	       let thunk_type       = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
 	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
 	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
 	   else
-	     Gripers.die pos ("The handler must include a " ^ TypeUtils.return_case ^ "-case.")
+	     Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
