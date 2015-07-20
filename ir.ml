@@ -84,7 +84,7 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map)
+  | `Handle of (value * (binder * computation) name_map * bool)
   | `DoOperation of (value * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)
@@ -416,7 +416,7 @@ struct
            `Choice (v, bs), t, o
 	(* Input arguments: (value, (binder, computation)) 
          * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
-	| `Handle (v, bs) ->
+	| `Handle (v, bs, isclosed) ->
 	   let (v, _, o) = o#value v in
 	   let (bs, branch_types, o) =
 	     o#name_map (fun o (b, c) ->
@@ -426,7 +426,7 @@ struct
 			bs
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle (v, bs), t, o
+	   `Handle (v, bs, isclosed), t, o
 	| `DoOperation (v, t) ->
 	   let (v, _, o) = o#value v in
 	   (`DoOperation (v, t), t, o)

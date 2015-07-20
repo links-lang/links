@@ -413,8 +413,7 @@ class transform (env : Types.typing_environment) =
 	 let (o, op, _) = o#phrase op in
 	 let (o, t) = o#datatype datatype in
 	 (o, `DoOperation (op, Some t), t)
-      (* Handle-case is a copy of the Switch-case *)	    
-      | `Handle (expr, cases, Some (t, effects)) ->
+      | `Handle (expr, cases, Some (t, effects), isclosed) ->
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
             listu o
@@ -424,7 +423,7 @@ class transform (env : Types.typing_environment) =
               cases in
           let (o, t) = o#datatype t in
 	  let (o, effects) = o#row effects in
-            (o, `Handle (expr, cases, Some (t,effects)), t)	    
+            (o, `Handle (expr, cases, Some (t,effects), isclosed), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =

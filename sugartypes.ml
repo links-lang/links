@@ -218,8 +218,8 @@ and phrasenode = [
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of phrase * Types.datatype option
-(* Handle:             expression, list of cases, and optional (output type and effects) *)
-| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option 
+(* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
+| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * bool
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -407,7 +407,7 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Handle (p, cases, _)
+    | `Handle (p, cases, _, _)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp

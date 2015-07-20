@@ -852,8 +852,8 @@ let compile_cases
 
 				 
 (* Handler cases compilation *)
-let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) -> bound_computation =
-  fun var clauses (output_type,effects) env ->
+let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row * bool) -> bound_computation =
+  fun var clauses (output_type,effects,isclosed) env ->
   (* Construct a Handle by folding over the clauses *)
   ([], `Special (`Handle (`Variable var,
 			  List.fold_left
@@ -897,14 +897,14 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row) 
 			    )
 			    StringMap.empty (* Fold seed *)
 			    clauses (* Structure we're folding over *)
-			 )))
+			 , isclosed)))
 				  
-let compile_handle_cases : raw_env -> (Types.datatype * Types.row * var * raw_clause list) -> Ir.computation =
-  fun (nenv, tenv, eff) (output_type, effects, var, raw_clauses) ->
+let compile_handle_cases : raw_env -> (Types.datatype * Types.row * bool * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, effects, isclosed, var, raw_clauses) ->
     let clauses = List.map reduce_clause raw_clauses in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let result =
-      match_handle_cases var clauses (output_type,effects) initial_env
+      match_handle_cases var clauses (output_type,effects,isclosed) initial_env
     in
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled handler cases: "^(string_of_computation result));

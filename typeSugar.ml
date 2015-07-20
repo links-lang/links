@@ -2567,7 +2567,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 end
               else
                 Gripers.upcast_subtype pos t2 t1
-        | `Handle (exp, cases, _) ->
+        | `Handle (exp, cases, _, isclosed) ->
 	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
 	   let unify_all types
 	     = if List.length types > 1 then
@@ -2594,7 +2594,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let operations = HandlerUtils.effectrow_of_oplist operations in	      
 				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
-				 `Handle (erase m, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages m; usages_cases cases]
+				 `Handle (erase m, erase_cases cases, Some (body_type, effects), isclosed), body_type, merge_usages [usages m; usages_cases cases]
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	     | _-> Gripers.die pos "Handler cases can only pattern match on operation types."

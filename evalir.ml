@@ -692,7 +692,7 @@ module Eval = struct
     | `CallCC f ->
        apply cont hs env (value env f, [`GContinuation (cont, hs)])
     (* Handlers *)
-    | `Handle (v, cases) ->
+    | `Handle (v, cases, isclosed) ->
        let hs = cases :: hs in
        let cont = [] :: cont in 
        let comp = value env v in
