@@ -12,9 +12,9 @@ fun stateful(x) {
     }
 }
 
-fun unwrap(x) {
-    handle(x) {
-    	      case Return(x) -> x(0)
+fun runState(s0, c) {
+    handle(fun() { stateful(c) }) {
+    	      case Return(s) -> s(s0)
     }
 }
 
@@ -35,3 +35,5 @@ fun comp() {
     do Put(s2 + s2);
     do Get()
 }
+
+# Example: stateful(comp)(s0), where s0 is the initial state.

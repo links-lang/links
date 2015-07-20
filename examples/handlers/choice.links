@@ -5,19 +5,19 @@ fun enumerate(x) {
     }
 }
 
-#fun positive(x) {
-#    handle(x) {
-#    	      case Choose(_,k) -> k(true)
-#	      case Return(x)   -> x
-#    }
-#}
+fun positive(x) {
+    handle(x) {
+    	      case Choose(_,k) -> k(true)
+	      case Return(x)   -> x
+    }
+}
 
-#fun negative(x) {
-#    handle(x) {
-#    	      case Choose(_,k) -> k(false)
-#	      case Return(x)   -> x
-#    }
-#}
+fun negative(x) {
+    handle(x) {
+    	      case Choose(_,k) -> k(false)
+	      case Return(x)   -> x
+    }
+}
 
 fun h1(x) {
     handle(x) {

@@ -10,7 +10,7 @@ fun mapk(x) {
 }
 
 # type: () {Op1:([Int]) {}-> Int}-> Int
-fun comp2() {
+fun comp() {
     var x = do Op1([1,2,3,4]);
     x `mod` 2
 }
