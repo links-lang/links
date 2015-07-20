@@ -202,7 +202,7 @@ and t = [
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
 (* and env = (t * Ir.scope) Utility.intmap  * Ir.closures *)
 (* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
-and handler  = (Ir.binder * Ir.computation) Ir.name_map (* Collection of cases *)
+and handler  = (Ir.binder * Ir.computation) Ir.name_map * bool (* Collection of cases *)
 and handlers = handler list
   deriving (Show)					    
   

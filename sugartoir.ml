@@ -51,6 +51,7 @@ exception ASTSyntaxError = SourceCode.ASTSyntaxError
 let dp = Sugartypes.dummy_position
 
 type datatype = Types.datatype
+type handler_spec = Sugartypes.handler_spec	  
 
 module NEnv = Env.String
 module TEnv = Env.Int
@@ -135,7 +136,7 @@ sig
 
   val do_operation : (value sem * Types.datatype) -> tail_computation sem
 														 
-  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype * Types.row * bool) -> tail_computation sem
+  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype * Types.row * handler_spec) -> tail_computation sem
 														 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -631,7 +632,7 @@ struct
   let do_operation (v, t) =
     bind v (fun v -> lift (`Special (`DoOperation (v, t)), t))
 	 
-  let handle env (v, cases, t, effects, isclosed) =
+  let handle env (v, cases, t, effects, spec) =
     let cases =
       List.map
         (fun (p, body) -> ([p], fun env -> reify (body env))) cases
@@ -643,7 +644,7 @@ struct
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, isclosed, var, cases) in
+                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, HandlerUtils.is_closed spec, var, cases) in
                   reflect (bs, (tc, t))))
     
 	     
@@ -825,7 +826,7 @@ struct
 	     let v = ev op in
 	     I.do_operation (v, t)
 
-          | `Handle (e, cases, Some (t,effects), isclosed) ->
+          | `Handle (e, cases, Some (t,effects), spec) ->
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -833,7 +834,7 @@ struct
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
-                I.handle env (ev e, cases, t, effects, isclosed)
+                I.handle env (ev e, cases, t, effects, spec)
 		   
           | `Switch (e, cases, Some t) ->
               let cases =

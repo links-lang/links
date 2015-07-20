@@ -165,3 +165,8 @@ let return_case = "Return"
 
 let handles_operation : Types.row -> string -> bool
   = fun (fields,_,_) opname -> StringMap.mem opname fields		   
+
+let is_closed spec =
+  match spec with
+    `Closed -> true
+  | _ -> false

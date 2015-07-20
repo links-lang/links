@@ -237,7 +237,7 @@ class map =
 	 let p  = o#phrase p in
 	 `DoOperation (p, datatype)
       (* The handle case is written by hand *)
-      | `Handle (m, cases, t, closed) ->
+      | `Handle (m, cases, t, spec) ->
           let m = o#phrase m in
           let cases =
             o#list
@@ -248,7 +248,8 @@ class map =
               cases
 	  in
           let t = o#option (fun o -> o#unknown) t in
-          `Handle (m, cases, t, closed)
+	  let spec = o#handler_spec spec in
+          `Handle (m, cases, t, spec)
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -596,6 +597,8 @@ class map =
 
     method unknown : 'a. 'a -> 'a = fun x -> x
 
+    method handler_spec : handler_spec -> handler_spec =
+      fun spec -> spec (* For the future: If spec gets more complex then handle it appropriately via pattern-matching *)   
   end
 
 class fold =
@@ -799,7 +802,7 @@ class fold =
       | `DoOperation (p,_) ->
 	 let o = o#phrase p in o
       (* The Handle case is written by hand *)
-      | `Handle (m, cases, t, closed) ->
+      | `Handle (m, cases, t, spec) ->
           let o = o#phrase m in
           let o =
             o#list
@@ -809,6 +812,7 @@ class fold =
 	      )
               cases
 	  in
+	  let spec = o#handler_spec spec in
           let o = o#option (fun o -> o#unknown) t in o	  
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
@@ -1126,6 +1130,8 @@ class fold =
 
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
 
+    method handler_spec : handler_spec -> 'self_type =
+      fun spec -> o (* For the future: If spec gets more complex then handle it appropriately via pattern-matching *)      
   end
 
 class virtual predicate =
@@ -1374,7 +1380,7 @@ class fold_map =
 	 let (o, p) = o#phrase p in
 	 (o, `DoOperation (p, datatype))
       (* Handle case is written by hand *)
-      | `Handle (m, cases, t, closed) ->
+      | `Handle (m, cases, t, spec) ->
           let (o, m) = o#phrase m in
           let (o, cases) =
             o#list
@@ -1385,7 +1391,8 @@ class fold_map =
               cases
 	  in
           let (o, t) = o#option (fun o -> o#unknown) t in
-          (o, (`Handle (m, cases, t, closed)))
+	  let (o, spec) = o#handler_spec spec in
+          (o, (`Handle (m, cases, t, spec)))
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1786,4 +1793,7 @@ class fold_map =
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
 
+    method handler_spec : handler_spec -> ('self_type * handler_spec) =
+      fun spec ->
+      (o, spec) (* For the future: If spec gets more complex then handle it appropriately via pattern-matching *)
   end

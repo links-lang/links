@@ -219,7 +219,7 @@ and phrasenode = [
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of phrase * Types.datatype option
 (* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
-| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * bool
+| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -261,6 +261,7 @@ and bindingnode = [
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
+and handler_spec = [ `Open | `Closed ]
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list

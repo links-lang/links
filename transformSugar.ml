@@ -413,7 +413,7 @@ class transform (env : Types.typing_environment) =
 	 let (o, op, _) = o#phrase op in
 	 let (o, t) = o#datatype datatype in
 	 (o, `DoOperation (op, Some t), t)
-      | `Handle (expr, cases, Some (t, effects), isclosed) ->
+      | `Handle (expr, cases, Some (t, effects), spec) ->
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
             listu o
@@ -423,7 +423,7 @@ class transform (env : Types.typing_environment) =
               cases in
           let (o, t) = o#datatype t in
 	  let (o, effects) = o#row effects in
-            (o, `Handle (expr, cases, Some (t,effects), isclosed), t)
+            (o, `Handle (expr, cases, Some (t,effects), spec), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -762,5 +762,5 @@ class transform (env : Types.typing_environment) =
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (cbind, left, right), t
+         o, `Comp (cbind, left, right), t    					  
   end

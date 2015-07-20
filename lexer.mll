@@ -172,6 +172,7 @@ let keywords = [
  "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
+ "forward"  , FORWARD;
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;

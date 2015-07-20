@@ -693,7 +693,7 @@ module Eval = struct
        apply cont hs env (value env f, [`GContinuation (cont, hs)])
     (* Handlers *)
     | `Handle (v, cases, isclosed) ->
-       let hs = cases :: hs in
+       let hs = (cases, isclosed) :: hs in
        let cont = [] :: cont in 
        let comp = value env v in
        apply cont hs env (comp, [])
@@ -739,25 +739,34 @@ module Eval = struct
               switch_context env
       end
   (*****************)
-  and handle env cont hs op =
-    let transform (delim :: cont) (h :: hs) op =
-      match op with
-       | `Variant (label, v) ->
-	begin
-	  match StringMap.lookup label h with
-	    Some ((var,_) as b, comp) -> let p    = v in
-					 let k    = `GContinuation ([delim], [h]) in
-					 let pair = Value.box_pair p k in
-					 let env  = Value.bind var (pair, `Local) env in
-					 computation env cont hs comp 
-          | None -> eval_error "Pattern matching failed"
-	end
-       | _ -> assert false (* This can never happen as all operations are variants. *)
+  and  handle env cont hs op =
+    let restore cont hs s = (* Restores handler stack by merging state s with cont & hs *)
+      List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
+				     (cont,hs) s     
+    in    
+    let rec handle env cont hs op s = 
+      let transform (delim :: cont) ((h,isclosed) :: hs) op =
+	match op with
+	| `Variant (label, v) ->
+	   begin
+	     match StringMap.lookup label h with
+	       Some ((var,_) as b, comp) -> let (cont,hs) = restore cont hs s in
+	                                    let p    = v in
+					    let k    = `GContinuation ([delim], [(h,isclosed)]) in
+					    let pair = Value.box_pair p k in
+					    let env  = Value.bind var (pair, `Local) env in
+					    computation env cont hs comp
+             | None  when isclosed == true  -> eval_error "Pattern matching failed"
+	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,false)) :: s)
+	   end
+	| _ -> assert false (* This can never happen as all operations are variants. *)
+      in
+      match hs with
+	h :: _  -> transform cont hs op
+      | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
     in
-    match hs with
-      h :: _  -> transform cont hs op
-    | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
-  and invoke_return_clause cont hs env h v =    
+    handle env cont hs op []
+  and invoke_return_clause cont hs env (h,_) v =    
     match StringMap.lookup "Return" h with
       Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
 			      computation env cont hs comp
