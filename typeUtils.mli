@@ -33,16 +33,3 @@ val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 val select_type : string -> Types.datatype -> Types.datatype
 val split_choice_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
 val choice_at : string -> Types.datatype -> Types.datatype
-
-(* Handler stuff *)
-type operation_signature = Single of Types.datatype  (* Takes a single parameter.  *)
-			 | Binary of Types.datatype * Types.datatype (* Takes two parameters: one regular parameter and the continuation. *)
-			 | Invalid (* Cannot be an operation, i.e. the entity is not well-formed. *)
-
-type operation           = string * operation_signature
-					   
-val handles_operation                   : Types.row -> string -> bool
-val return_case                         : string
-val extract_operations                  : Types.row -> operation list
-val simplify_operation_signatures       : operation list -> operation list						
-val effectrow_of_oplist                 : operation list -> Types.row
