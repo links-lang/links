@@ -499,10 +499,10 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
-    | `GContinuation (c, []), [p]  -> apply_cont c hs env p        (* TODO: This needs to be fixed, it breaks the invariant that |cont| - |hs| <= 1 *)
+    (* | `GContinuation (c, []), [p]  -> apply_cont c hs env p        (* TODO: This needs to be fixed, it breaks the invariant that |cont| - |hs| <= 1 *)*)
     | `GContinuation (c, [h]), [p] -> apply_cont (c @ cont) (h :: hs) env p
-    | `Continuation c,      p      -> let c = Value.generalise_cont c in
-				      let gcont = `GContinuation (c, hempty) in
+    | `GContinuation (c, hs), [p]  -> apply_cont c hs env p
+    | `Continuation c,      p      -> let gcont = `GContinuation (c :: cont, hs) in
 				      apply cont hs env (gcont, p) (* Legacy / backwards compatibility *)
     | `GContinuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
