@@ -2542,57 +2542,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       else
 		 ()
 	   in
-	   let is_function_type t =
-	     let () = print_endline ("is_function_type: " ^ (Types.string_of_datatype t)) in
-	     match TypeUtils.concrete_type t with
-	       `Function _ -> true
-	     | _ -> print_endline ("False"); false
-	   in
-	   (* The following is an adapted version of type_cases *)
-	   let type_cases binders =
-	     let pt = Types.fresh_type_variable (`Any, `Any) in
-	     let bt = Types.fresh_type_variable (`Any, `Any) in
-	     let binders, pats =
-               List.fold_right
-		 (fun (pat, body) (binders, pats) ->
-		  let pat = tpo pat in
-		  let () =
-		    unify ~handle:Gripers.switch_patterns
-			  (ppos_and_typ pat, no_pos pt)
-		  in
-		  (pat, body)::binders, pat :: pats)
-		 binders ([], []) in
-	     let pt = close_pattern_type (List.map fst3 pats) pt in
-
-	     (* NOTE: it is important to type the patterns in isolation first in order
-               to allow them to be closed before typing the bodies *)
-
-	     let binders =
-               List.fold_right
-		 (fun (pat, body) binders ->
-		  let body = type_check (context ++ pattern_env pat) body in
-		  let () = unify ~handle:Gripers.switch_branches
-				 (pos_and_typ body, no_pos bt) in
-		  let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
-						if uses <> 1 then
-						  if Types.type_can_be_unl t then
-						    Types.make_type_unl t
-						  else
-						    Gripers.non_linearity pos uses v t)
-				    (pattern_env pat) in
-		  let vs = Env.domain (pattern_env pat) in
-		  let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
-		  (pat, update_usages body us)::binders)
-		 binders []
-	     in
-             binders, pt, bt
-	   in
-	   let exp = tc exp in (* Type-check expression under current context *)
+	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_cases cases     in  (* Type check cases. *)
-	   let effects            = TypeUtils.extract_row pattern_type                       in  (* Extract inferrred effect row *)
-	   if HandlerUtils.handles_operation effects HandlerUtils.return_case then                     (* Checks that the Return-case exists *)
-	     let (ret,ops)        = TypeUtils.split_row HandlerUtils.return_case effects     in
-	     let raw_operations   = HandlerUtils.extract_operations ops            in
+	   let effects            = TypeUtils.extract_row pattern_type in  (* Extract inferrred effect row *)
+	   if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
+	     let (ret,ops)        = TypeUtils.split_row HandlerUtils.return_case effects in
+	     let raw_operations   = HandlerUtils.extract_operations ops in
 	     if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
 	       let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
 	       Gripers.die pos msg
@@ -2602,8 +2557,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       let operations       = HandlerUtils.simplify_operations raw_operations in
 	       let operations       = HandlerUtils.effectrow_of_oplist operations in	      
 	       let thunk_type       = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
-	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ exp, no_pos thunk_type) in (* Unify expression and handler type. *)
-	       `Handle (erase exp, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages exp; usages_cases cases]
+	       let () = unify ~handle:Gripers.handle_pattern (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
+	       `Handle (erase m, erase_cases cases, Some (body_type, effects)), body_type, merge_usages [usages m; usages_cases cases]
 	   else
 	     Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
         | `Switch (e, binders, _) ->
