@@ -112,10 +112,15 @@ let simplify_operations  : operation_raw list -> operation list
   List.map simplify_operation ops
 
 
-let effectrow_of_oplist : operation list -> Types.row
-  = fun ops ->
+let effectrow_of_oplist : operation list -> bool -> Types.row
+  = fun ops isclosed ->
   let fields = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty ops in
-  Types.make_closed_row fields
+  if isclosed then
+    Types.make_closed_row fields
+  else
+    let row = Types.make_empty_open_row (`Unl, `Any) in
+    Types.extend_row fields row
+    
 
 let oplist_of_effectrow : Types.row -> operation list
   = fun (fields,_,_) ->
@@ -141,7 +146,7 @@ let fix_operation_arity : Types.row -> Types.row
   in
   let oplist = oplist_of_effectrow row in
   let oplist = List.map fix_arity oplist in
-  let (fields,_,_) = effectrow_of_oplist oplist in
+  let (fields,_,_) = effectrow_of_oplist oplist false in
   (fields,row_var,dual)
 
 let is_operation_invalid : operation_raw -> bool

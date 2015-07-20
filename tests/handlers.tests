@@ -34,3 +34,13 @@ exit : 1
 State handler
 {fun state(m) { handle(m) { case Get(p,k) -> fun(s) { k(s)(s) } case Put(p,k) -> fun(s) { k(())(p) } case Return(x) -> fun(s) { x } } } fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get(); do Put(s + 1); var s = do Get(); do Put(s + s); do Get() }) }
 stdout : 6 : Int
+
+Cannot discharge operation toplevel
+{ do Get() }
+stderr : @.
+exit : 1
+
+Cannot discharge Return
+{ fun() { do Return(1) } }
+stderr : @.
+exit : 1

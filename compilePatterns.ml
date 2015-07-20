@@ -891,8 +891,8 @@ let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row *
 				      `Variable k  -> let k_tyvars = [] in				    
 						      [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
 				    | `Any         -> []
-				    | `As _ as p   -> let (bs,_) = codegen k (`Project ("2", `Variable y), kt) body in
-						      bs
+				    | `As _ as p   -> let (bs,tc) = codegen k (`Project ("2", `Variable y), kt) body in
+						      bs (* We cannot just dump the tail computation, it needs to be glued with the other computation *)
 				    | `HasType _   -> failwith "It is not possible to type annotate the continuation."
 				    | _            -> failwith "Pattern-matching failure on continuation."
 				  in				  

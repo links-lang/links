@@ -2591,7 +2591,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
 				 let ()         = unify_all (body_type :: conttails) in
 				 let operations = HandlerUtils.simplify_operations raw_operations in
-				 let operations = HandlerUtils.effectrow_of_oplist operations in	      
+				 let operations = HandlerUtils.effectrow_of_oplist operations isclosed in	      
 				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
 				 `Handle (erase m, erase_cases cases, Some (body_type, effects), isclosed), body_type, merge_usages [usages m; usages_cases cases]

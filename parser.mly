@@ -720,7 +720,7 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, false), pos() }	  
+| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, true), pos() }	  
 
 iteration_expression:
 | case_expression                                              { $1 }
