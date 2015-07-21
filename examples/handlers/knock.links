@@ -30,3 +30,34 @@ fun run() {
 	})
     })
 }
+
+fun h0(m) {
+    forward handle(m) {
+      case Op0(p,k) -> k(())
+      case Return(x) -> x + 10
+      }
+}
+
+fun h1(m) {
+    forward handle(m) {
+    	      case Op1(p,k) -> k(())
+	      case Return(x) -> x - 1
+	      }
+}
+
+fun h2(m) {
+    forward handle(m) {
+    	    case Op2(p,k) -> k(())
+	    case Return(x) -> x * 2
+    }
+}
+
+fun run2() {
+    h0 ( fun() {
+       h1( fun() {
+       	   h2(fun () {
+	   	  do Op2(); do Op1(); do Op2(); do Op2(); 1
+	    })
+        })
+    })
+}

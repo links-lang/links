@@ -500,8 +500,8 @@ module Eval = struct
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
     (* | `GContinuation (c, []), [p]  -> apply_cont c hs env p        (* TODO: This needs to be fixed, it breaks the invariant that |cont| - |hs| <= 1 *)*)
-    | `GContinuation (c, [h]), [p] -> apply_cont (c @ cont) (h :: hs) env p
-    | `GContinuation (c, hs), [p]  -> apply_cont c hs env p
+    | `GContinuation (c, h), [p] -> apply_cont (c @ cont) (h @ hs) env p
+    (*    | `GContinuation (c, hs), [p]  -> apply_cont c hs env p*)
     | `Continuation c,      p      -> let gcont = `GContinuation (c :: cont, hs) in
 				      apply cont hs env (gcont, p) (* Legacy / backwards compatibility *)
     | `GContinuation _,       _    ->
@@ -742,7 +742,7 @@ module Eval = struct
   and  handle env cont hs op =
     let restore cont hs s = (* Restores handler stack by merging state s with cont & hs *)
       List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
-				     (cont,hs) s     
+				     ([],[]) s      
     in    
     let rec handle env cont hs op s = 
       let transform (delim :: cont) ((h,isclosed) :: hs) op =
@@ -750,9 +750,9 @@ module Eval = struct
 	| `Variant (label, v) ->
 	   begin
 	     match StringMap.lookup label h with
-	       Some ((var,_) as b, comp) -> let (cont,hs) = restore cont hs s in
+	       Some ((var,_) as b, comp) -> let (cont',hs') = restore cont hs s in
 	                                    let p    = v in
-					    let k    = `GContinuation ([delim], [(h,isclosed)]) in
+					    let k    = `GContinuation (cont' @ [delim], hs' @ [(h,isclosed)]) in
 					    let pair = Value.box_pair p k in
 					    let env  = Value.bind var (pair, `Local) env in
 					    computation env cont hs comp
