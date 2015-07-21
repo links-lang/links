@@ -2594,6 +2594,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let operations = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in	      
 				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
+				
 				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
