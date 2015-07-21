@@ -1,0 +1,14 @@
+fun h1(m) {
+  forward handle(m) {
+  	  case Op1(p,k) -> k("1")
+	  case Return(x) -> x
+  }
+}
+
+fun h2(m) {
+  forward handle(m) {
+  	  case Op2(p,k) -> k("2")
+	  case Return(x) -> x
+  }
+}
+

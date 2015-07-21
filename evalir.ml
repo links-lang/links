@@ -188,8 +188,6 @@ module Eval = struct
      It is currently used for running pure functions. *)
   let atomic = ref false
 
-  let toplevel_val = ref None
-
   let rec switch_context env =
     assert (not (!atomic));
     match Proc.pop_ready_proc() with
@@ -204,9 +202,8 @@ module Eval = struct
         (* Outside web mode, this case indicates deadlock:
            all running processes are blocked. *)
       else
-        match !toplevel_val with
-        | None -> exit 0
-        | Some v -> raise (TopLevel v)
+        (* TODO: should we really be exiting here? *)
+        exit 0
 
   and scheduler env state stepf =
     if !atomic || Proc.singlethreaded() then stepf()
@@ -509,7 +506,7 @@ module Eval = struct
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont hs env v : Value.t =
     let stepf() =
-      match cont, hs with
+(*      match cont, hs with
       | [] :: conts, h :: hs ->
 	 invoke_return_clause conts hs env h v
       | [], [] ->
@@ -537,7 +534,27 @@ module Eval = struct
          let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
 	 let conts = (List.tl cont) :: conts in
          computation env conts hs comp
-      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")
+      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")*)
+
+      match cont with
+        | [] when !atomic ->
+            raise (TopLevel (Value.globals env, v))
+        | [] when Proc.current_is_main() ->
+            if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+              raise (TopLevel (Value.globals env, v))
+            else
+              begin
+                Debug.print ("Finished top level process (other processes still active)");
+                Proc.suspend_current ([], v);
+                switch_context env
+              end
+        | [] ->
+          Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+          Proc.finish_current();
+          switch_context env
+        | (scope, var, locals, comp)::cont ->
+            let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
+              computation env cont comp
     in
     scheduler env (cont, hs, v) stepf  (* TODO: What about state in a multithreaded context? *)
   and computation env cont hs (bindings, tailcomp) : Value.t =
