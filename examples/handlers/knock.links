@@ -1,20 +1,20 @@
 fun knock(m) {
     forward handle(m) {
-        case Knock(p,k) -> k(p ^^ " Who's there?")
+        case Knock(p,k) -> p ^^ k(" Who's there?")
 	case Return(x)  -> x
     }
 }
 
 fun who(m) {
     forward handle(m) {
-        case Its(p,k)  -> k(p ^^ ". " ^^ p ^^ ", who? ")
+        case Its(p,k)  -> k(p ^^ ". " ^^ p ^^ ", who?")
 	case Return(x) -> x
     }
 }
 
 fun me(m) {
     handle(m) {
-    	case Me(p,k)   -> k(p)
+    	case Me(p,k)   -> k(p ^^ ".")
         case Return(x) -> x
     }
 }

@@ -121,12 +121,6 @@ module Session = struct
       (unbox_port outp, unbox_port inp)
 end
 
-let hempty = [] (* Empty handler stack *)
-let hpush h hs = h :: hs
-let hpop = function
-  | h :: hs -> (Some h, hs)
-  | [] -> (None, [])
-
 module Eval = struct
   open Ir
 
@@ -164,7 +158,7 @@ module Eval = struct
    let serialize_call_to_client (continuation, handlers, name, arg) =
      Json.jsonize_call continuation handlers name arg
 
-   let client_call : string -> Value.gcontinuation -> Value.handlers -> Value.t list -> 'a =
+   let client_call : string -> Value.continuation -> Value.handlers -> Value.t list -> 'a =
      fun name cont hs args ->
        if not(Settings.get_value Basicsettings.web_mode) then
          failwith "Can't make client call outside web mode.";
@@ -303,8 +297,9 @@ module Eval = struct
           try (
             atomic := true;
             (* Debug.print ("Applying pure function"); *)
-	    let cont = Value.toplevel_gcont in (* Empty continuation *)
-            ignore (apply cont hempty env (value env f, List.map (value env) args));
+	    let cont = Value.toplevel_cont in (* Empty continuation, i.e. [[]] *)
+	    let hs   = Value.toplevel_hs in (* Empty handler stack, i.e. [] *)
+            ignore (apply cont hs env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
             | TopLevel (_, v) -> atomic := previousAtomic; v
@@ -496,21 +491,36 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
-    (* | `GContinuation (c, []), [p]  -> apply_cont c hs env p        (* TODO: This needs to be fixed, it breaks the invariant that |cont| - |hs| <= 1 *)*)
-    | `GContinuation (c, h), [p] -> apply_cont (c @ cont) (h @ hs) env p
-    (*    | `GContinuation (c, hs), [p]  -> apply_cont c hs env p*)
-    | `Continuation c,      p      -> let gcont = `GContinuation (c :: cont, hs) in
-				      apply cont hs env (gcont, p) (* Legacy / backwards compatibility *)
-    | `GContinuation _,       _    ->
+    | `UserContinuation (cont', hs'), [p] -> apply_cont (cont' @ cont) (hs' @ hs) env p
+    | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
+    | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont cont hs env v : Value.t =
     let stepf() =
-(*      match cont, hs with
+      match cont, hs with
       | [] :: conts, h :: hs ->
 	 invoke_return_clause conts hs env h v
-      | [], [] ->
-	 if !atomic then
+      | [], [] -> (* Note: [] :: [], [] ? *)
+	 begin
+	   match cont with
+           | [] when !atomic ->
+              raise (TopLevel (Value.globals env, v))
+           | [] when Proc.current_is_main() ->
+              if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+		raise (TopLevel (Value.globals env, v))
+              else
+		begin
+                  Debug.print ("Finished top level process (other processes still active)");
+                  Proc.suspend_current ([],[], v); (* TODO: Fix: gcont, hs, v *)
+                  switch_context env
+		end
+           | [] ->
+              Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+              Proc.finish_current();
+              switch_context env
+	 end
+(*	 if !atomic then
            raise (TopLevel (Value.globals env, v))
 	 else if Proc.current_is_main() then
            if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
@@ -527,16 +537,16 @@ module Eval = struct
              Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
              Proc.finish_current();
              switch_context env
-	   end
+	   end*)
       | [] :: conts, [] -> apply_cont conts hs env v
       | cont :: conts, _ ->
 	 let (scope, var, locals, comp) = List.hd cont in 
          let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
 	 let conts = (List.tl cont) :: conts in
          computation env conts hs comp
-      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")*)
+      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")
 
-      match cont with
+(*      match cont with
         | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
         | [] when Proc.current_is_main() ->
@@ -554,7 +564,7 @@ module Eval = struct
           switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-              computation env cont comp
+              computation env cont comp*)
     in
     scheduler env (cont, hs, v) stepf  (* TODO: What about state in a multithreaded context? *)
   and computation env cont hs (bindings, tailcomp) : Value.t =
@@ -707,7 +717,7 @@ module Eval = struct
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont hs env (`Record [])
     | `CallCC f ->
-       apply cont hs env (value env f, [`GContinuation (cont, hs)])
+       apply cont hs env (value env f, [`Continuation (cont, hs)])
     (* Handlers *)
     | `Handle (v, cases, isclosed) ->
        let hs = (cases, isclosed) :: hs in
@@ -756,25 +766,26 @@ module Eval = struct
               switch_context env
       end
   (*****************)
-  and  handle env cont hs op =
-    let restore cont hs s = (* Restores handler stack by merging state s with cont & hs *)
-      List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
-				     ([],[]) s      
-    in    
+  and  handle env cont hs op =        
     let rec handle env cont hs op s = 
       let transform (delim :: cont) ((h,isclosed) :: hs) op =
+	let restore = (* Restores handler stack by merging state s with cont & hs *)
+	  List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
+			 ([delim],[(h,isclosed)]) s 
+	in
 	match op with
 	| `Variant (label, v) ->
 	   begin
 	     match StringMap.lookup label h with
-	       Some ((var,_) as b, comp) -> let (cont',hs') = restore cont hs s in
+	       Some ((var,_) as b, comp) -> let (cont',hs') = restore in
 	                                    let p    = v in
-					    let k    = `GContinuation (cont' @ [delim], hs' @ [(h,isclosed)]) in
+					    let k    = `UserContinuation (cont', hs') in
+					    (*					    let k = `UserContinuation ([delim], [(h,isclosed)]) in*)
 					    let pair = Value.box_pair p k in
 					    let env  = Value.bind var (pair, `Local) env in
 					    computation env cont hs comp
              | None  when isclosed == true  -> eval_error "Pattern matching failed"
-	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,false)) :: s)
+	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)
 	   end
 	| _ -> assert false (* This can never happen as all operations are variants. *)
       in
@@ -791,16 +802,16 @@ module Eval = struct
 
   let eval : Value.env -> program -> Value.t =
     fun env ->
-    computation env Value.toplevel_gcont Value.toplevel_hs
+    computation env Value.toplevel_cont Value.toplevel_hs
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
   (Value.env * Value.t) =
   fun cont env program ->
-  let cont = Value.generalise_cont cont in
+  let hs = Value.toplevel_hs in
     try (
       ignore	
-        (Eval.computation env cont hempty program); (* TODO: Figure out whether the handler stack should be an input parameter *)
+        (Eval.computation env cont hs program); (* TODO: Figure out whether the handler stack should be an input parameter *)
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
@@ -829,15 +840,14 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
 let apply_cont_toplevel cont env v =
-  let cont = Value.generalise_cont cont in
-  try Eval.apply_cont cont hempty env v
+  try Eval.apply_cont cont Value.toplevel_hs env v
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
-  try Eval.apply Value.toplevel_gcont hempty env (f, vs)
+  try Eval.apply Value.toplevel_cont Value.toplevel_hs env (f, vs)
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^

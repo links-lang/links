@@ -36,7 +36,7 @@ let is_client_program : Ir.program -> bool =
       bs
 
 let serialize_call_to_client (continuation, name, arg) =
-  Json.jsonize_call continuation name arg
+  Json.jsonize_call continuation [] name arg (* TODO: Fix handler stack here *)
 
 let resolve_function funcmap x env =
   let binding = assoc x funcmap in
@@ -60,8 +60,8 @@ let rec resolve_functions closures funcmap =
                         (Value.extend (Value.empty_env clos) env),
                         f, scope)
     | `ClientFunction _ as x -> x
-    | `Continuation _ as x -> assert false      (* Unimplemented. Traverse it? *)
-    | `GContinuation _ as x -> assert false (* Same as above *)
+    | `Continuation _ -> assert false     (* Unimplemented. Traverse it? *)
+    | `UserContinuation _ -> assert false
     | `PrimitiveFunction _ as x -> x
     | #Value.primitive_value as x -> x
     | `Socket _ as x -> x
@@ -403,7 +403,8 @@ let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
   let valenv = Value.with_closures valenv closures in
     (* We can evaluate the definitions here because we know they are pure. *)
   let valenv = Evalir.run_defs valenv globals in
-
+  let cont0 = [cont0] in (* Todo: Transform properly into a continuation *)
+  
   Errors.display (lazy (serve_request_program
 			  (valenv,nenv,tyenv)
 			  (globals,(locals,main),cont0)

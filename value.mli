@@ -68,23 +68,22 @@ type t = [
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-| `Continuation of continuation
-| `GContinuation of gcontinuation * handlers
+| `Continuation of continuation * handlers
+| `UserContinuation of continuation * handlers
 | `Socket of in_channel * out_channel
 ]
-and continuation_frame = (Ir.scope * Ir.var * env * Ir.computation)
-and continuation = continuation_frame list
-and gcontinuation = continuation list
+and frame = (Ir.scope * Ir.var * env * Ir.computation)
+and delim_continuation = frame list (* Delimited continuation *)
+and continuation = delim_continuation list (* (Generalised) continuation *)
 and handler  = (Ir.binder * Ir.computation) Ir.name_map * bool
 and handlers = handler list				 
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
 (** Continuation helpers **)    
-val generalise_cont   : continuation -> gcontinuation
-val toplevel_gcont    : gcontinuation
-val append_cont_frame : continuation_frame -> gcontinuation -> gcontinuation
-val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> continuation_frame
+val append_cont_frame : frame -> continuation -> continuation
+val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> frame
+val append_delim_cont : delim_continuation -> continuation -> continuation
     
 val toplevel_hs   : handlers
 val toplevel_cont : continuation
@@ -140,11 +139,9 @@ val string_of_value : t -> string
 val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
 val string_of_cont : continuation -> string
-val string_of_gcont : gcontinuation -> string				       
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
-val marshal_gcontinuation : gcontinuation -> string					     
 
 type unmarshal_envs =
     env * Ir.scope Utility.IntMap.t *
@@ -155,7 +152,6 @@ val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
   -> Ir.program -> unmarshal_envs
 
 val unmarshal_continuation : unmarshal_envs -> string -> continuation
-val unmarshal_gcontinuation : unmarshal_envs -> string -> gcontinuation
 val unmarshal_value : unmarshal_envs -> string -> t
 
 val expr_to_contframe : env -> Ir.tail_computation ->

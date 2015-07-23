@@ -1,14 +1,36 @@
 fun h1(m) {
-  forward handle(m) {
-  	  case Op1(p,k) -> k("1")
+  handle(m) {
+  	  case Op1(p,k)  -> " Op1 " ^^ k(()) ^^ " Last "
 	  case Return(x) -> x
   }
 }
 
 fun h2(m) {
   forward handle(m) {
-  	  case Op2(p,k) -> k("2")
+  	  case Op2(p,k) ->  " Op2 " ^^ k(()) ^^ " First "
 	  case Return(x) -> x
   }
+}
+
+fun h3(m) {
+  forward handle(m) {
+  	  case Op3(p,k) -> " Op3 " ^^ k(()) ^^ " Mid "
+	  case Return(x) -> x
+  }
+}
+
+fun comp() {
+    do Op1();
+    do Op3();
+    do Op2();
+    ""
+}
+
+fun run() {
+    h1(fun() {
+    	     h3(fun() {
+	     	      h2(comp)
+	     })
+    })
 }
 

@@ -91,9 +91,6 @@ let rec jsonize_value : Value.t -> string = function
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let encode_gcontinuation (cont : Value.gcontinuation) : string =
-  Value.marshal_gcontinuation cont			     
-			     
 let jsonize_value value =
   Debug.if_set show_json
     (fun () -> "jsonize_value => " ^ Value.string_of_value value);
@@ -113,7 +110,7 @@ let jsonize_value value =
 let jsonize_call continuation hs name args =
   Printf.sprintf
     "{\"__continuation\":\"%s\",\"__handlers\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
-    (encode_gcontinuation continuation)
+    (encode_continuation continuation)
     "<handlers serialisation not yet implemented>"
     name
     (Utility.mapstrcat ", " jsonize_value args)
