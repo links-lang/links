@@ -322,26 +322,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
-  (p1 (fun f ->
-         (* if Settings.get_value Basicsettings.web_mode then *)
-         (*   failwith("Can't spawn at the server in web mode."); *)
-         let var = Var.dummy_var in
-         let cont = (`Local, var, Value.empty_env IntMap.empty,
-                     ([], `Apply (`Variable var, []))) in
-         let new_pid = Proc.create_process false (cont::Value.toplevel_cont, f) in
-           (`Int (num_of_int new_pid))),
+  (* And now it is *)
+  (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngel",
-  (p1 (fun f ->
-         (* if Settings.get_value Basicsettings.web_mode then *)
-         (*   failwith("Can't spawn at the server in web mode."); *)
-         let var = Var.dummy_var in
-         let cont = (`Local, var, Value.empty_env IntMap.empty,
-                     ([], `Apply (`Variable var, []))) in
-         let new_pid = Proc.create_process true (cont::Value.toplevel_cont, f) in
-           (`Int (num_of_int new_pid))),
+  (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
@@ -1351,10 +1338,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	"lsNilF",
 	(`Client, datatype "() -> a", PURE);
-	
+
 	"lsCons",
 	(`Client, datatype "(a, b) -> c", PURE);
-	
+
 	"lsAt",
 	(`Client, datatype "(a, Int) -> c", PURE);
 
@@ -1363,7 +1350,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	"lsZip",
 	(`Client, datatype "(a, b) -> c", PURE);
-(*	
+(*
 	"lsMap",
 	(`Client, datatype "((a) -b-> c, d) -b-> e", IMPURE);
 
