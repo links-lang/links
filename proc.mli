@@ -2,7 +2,7 @@
 module Proc :
 sig
   type pid = int (* leaky abstraction what *)
-  type thread = unit -> unit
+  type thread = unit -> unit Lwt.t
 
   val debug_process_status : unit -> unit
 
@@ -12,9 +12,9 @@ sig
   val create_process : bool -> thread -> pid
   val awaken : pid -> unit
 
-  val finish : Value.env * Value.t -> unit
-  val yield : thread -> unit
-  val block : thread -> unit
+  val finish : Value.env * Value.t -> unit Lwt.t
+  val yield : thread -> unit Lwt.t
+  val block : thread -> unit Lwt.t
 
   val atomically : thread -> Value.t
 
