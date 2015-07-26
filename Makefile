@@ -84,6 +84,7 @@ SOURCES = $(OPC)                                \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
+          closures.ml \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
           desugarDatatypes.mli desugarDatatypes.ml      \

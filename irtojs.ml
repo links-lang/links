@@ -441,13 +441,13 @@ struct
 
     method binding b =
       match b with
-        | `Fun (f, lam, _location) ->
+        | `Fun (f, lam, _zs, _location) ->
             let o = o#bind_fun (Var.var_of_binder f) lam in
               o#super_binding b
         | `Rec defs ->
             let o =
               List.fold_right
-                (fun (f, lam, _location) o ->
+                (fun (f, lam, _zs, _location) o ->
                    o#bind_fun (Var.var_of_binder f) lam)
                 defs
                 o
@@ -667,9 +667,7 @@ let generate_remote_call f_name xs_names env =
 
 (** The [lambdalift] operations build up a [code->code] function (effectively
     a code context consisting of definitions) by function composition. *)
-let rec lambdalift_function
-    ((fb, (_, xsb, body), location)
-    : (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location)) =
+let rec lambdalift_function ((fb, (_, xsb, body), None, location) : Ir.fun_def) =
   let body_fs = lambdalift_computation body in
     let f_var, f_name = fb in
     let bs = List.map name_binder xsb in
@@ -846,9 +844,9 @@ and generate_computation env : Ir.computation -> code -> (venv * code) =
     gbs env (fun code -> code) bs
 
 and generate_function env fs :
-    (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location) ->
+    Ir.fun_def ->
     (string * string list * code * Ir.location) =
-  fun (fb, (_, xsb, body), location) ->
+  fun (fb, (_, xsb, body), None, location) ->
   let (f, f_name) = name_binder fb in
   let bs = List.map name_binder xsb in
   let _xs, xs_names = List.split bs in
@@ -878,14 +876,14 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let env' = VEnv.bind env (x, x_name) in
           (env', fun code ->
                    generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun ((fb, _, location) as def) ->
+    | `Fun ((fb, _, _zs, _location) as def) ->
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
         let (f_name, args, _, _) as def_header = generate_function env [] def in
           (env', fun code ->
              LetFun (def_header, code))
     | `Rec defs ->
-        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
+        let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
         let env' = List.fold_left VEnv.bind env fs in
           (env', fun code ->
              LetRec (List.map (generate_function env fs) defs, code))

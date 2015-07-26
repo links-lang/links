@@ -523,12 +523,12 @@ module Eval = struct
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
                 tail_computation env cont' tc
-          | `Fun ((f, _) as fb, (_, args, body), `Client) ->
+          | `Fun ((f, _) as fb, (_, args, body), None, `Client) ->
               let env' = Value.bind f (`ClientFunction
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), _) ->
+          | `Fun ((f, _) as fb, (_, args, body), None, _) ->
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
               let env' =
@@ -541,29 +541,29 @@ module Eval = struct
               (* partition the defs into client defs and non-client defs *)
               let client_defs, defs =
                 List.partition (function
-                                  | (_fb, _lam, (`Client | `Native)) -> true
+                                  | (_fb, _lam, _zs, (`Client | `Native)) -> true
                                   | _ -> false) defs in
 
               let locals =
                 match defs with
                   | [] -> Value.empty_env (Value.get_closures env)
-                  | ((f, _), _, _)::_ -> Value.localise env f in
+                  | ((f, _), _, _, _)::_ -> Value.localise env f in
 
               (* add the client defs to the environments *)
               let env =
                 List.fold_left
-                  (fun env ((f, _) as fb, _lam, _location) ->
+                  (fun env ((f, _) as fb, _lam, None, _location) ->
                      let v = `ClientFunction (Js.var_name_binder fb),
                              Var.scope_of_binder fb
                      in Value.bind f v env)
                   env client_defs in
 
               (* add the server defs to the environment *)
-              let bindings = List.map (fun ((f,_), (_, args, body), _) ->
+              let bindings = List.map (fun ((f,_), (_, args, body), None, _) ->
                                          f, (List.map fst args, body)) defs in
               let env =
                 List.fold_right
-                  (fun ((f, _) as fb, _, _) env ->
+                  (fun ((f, _) as fb, _, None, _) env ->
                      let scope = Var.scope_of_binder fb in
                        Value.bind f
                          (`RecFunction (bindings, locals, f, scope),

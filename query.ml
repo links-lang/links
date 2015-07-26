@@ -559,9 +559,9 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), (`Client | `Native)) ->
+              | `Fun ((f, _) as fb, (_, args, body), _, (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _) ->
+              | `Fun ((f, _) as fb, (_, args, body), _, _) ->
                   computation
                     (bind env (f, `Closure ((List.map fst args, body), env)))
                     (bs, tailcomp)

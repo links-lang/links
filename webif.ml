@@ -26,11 +26,11 @@ let is_client_program : Ir.program -> bool =
   fun (bs, main) ->
     exists
       (function
-         | `Fun (_, _, `Client)
+         | `Fun (_, _, _, `Client)
          | `Alien (_, "javascript") -> true
          | `Rec defs ->
              exists
-               (fun (_, _, location) -> location = `Client)
+               (fun (_, _, _, location) -> location = `Client)
                defs
          | _ -> false)
       bs

@@ -499,12 +499,12 @@ let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
             | [] -> o
             | (`Let (x, (_tyvars, e)))::bs ->
                 bind (o#bind_cont (x, (bs, main))) bs
-            | (`Fun (f, (_tyvars, xs, e), _))::bs ->
+            | (`Fun (f, (_tyvars, xs, e), None, _))::bs ->
                 bind (o#bind_fun (f, (xs, e))) bs
             | (`Rec defs)::bs ->
                 let o =
                   List.fold_left
-                    (fun o (f, (_tyvars, xs, e), _) ->
+                    (fun o (f, (_tyvars, xs, e), None, _) ->
                        o#bind_fun (f, (xs, e)))
                     o
                     defs
