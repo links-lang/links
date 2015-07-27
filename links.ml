@@ -56,6 +56,12 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
   let valenv = Value.with_closures valenv closures in
 
+  (* Debug.print ("Before closure conversion: " ^ Ir.Show_program.show program); *)
+  let fenv = Closures.ClosureVars.program tenv Lib.primitive_vars program in
+  (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
+  let program = Closures.ClosureConvert.program tenv Lib.primitive_vars fenv program in
+  (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
+
   let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program"
   in
     lazy (printer t v) <|measure_as|> "print";

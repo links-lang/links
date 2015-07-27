@@ -1,6 +1,10 @@
+(*pp deriving *)
 open Notfound
 open Utility
 open Ir
+
+type fenv = (Ir.binder list) IntMap.t
+    deriving (Show)
 
 module ClosureVars =
 struct
@@ -40,13 +44,6 @@ struct
       method private get_bound_vars = bound_vars
       method private get_free_vars = free_vars
 
-      method private wrap : 'a.(unit -> 'a * 'self) -> 'a * 'self =
-        fun f ->
-          let o = o#reset in
-          let r, o = f() in
-          let o = o#set bound_vars free_vars in
-          r, o
-
       method get_fenv = fenv
 
       method var =
@@ -64,69 +61,83 @@ struct
         function
         | b when Ir.binding_scope b = `Global -> super#binding b
         | `Fun (f, (tyvars, xs, body), None, location) ->
-          let (xs, body, zs), o =
-            o#wrap (fun () ->
-                let (xs, o) =
-                  List.fold_right
-                    (fun x (xs, o) ->
-                       let x, o = o#binder x in
-                       (x::xs, o))
-                    xs
-                    ([], o) in
-                let body, _, o = o#computation body in
-                let zs =
-                  List.rev
-                    (IntSet.fold
-                       (fun x zs ->
-                          (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
-                       (o#get_free_vars)
-                       []) in
-                (xs, body, zs), o) in
+          (* reset free and bound variables to be empty *)
+          let o = o#reset in
+          let (xs, o) =
+            List.fold_right
+              (fun x (xs, o) ->
+                 let x, o = o#binder x in
+                 (x::xs, o))
+              xs
+              ([], o) in
+          let body, _, o = o#computation body in
+          let zs =
+            List.rev
+              (IntSet.fold
+                 (fun x zs ->
+                    (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
+                 (o#get_free_vars)
+                 []) in
+          (* restore free and bound variables *)
+          let o = o#set bound_vars free_vars in
+
           let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) zs in
           `Fun (f, (tyvars, xs, body), None, location), o
         | `Rec defs ->
-          let (defs, zs), o =
-            o#wrap (fun () ->
-                (* it's important to traverse the function binders first in
-                   order to make sure they're in scope for all of the
-                   function bodies *)
-                let _, o =
-                  List.fold_right
-                    (fun (f, _, _, _) (fs, o) ->
-                       let f, o = o#binder f in
-                     (f::fs, o))
-                    defs
-                    ([], o) in
+          (* reset free and bound variables to be empty *)
+          let o = o#reset in
 
-                (* We rely here on the invariant that variables have
-                   unique names in that we allow bound variables from
-                   earlier definitions in the `Rec to leak into
-                   subsequent ones *)
-                let def, zs =
-                  List.fold_left
-                    (fun (defs, o) (f, (tyvars, xs, body), None, location) ->
-                       let xs, o =
-                         List.fold_right
-                           (fun x (xs, o) ->
-                              let (x, o) = o#binder x in
-                              (x::xs, o))
-                           xs
-                           ([], o) in
-                       let body, _, o = o#computation body in
+          (* it's important to traverse the function binders first in
+             order to make sure they're in scope for all of the
+             function bodies *)
+          let _, o =
+            List.fold_right
+              (fun (f, _, _, _) (fs, o) ->
+                 let f, o = o#binder f in
+                 (f::fs, o))
+              defs
+              ([], o) in
 
-                       (f, (tyvars, xs, body), None, location)::defs, o)
-                    ([], o)
-                    defs in
+          (* We rely here on the invariant that variables have
+             unique names in that we allow bound variables from
+             earlier definitions in the `Rec to leak into
+             subsequent ones *)
+          let defs, o =
+            List.fold_left
+              (fun (defs, o) (f, (tyvars, xs, body), None, location) ->
+                 let xs, o =
+                   List.fold_right
+                     (fun x (xs, o) ->
+                        let (x, o) = o#binder x in
+                        (x::xs, o))
+                     xs
+                     ([], o) in
+                 let body, _, o = o#computation body in
 
-                let zs =
-                  List.rev
-                    (IntSet.fold
-                       (fun x zs ->
-                          (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
-                       (o#get_free_vars)
-                       []) in
-                (defs, zs), o) in
+                 (f, (tyvars, xs, body), None, location)::defs, o)
+              ([], o)
+              defs in
+
+          let zs =
+            List.rev
+              (IntSet.fold
+                 (fun x zs ->
+                    (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
+                 (o#get_free_vars)
+                 []) in
+          (* restore free and bound variables *)
+          let o = o#set bound_vars free_vars in
+
+          (* ensure functions are in scope for the continuation *)
+          let _, o =
+            List.fold_right
+              (fun (f, _, _, _) (fs, o) ->
+                 let f, o = o#binder f in
+                 (f::fs, o))
+              defs
+              ([], o) in
+
           let o = List.fold_left
               (fun o (f, _, _, _) ->
                  o#register_fun (Var.var_of_binder f) zs) o defs in
@@ -197,6 +208,7 @@ struct
               `Variable x
           in
           v, t, o
+        | v -> super#value v
 
       method private set_context parents parent_env cvars =
         {< parents = parents; parent_env = parent_env; cvars = cvars >}
@@ -269,8 +281,15 @@ struct
                 ([], o)
                 defs in
             let defs = List.rev defs in
-              `Rec defs, o
+            `Rec defs, o
+        | b -> super#binding b
     end
+
+  let computation tyenv globals fenv e =
+    let e, _, o = (new visitor tyenv globals fenv)#computation e in
+      e
+
+  let program = computation
 end
 
 

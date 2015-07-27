@@ -311,7 +311,7 @@ struct
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
-      | `RecFunction ([(f, (xs, body))], env, f', _scope) ->
+      | `RecFunction ([(f, (xs, body, _z))], env, f', _scope) ->
           assert (f=f');
           `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f

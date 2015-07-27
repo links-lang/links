@@ -60,7 +60,6 @@ type value =
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
 
-  (* | `Closure of var * value var_map *)
   | `Closure of var * value
 
   | `Coerce of (value * Types.datatype)
@@ -68,7 +67,7 @@ type value =
 and tail_computation =
   [ `Return of (value)
   | `Apply of (value * value list)
-  | `ApplyClosure of (value * value list)
+  (* | `ApplyClosure of (value * value list) *)
 
   | `Special of special
 
@@ -386,12 +385,12 @@ struct
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `Apply (f, args), deconstruct return_type ft, o
-        | `ApplyClosure (f, args) ->
-            let f, ft, o = o#value f in
-            let args, arg_types, o = o#list (fun o -> o#value) args in
-            (* TODO: check arg types match *)
-            (* TOOD: add closure type *)
-              `ApplyClosure (f, args), deconstruct return_type ft, o
+        (* | `ApplyClosure (f, args) -> *)
+        (*     let f, ft, o = o#value f in *)
+        (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
+        (*     (\* TODO: check arg types match *\) *)
+        (*     (\* TOOD: add closure type *\) *)
+        (*       `ApplyClosure (f, args), deconstruct return_type ft, o *)
         | `Special special ->
             let special, t, o = o#special special in
               `Special special, t, o
@@ -532,7 +531,7 @@ struct
                        xs
                        ([], o) in
                   let body, _, o = o#computation body in
-                    (f, (tyvars, xs, body), assert false, location)::defs, o)
+                    (f, (tyvars, xs, body), z, location)::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in

@@ -188,7 +188,7 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
+| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation * Ir.var option)) list *
                      env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
@@ -361,7 +361,7 @@ and compress_t (v : t) : compressed_t =
       | `Variant (name, v) -> `Variant (name, cv v)
       | `FunctionPtr(x, env) -> assert false    (* Should already be resolved. *)
       | `RecFunction (defs, locals, f, `Local) ->
-          `LocalFunction (List.map (fun (f, (_xs, _body)) -> f) defs,
+          `LocalFunction (List.map (fun (f, (_xs, _body, _z)) -> f) defs,
                           compress_env locals, f)
       | `RecFunction (defs, _env, f, `Global) ->
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
@@ -386,7 +386,7 @@ and compress_env env : compressed_env =
 type unmarshal_envs =
     env * Ir.scope IntMap.t *
       Ir.computation IntMap.t *
-      (Ir.var list * Ir.computation) IntMap.t
+      (Ir.var list * Ir.computation * Ir.var option) IntMap.t
 
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
@@ -480,10 +480,10 @@ let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
       let conts = IntMap.add x e conts in
         o#with_conts conts
 
-    method bind_fun (fb, (xsb, e)) =
+    method bind_fun (fb, (xsb, e, z)) =
       let f = Var.var_of_binder fb in
       let xs = List.map Var.var_of_binder xsb in
-      let funs = IntMap.add f (xs, e) funs in
+      let funs = IntMap.add f (xs, e, z) funs in
         o#with_funs funs
 
     method binder =
@@ -499,13 +499,15 @@ let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
             | [] -> o
             | (`Let (x, (_tyvars, e)))::bs ->
                 bind (o#bind_cont (x, (bs, main))) bs
-            | (`Fun (f, (_tyvars, xs, e), None, _))::bs ->
-                bind (o#bind_fun (f, (xs, e))) bs
+            | (`Fun (f, (_tyvars, xs, e), zb, _))::bs ->
+              let z = opt_map (Var.var_of_binder) zb in
+              bind (o#bind_fun (f, (xs, e, z))) bs
             | (`Rec defs)::bs ->
                 let o =
                   List.fold_left
-                    (fun o (f, (_tyvars, xs, e), None, _) ->
-                       o#bind_fun (f, (xs, e)))
+                    (fun o (f, (_tyvars, xs, e), zb, _) ->
+                       let z = opt_map (Var.var_of_binder) zb in
+                       o#bind_fun (f, (xs, e, z)))
                     o
                     defs
                 in
@@ -567,7 +569,7 @@ and string_of_value : t -> string = function
       (* Choose from fancy or simple printing of functions: *)
       if Settings.get_value(Basicsettings.printing_functions) then
         "{ " ^ (mapstrcat " "
-                  (fun (_name, (formals, body)) ->
+                  (fun (_name, (formals, body, _z)) ->
                      "fun (" ^ String.concat "," (List.map Ir.string_of_var formals) ^ ") {" ^
                        Ir.string_of_computation body ^ "}")
                   defs) ^

@@ -303,13 +303,32 @@ module Eval = struct
           ) with
             | TopLevel (_, v) -> atomic := previousAtomic; v
         end
+    | `Closure (f, v) ->
+      begin
+      match lookup_var f env with
+      | `RecFunction (recs, locals, name, scope) ->
+        let r = value env v in
+        let recs, locals =
+          List.fold_right
+            (fun (name, (xs, body, z)) (recs, locals) ->
+               match z with
+               | None ->
+                 (* already closed *)
+                 (name, (xs, body, None)) :: recs, locals
+               | Some z ->
+                 (name, (xs, body, None)) :: recs, Value.bind z (r, `Local) locals)
+            recs
+            ([], locals)
+        in
+        `RecFunction (recs, locals, name, scope)
+      end
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
     | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
-          | Some (args, body) ->
+          | Some (args, body, None) ->
               (* unfold recursive definitions once *)
 
               (* extend env with locals *)
@@ -528,12 +547,13 @@ module Eval = struct
                                          (Js.var_name_binder fb),
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), None, _) ->
+          | `Fun ((f, _) as fb, (_, args, body), zb, _) ->
               let scope = Var.scope_of_binder fb in
               let locals = Value.localise env f in
+              let z = opt_map Var.var_of_binder zb in
               let env' =
                 Value.bind f
-                  (`RecFunction ([f, (List.map fst args, body)],
+                  (`RecFunction ([f, (List.map fst args, body, z)],
                                  locals, f, scope), scope) env
               in
                 computation env' cont (bs, tailcomp)
@@ -552,18 +572,22 @@ module Eval = struct
               (* add the client defs to the environments *)
               let env =
                 List.fold_left
-                  (fun env ((f, _) as fb, _lam, None, _location) ->
+                  (fun env ((f, _) as fb, _lam, zb, _location) ->
+                     (* TODO: do we need to do something with zb here?
+                        Not while client functions are always
+                        top-level, in which case zb will always be
+                        None *)
                      let v = `ClientFunction (Js.var_name_binder fb),
                              Var.scope_of_binder fb
                      in Value.bind f v env)
                   env client_defs in
 
               (* add the server defs to the environment *)
-              let bindings = List.map (fun ((f,_), (_, args, body), None, _) ->
-                                         f, (List.map fst args, body)) defs in
+              let bindings = List.map (fun ((f,_), (_, args, body), zb, _) ->
+                                         f, (List.map fst args, body, opt_map Var.var_of_binder zb)) defs in
               let env =
                 List.fold_right
-                  (fun ((f, _) as fb, _, None, _) env ->
+                  (fun ((f, _) as fb, _, _zb, _) env ->
                      let scope = Var.scope_of_binder fb in
                        Value.bind f
                          (`RecFunction (bindings, locals, f, scope),

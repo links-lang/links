@@ -61,7 +61,7 @@ type value =
 and tail_computation =
   [ `Return of value
   | `Apply of value * value list
-  | `ApplyClosure of value * value list
+  (* | `ApplyClosure of value * value list *)
   | `Special of special
   | `Case of value * (binder * computation) name_map * (binder * computation) option
   | `If of value * computation * computation

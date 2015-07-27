@@ -481,7 +481,7 @@ struct
 
                         let lam =
                           let _tyvars, xsb, body = VEnv.lookup fun_env f in
-                            (List.map Var.var_of_binder xsb, body) in
+                            (List.map Var.var_of_binder xsb, body, None) in
                         let fv = IntMap.find f closures in
 
                         let func = Value.marshal_value

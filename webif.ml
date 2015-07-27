@@ -170,7 +170,7 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
     program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
-        | `RecFunction ([(f, (_xs, _body))], locals, _, _) as v ->
+        | `RecFunction ([(f, (_xs, _body, _z))], locals, _, _) as v ->
           let json_env =
             if mem_assoc "_jsonArgs" params then
               match Json.parse_json_b64 (assoc "_jsonArgs" params) with
