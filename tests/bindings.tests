@@ -22,16 +22,16 @@ fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } evn(20)
 stdout : true : Bool
 exit : 0
 
-Mutually recurisve nested functions
+Mutually recursive nested functions
 { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20) }
 stdout : true : Bool
 exit : 0
-        
-Mutually recurisve nested functions returned outside their scope
+
+Mutually recursive nested functions returned outside their scope
 {fun f() { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even } f()(7) }
 stdout : false : Bool
 exit : 0
-        
+
 Closures using anonymous functions
 fun addn(n) { fun(x) { x + n } } addn(3)(4)
 stdout : 7 : Int
