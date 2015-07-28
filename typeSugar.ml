@@ -10,6 +10,8 @@ let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
 let check_top_level_purity =
   Settings.add_bool ("check_top_level_purity", false, `User)
 
+let rho = ref (Types.fresh_row_variable (`Unl, `Any))		    
+
 type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t
@@ -2577,10 +2579,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _, spec) ->
 	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
-	   let unify_all types
-	     = if List.length types > 1 then
-		 let t    = List.hd types in
-		 List.fold_left (fun _ t' -> unify ~handle:Gripers.handle_continuations (no_pos t, no_pos t')) () types
+	   let unify_all_with body_type types
+	     = if List.length types > 0 then
+		 List.fold_left (fun _ t -> unify ~handle:Gripers.handle_continuations (no_pos body_type, no_pos t)) () types
 	       else
 		 ()
 	   in
@@ -2597,12 +2598,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 Gripers.die pos msg
 			       else
 				 let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
-				 let ()         = unify_all (body_type :: conttails) in
-				 let operations = HandlerUtils.simplify_operations raw_operations in
-				 let operations = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in	      
+				 let ()         = unify_all_with body_type conttails in
+				 let operations = HandlerUtils.simplify_operations raw_operations in				 
+				 let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
+				 let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in
+				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c
+				 let operations'= HandlerUtils.make_operations_polymorphic operations in
+				 let operations = if HandlerUtils.is_closed spec then
+						    operations_row
+						  else
+						    let operations = (ops,row_var,dual) in in operations
+				 in
+				  **)
 				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
-				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
-				
+				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)				
 				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")

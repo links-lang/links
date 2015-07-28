@@ -152,7 +152,7 @@ let fix_operation_arity : Types.row -> Types.row
 let is_operation_invalid : operation_raw -> bool
   = function
     RawFailure _  -> true
-  | _             -> false
+   | _             -> false
 
 let extract_continuation_tails : operation_raw list -> Types.datatype list
   = fun ops ->
@@ -170,3 +170,10 @@ let is_closed spec =
   match spec with
     `Closed -> true
   | _ -> false
+
+let make_operations_polymorphic : operation list -> operation list
+  = List.map
+    (fun (opname,optype) -> let tvar = Types.fresh_type_variable (`Unl, `Any) in
+			    (opname,tvar)
+    )
+  
