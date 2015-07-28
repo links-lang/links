@@ -341,8 +341,14 @@ let load_prelude () =
   let () = Lib.prelude_tyenv := Some tyenv in
   let () = Lib.prelude_nenv := Some nenv in
 
-  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals
+  let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
+
+  let closures = Ir.ClosureTable.bindings tenv (Lib.primitive_vars) globals
   in
+
+  let fenv = Closures.ClosureVars.bindings tenv Lib.primitive_vars globals in
+  let globals = Closures.ClosureConvert.bindings tenv Lib.primitive_vars fenv globals in
+
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in
   let envs = 
     (valenv,

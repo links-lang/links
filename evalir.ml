@@ -314,9 +314,10 @@ module Eval = struct
                match z with
                | None ->
                  (* already closed *)
-                 (name, (xs, body, None)) :: recs, locals
+                 assert false
+               (*                 (name, (xs, body, None)) :: recs, locals*)
                | Some z ->
-                 (name, (xs, body, None)) :: recs, Value.bind z (r, `Local) locals)
+                 (name, (xs, body, Some z)) :: recs, Value.bind z (r, `Local) locals)
             recs
             ([], locals)
         in
@@ -328,7 +329,7 @@ module Eval = struct
     function
     | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
-          | Some (args, body, None) ->
+          | Some (args, body, _z) ->
               (* unfold recursive definitions once *)
 
               (* extend env with locals *)

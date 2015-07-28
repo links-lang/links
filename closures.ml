@@ -19,6 +19,16 @@ struct
       val bound_vars = IntSet.empty
       val free_vars = IntSet.empty
 
+      val toplevel = true
+      method private set_toplevel toplevel = {< toplevel = toplevel >}
+      method private descend : 'a.('self -> 'a * 'self) -> 'a * 'self =
+        fun f ->
+          let l = toplevel in
+          let o = o#set_toplevel false in
+          let r, o = f o in
+          let o = o#set_toplevel l in
+          r, o
+
       val fenv : (Ir.binder list) IntMap.t = IntMap.empty
 
       method private register_fun f (zs : binder list) =
@@ -30,9 +40,25 @@ struct
       method private bound x =
         {< bound_vars = IntSet.add x bound_vars >}
 
-      method private free x =
-        if IntSet.mem x globals || IntSet.mem x bound_vars then
+      method private register_var x =
+        if IntSet.mem x globals then
           o
+        else if IntSet.mem x bound_vars then
+          if IntMap.mem x fenv then
+            let zs = IntMap.find x fenv in
+            let free_vars =
+              List.fold_left
+                (fun free_vars (z, _) ->
+                   if IntSet.mem z bound_vars then
+                     free_vars
+                   else
+                     IntSet.add z free_vars)
+                free_vars
+                zs
+            in
+            {< free_vars = free_vars >}
+          else
+            o
         else
           {< free_vars = IntSet.add x free_vars >}
 
@@ -49,18 +75,23 @@ struct
       method var =
         fun var ->
           let var, t, o = super#var var in
-          var, t, o#free var
+          var, t, o#register_var var
 
       method binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
-        match scope with
-        | `Global -> b, o#global (Var.var_of_binder b)
-        | `Local  -> b, o#bound (Var.var_of_binder b)
+        if toplevel = true then
+          b, o#global (Var.var_of_binder b)
+        else
+          b, o#bound (Var.var_of_binder b)
+        (* match scope with *)
+        (* | `Global -> b, o#global (Var.var_of_binder b) *)
+        (* | `Local  -> b, o#bound (Var.var_of_binder b) *)
+
+      method private super_binding = super#binding
 
       method binding =
         function
-        | b when Ir.binding_scope b = `Global -> super#binding b
-        | `Fun (f, (tyvars, xs, body), None, location) ->
+        | `Fun (f, (tyvars, xs, body), None, location) when toplevel = false ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
           let (xs, o) =
@@ -70,7 +101,7 @@ struct
                  (x::xs, o))
               xs
               ([], o) in
-          let body, _, o = o#computation body in
+          let body, o = o#descend (fun o -> let body, _, o = o#computation body in body, o) in
           let zs =
             List.rev
               (IntSet.fold
@@ -84,7 +115,7 @@ struct
           let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) zs in
           `Fun (f, (tyvars, xs, body), None, location), o
-        | `Rec defs ->
+        | `Rec defs when toplevel = false ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -105,7 +136,7 @@ struct
              subsequent ones *)
           let defs, o =
             List.fold_left
-              (fun (defs, o) (f, (tyvars, xs, body), None, location) ->
+              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), None, location) ->
                  let xs, o =
                    List.fold_right
                      (fun x (xs, o) ->
@@ -113,7 +144,7 @@ struct
                         (x::xs, o))
                      xs
                      ([], o) in
-                 let body, _, o = o#computation body in
+                 let body, o = o#descend (fun o -> let body, _, o = o#computation body in body, o) in
 
                  (f, (tyvars, xs, body), None, location)::defs, o)
               ([], o)
@@ -143,50 +174,53 @@ struct
                  o#register_fun (Var.var_of_binder f) zs) o defs in
           let defs = List.rev defs in
           `Rec defs, o
-        | b -> super#binding b
+        | b ->
+          o#descend (fun o -> o#super_binding b)
     end
 
-  let value tyenv globals v =
-    let _, _, o = (new visitor tyenv globals)#value v in
+  let bindings tyenv globals e =
+    let _, o = (new visitor tyenv globals)#bindings e in
       o#get_fenv
 
-  let tail_computation tyenv globals e =
-    let _, _, o = (new visitor tyenv globals)#tail_computation e in
+  let program tyenv globals e =
+    let _, _, o = (new visitor tyenv globals)#program e in
       o#get_fenv
-
-  let binding tyenv globals bs =
-    let _, o = (new visitor tyenv globals)#binding bs in
-      o#get_fenv
-
-  let bindings tyenv globals bs =
-    let _, o = (new visitor tyenv globals)#bindings bs in
-      o#get_fenv
-
-  let computation tyenv globals e =
-    let _, _, o = (new visitor tyenv globals)#computation e in
-      o#get_fenv
-
-  let program = computation
 end
 
 module ClosureConvert =
 struct
+  let globalise (f, (t, name, scope)) = (f, (t, name, `Global))
+
   let close f zs =
     `Closure (f, `Extend (List.fold_right
-                            (fun zb fields ->
-                               let z = Var.var_of_binder zb in
-                               StringMap.add (string_of_int z) (`Variable z) fields)
+                            (fun (zname, zv) fields ->
+                               StringMap.add zname zv fields)
                             zs
                             StringMap.empty, None))
 
   class visitor tenv globals fenv =
     object (o : 'self) inherit Transform.visitor(tenv) as super
       (* currently active mutually recursive functions*)
-      val parents : Ir.binder list  = []
+      val parents : Ir.binder list = []
       (* currently active closure environment *)
       val parent_env = 0
       (* currently active closure variables *)
       val cvars = IntSet.empty
+
+      val hoisted_bindings = []
+
+      val toplevel = true
+      method private set_toplevel toplevel = {< toplevel = toplevel >}
+      method private descend : 'a.('self -> 'a * 'self) -> 'a * 'self =
+        fun f ->
+          let l = toplevel in
+          let o = o#set_toplevel false in
+          let r, o = f o in
+          let o = o#set_toplevel l in
+          r, o
+
+      method private push_binding b = {< hoisted_bindings = b :: hoisted_bindings >}
+      method private pop_hoisted_bindings = List.rev hoisted_bindings, {< hoisted_bindings = [] >}
 
       method value =
         function
@@ -203,6 +237,15 @@ struct
                 if List.mem_assoc x parents then
                   `Closure (x, `Variable parent_env)
                 else
+                  let zs =
+                    List.map (fun (z, _) ->
+                        let zname = string_of_int z in
+                        if IntSet.mem z cvars then
+                          (zname, `Project (zname,  `Variable parent_env))
+                        else
+                          (zname, `Variable z))
+                      zs
+                  in
                   close x zs
             else
               `Variable x
@@ -213,10 +256,17 @@ struct
       method private set_context parents parent_env cvars =
         {< parents = parents; parent_env = parent_env; cvars = cvars >}
 
-      method binding =
+      method bindings =
         function
-        | b when Ir.binding_scope b = `Global -> super#binding b
-        | `Fun ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) ->
+        | [] -> [], o
+        | b :: bs when toplevel = true ->
+          let b, o = o#descend (fun o -> o#binding b) in
+          let bs', o = o#pop_hoisted_bindings in
+          let bs, o = o#bindings bs in
+          bs' @ (b :: bs), o
+        | `Fun ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) :: bs ->
+          assert (Var.scope_of_binder fb = `Local);
+          let fb = globalise fb in
           let (xs, o) =
             List.fold_right
               (fun x (xs, o) ->
@@ -232,16 +282,26 @@ struct
             match zs with
             | [] -> None, o
             | _ ->
+              let zt =
+                Types.make_record_type
+                  (List.fold_left
+                     (fun fields (x, (xt, _, _)) ->
+                        StringMap.add (string_of_int x) xt fields)
+                     StringMap.empty
+                     zs)
+              in
               (* fresh variable for the closure environment *)
-              let zb = Var.fresh_binder (t, "env_" ^ string_of_int f, `Local) in
+              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
               let z = Var.var_of_binder zb in
               let o = o#set_context [fb] z cvars in
               Some zb, o in
-          let body, _, o = o#computation body in
+          let body, o = o#descend (fun o -> let body, _, o = o#computation body in body, o) in
           let o = o#set_context parents' parent_env' cvars' in
           let fb, o = o#binder fb in
-          `Fun (fb, (tyvars, xs, body), zb, location), o
-        | `Rec defs ->
+          let o = o#push_binding (`Fun (fb, (tyvars, xs, body), zb, location)) in
+          let bs, o = o#bindings bs in
+          bs, o
+        | `Rec defs :: bs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
@@ -254,7 +314,9 @@ struct
                 ([], o) in
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) ->
+                (fun (defs, (o : 'self)) ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) ->
+                   assert (Var.scope_of_binder fb = `Local);
+                   let fb = globalise fb in
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -271,123 +333,38 @@ struct
                      match zs with
                      | [] -> None, o
                      | _ ->
+                       let zt =
+                         Types.make_record_type
+                           (List.fold_left
+                              (fun fields (x, (xt, _, _)) ->
+                                 StringMap.add (string_of_int x) xt fields)
+                              StringMap.empty
+                              zs)
+                       in
                        (* fresh variable for the closure environment *)
-                       let zb = Var.fresh_binder (t, "env_" ^ string_of_int f, `Local) in
+                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
                        let z = Var.var_of_binder zb in
                        Some zb, o#set_context fbs z cvars in
-                   let body, _, o = o#computation body in
+                   let body, o = o#descend (fun o -> let body, _, o = o#computation body in body, o) in
                    let o = o#set_context parents' parent_env' cvars' in
                     (fb, (tyvars, xs, body), zb, location)::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in
-            `Rec defs, o
-        | b -> super#binding b
+            let o = o#push_binding (`Rec defs) in
+            let bs, o = o#bindings bs in
+            bs, o
+        | b :: bs ->
+          let b, o = o#binding b in
+          let bs, o = o#bindings bs in
+          b :: bs, o
     end
 
-  let computation tyenv globals fenv e =
-    let e, _, o = (new visitor tyenv globals fenv)#computation e in
+  let bindings tyenv globals fenv bs =
+    let bs, _ = (new visitor tyenv globals fenv)#bindings bs in
+      bs
+
+  let program tyenv globals fenv e =
+    let e, _, _ = (new visitor tyenv globals fenv)#program e in
       e
-
-  let program = computation
 end
-
-
-
-(* module ClosureConvert = *)
-(* struct *)
-(*   class visitor tenv fenv cenv = *)
-(*     object (o : 'self) inherit Transform.visitor(tenv) as super *)
-
-(*       method value = *)
-(*         function *)
-(*         | `Variable x -> *)
-(*           let x, t, o = o#var x in *)
-(*           if IntMap.mem x fenv then *)
-(*             assert false *)
-(*           else if IntMap.mem x cenv then *)
-(*             `ClosureVar x, t, o *)
-(*           `Variable x, t, o         *)
-
-(*       method binding = *)
-(*         function *)
-(*         | `Fun (f, (tyvars, xs, body), [], location) -> *)
-(*             let xs, body, o = *)
-(*               let (xs, o) = *)
-(*                 List.fold_right *)
-(*                   (fun x (xs, o) -> *)
-(*                      let x, o = o#binder x in *)
-(*                        (x::xs, o)) *)
-(*                   xs *)
-(*                   ([], o) in *)
-(*               let body, _, o = o#computation body in *)
-(*               xs, body, o in *)
-(*             let zs = IntMap.find f tenv in  *)
-(*             let f, o = o#binder f in *)
-(*               `Fun (f, (tyvars, xs, body), zs, location), o *)
-(*         | `Rec _ -> assert false *)
-(*         | b -> super#binding b *)
-
-(*     end *)
-(* end *)
-
-
-(* module ClosureConvert = *)
-(* struct *)
-(*   class visitor tyenv bound_vars = *)
-(*     object (o) *)
-(*       inherit Transform.visitor(tyenv) as super *)
-
-(*       val free_vars = IntSet.empty *)
-(*       val bound_vars = bound_vars *)
-
-(*       method bound x = *)
-(*         {< bound_vars = IntSet.add x bound_vars >} *)
-
-(*       method free x = *)
-(*         if IntSet.mem x bound_vars then o *)
-(*         else {< free_vars = IntSet.add x free_vars >} *)
-
-(*       method reset_free = *)
-(*         {< free_vars = IntSet.empty >} *)
-
-(*       method extend_free free_vars' = *)
-(*         {< free_vars = IntSet.union free_vars free_vars' >} *)
-
-
-(*       method binder b = *)
-(*         let b, o = super#binder b in *)
-(*         b, o#bound (Var.var_of_binder b) *)
-
-(*       method binding = *)
-(*         function *)
-(*         | `Let _ as b -> o#super b *)
-(*         | `Fun (f, (tyvars, xs, body), [], scope) -> *)
-(*           let free_vars' = free_vars in *)
-(*           let o = o#reset_free in *)
-(*           let xs, body, o = *)
-(*             let (xs, o) = *)
-(*               List.fold_right *)
-(*                 (fun x (xs, o) -> *)
-(*                    let x, o = o#binder x in *)
-(*                    (x::xs, o)) *)
-(*                 xs *)
-(*                 ([], o) in *)
-(*             let body, _, o = o#computation body in *)
-(*             xs, body, o in *)
-
-(*           let tyenv = get_type_environment in *)
-
-(*           let zs = *)
-(*             IntSet.fold *)
-(*               (fun x zs -> *)
-(*                  IntMap.find x *)
-(*               ) *)
-(*                  get_free_vars *)
-
-(*           let o = o#extend_free *)
-(*           let f, o = o#binder f in *)
-(*           (\* TODO: check that xs and body match up with f *\) *)
-(*           `Fun (f, (tyvars, xs, body), zs, location), o *)
-(*     end            *)
-(* end *)

@@ -555,11 +555,6 @@ struct
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
 
-    (* method closure_binder : binder -> (binder * 'self_type) = *)
-    (*   fun (var, info) -> *)
-    (*     let tyenv = Env.bind cenv (var, info_type info) in *)
-    (*       (var, info), {< cenv=cenv >} *)
-
     method program : program -> (program * datatype * 'self_type) = o#computation
 
     method get_type_environment : environment = tyenv
