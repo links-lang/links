@@ -106,6 +106,7 @@ SOURCES = $(OPC)                                \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
 	  desugarCP.mli desugarCP.ml                     \
+	  desugarHandlers.mli desugarHandlers.ml         \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \
