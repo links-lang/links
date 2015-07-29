@@ -177,6 +177,7 @@ let keywords = [
  "fun"      , FUN;
  "formlet"  , FORMLET;
  "handle"   , HANDLE;
+ "handler"  , HANDLER;
  "if"       , IF;
  "in"       , IN;
  "include"  , INCLUDE;
@@ -192,6 +193,7 @@ let keywords = [
  "offer"    , OFFER;
  "orderby"  , ORDERBY;
  "op"       , OP;
+ "open"     , OPEN;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
@@ -201,6 +203,7 @@ let keywords = [
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;
+ "shallow"  , SHALLOW;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;

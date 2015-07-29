@@ -38,13 +38,13 @@ struct
   let rec opt_generalisable o = opt_app is_pure true o
   and is_pure (p, _) = match p with
     | `Constant _
-    | `Var _
+    | `Var _   
     | `FunLit _
     | `DatabaseLit _
     | `TableLit _
     | `TextNode _
     | `Section _ -> true
-    
+    | `HandlerLit _ -> false
     | `ListLit (ps, _)
     | `TupleLit ps -> List.for_all is_pure ps
     | `RangeLit (e1, e2) -> is_pure e1 && is_pure e2
@@ -1754,6 +1754,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
+	| `HandlerLit (_, spec, (pats, body)) ->
+	   failwith "typeSugar.ml: `HandlerLit not yet implemented."
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
@@ -2604,14 +2606,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
 				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
-         			 let body_type' =
+         			 let () =
 				   if HandlerUtils.is_closed spec == false then
 				     let operation_row' = HandlerUtils.make_operation_row_polymorphic operations_row in
-				     (*let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operation_row')) in*)
-				     Types.make_thunk_type operation_row' body_type
-				   else body_type
+				     unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operation_row'))
+				   else ()
 				 in
-				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type', merge_usages [usages m; usages_cases cases]
+				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	     | _-> Gripers.die pos "Handler cases can only pattern match on operation types."

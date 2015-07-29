@@ -831,7 +831,7 @@ struct
                 List.map
                   (fun (p, body) ->
                      let p, penv = CompilePatterns.desugar_pattern `Local p in
-                       (p, fun env ->  eval (env ++ penv) body))
+                       (p, fun env -> eval (env ++ penv) body))
                   cases
               in
                 I.handle env (ev e, cases, t, effects, spec)

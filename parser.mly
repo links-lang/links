@@ -175,7 +175,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD OPEN SHALLOW HANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -440,7 +440,16 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-       
+| handler_spec HANDLER arg_lists handler_body                  { `HandlerLit (None, $1, ($3, $4)), pos() }
+
+handler_spec:
+| /* empty */                                                  { `Closed }
+| OPEN                                                         { `Open }
+| SHALLOW                                                      { `Shallow }
+
+handler_body:	  
+| LBRACE cases RBRACE    	                               { $2 }
+  
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }

@@ -183,6 +183,7 @@ and regex = [
 | `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
+and handlerlit = pattern list list * (pattern * phrase) list				   
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -193,6 +194,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
+| `HandlerLit       of ((Types.datatype * Types.row) list) option *  handler_spec * handlerlit
 | `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
@@ -261,7 +263,7 @@ and bindingnode = [
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
-and handler_spec = [ `Open | `Closed ]
+and handler_spec = [ `Open | `Closed | `Shallow ]
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -390,6 +392,7 @@ struct
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
     | `FunLit (_, _, fnlit) -> funlit fnlit
+    | `HandlerLit (_,_, hnlit) -> handlerlit hnlit				      
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -444,6 +447,8 @@ struct
     | `Op _  -> failwith "sugartypes.ml: Operation declaration is not yet supported"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and handlerlit (args, cases : handlerlit) : StringSet.t =
+    diff (union_map case cases) (union_map (union_map pattern) args) 
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

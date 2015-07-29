@@ -222,7 +222,21 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lin, lam), t)
+          (o, `FunLit (Some argss, lin, lam), t)
+      | `HandlerLit (Some argss, spec, hnlit) ->
+	 failwith "transformSugar.ml: `HandlerLit not yet implemented"
+(*         let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in	 
+         let (o, hnlit, rt) = o#handlerlit inner_e hnlit in
+         let (o, t) =
+           List.fold_right
+             (fun (args, effects) (o, rt) ->
+              let (o, args) = o#datatype args in
+              let (o, effects) = o#row effects in
+              (o, `Function (args, effects, rt)))
+             argss
+             (o, rt)
+         in
+         (o, `HandlerLit (Some argss, spec, hnlit), t)*)
       | `Spawn (`Wait, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -579,7 +593,29 @@ class transform (env : Types.typing_environment) =
         let o = o#with_effects inner_eff in
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
-          (o, (pss, e), t)
+        (o, (pss, e), t)
+
+    method handlerlit : Types.row -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
+      fun inner_e (pats, cases) -> failwith "transformSugar.ml: handlerlit not yet implemented!"
+      (*let envs = o#backup_envs in
+      let (o, pats) =
+	listu o
+	      (fun o ->
+	       listu o (fun o -> o#pattern)
+	      )
+	      pats
+      in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#with_effects inner_e in
+      let (o, e, t) = o#
+      let o = o#restore_envs envs in
+      (o, (pats, cases), t)*)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
       function
