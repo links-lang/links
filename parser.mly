@@ -440,7 +440,7 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_spec HANDLER arg_lists handler_body                  { `HandlerLit (None, $1, ($3, $4)), pos() }
+| handler_spec HANDLER LPAREN pattern RPAREN handler_body      { `HandlerLit (None, $1, ($4, $6)), pos() }
 
 handler_spec:
 | /* empty */                                                  { `Closed }

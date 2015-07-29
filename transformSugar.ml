@@ -223,20 +223,8 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
           (o, `FunLit (Some argss, lin, lam), t)
-      | `HandlerLit (Some argss, spec, hnlit) ->
-	 failwith "transformSugar.ml: `HandlerLit not yet implemented"
-(*         let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in	 
-         let (o, hnlit, rt) = o#handlerlit inner_e hnlit in
-         let (o, t) =
-           List.fold_right
-             (fun (args, effects) (o, rt) ->
-              let (o, args) = o#datatype args in
-              let (o, effects) = o#row effects in
-              (o, `Function (args, effects, rt)))
-             argss
-             (o, rt)
-         in
-         (o, `HandlerLit (Some argss, spec, hnlit), t)*)
+      | `HandlerLit (Some (m, effects, effects'), spec, hnlit) ->	 
+         (o, `HandlerLit (Some (m, effects, effects'), spec, hnlit), m)
       | `Spawn (`Wait, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)

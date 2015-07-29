@@ -451,13 +451,7 @@ class map =
 
     method handlerlit : handlerlit -> handlerlit =
       fun (args, cases) ->
-      let args =
-	o#list
-	  (fun o ->
-	   o#list (fun o -> o#pattern)
-	  )
-	  args
-      in
+      let args = o#pattern args in
       let cases =
         o#list
           (fun o (lhs, rhs) ->
@@ -1016,13 +1010,7 @@ class fold =
 
     method handlerlit : handlerlit -> 'self_type =
       fun (args, cases) ->
-      let o =
-	o#list
-	  (fun o ->
-	   o#list (fun o -> o#pattern)
-	  )
-	  args
-      in
+      let o = o#pattern args in
       let cases =
         o#list
           (fun o (lhs, rhs) ->
@@ -1677,14 +1665,7 @@ class fold_map =
 
     method handlerlit : handlerlit -> ('self_type * handlerlit) =
       fun (args, cases) ->
-      let (o, args) =
-	o#list
-	  (fun o ->
-	   o#list
-	     (fun o -> o#pattern)
-	  )
-	  args
-      in
+      let (o, args) = o#pattern args in
       let (o, cases) =
         o#list
           (fun o (lhs, rhs ) ->

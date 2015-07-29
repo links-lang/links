@@ -1585,7 +1585,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
     and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
-    let type_cases' binders hpatterns hbranches = (* Generalised type_cases; two additional parameters are Griper handles *)
+    let type_cases' binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
       let binders, pats =
@@ -1754,8 +1754,46 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-	| `HandlerLit (_, spec, (pats, body)) ->
-	   failwith "typeSugar.ml: `HandlerLit not yet implemented."
+	| `HandlerLit (_, spec, (p, cases)) ->
+	     let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
+	     let unify_all_with body_type types
+	       = if List.length types > 0 then
+		   List.fold_left (fun _ t -> unify ~handle:Gripers.handle_continuations (no_pos body_type, no_pos t)) () types
+		 else
+		   ()
+	     in
+	     let m = tpo p in
+	     let cases, pattern_type, body_type = type_cases' cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)      
+	     let (mt,effects,operations_row,ret) =
+	       match pattern_type with
+		 `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
+			       if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
+				 let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
+				 let raw_operations  = HandlerUtils.extract_operations ops in
+				 if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
+				   let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
+				   Gripers.die pos msg
+				 else
+				   let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
+				   let ()         = unify_all_with body_type conttails in
+				   let operations = HandlerUtils.simplify_operations raw_operations in				 
+				   let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
+				   let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
+				   let () = unify ~handle:Gripers.handle_computation (no_pos (pattern_typ m), no_pos thunk_type) in (* Unify expression and handler type. *)
+				   (thunk_type,effects,operations_row,ret)				  
+			       else
+				 Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
+	       | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
+	       in
+	       let (body_type, effects') =
+		 match spec with
+		   `Closed -> (body_type, None)
+		 | `Open -> let operations_row = HandlerUtils.make_operation_row_polymorphic operations_row in
+	                    let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in
+			    (Types.make_thunk_type operations_row ret, Some operations_row)
+		 | `Shallow -> failwith "Shallow handlers are not yet supported."
+	       in
+	       (`HandlerLit (Some (mt, effects, effects'), spec, (erase m, erase_cases cases)), body_type, usages_cases cases)
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
