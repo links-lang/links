@@ -131,7 +131,7 @@ module Eval = struct
        Proc.atomically (fun () -> apply [] env (value env f, List.map (value env) args))
     | `Coerce (v, t) -> value env v
 
-  and apply cont env : Value.t * Value.t list -> unit Lwt.t =
+  and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
     | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
@@ -325,13 +325,13 @@ module Eval = struct
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
-  and apply_cont cont env v : unit Lwt.t =
+  and apply_cont cont env v : Proc.thread_result Lwt.t =
     match cont with
     | [] -> Proc.finish (env, v)
     | (scope, var, locals, comp) :: cont ->
        let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
        computation env cont comp
-  and computation env cont (bindings, tailcomp) : unit Lwt.t =
+  and computation env cont (bindings, tailcomp) : Proc.thread_result Lwt.t =
     match bindings with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
@@ -391,7 +391,7 @@ module Eval = struct
           | `Alien _ -> (* just skip it *)
               computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env cont : Ir.tail_computation -> unit Lwt.t = function
+  and tail_computation env cont : Ir.tail_computation -> Proc.thread_result Lwt.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -420,7 +420,7 @@ module Eval = struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env cont : Ir.special -> unit Lwt.t = function
+  and special env cont : Ir.special -> Proc.thread_result Lwt.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, (readtype, _, _)) ->
@@ -540,7 +540,7 @@ module Eval = struct
       end
     (*****************)
 
-  let eval : Value.env -> program -> unit Lwt.t =
+  let eval : Value.env -> program -> Proc.thread_result Lwt.t =
     fun env -> computation env Value.toplevel_cont
 end
 

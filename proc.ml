@@ -18,7 +18,8 @@ struct
   type proc_state = Value.continuation * Value.t
   *)
 
-  type thread = unit -> unit Lwt.t (* Thunked to avoid changing evalir.  Because I'm laaaaaaaaaaaaazy. *)
+  type thread_result = Value.env * Value.t
+  type thread = unit -> thread_result Lwt.t (* Thunked to avoid changing evalir.  Because I'm laaaaaaaaaaaaazy. *)
 
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
@@ -137,10 +138,7 @@ struct
     let pid = get_current_pid () in
     Debug.print ("Finishing thread " ^ string_of_int pid);
     if pid == main_process_pid then
-      begin
-        result := Some r;
-        main_running := false
-      end
+      main_running := false
     else if Hashtbl.mem state.angels pid then
       begin
         let w = match Lwt.get angel_done with
@@ -149,7 +147,7 @@ struct
         Lwt.wakeup w ();
         Hashtbl.remove state.angels pid
       end;
-    Lwt.return ()
+    Lwt.return r
 
   let is_main pid = pid == main_process_pid
   (** Is the current process is the main process? *)
@@ -159,14 +157,12 @@ struct
 
   let run pfun =
    state.step_counter := 0;
-   Lwt_main.run (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun () ->
-                 if not !atomic then
-                   Lwt.join (Hashtbl.fold (fun _ t ts -> t :: ts) state.angels [])
-                 else
-                   return ());
-   match !result with
-   | None -> assert false
-   | Some r -> r
+   Lwt_main.run (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun r ->
+                 (if not !atomic then
+                    Lwt.join (Hashtbl.fold (fun _ t ts -> t :: ts) state.angels [])
+                  else
+                    Lwt.return ()) >>= fun _ ->
+                 Lwt.return r)
 
   (* Pretty sure that Lwt.run does what we want here---at least, the document reasons not to nest
   calls to Lwt.run match the desired behavior of atomically. :) *)
