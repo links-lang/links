@@ -468,11 +468,12 @@ struct
                   match f with
                     | `Variable v when VEnv.lookup venv v = "pickleCont" ->
                         (* an instance of [pickleCont(cont)] *)
-                        let f =
+                        let f, v =
                           match strip_poly cont with
-                            | `Variable f -> f
-                            | v -> failwith ("don't know how to pickle this value on the client: "^ Ir.Show_value.show v) in
-                          
+                          | `Variable f -> f, `Extend (StringMap.empty, None)
+                          | `Closure (f, v) -> f, v
+                          | v -> failwith ("don't know how to pickle this value on the client: "^ Ir.Show_value.show v) in
+
                         (* hereafter [cont] is a variable, [`Variable f] *)
 
                         let e, t, o = super#tail_computation e in
@@ -482,22 +483,22 @@ struct
                         let lam =
                           let _tyvars, xsb, body = VEnv.lookup fun_env f in
                             (List.map Var.var_of_binder xsb, body, None) in
-                        let fv = IntMap.find f closures in
+                        (* let fv = IntMap.find f closures in *)
 
                         let func = Value.marshal_value
                           (`RecFunction([f, lam],
                                         Value.empty_env closures,
                                         f, `Local)) in
-                        let fields =
-                          IntSet.fold
-                            (fun x fields ->
-                               StringMap.add (string_of_int x) (`Variable x) fields)
-                            fv
-                            StringMap.empty
-                        in
+                        (* let fields = *)
+                        (*   IntSet.fold *)
+                        (*     (fun x fields -> *)
+                        (*        StringMap.add (string_of_int x) (`Variable x) fields) *)
+                        (*     fv *)
+                        (*     StringMap.empty *)
+                        (* in *)
                         let json_args =
-                          `ApplyPure (stringifyB64,
-                                      [`Extend (fields, None)])
+                          `ApplyPure (stringifyB64, [v])
+                                      (* [`Extend (fields, None)]) *)
                         in
                           `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
                     | _ -> super#tail_computation (`Apply (f, [cont]))
@@ -521,6 +522,12 @@ let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
+  let name = Js.name_binder (x, info) in
+  if (name = "") then
+    prerr_endline (Ir.Show_binder.show (x, info))
+  else
+    ();
+  assert (name <> "");
   (x, Js.name_binder (x,info))
 
 let bind_continuation kappa body =
@@ -644,6 +651,8 @@ let rec generate_value env : Ir.value -> code =
                 | _ ->
                     Call (gv f, List.map gv vs)
             end
+      | `Closure (f, v) ->
+        Call (Var "partialApply", [gv (`Variable f); gv v])
       | `Coerce (v, _) ->
           gv v
 
@@ -667,35 +676,42 @@ let generate_remote_call f_name xs_names env =
 
 (** The [lambdalift] operations build up a [code->code] function (effectively
     a code context consisting of definitions) by function composition. *)
-let rec lambdalift_function ((fb, (_, xsb, body), None, location) : Ir.fun_def) =
+let rec lambdalift_function ((fb, (_, xsb, body), zb, location) : Ir.fun_def) =
   let body_fs = lambdalift_computation body in
-    let f_var, f_name = fb in
-    let bs = List.map name_binder xsb in
-    let xs, xs_names = List.split bs in
-    let fbody =
-      match location with
-        | `Client | `Native -> Ret(Var (snd(name_binder fb)))
-            (* Note: this is wrong for nested functions--those with
-               free variables. But these stubs are only used for
-               server->client calls. Such calls, when they involve
-               nested closures, will use the _closureTable mechanism
-               rather than this one. For unlabeled functions (below)
-               we treat them as server functions, for the same
-               reason. *)
-        | `Server | `Unknown ->
-            Ret(Fn(xs_names@["__kappa"],
-                   generate_remote_call (string_of_int f_var) xs_names
-                     (Var "_env")))
-    in
-    let f_lifted = fun code ->
-      LetFun((Js.var_name_binder fb, ["_env"],
-              (* Note: This function is unlike regular compiled Links
-                 functions in that it is not in CPS; it is applied only in the
-                 [_resolveFunctions] routine in jslib.js. *)
-              fbody,
-              `Client),
-             code)
-    in f_lifted -<- body_fs
+  let f_var, f_name = fb in
+  (* optionally add an additional closure environment argument *)
+  let xsb =
+    match zb with
+    | None -> xsb
+    | Some zb -> zb :: xsb
+  in
+  let bs = List.map name_binder xsb in
+  let xs, xs_names = List.split bs in
+  let fbody =
+    match location with
+    | `Client | `Native -> Ret(Var (snd(name_binder fb)))
+    (* Note: this is wrong for nested functions--those with
+       free variables. But these stubs are only used for
+       server->client calls. Such calls, when they involve
+       nested closures, will use the _closureTable mechanism
+       rather than this one. For unlabeled functions (below)
+       we treat them as server functions, for the same
+       reason. *)
+    | `Server | `Unknown ->
+      Ret(Fn(xs_names@["__kappa"],
+             generate_remote_call (string_of_int f_var) xs_names
+               (Var "_env")))
+  in
+  let f_lifted = fun code ->
+    LetFun((Js.var_name_binder fb, ["_env"],
+            (* Note: This function is unlike regular compiled Links
+               functions in that it is not in CPS; it is applied only in the
+               [_resolveFunctions] routine in jslib.js. *)
+            fbody,
+            `Client),
+           code)
+  in
+  f_lifted -<- body_fs
 and lambdalift_binding =
   function
   | `Fun def -> lambdalift_function def
@@ -817,7 +833,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
             (fun kappa -> apply_yielding (gv v, [kappa], kappa))
       | `Select (l, c) ->
          Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
-	(* TODO: JS generation for session types *)
+        (* TODO: JS generation for session types *)
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -846,18 +862,26 @@ and generate_computation env : Ir.computation -> code -> (venv * code) =
 and generate_function env fs :
     Ir.fun_def ->
     (string * string list * code * Ir.location) =
-  fun (fb, (_, xsb, body), None, location) ->
-  let (f, f_name) = name_binder fb in
-  let bs = List.map name_binder xsb in
-  let _xs, xs_names = List.split bs in
-  let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-  let body =
-    match location with
+  fun (fb, (_, xsb, body), zb, location) ->
+    let (f, f_name) = name_binder fb in
+    assert (f_name <> "");
+    (* prerr_endline ("f_name: "^f_name); *)
+    (* optionally add an additional closure environment argument *)
+    let xsb =
+      match zb with
+      | None -> xsb
+      | Some zb -> zb :: xsb
+    in
+    let bs = List.map name_binder xsb in
+    let _xs, xs_names = List.split bs in
+    let body_env = List.fold_left VEnv.bind env (fs @ bs) in
+    let body =
+      match location with
       | `Client | `Unknown ->
-          snd (generate_computation body_env body (Var "__kappa"))
+        snd (generate_computation body_env body (Var "__kappa"))
       | `Server -> generate_remote_call (string_of_int f) xs_names (Dict [])
       | `Native -> failwith ("Not implemented native calls yet")
-  in
+    in
     (f_name,
      xs_names @ ["__kappa"],
      body,
@@ -942,7 +966,7 @@ and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
 
 and generate_program env : Ir.program -> (venv * code) = fun comp ->
   let (venv, code) = generate_computation env comp (Var "_start") in
-    (venv, lambdalift_computation comp code)
+  (venv, lambdalift_computation comp code)
 
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
