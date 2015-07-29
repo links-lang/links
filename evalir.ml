@@ -495,7 +495,7 @@ module Eval = struct
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
-    | _                        -> eval_error "Application of non-function"
+    | (v,vs)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
   and apply_cont cont hs env v : Value.t =
     let stepf() =
       match cont, hs with

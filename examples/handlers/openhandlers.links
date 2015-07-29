@@ -1,5 +1,12 @@
-fun h1(m) {
+fun h0(m) {
   handle(m) {
+  	    case Op0(p,k) -> " Op0 " ^^ k(()) ^^ "Very last"
+	    case Return(x) -> x ^^ "[h0]"
+  }
+}
+
+fun h1(m) {
+  forward handle(m) {
   	  case Op1(p,k)  -> " Op1 " ^^ k(()) ^^ " Last "
 	  case Return(x) -> x
   }
@@ -26,11 +33,11 @@ fun comp() {
     ""
 }
 
-fun run() {
-    h1(fun() {
-    	     h3(fun() {
-	     	      h2(comp)
-	     })
-    })
-}
+#fun run() {
+#    h1(fun() {
+#    	     h3(fun() {
+#	     	      h2(comp)
+#	     })
+#    })
+#}
 

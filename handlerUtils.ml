@@ -171,9 +171,13 @@ let is_closed spec =
     `Closed -> true
   | _ -> false
 
-let make_operations_polymorphic : operation list -> operation list
-  = List.map
-    (fun (opname,optype) -> let tvar = Types.fresh_type_variable (`Unl, `Any) in
-			    (opname,tvar)
-    )
+let make_operation_row_polymorphic : Types.row -> Types.row
+  = fun (types,row_var,dual) ->
+  let types = StringMap.map
+		(function
+		    `Present _ -> `Present (Types.fresh_type_variable (`Unl, `Any))
+		  | _ -> assert false					
+		) types
+  in
+  (types,row_var,dual)
   

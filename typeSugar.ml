@@ -2589,7 +2589,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let cases, pattern_type, body_type = type_cases' cases Gripers.handle_patterns Gripers.handle_branches     in  (* Type check cases. *)
 	   begin
 	     match pattern_type with
-	       `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferrred effect row *)
+	       `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
 			     if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
 			       let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
 			       let raw_operations  = HandlerUtils.extract_operations ops in
@@ -2601,18 +2601,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let ()         = unify_all_with body_type conttails in
 				 let operations = HandlerUtils.simplify_operations raw_operations in				 
 				 let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
-				 let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in
-				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c
-				 let operations'= HandlerUtils.make_operations_polymorphic operations in
-				 let operations = if HandlerUtils.is_closed spec then
-						    operations_row
-						  else
-						    let operations = (ops,row_var,dual) in in operations
+				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
+				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
+				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
+         			 let body_type' =
+				   if HandlerUtils.is_closed spec == false then
+				     let operation_row' = HandlerUtils.make_operation_row_polymorphic operations_row in
+				     (*let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operation_row')) in*)
+				     Types.make_thunk_type operation_row' body_type
+				   else body_type
 				 in
-				  **)
-				 let thunk_type = Types.make_thunk_type operations ret in (* type: () {e}-> a *) 
-				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)				
-				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
+				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type', merge_usages [usages m; usages_cases cases]
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	     | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
