@@ -57,8 +57,6 @@ type value =
   | `Closure of var * value           (* closure creation: f env *)
 
   | `Coerce of value * Types.datatype (* type coercion: v:A *)
-
-  | `Premarshaled of string   (* Unusuable on the client, but can be unpacked and used upon returning to the server *)
   ]
 and tail_computation =
   [ `Return of value

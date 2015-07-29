@@ -80,6 +80,15 @@ struct
         Some v
       end
 
+  let current_pid_key = Lwt.new_key ()
+  let angel_done = Lwt.new_key ()
+
+  (** Return the identifier of the running process. *)
+  let get_current_pid () =
+    match Lwt.get current_pid_key with
+    | None -> assert false
+    | Some pid -> pid
+
   (** Awaken (unblock) a process:
     Move it from the blocked state to the runnable queue ([suspended]).
     Ignores if the process does not exist.
@@ -100,13 +109,6 @@ struct
   (** Reset (set to 0) the scheduler's step counter. *)
   let reset_step_counter() = state.step_counter := 0
   let result : (Value.env * Value.t) option ref = ref None
-  let current_pid_key = Lwt.new_key ()
-
-  (** Return the identifier of the running process. *)
-  let get_current_pid () =
-    match Lwt.get current_pid_key with
-    | None -> assert false
-    | Some pid -> pid
 
   let switch_granularity = 100
 
@@ -136,8 +138,6 @@ struct
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
-
-  let angel_done = Lwt.new_key ()
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =

@@ -61,8 +61,6 @@ type value =
   | `Closure of var * value
 
   | `Coerce of (value * Types.datatype)
-
-  | `Premarshaled of string
   ]
 and tail_computation =
   [ `Return of (value)

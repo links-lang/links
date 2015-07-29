@@ -122,9 +122,13 @@ SOURCES = $(OPC)                                \
           irtojs.mli irtojs.ml                  \
           query.mli query.ml                              \
           queryshredding.ml                     \
-          evalir.ml                             \
+          webserver_types.mli webserver_types.ml \
+	  valuetoir.ml                          \
+          webserver.mli                         \
+	  evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \
+	  webserver.ml                          \
           links.ml                              \
 
 # TODO: get these working again
