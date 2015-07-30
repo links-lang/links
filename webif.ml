@@ -166,8 +166,7 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
       (StringMap.from_alist [("1", `Constant (`String l));
                              ("2", `Constant (`String r))],
        None) in
-  let closures, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv)
-    program in
+  let closures, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
         | `RecFunction ([(f, (_xs, _body, _z))], locals, _, _) as v ->
@@ -242,8 +241,6 @@ let parse_request env comp cgi_args =
   else if (is_expr_eval cgi_args)
   then parse_expr_eval env comp cgi_args
   else EvalMain
-;;
-
 
 (** In web mode, we wrap the continuation of the whole program in a
     call to renderPage. We also return the resulting continuation so
@@ -322,11 +319,9 @@ let perform_request cgi_args (valenv, nenv, tyenv) (globals, locals, main) cont0
              let _env, v = Evalir.run_program valenv program in
                Value.string_of_value v)
 
-let serve_request_program env (globals, (locals, main), render_cont) cgi_args
-    =
+let serve_request_program env (globals, (locals, main), render_cont) cgi_args =
   try
-    let request = parse_request env (globals@locals,main) cgi_args
-    in
+    let request = parse_request env (globals@locals,main) cgi_args in
     let (content_type, content) =
       perform_request cgi_args env (globals, locals, main)
         render_cont request
@@ -367,6 +362,16 @@ let make_program (_,nenv,tyenv) prelude filename =
   let nenv'' = Env.String.extend nenv nenv' in
   let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
 
+  let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
+  let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
+  let fenv0 = Closures.ClosureVars.bindings tenv0 gs0 globals in
+  let globals = Closures.ClosureConvert.bindings tenv0 gs0 fenv0 globals in
+
+  let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
+  let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
+  let fenv1 = Closures.ClosureVars.program tenv1 gs1 (locals, main) in
+  let (locals, main) = Closures.ClosureConvert.program tenv1 gs1 fenv1 (locals, main) in
+
   let (locals,main), render_cont =
     wrap_with_render_page (nenv, tyenv) (locals,main) in
 
@@ -377,12 +382,9 @@ let make_program (_,nenv,tyenv) prelude filename =
       (Var.varify_env (nenv, tyenv.Types.var_env))
       Lib.primitive_vars
       (globals @ locals, main)
-
   in
-  let cont0  = render_cont (Value.empty_env closures) in
-
-  (closures,cont0,(nenv'', tyenv''), (globals, (locals, main)))
-;;
+  let cont0 = render_cont (Value.empty_env closures) in
+  (closures, cont0, (nenv'', tyenv''), (globals, (locals, main)))
 
 (* wrapper for ordinary uses of serve_request_program *)
 let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =

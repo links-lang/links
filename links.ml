@@ -53,14 +53,14 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     else program 
   in
 
-  let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
-  let valenv = Value.with_closures valenv closures in
-
   (* Debug.print ("Before closure conversion: " ^ Ir.Show_program.show program); *)
   let fenv = Closures.ClosureVars.program tenv Lib.primitive_vars program in
   (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
   let program = Closures.ClosureConvert.program tenv Lib.primitive_vars fenv program in
   (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
+
+  let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
+  let valenv = Value.with_closures valenv closures in
 
   let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program"
   in
@@ -343,11 +343,10 @@ let load_prelude () =
 
   let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
 
-  let closures = Ir.ClosureTable.bindings tenv (Lib.primitive_vars) globals
-  in
-
   let fenv = Closures.ClosureVars.bindings tenv Lib.primitive_vars globals in
   let globals = Closures.ClosureConvert.bindings tenv Lib.primitive_vars fenv globals in
+
+  let closures = Ir.ClosureTable.bindings tenv (Lib.primitive_vars) globals in
 
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in
   let envs = 
