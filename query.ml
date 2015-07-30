@@ -146,7 +146,7 @@ struct
         | `Primitive f -> `Primitive f
         | `Var v -> `Var v
         | `Constant c -> `Constant c
-          
+
   let t = Show_pt.show -<- pt_of_t
 end
 let string_of_t = S.t
@@ -311,9 +311,13 @@ struct
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
-      | `RecFunction ([(f, (xs, body, _z))], env, f', _scope) ->
-          assert (f=f');
-          `Closure ((xs, body), env_of_value_env env)
+      | `RecFunction ([(f, (xs, body, z))], env, f', _scope) ->
+        assert (f=f');
+        let xs = match z with
+          | None -> xs
+          | Some z -> z :: xs
+        in
+        `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -471,6 +475,15 @@ struct
 
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
+    | `Closure (f, v) ->
+      begin
+        match value env (`Variable f) with
+        | `Closure ((z::xs, body), closure_env) ->
+          (* partially apply the closure to bind the closure
+             environment *)
+          `Closure ((xs, body), bind closure_env (z, value env v))
+        | _ -> assert false
+      end
     | `Coerce (v, _) -> value env v
 
   and apply env : t * t list -> t = function
@@ -561,10 +574,15 @@ struct
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | `Fun ((f, _) as fb, (_, args, body), _, (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), _, _) ->
-                  computation
-                    (bind env (f, `Closure ((List.map fst args, body), env)))
-                    (bs, tailcomp)
+              | `Fun ((f, _) as fb, (_, args, body), z, _) ->
+                let args =
+                  match z with
+                  | None -> args
+                  | Some z -> z :: args
+                in
+                computation
+                  (bind env (f, `Closure ((List.map fst args, body), env)))
+                  (bs, tailcomp)
               | `Rec defs ->
                   eval_error "Recursive function"
               | `Alien _ -> (* just skip it *)
