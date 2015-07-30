@@ -381,9 +381,9 @@ tab() ^ code (show_type rt) ^ "."
 		       "while the subsequent expressions have type" ^ nl() ^
 			 tab() ^ code (show_type rt))
     let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
-      die pos ("Cannot unify computation type " ^ nl() ^
+      die pos ("The handled computation type " ^ nl() ^
 		 tab() ^ code (show_type lt) ^ nl() ^
-		   "and constructed type" ^ nl() ^
+		   "is not compatible with" ^ nl() ^
 		     tab() ^ code (show_type rt)
 	      )
 
@@ -1785,15 +1785,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	       | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
 	       in
-	       let (body_type, effects') =
+	       let (body_type', effects') =
 		 match spec with
 		   `Closed -> (body_type, None)
 		 | `Open -> let operations_row = HandlerUtils.make_operation_row_polymorphic operations_row in
-	                    let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in
-			    (Types.make_thunk_type operations_row ret, Some operations_row)
+	                    (*let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in*)
+			    (Types.make_thunk_type operations_row body_type, Some operations_row)
 		 | `Shallow -> failwith "Shallow handlers are not yet supported."
 	       in
-	       (`HandlerLit (Some (mt, effects, effects'), spec, (erase m, erase_cases cases)), body_type, usages_cases cases)
+	       let ht = `Function ((Types.make_tuple_type [mt]), (Types.make_empty_open_row (`Unl, `Any)), body_type') in 
+	       (`HandlerLit (Some (effects, body_type, ht), spec, (erase m, erase_cases cases)), ht, usages_cases cases)
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in

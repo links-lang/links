@@ -223,8 +223,11 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
           (o, `FunLit (Some argss, lin, lam), t)
-      | `HandlerLit (Some (m, effects, effects'), spec, hnlit) ->	 
-         (o, `HandlerLit (Some (m, effects, effects'), spec, hnlit), m)
+      | `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->
+	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
+	 let (o, hnlit, ht) = o#handlerlit ht hnlit in
+	 let (o, effects) = o#row effects in
+         (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)
       | `Spawn (`Wait, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -583,8 +586,19 @@ class transform (env : Types.typing_environment) =
         let o = o#restore_envs envs in
         (o, (pss, e), t)
 
-    method handlerlit : Types.row -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun inner_e (pats, cases) -> failwith "transformSugar.ml: handlerlit not yet implemented!"
+    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
+      fun t (pat, cases) ->
+      let envs = o#backup_envs in
+      let (o, pat) = o#pattern pat in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#restore_envs envs in
+      (o, (pat, cases), t)
       (*let envs = o#backup_envs in
       let (o, pats) =
 	listu o

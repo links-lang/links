@@ -150,13 +150,23 @@ let rec return_type t = match concrete_type t with
   | `Lolli (_, _, t) -> t
   | t ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
+
+let is_thunk_type t =
+  match t with
+    `Function (t,_,_) -> t = Types.unit_type
+  | _ -> false
 	    
 let rec arg_types t = match concrete_type t with
   | `ForAll (_, t) -> arg_types t
   | `Function (`Record row, _, _) ->
       extract_tuple row
   | `Lolli (`Record row, _, _) ->
-      extract_tuple row
+     extract_tuple row
+  | `Function (t', _, _) when is_thunk_type t' -> [Types.unit_type] (* THIS IS A HACK. TODO: Trace down cause of bug. At some point during the compilation process the formal parameter to (() {Op: a -> b} -> c) -> d gets unwrapped yielding a function type composed internally as
+ `Function ((`Function (), {Op: a -> b}, c)
+           , <empty effects>, d)
+  which is wrong; the formal parameter should be wrapped inside a `Record.
+*) (*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*)
   | t ->
       error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 

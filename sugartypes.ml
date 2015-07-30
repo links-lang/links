@@ -194,7 +194,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
-| `HandlerLit       of (Types.datatype * Types.row * Types.row option) option * handler_spec * handlerlit (* optional (computation type, input effects, optional output effects), handler specialisation, handler literal *)
+| `HandlerLit       of (Types.row * Types.datatype * Types.datatype) option * handler_spec * handlerlit (* optional (computation type, input effects, optional output effects), handler specialisation, handler literal *)
 | `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)

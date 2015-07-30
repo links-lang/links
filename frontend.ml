@@ -40,8 +40,8 @@ struct
         ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
         ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
         ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3)
-        ->- after_typing ((DesugarHandlers.desugar_handlers tyenv)#program ->- snd3))
+	->- after_typing ((DesugarHandlers.desugar_handlers tyenv)#program ->- snd3)
+        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
           program
 
   let interactive =
@@ -60,8 +60,8 @@ struct
         ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarHandlers.desugar_handlers tyenv)#sentence ->- snd))
+        ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)        
+        ->- after_typing ((DesugarHandlers.desugar_handlers tyenv)#sentence ->- snd)
+	->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd))
 	  sentence
 end

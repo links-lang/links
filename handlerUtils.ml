@@ -175,7 +175,7 @@ let make_operation_row_polymorphic : Types.row -> Types.row
   = fun (types,row_var,dual) ->
   let types = StringMap.map
 		(function
-		    `Present _ -> `Present (Types.fresh_type_variable (`Unl, `Any))
+		    `Present _ -> Types.fresh_presence_variable (`Unl, `Any)
 		  | _ -> assert false					
 		) types
   in

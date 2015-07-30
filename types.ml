@@ -1808,7 +1808,7 @@ struct
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
                     string_of_tuple row ^ " " ^arrow ^ " " ^ sd t
-                  | t' -> "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t (*assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)*)
+                  | t' -> assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)
                 end
           | `Lolli (args, effects, t) ->
               let arrow =
