@@ -1,3 +1,7 @@
+Access points
+fun f(ap) {send(42, request(ap))} f
+stdout : fun : (AP (?(Int).~a::Session)) ~> a::Session
+
 Linear function annotation
 sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(x)}
 stdout : () : ()
