@@ -70,6 +70,7 @@ let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args =
   let closures = Value.get_closures valenv in
   let fname = Utility.base64decode (assoc "__name" cgi_args) in
   let args = Utility.base64decode (assoc "__args" cgi_args) in
+  (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
   let args = Value.untuple (Json.parse_json args) in
   let args = map (resolve_functions closures funcmap) args in
   let local_env = Json.parse_json_b64 (assoc "__env" cgi_args) in
@@ -83,6 +84,7 @@ let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args =
     local_env in
   let local_env = IntMap.map (fun x -> (x, `Local)) local_env in
   let env = Value.extend valenv local_env in
+  (* Debug.print ("env: " ^ Value.Show_env.show env); *)
   Debug.print("Resolving server call to " ^ fname);
     (* [fname] may be in the (int-indexed) funcmap, if it is a nested
        function, or in [nenv] if a global, or in [Lib.primitive_stub].
@@ -92,6 +94,7 @@ let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args =
     let f_var = int_of_string fname in
       (* FIXME: use resolve_function here *)
     let binding = assoc f_var funcmap in
+    (* Debug.print ("binding: " ^ Ir.Show_binding.show binding); *)
       Evalir.eval_toplevel env ([binding], `Return(`Variable f_var))
   with _ ->
     (* Try the nenv, which maps the global functions *)
@@ -276,7 +279,10 @@ let perform_request cgi_args (valenv, nenv, tyenv) (globals, locals, main) cont0
            Utility.base64encode result_json)
     | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
+        (* Debug.print ("func: " ^ Value.Show_t.show func); *)
+        (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
         let result = Evalir.apply_toplevel env (func, args) in
+        (* Debug.print ("result: "^Value.Show_t.show result); *)
           if not(Proc.singlethreaded()) then
             (prerr_endline "Remaining procs on server after remote call!";
              assert(false));
