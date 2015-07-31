@@ -313,9 +313,16 @@ struct
       | `XML xmlitem -> `XML xmlitem
       | `RecFunction ([(f, (xs, body, z))], env, f', _scope) ->
         assert (f=f');
+        (* Debug.print("converting to query closure: " ^ string_of_int f); *)
         let xs = match z with
           | None -> xs
-          | Some z -> z :: xs
+          | Some z ->
+            if Value.mem z env then
+              (* if z has already been bound then we don't need to
+                 extend the arguments *)
+              xs
+            else
+              z :: xs
         in
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
@@ -476,21 +483,27 @@ struct
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Closure (f, v) ->
+      (* Debug.print("looking up query closure: "^string_of_int f); *)
       begin
         match value env (`Variable f) with
         | `Closure ((z::xs, body), closure_env) ->
+          (* Debug.print("binding query closure parameter: "^string_of_int z); *)
           (* partially apply the closure to bind the closure
              environment *)
           `Closure ((xs, body), bind closure_env (z, value env v))
-        | _ -> assert false
+        | _ ->
+          failwith "ill-formed closure in query compilation"
       end
     | `Coerce (v, _) -> value env v
 
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
+      (* Debug.print("Applying query closure: " ^ Show_t.show (`Closure ((xs, body), closure_env))); *)
+      (* Debug.print("args: " ^ mapstrcat ", " Show_t.show args); *)
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env ->
-                                      bind env (x, arg)) xs args env in
+            bind env (x, arg)) xs args env in
+        (* Debug.print("Applied"); *)
           computation env body
     | `Primitive "AsList", [xs] ->
         xs
@@ -575,14 +588,16 @@ struct
               | `Fun ((f, _) as fb, (_, args, body), _, (`Client | `Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _) as fb, (_, args, body), z, _) ->
-                let args =
-                  match z with
-                  | None -> args
-                  | Some z -> z :: args
-                in
-                computation
-                  (bind env (f, `Closure ((List.map fst args, body), env)))
-                  (bs, tailcomp)
+                (* This should never happen now that we have closure conversion*)
+                failwith ("Function definition in query: " ^ string_of_int f)
+                (* let args = *)
+                (*   match z with *)
+                (*   | None -> args *)
+                (*   | Some z -> z :: args *)
+                (* in *)
+                (* computation *)
+                (*   (bind env (f, `Closure ((List.map fst args, body), env))) *)
+                (*   (bs, tailcomp) *)
               | `Rec defs ->
                   eval_error "Recursive function"
               | `Alien _ -> (* just skip it *)
