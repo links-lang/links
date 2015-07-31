@@ -24,13 +24,13 @@ let fresh_rigid_row_variable : subkind -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_presence_variable : unit -> fieldspec =
-  function () ->
-    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Flexible)
+let fresh_presence_variable : subkind -> fieldspec =
+  function subkind ->
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_presence_variable : unit -> fieldspec =
-  function () ->
-    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), (`Any, `Any), `Rigid)
+let fresh_rigid_presence_variable : subkind -> fieldspec =
+  function subkind ->
+    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let ensure_match (start, finish, _) (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -1082,8 +1082,8 @@ fieldspec:
 | LBRACE MINUS RBRACE                                          { `Absent }
 | LBRACE VARIABLE RBRACE                                       { `Var ($2, (`Unl, `Any), `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { `Var ($2, (`Unl, `Any), `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable () }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable (`Unl, `Any) }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable (`Unl, `Any) }
 
 nonrec_row_var:
 | VARIABLE                                                     { `Open ($1, (`Unl, `Any), `Rigid) }

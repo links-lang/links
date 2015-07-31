@@ -957,8 +957,9 @@ struct
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
             let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
               (o#close x fvs)#close_cont (IntSet.union fvs fvs') bs
-        | `Fun (f, (_tyvars, xs, body), _z, _)::bs ->
+        | `Fun (f, (_tyvars, xs, body), z, _)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
+            let xs = match z with None -> xs | Some z -> z :: xs in
             let bound_vars =
               List.fold_right
                 (fun x bound_vars ->
@@ -971,9 +972,10 @@ struct
         | `Rec defs::bs ->
             let fvs, bound_vars =
               List.fold_right
-                (fun (f, (_tyvars, xs, _body), _z, _) (fvs, bound_vars) ->
+                (fun (f, (_tyvars, xs, _body), z, _) (fvs, bound_vars) ->
                    let f = Var.var_of_binder f in
                    let fvs = IntSet.remove f fvs in
+                   let xs = match z with None -> xs | Some z -> z :: xs in
                    let bound_vars =
                      List.fold_right
                        (fun x bound_vars ->

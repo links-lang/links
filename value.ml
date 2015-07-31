@@ -322,7 +322,7 @@ and compressed_t = [
 | `Record of (string * compressed_t) list
 | `Variant of string * compressed_t
 | `LocalFunction of (Ir.var list * compressed_env * Ir.var)
-| `GlobalFunction of (Ir.var list * Ir.var)
+| `GlobalFunction of ((Ir.var * compressed_t option) list * Ir.var)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
@@ -363,8 +363,13 @@ and compress_t (v : t) : compressed_t =
       | `RecFunction (defs, locals, f, `Local) ->
           `LocalFunction (List.map (fun (f, (_xs, _body, _z)) -> f) defs,
                           compress_env locals, f)
-      | `RecFunction (defs, _env, f, `Global) ->
-          `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
+      | `RecFunction (defs, env, f, `Global) ->
+        let compress_def =
+          function
+          | (f, (_xs, _body, None))   -> (f, None)
+          | (f, (_xs, _body, Some z)) -> (f, Some (cv (find z env)))
+        in
+          `GlobalFunction (List.map compress_def defs, f)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
@@ -414,7 +419,7 @@ let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont
        let locals = localise env var in
          (scope, var, locals, body))
     cont
-and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t =
+and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) (v : compressed_t) : t =
   let uv = uncompress_t envs in
     match v with
       | #compressed_primitive_value as v -> uncompress_primitive_value v
@@ -427,10 +432,20 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
                         var,
                         `Local)
       | `GlobalFunction (defs, f) ->
-          `RecFunction (List.map (fun f -> f, IntMap.find f funs) defs,
-                        localise globals f,
-                        f,
-                        `Global)
+        let locals = localise globals f in
+        let defs, locals =
+          List.fold_right
+            (fun (f, v) (defs, locals) ->
+               let (_f, (_xs, _body, z)) as def = (f, IntMap.find f funs) in
+               let locals = match z, v with
+                 | None, None -> locals
+                 | Some z, Some v -> bind z (uv v, `Local) locals
+               in
+               def :: defs, locals)
+            defs
+            ([], locals)
+        in
+          `RecFunction (defs, locals, f, `Global)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
@@ -748,16 +763,19 @@ let marshal_continuation (c : continuation) : string =
 let marshal_value : t -> string =
   fun v ->
     let { save = save } = value_serialiser () in
+    (* Debug.print ("marshalling: "^Show_t.show v); *)
       base64encode (save (compress_t v))
 
 let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
-    let { load = load } = continuation_serialiser () in
-    base64decode ->- load ->- uncompress_continuation envs
+    let { load = load } = continuation_serialiser () in assert false
+    (* base64decode ->- load ->- uncompress_continuation envs *)
 
 let unmarshal_value envs : string -> t =
   fun s ->
     let { load = load } = value_serialiser () in
-      uncompress_t envs (load (base64decode s))
+    let v = (load (base64decode s)) in
+    (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
+      uncompress_t envs v
 
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)
