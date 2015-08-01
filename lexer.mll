@@ -179,6 +179,7 @@ let keywords = [
  "handle"   , HANDLE;
  "handler"  , HANDLER;
  "if"       , IF;
+ "impure"   , IMPURE;
  "in"       , IN;
  "include"  , INCLUDE;
  "yields"   , YIELDS;

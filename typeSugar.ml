@@ -1754,7 +1754,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-	| `HandlerLit (_, spec, (p, cases)) ->
+	| `HandlerLit (_, spec, (p, cases)) -> let () = failwith "\`HandlerLit" in
 	     let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
 	     let unify_all_with body_type types
 	       = if List.length types > 0 then
@@ -1779,8 +1779,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				   let operations = HandlerUtils.simplify_operations raw_operations in				 
 				   let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
 				   let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
-				   let () = unify ~handle:Gripers.handle_computation (no_pos (pattern_typ m), no_pos thunk_type) in (* Unify expression and handler type. *)
-				   (thunk_type,effects,operations_row,ret)				  
+				   let () = unify ~handle:Gripers.handle_computation (no_pos (pattern_typ m), no_pos thunk_type) in (* Unify expression and handler type. *)				   
+				   (thunk_type,effects,operations_row,ret)			  
 			       else
 				 Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	       | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
@@ -2642,6 +2642,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let ()         = unify_all_with body_type conttails in
 				 let operations = HandlerUtils.simplify_operations raw_operations in				 
 				 let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
+				 (*let operations_row =
+				   match spec with
+				     `Closed -> HandlerUtils.allow_wild operations_row
+				   | _ -> operations_row
+				 in*)
 				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
 				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)

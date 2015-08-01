@@ -1,0 +1,108 @@
+# Nim game (https://en.wikipedia.org/wiki/Nim)
+
+# A game begins with n sticks on the table. The game has two players: Alice and Bob.
+# Alice goes first. Alice takes between one and three sticks, then it is Bob's turn
+# and similary Bob takes between one and three sticks. They alternate turns until
+# there are no more sticks left. The player, who takes the last stick, wins.
+
+typename Player(r :: Row) = [|Alice|Bob|r|];
+
+var sticks = 10;
+
+fun aliceTurn(n) {
+    if (n == 0) {
+       Bob
+    } else {
+      var take = do Move((Alice,n));
+      var n = n - take;
+      bobTurn(n)
+    }
+}
+
+fun bobTurn(n) {
+    if (n == 0) {
+       Alice
+    } else {
+      var take = do Move((Bob,n));
+      var n = n - take;
+      aliceTurn(n)
+    }
+}
+
+fun max(a,b) {
+    if (a > b)
+    { a }
+    else { b }
+}
+
+# Computes a perfect strategy given the remaining sticks.
+fun perfect(n, k) {
+    k(max(mod(n,4),1))
+}
+
+fun perfectVsPerfect(m) {
+    forward handle(m) {
+    	      case Move((_,n),k) -> perfect(n, k)
+	      case Return(x) -> x
+    }
+}
+
+# Naïve strategy: Picks just one stick.
+fun pickOne(m) {
+    forward handle(m) {
+    	      case Move((_,n),k) -> k(1)
+	      case Return(x) -> x
+    }
+}
+
+# Convenient "driver" function. Takes a handler as its first argument and the number of sticks as its second.
+fun play(h, n) {
+    h(fun() {
+    	    aliceTurn(n)
+    })
+}
+
+# Play perfect vs. perfect strategy
+fun pp(n) {
+    play(perfectVsPerfect, n)
+}
+
+# Computes a list of valid moves given n sticks remaining
+fun validMoves(n) {
+    filter(fun(m) { m <= n }, [1,2,3])
+}
+
+# Brute force strategy: Enumerate all possible moves.
+# If one move leads to a win for player, then take it.
+# Otherwise just take 1 stick
+fun bruteForce(player, n, k) {
+    var winners = map(k, validMoves(n));
+    var hasPlayerWon = indexOf(player, winners);
+    switch (hasPlayerWon) {
+    	   case Nothing -> k(1)
+	   case Just(i) -> k(i+1)
+    }
+}
+
+fun indexOf(x, xs) {
+    var n = fold_left(fun(acc, y) {
+      switch (acc) {
+      	     case (n,Just(i)) -> (n,Just(i))
+	     case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+      }
+    }, (0,Nothing), xs);
+
+    second(n)
+}
+
+fun bruteForceVsPerfect(m) {
+    handle(m) {
+    	      case Move((Alice,n),k) -> bruteForce(Alice,n,k)
+	      case Move((Bob,n),k)   -> perfect(n,k)
+	      case Return(x)         -> x
+    }
+}
+
+fun bp(n) {
+    play(bruteForceVsPerfect, n)
+}

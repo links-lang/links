@@ -175,7 +175,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD OPEN SHALLOW HANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD OPEN SHALLOW IMPURE HANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -446,6 +446,7 @@ handler_spec:
 | /* empty */                                                  { `Closed }
 | OPEN                                                         { `Open }
 | SHALLOW                                                      { `Shallow }
+/*| IMPURE                                                       { `Impure }*/
 
 handler_body:	  
 | LBRACE cases RBRACE    	                               { $2 }

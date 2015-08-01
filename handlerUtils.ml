@@ -63,7 +63,7 @@ let extract_operations : Types.row -> operation_raw list
 	  ((`Function _) as k) -> RawOperation (name, p, k) (* Is already normalised *)
 	| _ as inp_t -> (* Needs to be normalised: Construct new function type. *)
 	   let out_t = Types.fresh_type_variable (`Unl, `Any) in
-	   let k     = Types.make_pure_function_type inp_t out_t in
+	   let k     = Types.make_pure_function_type inp_t out_t in (* or inp_t instead of p? *)
 	   RawOperation (name, p, k)	 
 (*	| _ -> RawFailure ("expected last parameter in operation " ^ name ^ " to have a function type.") (* Continuation must be a function type. *)*)
       else
@@ -114,7 +114,7 @@ let simplify_operations  : operation_raw list -> operation list
 
 let effectrow_of_oplist : operation list -> bool -> Types.row
   = fun ops isclosed ->
-  let fields = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty ops in
+  let fields = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty ops in  
   if isclosed then
     Types.make_closed_row fields
   else
@@ -168,7 +168,8 @@ let handles_operation : Types.row -> string -> bool
 
 let is_closed spec =
   match spec with
-    `Closed -> true
+    `Pure
+  | `Closed -> true
   | _ -> false
 
 let make_operation_row_polymorphic : Types.row -> Types.row
@@ -180,4 +181,9 @@ let make_operation_row_polymorphic : Types.row -> Types.row
 		) types
   in
   (types,row_var,dual)
+
+let allow_wild : Types.row -> Types.row
+  = fun row ->
+  let fields = StringMap.add "wild" (Types.unit_type) StringMap.empty in
+  Types.extend_row fields row
   

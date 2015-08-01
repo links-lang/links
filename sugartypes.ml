@@ -263,7 +263,7 @@ and bindingnode = [
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
-and handler_spec = [ `Open | `Closed | `Shallow ]
+and handler_spec = [ `Open | `Closed | `Shallow | `Pure ]
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list

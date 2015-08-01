@@ -616,6 +616,7 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
+  | `UserContinuation (cont,hs) -> "\"Continuation\""
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value

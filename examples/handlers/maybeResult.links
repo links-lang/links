@@ -5,6 +5,13 @@ fun maybeResult(x) {
     }
 }
 
+fun recover(m) {
+   handle(m) {
+      case Fail(_,k) -> k(())
+      case Return(x) -> Just(x)
+   }
+}
+
 fun listify(x) {
     handle (x) {
     	   case Return(x) -> [x]
@@ -30,7 +37,8 @@ fun maybeResult_t2(x) {
 }
 
 fun comp() {
-    do Fail()
+    do Fail();
+    "Yikes!"
 }
 
 fun comp2() {

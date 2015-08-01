@@ -54,3 +54,27 @@ object (o : 'self_type)
 end
 
 let desugar_handlers env = ((new desugar_handlers env) : desugar_handlers :> TransformSugar.transform)
+
+let desugar_handlers_early =
+object
+  inherit SugarTraversals.map as super
+  method phrasenode = function
+    | `HandlerLit (None, spec, (m, cases)) ->
+       let (m_name,_,_) =
+	 match m with
+	 | `Variable b, _ -> b
+	 | _ -> assert false
+       in       
+       let mvar = (`Var m_name, dp) in
+       let handle = `Block ([],(`Handle (mvar, cases, None, spec), dp)) in
+       let body =
+	 match spec with
+	   `Open ->
+	   `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp))
+	 | `Pure
+	 | `Closed -> handle
+       in
+       let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, ([[m]], (body, dp))) in       
+       super#phrasenode funlit
+    | e -> super#phrasenode e
+end			     

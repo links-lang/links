@@ -645,7 +645,7 @@ module Eval = struct
                   | Some ((var,_), c), _, `Variant (_, v)
                   | _, Some ((var,_), c), v ->
                       computation (Value.bind var (v, `Local) env) cont hs c
-                  | None, _, #Value.t -> eval_error "Pattern matching failed"
+                  | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label 
                   | _ -> assert false (* v not a variant *))
            | _ -> eval_error "Case of non-variant"
         end
