@@ -1,0 +1,10 @@
+# Delimited continuations using handlers
+
+var reset = open handler(m) {
+    case Shift(p,k) -> p(k)
+    case Return(x)  -> x
+};
+
+fun comp() {
+    2
+}

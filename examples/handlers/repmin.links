@@ -1,0 +1,39 @@
+# Repmin
+
+typename Tree = [|Leaf:Int|Node:(Tree,Tree)|];
+
+fun repmin(t) {
+    switch(t) {
+       case Node(l,r) -> (Node(repmin(l), repmin(r)))
+       case Leaf(i) -> Leaf(i, do Min(i))
+    }
+}
+
+fun my_min(a,b) {
+    if (a > b) { b }
+    else { a }
+}
+
+var h0 = open handler(m) {
+  case Delay(p,k) -> fun(s) {
+                       var s = my_min(s,p);
+                       k(s)(s)
+                     }
+  case Return(x) -> x
+};
+
+var hmin = open handler(m) {
+   case Min(i,k)    -> fun(s) {
+                       var s = my_min(i,s);
+		       k(s)(s)
+                     }
+
+   case Return(x) -> fun(s) {
+   	                x
+                     }
+};
+
+fun comp() {
+  var t = Node(Leaf(2),Leaf(1));
+  repmin(t)  
+}

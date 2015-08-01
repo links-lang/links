@@ -1,0 +1,32 @@
+# Handlers as parsers?
+
+var src = "+ 1 1";
+var stream = explode(src);
+
+fun readInt(s) {
+    var i = takeWhile(isDigit, s);
+    (i,dropWhile(isDigit,s))
+}
+
+fun read(s) {
+    (hd(s),tl(s))
+}
+
+fun consumeWhitespace(s) {
+    ([],dropWhile(fun(x) { x == ' ' || x == '\n' || x == '\t' || x == '\r' }, s))
+}
+
+var tokenizer = handler(m) {
+    case Tokenize(p,k) -> fun(s) {
+    	 
+    }
+    
+    case Return(x) -> fun (s) {
+    	 x
+    }
+};
+
+fun tokenize(src) {
+    
+}
+

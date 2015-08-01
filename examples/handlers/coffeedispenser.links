@@ -1,0 +1,83 @@
+## Randomness
+# Outputs the next number in the "random" sequence and the next seed.
+fun random(seed, lb, ub) {
+    var p = 2147483647; # Largest prime less than (2 ^ 32)
+    var j = mod(7 * seed, p);
+    var r = mod(j - 1, (ub - lb)) + lb;
+    (j, r)
+}
+
+# The random-effect handler is reminiscent of the state handler
+# We encapsulate the "random state" inside a function which is
+# passed around during the computation.
+var rand = handler(m) {
+    case Rand((lb,ub),k) -> fun(s) {
+                              var r = random(s, lb, ub);
+			      k(second(r))(first(r))
+                            }
+		      
+    case Return(x) -> fun(s) {
+                         x
+                      }
+};
+
+fun runRand(hrand, comp) {
+    var f = hrand(comp);
+    var seed = serverTime();
+    f(seed)
+}
+
+fun nextInt(lb,ub) {
+    runRand(rand, fun() { do Rand(lb,ub) })    
+}
+
+# Coffee dispenser model in Links
+
+fun dispenser1(n) {
+    var inv = do Ask();
+    do Lookup(n,inv)
+}
+
+fun dispenser2(n) {
+    var inv = do Ask();
+    var item = do Lookup(n,inv);
+    do Tell(item)
+}
+
+
+var hreader = open handler(m) {
+    case Ask(_,k)  -> k([(1,Coffee),(2,Tea)])
+    case Return(x) -> x
+};
+
+var hlookup = open handler(m) {
+    case Lookup((n,inv),k) -> k(lookup(n, inv))
+    case Return(x) -> x
+};
+
+var hdodgyLookup = open handler(m) {
+    case Lookup((n,inv),k) -> k(if (nextInt(1,10) < 5) {
+                                    Nothing
+                              } else {
+			      	    lookup(n,inv)
+			      })
+    case Return(x) -> x
+};
+
+var hwriter = open handler(m) {
+    case Tell(Just(Coffee),k) -> k("Coffee")
+    case Tell(Just(Tea),k)    -> k("Tea")
+    case Tell(Just(_),k)      -> k("Unknown")
+    case Tell(Nothing,k)      -> k("Nothing")
+    case Return(x) -> x
+};
+
+fun runDispenser(dispenser, n) {
+    var f = hreader(hwriter(hlookup(fun() { dispenser(n) })));
+    f()
+}
+
+fun runDispenser2(dispenser, n) {
+    var f = hreader(hwriter(hdodgyLookup(fun() { dispenser(n) })));
+    f()
+}

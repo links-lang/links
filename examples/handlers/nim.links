@@ -7,8 +7,6 @@
 
 typename Player(r :: Row) = [|Alice|Bob|r|];
 
-var sticks = 10;
-
 fun aliceTurn(n) {
     if (n == 0) {
        Bob
@@ -29,30 +27,17 @@ fun bobTurn(n) {
     }
 }
 
-fun max(a,b) {
-    if (a > b)
-    { a }
-    else { b }
-}
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+fun indexOf(x, xs) {
+    var n = fold_left(fun(acc, y) {
+      switch (acc) {
+      	     case (n,Just(i)) -> (n,Just(i))
+	     case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+      }
+    }, (0,Nothing), xs);
 
-# Computes a perfect strategy given the remaining sticks.
-fun perfect(n, k) {
-    k(max(mod(n,4),1))
-}
-
-fun perfectVsPerfect(m) {
-    forward handle(m) {
-    	      case Move((_,n),k) -> perfect(n, k)
-	      case Return(x) -> x
-    }
-}
-
-# Naïve strategy: Picks just one stick.
-fun pickOne(m) {
-    forward handle(m) {
-    	      case Move((_,n),k) -> k(1)
-	      case Return(x) -> x
-    }
+    second(n)
 }
 
 # Convenient "driver" function. Takes a handler as its first argument and the number of sticks as its second.
@@ -61,6 +46,71 @@ fun play(h, n) {
     	    aliceTurn(n)
     })
 }
+
+## Pseudo randomness
+# Outputs the next number in the "random" sequence and the next seed.
+fun random(seed) {
+    var p = 101; # prime; generates all {0,...,100}
+    var j = mod(7 * seed, p);
+    var r = mod(j - 1, 10);
+    (j, r)
+}
+
+# The random-effect handler is reminiscent of the state handler
+# We encapsulate the "random state" inside a function which is
+# passed around during the computation.
+var rand = handler(m) {
+    case Rand(_,k) -> fun(s) {
+                        var r = random(s);
+		        k(second(r))(first(r))
+                      }
+		      
+    case Return(x) -> fun(s) {
+                         x
+                      }
+};
+
+# Convenient driver function for random computations
+fun runRand(hrand, comp) {
+    var f = hrand(comp);
+    var seed = serverTime();
+    f(seed)
+}
+
+fun nextInt() {
+    runRand(rand, fun() { do Rand() })
+}
+
+# Returns the greater of a and b. Note: Shadows max in prelude
+fun max(a,b) {
+    if (a > b) { a }
+    else { b }
+}
+
+#
+# Strategies
+#
+
+# Naïve strategy: Pick just one stick.
+var pickOne = handler(m) {
+      case Move((_,n),k) -> k(1)
+      case Return(x) -> x
+};
+
+fun naive(n) {
+    play(pickOne,n)
+}
+
+# Perfect strategy.
+# Computes a perfect strategy given the remaining sticks.
+fun perfect(n, k) {
+    k(max(mod(n,4),1))
+}
+
+var perfectVsPerfect = handler(m) {
+      case Move((_,n),k) -> perfect(n, k)
+      case Return(x) -> x
+};
 
 # Play perfect vs. perfect strategy
 fun pp(n) {
@@ -84,25 +134,157 @@ fun bruteForce(player, n, k) {
     }
 }
 
-fun indexOf(x, xs) {
-    var n = fold_left(fun(acc, y) {
-      switch (acc) {
-      	     case (n,Just(i)) -> (n,Just(i))
-	     case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
-      }
-    }, (0,Nothing), xs);
-
-    second(n)
-}
-
-fun bruteForceVsPerfect(m) {
-    handle(m) {
-    	      case Move((Alice,n),k) -> bruteForce(Alice,n,k)
-	      case Move((Bob,n),k)   -> perfect(n,k)
-	      case Return(x)         -> x
-    }
-}
+var bruteForceVsPerfect = handler(m) {
+     case Move((Alice,n),k) -> bruteForce(Alice,n,k)
+     case Move((Bob,n),k)   -> perfect(n,k)
+     case Return(x)         -> x
+};
 
 fun bp(n) {
     play(bruteForceVsPerfect, n)
+}
+
+# Mixing strategy: Pick 1 or 3 sticks at random.
+# If n < 3 then fall back to pickOne strategy
+fun mix(n) {
+    if (n < 3) {
+      1
+    } else {
+        var r = mod(nextInt(), 2);
+    	if (r == 0) {
+       	   1   
+	} else {
+           3
+        }
+    }
+}
+
+var mixing = handler(m) {
+    case Move((_,n),k) -> k(mix(n))
+    case Return(x)     -> x			  
+};
+
+fun mm(n) {
+    play(mixing, n)
+}
+
+
+#
+# Game tree
+#
+
+# typename MoveTree = [|Take:(Player,[(Int,MoveTree)])|Winner:Player|]
+# Auxiliary function enumerates the range [a,b]
+fun enumerate(a,b) {
+    var range = replicate(b - a + 1, a);
+    var xs = fold_left(fun(acc, x) {
+        var x = first(acc);
+	var xs = second(acc);
+	(x+1,(x :: xs))
+    }, (a,[]), range);
+    reverse(second(xs))
+}
+
+# make a move a part of the move tree
+fun reifyMove(player, n, k) {
+    var l = map(k, validMoves(n));
+    Take(player, zip(enumerate(1,length(l)), l) )
+}
+
+# Complete move tree generator
+var mtGen = handler(m) {
+    case Move((player,n),k) -> reifyMove(player,n,k)
+    case Return(x) -> Winner(x)
+};
+
+fun mt(n) {
+    play(mtGen,n)
+}
+
+# links> mt(3)
+#  Take((Alice(), [(1, Take((Bob(), [(1, Take((Alice(), [(1, Winner(Alice()))]))),
+#                                    (2, Winner(Bob()))]))),
+#                  (2, Take((Bob(), [(1, Winner(Bob()))]))),
+#     		   (3, Winner(Alice()))]))
+# ( Type : mu a . [|Take:([|Alice|Bob|_|], [(Int, a)])|Winner:[|Alice|Bob|_|]|_|] )
+
+# Generate perfect strategy for Bob
+var favourBob = open handler(m) {
+    case Move((Alice,n),k) -> reifyMove(Alice,n,k)
+    case Move((Bob,n),k)   -> { var take = do Move(Bob,n);
+                                var tree = k(take);
+				Take(Bob,[(take,tree)])
+                              }
+    case Return(x)          -> Winner(x)			      
+};
+
+# Note: We reuse perfectVsPerfect-handler. It only ever gets to handle Move(Bob,n)
+# even though it is defined for Move(Alice,n) aswell.
+fun mp(n) {
+    play(fun(m) { perfectVsPerfect(favourBob(m)) }, n)
+}
+
+# links> mp(3);
+#    Take((Alice(), [(1, Take((Bob(), [(2, Winner(Bob()))]))),
+#                    (2, Take((Bob(), [(1, Winner(Bob()))]))),
+#                    (3, Winner(Alice()))]))
+# ( Type : [|Take:([|Alice|Bob|a|], [(Int, mu b . [|Take:([|Alice|Bob|a|], [(Int, b)])|Winner:[|Alice|Bob|c|]|d|])])|Winner:[|Alice|Bob|c|]|d|] )
+
+#
+# Introduce cheating
+# 
+
+fun checkChoice(player,n,k) {
+    var take = do Move(player,n);
+    if ((take <> 1 && take <> 3) == true) { # Cheater detected!
+       do Cheat(player,take)
+    } else {                                # Otherwise OK
+      k(take)
+    }
+}
+
+var check = open handler(m) {
+    case Move((player,n),k) -> checkChoice(player,n,k)
+    case Return(x) -> x
+};
+
+# Cheater's strategy: Take all the remaining sticks
+fun cheater(n,k) {
+    k(n)
+}
+
+var aliceCheats = handler(m) {
+    case Move((Alice,n),k) -> cheater(n,k)
+    case Move((Bob,n),k)   -> perfect(n,k)
+    case Return(x)         -> x
+};
+
+fun cp(n) {
+    play(aliceCheats, n)
+}
+
+# If somebody cheats then halt the game and report the cheater
+var cheatEnd = open handler(m) {
+    case Cheat((Alice,n),k) -> error("Cheater Alice took " ^^ intToString(n) ^^ " sticks")
+    case Cheat((Bob,n),k)   -> error("Cheater Bob took " ^^ intToString(n) ^^ " sticks")
+    case Return(x)          -> x
+};
+
+# If somebody cheats then the opponent wins immediately
+var cheatLose = open handler(m) {
+    case Cheat((Alice,n),k) -> Bob
+    case Cheat((Bob,n),k)   -> Alice
+    case Return(x)          -> x
+};
+
+# A few cheater games
+
+# Alice cheats in a "checked cheating-ends-the-game"
+fun acEnd(n) {
+   play(fun(m) { aliceCheats(cheatEnd(check(m))) }, n)()
+}
+
+# Alice cheats in a "checked cheater-loses-the-game"
+fun acLose(n) {
+   play(fun(m) { aliceCheats(cheatLose(check(m))) }, n)
 }

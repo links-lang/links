@@ -2642,11 +2642,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 let ()         = unify_all_with body_type conttails in
 				 let operations = HandlerUtils.simplify_operations raw_operations in				 
 				 let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
-				 (*let operations_row =
+				 let operations_row = (* Decide whether to allow wild *)
 				   match spec with
 				     `Closed -> HandlerUtils.allow_wild operations_row
 				   | _ -> operations_row
-				 in*)
+				 in
 				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
 				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
 				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)

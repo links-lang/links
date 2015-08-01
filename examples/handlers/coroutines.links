@@ -1,0 +1,4 @@
+# Coroutines in Links
+
+typename Prod(s,r) = [|Prod :((()) {}-> (Cons(s,r)) {}-> r)|];
+typename Cons(s,r) = [|Cons :((s) {}-> (Prod(s,r)) {}-> r)|];
