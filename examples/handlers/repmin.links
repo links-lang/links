@@ -1,4 +1,7 @@
 # Repmin
+#
+# Finds the minimum element in a tree and replaces all elements by that minimum.
+#
 
 typename Tree = [|Leaf:Int|Node:(Tree,Tree)|];
 
@@ -14,26 +17,34 @@ fun my_min(a,b) {
     else { a }
 }
 
-var h0 = open handler(m) {
-  case Delay(p,k) -> fun(s) {
-                       var s = my_min(s,p);
-                       k(s)(s)
-                     }
-  case Return(x) -> x
+var n = 1000000000000; # Very large number
+
+var setmin = handler(m) {    
+    case Return(x) -> {
+    	 var s = first(x((n,[])));    # Retrieve state
+	 var i = first(s);            # Get the real minimum
+	 var k = hd(second(s));       # Get the first continuation
+	 second(k(i)((i,[])))         # Invoke it, and return the tree
+    }
 };
 
-var hmin = open handler(m) {
-   case Min(i,k)    -> fun(s) {
-                       var s = my_min(i,s);
-		       k(s)(s)
-                     }
-
-   case Return(x) -> fun(s) {
-   	                x
-                     }
+var findmin = open handler(m) {
+    case Min(i,k)   -> fun(s) {
+    	                 var n = first(s);       # Current minimum
+			 var ks = second(s);     # Singleton list with continuation
+                         var n = my_min(n,i);    # New minimum
+			 var s = (n, if(empty(ks)) { # Store just the first continuation
+			               [k] }
+				     else { ks }); # New state
+			 k(n)(s)                   # Set new minimum, forward new state
+		       }
+    case Return(x)  -> fun (s) {
+                          (s, x)                 # Output state and tree
+                       }
 };
 
-fun comp() {
-  var t = Node(Leaf(2),Leaf(1));
-  repmin(t)  
+var t = Node(Node(Leaf(1000),Node(Leaf(3),Leaf(8))),Node(Leaf(2), Node(Leaf(1), Node(Leaf(100), Leaf(433)))));
+
+fun runRepmin(t) {
+    setmin(findmin(fun() { repmin(t) }))
 }
