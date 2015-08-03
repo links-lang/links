@@ -200,9 +200,12 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
       | _ -> assert false
 
 let parse_client_return envs program cgi_args =
+  (* Debug.print("parsing client return"); *)
   let continuation =
     decode_continuation envs program (assoc "__continuation" cgi_args) in
+  (* Debug.print("continuation: " ^ Value.Show_continuation.show continuation); *)
   let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
+  (* Debug.print ("arg: "^Value.Show_t.show arg); *)
     (* FIXME: refactor *)
   let funcmap = Ir.funcmap program in (* FIXME: Quite slow... *)
   let (valenv, _, _) = envs in
@@ -349,20 +352,27 @@ let make_program (_,nenv,tyenv) prelude filename =
                    ^ Types.string_of_datatype t)
   end;
 
-  (* Debug.print ("unclosure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main)); *)
+  Debug.print ("un-closure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main));
 
   let nenv'' = Env.String.extend nenv nenv' in
   let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
 
+  let module Show_IntEnv = Env.Int.Show_t(Deriving_Show.Show_int) in
+
   let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
   let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
+  (* Debug.print("gs0: "^Show_intset.show gs0); *)
   let fenv0 = Closures.ClosureVars.bindings tenv0 gs0 globals in
+  (* Debug.print ("fenv0: " ^ Closures.Show_fenv.show fenv0); *)
   let globals = Closures.ClosureConvert.bindings tenv0 gs0 fenv0 globals in
+
 
   let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
   let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
   let fenv1 = Closures.ClosureVars.program tenv1 gs1 (locals, main) in
   let (locals, main) = Closures.ClosureConvert.program tenv1 gs1 fenv1 (locals, main) in
+
+  (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
 
   let (locals,main), render_cont =
     wrap_with_render_page (nenv, tyenv) (locals,main) in
@@ -384,6 +394,7 @@ let make_program (_,nenv,tyenv) prelude filename =
 let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
 
   let cgi_args = get_cgi_args() in
+  Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
   Lib.cgi_parameters := cgi_args;
 
 

@@ -60,7 +60,10 @@ struct
           else
             o
         else
-          {< free_vars = IntSet.add x free_vars >}
+          begin
+            (* Debug.print ("free var: "^string_of_int x); *)
+            {< free_vars = IntSet.add x free_vars >}
+          end
 
       method private reset =
         {< bound_vars = IntSet.empty; free_vars = IntSet.empty >}
@@ -80,14 +83,22 @@ struct
       method binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
         if toplevel = true then
-          b, o#global (Var.var_of_binder b)
+          begin
+            (* Debug.print("global binder: " ^ string_of_int (Var.var_of_binder b)); *)
+            b, o#global (Var.var_of_binder b)
+          end
         else
-          b, o#bound (Var.var_of_binder b)
+          begin
+            (* Debug.print("local binder: " ^ string_of_int (Var.var_of_binder b)); *)
+            b, o#bound (Var.var_of_binder b)
+          end
         (* match scope with *)
         (* | `Global -> b, o#global (Var.var_of_binder b) *)
         (* | `Local  -> b, o#bound (Var.var_of_binder b) *)
 
       method private super_binding = super#binding
+
+      method private super_binder = super#binder
 
       method binding =
         function
@@ -101,7 +112,10 @@ struct
                  (x::xs, o))
               xs
               ([], o) in
+          (* Debug.print("Descending into: " ^ string_of_int (Var.var_of_binder f)); *)
           let body, o = o#descend (fun o -> let body, _, o = o#computation body in body, o) in
+          (* Debug.print("Ascended from: " ^ string_of_int (Var.var_of_binder f)); *)
+
           let zs =
             List.rev
               (IntSet.fold
@@ -174,8 +188,67 @@ struct
                  o#register_fun (Var.var_of_binder f) zs) o defs in
           let defs = List.rev defs in
           `Rec defs, o
-        | b ->
-          o#descend (fun o -> o#super_binding b)
+        | `Fun (f, (tyvars, xs, body), None, location) ->
+          let (xs, body), o =
+            o#descend (fun o ->
+                let (xs, o) =
+                  List.fold_right
+                    (fun x (xs, o) ->
+                       let x, o = o#binder x in
+                       (x::xs, o))
+                    xs
+                    ([], o) in
+                let body, _, o = o#computation body in
+                (xs, body), o) in
+            let f, o = o#binder f in
+              (* TODO: check that xs and body match up with f *)
+          `Fun (f, (tyvars, xs, body), None, location), o
+        | `Rec defs ->
+          (* it's important to traverse the function binders first in
+             order to make sure they're in scope for all of the
+             function bodies *)
+          let _, o =
+            List.fold_right
+              (fun (f, _, _, _) (fs, o) ->
+                 let f, o = o#super_binder f in
+                 (f::fs, o))
+              defs
+              ([], o) in
+
+          let defs, o =
+              o#descend (fun o ->
+                  List.fold_left
+                    (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), None, location) ->
+                       let xs, o =
+                         List.fold_right
+                           (fun x (xs, o) ->
+                              let (x, o) = o#binder x in
+                              (x::xs, o))
+                           xs
+                           ([], o) in
+                       let body, _, o = o#computation body in
+                       (f, (tyvars, xs, body), None, location)::defs, o)
+                    ([], o)
+                    defs) in
+
+            (* we traverse the function binders again in order to
+               treat them as globals *)
+            let _, o =
+              List.fold_right
+                (fun (f, _, _, _) (fs, o) ->
+                   let f, o = o#binder f in
+                   (f::fs, o))
+                defs
+                ([], o) in
+
+            let defs = List.rev defs in
+            `Rec defs, o
+        | `Let (x, (tyvars, tc)) ->
+          let x, o = o#binder x in
+          let (tc, t), o = o#descend (fun o -> let tc, t, o = o#tail_computation tc in (tc, t), o) in
+          `Let (x, (tyvars, tc)), o
+        | `Alien _ as b -> super#binding b
+        | b -> assert false
     end
 
   let bindings tyenv globals e =
@@ -226,7 +299,8 @@ struct
         function
         | `Variable x ->
           let x, t, o = o#var x in
-          let v =
+
+          let rec var_val x =
             if IntSet.mem x cvars then
               `Project (string_of_int x, `Variable parent_env)
             else if IntMap.mem x fenv then
@@ -238,19 +312,17 @@ struct
                   `Closure (x, `Variable parent_env)
                 else
                   let zs =
-                    List.map (fun (z, _) ->
-                        let zname = string_of_int z in
-                        if IntSet.mem z cvars then
-                          (zname, `Project (zname,  `Variable parent_env))
-                        else
-                          (zname, `Variable z))
+                    List.map
+                      (fun (z, _) ->
+                         let v = var_val z in
+                         (string_of_int z, v))
                       zs
                   in
                   close x zs
             else
               `Variable x
           in
-          v, t, o
+          var_val x, t, o
         | v -> super#value v
 
       method private set_context parents parent_env cvars =

@@ -343,7 +343,7 @@ let load_prelude () =
 
   let fenv = Closures.ClosureVars.bindings tenv Lib.primitive_vars globals in
   let globals = Closures.ClosureConvert.bindings tenv Lib.primitive_vars fenv globals in
-
+  (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   let closures = Ir.ClosureTable.bindings tenv (Lib.primitive_vars) globals in
 
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in

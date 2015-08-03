@@ -768,8 +768,8 @@ let marshal_value : t -> string =
       base64encode (save (compress_t v))
 
 let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
-    let { load = load } = continuation_serialiser () in assert false
-    (* base64decode ->- load ->- uncompress_continuation envs *)
+    let { load = load } = continuation_serialiser () in
+    base64decode ->- load ->- uncompress_continuation envs
 
 let unmarshal_value envs : string -> t =
   fun s ->
