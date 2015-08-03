@@ -19,12 +19,16 @@ let server_use name pos =
 let client_use id pos = 
   apply pos "getInputValue" [(`Constant (`String id), pos)]
     
-let fresh_names = 
-  let counter = ref 0 in
-    (fun () -> 
-       incr counter;
-       ("_lnameid_" ^ string_of_int !counter,
-        "lname_" ^ string_of_int !counter))
+let fresh_names () =
+  let id = gensym ~prefix:"_lnameid_" () in
+  let name = gensym ~prefix:"lname_" () in
+  id, name
+
+  (* let counter = ref 0 in *)
+  (*   (fun () ->  *)
+  (*      incr counter; *)
+  (*      ("_lnameid_" ^ string_of_int !counter, *)
+  (*       "lname_" ^ string_of_int !counter)) *)
       
 let desugar_lhref : phrasenode -> phrasenode = function
   | `Xml (("a"|"A") as a, attrs, attrexp, children)

@@ -791,11 +791,13 @@ let rec version_atleast a b =
     | (ah::at), (bh::bt) -> ah > bh or (ah = bh && version_atleast at bt)
 let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
 
+let gensym_counter = ref 0
+
 (** Any two calls to [gensym] return distinct strings.  The optional
     [prefix] argument can be used to supply a prefix for the string.
 *)
 let gensym = 
-  let counter = ref 0 in
+  let counter = gensym_counter in
     fun ?prefix:(pref="") () ->
       begin
         incr counter;
