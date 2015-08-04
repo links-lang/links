@@ -1,0 +1,33 @@
+# Links has call-by-value semantics.
+# Therefore, we model computations as thunks
+fun comp() {
+  if (do Choose()) { # Picking true first branch
+    if (do Choose()) { 
+      2
+    } else {            
+      4
+    }
+  } else {            # Picking false first branch
+    if (do Choose()) {
+      8
+    } else {
+      16
+    }
+  }
+}
+
+#
+# A few (closed) handlers
+#
+
+# The "positive" handler
+var positive = handler(m) {
+    case Choose(_,k) -> k(true)
+    case Return(x)   -> x
+};
+
+# The "I'll-take-everything" handler
+var enumerate = handler(m) {
+    case Choose(_,k) -> k(true) ++ k(false)
+    case Return(x)   -> [x]
+};
