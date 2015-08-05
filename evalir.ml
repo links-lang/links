@@ -1,5 +1,4 @@
 open Notfound
-
 open Utility
 
 module Session = struct
@@ -121,6 +120,8 @@ module Session = struct
       (unbox_port outp, unbox_port inp)
 end
 
+let lookup_fun = FunMap.lookup
+let find_fun = FunMap.find
 
 module Eval = struct
   open Ir
@@ -142,19 +143,35 @@ module Eval = struct
        else name ^ ":" ^ args)
     in
       Value.db_connect driver params
-(*
-   let lookup_var var env =
-     match Value.lookup var env with
-       | Some v -> v
-       | None -> (Lib.primitive_stub_by_code var)
-*)
 
-(* Alternative, faster version *)
-   let lookup_var var env =
-     if Lib.is_primitive_var var
-     then Lib.primitive_stub_by_code var
-     else Value.find var env
+  let lookup_fun_def env f =
+    match lookup_fun f with
+    | None -> None
+    | Some (finfo, _, None, location) ->
+      begin
+        match location with
+        | `Server | `Unknown ->
+          (* TODO: perhaps we should actually use env here - and make
+             sure we only call this function when it is sufficiently
+             small *)
+          Some (`FunctionPtr (f, Value.empty_env (Value.get_closures env)))
+        | `Client ->
+          Some (`ClientFunction (Js.var_name_binder (f, finfo)))
+      end
 
+  let find_fun_def env f =
+    val_of (lookup_fun_def env f)
+
+  (* TODO: explicitly distinguish functions and variables in the
+     IR so we don't have to do this check every time we look up a
+     variable *)
+  let lookup_var var env =
+    if Lib.is_primitive_var var then Lib.primitive_stub_by_code var
+    else
+      match lookup_fun_def env var with
+      | None ->
+        Value.find var env
+      | Some v -> v
 
    let serialize_call_to_client (continuation, name, arg) =
      Json.jsonize_call continuation name arg
@@ -304,51 +321,74 @@ module Eval = struct
             | TopLevel (_, v) -> atomic := previousAtomic; v
         end
     | `Closure (f, v) ->
+      let (finfo, _, z, location) = find_fun f in
+      let z =
+        match z with
+        | None -> failwith ("Closure without environment variable: " ^ Ir.Show_value.show (`Closure (f, v)));
+        | Some z -> z
+      in
       begin
-      match lookup_var f env with
-      | `RecFunction (recs, locals, name, scope) ->
-        let r = value env v in
-        let recs, locals =
-          List.fold_right
-            (fun (name, (xs, body, z)) (recs, locals) ->
-               match z with
-               | None ->
-                 (* already closed *)
-                 assert false
-               (*                 (name, (xs, body, None)) :: recs, locals*)
-               | Some z ->
-                 (name, (xs, body, Some z)) :: recs, Value.bind z (r, `Local) locals)
-            recs
-            ([], locals)
-        in
-        `RecFunction (recs, locals, name, scope)
+        match location with
+        | `Server | `Unknown ->
+          let r = value env v in
+          let locals = Value.bind z (value env v, `Local) (Value.empty_env (Value.get_closures env)) in
+          `FunctionPtr (f, locals)
+        | `Client ->
+          `ClientFunction (Js.var_name_binder (f, finfo))
       end
+      (* begin *)
+      (* match lookup_var f env with *)
+      (* | `RecFunction (recs, locals, name, scope) -> *)
+      (*   let r = value env v in *)
+      (*   let recs, locals = *)
+      (*     List.fold_right *)
+      (*       (fun (name, (xs, body, z)) (recs, locals) -> *)
+      (*          match z with *)
+      (*          | None -> *)
+      (*            (\* already closed *\) *)
+      (*            assert false *)
+      (*          (\*                 (name, (xs, body, None)) :: recs, locals*\) *)
+      (*          | Some z -> *)
+      (*            (name, (xs, body, Some z)) :: recs, Value.bind z (r, `Local) locals) *)
+      (*       recs *)
+      (*       ([], locals) *)
+      (*   in *)
+      (*   `RecFunction (recs, locals, name, scope) *)
+      (* end *)
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t =
     function
-    | `RecFunction (recs, locals, n, scope), ps ->
-        begin match lookup n recs with
-          | Some (args, body, _z) ->
-              (* unfold recursive definitions once *)
+    | `FunctionPtr (f, locals), ps ->
+      let (_finfo, (xs, body), _z, _location) as def = find_fun f in
+      let env = Value.shadow env ~by:locals in
 
-              (* extend env with locals *)
-              let env = Value.shadow env ~by:locals in
+      (* extend env with arguments *)
+      let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
+      computation env cont body
+    | `RecFunction _, _ -> failwith "RecFunction deprecated"
+    (* | `RecFunction (recs, locals, n, scope), ps -> *)
+    (*     begin match lookup n recs with *)
+    (*       | Some (args, body, _z) -> *)
+    (*           (\* unfold recursive definitions once *\) *)
 
-              (* extend env with recs *)
+    (*           (\* extend env with locals *\) *)
+    (*           let env = Value.shadow env ~by:locals in *)
 
-              let env =
-	        List.fold_right
-                  (fun (name, _) env ->
-                      Value.bind name
-			(`RecFunction (recs, locals, name, scope), scope) env)
-                    recs env in
+    (*           (\* extend env with recs *\) *)
 
-              (* extend env with arguments *)
-              let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
-                computation env cont body
-          | None -> eval_error "Error looking up recursive function definition"
-        end
+    (*           let env = *)
+    (*             List.fold_right *)
+    (*               (fun (name, _) env -> *)
+    (*                   Value.bind name *)
+    (*     		(`RecFunction (recs, locals, name, scope), scope) env) *)
+    (*                 recs env in *)
+
+    (*           (\* extend env with arguments *\) *)
+    (*           let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in *)
+    (*             computation env cont body *)
+    (*       | None -> eval_error "Error looking up recursive function definition" *)
+    (*     end *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
@@ -549,53 +589,55 @@ module Eval = struct
                                        Var.scope_of_binder fb) env in
                 computation env' cont (bs, tailcomp)
           | `Fun ((f, _) as fb, (_, args, body), zb, _) ->
-              let scope = Var.scope_of_binder fb in
-              let locals = Value.localise env f in
-              let z = opt_map Var.var_of_binder zb in
-              let env' =
-                Value.bind f
-                  (`RecFunction ([f, (List.map fst args, body, z)],
-                                 locals, f, scope), scope) env
-              in
-                computation env' cont (bs, tailcomp)
+            computation env cont (bs, tailcomp)
+              (* let scope = Var.scope_of_binder fb in *)
+              (* let locals = Value.localise env f in *)
+              (* let z = opt_map Var.var_of_binder zb in *)
+              (* let env' = *)
+              (*   Value.bind f *)
+              (*     (`RecFunction ([f, (List.map fst args, body, z)], *)
+              (*                    locals, f, scope), scope) env *)
+              (* in *)
+              (*   computation env' cont (bs, tailcomp) *)
           | `Rec defs ->
-              (* partition the defs into client defs and non-client defs *)
-              let client_defs, defs =
-                List.partition (function
-                                  | (_fb, _lam, _zs, (`Client | `Native)) -> true
-                                  | _ -> false) defs in
+            computation env cont (bs, tailcomp)
+              (* (\* partition the defs into client defs and non-client defs *\) *)
+              (* let client_defs, defs = *)
+              (*   List.partition (function *)
+              (*                     | (_fb, _lam, _zs, (`Client | `Native)) -> true *)
+              (*                     | _ -> false) defs in *)
 
-              let locals =
-                match defs with
-                  | [] -> Value.empty_env (Value.get_closures env)
-                  | ((f, _), _, _, _)::_ -> Value.localise env f in
+              (* let locals = *)
+              (*   match defs with *)
+              (*     | [] -> Value.empty_env (Value.get_closures env) *)
+              (*     | ((f, _), _, _, _)::_ -> Value.localise env f in *)
 
-              (* add the client defs to the environments *)
-              let env =
-                List.fold_left
-                  (fun env ((f, _) as fb, _lam, zb, _location) ->
-                     (* TODO: do we need to do something with zb here?
-                        Not while client functions are always
-                        top-level, in which case zb will always be
-                        None *)
-                     let v = `ClientFunction (Js.var_name_binder fb),
-                             Var.scope_of_binder fb
-                     in Value.bind f v env)
-                  env client_defs in
+              (* (\* add the client defs to the environments *\) *)
+              (* let env = *)
+              (*   List.fold_left *)
+              (*     (fun env ((f, _) as fb, _lam, zb, _location) -> *)
+              (*        (\* TODO: do we need to do something with zb here? *)
+              (*           Not while client functions are always *)
+              (*           top-level, in which case zb will always be *)
+              (*           None *\) *)
+              (*        let v = `ClientFunction (Js.var_name_binder fb), *)
+              (*                Var.scope_of_binder fb *)
+              (*        in Value.bind f v env) *)
+              (*     env client_defs in *)
 
-              (* add the server defs to the environment *)
-              let bindings = List.map (fun ((f,_), (_, args, body), zb, _) ->
-                                         f, (List.map fst args, body, opt_map Var.var_of_binder zb)) defs in
-              let env =
-                List.fold_right
-                  (fun ((f, _) as fb, _, _zb, _) env ->
-                     let scope = Var.scope_of_binder fb in
-                       Value.bind f
-                         (`RecFunction (bindings, locals, f, scope),
-                          scope)
-                         env) defs env
-              in
-                computation env cont (bs, tailcomp)
+              (* (\* add the server defs to the environment *\) *)
+              (* let bindings = List.map (fun ((f,_), (_, args, body), zb, _) -> *)
+              (*                            f, (List.map fst args, body, opt_map Var.var_of_binder zb)) defs in *)
+              (* let env = *)
+              (*   List.fold_right *)
+              (*     (fun ((f, _) as fb, _, _zb, _) env -> *)
+              (*        let scope = Var.scope_of_binder fb in *)
+              (*          Value.bind f *)
+              (*            (`RecFunction (bindings, locals, f, scope), *)
+              (*             scope) *)
+              (*            env) defs env *)
+              (* in *)
+              (*   computation env cont (bs, tailcomp) *)
           | `Alien _ -> (* just skip it *)
               computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
@@ -787,3 +829,6 @@ let eval_toplevel env program =
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
+
+let eval_fun env f =
+  Eval.find_fun_def env f

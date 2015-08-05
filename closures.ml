@@ -189,6 +189,7 @@ struct
           let defs = List.rev defs in
           `Rec defs, o
         | `Fun (f, (tyvars, xs, body), None, location) ->
+          (* Debug.print ("Top level function:" ^ Var.name_of_binder f); *)
           let (xs, body), o =
             o#descend (fun o ->
                 let (xs, o) =
@@ -249,6 +250,12 @@ struct
           `Let (x, (tyvars, tc)), o
         | `Alien _ as b -> super#binding b
         | b -> assert false
+
+      method program =
+        fun (bs, tc) ->
+          let bs, o = o#bindings bs in
+          let (tc, t), o = o#descend (fun o -> let tc, t, o = o#tail_computation tc in (tc, t), o) in
+          (bs, tc), t, o
     end
 
   let bindings tyenv globals e =
@@ -430,6 +437,13 @@ struct
           let b, o = o#binding b in
           let bs, o = o#bindings bs in
           b :: bs, o
+
+      method program =
+        fun (bs, tc) ->
+          let bs, o = o#bindings bs in
+          let (tc, t), o = o#descend (fun o -> let tc, t, o = o#tail_computation tc in (tc, t), o) in
+          let bs', o = o#pop_hoisted_bindings in
+          (bs @ bs', tc), t, o
     end
 
   let bindings tyenv globals fenv bs =

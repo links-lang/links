@@ -154,7 +154,7 @@ type primitive_value_basis =  [
 | `Char of char
 | `Float of float
 | `Int of number
-| `XML of xmlitem 
+| `XML of xmlitem
 | `String of string ]
   deriving (Show, Typeable, Eq, Pickle, Dump)
 
@@ -218,7 +218,7 @@ let lookup name (env, _closures, _globals) = opt_map fst (IntMap.lookup name env
 let lookupS name (env, _closures, _globals) = IntMap.lookup name env
 let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
 
-let get_parameters (env,_closures,_globals) = env;;
+let get_parameters (env,_closures,_globals) = env
 
 let shadow env ~by:(by, _closures',_globals') =
 (* Assumes that closures, globals never change *)
@@ -250,6 +250,7 @@ and compressed_t = [
 | `Variant of string * compressed_t
 | `LocalFunction of (Ir.var list * compressed_env * Ir.var)
 | `GlobalFunction of ((Ir.var * compressed_t option) list * Ir.var)
+| `FunctionPtr of (Ir.var * compressed_env)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
@@ -286,7 +287,9 @@ and compress_t (v : t) : compressed_t =
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
-      | `FunctionPtr(x, env) -> assert false    (* Should already be resolved. *)
+      | `FunctionPtr(x, env) ->
+        `FunctionPtr (x, compress_env env)
+        (* assert false    (\* Should already be resolved. *\) *)
       | `RecFunction (defs, locals, f, `Local) ->
           `LocalFunction (List.map (fun (f, (_xs, _body, _z)) -> f) defs,
                           compress_env locals, f)
@@ -353,6 +356,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) (v : 
       | `List vs -> `List (List.map uv vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
+      | `FunctionPtr (x, locals) -> `FunctionPtr (x, uncompress_env envs locals)
       | `LocalFunction (defs, env, var) ->
           `RecFunction (List.map (fun f -> f, IntMap.find f funs) defs,
                         uncompress_env envs env,
@@ -504,7 +508,11 @@ and charlist_as_string chlist =
 
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
-  | `FunctionPtr (x, env) -> string_of_int x ^ string_of_environment env
+  | `FunctionPtr (x, env) ->
+    if Settings.get_value (Basicsettings.printing_functions) then
+      string_of_int x ^ string_of_environment env
+    else
+      "fun"
   | `PrimitiveFunction (name,_op) -> name
   | `ClientFunction (name) -> name
   | `RecFunction(defs, env, var, _scope) ->

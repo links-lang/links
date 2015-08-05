@@ -312,6 +312,7 @@ struct
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
       | `RecFunction ([(f, (xs, body, z))], env, f', _scope) ->
+        assert false;
         assert (f=f');
         (* Debug.print("converting to query closure: " ^ string_of_int f); *)
         let xs = match z with
@@ -325,6 +326,10 @@ struct
               z :: xs
         in
         `Closure ((xs, body), env_of_value_env env)
+      | `FunctionPtr (f, env) ->
+        Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure");
+        let (_finfo, (xs, body), _z, _location) as def = FunMap.find f in
+        `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -334,19 +339,42 @@ struct
     (val_env, Env.Int.bind exp_env (x, v))
 
   let lookup (val_env, exp_env) var =
-    match Value.lookup var val_env, Env.Int.find exp_env var with
-      | None, Some v -> v
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "concatMap" = f ->
+    match FunMap.lookup var with
+    | Some (finfo, (xs, body), None, location) ->
+      begin
+        match Var.name_of_binder (var, finfo) with
+        | "concatMap" ->
           `Primitive "ConcatMap"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "map" = f ->
+        | "map" ->
           `Primitive "Map"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "empty" = f ->
+        | "empty" ->
           `Primitive "Empty"
-      | Some (`RecFunction ([(_, _)], _, f, _)), None when Env.String.lookup (val_of !Lib.prelude_nenv) "sortByBase" = f ->
+        | "sortByBase" ->
           `Primitive "SortBy"
-      | Some v, None -> expression_of_value v
-      | None, None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
-      | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+        | _ ->
+          begin
+            match location with
+            | `Server | `Unknown ->
+              (* Debug.print ("looked up function: "^Var.Show_binder.show (var, finfo)); *)
+              `Closure ((xs, body), env_of_value_env (Value.empty_env (Value.get_closures val_env)))
+            | `Client ->
+              failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
+            | `Native ->
+              failwith ("Attempt to use native function: " ^ Var.Show_binder.show (var, finfo) ^ " in query")
+          end
+      end
+    | None ->
+      begin
+        match Value.lookup var val_env, Env.Int.find exp_env var with
+        | None, Some v -> v
+        | Some v, None -> expression_of_value v
+        | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+        | None, None ->
+          begin
+            try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
+            | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
+          end
+      end
 
   let lookup_lib_fun (val_env, _exp_env) var =
     match Value.lookup var val_env with
@@ -483,21 +511,28 @@ struct
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Closure (f, v) ->
-      (* Debug.print("looking up query closure: "^string_of_int f); *)
-      begin
-        match value env (`Variable f) with
-        | `Closure ((z::xs, body), closure_env) ->
-          (* Debug.print("binding query closure parameter: "^string_of_int z); *)
-          (* partially apply the closure to bind the closure
-             environment *)
-          `Closure ((xs, body), bind closure_env (z, value env v))
-        | _ ->
-          failwith "ill-formed closure in query compilation"
-      end
+      let (_finfo, (xs, body), Some z, _location) = FunMap.find f in
+      (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
+      (* yuck! *)
+      let env' = bind (Value.empty_env (Value.get_closures (fst env)), Env.Int.empty) (z, value env v) in
+      `Closure ((xs, body), env')
+      (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
+      (* begin *)
+      (*   match value env (`Variable f) with *)
+      (*   | `Closure ((z::xs, body), closure_env) -> *)
+      (*     (\* Debug.print("binding query closure parameter: "^string_of_int z); *\) *)
+      (*     (\* partially apply the closure to bind the closure *)
+      (*        environment *\) *)
+      (*     `Closure ((xs, body), bind closure_env (z, value env v)) *)
+      (*   | _ -> *)
+      (*     failwith "ill-formed closure in query compilation" *)
+      (* end *)
     | `Coerce (v, _) -> value env v
 
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
+      (* Debug.print ("Applying closure"); *)
+      (* Debug.print ("body: " ^ Ir.Show_computation.show body); *)
       (* Debug.print("Applying query closure: " ^ Show_t.show (`Closure ((xs, body), closure_env))); *)
       (* Debug.print("args: " ^ mapstrcat ", " Show_t.show args); *)
         let env = env ++ closure_env in
@@ -1559,7 +1594,7 @@ end
 
 let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
-    (* Debug.print ("e: "^Show.show Ir.show_computation e); *)
+    (* Debug.print ("e: "^Ir.Show_computation.show e); *)
     let v = Eval.eval env e in
       (* Debug.print ("v: "^string_of_t v); *)
       match used_database v with

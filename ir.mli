@@ -190,3 +190,14 @@ val var_appln : var Env.String.t -> Env.String.name -> value list ->
   tail_computation
 
 val funcmap : program -> (Var.var * binding) list
+
+type eval_fun_def = var_info * (var list * computation) * Var.var option * location
+  deriving (Show)
+
+module FunMap :
+sig
+  type t = (var, eval_fun_def) Hashtbl.t
+
+  val bindings : t -> binding list -> unit
+  val program : t -> program -> unit
+end

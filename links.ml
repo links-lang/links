@@ -61,8 +61,8 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
   let valenv = Value.with_closures valenv closures in
 
-  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program"
-  in
+  Ir.FunMap.program FunMap.fun_map program;
+  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
     lazy (printer t v) <|measure_as|> "print";
     valenv, v
 
@@ -346,6 +346,7 @@ let load_prelude () =
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   let closures = Ir.ClosureTable.bindings tenv (Lib.primitive_vars) globals in
 
+  Ir.FunMap.bindings FunMap.fun_map globals;
   let valenv = Evalir.run_defs (Value.empty_env closures) globals in
   let envs =
     (valenv,
@@ -370,6 +371,8 @@ let cache_load_prelude () =
   Loader.wpcache "prelude.closures" (fun () ->
     let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals
     in
+    (* TODO: either scrap whole program caching or add closure
+       conversion code here *)
     let valenv = Evalir.run_defs (Value.empty_env closures) globals in
     let envs =
       (valenv,

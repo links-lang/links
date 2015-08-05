@@ -10,7 +10,7 @@ type query_params = (string * Value.t) list deriving (Show)
 
 type web_request =
   | ContApply of Value.continuation * query_params
-  | ExprEval of Ir.tail_computation * Value.env
+  | ExprEval of Ir.computation * Value.env
   | ClientReturn of Value.continuation * (* continuation *)
       Value.t                            (* argument *)
   | RemoteCall of Value.t *              (* function *)
@@ -38,9 +38,11 @@ let is_client_program : Ir.program -> bool =
 let serialize_call_to_client (continuation, name, arg) =
   Json.jsonize_call continuation name arg
 
-let resolve_function funcmap x env =
-  let binding = assoc x funcmap in
-    Evalir.eval_toplevel env ([binding], `Return(`Variable x))
+let resolve_function _ f env = Evalir.eval_fun env f
+
+(* let resolve_function funcmap x env = *)
+(*   let binding = assoc x funcmap in *)
+(*     Evalir.eval_toplevel env ([binding], `Return(`Variable x)) *)
 
 let rec resolve_functions closures funcmap =
   function
@@ -86,25 +88,55 @@ let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args =
   let env = Value.extend valenv local_env in
   (* Debug.print ("env: " ^ Value.Show_env.show env); *)
   Debug.print("Resolving server call to " ^ fname);
-    (* [fname] may be in the (int-indexed) funcmap, if it is a nested
-       function, or in [nenv] if a global, or in [Lib.primitive_stub].
-       NOTE: in fact, the funcmap contains top-level functions, so
-       we can ditch the [nenv] lookup. *)
-  let func = try (* Try finding it in the funcmap as a nested closure *)
-    let f_var = int_of_string fname in
-      (* FIXME: use resolve_function here *)
-    let binding = assoc f_var funcmap in
-    (* Debug.print ("binding: " ^ Ir.Show_binding.show binding); *)
-      Evalir.eval_toplevel env ([binding], `Return(`Variable f_var))
-  with _ ->
-    (* Try the nenv, which maps the global functions *)
-    let var = Env.String.lookup nenv fname in
-      match Value.lookup var valenv with
+
+  (* ridiculousness: fname is sometimes an integer and sometimes a
+     real name! *)
+
+  let func =
+    let var =
+      try int_of_string fname with
+        _ ->
+        if not (Env.String.has nenv fname) then
+          failwith ("fname: " ^ fname ^ " isn't an integer and isn't in the nenv environment!")
+        else
+          Env.String.lookup nenv fname
+    in
+    try resolve_function funcmap var valenv with
+      _ ->
+      begin
+        match Value.lookup var valenv with
         | Some v -> v
-            (* Try the primitives. *)
-        | None -> Lib.primitive_stub fname
+        (* Try the primitives. *)
+        | None ->
+          Debug.print ("fname: " ^ fname ^ " not in value environment");
+          Lib.primitive_stub fname
+      end
   in
-    RemoteCall(func, env, args)
+  (*   (\* [fname] may be in the (int-indexed) funcmap, if it is a nested *)
+  (*      function, or in [nenv] if a global, or in [Lib.primitive_stub]. *)
+  (*      NOTE: in fact, the funcmap contains top-level functions, so *)
+  (*      we can ditch the [nenv] lookup. *\) *)
+  (* let func = try (\* Try finding it in the funcmap as a nested closure *\) *)
+  (*   let f_var = int_of_string fname in *)
+  (*     (\* FIXME: use resolve_function here *\) *)
+  (*   let binding = assoc f_var funcmap in *)
+  (*   (\* Debug.print ("binding: " ^ Ir.Show_binding.show binding); *\) *)
+  (*     Evalir.eval_toplevel env ([binding], `Return(`Variable f_var)) *)
+  (* with _ -> *)
+  (* Try the nenv, which maps the global functions *)
+  (* let func = *)
+  (*   Debug.print ("A"); *)
+  (*   if not (Env.String.has nenv fname) then *)
+  (*     Debug.print ("fname: " ^ fname ^ " isn't in the nenv environment!"); *)
+  (*   let var = Env.String.lookup nenv fname in *)
+  (*   Debug.print ("var: "^string_of_int var); *)
+  (*   match Value.lookup var valenv with *)
+  (*   | Some v -> v *)
+  (*   (\* Try the primitives. *\) *)
+  (*   | None -> Lib.primitive_stub fname *)
+  (* in *)
+  (* Debug.print ("func: "^Value.Show_t.show func); *)
+  RemoteCall(func, env, args)
 
 let decode_continuation envs program (cont : string) : Value.continuation =
   let fixup_cont =
@@ -158,48 +190,56 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
   let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
-        | `RecFunction ([(f, (_xs, _body, z))], locals, _, _) as v ->
-          (* FIXME: all this jsonArgs stuff is broken *)
-          (* (it's used for server side continuations created on the
-             client, e.g., in l:action and l:href) *)
-          let json_env =
-            if mem_assoc "_jsonArgs" params then
-              match Json.parse_json_b64 (assoc "_jsonArgs" params) with
-                | `Record fields ->
-                       fold_left
-                         (fun env (name, v) ->
-                            Value.bind (int_of_string name) (v, `Local) env)
-                         (Value.empty_env closures)
-                         fields
-                | _ -> assert false
-            else
-              Value.empty_env closures in
+      | `FunctionPtr (f, locals) as v ->
+        (* we assume that f has no arguments *)
+        let (_, ([], body), _, _) = FunMap.find f in
+        ExprEval (body, locals)
 
-          (* Debug.print ("unmarshalled value: " ^ Value.Show_t.show v); *)
-          (* Debug.print (Value.Show_env.show locals); *)
+      (* Debug.print ("v: "^Value.Show_t.show v); *)
+      (* ExprEval (`Apply (`Variable f, []), locals) *)
 
-          let fclos =
-            match z with
-            | None -> `Variable f
-            | Some z ->
-              (* Debug.print ("z: " ^ string_of_int z); *)
-              `Variable f
-              (*`Closure (f, Value.find z json_env)*)
-          in
+        (* | `RecFunction ([(f, (_xs, _body, z))], locals, _, _) as v -> *)
+        (*   (\* FIXME: all this jsonArgs stuff is broken *\) *)
+        (*   (\* (it's used for server side continuations created on the *)
+        (*      client, e.g., in l:action and l:href) *\) *)
+        (*   let json_env = *)
+        (*     if mem_assoc "_jsonArgs" params then *)
+        (*       match Json.parse_json_b64 (assoc "_jsonArgs" params) with *)
+        (*         | `Record fields -> *)
+        (*                fold_left *)
+        (*                  (fun env (name, v) -> *)
+        (*                     Value.bind (int_of_string name) (v, `Local) env) *)
+        (*                  (Value.empty_env closures) *)
+        (*                  fields *)
+        (*         | _ -> assert false *)
+        (*     else *)
+        (*       Value.empty_env closures in *)
 
-          (* we don't need to pass the args in here as they are read using the environment
-             function *)
+        (*   (\* Debug.print ("unmarshalled value: " ^ Value.Show_t.show v); *\) *)
+        (*   (\* Debug.print (Value.Show_env.show locals); *\) *)
 
-          (*           let params = filter (not -<- is_cont_apply_param) params in *)
-          (*           let args = *)
-          (*             fold_right *)
-          (*               (fun pair env -> *)
-          (*                  `ApplyPure (`Variable (Env.String.lookup nenv "Cons"), [string_pair pair; env])) *)
-          (*               params *)
-          (*               (`Variable (Env.String.lookup nenv "Nil")) in *)
+        (*   let fclos = *)
+        (*     match z with *)
+        (*     | None -> `Variable f *)
+        (*     | Some z -> *)
+        (*       (\* Debug.print ("z: " ^ string_of_int z); *\) *)
+        (*       `Variable f *)
+        (*       (\*`Closure (f, Value.find z json_env)*\) *)
+        (*   in *)
 
-          let env = Value.shadow(Value.bind f (v, `Local) locals) ~by:json_env in
-            ExprEval (`Apply (fclos, []), env)
+        (*   (\* we don't need to pass the args in here as they are read using the environment *)
+        (*      function *\) *)
+
+        (*   (\*           let params = filter (not -<- is_cont_apply_param) params in *\) *)
+        (*   (\*           let args = *\) *)
+        (*   (\*             fold_right *\) *)
+        (*   (\*               (fun pair env -> *\) *)
+        (*   (\*                  `ApplyPure (`Variable (Env.String.lookup nenv "Cons"), [string_pair pair; env])) *\) *)
+        (*   (\*               params *\) *)
+        (*   (\*               (`Variable (Env.String.lookup nenv "Nil")) in *\) *)
+
+        (*   let env = Value.shadow(Value.bind f (v, `Local) locals) ~by:json_env in *)
+        (*     ExprEval (`Apply (fclos, []), env) *)
       | _ -> assert false
 
 let parse_client_return envs program cgi_args =
@@ -274,7 +314,7 @@ let perform_request cgi_args (valenv, nenv, tyenv) (globals, locals, main) cont0
         let env = Value.shadow valenv ~by:expr_locals in
         let v = snd (Evalir.run_program_with_cont
                        (cont0)
-                       env ([], expr)) in
+                       env (expr)) in
           ("text/html",
            Value.string_of_value v)
     | ClientReturn(cont, arg) ->
@@ -355,12 +395,15 @@ let make_program (_,nenv,tyenv) prelude filename =
                    ^ Types.string_of_datatype t)
   end;
 
-  Debug.print ("un-closure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main));
+  (* Debug.print ("un-closure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main)); *)
 
   let nenv'' = Env.String.extend nenv nenv' in
   let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
 
-  let module Show_IntEnv = Env.Int.Show_t(Deriving_Show.Show_int) in
+  let module Show_IntEnv = Env.Int.Show_t(Deriving_Show.Show_string) in
+  let module Show_StringEnv = Env.String.Show_t(Deriving_Show.Show_int) in
+
+  (* Debug.print ("nenv''" ^ Show_StringEnv.show nenv''); *)
 
   let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
   let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
@@ -369,13 +412,14 @@ let make_program (_,nenv,tyenv) prelude filename =
   (* Debug.print ("fenv0: " ^ Closures.Show_fenv.show fenv0); *)
   let globals = Closures.ClosureConvert.bindings tenv0 gs0 fenv0 globals in
 
-
   let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
   let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
   let fenv1 = Closures.ClosureVars.program tenv1 gs1 (locals, main) in
   let (locals, main) = Closures.ClosureConvert.program tenv1 gs1 fenv1 (locals, main) in
 
   (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
+
+  Ir.FunMap.bindings FunMap.fun_map (globals @ locals);
 
   let (locals,main), render_cont =
     wrap_with_render_page (nenv, tyenv) (locals,main) in

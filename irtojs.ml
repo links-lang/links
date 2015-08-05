@@ -391,6 +391,8 @@ end
 
    To implement this functionality properly would probably require
    closure-converting the IR.
+
+   FIXME: this is all broken now
 *)
 module FixPickles :
 sig
@@ -430,6 +432,8 @@ struct
       (*
         This two-stage update is a workaround for a camlp4 parsing bug.
         http://caml.inria.fr/mantis/view.php?id=4673
+
+         FIXME: this bug is now fixed
       *)
       (o#with_nenv nenv)
         #with_venv venv

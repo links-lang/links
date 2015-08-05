@@ -1042,27 +1042,47 @@ let var_appln env name args =
   (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
 
 let rec funcmap_of_binding = function
-  | `Let (b, (_, tc)) -> funcmap_of_tailcomp tc
-  | (`Fun (b, (_, _, body), _, _) as f) ->
-      (Var.var_of_binder b, f) :: funcmap_of_computation body
-  | `Rec defs -> concat_map (fun ((b, (_, _, body), _, _) as def) ->
-                               (Var.var_of_binder b, `Rec defs) ::
-                                 funcmap_of_computation body) defs
+  | `Let _ -> []
+  | (`Fun (b, _, _, _) as def) -> [Var.var_of_binder b, def]
+  | `Rec defs ->
+    concat_map
+      (fun ((b, _, _, _) as def) ->
+         [Var.var_of_binder b, `Rec defs]) defs
   | `Alien (b, _lang) -> []
   | `Module _ -> failwith "Not implemented."
-and funcmap_of_tailcomp = function
-  | `Return _ | `Apply _ | `ApplyClosure _ | `Special _ -> []
-  | `Case (_, branches, default) ->
-      List.concat(StringMap.to_list
-                    (fun _ (_, comp) -> funcmap_of_computation comp)
-                    branches)
-      @ (match default with
-           | None -> []
-           | Some (_, comp) -> funcmap_of_computation comp)
-  | `If (_, t, f) ->
-      funcmap_of_computation t @ funcmap_of_computation f
 and funcmap_of_computation =
   fun (bs, tc) ->
-    concat_map funcmap_of_binding bs @ funcmap_of_tailcomp tc
+    concat_map funcmap_of_binding bs
 
 let funcmap = funcmap_of_computation
+
+type eval_fun_def = var_info * (var list * computation) * Var.var option * location
+  deriving (Show)
+
+module FunMap =
+struct
+  type t = (Var.var, eval_fun_def) Hashtbl.t
+
+  let make_eval_def : fun_def -> eval_fun_def =
+    fun ((_f, info), (_tyvars, xs, body), z, location) ->
+      info, (List.map Var.var_of_binder xs, body), opt_map Var.var_of_binder z, location
+
+  let add fs def =
+      let f = Var.var_of_binder (binder_of_fun_def def) in
+      Hashtbl.add fs f (make_eval_def def)
+
+  let binding fs = function
+    | `Let _ -> ()
+    | `Fun def -> add fs def
+    | `Rec defs -> List.iter (add fs) defs
+    | `Alien _ -> ()
+    | `Module _ -> failwith "Not implemented"
+
+  let bindings fs = List.iter (binding fs)
+
+  let computation fs =
+    fun (bs, _) ->
+      bindings fs bs
+
+  let program = computation
+end
