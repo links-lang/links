@@ -159,6 +159,9 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
         | `RecFunction ([(f, (_xs, _body, z))], locals, _, _) as v ->
+          (* FIXME: all this jsonArgs stuff is broken *)
+          (* (it's used for server side continuations created on the
+             client, e.g., in l:action and l:href) *)
           let json_env =
             if mem_assoc "_jsonArgs" params then
               match Json.parse_json_b64 (assoc "_jsonArgs" params) with
