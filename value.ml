@@ -189,7 +189,7 @@ and t = [
 | `Record of (string * t) list
 | `Variant of string * t
 | `RecFunction of ((Ir.var * (Ir.var list * Ir.computation * Ir.var option)) list *
-                     env * Ir.var * Ir.scope)
+                   env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
@@ -233,80 +233,6 @@ let get_closures (_, closures,_) = closures
 let find_closure (_, closures,_) var = IntMap.find var closures
 let with_closures (env, closures',globals) closures =
   (env, IntMap.fold IntMap.add closures closures',globals)
-
-
-(** {2 IntMap-based implementation} *)
-(*
-let empty_env closures = (IntMap.empty, closures)
-let bind name v (env, closures) = (IntMap.add name v env, closures)
-let find name (env, _closures) = fst (IntMap.find name env)
-let lookup name (env, _closures) = opt_map fst (IntMap.lookup name env)
-let lookupS name (env, _closures) = IntMap.lookup name env
-let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
-
-let get_parameters (env,_closures) = env;;
-
-let shadow (outers, closures) ~by:(by, _closures') =
-(* WARNING:
-
-   The commented out code causes an enormous slowdown. The closures
-   are computed globally anyway, so closures and closures' should
-   always be the same.
-*)
-  (*   let closures = *)
-(*     IntMap.fold *)
-(*       (fun name xs closures -> *)
-(*          IntMap.add name xs closures) *)
-(*       closures' *)
-(*       closures *)
-(*   in *)
-    IntMap.fold (fun name v env -> IntMap.add name v env) by outers, closures
-
-
-
-let fold f (env, closures) a = IntMap.fold f env a
-let globals (env, closures) =
-      let g =
-	IntMap.fold (fun name ((_, scope) as v) globals ->
-	  match scope with
-	  | `Global -> IntMap.add name v globals
-	  | _ -> globals) env (IntMap.empty)
-      in (g, closures)
-
-let get_closures (_, closures) = closures
-let find_closure (_, closures) var = IntMap.find var closures
-let with_closures (env, closures') closures =
-  (env, IntMap.fold IntMap.add closures closures')
-*)
-
-
-
-
-
-(** {2 List-based environment implementation (disabled)} *)
-(* let empty_env closures = [], closures *)
-(* let bind name v (env, closures) = (name, v)::env, closures *)
-(* let find name (env, _closures) = *)
-(*   fst (List.assoc name env) *)
-(* let lookup name env = *)
-(*   try Some (find name env) *)
-(*   with NotFound _ -> None *)
-(* let lookupS name (env, _closures) = *)
-(*   try Some (List.assoc name env) *)
-(*   with NotFound _ -> None *)
-(* let shadow (outers, closures) ~by:(by, _closures') = *)
-(*   by @ outers, closures *)
-(* let fold f (env, _closures) a = List.fold_right (fun (name, v) -> f name v) env a *)
-(* let globals (env, closures) = *)
-(*   List.fold_right (fun (name, ((_, scope) as v)) globals -> *)
-(*                      match scope with *)
-(*                        | _ -> (name, v)::globals *)
-(*                        | _ -> globals) env [], closures *)
-(* let find_closure (_, closures) var = IntMap.find var closures *)
-(* let with_closures (env, closures') closures = *)
-(*   (env, IntMap.fold IntMap.add closures closures') *)
-
-
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
