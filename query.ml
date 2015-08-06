@@ -311,23 +311,8 @@ struct
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
-      | `RecFunction ([(f, (xs, body, z))], env, f', _scope) ->
-        assert false;
-        assert (f=f');
-        (* Debug.print("converting to query closure: " ^ string_of_int f); *)
-        let xs = match z with
-          | None -> xs
-          | Some z ->
-            if Value.mem z env then
-              (* if z has already been bound then we don't need to
-                 extend the arguments *)
-              xs
-            else
-              z :: xs
-        in
-        `Closure ((xs, body), env_of_value_env env)
       | `FunctionPtr (f, env) ->
-        Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure");
+        (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
         let (_finfo, (xs, body), _z, _location) as def = FunMap.find f in
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f

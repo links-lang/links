@@ -188,8 +188,6 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation * Ir.var option)) list *
-                   env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
@@ -248,8 +246,6 @@ and compressed_t = [
 | `List of compressed_t list
 | `Record of (string * compressed_t) list
 | `Variant of string * compressed_t
-| `LocalFunction of (Ir.var list * compressed_env * Ir.var)
-| `GlobalFunction of ((Ir.var * compressed_t option) list * Ir.var)
 | `FunctionPtr of (Ir.var * compressed_env)
 | `PrimitiveFunction of string
 | `ClientFunction of string
@@ -289,17 +285,6 @@ and compress_t (v : t) : compressed_t =
       | `Variant (name, v) -> `Variant (name, cv v)
       | `FunctionPtr(x, env) ->
         `FunctionPtr (x, compress_env env)
-        (* assert false    (\* Should already be resolved. *\) *)
-      | `RecFunction (defs, locals, f, `Local) ->
-          `LocalFunction (List.map (fun (f, (_xs, _body, _z)) -> f) defs,
-                          compress_env locals, f)
-      | `RecFunction (defs, env, f, `Global) ->
-        let compress_def =
-          function
-          | (f, (_xs, _body, None))   -> (f, None)
-          | (f, (_xs, _body, Some z)) -> (f, Some (cv (find z env)))
-        in
-          `GlobalFunction (List.map compress_def defs, f)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
@@ -357,26 +342,6 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) (v : 
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
       | `FunctionPtr (x, locals) -> `FunctionPtr (x, uncompress_env envs locals)
-      | `LocalFunction (defs, env, var) ->
-          `RecFunction (List.map (fun f -> f, IntMap.find f funs) defs,
-                        uncompress_env envs env,
-                        var,
-                        `Local)
-      | `GlobalFunction (defs, f) ->
-        let locals = localise globals f in
-        let defs, locals =
-          List.fold_right
-            (fun (f, v) (defs, locals) ->
-               let (_f, (_xs, _body, z)) as def = (f, IntMap.find f funs) in
-               let locals = match z, v with
-                 | None, None -> locals
-                 | Some z, Some v -> bind z (uv v, `Local) locals
-               in
-               def :: defs, locals)
-            defs
-            ([], locals)
-        in
-          `RecFunction (defs, locals, f, `Global)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
@@ -515,17 +480,17 @@ and string_of_value : t -> string = function
       "fun"
   | `PrimitiveFunction (name,_op) -> name
   | `ClientFunction (name) -> name
-  | `RecFunction(defs, env, var, _scope) ->
-      (* Choose from fancy or simple printing of functions: *)
-      if Settings.get_value(Basicsettings.printing_functions) then
-        "{ " ^ (mapstrcat " "
-                  (fun (_name, (formals, body, _z)) ->
-                     "fun (" ^ String.concat "," (List.map Ir.string_of_var formals) ^ ") {" ^
-                       Ir.string_of_computation body ^ "}")
-                  defs) ^
-          " " ^ Ir.string_of_var var ^ " }[" ^ string_of_environment env ^ "]"
-      else
-        "fun"
+  (* | `RecFunction(defs, env, var, _scope) -> *)
+  (*     (\* Choose from fancy or simple printing of functions: *\) *)
+  (*     if Settings.get_value(Basicsettings.printing_functions) then *)
+  (*       "{ " ^ (mapstrcat " " *)
+  (*                 (fun (_name, (formals, body, _z)) -> *)
+  (*                    "fun (" ^ String.concat "," (List.map Ir.string_of_var formals) ^ ") {" ^ *)
+  (*                      Ir.string_of_computation body ^ "}") *)
+  (*                 defs) ^ *)
+  (*         " " ^ Ir.string_of_var var ^ " }[" ^ string_of_environment env ^ "]" *)
+  (*     else *)
+  (*       "fun" *)
   | `Record fields ->
       (try string_of_tuple fields
        with Not_tuple ->
@@ -708,8 +673,9 @@ let unmarshal_continuation (envs : unmarshal_envs) : string -> continuation =
 let unmarshal_value envs : string -> t =
   fun s ->
     let { load = load } = value_serialiser () in
+    Debug.print ("unmarshalling string: " ^ s);
     let v = (load (base64decode s)) in
-    (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
+    Debug.print ("unmarshalling: " ^ Show_compressed_t.show v);
       uncompress_t envs v
 
 (** Return the continuation frame that evaluates the given expression

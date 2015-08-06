@@ -2,7 +2,12 @@ open Utility
 open Sugartypes
 open List
 
-(* See http://frege/wiki/LAttributeSugar *)
+(* TODO:
+
+   Either disallow l:href and l:action in client-side XML or, more
+   usefully, provide proper support for sending client-side closures
+   to the server.
+*)
 
 let has_lattrs : phrasenode -> bool = function
   | `Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
@@ -23,12 +28,6 @@ let fresh_names () =
   let id = gensym ~prefix:"_lnameid_" () in
   let name = gensym ~prefix:"lname_" () in
   id, name
-
-  (* let counter = ref 0 in *)
-  (*   (fun () ->  *)
-  (*      incr counter; *)
-  (*      ("_lnameid_" ^ string_of_int !counter, *)
-  (*       "lname_" ^ string_of_int !counter)) *)
 
 let desugar_lhref : phrasenode -> phrasenode = function
   | `Xml (("a"|"A") as a, attrs, attrexp, children)

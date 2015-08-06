@@ -376,149 +376,6 @@ struct
       | _ ->  Call(Var (js_name op), [l; r])
 end
 
-(**This transformation is supposed to pre-pickle any continuations
-   that might need to be invoked from the client.
-
-   As it is currently implemented it is rather brittle. It only works
-   if the call to pickleCont is of the form:
-
-   let f () = e in C[pickleCont f]
-
-   where \().e is the continuation, and C[...] is a one-holed context.
-
-   As we cannot jsonise functions, it also requires that any
-   free-local variables in e are structural.
-
-   To implement this functionality properly would probably require
-   closure-converting the IR.
-
-   FIXME: this is all broken now
-*)
-module FixPickles :
-sig
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
-
-  val bindings : envs -> Ir.binding list -> Ir.binding list
-  val program : envs -> Ir.program -> Ir.program
-end
-  =
-struct
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
-
-  class visitor (closures, nenv, venv, tenv) =
-  object (o)
-    inherit Ir.Transform.visitor(tenv) as super
-
-    val fun_env = VEnv.empty
-
-    val nenv = nenv
-    val venv = venv
-
-    val closures = closures
-
-    method private with_nenv nenv =
-      {< nenv = nenv >}
-
-    method private with_venv venv =
-      {< venv = venv >}
-
-    method bind_name b =
-      let name = Var.name_of_binder b in
-      let var = Var.var_of_binder b in
-      let nenv =
-        if name = "" then nenv
-        else Env.String.bind nenv (name, var) in
-      let venv = VEnv.bind venv (var, name) in
-      (*
-        This two-stage update is a workaround for a camlp4 parsing bug.
-        http://caml.inria.fr/mantis/view.php?id=4673
-
-         FIXME: this bug is now fixed
-      *)
-      (o#with_nenv nenv)
-        #with_venv venv
-
-    method bind_fun f lam =
-      {< fun_env = VEnv.bind fun_env (f, lam) >}
-
-    method super_binding b = super#binding b
-
-    method binding b =
-      match b with
-        | `Fun (f, lam, _zs, _location) ->
-            let o = o#bind_fun (Var.var_of_binder f) lam in
-              o#super_binding b
-        | `Rec defs ->
-            let o =
-              List.fold_right
-                (fun (f, lam, _zs, _location) o ->
-                   o#bind_fun (Var.var_of_binder f) lam)
-                defs
-                o
-            in
-              o#super_binding b
-        | _ -> super#binding b
-
-    method binder b =
-      let b, o = super#binder b in
-        b, o#bind_name b
-
-    method tail_computation =
-      fun e ->
-        match e with
-          | `Apply (f, [cont]) ->
-              let f = strip_poly f in
-                begin
-                  match f with
-                    | `Variable v when VEnv.lookup venv v = "pickleCont" ->
-                        (* an instance of [pickleCont(cont)] *)
-                        let f, v =
-                          match strip_poly cont with
-                          | `Variable f -> f, `Extend (StringMap.empty, None)
-                          | `Closure (f, v) -> f, v
-                          | v -> failwith ("don't know how to pickle this value on the client: "^ Ir.Show_value.show v) in
-
-                        (* hereafter [cont] is a variable, [`Variable f] *)
-
-                        let e, t, o = super#tail_computation e in
-                        let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
-                        let concat = `Variable (Env.String.lookup nenv "Concat") in
-
-                        let lam =
-                          let _tyvars, xsb, body = VEnv.lookup fun_env f in
-                            (List.map Var.var_of_binder xsb, body, None) in
-                        (* let fv = IntMap.find f closures in *)
-
-                        let func = Value.marshal_value
-                          (`RecFunction([f, lam],
-                                        Value.empty_env closures,
-                                        f, `Local)) in
-                        (* let fields = *)
-                        (*   IntSet.fold *)
-                        (*     (fun x fields -> *)
-                        (*        StringMap.add (string_of_int x) (`Variable x) fields) *)
-                        (*     fv *)
-                        (*     StringMap.empty *)
-                        (* in *)
-                        let json_args =
-                          `ApplyPure (stringifyB64, [v])
-                                      (* [`Extend (fields, None)]) *)
-                        in
-                          `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
-                    | _ -> super#tail_computation (`Apply (f, [cont]))
-              end
-          | _ -> super#tail_computation e
-  end
-
-  let bindings envs bindings =
-    let bindings, _ = (new visitor envs)#bindings bindings in
-      bindings
-
-  let program envs program =
-    let program, _, _ = (new visitor envs)#program program in
-      program
-end
-
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
@@ -837,7 +694,6 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
             (fun kappa -> apply_yielding (gv v, [kappa], kappa))
       | `Select (l, c) ->
          Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
-        (* TODO: JS generation for session types *)
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -1028,11 +884,6 @@ let wrap_with_server_stubs (code : code) : code =
                 funcs)
          (Lib.value_env) []) in
 
-(*     List.filter *)
-(*       (fun (name,_) ->  *)
-(*          Lib.primitive_location name = `Server) *)
-(*       (StringMap.to_alist !Lib.value_env)) in *)
-
   let rec some_vars = function
       0 -> []
     | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
@@ -1090,7 +941,6 @@ let initialise_envs (nenv, tyenv) =
 let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-    let program = FixPickles.program (closures, nenv, venv, tenv) program in
     let _, code = generate_program venv program in
     let code = wrap_with_server_stubs code in
     show code)
@@ -1103,6 +953,5 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) p
 
 let generate_program_defs (closures, nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
   let _, code = generate_defs venv bs in
     [show (code Nothing)]

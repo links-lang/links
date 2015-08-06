@@ -182,7 +182,7 @@ module Eval = struct
          failwith "Can't make client call outside web mode.";
        if not(Proc.singlethreaded()) then
          failwith "Remaining procs on server at client call!";
-(*        Debug.print("Making client call to " ^ name); *)
+       Debug.print("Making client call to " ^ name);
 (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
        let call_package = Utility.base64encode
                             (serialize_call_to_client (cont, name, args)) in
@@ -336,25 +336,6 @@ module Eval = struct
         | `Client ->
           `ClientFunction (Js.var_name_binder (f, finfo))
       end
-      (* begin *)
-      (* match lookup_var f env with *)
-      (* | `RecFunction (recs, locals, name, scope) -> *)
-      (*   let r = value env v in *)
-      (*   let recs, locals = *)
-      (*     List.fold_right *)
-      (*       (fun (name, (xs, body, z)) (recs, locals) -> *)
-      (*          match z with *)
-      (*          | None -> *)
-      (*            (\* already closed *\) *)
-      (*            assert false *)
-      (*          (\*                 (name, (xs, body, None)) :: recs, locals*\) *)
-      (*          | Some z -> *)
-      (*            (name, (xs, body, Some z)) :: recs, Value.bind z (r, `Local) locals) *)
-      (*       recs *)
-      (*       ([], locals) *)
-      (*   in *)
-      (*   `RecFunction (recs, locals, name, scope) *)
-      (* end *)
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Value.t =
@@ -366,29 +347,6 @@ module Eval = struct
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
       computation env cont body
-    | `RecFunction _, _ -> failwith "RecFunction deprecated"
-    (* | `RecFunction (recs, locals, n, scope), ps -> *)
-    (*     begin match lookup n recs with *)
-    (*       | Some (args, body, _z) -> *)
-    (*           (\* unfold recursive definitions once *\) *)
-
-    (*           (\* extend env with locals *\) *)
-    (*           let env = Value.shadow env ~by:locals in *)
-
-    (*           (\* extend env with recs *\) *)
-
-    (*           let env = *)
-    (*             List.fold_right *)
-    (*               (fun (name, _) env -> *)
-    (*                   Value.bind name *)
-    (*     		(`RecFunction (recs, locals, name, scope), scope) env) *)
-    (*                 recs env in *)
-
-    (*           (\* extend env with arguments *\) *)
-    (*           let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in *)
-    (*             computation env cont body *)
-    (*       | None -> eval_error "Error looking up recursive function definition" *)
-    (*     end *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
@@ -582,94 +540,39 @@ module Eval = struct
               let locals = Value.localise env var in
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
-                tail_computation env cont' tc
-          | `Fun ((f, _) as fb, (_, args, body), None, `Client) ->
-              let env' = Value.bind f (`ClientFunction
-                                         (Js.var_name_binder fb),
-                                       Var.scope_of_binder fb) env in
-                computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), zb, _) ->
+              tail_computation env cont' tc
+          (* function definitions are stored in the global fun map *)
+          | `Fun _ ->
             computation env cont (bs, tailcomp)
-              (* let scope = Var.scope_of_binder fb in *)
-              (* let locals = Value.localise env f in *)
-              (* let z = opt_map Var.var_of_binder zb in *)
-              (* let env' = *)
-              (*   Value.bind f *)
-              (*     (`RecFunction ([f, (List.map fst args, body, z)], *)
-              (*                    locals, f, scope), scope) env *)
-              (* in *)
-              (*   computation env' cont (bs, tailcomp) *)
-          | `Rec defs ->
+          | `Rec _ ->
             computation env cont (bs, tailcomp)
-              (* (\* partition the defs into client defs and non-client defs *\) *)
-              (* let client_defs, defs = *)
-              (*   List.partition (function *)
-              (*                     | (_fb, _lam, _zs, (`Client | `Native)) -> true *)
-              (*                     | _ -> false) defs in *)
-
-              (* let locals = *)
-              (*   match defs with *)
-              (*     | [] -> Value.empty_env (Value.get_closures env) *)
-              (*     | ((f, _), _, _, _)::_ -> Value.localise env f in *)
-
-              (* (\* add the client defs to the environments *\) *)
-              (* let env = *)
-              (*   List.fold_left *)
-              (*     (fun env ((f, _) as fb, _lam, zb, _location) -> *)
-              (*        (\* TODO: do we need to do something with zb here? *)
-              (*           Not while client functions are always *)
-              (*           top-level, in which case zb will always be *)
-              (*           None *\) *)
-              (*        let v = `ClientFunction (Js.var_name_binder fb), *)
-              (*                Var.scope_of_binder fb *)
-              (*        in Value.bind f v env) *)
-              (*     env client_defs in *)
-
-              (* (\* add the server defs to the environment *\) *)
-              (* let bindings = List.map (fun ((f,_), (_, args, body), zb, _) -> *)
-              (*                            f, (List.map fst args, body, opt_map Var.var_of_binder zb)) defs in *)
-              (* let env = *)
-              (*   List.fold_right *)
-              (*     (fun ((f, _) as fb, _, _zb, _) env -> *)
-              (*        let scope = Var.scope_of_binder fb in *)
-              (*          Value.bind f *)
-              (*            (`RecFunction (bindings, locals, f, scope), *)
-              (*             scope) *)
-              (*            env) defs env *)
-              (* in *)
-              (*   computation env cont (bs, tailcomp) *)
-          | `Alien _ -> (* just skip it *)
-              computation env cont (bs, tailcomp)
+          | `Alien _ ->
+            computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env cont : Ir.tail_computation -> Value.t = function
-    (* | `Return (`ApplyPure _ as v) -> *)
-    (*   let w = (value env v) in *)
-    (*     Debug.print ("ApplyPure"); *)
-    (*     Debug.print ("  value term: " ^ Show.show Ir.show_value v); *)
-    (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
-    (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
-    (*     apply_cont cont env w *)
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) ->
         apply cont env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont s
     | `Case (v, cases, default) ->
-        begin match value env v with
-           | `Variant (label, _) as v ->
-               (match StringMap.lookup label cases, default, v with
-                  | Some ((var,_), c), _, `Variant (_, v)
-                  | _, Some ((var,_), c), v ->
-                      computation (Value.bind var (v, `Local) env) cont c
-                  | None, _, #Value.t -> eval_error "Pattern matching failed"
-                  | _ -> assert false (* v not a variant *))
-           | _ -> eval_error "Case of non-variant"
-        end
+      begin match value env v with
+        | `Variant (label, _) as v ->
+          begin
+            match StringMap.lookup label cases, default, v with
+            | Some ((var,_), c), _, `Variant (_, v)
+            | _, Some ((var,_), c), v ->
+              computation (Value.bind var (v, `Local) env) cont c
+            | None, _, #Value.t -> eval_error "Pattern matching failed"
+            | _ -> assert false (* v not a variant *)
+          end
+        | _ -> eval_error "Case of non-variant"
+      end
     | `If (c,t,e)    ->
-        computation env cont
-          (match value env c with
-             | `Bool true     -> t
-             | `Bool false    -> e
-             | _              -> eval_error "Conditional was not a boolean")
+      computation env cont
+        (match value env c with
+         | `Bool true     -> t
+         | `Bool false    -> e
+         | _              -> eval_error "Conditional was not a boolean")
   and special env cont : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
@@ -811,6 +714,12 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
     here immediately. *)
 let apply_cont_toplevel cont env v =
   try Eval.apply_cont cont env v
+  with
+    | Eval.TopLevel s -> snd s
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                " while interpreting.")
+let apply_with_cont cont env (f, vs) =
+  try Eval.apply cont env (f, vs)
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^

@@ -85,14 +85,6 @@ let rec jsonize_value : Value.t -> string = function
                                               jsonize_value v) (Value.get_parameters env))
       ^ "}}"
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
-  | `RecFunction(defs, env, f, _scope) ->
-      "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
-      " \"location\":\"server\"," ^
-      " \"environment\": {" ^
-        String.concat "," (IntMap.to_list(fun k (v,_) ->
-                                            string_of_int k ^ ":" ^
-                                              jsonize_value v) (Value.get_parameters env))
-      ^ "}}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
   | `Record fields ->

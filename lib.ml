@@ -856,22 +856,24 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Should this function really return?
      I think not --ez*)
 
-  (** reifyK: I choose an obscure name, for an obscure function, until
-      a better one can be thought up. It just turns a continuation into its
-      string representation *)
-  "reifyK",
-  (p1 (function
-           `Continuation k ->
-             let s = marshal_continuation k in
-               box_string s
-         | _ -> failwith "argument to reifyK was not a continuation"
-      ),
-   datatype "((a) -> b) ~> String",
-  IMPURE);
-  (* arg type should actually be limited
-     to continuations, but we don't have
-     any way of specifying that in the
-     type system. *)
+  (* REDUNDANT *)
+
+  (* (\** reifyK: I choose an obscure name, for an obscure function, until *)
+  (*     a better one can be thought up. It just turns a continuation into its *)
+  (*     string representation *\) *)
+  (* "reifyK", *)
+  (* (p1 (function *)
+  (*          `Continuation k -> *)
+  (*            let s = marshal_continuation k in *)
+  (*              box_string s *)
+  (*        | _ -> failwith "argument to reifyK was not a continuation" *)
+  (*     ), *)
+  (*  datatype "((a) -> b) ~> String", *)
+  (* IMPURE); *)
+  (* (\* arg type should actually be limited *)
+  (*    to continuations, but we don't have *)
+  (*    any way of specifying that in the *)
+  (*    type system. *\) *)
 
   "sleep",
   (p1 (fun _ ->
@@ -1183,16 +1185,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(() -> a) ~> String",
     IMPURE));
 
-  (* Serialize values to DB *)
-  ("pickle_value",
-   (`Server (p1 (fun v -> (box_string (marshal_value v)))),
-    datatype "(a) ~> String",
-    IMPURE));
+  (* REDUNDANT *)
 
-  ("unpickle_value",
-   (`Server (p1 (fun v -> assert false (*broken_unmarshal_value (unbox_string v)*))),
-    datatype "(String) ~> a",
-  IMPURE));
+  (* (\* Serialize values to DB *\) *)
+  (* ("pickle_value", *)
+  (*  (`Server (p1 (fun v -> (box_string (marshal_value v)))), *)
+  (*   datatype "(a) ~> String", *)
+  (*   IMPURE)); *)
+
+  (* ("unpickle_value", *)
+  (*  (`Server (p1 (fun v -> assert false (\*broken_unmarshal_value (unbox_string v)*\))), *)
+  (*   datatype "(String) ~> a", *)
+  (* IMPURE)); *)
 
   (* HACK *)
   ("unsafe_cast",
