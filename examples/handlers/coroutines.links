@@ -1,4 +1,21 @@
 # Coroutines in Links
 
-typename Prod(s,r) = [|Prod :((()) {}-> (Cons(s,r)) {}-> r)|];
-typename Cons(s,r) = [|Cons :((s) {}-> (Prod(s,r)) {}-> r)|];
+open handler queue(m) {
+     case Enqueue(p,k) -> fun(q) {
+                           k(())(q ++ [p])
+                          }
+     case Dequeue(_,k) -> fun(q) {
+			    k(hd(q))(tl(q))
+                          }
+     case Return(x)    -> fun(q) { x }			  
+}
+
+fun run(t) {
+    scheduler(fun() { t(()) })
+}
+
+handler scheduler(m) {
+      case Spawn(t,k) -> { do Enqueue(k); run(t) }
+      case Yield(_,k) -> { do Enqueue(k); var t = do Dequeue(); t(()) }
+      case Return(x)  -> x
+}

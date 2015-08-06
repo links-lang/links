@@ -580,6 +580,11 @@ class map =
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in `Funs _x
+      | `Handler (b, spec, hnlit) ->
+	 let b = o#binder b in
+	 let spec = o#handler_spec spec in
+	 let hnlit = o#handlerlit hnlit in
+	 `Handler (b, spec, hnlit)
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
@@ -1131,6 +1136,10 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
+      | `Handler (b, spec, hnlit) ->
+	 let o = o#binder b in
+	 let o = o#handler_spec spec in
+	 let o = o#handlerlit hnlit in o
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
@@ -1796,7 +1805,7 @@ class fold_map =
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
+          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))	       
       | `Funs _x ->
           let (o, _x) =
             o#list
@@ -1809,6 +1818,11 @@ class fold_map =
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (`Funs _x))
+      | `Handler (b, spec, hnlit) ->
+	 let (o, b) = o#binder b in
+	 let (o, spec) = o#handler_spec spec in
+	 let (o, hnlit) = o#handlerlit hnlit in
+	 (o, `Handler (b, spec, hnlit))
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in

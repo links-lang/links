@@ -27,7 +27,8 @@ let refine_bindings : binding list -> binding list =
       let group, groups =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
-           match binding with	   
+           match binding with
+	   | `Handler _
            | `Funs _ -> assert false
            | `Exp _
            | `Foreign _
@@ -257,6 +258,7 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
 	  match binding with
+    	    `Handler _ -> assert false		   
           | `Op _ 
           | `Funs _
           | `Fun _

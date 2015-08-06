@@ -2,6 +2,7 @@
 
 var src = "+ 1 1";
 var stream = explode(src);
+var tokenStream = [Plus, Int(1), Int(1)];
 
 fun readInt(s) {
     var i = takeWhile(isDigit, s);
@@ -28,5 +29,37 @@ var tokenizer = handler(m) {
 
 fun tokenize(src) {
     
+}
+
+open handler state(m) {
+  case Get(_,k)  -> fun(s) { k(s)(s) }
+  case Put(p,k)  -> fun(s) { k(())(p) }
+  case Return(x) -> fun(s) { x }
+}
+
+open handler parser(m) {
+    case Choose(_,k) -> {
+			  var r = fun(b) { parser(fun() {
+			     k(b)
+			  }) };
+			  switch (r(true)) {
+			  	 case Nothing -> r(false)
+				 case Just(x) -> Just(x)
+			  }
+                        }
+    case Fail(_,_)   -> Nothing
+    case Return(x)   -> Nothing
+}
+
+fun either(p, q) {
+    if (do Choose()) {
+      p
+    } else {
+      q
+    }
+}
+
+fun expr(stream) {
+    do Put(([], stream));
 }
 

@@ -708,7 +708,8 @@ class transform (env : Types.typing_environment) =
 
             (* put the outer bindings in the environment *)
             let o, defs = o#rec_activate_outer_bindings defs in
-              (o, (`Funs defs))
+            (o, (`Funs defs))
+	| `Handler _ -> assert false
       | `Foreign (f, language, t) ->
           let (o, f) = o#binder f in
             (o, `Foreign (f, language, t))

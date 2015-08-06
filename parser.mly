@@ -315,7 +315,8 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
-
+| handler_spec HANDLER var LPAREN pattern RPAREN handler_body  { let (d,dpos) = $3 in
+								 `Handler ((d,None,dpos), $1, ($5, $7)), pos() }
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }

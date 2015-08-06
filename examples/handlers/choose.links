@@ -2,7 +2,7 @@
 # Therefore, we model computations as thunks
 fun comp() {
   if (do Choose()) { # Picking true first branch
-    if (do Choose()) { 
+    if (do Choose()) {
       2
     } else {            
       4
