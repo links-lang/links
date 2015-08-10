@@ -12,11 +12,6 @@ fun stateful(x) {
     }
 }
 
-fun runState(s0, c) {
-    var f = stateful(c);
-    f(s0)
-}
-
 # k1 : (a1) -> r
 # k2 : (a2) -> r 
 
@@ -29,3 +24,41 @@ fun comp() {
 }
 
 # Example: runState(s0, comp), where s0 is the initial state.
+
+handler state(m) {
+     case Get(_,k)  -> fun(s) { k(s)(s) }
+     case Put(p,k)  -> fun(s) { k(())(p) }
+     case Return(x) -> fun(s) { x }
+}
+
+open handler openState(m) {
+     case Get(_,k)  -> fun(s) { k(s)(s) }
+     case Put(p,k)  -> fun(s) { k(())(p) }
+     case Return(x) -> fun(s) { x }
+}
+
+open handler putLogger(m) {
+     case Put(p,k)  ->  { do LogPut(p); do Put(p); k(()) }
+     case Return(x) -> x
+}
+
+open handler putLoggerR(m) {
+     case LogPut(x,k) -> { var s = k(());
+                           var xs = second(s);
+			   var p = first(s);
+			   (p, (x :: xs))
+                         }
+     case Return(x)    -> (x, [])			 
+}
+
+handler force(m) {
+	case Return(x) -> x
+}
+
+fun runState(s0, scomp) {
+    scomp(s0)
+}
+
+fun stateWithLog(m, s0) {
+   runState(s0, force(openState(putLoggerR((putLogger(m))))))
+}

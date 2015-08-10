@@ -288,7 +288,7 @@ var cheatLose = open handler(m) {
 
 # Alice cheats in a "checked cheating-ends-the-game"
 fun acEnd(n) {
-   play(fun(m) { aliceCheats(cheatEnd(check(m))) }, n)()
+   play(fun(m) { aliceCheats(cheatEnd(check(m))) }, n)
 }
 
 # Alice cheats in a "checked cheater-loses-the-game"
