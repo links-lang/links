@@ -6,8 +6,6 @@ open List
 open Performance
 open Utility
 
-type query_params = (string * Value.t) list deriving (Show)
-
 type web_request =
   | ServerCont of
       Value.t                (* thunk *)
@@ -22,8 +20,6 @@ type web_request =
       Ir.binding list *
       Ir.program
       deriving (Show)
-
-type program = Ir.binding list * Ir.computation * Value.continuation;;
 
 (** Does at least one of the functions have to run on the client? *)
 let is_client_program : Ir.program -> bool =
@@ -41,8 +37,6 @@ let is_client_program : Ir.program -> bool =
 
 let serialize_call_to_client (continuation, name, arg) =
   Json.jsonize_call continuation name arg
-
-let empty valenv = Value.empty_env (Value.get_closures valenv)
 
 let resolve_function f env = Evalir.eval_fun env f
 
@@ -89,15 +83,6 @@ let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   in
   RemoteCall(func, env, args)
 
-let decode_continuation envs program (cont : string) : Value.continuation =
-  let fixup_cont =
-  (* At some point, '+' gets replaced with ' ' in our base64-encoded
-     string.  Here we put it back as it was. *)
-    Str.global_replace (Str.regexp " ") "+"
-  in
-  let envs = Value.build_unmarshal_envs envs program in
-    Value.unmarshal_continuation envs (fixup_cont cont)
-
 (** Boolean tests for cgi parameters *)
 
 (** remote client->server call *)
@@ -115,19 +100,24 @@ let is_server_cont args =
   mem_assoc "_k" args
 
 (** Extract continuation thunk from the CGI parameter _k *)
-let parse_server_cont (valenv, nenv, tyenv) program params =
-  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
-  ServerCont (Value.unmarshal_value unmarshal_envs (assoc "_k" params))
+let parse_server_cont (valenv, _, _) program params =
+  ServerCont (Value.unmarshal_value valenv (assoc "_k" params))
 
-let parse_client_return envs program cgi_args =
-  (* Debug.print("parsing client return"); *)
-  let continuation =
-    decode_continuation envs program (assoc "__continuation" cgi_args) in
+let parse_client_return (valenv, _, _) program cgi_args =
+  let fixup_cont =
+    (* At some point, '+' gets replaced with ' ' in our base64-encoded
+       string. Here we put it back as it was. *)
+    Str.global_replace (Str.regexp " ") "+"
+  in
+  let cont =
+    Value.unmarshal_continuation
+      valenv
+      (fixup_cont (assoc "__continuation" cgi_args))
+  in
   (* Debug.print("continuation: " ^ Value.Show_continuation.show continuation); *)
   let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
   (* Debug.print ("arg: "^Value.Show_t.show arg); *)
-  let (valenv, _, _) = envs in
-    ClientReturn(continuation, arg)
+    ClientReturn(cont, arg)
 
 let error_page_stylesheet =
   "<style>pre {border : 1px solid #c66; padding: 4px; background-color: #fee} code.typeError {display: block; padding:1em;}</style>"
@@ -168,7 +158,7 @@ let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
                           (bs, body) =
   let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
   let tail = Ir.var_appln nenv "renderPage" [`Variable x] in
-  let cont = fun env -> [(`Local, x, env, ([], tail))] in
+  let cont = fun env -> [(`Global, x, env, ([], tail))] in
     (bs @ [`Let (xb, ([], body))], tail), cont
 
 let perform_request cgi_args (valenv, nenv, tyenv) cont0 =
@@ -201,10 +191,9 @@ let perform_request cgi_args (valenv, nenv, tyenv) cont0 =
          if is_client_program (globals @ locals, main) then
            let program = (globals @ locals, main) in
            Debug.print "Running client program.";
-	   let closures = Value.get_closures valenv in
              lazy (Irtojs.generate_program_page
                      ~cgi_env:cgi_args
-                     (closures, Lib.nenv, Lib.typing_env)
+                     (Lib.nenv, Lib.typing_env)
                      program)
              <|measure_as|> "irtojs"
          else
@@ -234,7 +223,7 @@ let serve_request_program env (globals, (locals, main), render_cont) cgi_args =
 (* does the preprocessing to turn prelude+filename into a program *)
 (* result can be cached *)
 
-let make_program (_,nenv,tyenv) prelude filename =
+let make_program (_, nenv, tyenv) prelude filename =
   (* Warning: cache call nested inside another cache call *)
   let (nenv', tyenv'), (globals,(locals,main),t) =
     Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
@@ -277,43 +266,36 @@ let make_program (_,nenv,tyenv) prelude filename =
 
   (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
 
-  Ir.FunMap.bindings FunMap.fun_map (globals @ locals);
-
   let (locals,main), render_cont =
     wrap_with_render_page (nenv, tyenv) (locals,main) in
 
   let globals = prelude@globals in
 
-  (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
+  Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main));
 
-  let closures =
-    Ir.ClosureTable.program
-      (Var.varify_env (nenv, tyenv.Types.var_env))
-      Lib.primitive_vars
-      (globals @ locals, main)
-  in
-  let cont0 = render_cont (Value.empty_env closures) in
-  (closures, cont0, (nenv'', tyenv''), (globals, (locals, main)))
+  BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
+
+  let cont0 = render_cont Value.empty_env in
+  (cont0, (nenv'', tyenv''), (globals, (locals, main)))
 
 (* wrapper for ordinary uses of serve_request_program *)
-let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
+let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
 
   let cgi_args = get_cgi_args() in
   Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
   Lib.cgi_parameters := cgi_args;
 
   (* Compute cacheable stuff in one call *)
-  let (closures,cont0,(nenv,tyenv), (globals,(locals,main))) =
+  let (cont0,(nenv,tyenv), (globals,(locals,main))) =
     Loader.wpcache "program" (fun () ->
       make_program envs prelude filename
    )
   in
 
-  let valenv = Value.with_closures valenv closures in
   (* We can evaluate the definitions here because we know they are pure. *)
   let valenv = Evalir.run_defs valenv globals in
 
   Errors.display (lazy (serve_request_program
-			  (valenv,nenv,tyenv)
-			  (globals,(locals,main),cont0)
+			  (valenv, nenv, tyenv)
+			  (globals, (locals, main), cont0)
                           cgi_args))

@@ -938,7 +938,7 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
+let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
     let _, code = generate_program venv program in
@@ -951,7 +951,7 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) p
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
 
-let generate_program_defs (closures, nenv, tyenv) bs =
+let generate_program_defs (nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let _, code = generate_defs venv bs in
     [show (code Nothing)]

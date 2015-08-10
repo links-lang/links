@@ -313,7 +313,7 @@ struct
       | `XML xmlitem -> `XML xmlitem
       | `FunctionPtr (f, env) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        let (_finfo, (xs, body), _z, _location) as def = FunMap.find f in
+        let (_finfo, (xs, body), _z, _location) as def = Tables.find Tables.fun_defs f in
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
@@ -324,7 +324,7 @@ struct
     (val_env, Env.Int.bind exp_env (x, v))
 
   let lookup (val_env, exp_env) var =
-    match FunMap.lookup var with
+    match Tables.lookup Tables.fun_defs var with
     | Some (finfo, (xs, body), None, location) ->
       begin
         match Var.name_of_binder (var, finfo) with
@@ -341,7 +341,7 @@ struct
             match location with
             | `Server | `Unknown ->
               (* Debug.print ("looked up function: "^Var.Show_binder.show (var, finfo)); *)
-              `Closure ((xs, body), env_of_value_env (Value.empty_env (Value.get_closures val_env)))
+              `Closure ((xs, body), env_of_value_env Value.empty_env)
             | `Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
             | `Native ->
@@ -496,10 +496,10 @@ struct
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Closure (f, v) ->
-      let (_finfo, (xs, body), Some z, _location) = FunMap.find f in
+      let (_finfo, (xs, body), Some z, _location) = Tables.find Tables.fun_defs f in
       (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
-      let env' = bind (Value.empty_env (Value.get_closures (fst env)), Env.Int.empty) (z, value env v) in
+      let env' = bind (Value.empty_env, Env.Int.empty) (z, value env v) in
       `Closure ((xs, body), env')
       (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
       (* begin *)

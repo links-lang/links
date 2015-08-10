@@ -120,8 +120,8 @@ module Session = struct
       (unbox_port outp, unbox_port inp)
 end
 
-let lookup_fun = FunMap.lookup
-let find_fun = FunMap.find
+let lookup_fun = Tables.lookup Tables.fun_defs
+let find_fun = Tables.find Tables.fun_defs
 
 module Eval = struct
   open Ir
@@ -154,7 +154,7 @@ module Eval = struct
           (* TODO: perhaps we should actually use env here - and make
              sure we only call this function when it is sufficiently
              small *)
-          Some (`FunctionPtr (f, Value.empty_env (Value.get_closures env)))
+          Some (`FunctionPtr (f, Value.empty_env))
         | `Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
       end
@@ -331,7 +331,7 @@ module Eval = struct
         match location with
         | `Server | `Unknown ->
           let r = value env v in
-          let locals = Value.bind z (value env v, `Local) (Value.empty_env (Value.get_closures env)) in
+          let locals = Value.bind z (value env v, `Local) Value.empty_env in
           `FunctionPtr (f, locals)
         | `Client ->
           `ClientFunction (Js.var_name_binder (f, finfo))
@@ -536,7 +536,7 @@ module Eval = struct
     match bindings with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
-          | `Let ((var, _) as b, (_, tc)) ->
+        | `Let ((var, _) as b, (_, tc)) ->
               let locals = Value.localise env var in
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in

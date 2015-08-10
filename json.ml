@@ -75,7 +75,7 @@ let rec jsonize_value : Value.t -> string = function
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
   (* | `FunctionPtr _ -> assert false (\* should've been resolved when 1st parsed. *\) *)
   | `FunctionPtr (f, env) ->
-    let (_, _, _, location) = FunMap.find f in
+    let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
       "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
       " \"location\":\"" ^ location ^ "\"," ^

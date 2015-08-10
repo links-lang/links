@@ -172,32 +172,8 @@ sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
 
-type closures = Utility.intset Utility.intmap
-    deriving (Show)
-
-module ClosureTable :
-sig
-  type t = closures
-
-  val value : Types.datatype Env.Int.t -> Utility.IntSet.t ->  value -> t
-  val tail_computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> tail_computation -> t
-  val computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> computation -> t
-  val bindings : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding list -> t
-  val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
-end
-
 val var_appln : var Env.String.t -> Env.String.name -> value list ->
   tail_computation
 
-val funcmap : program -> (Var.var * binding) list
-
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   deriving (Show)
-
-module FunMap :
-sig
-  type t = (var, eval_fun_def) Hashtbl.t
-
-  val bindings : t -> binding list -> unit
-  val program : t -> program -> unit
-end
