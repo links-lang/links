@@ -13,9 +13,9 @@ type web_request =
   | ExprEval of Ir.tail_computation * Value.env
   | ClientReturn of Value.continuation * (* continuation *)
       Value.t                            (* argument *)
-  | RemoteCall of Value.t *            (* function *)
-      Value.env *                      (* closure environment *)
-      Value.t list                     (* argument *)
+  | RemoteCall of Value.t *              (* function *)
+      Value.env *                        (* closure environment *)
+      Value.t list                       (* argument *)
   | EvalMain
       deriving (Show)
 
@@ -104,29 +104,14 @@ let parse_remote_call (valenv, nenv, tyenv) (program:Ir.program) cgi_args =
   in
     RemoteCall(func, env, args)
 
-let make_unmarshal_envs (valenv, nenv, tyenv) program =
-  (* jcheney: is this closure table call necessary?
-     maybe can use closures from valenv instead.  *)
-  let closures =
-    Ir.ClosureTable.program
-      (Var.varify_env (nenv, tyenv.Types.var_env))
-      Lib.primitive_vars program
-  in
-  let valenv = Value.with_closures valenv closures in
-  let unmarshal_envs= Value.build_unmarshal_envs(valenv, nenv, tyenv) program in
-    closures, unmarshal_envs
-
 let decode_continuation envs program (cont : string) : Value.continuation =
   let fixup_cont =
   (* At some point, '+' gets replaced with ' ' in our base64-encoded
      string.  Here we put it back as it was. *)
     Str.global_replace (Str.regexp " ") "+"
   in
-  let _, envs = make_unmarshal_envs envs program in
+  let envs = Value.build_unmarshal_envs envs program in
     Value.unmarshal_continuation envs (fixup_cont cont)
-
-
-
 
 (** Boolean tests for cgi parameters *)
 
@@ -155,7 +140,7 @@ let parse_cont_apply (valenv, nenv, tyenv) program params =
   let pickled_continuation = assoc "_cont" params in
   let params = filter (not -<- is_cont_apply_param) params in
   let params = alistmap Value.box_string params in
-  let _, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv) program in
+  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv) program in
     (* TBD: create a debug setting for printing webif modes. *)
     ContApply(Value.unmarshal_continuation unmarshal_envs pickled_continuation,
               params)
@@ -167,7 +152,8 @@ let parse_expr_eval (valenv, nenv, tyenv) program params =
       (StringMap.from_alist [("1", `Constant (`String l));
                              ("2", `Constant (`String r))],
        None) in
-  let closures, unmarshal_envs = make_unmarshal_envs (valenv, nenv, tyenv)
+  let closures = Value.get_closures valenv in
+  let unmarshal_envs = Value.build_unmarshal_envs (valenv, nenv, tyenv)
     program in
     (* FIXME: "_k" is a misnomer; it should be "_expr" *)
     match Value.unmarshal_value unmarshal_envs (assoc "_k" params) with
@@ -294,14 +280,6 @@ let perform_request cgi_args (valenv, nenv, tyenv) (globals, locals, main) cont0
          if is_client_program (globals @ locals, main) then
            let program = (globals @ locals, main) in
              Debug.print "Running client program.";
-(* jcheney:redundant? *)
-(*
-             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-             let closures = lazy (
-	       Ir.ClosureTable.program tenv Lib.primitive_vars program
-	      ) <|measure_as|> "closures"
-	     in
-*)
 	   let closures = Value.get_closures valenv in
 	     lazy (
 	     Irtojs.generate_program_page
@@ -313,18 +291,10 @@ let perform_request cgi_args (valenv, nenv, tyenv) (globals, locals, main) cont0
            let program = locals, main in
              (* wrap_with_render_page (nenv, tyenv) (locals, main) in*)
              Debug.print "Running server program";
-(* jcheney: redundant? *)
-(*
-             let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-             let closures = Ir.ClosureTable.program tenv Lib.primitive_vars
-               (globals @ locals, main) in
-             let valenv = Value.with_closures valenv (closures) in
-*)
              let _env, v = Evalir.run_program valenv program in
                Value.string_of_value v)
 
-let serve_request_program env (globals, (locals, main), render_cont) cgi_args
-    =
+let serve_request_program env (globals, (locals, main), render_cont) cgi_args =
   try
     let request = parse_request env (globals@locals,main) cgi_args
     in
@@ -383,7 +353,6 @@ let make_program (_,nenv,tyenv) prelude filename =
   let cont0  = render_cont (Value.empty_env closures) in
 
   (closures,cont0,(nenv'', tyenv''), (globals, (locals, main)))
-;;
 
 (* wrapper for ordinary uses of serve_request_program *)
 let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
@@ -409,4 +378,3 @@ let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
 			  (valenv,nenv,tyenv)
 			  (globals,(locals,main),cont0)
                           cgi_args))
-;;
