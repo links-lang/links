@@ -152,20 +152,21 @@ let parse_request env (globals, (locals, main)) cgi_args  =
 
 (** In web mode, we wrap the continuation of the whole program in a
     call to renderPage. We also return the resulting continuation so
-    that we can use it elsewhere (i.e. in processing ExprEval).
+    that we can use it elsewhere (i.e. in processing ServerCont).
 *)
 let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
                           (bs, body) =
-  let xb, x = Var.fresh_var_of_type (Instantiate.alias "Page" [] tycon_env) in
-  let tail = Ir.var_appln nenv "renderPage" [`Variable x] in
-  let cont = fun env -> [(`Global, x, env, ([], tail))] in
+  let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
+  let render_page = Env.String.lookup nenv "renderPage" in
+  let tail = `Apply (`Variable render_page, [`Variable x]) in
+  let cont = [(`Global, x, Value.empty_env, ([], tail))] in
     (bs @ [`Let (xb, ([], body))], tail), cont
 
-let perform_request cgi_args (valenv, nenv, tyenv) cont0 =
+let perform_request cgi_args (valenv, nenv, tyenv) render_cont =
   function
     | ServerCont t ->
       Debug.print("Doing ServerCont");
-      let v = Evalir.apply_with_cont cont0 valenv (t, []) in
+      let v = Evalir.apply_with_cont render_cont valenv (t, []) in
       ("text/html",
        Value.string_of_value v)
     | ClientReturn(cont, arg) ->
@@ -247,36 +248,28 @@ let make_program (_, nenv, tyenv) prelude filename =
   let nenv'' = Env.String.extend nenv nenv' in
   let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
 
-  let module Show_IntEnv = Env.Int.Show_t(Deriving_Show.Show_string) in
-  let module Show_StringEnv = Env.String.Show_t(Deriving_Show.Show_int) in
+  (* let module Show_IntStringEnv = Env.Int.Show_t(Deriving_Show.Show_string) in *)
+  (* let module Show_StringIntEnv = Env.String.Show_t(Deriving_Show.Show_int) in *)
 
-  (* Debug.print ("nenv''" ^ Show_StringEnv.show nenv''); *)
+  (* Debug.print ("nenv''" ^ Show_StringIntEnv.show nenv''); *)
 
   let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
   let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
   (* Debug.print("gs0: "^Show_intset.show gs0); *)
-  let fenv0 = Closures.ClosureVars.bindings tenv0 gs0 globals in
-  (* Debug.print ("fenv0: " ^ Closures.Show_fenv.show fenv0); *)
-  let globals = Closures.ClosureConvert.bindings tenv0 gs0 fenv0 globals in
+  let globals = Closures.bindings tenv0 gs0 globals in
 
   let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
   let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
-  let fenv1 = Closures.ClosureVars.program tenv1 gs1 (locals, main) in
-  let (locals, main) = Closures.ClosureConvert.program tenv1 gs1 fenv1 (locals, main) in
+  let (locals, main) = Closures.program tenv1 gs1 (locals, main) in
 
   (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
 
-  let (locals,main), render_cont =
-    wrap_with_render_page (nenv, tyenv) (locals,main) in
-
+  let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
   let globals = prelude@globals in
-
   Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main));
 
   BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
-
-  let cont0 = render_cont Value.empty_env in
-  (cont0, (nenv'', tyenv''), (globals, (locals, main)))
+  (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
 
 (* wrapper for ordinary uses of serve_request_program *)
 let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
@@ -286,7 +279,7 @@ let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
   Lib.cgi_parameters := cgi_args;
 
   (* Compute cacheable stuff in one call *)
-  let (cont0,(nenv,tyenv), (globals,(locals,main))) =
+  let (render_cont, (nenv,tyenv), (globals,(locals,main))) =
     Loader.wpcache "program" (fun () ->
       make_program envs prelude filename
    )
@@ -297,5 +290,5 @@ let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
 
   Errors.display (lazy (serve_request_program
 			  (valenv, nenv, tyenv)
-			  (globals, (locals, main), cont0)
+			  (globals, (locals, main), render_cont)
                           cgi_args))

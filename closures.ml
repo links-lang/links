@@ -454,3 +454,15 @@ struct
     let e, _, _ = (new visitor tyenv globals fenv)#program e in
       e
 end
+
+let program tyenv globals program =
+  (* Debug.print ("Before closure conversion: " ^ Ir.Show_program.show program); *)
+  let fenv = ClosureVars.program tyenv globals program in
+  (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
+  let program = ClosureConvert.program tyenv globals fenv program in
+  (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
+  program
+
+let bindings tyenv globals bs =
+  let fenv = ClosureVars.bindings tyenv globals bs in
+  ClosureConvert.bindings tyenv globals fenv bs

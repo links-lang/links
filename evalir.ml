@@ -527,7 +527,7 @@ module Eval = struct
           Proc.finish_current();
           switch_context env
         | (scope, var, locals, comp)::cont ->
-            let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
+          let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
               computation env cont comp
     in
       scheduler env (cont, v) stepf

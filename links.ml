@@ -52,16 +52,12 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     else program
   in
 
-  (* Debug.print ("Before closure conversion: " ^ Ir.Show_program.show program); *)
-  let fenv = Closures.ClosureVars.program tenv Lib.primitive_vars program in
-  (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
-  let program = Closures.ClosureConvert.program tenv Lib.primitive_vars fenv program in
-  (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
-
+  let program = Closures.program tenv Lib.primitive_vars program in
   BuildTables.program tenv Lib.primitive_vars program;
+
   let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
-    lazy (printer t v) <|measure_as|> "print";
-    valenv, v
+  lazy (printer t v) <|measure_as|> "print";
+  valenv, v
 
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
@@ -338,11 +334,10 @@ let load_prelude () =
 
   let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
 
-  let fenv = Closures.ClosureVars.bindings tenv Lib.primitive_vars globals in
-  let globals = Closures.ClosureConvert.bindings tenv Lib.primitive_vars fenv globals in
+  let globals = Closures.bindings tenv Lib.primitive_vars globals in
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
-
   BuildTables.bindings tenv Lib.primitive_vars globals;
+
   let valenv = Evalir.run_defs Value.empty_env globals in
   let envs =
     (valenv,

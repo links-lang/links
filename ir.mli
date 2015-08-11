@@ -172,8 +172,5 @@ sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
 
-val var_appln : var Env.String.t -> Env.String.name -> value list ->
-  tail_computation
-
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   deriving (Show)

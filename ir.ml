@@ -854,9 +854,6 @@ struct
       p
 end
 
-let var_appln env name args =
-  (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
-
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   deriving (Show)
 
