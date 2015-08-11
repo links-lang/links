@@ -135,6 +135,17 @@ end
 (* end *)
 
 
+(* TODO:
+
+   Computing the cont_vars table can probably be speeded up.
+
+   Currently it can be quadratic because it can invoke FreeVars on the
+   same term multiple times.
+
+   One option would be to combine this computation with
+   Closures.ClosureVars, which already computes the free variables of
+   functions.
+*)
 (** Compute the closures in an IR expression
 
     This traversal computes the local free variables for each

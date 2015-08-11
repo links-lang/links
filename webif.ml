@@ -226,7 +226,7 @@ let serve_request_program env (globals, (locals, main), render_cont) cgi_args =
 
 let make_program (_, nenv, tyenv) prelude filename =
   (* Warning: cache call nested inside another cache call *)
-  let (nenv', tyenv'), (globals,(locals,main),t) =
+  let (nenv', tyenv'), (globals, (locals, main), t) =
     Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
   in
 
@@ -266,7 +266,7 @@ let make_program (_, nenv, tyenv) prelude filename =
 
   let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
   let globals = prelude@globals in
-  Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main));
+  (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
 
   BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
   (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
@@ -279,7 +279,7 @@ let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
   Lib.cgi_parameters := cgi_args;
 
   (* Compute cacheable stuff in one call *)
-  let (render_cont, (nenv,tyenv), (globals,(locals,main))) =
+  let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
     Loader.wpcache "program" (fun () ->
       make_program envs prelude filename
    )
