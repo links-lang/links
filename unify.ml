@@ -791,6 +791,9 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
                        confined to ordinary types inside presence
                        types; hence we never need recursive presence
                        types *)
+                    (* BUG: no it doesn't! In order to make this work,
+                       we need to substitute Present t' for every
+                       instance of var in t. *)
                     let t' = Types.fresh_type_variable subkind in
                     Unionfind.change point (`Body (`Present t'));
                     unify' rec_env (t', t)
