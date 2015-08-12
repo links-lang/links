@@ -15,7 +15,12 @@ fun run(t) {
 }
 
 handler scheduler(m) {
-      case Spawn(t,k) -> { do Enqueue(k); run(t) }
-      case Yield(_,k) -> { do Enqueue(k); var t = do Dequeue(); t(()) }
+      case Spawn(t,k) -> { var q = do Enqueue(k); scheduler(t) }
+      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue(); t(()) }
+      case Return(x)  -> x
+}
+
+handler test(m) {
+      case Op(t,k) -> test(t)
       case Return(x)  -> x
 }
