@@ -791,12 +791,13 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
                        confined to ordinary types inside presence
                        types; hence we never need recursive presence
                        types *)
-                    (* BUG: no it doesn't! In order to make this work,
-                       we need to substitute Present t' for every
-                       instance of var in t. *)
-                    let t' = Types.fresh_type_variable subkind in
-                    Unionfind.change point (`Body (`Present t'));
-                    unify' rec_env (t', t)
+                    let tv = Types.fresh_type_variable subkind in
+                    Unionfind.change point (`Body (`Present tv));
+                    unify' rec_env (tv, t)
+                    (* let [q] = Types.quantifiers_of_type_args [`Presence (`Var point)] in *)
+                    (* let t' = Instantiate.apply_type (Types.for_all ([q], t)) [`Presence (`Present tv)] in *)
+                    (* unify' rec_env (tv, t'); *)
+                    (* Unionfind.change point (`Body (`Present tv)) *)
                 end
               | `Body f' -> unify_presence' rec_env (f, f')
           end
