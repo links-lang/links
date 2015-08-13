@@ -749,9 +749,11 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
               | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qs ->
                   Unionfind.union lpoint rpoint
               | `Var (flexible_var, _, `Flexible), `Var (rigid_var, _, `Rigid)
-              | `Var (rigid_var, _, `Rigid), `Var (flexible_var, _, `Flexible)
                   when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
                   Unionfind.union lpoint rpoint
+              | `Var (rigid_var, _, `Rigid), `Var (flexible_var, _, `Flexible)
+                  when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
+                  Unionfind.union rpoint lpoint
               | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
                   if l <> r then
                     raise (Failure (`Msg ("Rigid presence variables "^
@@ -779,8 +781,24 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
                   raise (Failure (`Msg ("Couldn't unify the rigid presence variable "^
                                           string_of_int l ^" with the presence flag "^
                                           string_of_presence f)))
-              | `Var (var, _, `Flexible) ->
-                  Unionfind.change point (`Body f)
+              | `Var (var, subkind, `Flexible) ->
+                begin
+                  match f with
+                  | `Absent ->
+                    Unionfind.change point (`Body `Absent)
+                  | `Present t ->
+                    (* HACK: this ensures that any recursion is
+                       confined to ordinary types inside presence
+                       types; hence we never need recursive presence
+                       types *)
+                    let tv = Types.fresh_type_variable subkind in
+                    Unionfind.change point (`Body (`Present tv));
+                    unify' rec_env (tv, t)
+                    (* let [q] = Types.quantifiers_of_type_args [`Presence (`Var point)] in *)
+                    (* let t' = Instantiate.apply_type (Types.for_all ([q], t)) [`Presence (`Present tv)] in *)
+                    (* unify' rec_env (tv, t'); *)
+                    (* Unionfind.change point (`Body (`Present tv)) *)
+                end
               | `Body f' -> unify_presence' rec_env (f, f')
           end
       | _, _ ->

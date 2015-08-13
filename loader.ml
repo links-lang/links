@@ -12,11 +12,11 @@ type program = Ir.binding list * Ir.computation * Types.datatype
     environments and the fresh variable counters.
 *)
 let write_a filename x : unit =
-  let var_counters = (!Types.type_variable_counter, !Var.variable_counter) in
+  let counters = (!Utility.gensym_counter, !Types.type_variable_counter, !Var.variable_counter) in
     call_with_open_outfile filename ~binary:true
       (fun fh ->
          Marshal.to_channel fh
-           ((x, var_counters) : 'a * (int * int))
+           ((x, counters) : 'a * (int * int * int))
            [])
 
 let write_program filename envs program : unit = 
@@ -28,9 +28,10 @@ let write_program filename envs program : unit =
     environments and the fresh variable counters.
 *)
 let read_a filename : ('a) = 
-  let x, (tc, vc) =
+  let x, (gc, tc, vc) =
     call_with_open_infile filename ~binary:true Marshal.from_channel
   in
+    Utility.gensym_counter := gc;
     Types.type_variable_counter := tc;
     Var.variable_counter := vc;
     x
