@@ -1,3 +1,4 @@
+# N-Queens problem (handlers)
 fun safe(rows, row) {
     second(fold_left(fun(acc, r) {
       var i = first(acc);
@@ -6,47 +7,30 @@ fun safe(rows, row) {
     }, (1,true), rows))
 }
 
-fun queensPure(n) { 
+fun queensAbs(n) {
     fold_left(fun(rows, _) {
-        fold_left(fun(sols, rows) {
-           var newSol = for (row <- [1..n]) {
-    	 	if (safe(rows, row)) {
-		  [row :: rows]
-		} else {  
-		  []
-		}
-         };
-         sols ++ newSol
-        }, [], rows)
-    }, [[]], [1..n])
+        var row = do Choose([1..n]);
+        if (safe(rows, row)) {
+ 	  row :: rows
+	} else {  
+	  []
+	}       
+    }, [], [1..n])
 }
 
-fun queenAbs(n) {
-    fold_left(fun(rows, _) {
-        fold_left(fun(sols, rows) {
-           var row = do Choose([1..n]);
-    	   var newSol = if (safe(rows, row)) {
- 		  row :: rows
-		} else {  
-		  do Fail()
-		}
-         };
-         sols ++ newSol
-        }, [], rows)
-    }, [[]], [1..n])
-}
-
-handler maybe(m) {
-	case Fail(_,_) -> Nothing
-	case Return(x) -> Just(x)
-}
-
-open handler choice(m) {
+handler choice(m) {
      case Choose(xs,k) -> 
      {
-       fold_left(fun(acc, x) {
-          k(x)
-       }, (), xs);
+       var n = length(xs);
+       filter(fun(ys) { length(ys) == n },
+              fold_left(fun(acc, x) {
+       	         acc ++ k(x)
+              }, [], xs))
      }                      
-     case Return(x) -> x
+     case Return(x) -> [x]
+}
+
+fun b(n) {
+    var x = choice(fun() { queensAbs(n) });
+    ()
 }

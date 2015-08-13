@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#BENCHMARKS=("nim.links" "nimPure.links" "nimgPure.links" "statefulcounting.links" "statefulcountingPure.links" "stateWithLog.links" "stateWithLogPure.links")
+BENCHMARKS=("statefulcountingPure.links")
+NUM_SAMPLES=1
+PROG_OUTPUT_DIR='raw_output'
+CSV_DIR='csv'
+LINKS_CONFIG='measurement-config'
+LINKS="/home/dh/Projects/links-effect-handlers/links"
+
+i=0
+while [[ $i -lt $NUM_SAMPLES ]]; do
+    let i=i+1
+    for b in ${BENCHMARKS[@]}; do
+        output="./$PROG_OUTPUT_DIR/$b.dump"
+	echo "# Run $i --- $(date)"  >> $output
+	run="$LINKS --config=$LINKS_CONFIG $b" # >> $output
+	$run >> $output
+	echo "" >> $output
+    done
+done
+

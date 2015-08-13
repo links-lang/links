@@ -21,6 +21,6 @@ handler scheduler(m) {
 }
 
 handler test(m) {
-      case Op(t,k) -> test(t)
+      case Op(t,k)    -> test(t)
       case Return(x)  -> x
 }

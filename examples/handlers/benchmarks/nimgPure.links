@@ -1,0 +1,31 @@
+fun validMoves(n) {
+    filter(fun(m) { m <= n }, [1,2,3])
+}
+
+# More generic approach
+fun aliceTurn(n) {
+    if (n == 0) {
+       Winner(Bob)
+    } else {
+      var moves    = validMoves(n);
+      var subgames = map(fun(k) { bobTurn(n-k) }, moves);
+      Take(Alice, zip([1,2,3], subgames))
+  }
+}
+
+fun bobTurn(n) {
+    if (n == 0) {
+       Winner(Alice)
+    } else {
+      var moves = validMoves(n);
+      var subgames = map(fun(k) { aliceTurn(n-k) }, moves);
+      Take(Bob, zip([1,2,3], subgames))
+  }
+}
+
+fun b(n) {
+    var x = aliceTurn(n);
+    ()
+}
+
+b(20)

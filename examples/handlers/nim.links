@@ -193,8 +193,7 @@ fun range(a,b) {
 # make a move a part of the move tree
 fun reifyMove(player, n, k) {
     var moves = map(k, validMoves(n));
-    var interval = range(1,length(moves));
-    Take(player, zip(interval, moves))
+    Take(player, zip([1,2,3], moves))
 }
 
 # Complete move tree generator
