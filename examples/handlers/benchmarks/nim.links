@@ -32,7 +32,7 @@ fun validMoves(n) {
 # make a move a part of the move tree
 fun reifyMove(player, n, k) {
     var moves = map(k, validMoves(n));
-    Take(player, zip([1,2,3], moves))
+    Take(player, zip([1..length(moves)], moves))
 }
 
 # Complete move tree generator

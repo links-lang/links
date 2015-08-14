@@ -34,3 +34,5 @@ fun b(n) {
     var x = choice(fun() { queensAbs(n) });
     ()
 }
+
+b(8)

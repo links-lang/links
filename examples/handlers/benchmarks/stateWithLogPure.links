@@ -7,10 +7,6 @@ fun countPureLog(i, is) {
     }
 }
 
-fun runPureCount(n) {
-    countPure(n)
-}
-
 fun runPureCountLog(n) {
     first(countPureLog(n, []))
 }

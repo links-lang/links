@@ -34,7 +34,7 @@ fun bobTurn(n) {
 }
 
 fun b(n) {
-    var x = aliceTurn(x);
+    var x = aliceTurn(n);
     ()
 }
 

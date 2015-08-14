@@ -27,6 +27,12 @@ fun runStateWithLog(m, s0) {
    force(openState(putLoggerR((putLogger(m)))))(s0)
 }
 
+fun countAbs() {
+    var i = do Get();
+    if (i == 0) { i }
+    else { do Put(i - 1); countAbs() }
+}
+
 fun b(n) {
     var x = runStateWithLog(countAbs, n);
     ()

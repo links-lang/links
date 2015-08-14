@@ -9,7 +9,7 @@ fun aliceTurn(n) {
     } else {
       var moves    = validMoves(n);
       var subgames = map(fun(k) { bobTurn(n-k) }, moves);
-      Take(Alice, zip([1,2,3], subgames))
+      Take(Alice, zip([1..length(moves)], subgames))
   }
 }
 
@@ -19,7 +19,7 @@ fun bobTurn(n) {
     } else {
       var moves = validMoves(n);
       var subgames = map(fun(k) { aliceTurn(n-k) }, moves);
-      Take(Bob, zip([1,2,3], subgames))
+      Take(Bob, zip([1..length(moves)], subgames))
   }
 }
 

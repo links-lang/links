@@ -26,3 +26,5 @@ fun b(n) {
     var x = queensPure(n);
     ()
 }
+
+b(8)
