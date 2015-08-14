@@ -7,6 +7,11 @@ handler state(m) {
      case Return(x) -> fun(s) { x }
 }
 
+# State runner
+fun runState(m, s0) {
+    state(m)(s0)
+}
+
 # The transaction handler utilitises state API to maintain the transaction-state.
 open handler transaction(m) {
      case Commit(p,k) -> { do Put(p); k(p) }
@@ -14,10 +19,13 @@ open handler transaction(m) {
      case Return(x)   -> (do Get(), "Committed")
 }
 
-handler force(m) {
-     case Return(x) -> x
+# Returns whether the transaction was successful.
+open handler transBool(m) {
+     case Return((x,"Committed")) -> true
+     case Return((x,_))           -> false
 }
 
+# Some computation
 fun comp() {
     var s = do Get();
     # Some critical work
