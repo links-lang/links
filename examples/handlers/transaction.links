@@ -1,4 +1,4 @@
-# Transaction
+# Transaction example
 
 # Closed state handler
 handler state(m) {
