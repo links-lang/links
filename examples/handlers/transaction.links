@@ -1,0 +1,30 @@
+# Transaction
+
+# Closed state handler
+handler state(m) {
+     case Get(_,k)  -> fun(s) { k(s)(s)  }
+     case Put(p,k)  -> fun(s) { k(())(p) }
+     case Return(x) -> fun(s) { x }
+}
+
+# The transaction handler utilitises state API to maintain the transaction-state.
+open handler transaction(m) {
+     case Commit(p,k) -> { do Put(p); k(p) }
+     case Abort(p,k)  -> (do Get(), "Aborted: " ^^ p)
+     case Return(x)   -> (do Get(), "Committed")
+}
+
+handler force(m) {
+     case Return(x) -> x
+}
+
+fun comp() {
+    var s = do Get();
+    # Some critical work
+    # Check computation state
+    if (s == 2) {
+       do Abort("Unexpected state.")
+    } else {
+       do Commit(s+2)
+    }
+}
