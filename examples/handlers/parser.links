@@ -1,65 +1,91 @@
-# Handlers as parsers?
+# Stateful parser
 
-var src = "+ 1 1";
-var stream = explode(src);
-var tokenStream = [Plus, Int(1), Int(1)];
+typename PState = ([Char],[Char]);
 
-fun readInt(s) {
-    var i = takeWhile(isDigit, s);
-    (i,dropWhile(isDigit,s))
-}
-
-fun read(s) {
-    (hd(s),tl(s))
-}
-
-fun consumeWhitespace(s) {
-    ([],dropWhile(fun(x) { x == ' ' || x == '\n' || x == '\t' || x == '\r' }, s))
-}
-
-var tokenizer = handler(m) {
-    case Tokenize(p,k) -> fun(s) {
-    	 
-    }
-    
-    case Return(x) -> fun (s) {
-    	 x
-    }
-};
-
-fun tokenize(src) {
-    
-}
-
-open handler state(m) {
-  case Get(_,k)  -> fun(s) { k(s)(s) }
-  case Put(p,k)  -> fun(s) { k(())(p) }
-  case Return(x) -> fun(s) { x }
+handler state(m) {
+	case Get(_,k)  -> fun(s) { k(s)(s)  }
+	case Put(p,k)  -> fun(s) { k(())(p) }
+	case Return(x) -> fun(s) { x }
 }
 
 open handler parser(m) {
-    case Choose(_,k) -> {
-			  var r = fun(b) { parser(fun() {
-			     k(b)
-			  }) };
-			  switch (r(true)) {
-			  	 case Nothing -> r(false)
-				 case Just(x) -> Just(x)
-			  }
-                        }
-    case Fail(_,_)   -> Nothing
-    case Return(x)   -> Nothing
+	case Token(_,k) -> {
+	     var s = (do Get()) : PState;
+	     var stream = second(s);
+	     switch (stream) {
+	     	    case (x :: xs) -> { do Put((x :: first(s), xs)); k(x) }
+		    case [] -> Nothing
+	     }
+	}
+	case Choose(_,k) -> {
+	     var s = (do Get()) : PState;
+	     switch (k(true)) {
+	     	    case Nothing -> { do Put(s); k(false) }
+		    case Just(x) -> Just(x)
+	     }
+	}
+	case Fail(_,_)  -> Nothing
+	case Return(x)  -> {
+	     var s = (do Get()) : PState;
+	     var stream = second(s);
+	     switch(stream) {
+	        case []    -> Just(reverse(first(s)))
+		case other -> Nothing
+	     }
+	}
 }
 
-fun either(p, q) {
-    if (do Choose()) {
-      p
-    } else {
-      q
+fun parse(source) {
+    var inp = explode(source);
+    var s = ([], inp);
+    var r = state(parser(grammar))(s);  
+    switch (r) {
+       case Just(p) -> Just(implode(p))
+       case Nothing -> Nothing
     }
 }
 
-fun expr(stream) {
-    do Put(([], stream));
+fun empty() {
+    ()
+}
+
+fun token(t) {
+    fun() {
+        var c = do Token();
+	    if (t == c) {
+	      empty()
+	    } else {
+	      do Fail()
+	    }
+    }
+}
+
+fun either(p,q) {
+    fun() {
+    	   if (do Choose()) {
+	     p()
+	   } else {
+	     q()
+	   }
+    }
+}
+
+fun seq(p, q) {
+    fun() { p(); q() }
+}
+
+fun grammar() {
+   var a    = token('a');
+   var b    = token('b');
+   var apa  = seq(a, seq(grammar, a));
+   var bpb  = seq(b, seq(grammar, b));
+   var lang = either(apa,
+                either(bpb,
+                   either(a,
+		     either(b, empty)
+		   )
+		)
+	      );
+   lang()	      
 }
 
