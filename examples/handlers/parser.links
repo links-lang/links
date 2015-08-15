@@ -79,15 +79,14 @@ fun seq(p, q) {
 fun grammar() {
    var a    = token('a');
    var b    = token('b');
-   var apa  = seq(a, seq(grammar, a));
-   var bpb  = seq(b, seq(grammar, b));
-   var lang = either(apa,
-                either(bpb,
-                   either(a,
-		     either(b, empty)
+   var apa  = a `seq` (grammar `seq` a);
+   var bpb  = b `seq` (grammar `seq` b);
+   var lang = apa `either`
+                (bpb `either`
+                   (a `either`
+		     (b `either` empty)
 		   )
-		)
-	      );
+		);	      
    lang()	      
 }
 
