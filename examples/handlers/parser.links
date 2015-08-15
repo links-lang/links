@@ -8,6 +8,7 @@ handler state(m) {
 	case Return(x) -> fun(s) { x }
 }
 
+#sig parser : (() ~> ()) -> Maybe(String)
 open handler parser(m) {
 	case Token(_,k) -> {
 	     var s = (do Get()) : PState;
@@ -21,7 +22,7 @@ open handler parser(m) {
 	     var s = (do Get()) : PState;
 	     switch (k(true)) {
 	     	    case Nothing -> { do Put(s); k(false) }
-		    case Just(x) -> Just(x)
+		    case Just(x) -> Just(x) : Maybe([Char])
 	     }
 	}
 	case Fail(_,_)  -> Nothing
@@ -29,12 +30,13 @@ open handler parser(m) {
 	     var s = (do Get()) : PState;
 	     var stream = second(s);
 	     switch(stream) {
-	        case []    -> Just(reverse(first(s)))
+	        case []    -> Just(reverse(first(s))) : Maybe([Char])
 		case other -> Nothing
 	     }
 	}
 }
 
+sig parse : (String) ~> Maybe(String)
 fun parse(source) {
     var inp = explode(source);
     var s = ([], inp);
