@@ -784,7 +784,7 @@ module Eval = struct
 					    let pair = Value.box_pair p k in
 					    let env  = Value.bind var (pair, `Local) env in
 					    computation env cont hs comp
-             | None  when isclosed == true  -> eval_error "Pattern matching failed"
+             | None  when isclosed == true  -> eval_error "Pattern matching failed %s" label
 	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)
 	   end
 	| _ -> assert false (* This can never happen as all operations are variants. *)
@@ -798,7 +798,7 @@ module Eval = struct
     match StringMap.lookup "Return" h with
       Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
 			      computation env cont hs comp
-    | None -> eval_error "Pattern matching failed"      
+    | None -> eval_error "Pattern matching failed on Return"      
 
   let eval : Value.env -> program -> Value.t =
     fun env ->
