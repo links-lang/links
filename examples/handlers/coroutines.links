@@ -1,26 +1,42 @@
 # Coroutines in Links
 
-open handler queue(m) {
+typename Thread = forall r::Row . () ~r~> ();
+
+handler queue(m) {
      case Enqueue(p,k) -> fun(q) {
                            k(())(q ++ [p])
                           }
      case Dequeue(_,k) -> fun(q) {
 			    k(hd(q))(tl(q))
                           }
+     case Peek(_,k)    -> fun(q) {
+     	  	       	     k(q)(q)
+                          }
      case Return(x)    -> fun(q) { x }			  
 }
 
-fun run(t) {
-    scheduler(fun() { t(()) })
-}
-
-handler scheduler(m) {
-      case Spawn(t,k) -> { var q = do Enqueue(k); scheduler(t) }
-      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue(); t(()) }
-      case Return(x)  -> x
+open handler scheduler(m) {
+      case Spawn(t,k) -> { var q = do Enqueue(k); t() }
+      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue(); t() }
+      case Return(x)  -> x     
 }
 
 handler test(m) {
       case Op(t,k)    -> test(t)
       case Return(x)  -> x
+}
+
+fun comp() {
+    do Spawn(fun() {
+       fold_left(fun(_,_) { 
+       	   print("a");
+	   do Yield();
+	 }, (), [1..6])
+    });
+    do Spawn(fun() {
+       fold_left(fun(_,_) { 
+       	   print("b");
+	   do Yield();
+	 }, (), [1..6])                
+    })
 }
