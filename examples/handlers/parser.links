@@ -8,6 +8,10 @@ handler state(m) {
 	case Return(x) -> fun(s) { x }
 }
 
+fun runState(m, s0) {
+    state(m)(s0)
+}
+
 #sig parser : (() ~> ()) -> Maybe(String)
 open handler parser(m) {
 	case Token(_,k) -> {
@@ -40,8 +44,7 @@ sig parse : (String) ~> Maybe(String)
 fun parse(source) {
     var inp = explode(source);
     var s = ([], inp);
-    var r = state(parser(grammar))(s);  
-    switch (r) {
+    switch (runState(parser(grammar), s)) {
        case Just(p) -> Just(implode(p))
        case Nothing -> Nothing
     }
@@ -62,7 +65,8 @@ fun token(t) {
     }
 }
 
-fun either(p,q) {
+#fun either(p,q) {
+op p <|> q {
     fun() {
     	   if (do Choose()) {
 	     p()
@@ -72,21 +76,17 @@ fun either(p,q) {
     }
 }
 
-fun seq(p, q) {
+#fun seq(p, q) {
+op p <*> q {
     fun() { p(); q() }
 }
 
 fun grammar() {
    var a    = token('a');
    var b    = token('b');
-   var apa  = a `seq` (grammar `seq` a);
-   var bpb  = b `seq` (grammar `seq` b);
-   var lang = apa `either`
-                (bpb `either`
-                   (a `either`
-		     (b `either` empty)
-		   )
-		);	      
+   var apa  = a <*> grammar <*> a;
+   var bpb  = b <*> grammar <*> b;
+   var lang = apa <|> bpb <|> a <|> b <|> empty;                   
    lang()	      
 }
 
