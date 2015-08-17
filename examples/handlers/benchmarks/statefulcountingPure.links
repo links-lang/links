@@ -1,4 +1,4 @@
-# Micro benchmark: Stateful couting (pure)
+# Micro benchmark: Stateful counting (pure)
 fun countPure(i) {
     if (i == 0) {
       i
