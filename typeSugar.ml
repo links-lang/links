@@ -1754,47 +1754,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-	| `HandlerLit (_, spec, (p, cases)) -> let () = failwith "\`HandlerLit" in
-	     let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
-	     let unify_all_with body_type types
-	       = if List.length types > 0 then
-		   List.fold_left (fun _ t -> unify ~handle:Gripers.handle_continuations (no_pos body_type, no_pos t)) () types
-		 else
-		   ()
-	     in
-	     let m = tpo p in
-	     let cases, pattern_type, body_type = type_cases' cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)      
-	     let (mt,effects,operations_row,ret) =
-	       match pattern_type with
-		 `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
-			       if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
-				 let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
-				 let raw_operations  = HandlerUtils.extract_operations ops in
-				 if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
-				   let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
-				   Gripers.die pos msg
-				 else
-				   let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
-				   let ()         = unify_all_with body_type conttails in
-				   let operations = HandlerUtils.simplify_operations raw_operations in				 
-				   let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
-				   let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
-				   let () = unify ~handle:Gripers.handle_computation (no_pos (pattern_typ m), no_pos thunk_type) in (* Unify expression and handler type. *)				   
-				   (thunk_type,effects,operations_row,ret)			  
-			       else
-				 Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
-	       | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
-	       in
-	       let (body_type', effects') =
-		 match spec with
-		   `Closed -> (body_type, None)
-		 | `Open -> let operations_row = HandlerUtils.make_operation_row_polymorphic operations_row in
-	                    (*let () = unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row)) in*)
-			    (Types.make_thunk_type operations_row body_type, Some operations_row)
-		 | `Shallow -> failwith "Shallow handlers are not yet supported."
-	       in
-	       let ht = `Function ((Types.make_tuple_type [mt]), (Types.make_empty_open_row (`Unl, `Any)), body_type') in 
-	       (`HandlerLit (Some (effects, body_type, ht), spec, (erase m, erase_cases cases)), ht, usages_cases cases)
+	| `HandlerLit (_, spec, (p, cases)) -> assert false (* Should already be desugared at this stage *)
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
@@ -2628,7 +2588,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   in
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_cases' cases Gripers.handle_patterns Gripers.handle_branches     in  (* Type check cases. *)
-	   begin
+	   let (effects, operations_row) =
 	     match pattern_type with
 	       `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
 			     if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
@@ -2648,19 +2608,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				   | _ -> operations_row
 				 in
 				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
-				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify expression and handler type. *)
-				 (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
-         			 let () =
-				   if HandlerUtils.is_closed spec == false then
-				     let operation_row' = HandlerUtils.make_operation_row_polymorphic operations_row in
-				     unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operation_row'))
-				   else ()
-				 in
-				 `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
+				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
+				 (effects, operations_row)
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
-	     | _-> Gripers.die pos "Handler cases can only pattern match on operation types."
-	   end
+	     | _-> Gripers.die pos "Handler cases can only pattern match on operation names."
+	   in
+	   (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
+           let () =
+	     if HandlerUtils.is_closed spec == false then
+	       let operations_row = HandlerUtils.make_operation_row_polymorphic operations_row in
+	       unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row))
+	     else ()
+	   in
+	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
