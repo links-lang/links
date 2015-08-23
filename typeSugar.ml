@@ -2617,7 +2617,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
            let () =
 	     if HandlerUtils.is_closed spec == false then
-	       let operations_row = HandlerUtils.make_operation_row_polymorphic operations_row in
+	       let operations_row = HandlerUtils.make_operations_presence_polymorphic operations_row in
 	       unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row))
 	     else ()
 	   in

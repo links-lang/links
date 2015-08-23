@@ -172,15 +172,15 @@ let is_closed spec =
   | `Closed -> true
   | _ -> false
 
-let make_operation_row_polymorphic : Types.row -> Types.row
-  = fun (types,row_var,dual) ->
-  let types = StringMap.map
+let make_operations_presence_polymorphic : Types.row -> Types.row
+  = fun (signatures,row_var,dual) ->
+  let signatures = StringMap.map
 		(function
 		    `Present _ -> Types.fresh_presence_variable (`Unl, `Any)
 		  | _ -> assert false					
-		) types
+		) signatures
   in
-  (types,row_var,dual)
+  (signatures, row_var, dual)
 
 let allow_wild : Types.row -> Types.row
   = fun row ->

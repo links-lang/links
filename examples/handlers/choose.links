@@ -1,19 +1,13 @@
-# Links has call-by-value semantics.
-# Therefore, we model computations as thunks
-fun comp() {
-  if (do Choose()) { # Picking true first branch
-    if (do Choose()) {
-      2
-    } else {            
-      4
-    }
-  } else {            # Picking false first branch
-    if (do Choose()) {
-      8
-    } else {
-      16
-    }
-  }
+# Choice example.
+# links> enumerate(choice);
+
+# The choice computation
+fun choice() {
+  var x = if (do Choose()) { 2 }
+          else { 4 };
+  var y = if (do Choose()) { 8 }
+          else { 16 };
+  x + y	  
 }
 
 #

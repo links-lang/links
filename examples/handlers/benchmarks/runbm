@@ -1,7 +1,6 @@
 #!/bin/bash
 
 BENCHMARKS=("nim.links" "nimPure.links" "nimgPure.links" "statefulcounting.links" "statefulcountingPure.links" "stateWithLog.links" "stateWithLogPure.links")
-#BENCHMARKS=("statefulcountingPure.links")
 NUM_SAMPLES=10
 CSV_DIR='csv'
 LINKS_CONFIG='measurement-config'

@@ -45,8 +45,7 @@ open handler putLogger(m) {
 open handler putLoggerR(m) {
      case LogPut(x,k) -> { var s = k(());
                            var xs = second(s);
-			   var p = first(s);
-			   (p, (x :: xs))
+			   (first(s), (x :: xs))
                          }
      case Return(x)    -> (x, [])			 
 }
@@ -55,10 +54,10 @@ handler force(m) {
 	case Return(x) -> x
 }
 
-fun runState(s0, scomp) {
-    scomp(s0)
+fun runState(s0, m) {
+    force(openState(m))(s0)
 }
 
-fun stateWithLog(m, s0) {
-   runState(s0, force(openState(putLoggerR((putLogger(m))))))
+fun runStateWithLog(m, s0) {
+   runState(s0, putLoggerR((putLogger(m))))
 }

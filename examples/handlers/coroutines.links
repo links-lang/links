@@ -1,3 +1,4 @@
+# Currently, there is a bug in Links' effect system which prevents this example from running
 # Coroutines in Links
 
 typename Thread = forall r::Row . () ~r~> ();
@@ -16,9 +17,9 @@ handler queue(m) {
 }
 
 open handler scheduler(m) {
-      case Spawn(t,k) -> { var q = do Enqueue(k); t() }
-      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue(); t() }
-      case Return(x)  -> x     
+      case Spawn(t : Thread,k) -> { var q = do Enqueue(k); t() }
+      case Yield(_,k) -> { var q = do Enqueue(k : Thread); var t = do Dequeue() : Thread; t() }
+      case Return(x)  -> x
 }
 
 handler test(m) {

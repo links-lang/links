@@ -1,32 +1,42 @@
 # Stateful parser
+# links> parse(p, "abba");
 
+# A type alias for the parser state
 typename PState = ([Char],[Char]);
 
-handler state(m) {
+# The force handler
+handler force(m) {
+	case Return(x) -> x
+}
+
+# The open state handler
+open handler state(m) {
 	case Get(_,k)  -> fun(s) { k(s)(s)  }
 	case Put(p,k)  -> fun(s) { k(())(p) }
 	case Return(x) -> fun(s) { x }
 }
 
-fun runState(m, s0) {
-    state(m)(s0)
+# State runner
+fun runState(s0, m) {
+    force(state(m))(s0)
 }
 
+# The parser interpreter.
 #sig parser : (() ~> ()) -> Maybe(String)
-open handler parser(m) {
+open handler parserh(m) {
 	case Token(_,k) -> {
 	     var s = (do Get()) : PState;
 	     var stream = second(s);
 	     switch (stream) {
-	     	    case (x :: xs) -> { do Put((x :: first(s), xs)); k(x) }
-		    case [] -> Nothing
+	        case (x :: xs) -> { do Put((x :: first(s), xs)); k(x) }
+	        case [] -> Nothing : Maybe([Char])
 	     }
 	}
 	case Choose(_,k) -> {
 	     var s = (do Get()) : PState;
 	     switch (k(true)) {
-	     	    case Nothing -> { do Put(s); k(false) }
-		    case Just(x) -> Just(x) : Maybe([Char])
+	        case Nothing -> { do Put(s); k(false) }
+	        case Just(x) -> Just(x) : Maybe([Char])
 	     }
 	}
 	case Fail(_,_)  -> Nothing
@@ -35,26 +45,33 @@ open handler parser(m) {
 	     var stream = second(s);
 	     switch(stream) {
 	        case []    -> Just(reverse(first(s))) : Maybe([Char])
-		case other -> Nothing
+		case other -> Nothing : Maybe([Char])
 	     }
 	}
 }
 
-sig parse : (String) ~> Maybe(String)
-fun parse(source) {
+# Convenient function for running a parser.
+#sig parse : (String) ~> Maybe(String)
+fun parse(p, source) {
     var inp = explode(source);
     var s = ([], inp);
-    switch (runState(parser(grammar), s)) {
-       case Just(p) -> Just(implode(p))
-       case Nothing -> Nothing
-    }
+     switch (runState(s, parserh(p))) {
+        case Just(r) -> Just(implode(r)) : Maybe(String)
+        case Nothing -> Nothing : Maybe(String)
+     }
 }
 
+#
+# Parser combinators
+#
+
+# The empty string parser
 fun empty() {
     ()
 }
 
-fun token(t) {
+# A single character parser generator
+fun char(t) {
     fun() {
         var c = do Token();
 	    if (t == c) {
@@ -65,7 +82,7 @@ fun token(t) {
     }
 }
 
-#fun either(p,q) {
+# Choice parser generator
 op p <|> q {
     fun() {
     	   if (do Choose()) {
@@ -76,17 +93,17 @@ op p <|> q {
     }
 }
 
-#fun seq(p, q) {
+# Sequence parser generator
 op p <*> q {
     fun() { p(); q() }
 }
 
-fun grammar() {
-   var a    = token('a');
-   var b    = token('b');
-   var apa  = a <*> grammar <*> a;
-   var bpb  = b <*> grammar <*> b;
-   var lang = apa <|> bpb <|> a <|> b <|> empty;                   
-   lang()	      
+# A compound parser for the language Palindromes.
+fun p() {
+   var a   = char('a');
+   var b   = char('b');
+   var apa = a <*> p <*> a;
+   var bpb = b <*> p <*> b;
+   var p   = apa <|> bpb <|> a <|> b <|> empty;                   
+   p()	      
 }
-

@@ -1,9 +1,4 @@
-fun identity(x) {
-    handle(x) {
-    	      case Return(x) -> x
-    }
-}
-
-fun comp() {
-    42
+# The force handler; it applies the identity transformation to outputs.
+handler force(m) {
+  case Return(x) -> x
 }
