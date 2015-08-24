@@ -1020,7 +1020,6 @@ struct
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | `Include _ -> assert false
-                | `Op _ -> assert false (* Should never occur, transformSugar.ml transforms an operation declaration into a function definition. *)
             end
 
   and evalv env e =

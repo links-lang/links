@@ -390,9 +390,6 @@ object (self)
         let o, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
         self, `Foreign (bind, lang, dt')
-    | `Op (name, dt) ->
-       let dt = Desugar.datatype' map alias_env dt in
-       (self, `Op (name, dt))
     | b -> super#bindingnode b
 
   method sentence =

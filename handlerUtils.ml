@@ -7,6 +7,9 @@ type operation_raw       = RawOperation of string * Types.datatype * Types.datat
 			 (*| RawSpecial   of string * Types.datatype*)
 			 | RawFailure   of string
 
+type operation_raw' = string * (Types.datatype list) * Types.datatype (* name, args, continuation *)
+type operation' = string * Types.datatype
+
 let lookup_present_safe : string -> Types.field_spec_map -> Types.datatype option
   = fun name fields ->
   match StringMap.lookup name fields with
@@ -17,13 +20,6 @@ let get_operation_arg_type : string -> Types.field_spec_map -> Types.datatype op
   = fun index fields ->
   match lookup_present_safe index fields with
     Some p -> Some (TypeUtils.concrete_type p)
-    (*Some ((`MetaTypeVar point) as p) -> 
-    begin
-      match Unionfind.find point with
-        `Body p -> Some p
-      | _       -> Some p
-    end
-  | Some p -> Some p*)
   | _ -> None
 
 let get_operation : string -> Types.row -> operation option
@@ -61,13 +57,13 @@ let extract_operations : Types.row -> operation_raw list
 	let (Some k) = get_operation_arg_type "2" types in
 	match TypeUtils.concrete_type k with
 	  ((`Function _) as k) -> RawOperation (name, p, k) (* Is already normalised *)
-	| _ as inp_t -> (* Needs to be normalised: Construct new function type. *)
+	| _ as inp_t -> print_endline ("Got : " ^ (Types.string_of_datatype inp_t)); (* Needs to be normalised: Construct new function type. *)
 	   let out_t = Types.fresh_type_variable (`Unl, `Any) in
 	   let k     = Types.make_pure_function_type inp_t out_t in (* or inp_t instead of p? *)
 	   RawOperation (name, p, k)	 
 (*	| _ -> RawFailure ("expected last parameter in operation " ^ name ^ " to have a function type.") (* Continuation must be a function type. *)*)
       else
-	RawFailure ("Operation " ^ name ^ " accepts " ^ (string_of_int num_params) ^ " argument(s), but operations must 2 arguments.")
+	RawFailure ("Operation " ^ name ^ " accepts " ^ (string_of_int num_params) ^ " argument(s), but operations must accept 2 arguments.")
     | _ -> RawFailure (name ^ " is not an operation") (* The signature is not a valid operation signature *)
   in
   let fields = StringMap.filter (fun _ t -> match t with
@@ -79,6 +75,29 @@ let extract_operations : Types.row -> operation_raw list
   List.map (fun (name,t) -> match t with
 			   `Present p -> normalise_operation_signature name p
 			 | _          -> assert false (* cannot occur *)
+	   ) fields
+  
+
+let extract_operations' : Types.row -> operation_raw' list
+  = fun (fields,_,_) -> 
+  let extract_signatures (fields,_,_) =
+    let last_element = (string_of_int (StringMap.size fields)) in
+    let (k,fields) = StringMap.pop last_element fields in
+    let k = match k with
+	`Present k -> k
+      | _ -> assert false
+    in
+    let ps = StringMap.fold (fun _ t ps -> match t with
+					     `Present t -> (Types.concrete_type t) :: ps
+					   | _ -> assert false
+			    ) fields []
+    in
+    (ps,k)
+  in
+  let fields = StringMap.to_list (fun name t -> (name,t)) fields in
+  List.map (fun (name,t) -> match t with
+			      `Present p -> let (ps, k) = extract_signatures (TypeUtils.extract_row p) in (name, ps, k)
+			    | _          -> assert false (* this should never occur *)
 	   ) fields
   
 
@@ -108,6 +127,20 @@ let simplify_operations  : operation_raw list -> operation list
 				   let p  = Types.make_pure_function_type p r in
 				   (name, p)
     | RawFailure msg    -> failwith msg
+  in
+  List.map simplify_operation ops
+
+let simplify_operations'  : operation_raw' list -> operation' list
+  = fun ops ->
+  let simplify_operation : operation_raw' -> operation'
+    = fun (name, ps, k) ->
+    let r = match Types.concrete_type k with
+	`Function _ -> List.hd (TypeUtils.arg_types k)
+      | _ -> k
+    in
+    let ps = List.map (fun p -> Types.make_pure_function_type p r) ps in
+    let ps = Types.make_tuple_type ps in	      
+    (name,ps)
   in
   List.map simplify_operation ops
 
@@ -161,6 +194,14 @@ let extract_continuation_tails : operation_raw list -> Types.datatype list
 	     | _ -> assert false
 	   ) ops
 
+let extract_continuation_tails' : operation_raw' list -> Types.datatype list
+  = fun ops ->
+  List.map (function
+	     | (_, _, (`Function (_,_,t) as f)) -> t
+	     | (_, _, k) -> k
+	     | _ -> assert false
+	   ) ops
+
 let return_case = "Return"	   
 
 let handles_operation : Types.row -> string -> bool
@@ -172,18 +213,25 @@ let is_closed spec =
   | `Closed -> true
   | _ -> false
 
+let allow_wild : Types.row -> Types.row
+  = fun row ->
+  let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+  Types.extend_row fields row
+
 let make_operations_presence_polymorphic : Types.row -> Types.row
   = fun (signatures,row_var,dual) ->
+  let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" == 0) signatures in
+  let signatures = StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures in
   let signatures = StringMap.map
 		(function
 		    `Present _ -> Types.fresh_presence_variable (`Unl, `Any)
 		  | _ -> assert false					
 		) signatures
   in
-  (signatures, row_var, dual)
-
-let allow_wild : Types.row -> Types.row
-  = fun row ->
-  let fields = StringMap.add "wild" (Types.unit_type) StringMap.empty in
-  Types.extend_row fields row
+  let row = (signatures, row_var, dual) in
+  if has_wild then
+    let () = print_endline "Allowing wild" in
+    allow_wild row
+  else
+    row
   

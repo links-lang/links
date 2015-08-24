@@ -305,7 +305,6 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
-/*| opdecl SEMICOLON                                             { $1 }	   */
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -1219,6 +1218,3 @@ multi_args:
 arg_lists:
 | multi_args                                                { [$1] }
 | multi_args arg_lists                                      { $1 :: $2 }
-
-/*opdecl:
-| OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }*/

@@ -720,19 +720,6 @@ class transform (env : Types.typing_environment) =
             {< tycon_env=tycon_env >}, e
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
-      | `Op (name, ((_, Some dt) as dt')) as op ->
-(*	 let pos  = SourceCode.dummy_pos in
-	 let capitalised_name                   = String.capitalize name in (* Label name *)
-	 let lc_name                            = String.lowercase name in  (* Function name *)
-	 let binder   : Sugartypes.binder       = (lc_name, Some dt, pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
-	 let linearity: Sugartypes.declared_linearity = `Unl in
-	 let tyvars   : Sugartypes.tyvar list   = [] in
-	 let funbody                            = `DoOperation ((`Nil, pos), None), pos in (* Fix body *)
-	 let funlit   : Sugartypes.funlit       = ([[]], funbody) in
-	 let location : Sugartypes.location     = `Unknown in (* Possibly `Native ? *)
-	 let funop    : Sugartypes.bindingnode  = `Fun (binder, linearity, (tyvars, funlit), location, Some dt') in	 
-	 (o, funop)*)
-	 failwith "transformSugar.ml: Operation declaration support not yet implemented!"
 
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->

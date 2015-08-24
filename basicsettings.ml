@@ -37,7 +37,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links with session types", `System)
+Welcome to Links with effect handlers", `System)
 
 (* (* Alternative banner designs *)
 "  _     _ __    _ _  __  ___

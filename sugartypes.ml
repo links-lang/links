@@ -259,7 +259,6 @@ and bindingnode = [
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
-| `Op      of name * datatype' (* Effect operation *)							  
 | `Infix
 | `Exp     of phrase
 ]
@@ -446,7 +445,6 @@ struct
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
-    | `Op _  -> failwith "sugartypes.ml: Operation declaration is not yet supported"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (args, cases : handlerlit) : StringSet.t =

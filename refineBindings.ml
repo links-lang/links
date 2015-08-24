@@ -34,7 +34,6 @@ let refine_bindings : binding list -> binding list =
            | `Foreign _
            | `Include _
            | `Type _
-	   | `Op _
            | `Val _ ->
               (* collapse the group we're collecting, then start a
                      new empty group *)
@@ -258,8 +257,7 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
 	  match binding with
-    	    `Handler _ -> assert false		   
-          | `Op _ 
+    	    `Handler _ -> assert false (* Desugared at this point *)
           | `Funs _
           | `Fun _
           | `Foreign _
