@@ -1525,23 +1525,6 @@ let merge_usages (ms:usagemap list) : usagemap =
                                     | Some x, Some y -> Some (x + y)
                                     | Some x, None   -> Some x
                                     | None, Some y   -> Some y) m n) ms m
-let compat_usages (u::us) =
-  let same m n =
-    let mvs = List.map fst (StringMap.bindings m) in
-    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-                          mvs in
-    let f v resulting_usages =
-      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-        StringMap.add v (StringMap.find v m) resulting_usages
-      else
-        (* We need to treat anything appearing in this case as unlimited; '2' assures that no
-            matter whether the variable in question is used anywhere else or not, it must be
-            unlimited. *)
-        StringMap.add v 2 resulting_usages in
-    List.fold_right f vs StringMap.empty in
-  List.fold_right same us u
-
-let usages_cases bs = compat_usages (List.map (fun (_, (_, _, m)) -> m) bs)
 
 let uses_of v us =
   try
@@ -1549,21 +1532,30 @@ let uses_of v us =
   with
     _ -> 0
 
-let usage_compat (u::us) =
-  let same m n =
-    let mvs = List.map fst (StringMap.bindings m) in
-    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-                          mvs in
-    let f v resulting_usages =
-      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-        StringMap.add v (StringMap.find v m) resulting_usages
-      else
+let usage_compat =
+  function
+  | [] ->
+    (* HACK: for now we take the conservative choice of assuming that
+       no linear variables are used in empty cases. We could keep
+       track of all variables in scope so that we can treat them as
+       linear if possible. This would require a further map recording
+       all variables that have empty pattern matching 'sink'. *)
+    StringMap.empty
+  | (u::us) ->
+    let same m n =
+      let mvs = List.map fst (StringMap.bindings m) in
+      let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
+          mvs in
+      let f v resulting_usages =
+        if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
+          StringMap.add v (StringMap.find v m) resulting_usages
+        else
         (* We need to treat anything appearing in this case as unlimited; '2' assures that no
            matter whether the variable in question is used anywhere else or not, it must be
            unlimited. *)
-        StringMap.add v 2 resulting_usages in
-    List.fold_right f vs StringMap.empty in
-  List.fold_right same us u
+          StringMap.add v 2 resulting_usages in
+      List.fold_right f vs StringMap.empty in
+    List.fold_right same us u
 
 let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
@@ -3218,7 +3210,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let branches = List.map check_branch branches in
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
-       let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
+       let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
     | `Fuse ((c, _, cpos), (d, _, dpos)) ->
       let (_, tc, uc) = type_check context (`Var c, pos) in
