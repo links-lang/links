@@ -1,0 +1,4 @@
+# The force handler; it applies the identity transformation to outputs.
+handler force(m) {
+  case Return(x) -> x
+}

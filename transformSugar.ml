@@ -210,7 +210,8 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lin, lam) ->
+      | `FunLit (Some argss, lin, lam) as phrase ->
+	 (*let () = prerr_endline ("Expression: " ^ Show_phrasenode.show phrase) in*)
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
@@ -222,7 +223,12 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lin, lam), t)
+          (o, `FunLit (Some argss, lin, lam), t)
+      | `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->
+	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
+	 let (o, hnlit, ht) = o#handlerlit ht hnlit in
+	 let (o, effects) = o#row effects in
+         (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)
       | `Spawn (`Wait, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -408,7 +414,22 @@ class transform (env : Types.typing_environment) =
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
-            (o, `ConstructorLit (name, e, Some t), t)
+          (o, `ConstructorLit (name, e, Some t), t)
+      | `DoOperation (op, Some datatype) ->
+	 let (o, op, _) = o#phrase op in
+	 let (o, t) = o#datatype datatype in
+	 (o, `DoOperation (op, Some t), t)
+      | `Handle (expr, cases, Some (t, effects), spec) ->
+          let (o, expr, _) = o#phrase expr in
+          let (o, cases) =
+            listu o
+              (fun o (p, e) ->
+                 let (o, p) = o#pattern p in
+                 let (o, e, _) = o#phrase e in (o, (p, e)))
+              cases in
+          let (o, t) = o#datatype t in
+	  let (o, effects) = o#row effects in
+            (o, `Handle (expr, cases, Some (t,effects), spec), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -564,7 +585,40 @@ class transform (env : Types.typing_environment) =
         let o = o#with_effects inner_eff in
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
-          (o, (pss, e), t)
+        (o, (pss, e), t)
+
+    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
+      fun t (pat, cases) ->
+      let envs = o#backup_envs in
+      let (o, pat) = o#pattern pat in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#restore_envs envs in
+      (o, (pat, cases), t)
+      (*let envs = o#backup_envs in
+      let (o, pats) =
+	listu o
+	      (fun o ->
+	       listu o (fun o -> o#pattern)
+	      )
+	      pats
+      in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#with_effects inner_e in
+      let (o, e, t) = o#
+      let o = o#restore_envs envs in
+      (o, (pats, cases), t)*)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
       function
@@ -654,7 +708,8 @@ class transform (env : Types.typing_environment) =
 
             (* put the outer bindings in the environment *)
             let o, defs = o#rec_activate_outer_bindings defs in
-              (o, (`Funs defs))
+            (o, (`Funs defs))
+	| `Handler _ -> assert false
       | `Foreign (f, language, t) ->
           let (o, f) = o#binder f in
             (o, `Foreign (f, language, t))
@@ -665,6 +720,19 @@ class transform (env : Types.typing_environment) =
             {< tycon_env=tycon_env >}, e
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
+      | `Op (name, ((_, Some dt) as dt')) as op ->
+(*	 let pos  = SourceCode.dummy_pos in
+	 let capitalised_name                   = String.capitalize name in (* Label name *)
+	 let lc_name                            = String.lowercase name in  (* Function name *)
+	 let binder   : Sugartypes.binder       = (lc_name, Some dt, pos) in  (* Reminder: Ask Sam about type of binder, and the last component datatype in `Fun *)
+	 let linearity: Sugartypes.declared_linearity = `Unl in
+	 let tyvars   : Sugartypes.tyvar list   = [] in
+	 let funbody                            = `DoOperation ((`Nil, pos), None), pos in (* Fix body *)
+	 let funlit   : Sugartypes.funlit       = ([[]], funbody) in
+	 let location : Sugartypes.location     = `Unknown in (* Possibly `Native ? *)
+	 let funop    : Sugartypes.bindingnode  = `Fun (binder, linearity, (tyvars, funlit), location, Some dt') in	 
+	 (o, funop)*)
+	 failwith "transformSugar.ml: Operation declaration support not yet implemented!"
 
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
@@ -734,5 +802,5 @@ class transform (env : Types.typing_environment) =
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (cbind, left, right), t
+         o, `Comp (cbind, left, right), t    					  
   end

@@ -1,0 +1,263 @@
+# Nim game (https://en.wikipedia.org/wiki/Nim)
+# This example is adapted from Kammar et al. (2013) (https://github.com/slindley/effect-handlers)
+
+# A game begins with n sticks on the table. The game has two players: Alice and Bob.
+# Alice goes first. Alice takes between one and three sticks, then it is Bob's turn
+# and similary Bob takes between one and three sticks. They alternate turns until
+# there are no more sticks left. The player, who takes the last stick, wins.
+
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+fun indexOf(x, xs) {
+    var n = fold_left(fun(acc, y) {
+      switch (acc) {
+      	     case (n,Just(i)) -> (n,Just(i))
+	     case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+      }
+    }, (0,Nothing), xs);
+
+    second(n)
+}
+
+# Randomness, returns the next integer in some random sequence.
+fun nextInt() {
+    var r = random() *. 101.0;
+    floatToInt(r)
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+    if (a > b) { a }
+    else { b }
+}
+
+
+#
+# Actual game implementation
+#
+
+typename Player = [|Alice|Bob|];
+# data Player = Alice | Bob
+
+# We model the game as two mutual recursive functions (abstract computations)
+fun aliceTurn(n) {
+    if (n == 0) {
+       Bob : Player      # Bob wins
+    } else { 
+      var take = do Move((Alice : Player,n)); # Make move
+      var n = n - take;                       # Update no. sticks
+      bobTurn(n)                              # Bob's turn
+    }
+}
+
+fun bobTurn(n) {
+    if (n == 0) {
+       Alice : Player
+    } else {
+      var take = do Move((Bob : Player,n));
+      var n = n - take;
+      aliceTurn(n)
+    }
+}
+
+# Convenient "driver" function. Takes a handler as its first argument and the number of sticks as its second.
+fun play(h, n) {
+    h(fun() {
+    	    aliceTurn(n)
+    })
+}
+
+#
+# Strategies
+#
+
+# Naïve strategy: Pick just one stick.
+handler naive(m) {
+      case Move((_,n),k) -> k(1)
+      case Return(x) -> x
+}
+
+fun nn(n) {
+    play(naive,n)
+}
+
+# Perfect strategy.
+# Computes a perfect strategy given the remaining sticks.
+fun perfect(n, k) {
+    k(maximum(mod(n,4),1))
+}
+
+# Perfect vs Perfect strategy
+handler pvp(m) {
+      case Move((_,n),k) -> perfect(n, k)
+      case Return(x)     -> x
+}
+
+# Play perfect vs. perfect strategy
+fun pp(n) {
+    play(pvp, n)
+}
+
+# Computes a list of valid moves given n sticks remaining
+fun validMoves(n) {
+    filter(fun(m) { m <= n }, [1,2,3])
+}
+
+# Brute force strategy: Enumerate all possible moves.
+# If one move leads to a win for player, then take it.
+# Otherwise just take 1 stick
+fun bruteForce(player, n, k) {
+    var winners = map(k, validMoves(n));
+    var hasPlayerWon = indexOf(player, winners);
+    switch (hasPlayerWon) {
+    	   case Nothing -> k(1)
+	   case Just(i) -> k(i+1)
+    }
+}
+
+handler bfvp(m) {
+     case Move((Alice,n),k) -> bruteForce(Alice,n,k)
+     case Move((Bob,n),k)   -> perfect(n,k)
+     case Return(x)         -> x
+}
+
+fun bp(n) {
+    play(bfvp, n)
+}
+
+# Mixed strategy: Pick 1-3 sticks at random.
+# If it is not a valid move then pick 1.
+fun mix(n,k) {
+  var r = mod(nextInt(), 3) + 1;
+  if (r > 1 && n >= r) {
+     k(r)
+  } else {
+     k(1)
+  }
+}
+
+handler mixed(m) {
+    case Move((_,n),k) -> mix(n,k)
+    case Return(x)     -> x			  
+}
+
+fun mm(n) {
+    play(mixed, n)
+}
+
+
+#
+# Game tree
+#
+
+typename GameTree = [|Take:(Player,[(Int,GameTree)])|Winner:Player|];
+# For Haskellers: data MoveTree = Take Player [(Int, MoveTree)] | Winner Player
+
+# make a move a part of the move tree
+sig reifyMove : forall a :: Row . (Player, Int, (Int) ~a~> GameTree) ~a~> GameTree
+fun reifyMove(player, n, k) {
+    var moves = map(k, validMoves(n));
+    var subgames = zip([1..length(moves)], moves);
+    Take(player, subgames)
+}
+
+# Complete move tree generator
+handler mtGen(m) {
+    case Move((player,n),k) -> reifyMove(player,n,k) : GameTree
+    case Return(x) -> Winner(x) : GameTree
+}
+
+sig mt : (Int) ~> GameTree
+fun mt(n) {
+    play(mtGen,n)
+}
+
+# links> mt(3)
+#  Take((Alice(), [(1, Take((Bob(), [(1, Take((Alice(), [(1, Winner(Alice()))]))),
+#                                    (2, Winner(Bob()))]))),
+#                  (2, Take((Bob(), [(1, Winner(Bob()))]))),
+#     		   (3, Winner(Alice()))]))
+# ( Type : mu a . [|Take:([|Alice|Bob|_|], [(Int, a)])|Winner:[|Alice|Bob|_|]|_|] )
+
+# Generate perfect strategy for Bob
+open handler favourBob(m) {
+    case Move((Alice,n),k) -> reifyMove(Alice,n,k)
+    case Move((Bob,n),k)   -> { var take = do Move(Bob,n);
+                                var tree = k(take);
+				Take(Bob,[(take,tree)])
+                              }
+    case Return(x)          -> Winner(x)			      
+}
+
+# Note: We reuse Perfect vs Perfect-handler. It only ever gets to handle Move(Bob,n)
+# even though it is defined for Move(Alice,n) aswell.
+fun mp(n) {
+    play(fun(m) { pvp(favourBob(m)) }, n)
+}
+
+# links> mp(3);
+#    Take((Alice(), [(1, Take((Bob(), [(2, Winner(Bob()))]))),
+#                    (2, Take((Bob(), [(1, Winner(Bob()))]))),
+#                    (3, Winner(Alice()))]))
+# ( Type : [|Take:([|Alice|Bob|a|], [(Int, mu b . [|Take:([|Alice|Bob|a|], [(Int, b)])|Winner:[|Alice|Bob|c|]|d|])])|Winner:[|Alice|Bob|c|]|d|] )
+
+#
+# Introduce cheating
+# 
+
+# Check whether a given player cheated
+#sig checkChoice : forall r :: Row,a . (Player, Int, (Int) ~r~> a) ~r~> a
+fun checkChoice(player : Player, n : Int, k) {
+    var take = do Move((player,n));
+    if (take < 1 || 3 < take) { # Cheater detected!
+       do Cheat(player,take) : Player
+    } else {                    # Otherwise OK
+      k(take)
+    }
+}
+
+open handler check(m) {
+    case Move((player,n),k) -> checkChoice(player,n,k)
+    case Return(x)          -> x
+}
+
+# Cheater's strategy: Take all the remaining sticks
+fun cheater(n,k) {
+    k(n)
+}
+
+handler aliceCheats(m) {
+    case Move((Alice,n),k) -> cheater(n,k)
+    case Move((Bob,n),k)   -> perfect(n,k)
+    case Return(x)         -> x
+}
+
+fun cp(n) {
+    play(aliceCheats, n)
+}
+
+# If somebody cheats then halt the game and report the cheater
+open handler cheatReport(m) {
+    case Cheat((Alice,n),k) -> error("Cheater Alice took " ^^ intToString(n) ^^ " sticks")
+    case Cheat((Bob,n),k)   -> error("Cheater Bob took " ^^ intToString(n) ^^ " sticks")
+    case Return(x)          -> x : Player
+}
+
+# If somebody cheats then the opponent wins immediately
+open handler cheatLose(m) {
+    case Cheat((Alice,n),k) -> Bob
+    case Cheat((Bob,n),k)   -> Alice
+    case Return(x)          -> x : Player
+}
+
+# A few cheater games
+
+# Alice cheats in a "checked cheating-ends-the-game"
+fun acEnd(n) {
+   play(fun(m) { aliceCheats(cheatReport(check(m))) }, n)
+}
+
+# Alice cheats in a "checked cheater-loses-the-game"
+fun acLose(n) {
+   play(fun(m) { aliceCheats(cheatLose(check(m))) }, n)
+}

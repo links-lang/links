@@ -1,6 +1,7 @@
 (** Process management *)
 type pid (* FIXME: don't reveal impl type of `pid' *) = int
-type proc_state = Value.continuation * Value.t
+(*type proc_state = Value.continuation * Value.t*)
+type proc_state = Value.continuation * Value.handlers * Value.t					 
 
 val debug_process_status : unit -> unit
 val singlethreaded : unit -> bool

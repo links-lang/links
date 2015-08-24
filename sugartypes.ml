@@ -183,6 +183,7 @@ and regex = [
 | `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
+and handlerlit = pattern * (pattern * phrase) list (* computation, cases *)	   
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -193,6 +194,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
+| `HandlerLit       of (Types.row * Types.datatype * Types.datatype) option * handler_spec * handlerlit (* optional (computation type, input effects, optional output effects), handler specialisation, handler literal *)
 | `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
@@ -217,6 +219,9 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
+| `DoOperation      of phrase * Types.datatype option
+(* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
+| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -250,13 +255,16 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
+| `Handler of binder * handler_spec * handlerlit
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
+| `Op      of name * datatype' (* Effect operation *)							  
 | `Infix
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
+and handler_spec = [ `Open | `Closed | `Shallow | `Pure ]
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -385,6 +393,7 @@ struct
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
     | `FunLit (_, _, fnlit) -> funlit fnlit
+    | `HandlerLit (_,_, hnlit) -> handlerlit hnlit				      
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -403,6 +412,7 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
+    | `Handle (p, cases, _, _)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp
@@ -416,10 +426,12 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
+    | `DoOperation (p, _) -> phrase p
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Handler ((name,_,_), _, hnlit) -> singleton name, (diff (handlerlit hnlit) (singleton name))
     | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs ->
         let names, rhss =
@@ -434,8 +446,11 @@ struct
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
+    | `Op _  -> failwith "sugartypes.ml: Operation declaration is not yet supported"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and handlerlit (args, cases : handlerlit) : StringSet.t =
+    diff (union_map case cases) (pattern args) 
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

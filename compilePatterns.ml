@@ -850,7 +850,116 @@ let compile_cases
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
 
+				 
+(* Handler cases compilation *)
+let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row * bool) -> bound_computation =
+  fun var clauses (output_type,effects,isclosed) env ->
+  let codegen pat v body =
+    let (nenv,tenv,eff,_) = env in
+    let_pattern (nenv,tenv,eff) pat v  (body env, output_type)
+  in
+  (* Construct a Handle by folding over the clauses *)
+  ([], `Special (`Handle (`Variable var,
+			  List.fold_left
+			    (fun cases ([(annotation, pattern)], body) ->
+			     match pattern with
+			     | `Variant ("Return", p) -> (* case Return(x) -> ... *)
+				begin
+				  match p with 
+				    `Variable b -> StringMap.add "Return" (b, body env) cases (* Add 'operation' Return to the environment *)
+				  | _ -> let (nenv,tenv,eff,_) = env in
+					 let (optype,_) = TypeUtils.split_row "Return" effects in
+					 let (yb,y) = Var.fresh_var_of_type optype in
+					 let comp = let_pattern (nenv,tenv,eff) p (`Variable y, optype) (body env, output_type) in
+					 StringMap.add "Return" (yb, comp) cases
+				end
+                             | `Variant (opname, (`Record (patterns,_) as r)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
+			        (* Straight forward hardcoding -- until I figure out what is going on here... *)
+				if StringMap.size patterns = 2 then
+				  (* Lookup the type of the computation *)
+				  let (optype,_) = TypeUtils.split_row opname effects in (* Retrieve the operation's type, i.e. the effect row from the computation type *) (* (TypeUtils.effect_row ty) *)
+				  let (yb, y) = Var.fresh_var_of_type optype in
+				  let (n,_) = yb in				  
+				  let computation =
+				    let Some p = StringMap.lookup "1" patterns in
+				    let pt = TypeUtils.project_type "1" optype in
+				    codegen p (`Project ("1", `Variable y), pt) body
+				  in				  
+				  let continuation_binder =
+				    let Some k = StringMap.lookup "2" patterns in
+				    let kt = TypeUtils.project_type "2" optype in
+				    match k with
+				      `Variable k  -> let k_tyvars = [] in				    
+						      [`Let (k, (k_tyvars, `Return (`Project ("2", `Variable y))))]
+				    | `Any         -> []
+				    | `As _ as p   -> let (bs,tc) = codegen k (`Project ("2", `Variable y), kt) body in
+						      bs (* We cannot just dump the tail computation, it needs to be glued with the other computation *)
+				    | `HasType _   -> failwith "It is not possible to type annotate the continuation."
+				    | _            -> failwith "Pattern-matching failure on continuation."
+				  in
+				  let computation = with_bindings continuation_binder computation  in
+				  StringMap.add opname (yb, computation) cases (* This overrides previous definitions when using multiple specialised pattern-matching on the same variant name *)
+				else failwith "Operations must take exactly two arguments." (* This can never occur as type-checking ensures that the operation labels are well-formed *)
+                             | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
+			    )
+			    StringMap.empty (* Fold seed *)
+			    clauses (* Structure we're folding over *)
+			 , isclosed)))
 
+let check_handler_pattern_matching : clause list -> bool =
+  fun clauses ->
+  List.fold_left
+    (fun isvalid ([(annotation, pattern)], body) ->
+     let is_case_ok =
+       match pattern with
+       `Variant ("Return", p) -> true (* case Return(x) -> ... *)
+       | `Variant (opname, (`Record (patterns,_) as r)) ->  (* case OpName(x1,..,xN,continuation) -> ... *)
+	  begin
+	    (* Check whether pattern matching on continuation is defined *)
+	    let last = string_of_int (StringMap.size patterns) in
+	    let Some k = StringMap.lookup last patterns in
+	    match k with
+	      `Variable _ 						  
+	    | `Any        
+	    | `As _        -> true 
+	    | `HasType _   -> failwith "It is not possible to type annotate the continuation."
+	    | _            -> failwith "Pattern-matching failure on continuation."
+	  end
+       | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
+     in
+     is_case_ok && isvalid)
+    true
+    clauses
+			    
+let compile_handle_cases : raw_env -> (Types.datatype * Types.row * bool * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, effects, isclosed, var, raw_clauses) ->
+    let clauses = List.map reduce_clause raw_clauses in
+    (*let initial_env = (nenv, tenv, eff, PEnv.empty) in*)
+    (*let result =
+      match_handle_cases var clauses (output_type,effects,isclosed) initial_env
+    in*)
+    let is_matching_ok = check_handler_pattern_matching clauses in
+    (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
+    (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
+     Afterwards we transform the  `Case to a `Handle construct. *)
+    let (bs,tc) =  (* The compiled cases *)
+      let t' = TEnv.lookup tenv var in (* Backup original type *)
+      let tenv = TEnv.bind tenv (var, `Variant effects) in (* Override the type with a variant type s.t. match_cases is happy *)
+      let initial_env = (nenv, tenv, eff, PEnv.empty) in   
+      let compiled_cases = match_cases [var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env in
+      let tenv = TEnv.bind tenv (var, t') in (* Restore original type (probably not necessary) *)
+      compiled_cases
+    in
+    let result =
+      match tc with
+	`Case (_, name_map, _) ->   ([], `Special (`Handle (`Variable var, name_map, isclosed)))
+      | _ -> assert false
+    in
+    (* END OF THE BIG HACK *)    
+      Debug.if_set (show_pattern_compilation)
+        (fun () -> "Compiled handler cases: "^(string_of_computation result));
+      result
+				  
 (* Session typing choice compilation *)
 let rec match_choices : var -> clause list -> bound_computation =
   fun var clauses env ->

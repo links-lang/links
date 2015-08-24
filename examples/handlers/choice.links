@@ -1,0 +1,60 @@
+fun enumerate(x) {
+    handle(x) {
+    	      case Choose(_,k)  -> k(true) ++ k(false)
+    	      case Return(x)    -> [x]
+    }
+}
+
+fun positive(x) {
+    handle(x) {
+    	      case Choose(_,k) -> k(true)
+	      case Return(x)   -> x
+    }
+}
+
+fun negative(x) {
+    handle(x) {
+    	      case Choose(_,k) -> k(false)
+	      case Return(x)   -> x
+    }
+}
+
+fun h1(x) {
+    handle(x) {
+        case Choose(p,k) -> k(true) ++ k(false)
+	case Fail(p,k)   -> []
+    	case Return(x)   -> [x]
+    }    
+}
+
+fun comp2() {
+    var x = if (do Choose()) { 0 } else { 1 };
+    do Fail
+}
+
+fun comp() {
+    var x = if (do Choose()) { 40 } else { 30 };
+    var y = if (do Choose()) {  2 } else {  5 };
+    x + y
+}
+
+# enumerate(comp) should yield [42, 45, 32, 35]
+
+# General enumeration
+#fun chooseAll(x) {
+#    handle(x) {
+#    	      case Choose((p,q),k) -> k(p) ++ k(q)
+#	      case Failure(_,_)    -> []
+#	      case Return(x)       -> [x]
+#    }
+#}
+
+#sig drunkToss : forall a, b . () {Choose:(a,a) {}-> a,Failure:(()) {}-> a | p} -> b
+#fun drunkToss() {
+#    var caught = do Choose(true,false); # Rank-2-polymorphism?
+#    if (caught) {
+#       do Choose(Heads,Tails)
+#    } else {
+#      do Failure()
+#    }
+#}

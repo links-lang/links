@@ -1,0 +1,39 @@
+# Pseudo-random number generator
+# Note this random number generator is terrible! The seed is serverTime()
+
+
+# Outputs the next number in the "random" sequence and the next seed.
+fun random(seed, lb, ub) {
+    var p = 2147483647; # Largest prime less than (2 ^ 32)
+    var j = mod(7 * seed, p);
+    var r = mod(j - 1, (ub - lb)) + lb;
+    (j, r)
+}
+
+# The random-effect handler is reminiscent of the state handler
+# We encapsulate the "random state" inside a function which is
+# passed around during the computation.
+var rand = handler(m) {
+    case Rand((lb,ub),k) -> fun(s) {
+                              var r = random(s, lb, ub);
+			      k(second(r))(first(r))
+                            }
+		      
+    case Return(x) -> fun(s) {
+                         x
+                      }
+};
+
+# Convenient driver function for random computations
+fun runRand(hrand, comp) {
+    var f = hrand(comp);
+    var seed = serverTime();
+    f(seed)
+}
+
+fun comp() {
+    var ns = replicate(10,());
+    for (i <- ns) {
+    	[do Rand(100,200)]
+    }
+}

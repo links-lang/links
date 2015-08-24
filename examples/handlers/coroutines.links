@@ -1,0 +1,43 @@
+# Currently, there is a bug in Links' effect system which prevents this example from running
+# Coroutines in Links
+
+typename Thread = forall r::Row . () ~r~> ();
+
+handler queue(m) {
+     case Enqueue(p,k) -> fun(q) {
+                           k(())(q ++ [p])
+                          }
+     case Dequeue(_,k) -> fun(q) {
+			    k(hd(q))(tl(q))
+                          }
+     case Peek(_,k)    -> fun(q) {
+     	  	       	     k(q)(q)
+                          }
+     case Return(x)    -> fun(q) { x }			  
+}
+
+open handler scheduler(m) {
+      case Spawn(t : Thread,k) -> { var q = do Enqueue(k); t() }
+      case Yield(_,k) -> { var q = do Enqueue(k : Thread); var t = do Dequeue() : Thread; t() }
+      case Return(x)  -> x
+}
+
+handler test(m) {
+      case Op(t,k)    -> test(t)
+      case Return(x)  -> x
+}
+
+fun comp() {
+    do Spawn(fun() {
+       fold_left(fun(_,_) { 
+       	   print("a");
+	   do Yield();
+	 }, (), [1..6])
+    });
+    do Spawn(fun() {
+       fold_left(fun(_,_) { 
+       	   print("b");
+	   do Yield();
+	 }, (), [1..6])                
+    })
+}

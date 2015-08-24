@@ -300,7 +300,8 @@ module SEnv = Env.String
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
   fun t tyargs ->
-(*    Debug.print ("t: " ^ Types.string_of_datatype t); *)
+  (*let () = print_endline ("t: " ^ Types.string_of_datatype t) in*)
+  (*let () = Debug.print ("t: " ^ Types.string_of_datatype t) in*)
     let t, vars =
       match concrete_type t with
         | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars

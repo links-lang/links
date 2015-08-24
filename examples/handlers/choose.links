@@ -1,0 +1,27 @@
+# Choice example.
+# links> enumerate(choice);
+
+# The choice computation
+fun choice() {
+  var x = if (do Choose()) { 2 }
+          else { 4 };
+  var y = if (do Choose()) { 8 }
+          else { 16 };
+  x + y	  
+}
+
+#
+# A few (closed) handlers
+#
+
+# The "positive" handler
+var positive = handler(m) {
+    case Choose(_,k) -> k(true)
+    case Return(x)   -> x
+};
+
+# The "I'll-take-everything" handler
+var enumerate = handler(m) {
+    case Choose(_,k) -> k(true) ++ k(false)
+    case Return(x)   -> [x]
+};

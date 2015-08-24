@@ -39,23 +39,23 @@ let unwrap_def ((f, Some ft, fpos), lin, (tyvars, lam), location, t) =
   let lam =
     let rec make_lam t : funlit -> funlit =
       function
-        | ([ps], body) as lam -> lam
-        | (ps::pss, body) ->
-            let g = gensym ~prefix:"_fun_" () in
-            let rt = TypeUtils.return_type t in
-              ([ps],
-               (`Block
-                  ([`Fun ((g, Some t, dp),
-                          lin,
-                          ([], make_lam rt (pss, body)),
-                          location,
-                          None), dp],
-                   ((`Var g), dp)), dp))
+      | ([ps], body) as lam -> lam
+      | (ps::pss, body) ->
+         let g = gensym ~prefix:"_fun_" () in
+         let rt = TypeUtils.return_type t in
+         ([ps],
+          (`Block
+            ([`Fun ((g, Some t, dp),
+                    lin,
+                    ([], make_lam rt (pss, body)),
+                    location,
+                    None), dp],
+             ((`Var g), dp)), dp))
     in
-      make_lam rt lam
+    make_lam rt lam
   in
     ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
-
+      
 (*
   unwrap a curried function definition
   with a position attached
@@ -80,11 +80,13 @@ object (o : 'self_type)
             argss
             rt in
         let f = gensym ~prefix:"_fun_" () in
+	let rett = Types.fresh_type_variable (`Unl, `Any) in
+	let (flpatterns, flphrase) = lam in
         let e =
-          `Block
-            ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), `Unknown, None)),
-              dp],
-             ((`Var f), dp))
+             `Block
+              ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), `Unknown, None)),
+		dp],
+               ((`Var f), dp))
         in
           (o, e, ft)
     | `Section (`Project name) ->

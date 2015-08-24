@@ -180,9 +180,10 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
     type t = out_channel
     let magic = "out_channel"
    end)
-
-(*jcheney: Added function component to PrimitiveFunction *)
-type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+ 
+type delim_continuation = frame list
+and frame = (Ir.scope * Ir.var * env * Ir.computation)
+and continuation = delim_continuation list							       
 and t = [
 | primitive_value
 | `List of t list
@@ -193,15 +194,30 @@ and t = [
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-| `Continuation of continuation
+| `Continuation of continuation * handlers
+| `UserContinuation of continuation * handlers
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * Ir.closures * (t * Ir.scope) Utility.intmap
 (* and env = (t * Ir.scope) Utility.intmap  * Ir.closures *)
 (* and env = (int * (t * Ir.scope)) list * Ir.closures  *)
-  deriving (Show)
+and handler  = (Ir.binder * Ir.computation) Ir.name_map * bool (* Collection of cases *)
+and handlers = handler list
+  deriving (Show)					    
+  
+let toplevel_cont : continuation  = [[]]
+let toplevel_hs   = []
 
-let toplevel_cont : continuation = []
+(** Continuation helpers **)
+let append_cont_frame frame cont =
+  match cont with
+    delim :: cont -> (frame :: delim) :: cont
+  | [] -> [[frame]]
+let make_cont_frame scope var env comp : frame = (scope, var, env, comp)
+let append_delim_cont delim cont =
+  match cont with
+    delim' :: cont -> (delim @ delim') :: cont
+  | [] -> assert false   
 
 (** {1 Environment stuff} *)
 (** {2 IntMap-based implementation with global memoization} *)
@@ -315,7 +331,8 @@ type compressed_primitive_value = [
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
-type compressed_continuation = (Ir.var * compressed_env) list
+type compressed_continuation = compressed_delim_continuation list
+and compressed_delim_continuation = (Ir.var * compressed_env) list
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -325,7 +342,8 @@ and compressed_t = [
 | `GlobalFunction of (Ir.var list * Ir.var)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Continuation of compressed_continuation ]
+| `Continuation of compressed_continuation
+]
 and compressed_env = (Ir.var * compressed_t) list
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
@@ -349,9 +367,14 @@ let localise env var =
 
 
 let rec compress_continuation (cont:continuation) : compressed_continuation =
-  List.map
+  let compress_frame (_scope, var, locals, _body) =
+    (var, compress_env locals)
+  in
+  let compress_delim delim = List.map compress_frame delim in
+  List.map compress_delim cont
+      (*List.map
     (fun (_scope, var, locals, _body) ->
-       (var, compress_env locals)) cont
+       (var, compress_env locals)) cont*)
 and compress_t (v : t) : compressed_t =
   let cv = compress_t in
     match v with
@@ -367,7 +390,7 @@ and compress_t (v : t) : compressed_t =
           `GlobalFunction (List.map (fun (f, _) -> f) defs, f)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
-      | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `Continuation (cont,_) -> `Continuation (compress_continuation cont) (* TODO: Compress handlers *)
       | `Socket (inc, outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -379,9 +402,8 @@ and compress_env env : compressed_env =
             (name, compress_t v)::compressed)
        env
        [])
-
-(* let string_of_value : t -> string = *)
-(*   fun v -> Show.show show_compressed_t (compress_t v) *)
+    (* let string_of_value : t -> string = *)
+    (*   fun v -> Show.show show_compressed_t (compress_t v) *)
 
 type unmarshal_envs =
     env * Ir.scope IntMap.t *
@@ -403,17 +425,25 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
         let driver, params = parse_db_string s in
         let database = db_connect driver params in
           `Database database
-
-let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont
-    : continuation =
-  List.map
+  
+let rec uncompress_continuation ((_globals, scopes, conts, _funs) as envs) cont : continuation = 
+  let uncompress_frame (var, env) =
+    let scope = IntMap.find var scopes in
+    let body = IntMap.find var conts in
+    let env = uncompress_env envs env in
+    let locals = localise env var in
+    (scope, var, locals, body)
+  in
+  let uncompress_delim delim = List.map uncompress_frame delim in
+  List.map uncompress_delim cont
+(*  List.map
     (fun (var, env) ->
        let scope = IntMap.find var scopes in
        let body = IntMap.find var conts in
        let env = uncompress_env envs env in
        let locals = localise env var in
          (scope, var, locals, body))
-    cont
+    cont*)
 and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t =
   let uv = uncompress_t envs in
     match v with
@@ -433,7 +463,7 @@ and uncompress_t ((globals, _scopes, _conts, funs) as envs:unmarshal_envs) v : t
                         `Global)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
-      | `Continuation cont -> `Continuation (uncompress_continuation envs cont)
+      | `Continuation cont -> `Continuation (uncompress_continuation envs cont, []) (* TODO: Uncompress handlers *)
 and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
   try
   List.fold_left
@@ -442,7 +472,7 @@ and uncompress_env ((globals, scopes, _conts, _funs) as envs) env : env =
     (empty_env (get_closures globals))
     env
   with NotFound str -> failwith("In uncompress_env: " ^ str)
-
+			       
 let build_unmarshal_envs ((valenv:env), nenv, tyenv) program
     : unmarshal_envs =
   let tyenv =
@@ -585,7 +615,8 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-  | `Continuation cont -> "Continuation" ^ string_of_cont cont
+  | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
+  | `UserContinuation (cont,hs) -> "\"Continuation\""
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -612,11 +643,11 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
 and string_of_cont : continuation -> string =
-  fun cont ->
-    let frame (_scope, var, _env, body) =
+  fun cont -> failwith "string_of_continuation not yet implemented!"
+(*    let frame (_scope, var, _env, body) =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
-      "[" ^ mapstrcat ", " frame cont ^ "]"
+    "[" ^ mapstrcat ", " frame cont ^ "]"*)
 
 
 (* let string_of_cont : continuation -> string = *)
@@ -702,13 +733,26 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   { save = marshal_save ; load = marshal_load };
 
   "Pickle",
+  { save = Pickle.to_string<compressed_continuation> ;
+    load = Pickle.from_string<compressed_continuation> };
+
+  "Dump",
+  { save = Dump.to_string<compressed_continuation> ;
+    load = Dump.from_string<compressed_continuation> }
+]
+											
+(*let continuation_serialisers : (string * compressed_continuation serialiser) list = [
+  "Marshal",
+  { save = marshal_save ; load = marshal_load };
+
+  "Pickle",
   { save = Pickle_compressed_continuation.to_string ;
     load = Pickle_compressed_continuation.from_string };
 
   "Dump",
   { save = Dump_compressed_continuation.to_string ;
     load = Dump_compressed_continuation.from_string }
-]
+]*)
 
 let value_serialisers : (string * compressed_t serialiser) list = [
   "Marshal",
@@ -760,10 +804,11 @@ let unmarshal_value envs : string -> t =
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)
 let expr_to_contframe env expr =
-  ((`Local        : Ir.scope),
+  make_cont_frame `Local Var.dummy_var env ([], expr)
+(*  ((`Local        : Ir.scope),
    (Var.dummy_var : Ir.var),
    (env           : env),
-   (([], expr)    : Ir.computation))
+   (([], expr)    : Ir.computation))*)
 
 let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
 and value_of_xmlitem =

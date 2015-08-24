@@ -273,7 +273,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "exit",
-  (`Continuation Value.toplevel_cont,
+  (`Continuation (Value.toplevel_cont, Value.toplevel_hs),
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.:
      if (test) exit(1) else 42 *)
@@ -326,9 +326,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          (* if Settings.get_value Basicsettings.web_mode then *)
          (*   failwith("Can't spawn at the server in web mode."); *)
          let var = Var.dummy_var in
-         let cont = (`Local, var, Value.empty_env IntMap.empty,
-                     ([], `Apply (`Variable var, []))) in
-         let new_pid = Proc.create_process false (cont::Value.toplevel_cont, f) in
+         let delim = [(`Local, var, Value.empty_env IntMap.empty,
+                     ([], `Apply (`Variable var, [])))] in
+	 let cont = Value.append_delim_cont delim Value.toplevel_cont in
+         let new_pid = Proc.create_process false (cont, Value.toplevel_hs, f) in (* TODO: Figure out whether it is correct to pass an empty handler stack *)
            (`Int (num_of_int new_pid))),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
@@ -338,9 +339,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          (* if Settings.get_value Basicsettings.web_mode then *)
          (*   failwith("Can't spawn at the server in web mode."); *)
          let var = Var.dummy_var in
-         let cont = (`Local, var, Value.empty_env IntMap.empty,
-                     ([], `Apply (`Variable var, []))) in
-         let new_pid = Proc.create_process true (cont::Value.toplevel_cont, f) in
+         let delim = [(`Local, var, Value.empty_env IntMap.empty,
+                     ([], `Apply (`Variable var, [])))] in
+	 let cont = Value.append_delim_cont delim Value.toplevel_cont in
+         let new_pid = Proc.create_process true (cont, Value.toplevel_hs, f) in (* TODO: Figure out whether it is correct to pass an empty handler stack *)
            (`Int (num_of_int new_pid))),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
@@ -861,7 +863,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       string representation *)
   "reifyK",
   (p1 (function
-           `Continuation k ->
+          `Continuation (k,hs) -> (* Todo: Marshal handlers *)
              let s = marshal_continuation k in
                box_string s
          | _ -> failwith "argument to reifyK was not a continuation"
@@ -876,9 +878,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "sleep",
   (p1 (fun _ ->
          (* FIXME: This isn't right : it freezes all threads *)
-         (*Unix.sleep (int_of_num (unbox_int duration));
+         (*Unix.usleep (int_of_num (unbox_int duration));
          `Record []*)
-         failwith "The sleep function is not implemented on the server yet"
+      failwith "The sleep function is not implemented on the server yet"
       ),
    datatype "(Int) ~> ()",
   IMPURE);

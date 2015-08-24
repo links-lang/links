@@ -175,8 +175,9 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD OPEN SHALLOW IMPURE HANDLER
 %token OFFER SELECT
+%token DOOP       
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -304,6 +305,7 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+/*| opdecl SEMICOLON                                             { $1 }	   */
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -313,7 +315,8 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
-
+| handler_spec HANDLER var LPAREN pattern RPAREN handler_body  { let (d,dpos) = $3 in
+								 `Handler ((d,None,dpos), $1, ($5, $7)), pos() }
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
@@ -438,7 +441,17 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| handler_spec HANDLER LPAREN pattern RPAREN handler_body      { `HandlerLit (None, $1, ($4, $6)), pos() }
 
+handler_spec:
+| /* empty */                                                  { `Closed }
+| OPEN                                                         { `Open }
+| SHALLOW                                                      { `Shallow }
+/*| IMPURE                                                       { `Impure }*/
+
+handler_body:	  
+| LBRACE cases RBRACE    	                               { $2 }
+  
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
@@ -503,7 +516,8 @@ postfix_expression:
                                                                          (`Block $5, pos ()), None), pos () }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
-| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
+| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }		     
+		     
 
 arg_spec:
 | LPAREN RPAREN                                                { [] }
@@ -519,6 +533,7 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
+| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -716,6 +731,8 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
+| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, `Closed), pos() }
+| FORWARD HANDLE LPAREN exp RPAREN LBRACE cases RBRACE         { `Handle ($4, $7, None, `Open), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -1202,3 +1219,6 @@ multi_args:
 arg_lists:
 | multi_args                                                { [$1] }
 | multi_args arg_lists                                      { $1 :: $2 }
+
+/*opdecl:
+| OP CONSTRUCTOR COLON datatype                             { `Op ($2, ($4, None)), pos () }*/

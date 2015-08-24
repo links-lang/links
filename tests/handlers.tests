@@ -1,0 +1,46 @@
+Identity handler
+{fun identity(m) { handle(m) { case Return(x) -> x } } identity(fun() { 42 }) }
+stdout : 42 : Int
+
+Listify handler (fortytwo)
+{fun listify(m) { handle(m) { case Return(x) -> [x] } } listify(fun() { 42 }) }
+stdout : [42] : [Int]
+
+Listify handler (list)
+{fun listify(m) { handle(m) { case Return(x) -> [x] } } listify(fun() { [42, 41, 40, 39] }) }
+stdout : [[42, 41, 40, 39]] : [[Int]]
+
+Maybe handler (Nothing)
+{fun maybe(m) { handle(m) { case Fail(_,_) -> Nothing case Return(x) -> Just(x) } } maybe(fun() { do Fail(); 42 }) }
+stdout : Nothing() : [|Just:Int|Nothing|_|]
+
+Maybe handler (Just(42))
+{fun maybe(m) { handle(m) { case Fail(_,_) -> Nothing case Return(x) -> Just(x) } } maybe(fun() { 42 }) }
+stdout : Just(42) : [|Just:Int|Nothing|_|]
+
+Recover handler
+{fun recover(m) { handle(m) { case Fail(_,k) -> k(()) case Return(x) -> x } } recover(fun() { var x = "Yikes!"; do Fail(); var x = "Phew! Thanks!"; x }) }
+stdout : "Phew! Thanks!" : String
+
+Choice handler
+{fun choice(m) { handle(m) { case Choose(_,k) -> k(true) ++ k(false) case Return(x) -> [x] } } choice(fun() { var x = if (do Choose()) { 40 } else { 20 }; var y = if (do Choose()) { 2 } else { -20 }; x + y }) }
+stdout : [42, 20, 22, 0] : [Int]
+
+Cannot map k
+{fun mapk(m) { handle(m) { case Map(p,k) -> map(k,p) case Return(x) -> [x] } } }
+stderr : @.
+exit : 1
+
+State handler
+{fun state(m) { handle(m) { case Get(p,k) -> fun(s) { k(s)(s) } case Put(p,k) -> fun(s) { k(())(p) } case Return(x) -> fun(s) { x } } } fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get(); do Put(s + 1); var s = do Get(); do Put(s + s); do Get() }) }
+stdout : 6 : Int
+
+Cannot discharge operation toplevel
+{ do Get() }
+stderr : @.
+exit : 1
+
+Cannot discharge Return
+{ fun() { do Return(1) } }
+stderr : @.
+exit : 1

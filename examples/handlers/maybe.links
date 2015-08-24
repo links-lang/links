@@ -1,0 +1,5 @@
+# The maybe handler
+open handler maybe(m) {
+     case Fail(_,_) -> Nothing
+     case Return(x) -> Just(x)
+}

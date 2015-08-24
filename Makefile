@@ -77,6 +77,7 @@ SOURCES = $(OPC)                                \
           parser.mly                            \
           lexer.mli lexer.mll                   \
           typeUtils.mli typeUtils.ml            \
+          handlerUtils.ml                       \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
@@ -105,6 +106,7 @@ SOURCES = $(OPC)                                \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
 	  desugarCP.mli desugarCP.ml                     \
+	  desugarHandlers.mli desugarHandlers.ml         \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \

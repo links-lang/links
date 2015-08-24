@@ -306,14 +306,18 @@ val unwrap_row : row -> (row * row_var option)
 val extract_tuple : row -> datatype list
 
 (** type constructors *)
-val make_tuple_type : datatype list -> datatype
-val make_list_type : datatype -> datatype
+val make_tuple_type   : datatype list -> datatype
+val make_list_type    : datatype -> datatype
 val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : datatype * datatype * datatype -> datatype
+val make_table_type   : datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
 
+val make_pure_function_type : datatype -> datatype -> datatype		   
+val make_function_type      : datatype -> row -> datatype -> datatype
+val make_thunk_type         : row -> datatype -> datatype
+			  
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
 val is_sub_row : row * row -> bool
@@ -344,3 +348,5 @@ val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 val string_of_tycon_spec : tycon_spec -> string
+
+					   

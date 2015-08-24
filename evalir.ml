@@ -121,7 +121,6 @@ module Session = struct
       (unbox_port outp, unbox_port inp)
 end
 
-
 module Eval = struct
   open Ir
 
@@ -156,11 +155,11 @@ module Eval = struct
      else Value.find var env
 
 
-   let serialize_call_to_client (continuation, name, arg) =
-     Json.jsonize_call continuation name arg
+   let serialize_call_to_client (continuation, handlers, name, arg) =
+     Json.jsonize_call continuation handlers name arg
 
-   let client_call : string -> Value.continuation -> Value.t list -> 'a =
-     fun name cont args ->
+   let client_call : string -> Value.continuation -> Value.handlers -> Value.t list -> 'a =
+     fun name cont hs args ->
        if not(Settings.get_value Basicsettings.web_mode) then
          failwith "Can't make client call outside web mode.";
        if not(Proc.singlethreaded()) then
@@ -168,7 +167,7 @@ module Eval = struct
 (*        Debug.print("Making client call to " ^ name); *)
 (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
        let call_package = Utility.base64encode
-                            (serialize_call_to_client (cont, name, args)) in
+                            (serialize_call_to_client (cont, hs, name, args)) in
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
 
@@ -186,10 +185,10 @@ module Eval = struct
   let rec switch_context env =
     assert (not (!atomic));
     match Proc.pop_ready_proc() with
-    | Some((cont, value), pid) when Proc.active_main() || Proc.active_angels() ->
+    | Some((cont, hs, value), pid) when Proc.active_main() || Proc.active_angels() ->
       begin
         Proc.activate pid;
-        apply_cont cont env value
+        apply_cont cont hs env value
       end
     | _ ->
       if not(Proc.singlethreaded()) then
@@ -298,14 +297,16 @@ module Eval = struct
           try (
             atomic := true;
             (* Debug.print ("Applying pure function"); *)
-            ignore (apply [] env (value env f, List.map (value env) args));
+	    let cont = Value.toplevel_cont in (* Empty continuation, i.e. [[]] *)
+	    let hs   = Value.toplevel_hs in (* Empty handler stack, i.e. [] *)
+            ignore (apply cont hs env (value env f, List.map (value env) args));
             failwith "boom"
           ) with
             | TopLevel (_, v) -> atomic := previousAtomic; v
         end
     | `Coerce (v, t) -> value env v
 
-  and apply cont env : Value.t * Value.t list -> Value.t =
+  and apply cont hs env : Value.t * Value.t list -> Value.t =
     function
     | `RecFunction (recs, locals, n, scope), ps ->
         begin match lookup n recs with
@@ -326,12 +327,12 @@ module Eval = struct
 
               (* extend env with arguments *)
               let env = List.fold_right2 (fun arg p -> Value.bind arg (p, `Local)) args ps env in
-                computation env cont body
+              computation env cont hs body
           | None -> eval_error "Error looking up recursive function definition"
         end
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_SendWrapper" cont [pid; msg]
+           client_call "_SendWrapper" cont hs [pid; msg]
         else
           let pid = Num.int_of_num (Value.unbox_int pid) in
             (try
@@ -341,17 +342,17 @@ module Eval = struct
                  Proc.UnknownProcessID pid ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
-            apply_cont cont env (`Record [])
+            apply_cont cont hs env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+           client_call "_spawnWrapper" cont hs [func]
         else
-          apply_cont cont env (Lib.apply_pfun "spawn" [func])
+          apply_cont cont hs env (Lib.apply_pfun "spawn" [func])
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+           client_call "_spawnWrapper" cont hs [func]
         else
-          apply_cont cont env (Lib.apply_pfun "spawnAngel" [func])
+          apply_cont cont hs env (Lib.apply_pfun "spawnAngel" [func])
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its
@@ -360,24 +361,25 @@ module Eval = struct
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_recvWrapper" cont []
+           client_call "_recvWrapper" cont hs []
         else
         begin match Proc.pop_message() with
             Some message ->
               Debug.print("delivered message.");
-              apply_cont cont env message
+              apply_cont cont hs env message
           | None ->
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
               in
-                (* the value passed to block_current is ignored, so can be anything *)
-                Proc.block_current (recv_frame::cont, `Record []);
-                switch_context env
+              (* the value passed to block_current is ignored, so can be anything *)
+	      let cont = Value.append_cont_frame recv_frame cont in
+              Proc.block_current (cont, hs, `Record []);
+              switch_context env
         end
     (* Session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
-        apply_cont cont env (`Int (Num.num_of_int apid))
+        apply_cont cont hs env (`Int (Num.num_of_int apid))
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Num.int_of_num (Value.unbox_int ap) in
       let (c, d), blocked = Session.accept apid in
@@ -390,11 +392,12 @@ module Eval = struct
                 (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
                                      (StringMap.add "2" (`Constant (`Int d'))
                                         StringMap.empty), None)))
-            in
-              Proc.block_current (accept_frame::cont, `Record []);
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              switch_context env
+          in
+	  let cont = Value.append_cont_frame accept_frame cont in
+          Proc.block_current (cont, hs, `Record []);
+          (* block my end of the channel *)
+          Session.block c (Proc.get_current_pid ());
+          switch_context env
         else
           begin
             begin
@@ -403,7 +406,7 @@ module Eval = struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env (Value.box_pair
+            apply_cont cont hs env (Value.box_pair
                                    (Value.box_int (Num.num_of_int c))
                                    (Value.box_int (Num.num_of_int d)))
           end
@@ -419,11 +422,12 @@ module Eval = struct
                 (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
                                      (StringMap.add "2" (`Constant (`Int d'))
                                         StringMap.empty), None)))
-            in
-              Proc.block_current (request_frame::cont, `Record []);
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              switch_context env
+          in
+	  let cont = Value.append_cont_frame request_frame cont in 
+          Proc.block_current (cont, hs, `Record []);
+          (* block my end of the channel *)
+          Session.block c (Proc.get_current_pid ());
+          switch_context env
         else
           begin
             begin
@@ -432,7 +436,7 @@ module Eval = struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env (Value.box_pair
+            apply_cont cont hs env (Value.box_pair
                                    (Value.box_int (Num.num_of_int c))
                                    (Value.box_int (Num.num_of_int d)))
           end
@@ -445,7 +449,7 @@ module Eval = struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env chan
+      apply_cont cont hs env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
@@ -454,16 +458,17 @@ module Eval = struct
           match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
-            apply_cont cont env (Value.box_pair v chan)
+            apply_cont cont hs env (Value.box_pair v chan)
           | None ->
             let grab_frame =
               Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
                                                                                 (StringMap.add "2" (`Constant (`Int in'))
                                                                                    StringMap.empty), None)])
             in
-              Proc.block_current (grab_frame::cont, `Record []);
-              Session.block inp (Proc.get_current_pid ());
-              switch_context env
+	    let cont = Value.append_cont_frame grab_frame cont in
+            Proc.block_current (cont, hs, `Record []);
+            Session.block inp (Proc.get_current_pid ());
+            switch_context env
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
@@ -479,20 +484,69 @@ module Eval = struct
         Session.fuse (out1, in1) (out2, in2);
         unblock out1;
         unblock out2;
-        apply cont env (value env end_bang, [])
+        apply cont hs env (value env end_bang, [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-	apply_cont cont env (Lib.apply_pfun n args)
+	apply_cont cont hs env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
-	apply_cont cont env (Lib.apply_pfun_by_code code args)
-    | `ClientFunction name, args -> client_call name cont args
-    | `Continuation c,      [p] -> apply_cont c env p
-    | `Continuation _,       _  ->
+	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
+    | `ClientFunction name, args   -> client_call name cont hs args
+    | `UserContinuation (cont', hs'), [p] -> apply_cont (cont' @ cont) (hs' @ hs) env p
+    | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
+    | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
-    | _                        -> eval_error "Application of non-function"
-  and apply_cont cont env v : Value.t =
+    | (v,vs)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
+  and apply_cont cont hs env v : Value.t =
     let stepf() =
-      match cont with
+      match cont, hs with
+      | [] :: conts, h :: hs ->
+	 invoke_return_clause conts hs env h v
+      | [], [] -> (* Note: [] :: [], [] ? *)
+	 begin
+	   match cont with
+           | [] when !atomic ->
+              raise (TopLevel (Value.globals env, v))
+           | [] when Proc.current_is_main() ->
+              if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+		raise (TopLevel (Value.globals env, v))
+              else
+		begin
+                  Debug.print ("Finished top level process (other processes still active)");
+                  Proc.suspend_current ([],[], v); (* TODO: Fix: gcont, hs, v *)
+                  switch_context env
+		end
+           | [] ->
+              Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+              Proc.finish_current();
+              switch_context env
+	 end
+(*	 if !atomic then
+           raise (TopLevel (Value.globals env, v))
+	 else if Proc.current_is_main() then
+           if not (Proc.active_angels() || Settings.get_value Basicsettings.wait_for_child_processes) || Proc.singlethreaded () then
+             raise (TopLevel (Value.globals env, v))
+           else
+             begin
+	       Debug.print ("Finished top level process (other processes still active)");
+	       toplevel_val := Some (Value.globals env, v);
+	       Proc.finish_current();
+	       switch_context env
+             end  
+	 else
+	   begin
+             Debug.print ("Finished process: " ^ string_of_int (Proc.get_current_pid()));
+             Proc.finish_current();
+             switch_context env
+	   end*)
+      | [] :: conts, [] -> apply_cont conts hs env v
+      | cont :: conts, _ ->
+	 let (scope, var, locals, comp) = List.hd cont in 
+         let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
+	 let conts = (List.tl cont) :: conts in
+         computation env conts hs comp
+      | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?")
+
+(*      match cont with
         | [] when !atomic ->
             raise (TopLevel (Value.globals env, v))
         | [] when Proc.current_is_main() ->
@@ -510,71 +564,70 @@ module Eval = struct
           switch_context env
         | (scope, var, locals, comp)::cont ->
             let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-              computation env cont comp
+              computation env cont comp*)
     in
-      scheduler env (cont, v) stepf
-
-  and computation env cont (bindings, tailcomp) : Value.t =
+    scheduler env (cont, hs, v) stepf  (* TODO: What about state in a multithreaded context? *)
+  and computation env cont hs (bindings, tailcomp) : Value.t =
     match bindings with
-      | [] -> tail_computation env cont tailcomp
+      | [] -> tail_computation env cont hs tailcomp
       | b::bs -> match b with
-          | `Let ((var, _) as b, (_, tc)) ->
-              let locals = Value.localise env var in
-              let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
-                           ::cont) : Value.continuation) in
-                tail_computation env cont' tc
-          | `Fun ((f, _) as fb, (_, args, body), `Client) ->
-              let env' = Value.bind f (`ClientFunction
-                                         (Js.var_name_binder fb),
-                                       Var.scope_of_binder fb) env in
-                computation env' cont (bs, tailcomp)
-          | `Fun ((f, _) as fb, (_, args, body), _) ->
-              let scope = Var.scope_of_binder fb in
-              let locals = Value.localise env f in
-              let env' =
-                Value.bind f
-                  (`RecFunction ([f, (List.map fst args, body)],
-                                 locals, f, scope), scope) env
-              in
-                computation env' cont (bs, tailcomp)
-          | `Rec defs ->
-              (* partition the defs into client defs and non-client defs *)
-              let client_defs, defs =
-                List.partition (function
-                                  | (_fb, _lam, (`Client | `Native)) -> true
-                                  | _ -> false) defs in
+		 | `Let ((var, _) as b, (_, tc)) ->
+		    let locals = Value.localise env var in	     
+		    let contf  = Value.make_cont_frame (Var.scope_of_binder b) var locals (bs, tailcomp) in
+		    let cont   = Value.append_cont_frame contf cont in
+                    tail_computation env cont hs tc
+		 | `Fun ((f, _) as fb, (_, args, body), `Client) ->
+		    let env' = Value.bind f (`ClientFunction
+                                              (Js.var_name_binder fb),
+					     Var.scope_of_binder fb) env in
+                    computation env' cont hs (bs, tailcomp)		    
+		 | `Fun ((f, _) as fb, (_, args, body), _) ->
+		    let scope = Var.scope_of_binder fb in
+		    let locals = Value.localise env f in
+		    let env' =
+                      Value.bind f
+				 (`RecFunction ([f, (List.map fst args, body)],
+						locals, f, scope), scope) env
+		    in
+                    computation env' cont hs (bs, tailcomp)
+		 | `Rec defs ->
+		    (* partition the defs into client defs and non-client defs *)
+		    let client_defs, defs =
+                      List.partition (function
+                                       | (_fb, _lam, (`Client | `Native)) -> true
+                                       | _ -> false) defs in
+		    
+		    let locals =
+                      match defs with
+                      | [] -> Value.empty_env (Value.get_closures env)
+                      | ((f, _), _, _)::_ -> Value.localise env f in
+		    
+		    (* add the client defs to the environments *)
+		    let env =
+                      List.fold_left
+			(fun env ((f, _) as fb, _lam, _location) ->
+			 let v = `ClientFunction (Js.var_name_binder fb),
+				 Var.scope_of_binder fb
+			 in Value.bind f v env)
+			env client_defs in
 
-              let locals =
-                match defs with
-                  | [] -> Value.empty_env (Value.get_closures env)
-                  | ((f, _), _, _)::_ -> Value.localise env f in
-
-              (* add the client defs to the environments *)
-              let env =
-                List.fold_left
-                  (fun env ((f, _) as fb, _lam, _location) ->
-                     let v = `ClientFunction (Js.var_name_binder fb),
-                             Var.scope_of_binder fb
-                     in Value.bind f v env)
-                  env client_defs in
-
-              (* add the server defs to the environment *)
-              let bindings = List.map (fun ((f,_), (_, args, body), _) ->
-                                         f, (List.map fst args, body)) defs in
-              let env =
-                List.fold_right
-                  (fun ((f, _) as fb, _, _) env ->
-                     let scope = Var.scope_of_binder fb in
-                       Value.bind f
-                         (`RecFunction (bindings, locals, f, scope),
-                          scope)
-                         env) defs env
-              in
-                computation env cont (bs, tailcomp)
-          | `Alien _ -> (* just skip it *)
-              computation env cont (bs, tailcomp)
-          | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env cont : Ir.tail_computation -> Value.t = function
+		    (* add the server defs to the environment *)
+		    let bindings = List.map (fun ((f,_), (_, args, body), _) ->
+                                             f, (List.map fst args, body)) defs in
+		    let env =
+                      List.fold_right
+			(fun ((f, _) as fb, _, _) env ->
+			 let scope = Var.scope_of_binder fb in
+			 Value.bind f
+				    (`RecFunction (bindings, locals, f, scope),
+				     scope)
+				    env) defs env
+		    in
+                    computation env cont hs (bs, tailcomp)
+		 | `Alien _ -> (* just skip it *)
+		    computation env cont hs (bs, tailcomp)
+		 | `Module _ -> failwith "Not implemented interpretation of modules yet"
+  and tail_computation env cont hs : Ir.tail_computation -> Value.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -582,37 +635,36 @@ module Eval = struct
     (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
     (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
     (*     apply_cont cont env w *)
-    | `Return v      -> apply_cont cont env (value env v)
-    | `Apply (f, ps) ->
-        apply cont env (value env f, List.map (value env) ps)
-    | `Special s     -> special env cont s
+    | `Return v      -> apply_cont cont hs env (value env v)
+    | `Apply (f, ps) -> apply cont hs env (value env f, List.map (value env) ps)
+    | `Special s     -> special env cont hs s
     | `Case (v, cases, default) ->
         begin match value env v with
            | `Variant (label, _) as v ->
                (match StringMap.lookup label cases, default, v with
                   | Some ((var,_), c), _, `Variant (_, v)
                   | _, Some ((var,_), c), v ->
-                      computation (Value.bind var (v, `Local) env) cont c
-                  | None, _, #Value.t -> eval_error "Pattern matching failed"
+                      computation (Value.bind var (v, `Local) env) cont hs c
+                  | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label 
                   | _ -> assert false (* v not a variant *))
            | _ -> eval_error "Case of non-variant"
         end
     | `If (c,t,e)    ->
-        computation env cont
+        computation env cont hs
           (match value env c with
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env cont : Ir.special -> Value.t = function
+  and special env cont hs : Ir.special -> Value.t = function
     | `Wrong _                    -> raise Wrong
-    | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
+    | `Database v                 -> apply_cont cont hs env (`Database (db_connect (value env v)))
     | `Table (db, name, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
         match value env db, value env name, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, `Record row ->
-            apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+            apply_cont cont hs env (`Table ((db, params), Value.unbox_string name, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -623,7 +675,7 @@ module Eval = struct
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
       let result =
         match Query.compile env (range, e) with
-          | None -> computation env cont e
+          | None -> computation env cont hs e
           | Some (db, q, t) ->
             let (fieldMap, _, _), _ =
               Types.unwrap_row(TypeUtils.extract_row t) in
@@ -639,7 +691,7 @@ module Eval = struct
             in
               Database.execute_select fields q db
       in
-        apply_cont cont env result
+        apply_cont cont hs env result
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
@@ -651,7 +703,7 @@ module Eval = struct
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
-        apply_cont cont env (`Record [])
+        apply_cont cont hs env (`Record [])
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
@@ -663,9 +715,18 @@ module Eval = struct
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
-        apply_cont cont env (`Record [])
-    | `CallCC f                   ->
-      apply cont env (value env f, [`Continuation cont])
+        apply_cont cont hs env (`Record [])
+    | `CallCC f ->
+       apply cont hs env (value env f, [`Continuation (cont, hs)])
+    (* Handlers *)
+    | `Handle (v, cases, isclosed) ->
+       let hs = (cases, isclosed) :: hs in
+       let cont = [] :: cont in 
+       let comp = value env v in
+       apply cont hs env (comp, [])
+    | `DoOperation (v, t) ->
+       let op = value env v in
+       handle env cont hs op
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -677,7 +738,7 @@ module Eval = struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env chan
+      apply_cont cont hs env chan
     | `Choice (v, cases) ->
       begin
         let chan = value env v in
@@ -691,7 +752,7 @@ module Eval = struct
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->
-                  computation (Value.bind var (chan, `Local) env) cont body
+                  computation (Value.bind var (chan, `Local) env) cont hs body
                 | None -> eval_error "Choice pattern matching failed"
               end
             (* apply_cont cont env (Value.box_pair v chan) *)
@@ -699,22 +760,58 @@ module Eval = struct
             let choice_frame =
               Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
-              Proc.block_current (choice_frame::cont, `Record []);
+	    let cont = Value.append_cont_frame choice_frame cont in
+              Proc.block_current (cont, hs, `Record []);
               Session.block inp (Proc.get_current_pid ());
               switch_context env
       end
-    (*****************)
+  (*****************)
+  and  handle env cont hs op =        
+    let rec handle env cont hs op s = 
+      let transform (delim :: cont) ((h,isclosed) :: hs) op =
+	let restore = (* Restores handler stack by merging state s with cont & hs *)
+	  List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
+			 ([delim],[(h,isclosed)]) s 
+	in
+	match op with
+	| `Variant (label, v) ->
+	   begin
+	     match StringMap.lookup label h with
+	       Some ((var,_) as b, comp) -> let (cont',hs') = restore in
+	                                    let p    = v in
+					    let k    = `UserContinuation (cont', hs') in
+					    (*					    let k = `UserContinuation ([delim], [(h,isclosed)]) in*)
+					    let pair = Value.box_pair p k in
+					    let env  = Value.bind var (pair, `Local) env in
+					    computation env cont hs comp
+             | None  when isclosed == true  -> eval_error "Pattern matching failed %s" label
+	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)
+	   end
+	| _ -> assert false (* This can never happen as all operations are variants. *)
+      in
+      match hs with
+	h :: _  -> transform cont hs op
+      | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
+    in
+    handle env cont hs op []
+  and invoke_return_clause cont hs env (h,_) v =    
+    match StringMap.lookup "Return" h with
+      Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in
+			      computation env cont hs comp
+    | None -> eval_error "Pattern matching failed on Return"      
 
   let eval : Value.env -> program -> Value.t =
-    fun env -> computation env Value.toplevel_cont
+    fun env ->
+    computation env Value.toplevel_cont Value.toplevel_hs
 end
 
 let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
   (Value.env * Value.t) =
   fun cont env program ->
+  let hs = Value.toplevel_hs in
     try (
-      ignore
-        (Eval.computation env cont program);
+      ignore	
+        (Eval.computation env cont hs program); (* TODO: Figure out whether the handler stack should be an input parameter *)
       failwith "boom"
     ) with
       | Eval.TopLevel (env, v) -> (env, v)
@@ -743,14 +840,14 @@ let run_defs : Value.env -> Ir.binding list -> Value.env =
     and returns the result. Finishing the main thread normally comes
     here immediately. *)
 let apply_cont_toplevel cont env v =
-  try Eval.apply_cont cont env v
+  try Eval.apply_cont cont Value.toplevel_hs env v
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
 let apply_toplevel env (f, vs) =
-  try Eval.apply [] env (f, vs)
+  try Eval.apply Value.toplevel_cont Value.toplevel_hs env (f, vs)
   with
     | Eval.TopLevel s -> snd s
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^

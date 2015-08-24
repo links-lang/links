@@ -107,10 +107,11 @@ let jsonize_value value =
     is because the [proc.ml] file keeps the scheduler state as an abstract
     type so we can't inspect it here. Consider changing this.
 *)
-let jsonize_call continuation name args =
+let jsonize_call continuation hs name args =
   Printf.sprintf
-    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
+    "{\"__continuation\":\"%s\",\"__handlers\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
     (encode_continuation continuation)
+    "<handlers serialisation not yet implemented>"
     name
     (Utility.mapstrcat ", " jsonize_value args)
 

@@ -1,0 +1,76 @@
+# Type aliases
+typename Dispensable = [|Coffee|Tea|];
+typename Inventory = [(Int, Dispensable)];
+
+# The extend coffee dispenser model in Links
+fun dispenser1(n : Int) {
+    var inv  = do Ask() : Inventory;
+    var item = my_lookup(n, inv) : Dispensable;
+    do Tell(item)
+}
+
+# The dodgy coffee dispenser model
+fun dispenser2(n : Int) {
+    var inv  = do Ask() : Inventory;
+    var item = dodgyLookup(n, inv) : Dispensable;
+    do Tell(item)
+}
+
+# A handler for randomness
+open handler rand(m) {
+    case Rand((lb,ub),k) -> {
+         var r = floatToInt(random() *. (intToFloat(ub - lb) +. 1.0));
+	 k(r)
+        }
+		      
+    case Return(x) -> x
+}
+
+# The lookup function; here renamed to avoid clashing with the built-in lookup function.
+fun my_lookup(n, xs) {
+    switch (xs) {
+       case [] -> do Fail()
+       case ((i, e) :: xs) -> if (n == i) { e }
+                              else { my_lookup(n, xs) }
+    }
+}
+
+# This lookup function fails sometimes.
+fun dodgyLookup(n, xs) {
+    if (do Rand(1,10) < 5) {
+      do Fail()
+    } else {
+      my_lookup(n,xs)
+    }
+}
+
+# Our old friend "force"
+handler force(m) {
+   case Return(x) -> x
+}
+
+# The read-only inventory handler
+open handler hreader(m) {
+    case Ask(_,k)  -> k([(1,Coffee),(2,Tea)] : Inventory)
+    case Return(x) -> x
+}
+
+# The writer handler, here we simply simply pattern match
+# on the paramisation of Tell in order to convert the
+# dispensed drink into its string representation.
+open handler hwriter(m) {
+    case Tell(Coffee,k) -> k("Coffee")
+    case Tell(Tea,k)    -> k("Tea")
+    case Return(x) -> x
+}
+
+# The open maybe handler
+open handler maybe(m) {
+     case Fail(_,_) -> Nothing
+     case Return(x) -> Just(x)
+}
+
+# A convenient function for running one of the above dispenser models
+fun runDispenser(dispenser, n) {
+    force(maybe(rand(hreader(hwriter(fun() { dispenser(n) }))))) : Maybe(String)
+}

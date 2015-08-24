@@ -68,13 +68,24 @@ type t = [
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-| `Continuation of continuation
+| `Continuation of continuation * handlers
+| `UserContinuation of continuation * handlers
 | `Socket of in_channel * out_channel
 ]
-and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+and frame = (Ir.scope * Ir.var * env * Ir.computation)
+and delim_continuation = frame list (* Delimited continuation *)
+and continuation = delim_continuation list (* (Generalised) continuation *)
+and handler  = (Ir.binder * Ir.computation) Ir.name_map * bool
+and handlers = handler list				 
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
 
+(** Continuation helpers **)    
+val append_cont_frame : frame -> continuation -> continuation
+val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> frame
+val append_delim_cont : delim_continuation -> continuation -> continuation
+    
+val toplevel_hs   : handlers
 val toplevel_cont : continuation
 
 val empty_env : Ir.closures -> env
