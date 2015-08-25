@@ -1586,7 +1586,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
     and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
-    let type_cases' binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
+    (*let type_cases' binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
       let binders, pats =
@@ -1622,57 +1622,84 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (pat, update_usages body us)::binders)
           binders []
       in
-        binders, pt, bt in
+        binders, pt, bt in*)
     let type_operation_case pat =
-      let ((pat,pos),tenv,dt) = tpo pat in (* We reuse the type inferer, and apply fixes afterwards. *)
-      let (tenv,dt) = (* Type environment and datatype for the operation case; these are the two we want to adjust. *)
+      let check_pattern_on_cont opname (p,pos) =
+	match p with
+	  `Any -> None
+	| `Variable (name,_,_) -> Some name
+	| `As ((name,_,_), _) -> Some name
+	| `HasType _ -> failwith "Type annotation on continuation not yet implemented!"
+	| _ -> Gripers.die pos ("Improper pattern matching on continuation parameter in " ^ opname ^ ".")
+      in
+      let ((pat,pos),tenv,dt) = tpo pat in (* We reuse the type inferer, and apply fixes afterwards. *)      
+      let (tenv,dt) =
 	match pat with
-	`Variant ("Return", _) -> (tenv,dt) (* Return case, there is nothing to do *)
+	  `Variant ("Return", _) -> (tenv,dt)  (* Return case, there is nothing to do *)
 	| `Variant (opname, None) -> Gripers.die pos ("Improper pattern matching on " ^ opname)
 	| `Variant (opname, Some (p,pos)) ->
-	 let (cont_name) = 
+	   let cont_name = 
+	   begin
 	   match p with (* Retrieve the continuation parameter's name, and while at it, check that the pattern-matching on said parameter is sane. 
                          * Permitted patterns: `Variable, `As, `Any *)
 	     `Tuple ps -> if List.length ps > 0 then 
-			    let (last_elem,pos) as p = List.hd (List.rev ps) in
-			    match last_elem with
-			      `Any -> None
-			    | `Variable (name,_,_) -> Some name
-			    | `As ((name,_,_), _) -> Some name
-			    (*| `HasType (`Variable ((name,_,_),_),_) -> Some name (* TODO: Verify that the type annotation is correct. *)*)
-			    | _ -> Gripers.die pos ("Improper pattern matching on continuation parameter in " ^ opname ^ ".")
+			    let p = List.hd (List.rev ps) in
+			    check_pattern_on_cont opname p
 			  else
 			    Gripers.die pos ("Improper pattern matching on " ^ opname)
-			  
-	   | _ -> assert false
-	 in
-	 (* Destruction and construction phase *)
-	 (* Case pattern matching variants are on the form Constructor{{typ1,typ2,...,typN}}, where {{contents}} denote a singleton row whose only member is another row with types. *)
-	 let (outer_fields,outer_rv,outer_dual) = TypeUtils.extract_row dt in 
-	 let (key,inner_row) = List.hd (StringMap.to_list (fun key t -> (key,t)) outer_fields) in (* There is only one element. *)
-	 let (inner_fields,inner_rv,inner_dual) = 
-		match inner_row with 
-		  `Present p -> TypeUtils.extract_row p (* Extracts the inner row *)
-		| _ -> assert false 
-	 in	
-	 let last_element = string_of_int (StringMap.size inner_fields) in    (* Get the identifier for the last parameter (the continuation parameter) *)
-	 let (kt',inner_fields) = StringMap.pop last_element inner_fields in  (* Remove the last parameter from the inner row *)     
-	 let kt = Types.fresh_type_variable (`Unl, `Any) in                   (* Begins constructing new continuation parameter type *)
-	 let kt = `Function (Types.make_tuple_type [kt], Types.make_empty_open_row (`Unl,`Any), Types.fresh_type_variable (`Unl,`Any)) in (* The continuation parameter is always a function *)
-	 let inner_fields = StringMap.add last_element (`Present kt) inner_fields in (* Reconstruct the fields in the inner row *)
-	 let inner_row = (inner_fields,inner_rv,inner_dual) in                       (* Reconstruct the inner row *)
-	 let outer_fields = StringMap.add key (`Present (`Record inner_row)) StringMap.empty in (* Reconstruct the fields in the outer row *)
-	 let outer_row = (outer_fields,outer_rv,outer_dual) in                                  (* Reconstruct the outer row *)
-	 let tenv = 
-	   match cont_name, kt' with
-	     Some kname, `Present kt' -> let () = unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt) in (* If the user is `As-pattern-matching on the continuation parameter, then the unify side effect will ensure that the both aliases get the same type. *)
-					 Env.bind tenv (kname, kt) (* Bind the continuation parameter to the constructed type in the environment *)
-	   | None, _ -> tenv
-	 in
-	 (tenv, `Variant outer_row)
+					
+	   | p -> check_pattern_on_cont opname (p,pos)
+	   end
+	   in
+	   let fresh_continuation_type =
+	     let t = Types.fresh_type_variable (`Unl, `Any) in (* Input type *)
+	     let eff_row = Types.make_empty_open_row (`Unl,`Any) in
+	     `Function (Types.make_tuple_type [t], HandlerUtils.allow_wild eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)
+	   in
+	   (* Destruction and construction phase *)
+           (* The parameters are always wrapped inside a variant*)
+	   let (outer_fields,outer_rv,outer_dual) = TypeUtils.extract_row dt in
+	   let (key,inner) = List.hd (StringMap.to_list (fun key t -> (key,t)) outer_fields) in (* There is only one element. *)
+	   let (kt, kt', dt) = 	 
+	     match inner with 
+	       `Present p ->
+	       begin
+		 match p with
+		   (* Case: The patterns are wrapped inside an inner record, that is, entire pattern is on the form Constructor{{typ1,typ2,...,typN}}, where {{contents}} denote a singleton row whose only member is another row with types. *)
+		   `Record _ ->
+		   let (inner_fields,inner_rv,inner_dual) = TypeUtils.extract_row p in (* Extracts the inner row *)
+		   let last_element = string_of_int (StringMap.size inner_fields) in    (* Get the identifier for the last parameter (the continuation parameter) *)
+		   let (kt',inner_fields) = StringMap.pop last_element inner_fields in  (* Remove the last parameter from the inner row *)
+		   let kt' = match kt' with
+		       `Present kt -> kt
+		     | _ -> assert false
+		   in
+		   let kt = fresh_continuation_type in
+		   let inner_fields = StringMap.add last_element (`Present kt) inner_fields in (* Reconstruct the fields in the inner row *)
+		   let inner = (inner_fields,inner_rv,inner_dual) in                       (* Reconstruct the inner row *)
+		   let outer_fields = StringMap.add key (`Present (`Record inner)) StringMap.empty in (* Reconstruct the fields in the outer row *)
+		   let outer_row = (outer_fields,outer_rv,outer_dual) in                             (* Reconstruct the outer row *)
+		   (kt, kt', `Variant outer_row)
+		 (* Case: The pattern is a single parameter *)
+		 | `MetaTypeVar _ -> let kt = fresh_continuation_type in
+				     let outer_fields = StringMap.add key (`Present kt) StringMap.empty in (* Reconstruct the fields in the outer row *)
+				     let outer_row = (outer_fields,outer_rv,outer_dual) in                             (* Reconstruct the outer row *)
+				     (kt, p, `Variant outer_row)
+		 | _ -> failwith ("Inner: " ^ (Types.string_of_datatype p))
+	       end
+	     | _ -> assert false (* It should never be absent from the row *)
+	   in	
+	   let tenv = 
+	     match cont_name with
+	       Some kname -> let () = unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt) in (* If the user is `As-pattern-matching on the continuation parameter, then the unify side effect will ensure that the both aliases get the same type. *)
+					   Env.bind tenv (kname, kt) (* Bind the continuation parameter to the constructed type in the environment *)
+	     | None -> tenv
+	   in
+	   (tenv, dt)   
+	| _ -> Gripers.die pos "The pattern is not an operation-pattern."
       in
       ((pat,pos),tenv,dt)
-    in	  
+    in	 
     let type_handler_cases binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
       let pt = Types.fresh_type_variable (`Unl, `Any) in
       let bt = Types.fresh_type_variable (`Unl, `Any) in
@@ -1704,7 +1731,43 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           binders []
       in
       binders, pt, bt in   
-    let type_cases binders = type_cases' binders Gripers.switch_patterns Gripers.switch_branches in
+    let type_cases binders = (*type_cases' binders Gripers.switch_patterns Gripers.switch_branches in*)
+            let pt = Types.fresh_type_variable (`Any, `Any) in
+      let bt = Types.fresh_type_variable (`Any, `Any) in
+      let binders, pats =
+        List.fold_right
+          (fun (pat, body) (binders, pats) ->
+             let pat = tpo pat in
+             let () =
+               unify ~handle:Gripers.switch_patterns
+                 (ppos_and_typ pat, no_pos pt)
+             in
+               (pat, body)::binders, pat :: pats)
+          binders ([], []) in
+      let pt = close_pattern_type (List.map fst3 pats) pt in
+
+      (* NOTE: it is important to type the patterns in isolation first in order
+         to allow them to be closed before typing the bodies *)
+
+      let binders =
+        List.fold_right
+          (fun (pat, body) binders ->
+             let body = type_check (context ++ pattern_env pat) body in
+             let () = unify ~handle:Gripers.switch_branches
+               (pos_and_typ body, no_pos bt) in
+             let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
+                                           if uses <> 1 then
+                                             if Types.type_can_be_unl t then
+                                               Types.make_type_unl t
+                                             else
+                                               Gripers.non_linearity pos uses v t)
+                               (pattern_env pat) in
+             let vs = Env.domain (pattern_env pat) in
+             let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+             (pat, update_usages body us)::binders)
+          binders []
+      in
+        binders, pt, bt in
     
     let e, t, usages =
       match (expr : phrasenode) with
@@ -2661,21 +2724,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _, spec) ->
-	   let any p xs = List.fold_right (fun x b -> (p x) || b) xs false in
 	   let unify_all_with body_type types
 	     = if List.length types > 0 then
 		 List.fold_left (fun _ t -> unify ~handle:Gripers.handle_continuations (no_pos body_type, no_pos t)) () types
 	       else
 		 ()
-	   in	   
-	   let pair_up pats (ptypes,_,_) =
-	     List.fold_left 
-	       (fun acc p -> 
-		match p with
-		  `Variant (name,_),_ -> let pt = StringMap.find name ptypes in (p, pt) :: acc
-		| _ -> assert false
-	       ) [] pats	     
-	   in
+	   in	   	 
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches     in  (* Type check cases. *)
 	   let (effects, operations_row) =
@@ -2684,27 +2738,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 			     if HandlerUtils.handles_operation effects HandlerUtils.return_case then (* Checks that the Return-case exists *)
 			       let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
 			       let raw_operations  = HandlerUtils.extract_operations ops in
-			       if (any HandlerUtils.is_operation_invalid raw_operations) then  (* If there's any 'invalid' operations then print an error message. *)
-				 let HandlerUtils.RawFailure msg = List.find HandlerUtils.is_operation_invalid raw_operations  in
-				 Gripers.die pos msg
-			       else
-				 
-				 let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
-				 let ()         = unify_all_with body_type conttails in
-				 let operations = HandlerUtils.simplify_operations raw_operations in				 
-				 let operations_row = HandlerUtils.effectrow_of_oplist operations (HandlerUtils.is_closed spec) in
-				 let operations_row = (* Decide whether to allow wild *)
-				   match spec with
-				     `Closed 
-				   | `Open -> HandlerUtils.allow_wild operations_row
-				   | _ -> operations_row
-				 in
-				 let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
-				 let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-				 let context' = bind_effects context wild_effect_row in
-				 let () = unify ~handle:Gripers.handle_computation (no_pos (`Record context.effect_row), no_pos (`Record context'.effect_row)) in
-				 let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
-				 (effects, operations_row)
+			       let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
+			       let ()         = unify_all_with body_type conttails in
+			       let operations = HandlerUtils.simplify_operations raw_operations in
+			       let operations_row = HandlerUtils.effectrow_of_oplist operations spec in
+			       let operations_row = (* Decide whether to allow wild *)
+				 match spec with
+				   `Closed 
+				 | `Open -> HandlerUtils.allow_wild operations_row
+				 | _ -> operations_row
+			       in
+			       let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
+			       let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
+			       let context' = bind_effects context wild_effect_row in
+			       let () = unify ~handle:Gripers.handle_computation (no_pos (`Record context.effect_row), no_pos (`Record context'.effect_row)) in
+			       let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
+			       (effects, operations_row)
 			     else
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	     | _-> Gripers.die pos "Handler cases can only pattern match on operation names."
