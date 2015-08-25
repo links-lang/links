@@ -25,7 +25,7 @@ let extract_operations : Types.row -> raw_operation list
 					     | _ -> assert false
 			      ) fields []
       in
-      (ps,k)
+      (List.rev ps,k)
     | _ -> ([],p)
   in
   let fields = StringMap.to_list (fun name t -> (name,t)) fields in
