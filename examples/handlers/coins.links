@@ -14,7 +14,7 @@ fun choose(x,y) {if (choice()) {x} else {y}}
 sig fail : Comp({Failure:(()) {}-> Zero|_}, a)
 fun fail() {switch (do Failure()) { }}
 
-sig allResults : (CF({}, a)) {}-> [a]
+sig allResults : (CF({}, a)) {}~> [a]
 fun allResults(m) {
   handle(m) {
     case Return(x)     -> [x]
@@ -70,7 +70,7 @@ fun maybeResult(m)() {
   }
 }
 
-sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) -> a
+sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) ~> a
 fun handleRandom(m) {
   handle(m) {
     case Return(x)  -> x
