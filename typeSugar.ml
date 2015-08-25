@@ -1770,7 +1770,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
 	   let optype = Types.make_pure_function_type pt return_type in
 	   let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in (* TODO: rho: `Any, `Any or `Unl, `Any here? *)
-	   (*let effects = HandlerUtils.fix_operation_arity effects in*)
+	   let effects = HandlerUtils.fix_operation_arity effects in
 	   let () = unify ~handle:Gripers.discharge_operation
 			  (no_pos (`Record context.effect_row), no_pos (`Record effects))
 	   in
@@ -2710,6 +2710,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 | `Open -> HandlerUtils.allow_wild operations_row
 				 | _ -> operations_row
 			       in
+			       let cont_effrows = HandlerUtils.extract_continuation_effect_rows raw_operations in
+			       let () = unify_all_with (`Record operations_row) cont_effrows in
 			       let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
 			       let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
 			       let context' = bind_effects context wild_effect_row in
@@ -2720,7 +2722,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 			       Gripers.die pos ("The handler must include a " ^ HandlerUtils.return_case ^ "-case.")
 	     | _-> Gripers.die pos "Handler cases can only pattern match on operation names."
 	   in
-	   (** For open handlers (() {Op:a -> b | p}-> c) -> c => (() {Op:a' | p}-> c) -> c **)
            let () =
 	     if HandlerUtils.is_closed spec == false then
 	       let operations_row = HandlerUtils.make_operations_presence_polymorphic operations_row in

@@ -26,7 +26,7 @@ fun comp() {
 # Example: runState(s0, comp), where s0 is the initial state.
 
 handler state(m) {
-     case Get(_,k)  -> fun(s) { k(s)(s) }
+     case Get(p,k)  -> fun(s) { k(s)(s) }
      case Put(p,k)  -> fun(s) { k(())(p) }
      case Return(x) -> fun(s) { x }
 }
@@ -55,9 +55,9 @@ handler force(m) {
 }
 
 fun runState(s0, m) {
-    force(openState(m))(s0)
+    openState(m)()(s0)
 }
 
-fun runStateWithLog(m, s0) {
+fun runStateWithLog(s0, m) {
    runState(s0, putLoggerR((putLogger(m))))
 }

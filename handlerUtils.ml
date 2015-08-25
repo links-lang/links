@@ -88,16 +88,17 @@ let unwrap_from_record r =
        | _ -> failwith "Error: Attempt to unwrap non-present type"
      end
   | _ -> r
+
 	   
 let fix_operation_arity : Types.row -> Types.row
-  = fun ((fields,row_var,dual) as row) -> row
-(*  let fix_arity : operation -> operation
+  = fun ((fields,row_var,dual) as row) ->
+  let fix_arity : operation -> operation
     = fun (name, opsig) ->
     match opsig with
       `Function (dt,eff,rt) as t -> 
       begin
 	match dt with
-	`Record (fields,_,_) as r when StringMap.size fields > 1 -> (name, `Function (unwrap_from_record r, eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
+	  `Record (fields,_,_) as r when StringMap.size fields = 0 || StringMap.size fields > 1 -> (name, `Function (wrap_in_record r, eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
 	  | _ -> (name, t)
       end
     | _ as t -> (name, t)
@@ -105,8 +106,13 @@ let fix_operation_arity : Types.row -> Types.row
   let oplist = oplist_of_effectrow row in
   let oplist = List.map fix_arity oplist in
   let (fields,_,_) = effectrow_of_oplist oplist `Closed in
-  (fields,row_var,dual)*)
+  (fields,row_var,dual)   
 
+let extract_continuation_effect_rows : raw_operation list -> Types.datatype list
+  =  List.map (fun (_,_,k) -> match k with
+				`Function (_,effrow,_) -> `Record effrow
+			      | _ -> assert false)
+					    
 let extract_continuation_tails : raw_operation list -> Types.datatype list
   = fun ops ->
   List.map (function
