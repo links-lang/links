@@ -1770,7 +1770,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
 	   let optype = Types.make_pure_function_type pt return_type in
 	   let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in (* TODO: rho: `Any, `Any or `Unl, `Any here? *)
-	   let effects = HandlerUtils.fix_operation_arity effects in
+	   (*let effects = HandlerUtils.fix_operation_arity effects in*)
 	   let () = unify ~handle:Gripers.discharge_operation
 			  (no_pos (`Record context.effect_row), no_pos (`Record effects))
 	   in

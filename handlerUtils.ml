@@ -52,7 +52,8 @@ let simplify_operations  : raw_operation list -> operation list
     let r = List.hd (TypeUtils.arg_types (Types.concrete_type k)) in
     match ps with
       [] -> (name, r)
-    | _  ->  let ps = curry ps r in
+    | _  ->  let ps = Types.make_tuple_type ps in
+	     let ps = Types.make_pure_function_type ps r in
 	     (name,ps)
   in
   List.map simplify_operation ops
@@ -70,16 +71,6 @@ let effectrow_of_oplist : operation list -> Sugartypes.handler_spec -> Types.row
 
 let oplist_of_effectrow : Types.row -> operation list
   = fun (fields,_,_) ->
-  let uncurry p =    
-    let rec uncurry p =
-      match p with
-	`Function (p,_,ps) -> p :: (uncurry ps)
-      | _ -> [p]
-    in
-    let ps = List.rev (uncurry p) in
-    let (ps,k) = (List.rev (List.tl ps), List.hd ps) in
-    (ps,k)
-  in
   let ops = List.rev (StringMap.fold (fun name t ops -> (name, t) :: ops) fields []) in
   List.map (fun (name,t) -> match t with
 			      `Present p -> (name,p)
@@ -87,15 +78,26 @@ let oplist_of_effectrow : Types.row -> operation list
 	   ) ops
 			  
 
+let unwrap_from_record r =
+  match r with
+  | `Record (smap,_,_) ->
+     begin
+       let (p,_) = StringMap.pop "1" smap in
+       match p with
+       | `Present p -> p
+       | _ -> failwith "Error: Attempt to unwrap non-present type"
+     end
+  | _ -> r
+	   
 let fix_operation_arity : Types.row -> Types.row
-  = fun ((fields,row_var,dual) as row) ->
-  let fix_arity : operation -> operation
+  = fun ((fields,row_var,dual) as row) -> row
+(*  let fix_arity : operation -> operation
     = fun (name, opsig) ->
     match opsig with
       `Function (dt,eff,rt) as t -> 
       begin
 	match dt with
-	  `Record (fields,_,_) as r when StringMap.size fields = 0 || StringMap.size fields > 1 -> (name, `Function (wrap_in_record r, eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
+	`Record (fields,_,_) as r when StringMap.size fields > 1 -> (name, `Function (unwrap_from_record r, eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
 	  | _ -> (name, t)
       end
     | _ as t -> (name, t)
@@ -103,7 +105,7 @@ let fix_operation_arity : Types.row -> Types.row
   let oplist = oplist_of_effectrow row in
   let oplist = List.map fix_arity oplist in
   let (fields,_,_) = effectrow_of_oplist oplist `Closed in
-  (fields,row_var,dual)
+  (fields,row_var,dual)*)
 
 let extract_continuation_tails : raw_operation list -> Types.datatype list
   = fun ops ->
