@@ -76,6 +76,8 @@
     "yields"
     "offer"
     "select"
+    "forward"
+    "handle"
     "open"
     "handler"
     "do"
