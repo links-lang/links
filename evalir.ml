@@ -491,7 +491,7 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
 	apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
-    | `ProgramSlice (cont', hs'), [p] -> apply_cont (cont' @ cont) (hs' @ hs) env p
+    | `UserContinuation (cont', hs'), [p] -> apply_cont (cont' @ cont) (hs' @ hs) env p
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -779,7 +779,8 @@ module Eval = struct
 	     match StringMap.lookup label h with
 	       Some ((var,_) as b, comp) -> let (cont',hs') = restore in
 	                                    let p    = v in
-					    let k    = `ProgramSlice (cont', hs') in
+					    let k    = `UserContinuation (cont', hs') in
+					    (*					    let k = `UserContinuation ([delim], [(h,isclosed)]) in*)
 					    let pair = Value.box_pair p k in
 					    let env  = Value.bind var (pair, `Local) env in
 					    computation env cont hs comp

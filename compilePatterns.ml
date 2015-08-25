@@ -852,7 +852,7 @@ let compile_cases
 
 				 
 (* Handler cases compilation *)
-(*let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row * bool) -> bound_computation =
+let rec match_handle_cases : var -> clause list -> (Types.datatype * Types.row * bool) -> bound_computation =
   fun var clauses (output_type,effects,isclosed) env ->
   let codegen pat v body =
     let (nenv,tenv,eff,_) = env in
@@ -904,7 +904,7 @@ let compile_cases
 			    )
 			    StringMap.empty (* Fold seed *)
 			    clauses (* Structure we're folding over *)
-			  , isclosed)))*)
+			 , isclosed)))
 
 let check_handler_pattern_matching : clause list -> bool =
   fun clauses ->
@@ -925,7 +925,7 @@ let check_handler_pattern_matching : clause list -> bool =
 	    | `HasType _   -> failwith "It is not possible to type annotate the continuation."
 	    | _            -> failwith "Pattern-matching failure on continuation."
 	  end
-       | _ -> true (*failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)*)
+       | _ -> failwith "Handlers pattern matching: Well, this is embarrassing, I wasn't expecting this to happen!" (* This case ought never to happen! *)
      in
      is_case_ok && isvalid)
     true
