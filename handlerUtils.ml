@@ -4,34 +4,6 @@ open TypeUtils
 type raw_operation = string * (Types.datatype list) * Types.datatype (* name, args, continuation *)
 type operation = string * Types.datatype
 
-let lookup_present_safe : string -> Types.field_spec_map -> Types.datatype option
-  = fun name fields ->
-  match StringMap.lookup name fields with
-    Some (`Present p) -> Some p
-  | _ -> None
-
-let get_operation_arg_type : string -> Types.field_spec_map -> Types.datatype option 
-  = fun index fields ->
-  match lookup_present_safe index fields with
-    Some p -> Some (TypeUtils.concrete_type p)
-  | _ -> None
-
-let get_operation : string -> Types.row -> operation option
-  = fun name (fields,_,_) ->
-  match lookup_present_safe name fields with
-    Some p -> 
-    begin
-      match p with
-	`Record (fields,_,_) ->
-	begin 
-	  match get_operation_arg_type "1" fields with
-	    Some p -> Some (name, p)
-	  | _ -> None
-	end
-      | _ -> assert false
-    end
-  | _ -> None
-	   
 (* Extracts operations from an effect row. 
  * The output is a list of triples, where each triple 
  * is on the form (opname, op parameters, continuation parameter)
@@ -65,17 +37,6 @@ let extract_operations : Types.row -> raw_operation list
 
 let wrap_in_record t =
   Types.make_record_type (StringMap.add "1" t StringMap.empty)
-
-let unwrap_from_record r =
-  match r with
-  | `Record (smap,_,_) ->
-     begin
-       let (p,_) = StringMap.pop "1" smap in
-       match p with
-       | `Present p -> p
-       | _ -> failwith "Error: Attempt to unwrap non-present type"
-     end
-  | _ -> r
 
 (* Simplifies the operation signatures, e.g. {Get:((), (a) -> (b) -> c)} becomes {Get:(() -> (a))} 
  *)

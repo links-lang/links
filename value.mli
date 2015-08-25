@@ -69,7 +69,7 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation * handlers
-| `UserContinuation of continuation * handlers
+| `ProgramSlice of continuation * handlers
 | `Socket of in_channel * out_channel
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
