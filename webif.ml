@@ -383,6 +383,20 @@ let make_program (_,nenv,tyenv) prelude filename =
   (closures,cont0,(nenv'', tyenv''), (globals, (locals, main)))
 ;;
 
+let with_error_html e = 
+    try 
+        Lazy.force e
+    with
+	Failure msg as e ->
+	    prerr_endline msg;
+	    Lib.print_http_response [("Content-type", "text/html; charset=utf-8")]
+		    (error_page (Errors.format_exception_html e));
+	    exit 1
+	| exc -> Lib.print_http_response[("Content-type","text/html; charset=utf-8")]
+		    (error_page (Errors.format_exception_html exc));
+	    exit 1
+
+
 (* wrapper for ordinary uses of serve_request_program *)
 let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
   
@@ -394,13 +408,13 @@ let serve_request ((valenv,nenv,tyenv) as envs) prelude filename =
   
   let (closures,cont0,(nenv,tyenv), (globals,(locals,main))) = 
     Loader.wpcache "program" (fun () -> 
-      make_program envs prelude filename
+	with_error_html (lazy(make_program envs prelude filename))
    )
   in 
 
-  let valenv = Value.with_closures valenv closures in
+  let valenv = with_error_html(lazy(Value.with_closures valenv closures)) in
     (* We can evaluate the definitions here because we know they are pure. *)
-  let valenv = Evalir.run_defs valenv globals in
+  let valenv = with_error_html(lazy(Evalir.run_defs valenv globals)) in
 
   Errors.display (lazy (serve_request_program 
 			  (valenv,nenv,tyenv)
