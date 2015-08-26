@@ -62,7 +62,7 @@ let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * 
       | `Negative names' -> failwith "desugarHandlers.ml: How to hide negative pattern names? Can the case ever occur?"
       | `As  ((name,t,pos'),pat) -> let pat = hide_names pat names in
 				    if StringSet.mem name names then
-				      `As (("_" ^ name,t,pos'),pat),pos
+				      `As (("_" ^ name,t,pos'),pat),pos (* Todo: Figure out whether this is *safe*, e.g. _name*)
 				    else
 				      `As ((name,t,pos'),pat),pos
       | _ -> (pat,pos)     
