@@ -158,7 +158,9 @@ sig
   val handle_patterns : griper
   val handle_branches : griper			  
   val handle_computation : griper
-  val handle_continuations : griper			     
+  val handle_continuations : griper
+  val output_effect_row : griper
+  val continuation_effect_rows : griper
   
   val operation_case_cont_param	: griper
   val discharge_operation : griper
@@ -388,11 +390,25 @@ tab() ^ code (show_type rt) ^ "."
 		     tab() ^ code (show_type rt)
 	      )
 
+    let output_effect_row ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
+      die pos ("The current effect context " ^ nl() ^
+		 tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
+		   "is not unifiable with" ^ nl() ^
+		     tab() ^ code (show_row (TypeUtils.extract_row rt))
+	      )	  
+
     let handle_continuations ~pos ~t1:(_,body_type) ~t2:(_,rt)	~error:_ =
       die pos ("Unexpected continuation return type" ^ nl() ^
 		 tab() ^ code (show_type rt) ^ nl() ^
 		   "a type compatible with" ^ nl() ^
 		     tab() ^ code(show_type body_type) ^ nl() ^
+	               "was expected.")
+
+    let continuation_effect_rows ~pos ~t1:(_,lt) ~t2:(_,rt)	~error:_ =
+      die pos ("The effect context (continuation)" ^ nl() ^
+		 tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
+		   "is not unifiable with effect context" ^ nl() ^
+		     tab() ^ code(show_row (TypeUtils.extract_row rt)) ^ nl() ^
 	               "was expected.")
 
 
@@ -2698,9 +2714,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _, spec) ->
-	   let unify_all_with body_type types
+	   let unify_all_with handle body_type types
 	     = if List.length types > 0 then
-		 List.fold_left (fun _ t -> unify ~handle:Gripers.handle_continuations (no_pos body_type, no_pos t)) () types
+		 List.fold_left (fun _ t -> unify ~handle:handle (no_pos body_type, no_pos t)) () types
 	       else ()
 	   in	   	 
 	   let m = tc exp in (* Type-check expression under current context *)
@@ -2712,7 +2728,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 			       let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
 			       let raw_operations  = HandlerUtils.extract_operations ops in
 			       let conttails  = HandlerUtils.extract_continuation_tails raw_operations in
-			       let ()         = unify_all_with body_type conttails in
+			       let ()         = unify_all_with Gripers.handle_continuations body_type conttails in
 			       let operations = HandlerUtils.simplify_operations raw_operations in
 			       let operations_row = HandlerUtils.effectrow_of_oplist operations spec in
 			       let operations_row = (* Decide whether to allow wild *)
@@ -2722,11 +2738,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 				 | _ -> operations_row
 			       in
 			       let cont_effrows = HandlerUtils.extract_continuation_effect_rows raw_operations in
-			       let () = unify_all_with (`Record (HandlerUtils.make_operations_presence_polymorphic operations_row)) cont_effrows in
+			       let () = unify_all_with Gripers.continuation_effect_rows (`Record (HandlerUtils.make_operations_presence_polymorphic operations_row)) cont_effrows in
 			       let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
 			       let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-			       let context' = bind_effects context wild_effect_row in
-			       let () = unify ~handle:Gripers.handle_computation (no_pos (`Record context.effect_row), no_pos (`Record context'.effect_row)) in
+		
+			       let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
 			       let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
 			       (effects, operations_row)
 			     else

@@ -256,7 +256,7 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
-| `Handler of binder * handler_spec * handlerlit
+| `Handler of binder * handler_spec * handlerlit * datatype' option
 | `Foreign of binder * name * datatype'
 | `Include of string
 | `Type    of name * (quantifier * tyvar option) list * datatype'
@@ -431,7 +431,7 @@ struct
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Handler ((name,_,_), _, hnlit) -> singleton name, (diff (handlerlit hnlit) (singleton name))
+    | `Handler ((name,_,_), _, hnlit, _) -> singleton name, (diff (handlerlit hnlit) (singleton name))
     | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs ->
         let names, rhss =

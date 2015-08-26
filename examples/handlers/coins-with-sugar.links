@@ -1,0 +1,47 @@
+typename Zero = [||];
+
+typename Comp(e::Row,a) = (() ~e~> a);
+typename CF(e::Row, a) = Comp({Choice: (()) {}-> Bool,
+                               Failure:(()) {}-> Zero|e},
+                              a);
+
+sig choice : Comp({Choice:(()) {}-> Bool|_}, Bool)
+fun choice() {do Choice(())}
+
+sig choose : (a, a) {Choice:(()) {}-> Bool|_}~> a
+fun choose(x,y) {if (choice()) {x} else {y}}
+
+sig fail : Comp({Failure:(()) {}-> Zero|_}, a)
+fun fail() {switch (do Failure(())) { }}
+
+#sig foo : (Comp({Choose:Bool|_},Bool)) ~> Bool
+handler foo(m) {
+    case Choose(k) -> k(true)
+    case Return(x) -> x
+}
+
+sig bar : forall a . (() {Choice:Bool}~> a) ~> a
+fun bar(m) {
+    handle(m) {
+       case Choose(k) -> k(false)
+       case Return(x) -> x
+    }
+}
+
+#sig allResults : (CF({}, a)) {}-> [a]
+handler allResults(m) {
+    case Return(x)     -> [x]
+    case Choice((),k)  -> k(true) ++ k(false)
+    case Failure((),k) -> []
+}
+
+typename Toss = [|Heads|Tails|];
+
+sig drunkToss : CF({ |_}, Toss)
+fun drunkToss() {
+  if (choice()) {
+    choose(Heads, Tails)
+  } else {
+    fail()
+  }
+}

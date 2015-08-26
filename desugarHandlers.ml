@@ -88,34 +88,34 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes
 	 match m with
 	 | `Variable b, _ -> b
 	 | _ -> assert false
-       in       
-       let mvar = (`Var m_name, dp) in
-       let cases = parameterize cases params in
-       let handle = `Block ([], (`Handle (mvar, cases, None, spec), dp)) in
-       let body =
-	 match spec with
-	   `Open ->
-	   let body = `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp)) in
-	   (body, dp)
-	 | `Pure
-	 | `Closed -> (handle, dp)
-       in
-       let fnlit = ([[m]], body) in
-       fnlit
+  in       
+  let mvar = (`Var m_name, dp) in
+  let cases = parameterize cases params in
+  let handle = `Block ([], (`Handle (mvar, cases, None, spec), dp)) in
+  let body =
+    match spec with
+      `Open ->
+      let body = `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp)) in
+      (body, dp)
+    | `Pure
+    | `Closed -> (handle, dp)
+  in
+  let fnlit = ([[m]], body) in
+  fnlit
 			     
 let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method phrasenode = function
-    | `HandlerLit (None, spec, hnlit) ->
+    | `HandlerLit (None, spec, hnlit) ->      
        let handle = make_handle hnlit spec in
        let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle) in       
        super#phrasenode funlit
     | e -> super#phrasenode e
 
   method bindingnode = function
-      `Handler (binder, spec, hnlit) ->
+      `Handler (binder, spec, hnlit, annotation) ->
       let handle  = make_handle hnlit spec in
-      `Fun (binder, `Unl, ([], handle), `Unknown, None)
+      `Fun (binder, `Unl, ([], handle), `Unknown, annotation)
     | b -> super#bindingnode b
-end			     
+end
