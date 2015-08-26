@@ -1774,10 +1774,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		 Some args ->
 		 let ps    = List.map tc args in
 		 let pts   = List.map typ ps in
-		 let inp_t = if List.length pts == 0 then
-			       Types.unit_type
-			     else
-			       Types.make_tuple_type pts 
+		 let inp_t = Types.make_tuple_type pts 
 		 in
 		 let out_t = Types.fresh_type_variable (`Unl, `Any) in
 		 let ft    = Types.make_pure_function_type inp_t out_t in

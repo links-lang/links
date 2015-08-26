@@ -47,13 +47,6 @@ let simplify_operations  : raw_operation list -> operation list
     let r = List.hd (TypeUtils.arg_types (Types.concrete_type k)) in
     match ps with
       [] -> (name, r)
-    | [p] -> let p = if p = Types.unit_type then
-		       p
-		     else
-		       Types.make_tuple_type [p]
-	     in
-	     let p = Types.make_pure_function_type p r in
-	     (name,p)
     | _  ->  let ps = Types.make_tuple_type ps in
 	     let ps = Types.make_pure_function_type ps r in
 	     (name,ps)
