@@ -823,10 +823,8 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
 
-	  | `DoOperation (name, Some ps, Some t) ->
-	     (*let fields = mapIndex (fun e i -> (string_of_int (i+1), ev e)) ps in
-                cofv (I.record (fields, None))*)
-	     let vs = List.map ev ps in
+	  | `DoOperation (name, Some ps, Some t) ->	    
+	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
 
           | `Handle (e, cases, Some (t,effects), spec) ->

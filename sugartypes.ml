@@ -183,7 +183,7 @@ and regex = [
 | `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
-and handlerlit = pattern * (pattern * phrase) list (* computation, cases *)	   
+and handlerlit = pattern * (pattern * phrase) list * pattern list option (* computation, cases, parameters *)	   
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -448,8 +448,8 @@ struct
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and handlerlit (args, cases : handlerlit) : StringSet.t =
-    diff (union_map case cases) (pattern args) 
+  and handlerlit (m, cases, params : handlerlit) : StringSet.t =
+    union_all [diff (union_map case cases) (option_map (union_map pattern) params); (pattern m)]
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

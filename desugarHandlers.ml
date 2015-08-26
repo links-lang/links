@@ -20,54 +20,33 @@ open Sugartypes
 
 let dp = Sugartypes.dummy_position
 
-class desugar_handlers env =
-object (o : 'self_type)
-  inherit (TransformSugar.transform env) as super
-
-  method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) =
-    function
-    | `HandlerLit (Some (effects, body_type, ht), spec, (m, cases)) ->
-       let (m_name,_,_) =
-	 match m with
-	 | `Variable b, _ -> b
-	 | _ -> assert false
-       in
-       let (mt,m_ops) =
-	 match TypeUtils.arg_types ht with
-	   [mt] -> (mt, TypeUtils.effect_row mt)
-	 | _ -> assert false
-       in
-       let mvar = (`Var m_name, dp) in
-       let handle = `Handle (mvar, cases, Some (body_type, effects), spec) in
-       let body =
-	 match spec with
-	   `Open ->
-	   let unit = Types.unit_type in
-	   let emptyeff = Types.make_empty_open_row (`Unl, `Any) in
-	   `FunLit (Some [(unit,emptyeff)], `Unl, ([[]], (handle, dp)))
-	 | `Closed -> handle
-       in
-       let funlit : Sugartypes.phrasenode = `FunLit (Some [(mt,m_ops)], `Unl, ([[m]], (body, dp))) in
-       (*let () = print_endline (Types.string_of_datatype ht) in*)
-       (o, funlit, ht)
-    | e -> super#phrasenode e
-end
-
-let desugar_handlers env = ((new desugar_handlers env) : desugar_handlers :> TransformSugar.transform)
+let parameterize cases params =
+  let wrap_fun params body =
+    (`FunLit (None, `Unl, ([params], body)), dp)
+  in
+  match params with
+    None
+  | Some [] -> cases
+  | Some params  -> List.map (fun (pat, ph) ->
+		    let pat = pat in
+		    (pat, wrap_fun params ph)
+		   ) cases
+  
 
 let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes.funlit
-  = fun (m, cases) spec ->
+  = fun (m, cases, params) spec ->
   let (m_name,_,_) =
 	 match m with
 	 | `Variable b, _ -> b
 	 | _ -> assert false
        in       
        let mvar = (`Var m_name, dp) in
+       let cases = parameterize cases params in
        let handle = `Block ([], (`Handle (mvar, cases, None, spec), dp)) in
        let body =
 	 match spec with
 	   `Open ->
-	   let body =  `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp)) in
+	   let body = `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp)) in
 	   (body, dp)
 	 | `Pure
 	 | `Closed -> (handle, dp)
@@ -79,8 +58,8 @@ let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method phrasenode = function
-    | `HandlerLit (None, spec, (m, cases)) ->
-       let handle = make_handle (m, cases) spec in
+    | `HandlerLit (None, spec, hnlit) ->
+       let handle = make_handle hnlit spec in
        let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle) in       
        super#phrasenode funlit
     | e -> super#phrasenode e

@@ -769,8 +769,8 @@ module Eval = struct
   and handle env cont hs (opname, vs) =
     let box ps k =
       match ps with 
-	[] -> k
-      | _ -> Value.box_op ps k
+	[]  -> k
+      | _   -> Value.box_op ps k
     in
     let rec handle env cont hs op s = 
       let transform (delim :: cont) ((h,isclosed) :: hs) op =

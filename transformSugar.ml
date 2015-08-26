@@ -588,7 +588,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun t (pat, cases) ->
+      fun t (pat, cases, params) ->
       let envs = o#backup_envs in
       let (o, pat) = o#pattern pat in
       let (o, cases) =
@@ -599,7 +599,7 @@ class transform (env : Types.typing_environment) =
 	      cases
       in
       let o = o#restore_envs envs in
-      (o, (pat, cases), t)
+      (o, (pat, cases, params), t)
       (*let envs = o#backup_envs in
       let (o, pats) =
 	listu o

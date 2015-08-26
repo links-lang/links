@@ -451,7 +451,7 @@ class map =
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
 
     method handlerlit : handlerlit -> handlerlit =
-      fun (args, cases) ->
+      fun (args, cases, params) ->
       let args = o#pattern args in
       let cases =
         o#list
@@ -461,7 +461,8 @@ class map =
 	  )
           cases
       in
-      (args,cases)
+      let params = o#option (fun o -> o#list (fun o -> o#pattern)) params in
+      (args,cases,params)
 
     method fieldspec : fieldspec -> fieldspec =
       function
@@ -1012,8 +1013,8 @@ class fold =
         let o = o#phrase _x_i1 in o
 
     method handlerlit : handlerlit -> 'self_type =
-      fun (args, cases) ->
-      let o = o#pattern args in
+      fun (m, cases, params) ->
+      let o = o#pattern m in
       let cases =
         o#list
           (fun o (lhs, rhs) ->
@@ -1021,7 +1022,8 @@ class fold =
 	   let o = o#phrase rhs in o
 	  )
           cases
-      in o
+      in 
+      let params = o#option (fun o -> o#list (fun o -> o#pattern)) params in o
 
     method fieldspec : fieldspec -> 'self_type =
       function
@@ -1669,7 +1671,7 @@ class fold_map =
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
 
     method handlerlit : handlerlit -> ('self_type * handlerlit) =
-      fun (args, cases) ->
+      fun (args, cases, params) ->
       let (o, args) = o#pattern args in
       let (o, cases) =
         o#list
@@ -1679,7 +1681,8 @@ class fold_map =
 	  )
           cases
       in
-      (o, (args, cases))
+      let (o, params) = o#option (fun o -> o#list (fun o -> o#pattern)) params in
+      (o, (args, cases, params))
 
 					     
     method fieldspec : fieldspec -> ('self_type * fieldspec) =

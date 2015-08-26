@@ -1774,34 +1774,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		 Some args ->
 		 let ps    = List.map tc args in
 		 let pts   = List.map typ ps in
-		 let inp_t = Types.make_tuple_type pts in
+		 let inp_t = if List.length pts == 0 then
+			       Types.unit_type
+			     else
+			       Types.make_tuple_type pts 
+		 in
 		 let out_t = Types.fresh_type_variable (`Unl, `Any) in
-		 (Types.make_pure_function_type inp_t out_t, out_t, args)
+		 let ft    = Types.make_pure_function_type inp_t out_t in
+		 (ft, out_t, args)
 	       | None -> let t = Types.fresh_type_variable (`Unl, `Any) in (t, t, [])
 	     in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     let () = unify ~handle:Gripers.discharge_operation
 			    (no_pos (`Record context.effect_row), no_pos (`Record effects))
 	     in
-	     (`DoOperation (opname, Some args, Some optype), return_type, StringMap.empty)
-	     
-        (*| `DoOperation ((pn,pos) as op, None) -> 
-	   let opname =
-	     match pn with
-	       `ConstructorLit ("Return", _, _) -> Gripers.die pos "the implicit effect Return cannot be discharged"
-	     |  `ConstructorLit (opname, _, _) -> opname
-	     | _ -> assert false (* This case *should* never happen as syntax tree is constructed such that it guarantees the phrasenode pn to be a `ConstructorLit *)
-	   in
-	   let p = tc op in (* Type-check the operation expression *)
-	   let pt = TypeUtils.variant_at opname (typ p) in (* Retrieve inferred expression type *)
-	   let return_type = Types.fresh_type_variable (`Unl, `Any) in (* The return type is inferred from context, therefore let the return type be a fresh type variable *)
-	   let optype = Types.make_pure_function_type pt return_type in
-	   let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in (* TODO: rho: `Any, `Any or `Unl, `Any here? *)
-	   let effects = HandlerUtils.fix_operation_arity effects in
-	   let () = unify ~handle:Gripers.discharge_operation
-			  (no_pos (`Record context.effect_row), no_pos (`Record effects))
-	   in
-	   (`DoOperation (erase p, Some optype), return_type, usages p)*)
+	     (`DoOperation (opname, Some args, Some optype), return_type, StringMap.empty)	     
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->
@@ -1889,7 +1876,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-	| `HandlerLit (_, spec, (p, cases)) -> assert false (* Should already be desugared at this stage *)
+	| `HandlerLit _ -> assert false (* Should already be desugared at this stage *)
         | `FunLit (_, lin, (pats, body)) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
