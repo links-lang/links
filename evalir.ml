@@ -766,7 +766,12 @@ module Eval = struct
               switch_context env
       end
   (*****************)
-  and  handle env cont hs (opname, vs) =        
+  and handle env cont hs (opname, vs) =
+    let box ps k =
+      match ps with 
+	[] -> k
+      | _ -> Value.box_op ps k
+    in
     let rec handle env cont hs op s = 
       let transform (delim :: cont) ((h,isclosed) :: hs) op =
 	let restore = (* Restores handler stack by merging state s with cont & hs *)
@@ -774,12 +779,10 @@ module Eval = struct
 			 ([delim],[(h,isclosed)]) s 
 	in
 	match StringMap.lookup opname h with
-	  Some ((var,_) as b, comp) -> let (cont',hs') = restore in
-	                               let p    = vs in
+	  Some ((var,_) as b, comp) -> let (cont',hs') = restore in	                               
 				       let k    = `ProgramSlice (cont', hs') in
-				       (*let pair = Value.box_pair p k in*)
-				       let pair = Value.box_op vs k in
-				       let env  = Value.bind var (pair, `Local) env in
+				       let box  = box vs k in
+				       let env  = Value.bind var (box, `Local) env in
 				       computation env cont hs comp
         | None  when isclosed == true  -> eval_error "Pattern matching failed %s" opname
 	| None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)  
