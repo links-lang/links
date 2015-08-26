@@ -92,6 +92,18 @@ fun suspend(e)(m) {do Suspend(e,m)}
 
 
 typename Env = [(String, Int)];
+fun showEnv(env) {
+  fun showEntry((x, i)) {x ^^ "=" ^^ intToString(i)}
+
+  fun showEntries(es) {
+    switch(es) {
+      case []      -> ""
+      case [e]     -> showEntry(e)
+      case (e::es) -> showEntry(e) ^^ "; " ^^ showEntries(es)
+    }
+  }
+  "{" ^^ showEntries(env) ^^ "}"
+}
 
 sig bevalStep :
   (Expr) -> SComp ({Get:(()) {}-> Env, Put: (Env) {}-> ()|e}, Int)
@@ -103,7 +115,7 @@ fun bevalStep(exp)() {
         case Just(v) -> v
         case Nothing -> error("variable: " ^^ x ^^ " not found!")
       }
-    case Plus(d, e) -> beval(d) + beval(e)
+    case Plus(l, r) -> beval(l) + beval(r)
     case Assign(x, e) ->
       var v = beval(e);
       put ((x, v) :: get());
@@ -153,6 +165,17 @@ fun logger(m)(name)() {
    })(name)
 }
 
+sig dump : (SComp ({Get:(()) {}-> Env,Tell:(String) {}-> ()|e}, Int)) ->
+           (SComp ({Get:(()) {}-> Env,Tell:(String) {}-> ()|e}, Int))
+fun dump(m)() {
+  forward handle(m) {
+     case Return(x)        -> x
+     case Suspend((e, m), k) ->
+       tell(showEnv(get()));
+       k(suspend(e)(dump(m)))
+  }
+}
+
 sig e1 : Expr
 var e1 = Plus (Lit(3), Lit(4));
 sig e2 : Expr
@@ -161,5 +184,8 @@ sig e3 : Expr
 var e3 = Plus (Plus(Assign ("x", Lit(3)), Assign("y", Lit(4))), Plus (Var("x"), Var("y")));
 
 fun test0(e) {printer(evalState (force (beval(e)))([]))}
-fun test1(e) {printer(evalState (force (logger(beval(e))("eval")))([]))}
+fun test1(e) {printer(evalState (force (logger (beval(e))("eval")))([]))}
+fun test2(e) {printer(evalState (force (dump (beval(e))))([]))}
+fun test3(e) {printer(evalState (force (dump (logger (beval(e))("eval"))))([]))}
+
 
