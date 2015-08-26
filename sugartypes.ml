@@ -183,7 +183,7 @@ and regex = [
 | `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
-and handlerlit = pattern * (pattern * phrase) list (* computation, cases *)	   
+and handlerlit = pattern * (pattern * phrase) list * pattern list option (* computation, cases, parameters *)	   
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -219,7 +219,8 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
-| `DoOperation      of phrase * Types.datatype option
+| `DoOperation      of name * phrase list option * Types.datatype option
+(*| `DoOperation      of phrase * Types.datatype option*)
 (* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
 | `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
@@ -425,7 +426,7 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-    | `DoOperation (p, _) -> phrase p
+    | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
@@ -447,8 +448,8 @@ struct
     | `Exp p -> empty, phrase p
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and handlerlit (args, cases : handlerlit) : StringSet.t =
-    diff (union_map case cases) (pattern args) 
+  and handlerlit (m, cases, params : handlerlit) : StringSet.t =
+    union_all [diff (union_map case cases) (option_map (union_map pattern) params); (pattern m)]
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

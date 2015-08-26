@@ -1,0 +1,25 @@
+handler state(m)(s) {
+     case Get(k)   -> k(s)(s)
+     case Put(s,k) -> k(())(s)
+     case Return(x)-> x
+}
+
+handler stateWithAlias(m)(s) {
+     case Get(k)   -> k(s)(s)
+     case Put(p as s,k) -> k(())(s)
+     case Return(x)-> x
+}
+
+handler stateWithAlias2(m)(s) {
+     case Get(k)   -> k(s)(s)
+     case Put(s as p,k) -> k(())(p)
+     case Return(x)-> x
+}
+
+fun comp() {
+    var s = do Get;
+    do Put(s + 1);
+    var s = do Get;
+    do Put(s + s);
+    do Get
+}

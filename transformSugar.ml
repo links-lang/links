@@ -415,10 +415,10 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
-      | `DoOperation (op, Some datatype) ->
-	 let (o, op, _) = o#phrase op in
-	 let (o, t) = o#datatype datatype in
-	 (o, `DoOperation (op, Some t), t)
+      | `DoOperation (name, Some ps, Some t) ->
+	 (o, `DoOperation (name, Some ps, Some t), t)
+      | `DoOperation (name, None, Some t) ->
+	 (o, `DoOperation (name, None, Some t), t)
       | `Handle (expr, cases, Some (t, effects), spec) ->
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
@@ -588,7 +588,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun t (pat, cases) ->
+      fun t (pat, cases, params) ->
       let envs = o#backup_envs in
       let (o, pat) = o#pattern pat in
       let (o, cases) =
@@ -599,7 +599,7 @@ class transform (env : Types.typing_environment) =
 	      cases
       in
       let o = o#restore_envs envs in
-      (o, (pat, cases), t)
+      (o, (pat, cases, params), t)
       (*let envs = o#backup_envs in
       let (o, pats) =
 	listu o

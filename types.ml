@@ -2543,7 +2543,7 @@ let make_function_type : datatype -> row -> datatype -> datatype
     `Function (domain, effs, range)
 
 let make_pure_function_type : datatype -> datatype -> datatype
-  = fun domain range -> make_function_type domain (make_empty_closed_row ()) range
+  = fun domain range -> make_function_type domain (make_empty_closed_row ()) range  
 			      
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->

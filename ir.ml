@@ -85,7 +85,7 @@ and special =
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
   | `Handle of (value * (binder * computation) name_map * bool)
-  | `DoOperation of (value * Types.datatype) ]
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
@@ -427,9 +427,9 @@ struct
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
 	   `Handle (v, bs, isclosed), t, o
-	| `DoOperation (v, t) ->
-	   let (v, _, o) = o#value v in
-	   (`DoOperation (v, t), t, o)
+	| `DoOperation (name, vs, t) ->
+	   let (vs, _, o) = o#list (fun o -> o#value) vs in
+	   (`DoOperation (name, vs, t), t, o)
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

@@ -703,6 +703,15 @@ and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+
+let box_op : t list -> t -> t =
+  fun ps k -> let box = List.fold_left
+			  (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
+			  (0, []) ps
+	      in
+	      let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
+	      `Record (List.rev box)
+		
 let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)

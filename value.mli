@@ -130,6 +130,7 @@ val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
+val box_op : t list -> t -> t				       
 
 val intmap_of_record : t -> t Utility.intmap option
 

@@ -134,7 +134,7 @@ sig
   val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
 
-  val do_operation : (value sem * Types.datatype) -> tail_computation sem
+  val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 														 
   val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype * Types.row * handler_spec) -> tail_computation sem
 														 
@@ -629,8 +629,9 @@ struct
     in
       M.bind (rec_binding defs) rest
 
-  let do_operation (v, t) =
-    bind v (fun v -> lift (`Special (`DoOperation (v, t)), t))
+  let do_operation (name, vs, t) =
+    let vs = lift_list vs in
+    M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
 	 
   let handle env (v, cases, t, effects, spec) =
     let cases =
@@ -822,9 +823,9 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
 
-	  | `DoOperation (op, Some t) ->
-	     let v = ev op in
-	     I.do_operation (v, t)
+	  | `DoOperation (name, Some ps, Some t) ->	    
+	     let vs = evs ps in
+	     I.do_operation (name, vs, t)
 
           | `Handle (e, cases, Some (t,effects), spec) ->
               let cases =

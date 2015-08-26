@@ -238,9 +238,10 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1, _x_i2))
-      | `DoOperation (p, datatype) ->
-	 let p  = o#phrase p in
-	 `DoOperation (p, datatype)
+      | `DoOperation (name, ps, t) ->
+	 let ps  = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 let t   = o#option (fun o -> o#unknown) t in
+	 `DoOperation (name, ps, t)
       (* The handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let m = o#phrase m in
@@ -450,7 +451,7 @@ class map =
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
 
     method handlerlit : handlerlit -> handlerlit =
-      fun (args, cases) ->
+      fun (args, cases, params) ->
       let args = o#pattern args in
       let cases =
         o#list
@@ -460,7 +461,8 @@ class map =
 	  )
           cases
       in
-      (args,cases)
+      let params = o#option (fun o -> o#list (fun o -> o#pattern)) params in
+      (args,cases,params)
 
     method fieldspec : fieldspec -> fieldspec =
       function
@@ -822,8 +824,9 @@ class fold =
       | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | `DoOperation (p,_) ->
-	 let o = o#phrase p in o
+      | `DoOperation (name,ps,t) ->
+	 let o = o#option (fun o -> o#unknown) t in
+	 let o = o#option (fun o -> o#list (fun o -> o#phrase)) ps in o
       (* The Handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let o = o#phrase m in
@@ -1010,8 +1013,8 @@ class fold =
         let o = o#phrase _x_i1 in o
 
     method handlerlit : handlerlit -> 'self_type =
-      fun (args, cases) ->
-      let o = o#pattern args in
+      fun (m, cases, params) ->
+      let o = o#pattern m in
       let cases =
         o#list
           (fun o (lhs, rhs) ->
@@ -1019,7 +1022,8 @@ class fold =
 	   let o = o#phrase rhs in o
 	  )
           cases
-      in o
+      in 
+      let params = o#option (fun o -> o#list (fun o -> o#pattern)) params in o
 
     method fieldspec : fieldspec -> 'self_type =
       function
@@ -1417,9 +1421,10 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
           in (o, (`ConstructorLit ((_x, _x_i1, _x_i2))))
-      | `DoOperation (p, datatype) ->
-	 let (o, p) = o#phrase p in
-	 (o, `DoOperation (p, datatype))
+      | `DoOperation (name, ps, t) ->
+	 let (o, t) = o#option (fun o -> o#unknown) t in
+	 let (o, ps) = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 (o, `DoOperation (name, ps, t))
       (* Handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let (o, m) = o#phrase m in
@@ -1666,7 +1671,7 @@ class fold_map =
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
 
     method handlerlit : handlerlit -> ('self_type * handlerlit) =
-      fun (args, cases) ->
+      fun (args, cases, params) ->
       let (o, args) = o#pattern args in
       let (o, cases) =
         o#list
@@ -1676,7 +1681,8 @@ class fold_map =
 	  )
           cases
       in
-      (o, (args, cases))
+      let (o, params) = o#option (fun o -> o#list (fun o -> o#pattern)) params in
+      (o, (args, cases, params))
 
 					     
     method fieldspec : fieldspec -> ('self_type * fieldspec) =

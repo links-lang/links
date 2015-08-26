@@ -44,11 +44,6 @@ let simplify_operations  : raw_operation list -> operation list
   = fun ops ->
   let simplify_operation : raw_operation -> operation
     = fun (name, ps, k) ->
-    let rec curry ps r =
-      match ps with
-	[p] -> Types.make_pure_function_type p r
-      | p :: ps -> Types.make_pure_function_type p (curry ps r)
-    in
     let r = List.hd (TypeUtils.arg_types (Types.concrete_type k)) in
     match ps with
       [] -> (name, r)

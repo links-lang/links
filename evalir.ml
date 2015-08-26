@@ -724,9 +724,9 @@ module Eval = struct
        let cont = [] :: cont in 
        let comp = value env v in
        apply cont hs env (comp, [])
-    | `DoOperation (v, t) ->
-       let op = value env v in
-       handle env cont hs op
+    | `DoOperation (name, v, t) ->
+       let vs = List.map (value env) v in
+       handle env cont hs (name,vs)
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -766,33 +766,32 @@ module Eval = struct
               switch_context env
       end
   (*****************)
-  and  handle env cont hs op =        
+  and handle env cont hs (opname, vs) =
+    let box ps k =
+      match ps with 
+	[]  -> k
+      | _   -> Value.box_op ps k
+    in
     let rec handle env cont hs op s = 
       let transform (delim :: cont) ((h,isclosed) :: hs) op =
 	let restore = (* Restores handler stack by merging state s with cont & hs *)
 	  List.fold_left (fun (cont, hs) (delim, h) -> (delim :: cont, h :: hs))
 			 ([delim],[(h,isclosed)]) s 
 	in
-	match op with
-	| `Variant (label, v) ->
-	   begin
-	     match StringMap.lookup label h with
-	       Some ((var,_) as b, comp) -> let (cont',hs') = restore in
-	                                    let p    = v in
-					    let k    = `ProgramSlice (cont', hs') in
-					    let pair = Value.box_pair p k in
-					    let env  = Value.bind var (pair, `Local) env in
-					    computation env cont hs comp
-             | None  when isclosed == true  -> eval_error "Pattern matching failed %s" label
-	     | None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)
-	   end
-	| _ -> assert false (* This can never happen as all operations are variants. *)
+	match StringMap.lookup opname h with
+	  Some ((var,_) as b, comp) -> let (cont',hs') = restore in	                               
+				       let k    = `ProgramSlice (cont', hs') in
+				       let box  = box vs k in
+				       let env  = Value.bind var (box, `Local) env in
+				       computation env cont hs comp
+        | None  when isclosed == true  -> eval_error "Pattern matching failed %s" opname
+	| None  when isclosed == false -> handle env cont hs op ((delim, (h,isclosed)) :: s)  
       in
       match hs with
-	h :: _  -> transform cont hs op
-      | []      -> eval_error "Unhandled operation: %s"  (Value.string_of_value op)
+	h :: _  -> transform cont hs (opname, vs)
+      | []      -> eval_error "Unhandled operation: %s" opname
     in
-    handle env cont hs op []
+    handle env cont hs (opname,vs) []
   and invoke_return_clause cont hs env (h,_) v =    
     match StringMap.lookup "Return" h with
       Some ((var,_), comp) -> let env = Value.bind var (v, `Local) env in

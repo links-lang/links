@@ -314,8 +314,13 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
-| handler_spec HANDLER var LPAREN pattern RPAREN handler_body  { let (d,dpos) = $3 in
-								 `Handler ((d,None,dpos), $1, ($5, $7)), pos() }
+/*| handler_spec HANDLER var LPAREN pattern RPAREN handler_body  { let (d,dpos) = $3 in
+								 let hanlit = ($5, $7) in
+								 `Handler ((d,None,dpos), $1, hanlit), pos() }*/
+| handler_spec HANDLER var handler_parameterization            { let (d,dpos) = $3 in
+								 let hnlit = $4 in
+								 `Handler ((d,None,dpos), $1, hnlit), pos() }
+
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
@@ -440,7 +445,12 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_spec HANDLER LPAREN pattern RPAREN handler_body      { `HandlerLit (None, $1, ($4, $6)), pos() }
+/*| handler_spec HANDLER LPAREN pattern RPAREN handler_body      { `HandlerLit (None, $1, ($4, $6), None), pos() }*/
+| handler_spec HANDLER handler_parameterization { let hnlit = $3 in
+						  `HandlerLit (None, $1, hnlit), pos() }
+handler_parameterization:
+| LPAREN pattern RPAREN handler_body { ($2, $4, None) }
+| LPAREN pattern RPAREN LPAREN patterns RPAREN handler_body { ($2, $7, Some $5) }
 
 handler_spec:
 | /* empty */                                                  { `Closed }
@@ -532,7 +542,10 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
-| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }
+| DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, Some $3, None), pos() }
+| DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }       
+/*| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }*/
+	
 
 infixr_9:
 | unary_expression                                             { $1 }
