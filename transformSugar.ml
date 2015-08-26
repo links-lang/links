@@ -415,10 +415,10 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
-      | `DoOperation (op, Some datatype) ->
-	 let (o, op, _) = o#phrase op in
-	 let (o, t) = o#datatype datatype in
-	 (o, `DoOperation (op, Some t), t)
+      | `DoOperation (name, Some ps, Some t) ->
+	 (o, `DoOperation (name, Some ps, Some t), t)
+      | `DoOperation (name, None, Some t) ->
+	 (o, `DoOperation (name, None, Some t), t)
       | `Handle (expr, cases, Some (t, effects), spec) ->
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =

@@ -238,9 +238,10 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1, _x_i2))
-      | `DoOperation (p, datatype) ->
-	 let p  = o#phrase p in
-	 `DoOperation (p, datatype)
+      | `DoOperation (name, ps, t) ->
+	 let ps  = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 let t   = o#option (fun o -> o#unknown) t in
+	 `DoOperation (name, ps, t)
       (* The handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let m = o#phrase m in
@@ -822,8 +823,9 @@ class fold =
       | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | `DoOperation (p,_) ->
-	 let o = o#phrase p in o
+      | `DoOperation (name,ps,t) ->
+	 let o = o#option (fun o -> o#unknown) t in
+	 let o = o#option (fun o -> o#list (fun o -> o#phrase)) ps in o
       (* The Handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let o = o#phrase m in
@@ -1417,9 +1419,10 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
           in (o, (`ConstructorLit ((_x, _x_i1, _x_i2))))
-      | `DoOperation (p, datatype) ->
-	 let (o, p) = o#phrase p in
-	 (o, `DoOperation (p, datatype))
+      | `DoOperation (name, ps, t) ->
+	 let (o, t) = o#option (fun o -> o#unknown) t in
+	 let (o, ps) = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 (o, `DoOperation (name, ps, t))
       (* Handle case is written by hand *)
       | `Handle (m, cases, t, spec) ->
           let (o, m) = o#phrase m in

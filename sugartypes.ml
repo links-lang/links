@@ -219,7 +219,8 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
-| `DoOperation      of phrase * Types.datatype option
+| `DoOperation      of name * phrase list option * Types.datatype option
+(*| `DoOperation      of phrase * Types.datatype option*)
 (* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
 | `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
@@ -425,7 +426,7 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-    | `DoOperation (p, _) -> phrase p
+    | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with

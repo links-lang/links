@@ -76,7 +76,7 @@ and special =
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
   | `Handle of (value * (binder * computation) name_map * bool)
-  | `DoOperation of (value * Types.datatype) ]
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)
 
