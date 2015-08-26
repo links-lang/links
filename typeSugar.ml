@@ -408,8 +408,8 @@ tab() ^ code (show_type rt) ^ "."
       die pos ("The effect context (continuation)" ^ nl() ^
 		 tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
 		   "is not unifiable with effect context" ^ nl() ^
-		     tab() ^ code(show_row (TypeUtils.extract_row rt)) ^ nl() ^
-	               "was expected.")
+		     tab() ^ code(show_row (TypeUtils.extract_row rt))
+	             )
 
 
     let operation_case_cont_param ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -1633,7 +1633,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let fresh_continuation_type =
 	     let t = Types.fresh_type_variable (`Unl, `Any) in (* Input type *)
 	     let eff_row = Types.make_empty_open_row (`Unl,`Any) in
-	     `Function (Types.make_tuple_type [t], HandlerUtils.allow_wild eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)
+	     `Function (Types.make_tuple_type [t], eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)
 	   in
 	   (* Destruction and construction phase *)
            (* The parameters are always wrapped inside a variant*)
