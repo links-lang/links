@@ -421,12 +421,12 @@ tab() ^ code (show_type rt) ^ "."
 		       ^ tab() ^ code (show_type lt))	
 	  
     let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
-      die pos ("Unification failure: The operation " ^ nl() ^
+      die pos ("The operation " ^ nl() ^
 		 tab() ^ code rexpr ^ nl() ^
 		   "has type" ^ nl() ^
-		     tab() ^ code (show_type rt) ^ nl() ^
-		       "while current effect context has type" ^ nl()
-		       ^ tab() ^ code (show_type lt))
+		     tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
+		       "but in current effect context it has type" ^ nl()
+		       ^ tab() ^ code ( show_row (TypeUtils.extract_row lt)))
 	  
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
