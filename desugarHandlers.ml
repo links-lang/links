@@ -82,25 +82,41 @@ let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * 
 			     ) cases
   
 
+let to_var : Sugartypes.patternnode -> Sugartypes.phrasenode
+  = fun p ->
+  match p with
+    `Variable b -> let (name,_,_) = b in
+		   `Var name
+  | _ -> assert false
+
 let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes.funlit
   = fun (m, cases, params) spec ->
-  let (m_name,_,_) =
+  let (m_name,_,_) = 
 	 match m with
-	 | `Variable b, _ -> b
+	   `Variable b, _ -> b
 	 | _ -> assert false
   in       
   let mvar = (`Var m_name, dp) in
   let cases = parameterize cases params in
-  let handle = `Block ([], (`Handle (mvar, cases, None, spec), dp)) in
+  let handle : phrase = `Block ([], (`Handle (mvar, cases, None, spec), dp)),dp in
   let body =
-    match spec with
-      `Open ->
-      let body = `Block ([], (`FunLit (None, `Unl, ([[]], (handle, dp))),dp)) in
-      (body, dp)
-    | `Pure
-    | `Closed -> (handle, dp)
+    match params with
+      None -> handle
+    | Some params ->
+      let params = List.map (fun (p,pos) -> (to_var p, pos)) params  in
+      `FnAppl (handle, params),dp
   in
-  let fnlit = ([[m]], body) in
+  let fnparams =
+    match spec with
+      `Open -> [[]]
+    | _ -> []
+  in
+  let fnparams =
+    match params with
+      Some params -> [m] :: (params :: fnparams)
+    | None -> [m] :: fnparams
+  in
+  let fnlit = (fnparams, body) in
   fnlit
 			     
 let desugar_handlers_early =
