@@ -1797,14 +1797,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		 in
 		 let out_t = Types.fresh_type_variable (`Unl, `Any) in
 		 let ft    = Types.make_pure_function_type inp_t out_t in
-		 (ft, out_t, args)
+		 (ft, out_t, ps)
 	       | None -> let t = Types.fresh_type_variable (`Unl, `Any) in (t, t, [])
 	     in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     let () = unify ~handle:Gripers.discharge_operation
 			    (no_pos (`Record context.effect_row), no_pos (`Record effects))
 	     in
-	     (`DoOperation (opname, Some args, Some optype), return_type, StringMap.empty)	     
+	     (`DoOperation (opname, Some (List.map erase args), Some optype), return_type, StringMap.empty)	     
         (* literals *)
         | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
         | `TupleLit [p] ->
