@@ -1602,7 +1602,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
     and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in    
-    let type_operation_case pat =
+    let type_operation_case pat (ktail,krow) =
       let check_pattern_on_cont opname (p,pos) =
 	match p with
 	  `Any -> None
@@ -1633,7 +1633,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let fresh_continuation_type =
 	     let t = Types.fresh_type_variable (`Unl, `Any) in (* Input type *)
 	     let eff_row = Types.make_empty_open_row (`Unl,`Any) in
-	     `Function (Types.make_tuple_type [t], eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)
+	     `Function (Types.make_tuple_type [t], krow, ktail)
+(*	     `Function (Types.make_tuple_type [t], eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)*)
 	   in
 	   (* Destruction and construction phase *)
            (* The parameters are always wrapped inside a variant*)
@@ -1682,10 +1683,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     let type_handler_cases binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
       let pt = Types.fresh_type_variable (`Unl, `Any) in
       let bt = Types.fresh_type_variable (`Unl, `Any) in
+      let ktail = Types.fresh_type_variable (`Unl, `Any) in
+      let krow  = Types.make_empty_open_row (`Unl, `Any) in
       let binders, pats =
         List.fold_right
           (fun (pat, body) (binders, pats) ->
-	     let pat = type_operation_case pat in
+	     let pat = type_operation_case pat (ktail,krow) in
              (*let pat = tpo pat in*)	     
              let () =
                unify ~handle:hpatterns
@@ -2755,7 +2758,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row))
 	     else ()
 	   in
-	   let () = unify ~handle:Gripers.handle_patterns (no_pos body_type, no_pos (Types.fresh_type_variable (`Unl, `Any))) in
+	   (*let () = unify ~handle:Gripers.handle_patterns (no_pos body_type, no_pos (Types.fresh_type_variable (`Unl, `Any))) in*)
 	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
