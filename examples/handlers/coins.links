@@ -6,15 +6,15 @@ typename CF(e::Row, a) = Comp({Choice: (()) {}-> Bool,
                               a);
 
 sig choice : Comp({Choice:(()) {}-> Bool|_}, Bool)
-fun choice() {do Choice()}
+fun choice() {do Choice(())}
 
 sig choose : (a, a) {Choice:(()) {}-> Bool|_}~> a
 fun choose(x,y) {if (choice()) {x} else {y}}
 
 sig fail : Comp({Failure:(()) {}-> Zero|_}, a)
-fun fail() {switch (do Failure()) { }}
+fun fail() {switch (do Failure(())) { }}
 
-sig allResults : (CF({}, a)) {}-> [a]
+sig allResults : (CF({}, a)) {}~> [a]
 fun allResults(m) {
   handle(m) {
     case Return(x)     -> [x]
@@ -40,7 +40,7 @@ fun drunkTosses(n)() {
 }
 
 sig rand : Comp({Rand:(()) {}-> Float|_}, Float)
-fun rand() {do Rand()}
+fun rand() {do Rand(())}
 
 sig randomResult :
   (Comp({Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e}, a)) ->
@@ -70,7 +70,7 @@ fun maybeResult(m)() {
   }
 }
 
-sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) -> a
+sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) {}~> a
 fun handleRandom(m) {
   handle(m) {
     case Return(x)  -> x
