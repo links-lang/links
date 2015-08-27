@@ -62,7 +62,7 @@ fun persevere(m)() {
 }
 
 sig maybeResult : (Comp({Failure:Zero|e}, a)) ->
-                   Comp({Failure{_}            |e}, Maybe(a))
+                   Comp({Failure{_}  |e}, Maybe(a))
 fun maybeResult(m)() {
   forward handle(m) {
     case Return(x)  -> Just(x)
