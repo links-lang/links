@@ -162,9 +162,10 @@ fun reifyMove(player, n, k) {
 }
 
 # Complete move tree generator
+sig mtGen : (() {Move:((Player,Int)) {}-> Int}~> Player) {Move{_}}~> GameTree
 handler mtGen(m) {
-    case Move((player,n),k) -> reifyMove(player,n,k) : GameTree
-    case Return(x) -> Winner(x) : GameTree
+    case Move((player,n),k) -> reifyMove(player,n,k)
+    case Return(x) -> Winner(x)
 }
 
 sig mt : (Int) {Move{_}}~> GameTree
