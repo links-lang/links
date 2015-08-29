@@ -416,8 +416,13 @@ class transform (env : Types.typing_environment) =
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
       | `DoOperation (name, Some ps, Some t) ->
+	 let rec ret_type t =
+	   function
+	   | []      -> t
+	   | (p::ps) -> ret_type (TypeUtils.return_type t) ps
+	 in
 	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
-	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
+	 (o, `DoOperation (name, Some ps, Some t), ret_type t ps)
       | `DoOperation (name, None, Some t) ->
 	 (o, `DoOperation (name, None, Some t), t)
       | `Handle (expr, cases, Some (t, effects), spec) ->
