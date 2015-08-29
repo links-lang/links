@@ -1,6 +1,8 @@
+# helper functions for invoking Get and Put operations
 fun get() {do Get}
 fun put(s) {do Put(s)}
 
+# bit toggling example
 fun toggle() {
   var x = get();
   put(not(x));
