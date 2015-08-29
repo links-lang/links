@@ -17,7 +17,7 @@ sig evalState :
           (Comp ({Get:s,  Put:(s) {}-> ()|e}, a)) ->
     (s) -> Comp ({Get{_}, Put{_}         |e}, a)
 fun evalState(m)(s)() {
-  (forward handle(m) {
+  (open handle(m) {
     case Return(x) -> fun (_) {x}
     case Get(k)    -> fun (s) {k(s)(s)}
     case Put(t, k) -> fun (s) {k(())(t)}
@@ -28,7 +28,7 @@ sig logState :
           (Comp ({Get:s,  Put:(s) {}-> ()|e}, a)) ->
     (s) -> Comp ({Get{_}, Put{_}         |e}, (a, [s]))
 fun logState(m)(s)() {
-  (forward handle(m) {
+  (open handle(m) {
     case Return(x) -> fun (s) {(x, [s])}
     case Get(k)    -> fun (s) {k(s)(s)}
     case Put(t, k) -> fun (s) {var (x, ss) = k(())(t);

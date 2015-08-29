@@ -46,7 +46,7 @@ sig randomResult :
   (Comp({Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e}, a)) ->
    Comp({Choice{_},             Rand:(()) {}-> Float|e}, a)
 fun randomResult(m)() {
-  forward handle(m) {
+  open handle(m) {
     case Return(x)    -> x
     case Choice((),k) -> k (rand() < 0.5)
   }
@@ -55,7 +55,7 @@ fun randomResult(m)() {
 sig persevere : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                  Comp({Failure{_}            |e}, a)
 fun persevere(m)() {
-  forward handle(m) {
+  open handle(m) {
     case Return(x)     -> x
     case Failure((),k) -> persevere(m)()
   }
@@ -64,7 +64,7 @@ fun persevere(m)() {
 sig maybeResult : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                    Comp({Failure{_}            |e}, Maybe(a))
 fun maybeResult(m)() {
-  forward handle(m) {
+  open handle(m) {
     case Return(x)     -> Just(x)
     case Failure((),k) -> Nothing
   }

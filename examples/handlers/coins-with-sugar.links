@@ -51,7 +51,7 @@ open handler randomResult(m) {
 sig persevere : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                  Comp({Failure{_}            |e}, a)
 fun persevere(m)() {
-  forward handle(m) {
+  open handle(m) {
 #open handler persevere(m) {
     case Return(x)     -> x
     case Failure((),k) -> persevere(m)()
@@ -61,7 +61,7 @@ fun persevere(m)() {
 sig maybeResult : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                    Comp({Failure{_}            |e}, Maybe(a))
 #fun maybeResult(m)() {
-#  forward handle(m) {
+#  open handle(m) {
 open handler maybeResult(m) {
     case Return(x)     -> Just(x)
     case Failure((),k) -> Nothing

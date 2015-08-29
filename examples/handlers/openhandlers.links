@@ -6,21 +6,21 @@ fun h0(m) {
 }
 
 fun h1(m) {
-  forward handle(m) {
+  open handle(m) {
   	  case Op1(p,k)  -> " Op1 " ^^ k(()) ^^ " Last "
 	  case Return(x) -> x
   }
 }
 
 fun h2(m) {
-  forward handle(m) {
+  open handle(m) {
   	  case Op2(p,k) ->  " Op2 " ^^ k(()) ^^ " First "
 	  case Return(x) -> x
   }
 }
 
 fun h3(m) {
-  forward handle(m) {
+  open handle(m) {
   	  case Op3(p,k) -> " Op3 " ^^ k(()) ^^ " Mid "
 	  case Return(x) -> x
   }

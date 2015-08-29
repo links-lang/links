@@ -6,7 +6,7 @@ sig runState :
         (Comp ({Get:(()) {}-> s,Put:(s) {}-> ()|e}, a)) ->
   (s) -> Comp ({Get{_},         Put{_}         |e}, (a, s))
 fun runState(m)(s)() {
-  (forward handle(m) {
+  (open handle(m) {
      case Return(x)  -> fun (s) {(x, s)}
      case Get((), k) -> fun (s) {k(s)(s)}
      case Put(s, k)  -> fun (_) {k(())(s)}
@@ -17,7 +17,7 @@ sig evalState :
         (Comp ({Get:(()) {}-> s,Put:(s) {}-> ()|e}, a)) ->
   (s) -> Comp ({Get{_},         Put{_}         |e}, a)
 fun evalState(m)(s)() {
-  (forward handle(m) {
+  (open handle(m) {
      case Return(x)  -> fun (s) {x}
      case Get((), k) -> fun (s) {k(s)(s)}
      case Put(s, k)  -> fun (_) {k(())(s)}
@@ -28,7 +28,7 @@ sig runStringWriter :
              (Comp ({Tell:(String) {}-> ()|e}, a)) ->
   (String) -> Comp ({Tell{_}              |e}, (a, String))
 fun runStringWriter(m)(s)() {
-  (forward handle(m) {
+  (open handle(m) {
      case Return(x) -> fun (s) {(x, s)}
      case Tell(t,k) -> fun (s) {k(())(s ^^ t)}
    })(s)
@@ -145,7 +145,7 @@ sig force :
 (SComp({          |e}, a)) ~>
   Comp({Suspend{_}|e}, a)
 fun force(m)() {
-  forward handle(m) {
+  open handle(m) {
     case Return(x)        -> x
     case Suspend((e, m), k) -> k (force(m)())
   }
@@ -154,7 +154,7 @@ fun force(m)() {
 sig logger :  (SComp ({Tell:(String) {}-> ()|e}, Int)) ->
   (String) -> (SComp ({Tell:(String) {}-> ()|e}, Int))
 fun logger(m)(name)() {
-  (forward handle(m) {
+  (open handle(m) {
      case Return(x)        -> fun (_) {x}
      case Suspend((e, m), k) ->
        fun (name) {
@@ -169,7 +169,7 @@ fun logger(m)(name)() {
 sig dump : (SComp ({Get:(()) {}-> Env,Tell:(String) {}-> ()|e}, Int)) ->
            (SComp ({Get:(()) {}-> Env,Tell:(String) {}-> ()|e}, Int))
 fun dump(m)() {
-  forward handle(m) {
+  open handle(m) {
      case Return(x)        -> x
      case Suspend((e, m), k) ->
        tell(showEnv(get()));

@@ -178,7 +178,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE FORWARD OPEN SHALLOW IMPURE HANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE OPEN SHALLOW IMPURE HANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -746,7 +746,7 @@ case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 | HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, `Closed), pos() }
-| FORWARD HANDLE LPAREN exp RPAREN LBRACE cases RBRACE         { `Handle ($4, $7, None, `Open), pos() }
+| OPEN HANDLE LPAREN exp RPAREN LBRACE cases RBRACE            { `Handle ($4, $7, None, `Open), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }
