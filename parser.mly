@@ -54,7 +54,10 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+          `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+      | `Handler ((name,_,_) as m, spec, hnlit, dpos) ->
+	 let _ = checksig signame name in
+	 `Handler (m, spec, hnlit, Some datatype), dpos
 
 let primary_kind_of_string pos =
   function
@@ -314,13 +317,14 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
-/*| handler_spec HANDLER var LPAREN pattern RPAREN handler_body  { let (d,dpos) = $3 in
-								 let hanlit = ($5, $7) in
-								 `Handler ((d,None,dpos), $1, hanlit), pos() }*/
-| handler_spec HANDLER var handler_parameterization            { let (d,dpos) = $3 in
-								 let hnlit = $4 in
-								 `Handler ((d,None,dpos), $1, hnlit), pos() }
+| signature typed_handler_binding                              { annotate $1 (`Handler $2) }
+| typed_handler_binding                                        { let (m, spec, hnlit, pos) = $1 in
+								 `Handler (m, spec, hnlit, None), pos }
 
+typed_handler_binding:
+| handler_spec HANDLER var handler_parameterization            { let (name,bpos) = $3 in
+ 		                                                ( (name,None,bpos), $1, $4, pos()) }
+  
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
@@ -445,7 +449,6 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-/*| handler_spec HANDLER LPAREN pattern RPAREN handler_body      { `HandlerLit (None, $1, ($4, $6), None), pos() }*/
 | handler_spec HANDLER handler_parameterization { let hnlit = $3 in
 						  `HandlerLit (None, $1, hnlit), pos() }
 handler_parameterization:
@@ -456,7 +459,6 @@ handler_spec:
 | /* empty */                                                  { `Closed }
 | OPEN                                                         { `Open }
 | SHALLOW                                                      { `Shallow }
-/*| IMPURE                                                       { `Impure }*/
 
 handler_body:	  
 | LBRACE cases RBRACE    	                               { $2 }

@@ -3,6 +3,9 @@
 
 typename Thread = forall r::Row . () ~r~> ();
 
+fun start(m) { do Spawn(m) }
+fun yield()  { do Yield() }
+
 handler queue(m) {
      case Enqueue(p,k) -> fun(q) {
                            k(())(q ++ [p])
@@ -18,7 +21,7 @@ handler queue(m) {
 
 open handler scheduler(m) {
       case Spawn(t : Thread,k) -> { var q = do Enqueue(k); t() }
-      case Yield(_,k) -> { var q = do Enqueue(k : Thread); var t = do Dequeue() : Thread; t() }
+      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue() : Thread; t() }
       case Return(x)  -> x
 }
 
@@ -28,16 +31,16 @@ handler test(m) {
 }
 
 fun comp() {
-    do Spawn(fun() {
-       fold_left(fun(_,_) { 
+    start(fun() {
+       fold_left(fun(a,b) {
        	   print("a");
-	   do Yield();
+	   yield()
 	 }, (), [1..6])
     });
-    do Spawn(fun() {
-       fold_left(fun(_,_) { 
+    start(fun() {
+       fold_left(fun(a,b) {
        	   print("b");
-	   do Yield();
+	   yield()
 	 }, (), [1..6])                
     })
 }

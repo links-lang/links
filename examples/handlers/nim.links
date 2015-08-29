@@ -162,12 +162,13 @@ fun reifyMove(player, n, k) {
 }
 
 # Complete move tree generator
+sig mtGen : (() {Move:((Player,Int)) {}-> Int}~> Player) {Move{_}}~> GameTree
 handler mtGen(m) {
-    case Move((player,n),k) -> reifyMove(player,n,k) : GameTree
-    case Return(x) -> Winner(x) : GameTree
+    case Move((player,n),k) -> reifyMove(player,n,k)
+    case Return(x) -> Winner(x)
 }
 
-sig mt : (Int) ~> GameTree
+sig mt : (Int) {Move{_}}~> GameTree
 fun mt(n) {
     play(mtGen,n)
 }
@@ -182,7 +183,7 @@ fun mt(n) {
 # Generate perfect strategy for Bob
 open handler favourBob(m) {
     case Move((Alice,n),k) -> reifyMove(Alice,n,k)
-    case Move((Bob,n),k)   -> { var take = do Move(Bob,n);
+    case Move((Bob,n),k)   -> { var take = do Move((Bob,n));
                                 var tree = k(take);
 				Take(Bob,[(take,tree)])
                               }
@@ -210,7 +211,7 @@ fun mp(n) {
 fun checkChoice(player : Player, n : Int, k) {
     var take = do Move((player,n));
     if (take < 1 || 3 < take) { # Cheater detected!
-       do Cheat(player,take) : Player
+       do Cheat((player,take)) : Player
     } else {                    # Otherwise OK
       k(take)
     }
