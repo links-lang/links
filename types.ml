@@ -1802,10 +1802,7 @@ struct
                         | `Recursive _ -> assert false
                         | `Body t' ->
                             sd (`Function (args, t', t))
-                  else if (FieldEnv.mem "wild" fields &&
-			     is_present (FieldEnv.find "wild" fields)) then
-                      "{" ^ row "," bound_vars p effects ^ "}~>"
-		  else
+                  else
                       (* to guarantee termination it's crucial that we
                          invoke row on the original wrapped version of
                          the effect row *)
@@ -1997,10 +1994,7 @@ struct
     *)
     let field_strings =
       FieldEnv.fold
-        (fun label f field_strings -> 
-	 if String.compare label "wild" = 0 then
-	   field_strings
-	 else
+        (fun label f field_strings ->
           (label ^ presence bound_vars p f) :: field_strings)
         field_env [] in
 
