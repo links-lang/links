@@ -823,7 +823,8 @@ struct
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
 
-	  | `DoOperation (name, Some ps, Some t) ->	    
+	  | `DoOperation (name, Some ps, Some t) ->
+	     (* FIXME: the type is only right here for 0-argument operations! *)
 	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
 

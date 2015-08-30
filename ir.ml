@@ -428,6 +428,8 @@ struct
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
 	   `Handle (v, bs, isclosed), t, o
 	| `DoOperation (name, vs, t) ->
+	   (* FIXME: the typing isn't right here for non-zero argument
+	   operations *)
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)
 
