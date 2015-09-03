@@ -1,6 +1,25 @@
 # Nim game (https://en.wikipedia.org/wiki/Nim)
 # This example is adapted from Kammar et al. (2013) (https://github.com/slindley/effect-handlers)
 
+# Auxiliary functions
+sig maximum : (a,a) -> a
+fun maximum(a,b) {
+    if (a > b) {a}
+    else {b}
+}
+
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+fun elemIndex(x, xs) {
+    var n = fold_left(fun(acc, y) {
+      switch (acc) {
+      	     case (n,Just(i)) -> (n,Just(i))
+	     case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+      }
+    }, (0,Nothing), xs);
+
+    second(n)
+}
+
 # A game begins with n sticks on the table. The game has two players: Alice and Bob.
 # Alice goes first. Alice takes between one and three sticks, then it is Bob's turn
 # and similary Bob takes between one and three sticks. They alternate turns until
@@ -12,7 +31,8 @@
 #
 
 typename Player = [|Alice|Bob|];
-
+typename Comp(e::Row, a) = () ~e~> a;
+typename Zero = [||];
 
 # The 'Move' operation represents a move by a player in the game. The
 # parameter is a pair of the player and the number of sticks
@@ -28,6 +48,7 @@ fun move(player, sticks) {do Move(player, sticks)}
 sig game : (Int) -> Comp ({Move: (Player, Int) {}-> Int|_}, Player)
 fun game(n)() {aliceTurn(n)}
 
+sig aliceTurn : (Int) {Move:(Player,Int) {}->Int|_}~> Player
 fun aliceTurn(n) {
   if (n == 0) {
     Bob    # Bob wins
@@ -36,6 +57,7 @@ fun aliceTurn(n) {
   }
 }
 
+sig bobTurn : (Int) {Move:(Player,Int) {}->Int|_}~> Player
 fun bobTurn(n) {
   if (n == 0) {
     Alice    # Alice wins 
@@ -52,6 +74,7 @@ fun bobTurn(n) {
 # Strategies
 #
 
+sig showPlayer : (Player) -> String
 fun showPlayer(p) {
   switch (p) {
     case Alice -> "Alice"
