@@ -1146,3 +1146,30 @@ fun lf(f) {
     f(x)
   }
 }
+
+
+### handler stuff
+typename Comp(e::Row, a) = () ~e~> a;
+
+typename Zero = [||];
+
+
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+sig elemIndex : (a, [a]) ~> Maybe(Int)
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
