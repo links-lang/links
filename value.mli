@@ -69,13 +69,13 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation * handlers
-| `ProgramSlice of continuation * handlers
+| `ProgramSlice of env * continuation * handlers
 | `Socket of in_channel * out_channel
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
 and delim_continuation = frame list (* Delimited continuation *)
 and continuation = delim_continuation list (* (Generalised) continuation *)
-and handler  = (Ir.binder * Ir.computation) Ir.name_map * bool
+and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * bool
 and handlers = handler list				 
 and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
     deriving (Show)
