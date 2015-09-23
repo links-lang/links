@@ -203,6 +203,7 @@ let datatype d = d, None
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG INCLUDE
+%token MODULE
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE

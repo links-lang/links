@@ -183,6 +183,7 @@ let keywords = [
 (*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
+ "module"   , MODULE;
  "mu"       , MU;
  "native"   , NATIVE;
  "nu"       , NU;
