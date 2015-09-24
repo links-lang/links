@@ -1731,7 +1731,7 @@ struct
               end
           | `Function (args, effects, t) ->
               let arrow =
-                let (fields, row_var, false) as r = unwrap effects in
+                let (fields, row_var, false) = unwrap effects in
                   if FieldEnv.is_empty fields then
                     match Unionfind.find row_var with
                       | `Closed -> "{}->"
@@ -1803,7 +1803,10 @@ struct
                         | `Body t' ->
                             sd (`Function (args, t', t))
                   else
-                      "{" ^ row "," bound_vars p r ^ "}->"
+                      (* to guarantee termination it's crucial that we
+                         invoke row on the original wrapped version of
+                         the effect row *)
+                      "{" ^ row "," bound_vars p effects ^ "}->"
               in
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
@@ -1812,7 +1815,7 @@ struct
                 end
           | `Lolli (args, effects, t) ->
               let arrow =
-                let (fields, row_var, false) as r = unwrap effects in
+                let (fields, row_var, false) = unwrap effects in
                   if FieldEnv.is_empty fields then
                     match Unionfind.find row_var with
                       | `Closed -> "{}-@"
@@ -1883,7 +1886,7 @@ struct
                         | `Body t' ->
                             sd (`Lolli (args, t', t))
                   else
-                      "{" ^ row "," bound_vars p r ^ "}-@"
+                      "{" ^ row "," bound_vars p effects ^ "}-@"
               in
                 begin match concrete_type args with
                   | `Record row when is_tuple ~allow_onetuples:true row ->
@@ -1891,8 +1894,8 @@ struct
                   | t' -> assert false (* "*" ^ sd t' ^ " " ^arrow ^ " " ^ sd t *)
                 end
           | `Record r ->
-              let r = unwrap r in
-                (if is_tuple r then string_of_tuple r
+              let ur = unwrap r in
+                (if is_tuple ur then string_of_tuple r
                  else "(" ^ row "," bound_vars p r ^ ")")
           | `Variant r -> "[|" ^ row "|" bound_vars p r ^ "|]"
           | `ForAll (tyvars, body) ->
