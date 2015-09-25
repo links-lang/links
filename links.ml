@@ -161,16 +161,16 @@ let rec directives
 
     "load",
     ((fun (envs) args ->
-        match args with
-          | [filename] ->
-              let parse_and_desugar (nenv, tyenv) filename =
-                let (nenv, tyenv), (globals, (locals, main), t) =
-                  Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
-                in
-                  ((globals @ locals, main), t), (nenv, tyenv) in
-              let envs, _ = evaluate parse_and_desugar envs filename in
-                envs
-          | _ -> prerr_endline "syntax: @load \"filename\""; envs),
+      match args with
+      | [filename] ->
+         let parse_and_desugar (nenv, tyenv) filename =
+           let (nenv, tyenv), (globals, (locals, main), t) =
+             Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
+           in
+           ((globals @ locals, main), t), (nenv, tyenv) in
+         let envs, _ = evaluate parse_and_desugar envs filename in
+         envs
+      | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
 
     "withtype",

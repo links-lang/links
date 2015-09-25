@@ -6,30 +6,30 @@
  #   (() {Op1:(a) {}-> b}-> b) -> [b]
  # but it *should* have type
  #   (() {Op1:(a) {}-> b}-> b) -> [[b]]
-#fun mapk(x) {
-#    handle(x) {
-#    	      case Op1(p,k)  -> map(k,p)
-#	      case Return(x) -> [x]
-#    }
-#}
+fun mapk(x) {
+    handle(x) {
+    	      case Op1(p,k)  -> map(k,p)
+	      case Return(x) -> [x]
+    }
+}
 
 # Below function does not type check (correct behaviour!)
-#fun mapk2(x) {
-#    handle(x) {
-#    	      case Op1(p,k)  -> map(k,p)
-#	      case Return(x) -> x
-#    }
-#}
+fun mapk2(x) {
+    handle(x) {
+    	      case Op1(p,k)  -> map(k,p)
+	      case Return(x) -> x
+    }
+}
 
 # Below function does not type check (correct behaviour!)
-#fun mapk3(x) {
-#    handle(x) {
-#    	      case Op1(p,k)  -> map(fun(x) {
-#	      	   	          [k(x)]
-#	      	   	        }, p)
-#	      case Return(x) -> [x]		   			       
-#    }
-#}
+fun mapk3(x) {
+    handle(x) {
+    	      case Op1(p,k)  -> map(fun(x) {
+	      	   	          [k(x)]
+	      	   	        }, p)
+	      case Return(x) -> [x]		   			       
+    }
+}
 
 # type: () {Op1:([Int]) {}-> Int}-> Int
 fun comp() {
