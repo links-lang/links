@@ -685,6 +685,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 
   (* Section: Accessors for DomNodes *)
+
   "domGetNodeValueFromRef",
   (`Client, datatype "(DomNode) ~> String",
   IMPURE);
@@ -693,8 +694,20 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(DomNode) ~> String",
   IMPURE);
 
+  "domGetPropertyFromRef",
+  (`Client, datatype "(DomNode, String) ~> String",
+  IMPURE);
+
+  "domSetPropertyFromRef",
+  (`Client, datatype "(DomNode, String, String) ~> String",
+  IMPURE);
+
   "domHasAttribute",
   (`Client, datatype "(DomNode, String) ~> Bool",
+  IMPURE);
+
+  "domRemoveAttributeFromRef",
+  (`Client, datatype "(DomNode, String) ~> ()",
   IMPURE);
 
   "domGetAttributeFromRef",
@@ -780,6 +793,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "event",
   (`Client, datatype "Event",
   PURE);
+
+
+  (* domSetAnchor : String -> () *)
+  "domSetAnchor",
+  (`Client, datatype "(String) ~> ()",
+  IMPURE);
 
   (* Yahoo UI library functions we don't implement: *)
   (* # stopEvent : ??? *)
