@@ -548,7 +548,7 @@ class map =
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
-      | `Include _x -> let _x = o#string _x in `Include _x
+      | `Open _x -> let _x = o#string _x in `Open _x
       | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
@@ -1061,7 +1061,7 @@ class fold =
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
-      | `Include _x -> let o = o#string _x in o
+      | `Open _x -> let o = o#string _x in o
       | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
@@ -1700,7 +1700,7 @@ class fold_map =
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))
-      | `Include _x -> let (o, _x) = o#string _x in (o, (`Include _x))
+      | `Open _x -> let (o, _x) = o#string _x in (o, (`Open _x))
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =

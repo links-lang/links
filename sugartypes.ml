@@ -163,7 +163,7 @@ and pattern = patternnode * position
 
 type spawn_kind = [ `Angel | `Demon | `Wait ]
     deriving (Show)
-    
+
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
@@ -251,10 +251,11 @@ and bindingnode = [
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
-| `Include of string
+| `Open    of name
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
+| `Module  of name * phrase
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -430,7 +431,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Include _
+    | `Open _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
