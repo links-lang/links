@@ -163,7 +163,7 @@ and pattern = patternnode * position
 
 type spawn_kind = [ `Angel | `Demon | `Wait ]
     deriving (Show)
-    
+
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase

@@ -376,144 +376,6 @@ struct
       | _ ->  Call(Var (js_name op), [l; r])
 end
 
-(**This transformation is supposed to pre-pickle any continuations
-   that might need to be invoked from the client.
-
-   As it is currently implemented it is rather brittle. It only works
-   if the call to pickleCont is of the form:
-
-   let f () = e in C[pickleCont f]
-
-   where \().e is the continuation, and C[...] is a one-holed context.
-
-   As we cannot jsonise functions, it also requires that any
-   free-local variables in e are structural.
-
-   To implement this functionality properly would probably require
-   closure-converting the IR.
-*)
-module FixPickles :
-sig
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
-
-  val bindings : envs -> Ir.binding list -> Ir.binding list
-  val program : envs -> Ir.program -> Ir.program
-end
-  =
-struct
-  type envs = Ir.closures * Var.var Env.String.t * string VEnv.t * Types.datatype VEnv.t
-
-  class visitor (closures, nenv, venv, tenv) =
-  object (o)
-    inherit Ir.Transform.visitor(tenv) as super
-
-    val fun_env = VEnv.empty
-
-    val nenv = nenv
-    val venv = venv
-
-    val closures = closures
-
-    method private with_nenv nenv =
-      {< nenv = nenv >}
-
-    method private with_venv venv =
-      {< venv = venv >}
-
-    method bind_name b =
-      let name = Var.name_of_binder b in
-      let var = Var.var_of_binder b in
-      let nenv =
-        if name = "" then nenv
-        else Env.String.bind nenv (name, var) in
-      let venv = VEnv.bind venv (var, name) in
-      (*
-        This two-stage update is a workaround for a camlp4 parsing bug.
-        http://caml.inria.fr/mantis/view.php?id=4673
-      *)
-      (o#with_nenv nenv)
-        #with_venv venv
-
-    method bind_fun f lam =
-      {< fun_env = VEnv.bind fun_env (f, lam) >}
-
-    method super_binding b = super#binding b
-
-    method binding b =
-      match b with
-        | `Fun (f, lam, _location) ->
-            let o = o#bind_fun (Var.var_of_binder f) lam in
-              o#super_binding b
-        | `Rec defs ->
-            let o =
-              List.fold_right
-                (fun (f, lam, _location) o ->
-                   o#bind_fun (Var.var_of_binder f) lam)
-                defs
-                o
-            in
-              o#super_binding b
-        | _ -> super#binding b
-
-    method binder b =
-      let b, o = super#binder b in
-        b, o#bind_name b
-
-    method tail_computation =
-      fun e ->
-        match e with
-          | `Apply (f, [cont]) ->
-              let f = strip_poly f in
-                begin
-                  match f with
-                    | `Variable v when VEnv.lookup venv v = "pickleCont" ->
-                        (* an instance of [pickleCont(cont)] *)
-                        let f =
-                          match strip_poly cont with
-                            | `Variable f -> f
-                            | v -> failwith ("don't know how to pickle this value on the client: "^ Ir.Show_value.show v) in
-                          
-                        (* hereafter [cont] is a variable, [`Variable f] *)
-
-                        let e, t, o = super#tail_computation e in
-                        let stringifyB64 = `Variable(Env.String.lookup nenv "stringifyB64") in
-                        let concat = `Variable (Env.String.lookup nenv "Concat") in
-
-                        let lam =
-                          let _tyvars, xsb, body = VEnv.lookup fun_env f in
-                            (List.map Var.var_of_binder xsb, body) in
-                        let fv = IntMap.find f closures in
-
-                        let func = Value.marshal_value
-                          (`RecFunction([f, lam],
-                                        Value.empty_env closures,
-                                        f, `Local)) in
-                        let fields =
-                          IntSet.fold
-                            (fun x fields ->
-                               StringMap.add (string_of_int x) (`Variable x) fields)
-                            fv
-                            StringMap.empty
-                        in
-                        let json_args =
-                          `ApplyPure (stringifyB64,
-                                      [`Extend (fields, None)])
-                        in
-                          `Apply (concat, [`Constant (`String (func ^"&_jsonArgs=")); json_args]), t, o
-                    | _ -> super#tail_computation (`Apply (f, [cont]))
-              end
-          | _ -> super#tail_computation e
-  end
-
-  let bindings envs bindings =
-    let bindings, _ = (new visitor envs)#bindings bindings in
-      bindings
-
-  let program envs program =
-    let program, _, _ = (new visitor envs)#program program in
-      program
-end
-
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
@@ -521,6 +383,12 @@ let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
+  let name = Js.name_binder (x, info) in
+  if (name = "") then
+    prerr_endline (Ir.Show_binder.show (x, info))
+  else
+    ();
+  assert (name <> "");
   (x, Js.name_binder (x,info))
 
 let bind_continuation kappa body =
@@ -644,6 +512,8 @@ let rec generate_value env : Ir.value -> code =
                 | _ ->
                     Call (gv f, List.map gv vs)
             end
+      | `Closure (f, v) ->
+        Call (Var "partialApply", [gv (`Variable f); gv v])
       | `Coerce (v, _) ->
           gv v
 
@@ -667,37 +537,42 @@ let generate_remote_call f_name xs_names env =
 
 (** The [lambdalift] operations build up a [code->code] function (effectively
     a code context consisting of definitions) by function composition. *)
-let rec lambdalift_function
-    ((fb, (_, xsb, body), location)
-    : (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location)) =
+let rec lambdalift_function ((fb, (_, xsb, body), zb, location) : Ir.fun_def) =
   let body_fs = lambdalift_computation body in
-    let f_var, f_name = fb in
-    let bs = List.map name_binder xsb in
-    let xs, xs_names = List.split bs in
-    let fbody =
-      match location with
-        | `Client | `Native -> Ret(Var (snd(name_binder fb)))
-            (* Note: this is wrong for nested functions--those with
-               free variables. But these stubs are only used for
-               server->client calls. Such calls, when they involve
-               nested closures, will use the _closureTable mechanism
-               rather than this one. For unlabeled functions (below)
-               we treat them as server functions, for the same
-               reason. *)
-        | `Server | `Unknown ->
-            Ret(Fn(xs_names@["__kappa"],
-                   generate_remote_call (string_of_int f_var) xs_names
-                     (Var "_env")))
-    in
-    let f_lifted = fun code ->
-      LetFun((Js.var_name_binder fb, ["_env"],
-              (* Note: This function is unlike regular compiled Links
-                 functions in that it is not in CPS; it is applied only in the
-                 [_resolveFunctions] routine in jslib.js. *)
-              fbody,
-              `Client),
-             code)
-    in f_lifted -<- body_fs
+  let f_var, f_name = fb in
+  (* optionally add an additional closure environment argument *)
+  let xsb =
+    match zb with
+    | None -> xsb
+    | Some zb -> zb :: xsb
+  in
+  let bs = List.map name_binder xsb in
+  let xs, xs_names = List.split bs in
+  let fbody =
+    match location with
+    | `Client | `Native -> Ret(Var (snd(name_binder fb)))
+    (* Note: this is wrong for nested functions--those with
+       free variables. But these stubs are only used for
+       server->client calls. Such calls, when they involve
+       nested closures, will use the _closureTable mechanism
+       rather than this one. For unlabeled functions (below)
+       we treat them as server functions, for the same
+       reason. *)
+    | `Server | `Unknown ->
+      Ret(Fn(xs_names@["__kappa"],
+             generate_remote_call (string_of_int f_var) xs_names
+               (Var "_env")))
+  in
+  let f_lifted = fun code ->
+    LetFun((Js.var_name_binder fb, ["_env"],
+            (* Note: This function is unlike regular compiled Links
+               functions in that it is not in CPS; it is applied only in the
+               [_resolveFunctions] routine in jslib.js. *)
+            fbody,
+            `Client),
+           code)
+  in
+  f_lifted -<- body_fs
 and lambdalift_binding =
   function
   | `Fun def -> lambdalift_function def
@@ -819,7 +694,6 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
             (fun kappa -> apply_yielding (gv v, [kappa], kappa))
       | `Select (l, c) ->
          Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
-	(* TODO: JS generation for session types *)
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -846,20 +720,28 @@ and generate_computation env : Ir.computation -> code -> (venv * code) =
     gbs env (fun code -> code) bs
 
 and generate_function env fs :
-    (Ir.binder * (Ir.tyvar list * Ir.binder list * Ir.computation) * Ir.location) ->
+    Ir.fun_def ->
     (string * string list * code * Ir.location) =
-  fun (fb, (_, xsb, body), location) ->
-  let (f, f_name) = name_binder fb in
-  let bs = List.map name_binder xsb in
-  let _xs, xs_names = List.split bs in
-  let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-  let body =
-    match location with
+  fun (fb, (_, xsb, body), zb, location) ->
+    let (f, f_name) = name_binder fb in
+    assert (f_name <> "");
+    (* prerr_endline ("f_name: "^f_name); *)
+    (* optionally add an additional closure environment argument *)
+    let xsb =
+      match zb with
+      | None -> xsb
+      | Some zb -> zb :: xsb
+    in
+    let bs = List.map name_binder xsb in
+    let _xs, xs_names = List.split bs in
+    let body_env = List.fold_left VEnv.bind env (fs @ bs) in
+    let body =
+      match location with
       | `Client | `Unknown ->
-          snd (generate_computation body_env body (Var "__kappa"))
+        snd (generate_computation body_env body (Var "__kappa"))
       | `Server -> generate_remote_call (string_of_int f) xs_names (Dict [])
       | `Native -> failwith ("Not implemented native calls yet")
-  in
+    in
     (f_name,
      xs_names @ ["__kappa"],
      body,
@@ -878,14 +760,14 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let env' = VEnv.bind env (x, x_name) in
           (env', fun code ->
                    generate_tail_computation env tc (Fn ([x_name], code)))
-    | `Fun ((fb, _, location) as def) ->
+    | `Fun ((fb, _, _zs, _location) as def) ->
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
         let (f_name, args, _, _) as def_header = generate_function env [] def in
           (env', fun code ->
              LetFun (def_header, code))
     | `Rec defs ->
-        let fs = List.map (fun (fb, _, _) -> name_binder fb) defs in
+        let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
         let env' = List.fold_left VEnv.bind env fs in
           (env', fun code ->
              LetRec (List.map (generate_function env fs) defs, code))
@@ -944,7 +826,7 @@ and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
 
 and generate_program env : Ir.program -> (venv * code) = fun comp ->
   let (venv, code) = generate_computation env comp (Var "_start") in
-    (venv, lambdalift_computation comp code)
+  (venv, lambdalift_computation comp code)
 
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
@@ -1002,11 +884,6 @@ let wrap_with_server_stubs (code : code) : code =
                 funcs)
          (Lib.value_env) []) in
 
-(*     List.filter *)
-(*       (fun (name,_) ->  *)
-(*          Lib.primitive_location name = `Server) *)
-(*       (StringMap.to_alist !Lib.value_env)) in *)
-
   let rec some_vars = function
       0 -> []
     | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
@@ -1061,10 +938,9 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) program  =
+let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-    let program = FixPickles.program (closures, nenv, venv, tenv) program in
     let _, code = generate_program venv program in
     let code = wrap_with_server_stubs code in
     show code)
@@ -1075,8 +951,7 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (closures, nenv, tyenv) p
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
 
-let generate_program_defs (closures, nenv, tyenv) bs =
+let generate_program_defs (nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-  let bs = FixPickles.bindings (closures, nenv, venv, tenv) bs in
   let _, code = generate_defs venv bs in
     [show (code Nothing)]

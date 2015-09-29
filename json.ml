@@ -62,21 +62,29 @@ let jsonize_primitive : Value.primitive_value -> string = function
   | `XML xmlitem -> json_of_xmlitem xmlitem
   | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
 
+let jsonize_location : Ir.location -> string = function
+  | `Client  -> "client"
+  | `Server  -> "server"
+  | `Native  -> "native"
+  | `Unknown -> "unknown"
+
 let rec jsonize_value : Value.t -> string = function
   | `PrimitiveFunction _
   | `Continuation _
       as r ->
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
-  | `FunctionPtr _ -> assert false (* should've been resolved when 1st parsed. *)
-  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
-  | `RecFunction(defs, env, f, _scope) ->
+  (* | `FunctionPtr _ -> assert false (\* should've been resolved when 1st parsed. *\) *)
+  | `FunctionPtr (f, env) ->
+    let (_, _, _, location) = Tables.find Tables.fun_defs f in
+    let location = jsonize_location location in
       "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
-      " \"location\":\"server\"," ^
+      " \"location\":\"" ^ location ^ "\"," ^
       " \"environment\": {" ^
         String.concat "," (IntMap.to_list(fun k (v,_) ->
                                             string_of_int k ^ ":" ^
                                               jsonize_value v) (Value.get_parameters env))
       ^ "}}"
+  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
   | `Record fields ->

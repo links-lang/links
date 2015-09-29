@@ -1016,7 +1016,7 @@ var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a f
 sig freshResource : () ~> ()
 fun freshResource() {
   escape esc in {
-    redirect("?_cont=" ^^ reifyK(esc)); exit(0)
+    redirect("?_k=" ^^ unsafePickleCont(fun () {esc(())})); exit(0)
   }
 }
 

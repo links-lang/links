@@ -32,6 +32,9 @@ type name_set = Utility.stringset
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
+type 'a var_map = 'a Utility.intmap
+  deriving (Show)
+
 type language = string
   deriving (Show)
 
@@ -57,21 +60,25 @@ type value =
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
 
+  | `Closure of var * value
+
   | `Coerce of (value * Types.datatype)
   ]
 and tail_computation =
   [ `Return of (value)
   | `Apply of (value * value list)
+  (* | `ApplyClosure of (value * value list) *)
 
   | `Special of special
 
   | `Case of (value * (binder * computation) name_map * (binder * computation) option)
   | `If of (value * computation * computation)
   ]
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
 and binding =
   [ `Let of binder * (tyvar list * tail_computation)
-  | `Fun of (binder * (tyvar list * binder list * computation) * location)
-  | `Rec of (binder * (tyvar list * binder list * computation) * location) list
+  | `Fun of fun_def
+  | `Rec of fun_def list
   | `Alien of (binder * language)
   | `Module of (string * binding list option) ]
 and special =
@@ -86,6 +93,16 @@ and special =
   | `Choice of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
+
+let binding_scope : binding -> scope =
+  function
+  | `Let (b, _)
+  | `Fun (b, _, _, _)
+  | `Rec ((b, _, _, _)::_)
+  | `Alien (b, _) -> Var.scope_of_binder b
+  | `Module _ -> assert false
+
+let binder_of_fun_def (fb, def, xs, scope) = fb
 
 let tapp (v, tyargs) =
   match tyargs with
@@ -140,7 +157,7 @@ sig
   object ('self_type)
     val tyenv : environment
 
-    method lookup_type : var -> Types.datatype
+    method private lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
     method optionu :
       'a.
@@ -158,7 +175,12 @@ sig
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
       'a name_map -> 'a name_map * Types.datatype name_map * 'self_type
+    method var_map :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a var_map -> 'a var_map * Types.datatype var_map * 'self_type
     method var : var -> (var * Types.datatype * 'self_type)
+    (* method closure_var : var -> (var * Types.datatype * 'self_type) *)
     method value : value -> (value * Types.datatype * 'self_type)
 
     method tail_computation :
@@ -168,6 +190,7 @@ sig
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
+    (* method closure_binder : binder -> (binder * 'self_type) *)
 
     method program : program -> (program * Types.datatype * 'self_type)
 
@@ -191,9 +214,13 @@ struct
   class visitor (tyenv : environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
+    (* val cenv = Env.empty *)
 
-    method lookup_type : var -> datatype = fun var ->
+    method private lookup_type : var -> datatype = fun var ->
       Env.lookup tyenv var
+
+    (* method private lookup_closure_type : var -> datatype = fun var -> *)
+    (*   Env.lookup cenv var *)
 
     method constant : constant -> (constant * datatype * 'self_type) = fun c ->
       match c with
@@ -202,7 +229,6 @@ struct
         | `Char _ -> c, char_type, o
         | `String _ -> c, string_type, o
         | `Float _ -> c, float_type, o
-
 
     method optionu :
       'a.
@@ -255,13 +281,31 @@ struct
           vmap
           (StringMap.empty, StringMap.empty, o)
 
+    method var_map :
+      'a.
+      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
+      'a var_map -> 'a var_map * datatype var_map * 'self_type =
+      fun f vmap ->
+        IntMap.fold
+          (fun name v (vmap, tmap, o) ->
+             let (v, t, o) = f o v in
+               (IntMap.add name v vmap,
+                IntMap.add name t tmap,
+                o))
+          vmap
+          (IntMap.empty, IntMap.empty, o)
+
     method var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
+
+    (* method closure_var : var -> (var * datatype * 'self_type) = *)
+    (*   fun var -> (var, o#lookup_closure_type var, o) *)
 
     method value : value -> (value * datatype * 'self_type) =
       function
         | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
         | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o
+        (* | `ClosureVar x -> let (x, t, o) = o#closure_var x in `ClosureVar x, t, o *)
         | `Extend (fields, base) ->
             let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
             let (base, base_type, o) = o#option (fun o -> o#value) base in
@@ -319,6 +363,11 @@ struct
             let (args, arg_types, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `ApplyPure (f, args), deconstruct return_type ft, o
+        | `Closure (f, z) ->
+            let (f, t, o) = o#var f in
+            let (z, _, o) = o#value z in
+              (* TODO: check that closure environment types match expectations for f *)
+              `Closure (f, z), t, o
         | `Coerce (v, t) ->
             let v, vt, o = o#value v in
             (* TODO: check that vt <: t *)
@@ -336,6 +385,12 @@ struct
             let args, arg_types, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `Apply (f, args), deconstruct return_type ft, o
+        (* | `ApplyClosure (f, args) -> *)
+        (*     let f, ft, o = o#value f in *)
+        (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
+        (*     (\* TODO: check arg types match *\) *)
+        (*     (\* TOOD: add closure type *\) *)
+        (*       `ApplyClosure (f, args), deconstruct return_type ft, o *)
         | `Special special ->
             let special, t, o = o#special special in
               `Special special, t, o
@@ -437,8 +492,9 @@ struct
             let x, o = o#binder x in
             let tc, t, o = o#tail_computation tc in
               `Let (x, (tyvars, tc)), o
-        | `Fun (f, (tyvars, xs, body), location) ->
-            let xs, body, o =
+        | `Fun (f, (tyvars, xs, body), z, location) ->
+            let xs, body, z, o =
+              let (z, o) = o#optionu (fun o -> o#binder) z in
               let (xs, o) =
                 List.fold_right
                   (fun x (xs, o) ->
@@ -447,14 +503,17 @@ struct
                   xs
                   ([], o) in
               let body, _, o = o#computation body in
-                xs, body, o in
+                xs, body, z, o in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              `Fun (f, (tyvars, xs, body), location), o
+              `Fun (f, (tyvars, xs, body), z, location), o
         | `Rec defs ->
+            (* it's important to traverse the function binders first in
+               order to make sure they're in scope for all of the
+               function bodies *)
             let _, o =
               List.fold_right
-                (fun (f, _, _) (fs, o) ->
+                (fun (f, _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (f::fs, o))
                 defs
@@ -462,7 +521,8 @@ struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, o) (f, (tyvars, xs, body), location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                   let (z, o) = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -471,7 +531,7 @@ struct
                        xs
                        ([], o) in
                   let body, _, o = o#computation body in
-                    (f, (tyvars, xs, body), location)::defs, o)
+                    (f, (tyvars, xs, body), z, location)::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in
@@ -603,7 +663,7 @@ struct
   let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
 
   let counter tyenv =
-  object (o)
+  object (o : 'self_type)
     inherit Transform.visitor(tyenv) as super
 
     val env = IntMap.empty
@@ -682,13 +742,13 @@ struct
         | `Let (x, (tyvars, `Return _)) ->
             let b, o = super#binding b in
               b, o#init x
-        | `Fun (f, (tyvars, _, _), _) ->
+        | `Fun (f, (tyvars, _, _), _, _) ->
             let b, o = super#binding b in
               b, o#init f
         | `Rec defs ->
             let fs, o =
               List.fold_right
-                (fun (f, _, _) (fs, o) ->
+                (fun (f, _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (IntSet.add (var_of_binder f) fs, o#initrec f))
                 defs
@@ -696,7 +756,8 @@ struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, o) (f, (tyvars, xs, body), location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                   let z, o = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -707,7 +768,7 @@ struct
                    let o = o#set_rec (var_of_binder f) in
                    let body, _, o = o#computation body in
                    let o = o#set_mutrec (var_of_binder f) in
-                     (f, (tyvars, xs, body), location)::defs, o)
+                     (f, (tyvars, xs, body), z, location)::defs, o)
                 ([], o)
                 defs in
             let o = o#set_nonrecs fs in
@@ -742,13 +803,13 @@ struct
                 match b with
                   | `Let ((x, (_, name, _)), (_tyvars, _)) when o#is_dead x ->
                       o#bindings bs
-                  | `Fun ((f, (_, name, _)), _, _) when o#is_dead f ->
+                  | `Fun ((f, (_, name, _)), _, _, _) when o#is_dead f ->
                       o#bindings bs
                   | `Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) (((f, (_, name, _)), _, _) as def) ->
+                          (fun (fs, defs) (((f, (_, name, _)), _, _, _) as def) ->
                              Debug.if_set show_rec_uses
                                (fun () ->
                                   "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^
@@ -793,257 +854,5 @@ struct
       p
 end
 
-(** Compute free variables *)
-module FreeVars =
-struct
-  class visitor tenv bound_vars =
-  object (o)
-    inherit Transform.visitor(tenv) as super
-
-    val free_vars = IntSet.empty
-    val bound_vars = bound_vars
-
-    method bound x =
-      {< bound_vars = IntSet.add x bound_vars >}
-
-    method free x =
-      if IntSet.mem x bound_vars then o
-      else {< free_vars = IntSet.add x free_vars >}
-
-    method binder =
-      fun b ->
-        let b, o = super#binder b in
-          b, o#bound (Var.var_of_binder b)
-
-    method var =
-      fun x ->
-        let x, t, o = super#var x in
-          x, t, o#free x
-
-    method get_free_vars = free_vars
-  end
-
-  let value tyenv bound_vars v =
-    let _, _, o = (new visitor tyenv bound_vars)#value v in
-      o#get_free_vars
-
-  let tail_computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
-      o#get_free_vars
-
-  let binding tyenv bound_vars bs =
-    let _, o = (new visitor tyenv bound_vars)#binding bs in
-      o#get_free_vars
-
-  let bindings tyenv bound_vars bs =
-    let _, o = (new visitor tyenv bound_vars)#bindings bs in
-      o#get_free_vars
-
-  let computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#computation e in
-      o#get_free_vars
-
-  let program = computation
-end
-
-(** The [closures] type represents the set of free variables of a
-    collection of functions *)
-type closures = intset intmap
-    deriving (Show)
-
-(** Compute the closures in an IR expression
-
-  This computes the free variables for every function
-  and every continuation in an IR expression.
-*)
-module ClosureTable =
-struct
-  type t = closures
-
-  class visitor tyenv bound_vars =
-  object (o)
-    inherit Transform.visitor(tyenv) as super
-
-    val globals = bound_vars
-    val relevant_vars = IntMap.empty
-
-    method close f vars =
-      {< relevant_vars = IntMap.add (Var.var_of_binder f) vars relevant_vars >}
-
-    method global x =
-      {< globals = IntSet.add x globals >}
-
-    method binder b =
-      let b, o = super#binder b in
-        if Var.scope_of_binder b = `Global then
-          b, o#global (Var.var_of_binder b)
-        else
-          b, o
-
-    (** Incrementally compute the free variables for every possible
-       continuation arising from a computation.
-
-       The first argument is the free variables in the tail. The
-       second argument is the list of bindings in reverse order.
-
-       The list of bindings is in reverse order in order to make
-       things both easier to express and more efficient.
-    *)
-    method close_cont fvs =
-      function
-        | [] -> o
-        | `Let (x, (tyvars, body))::bs ->
-            let fvs = IntSet.remove (Var.var_of_binder x) fvs in
-            let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
-              (o#close x fvs)#close_cont (IntSet.union fvs fvs') bs
-        | `Fun (f, (_tyvars, xs, body), _)::bs ->
-            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
-            let bound_vars =
-              List.fold_right
-                (fun x bound_vars ->
-                   IntSet.add (Var.var_of_binder x) bound_vars)
-                xs
-                globals in
-            let fvs' = FreeVars.computation o#get_type_environment bound_vars body in
-            let o = o#close f fvs' in
-              o#close_cont (IntSet.union fvs fvs') bs
-        | `Rec defs::bs ->
-            let fvs, bound_vars =
-              List.fold_right
-                (fun (f, (_tyvars, xs, _body), _) (fvs, bound_vars) ->
-                   let f = Var.var_of_binder f in
-                   let fvs = IntSet.remove f fvs in
-                   let bound_vars =
-                     List.fold_right
-                       (fun x bound_vars ->
-                          IntSet.add (Var.var_of_binder x) bound_vars)
-                       xs
-                       (IntSet.add f bound_vars) in
-                     fvs, bound_vars)
-                defs
-                (fvs, globals) in
-
-            let fvs' =
-              List.fold_left
-                (fun fvs' (_f, (_tyvars, _xs, body), _location) ->
-                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars body))
-                (IntSet.empty)
-                defs in
-
-            let o =
-              List.fold_left
-                (fun o (f, _, _) -> o#close f fvs')
-                o
-                defs
-            in
-              o#close_cont (IntSet.union fvs fvs') bs
-        | `Alien (f, _language)::bs ->
-            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
-              o#close_cont fvs bs
-        | `Module _::bs ->
-            assert false
-
-    method computation : computation -> (computation * Types.datatype * 'self_type) =
-      fun (bs, tc) ->
-        let bs, o = o#bindings bs in
-        let tc, t, o = o#tail_computation tc in
-
-        let free_vars = FreeVars.tail_computation o#get_type_environment globals tc in
-        let o = o#close_cont free_vars (List.rev bs) in
-          (bs, tc), t, o
-
-    method binding b =
-      match b with
-(*         | `Fun (f, (tyvars, xs, body), location) ->              *)
-(*             let xs, body, o = *)
-(*               let (xs, o, bound_vars) = *)
-(*                 List.fold_right *)
-(*                   (fun x (xs, o, bound_vars) -> *)
-(*                      let x, o = o#binder x in *)
-(*                        (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars)) *)
-(*                   xs *)
-(*                   ([], o, globals) in *)
-(*              let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in *)
-(*               let body, _, o = o#computation body in *)
-(*                 xs, body, o in *)
-(*             let f, o = o#binder f in *)
-(*               `Fun (f, (tyvars, xs, body), location), o *)
-(*         | `Rec defs -> *)
-(*             let _, o = *)
-(*               List.fold_right *)
-(*                 (fun (f, _, _) (fs, o) -> *)
-(*                    let f, o = o#binder f in *)
-(*                      (f::fs, o)) *)
-(*                 defs *)
-(*                 ([], o) in *)
-
-(*             let defs, o = *)
-(*               List.fold_left *)
-(*                 (fun (defs, o) (f, (tyvars, xs, body), location) -> *)
-(*                    let xs, o, bound_vars = *)
-(*                      List.fold_right *)
-(*                        (fun x (xs, o, bound_vars) -> *)
-(*                           let (x, o) = o#binder x in *)
-(*                             (x::xs, o, IntSet.add (Var.var_of_binder x) bound_vars)) *)
-(*                        xs *)
-(*                        ([], o, globals) in *)
-(*                    let o = o#close f (FreeVars.computation o#get_type_environment bound_vars body) in *)
-(*                    let body, _, o = o#computation body in *)
-(*                      (f, (tyvars, xs, body), location)::defs, o) *)
-(*                 ([], o) *)
-(*                 defs in *)
-(*             let defs = List.rev defs in *)
-(*               `Rec defs, o *)
-        | _ -> super#binding b
-
-    method get_relevant_vars = relevant_vars
-  end
-
-  let value tyenv bound_vars v =
-    let _, _, o = (new visitor tyenv bound_vars)#value v in
-      o#get_relevant_vars
-
-  let tail_computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
-      o#get_relevant_vars
-
-  let bindings tyenv bound_vars bs =
-    let o = new visitor tyenv bound_vars in
-    let _, _, o = o#computation (bs, `Return (`Extend (StringMap.empty, None))) in
-      o#get_relevant_vars
-
-  let computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#computation e in
-      o#get_relevant_vars
-
-  let program = computation
-end
-
-let var_appln env name args =
-  (`Apply(`Variable(Env.String.lookup env name), args) : tail_computation)
-
-let rec funcmap_of_binding = function
-  | `Let (b, (_, tc)) -> funcmap_of_tailcomp tc
-  | (`Fun (b, (_,_,body), _) as f) ->
-      (Var.var_of_binder b, f) :: funcmap_of_computation body
-  | `Rec defs -> concat_map (fun ((b, (_,_,body), _) as def) ->
-                               (Var.var_of_binder b, `Rec defs) ::
-                                 funcmap_of_computation body) defs
-  | `Alien (b, _lang) -> []
-  | `Module _ -> failwith "Not implemented."
-and funcmap_of_tailcomp = function
-  | `Return _ | `Apply _ | `Special _ -> []
-  | `Case (_, branches, default) ->
-      List.concat(StringMap.to_list
-                    (fun _ (_, comp) -> funcmap_of_computation comp)
-                    branches)
-      @ (match default with
-           | None -> []
-           | Some (_, comp) -> funcmap_of_computation comp)
-  | `If (_, t, f) ->
-      funcmap_of_computation t @ funcmap_of_computation f
-and funcmap_of_computation =
-  fun (bs, tc) ->
-    concat_map funcmap_of_binding bs @ funcmap_of_tailcomp tc
-
-let funcmap = funcmap_of_computation
+type eval_fun_def = var_info * (var list * computation) * Var.var option * location
+  deriving (Show)

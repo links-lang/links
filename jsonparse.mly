@@ -129,10 +129,10 @@ func:
 | SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE RBRACE
                                      { (* The underscore here is a nuisance; would be good to remove it. *)
                                        `FunctionPtr(Num.int_of_num $4,
-                                                    Value.empty_env (Utility.IntMap.empty)) }
+                                                    Value.empty_env) }
 | SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE members RBRACE
                                      { `FunctionPtr(Num.int_of_num $4,
-                                                    Value.extend (Value.empty_env Utility.IntMap.empty) 
+                                                    Value.extend Value.empty_env 
                                                       (Utility.IntMap.from_alist
                                                         (List.map (fun (x,y) ->
                                                             (int_of_string x,

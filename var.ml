@@ -48,6 +48,7 @@ let make_global_info (t, name) = (t, name, `Global)
 
 let fresh_binder_of_type = info_of_type ->- fresh_binder
 let fresh_var_of_type = info_of_type ->- fresh_var
+let fresh_global_var_of_type = info_of_type ->- fresh_var
 
 let var_of_binder (var, _ : binder) = var
 let info_of_binder (_, info : binder) = info
