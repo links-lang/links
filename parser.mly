@@ -202,7 +202,7 @@ let datatype d = d, None
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG OPEN
 %token MODULE
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
@@ -294,7 +294,7 @@ declaration:
 | nofun_declaration                                            { $1 }
 
 preamble_declaration:
-| INCLUDE STRING                                               { `Include $2, pos() }
+| OPEN STRING                                                  { `Open $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
@@ -306,6 +306,10 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+| links_module                                                 { $1 }
+
+links_module:
+| MODULE var block                                             { `Module $2 $3, pos() }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
