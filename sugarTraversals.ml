@@ -1714,6 +1714,10 @@ class fold_map =
           in (o, (`Type ((_x, _x_i1, _x_i2))))
       | `Infix -> (o, `Infix)
       | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
+      | `Module (n, p) ->
+          let (o, n) = o#string n in
+          let (o, p) = o#phrase p in
+          (o, (`Module (n, p)))
 
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->

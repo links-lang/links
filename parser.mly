@@ -198,7 +198,7 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR MODULENAME
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
@@ -308,7 +308,10 @@ nofun_declaration:
 | links_module                                                 { $1 }
 
 links_module:
-| MODULE var block                                             { `Module $2 $3, pos() }
+| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, (`Block $3, name_pos)), name_pos }
+module_name:
+| MODULENAME                                                   { $1 , pos () }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -836,6 +839,13 @@ binding:
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
+
+/* For now, I don't see it making much sense to allow values
+ * or expressions in module blocks. F# allows side-effecting
+ * functions in modules -- but I'm still not a fan.
+ */
+moduleblock:
+| LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
