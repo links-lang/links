@@ -14,7 +14,6 @@ open Utility
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
 %token COLON COMMA UNDERSCORE TRUE FALSE NULL 
-%token CLOSURETABLE SERVERFUNC
 %token <string> STRING
 %token <Num.num> INT
 %token <float> FLOAT
@@ -97,6 +96,19 @@ object_:
                                           failwith ("jsonparse: xml should be either a text node or an element node. Got: "
                                                     ^ Value.string_of_value t)
                                   end
+                            | ["_closureTable", id] ->
+                              `ClientFunction("_closureTable["^Value.string_of_value id^"]")
+                            | ["_serverFunc", id] ->
+                              `FunctionPtr(Num.int_of_num (Value.unbox_int id), Value.empty_env)
+                            | ["_serverFunc", id; "_env", env]
+                            | ["_env", env; "_serverFunc", id] ->
+                              let env' =
+                                Value.extend Value.empty_env
+                                  (Utility.IntMap.map
+                                     (fun v -> (v, `Local))
+                                     (Utility.val_of (Value.intmap_of_record env)))
+                              in
+                              `FunctionPtr(Num.int_of_num (Value.unbox_int id), env')
                             | _ -> `Record (List.rev $2)
                         }
 
@@ -113,7 +125,6 @@ elements:
 | elements COMMA value               { $3 :: $1 }
 
 value:
-| func                               { $1 }
 | string                             { $1 }
 | number                             { $1 }
 | object_                            { $1 }
@@ -121,22 +132,6 @@ value:
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
 | NULL                               { `Record [] (* Or an error? *) } 
-
-func:
-| CLOSURETABLE LBRACKET INT RBRACKET { `ClientFunction("_closureTable["^
-                                                       Num.string_of_num $3^"]")
-                                     }
-| SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE RBRACE
-                                     { (* The underscore here is a nuisance; would be good to remove it. *)
-                                       `FunctionPtr(Num.int_of_num $4,
-                                                    Value.empty_env) }
-| SERVERFUNC LBRACKET UNDERSCORE INT RBRACKET LBRACE members RBRACE
-                                     { `FunctionPtr(Num.int_of_num $4,
-                                                    Value.extend Value.empty_env 
-                                                      (Utility.IntMap.from_alist
-                                                        (List.map (fun (x,y) ->
-                                                            (int_of_string x,
-                                                                (y,`Local))) $7))) }
 
 string:
 | STRING                             { Value.box_string $1 }

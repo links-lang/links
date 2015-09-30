@@ -836,8 +836,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
   in
-  let extLibs = ext_script_tag "json.js"^"
-  "            ^ext_script_tag "regex.js"^"
+  let extLibs = ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
   let db_config_script =
