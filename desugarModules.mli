@@ -1,1 +1,1 @@
-val desugar_modules : SugarTraversals.map
+val desugar_modules : Sugartypes.program -> Sugartypes.program

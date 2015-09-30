@@ -28,7 +28,7 @@ struct
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
-        ->- RefineModules.refine_modules#program
+        ->- DesugarModules.desugar_modules
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv
