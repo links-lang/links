@@ -220,8 +220,7 @@ exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
-let def_kind = ['A'-'Z'] def_id*
-let def_module_name = def_kind
+let qualified_var = (['a'-'z' 'A'-'Z'] (['a'-'z' 'A'-'Z' '_' '0'-'9'] '.')* ['a'-'z' 'A'-'Z' '_' '0'-'9'])
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
@@ -315,11 +314,11 @@ rule lex ctxt nl = parse
   | "infixr"                            { INFIXR ctxt#setprec }
   | "prefix"                            { PREFIX ctxt#setprec }
   | "postfix"                           { POSTFIX ctxt#setprec }
-  | def_module_name as var              { MODULENAME var }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
+  | qualified_var as var                { QUALIFIEDVARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse

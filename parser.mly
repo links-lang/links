@@ -198,7 +198,7 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR MODULENAME
+%token <string> QUALIFIEDVARIABLE VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
@@ -305,13 +305,14 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+
 | links_module                                                 { $1 }
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
                                                                  `Module (mod_name, (`Block $3, name_pos)), name_pos }
 module_name:
-| MODULENAME                                                   { $1 , pos () }
+| CONSTRUCTOR                                                  { $1 , pos () }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -393,6 +394,7 @@ constant:
 
 atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
+| QUALIFIEDVARIABLE                                            { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
@@ -835,6 +837,7 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
+| links_module                                                 { $1 }
 
 bindings:
 | binding                                                      { [$1] }
