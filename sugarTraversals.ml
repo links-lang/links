@@ -564,6 +564,10 @@ class map =
           in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
       | `Infix -> `Infix
       | `Exp _x -> let _x = o#phrase _x in `Exp _x
+      | `Module (n, p) ->
+          let n = o#name n in
+          let p = o#phrase p in
+          `Module (n, p)
 
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
@@ -1079,6 +1083,10 @@ class fold =
           in let o = o#datatype' _x_i2 in o
       | `Infix -> o
       | `Exp _x -> let o = o#phrase _x in o
+      | `Module (n, p) ->
+          let o = o#name n in
+          let o = o#phrase p in
+          o
 
     method binding : binding -> 'self_type =
       fun (_x, _x_i1) ->
