@@ -9,7 +9,7 @@
 fun mapk(x) {
     handle(x) {
     	      case Op1(p,k)  -> map(k,p)
-	      case Return(x) -> [x]
+	      case Ret urn(x) -> [x]
     }
 }
 

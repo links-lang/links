@@ -1601,9 +1601,89 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
-    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in    
-    let type_operation_case pat (ktail,krow) =
-      let check_pattern_on_cont opname (p,pos) =
+    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
+    let rec type_continuation_param : string -> pattern -> (string * Types.datatype) option =
+      fun opname (k,pos) ->
+      let fresh_continuation_type =
+	let domain = Types.fresh_type_variable (`Unl, `Any) in
+	let codomain = Types.fresh_type_variable (`Unl, `Any) in
+	let effrow = Types.make_empty_open_row (`Unl, `Any) in (* Maybe the same across all continuations? *)
+	`Function (Types.make_tuple_type [domain], effrow, codomain)
+      in
+      let k' = tpo (k,pos) in
+      match k with
+	`Any -> None (* Nothing to do *)
+      | `Variable (name,_,_)
+      | `As ((name,_,_), _) -> let kt = fresh_continuation_type in
+			       let () = unify ~handle:Gripers.operation_case_cont_param (ppos_and_typ k', no_pos kt) in
+			       (Some (name, kt))
+      | `HasType (p,t)      -> begin
+			       let t = match t with
+				   _, Some t -> t
+				 | _ -> assert false
+			       in
+			       match type_continuation_param opname p with
+				 None -> None (* Nothing to do *)
+			       | Some (name, continuation_type) ->
+				  let (_,_,p) = SourceCode.resolve_pos pos in
+				  let () = unify ~handle:Gripers.operation_case_cont_param ((p, t), no_pos continuation_type) in (* Unify with t *)
+				  Some (name, t)
+			     end			     
+      | _ -> Gripers.die pos ("Improper pattern matching on continuation parameter in " ^ opname ^ ".")
+    in
+    let type_operation_case' : pattern -> ((pattern * Types.environment * Types.datatype) * (string * Types.datatype) option) =
+      fun pat ->
+      let ((pat,pos),tenv,dt) = tpo pat in (* Type the variant pattern *)
+      let k : ((string * Types.datatype) option) = (* Next, extract and type the continuation parameter (k) if it exists *)
+	match pat with
+	  `Variant ("Return", Some (p,pos)) -> None
+	| `Variant (opname, None) -> Gripers.die pos ("Improper pattern matching on " ^ opname)
+	| `Variant (opname, Some (p,pos)) ->
+	   begin
+	     match p with
+	       `Tuple ps -> let k = List.hd (List.rev ps) in
+			    type_continuation_param opname k
+	     | k -> print_endline "Single parameter case"; type_continuation_param opname (k,pos)
+	   end
+	| _ -> assert false
+      in
+      match k with
+	Some (kname, ktype) -> let tenv = Env.bind tenv (kname, ktype) in (* Assign the continuation parameter its type *)
+			       let (fields,row_var,dual) = TypeUtils.extract_row dt in
+			       let fields = StringMap.map (function
+							    | `Present p ->
+							       begin
+								 match p with
+								   `Record _ -> let (fields, row_var,dual) = TypeUtils.extract_row p in
+										let last_element = string_of_int (StringMap.size fields) in (* Get the identifier for the last parameter (the continuation parameter) *)
+										`Present ((`Record (StringMap.add last_element (`Present ktype) fields, row_var, dual))) (* Overwrite the continuation parameter type *)
+								 | `MetaTypeVar p -> failwith "MetaTypeVar"
+								 | _ -> assert false
+							       end
+							    | _ -> assert false) fields
+			       in
+(*			       let (key,inner) = List.hd (StringMap.to_list (fun key t -> (key,t)) fields) in (* There is only one element. *)
+			       let inner =
+				 match inner with
+				 `Present p ->
+				 begin
+				   match p with
+				     `Record _ -> let (fields, row_var,dual) = TypeUtils.extract_row p in
+						  let last_element = string_of_int (StringMap.size fields) in (* Get the identifier for the last parameter (the continuation parameter) *)
+						  `Present ((`Record (StringMap.add last_element (`Present ktype) fields, row_var, dual))) (* Overwrite the continuation parameter type *)
+				   | `MetaTypeVar p -> failwith ""
+				   | _ -> assert false
+				 end
+				 | _ -> assert false
+			       in			       *)
+			       let dt = `Variant (fields,row_var,dual) in			       
+			       (((pat,pos),tenv,dt),k)
+       | None -> (((pat,pos),tenv,dt),k)
+    in
+    let type_operation_case : pattern -> (Types.datatype * Types.row) -> (pattern * Types.environment * Types.datatype)
+      = fun pat (ktail,krow) ->
+      let check_pattern_on_cont : string -> pattern -> string option
+	    = fun opname (p,pos) ->
 	match p with
 	  `Any -> None
 	| `Variable (name,_,_) -> Some name
@@ -1617,24 +1697,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	  `Variant ("Return", Some (p,pos)) -> (tenv, dt)	  
 	| `Variant (opname, None) -> Gripers.die pos ("Improper pattern matching on " ^ opname)
 	| `Variant (opname, Some (p,pos)) ->
-	   let cont_name = 
-	   begin
-	   match p with (* Retrieve the continuation parameter's name, and while at it, check that the pattern-matching on said parameter is sane. 
-                         * Permitted patterns: `Variable, `As, `Any *)
-	     `Tuple ps as r -> if List.length ps > 0 then 
-			    let p = List.hd (List.rev ps) in
-			    check_pattern_on_cont opname p
-			  else
-			    Gripers.die pos ("Improper pattern matching on " ^ opname)
-					
-	   | p -> check_pattern_on_cont opname (p,pos)
-	   end
+	   let (cont_name) = 
+	     begin
+	       match p with (* Retrieve the continuation parameter's name, and while at it, check that the pattern-matching on said parameter is sane. 
+                             * Permitted patterns: `Variable, `As, `Any *)
+		 `Tuple ps as r -> if List.length ps > 0 then 
+				     let p = List.hd (List.rev ps) in
+				     check_pattern_on_cont opname p
+				   else
+				     Gripers.die pos ("Improper pattern matching on " ^ opname)
+						 
+	       | p -> check_pattern_on_cont opname (p,pos)
+	     end
 	   in
 	   let fresh_continuation_type =
 	     let t = Types.fresh_type_variable (`Unl, `Any) in (* Input type *)
-	     let eff_row = Types.make_empty_open_row (`Unl,`Any) in
 	     `Function (Types.make_tuple_type [t], krow, ktail)
-(*	     `Function (Types.make_tuple_type [t], eff_row, Types.fresh_type_variable (`Unl,`Any)) (* The continuation parameter is always a function *)*)
 	   in
 	   (* Destruction and construction phase *)
            (* The parameters are always wrapped inside a variant*)
@@ -1645,9 +1723,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       `Present p ->
 	       begin
 		 match p with
-		   (* Case: The patterns are wrapped inside an inner record, that is, entire pattern is on the form Constructor{{typ1,typ2,...,typN}}, where {{contents}} denote a singleton row whose only member is another row with types. *)
+		   (* Case: The patterns are wrapped inside an inner record, that is, the entire pattern is on the form Constructor{{typ1,typ2,...,typN}}, where {{contents}} denote a singleton row whose only member is another row with types. *)
 		   `Record _ ->
-		   let (inner_fields,inner_rv,inner_dual) = TypeUtils.extract_row p in (* Extracts the inner row *)
+		   let (inner_fields,inner_rv,inner_dual) = TypeUtils.extract_row p in  (* Extracts the inner row *)
 		   let last_element = string_of_int (StringMap.size inner_fields) in    (* Get the identifier for the last parameter (the continuation parameter) *)
 		   let (kt',inner_fields) = StringMap.pop last_element inner_fields in  (* Remove the last parameter from the inner row *)
 		   let kt' = match kt' with
@@ -1671,9 +1749,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   in	
 	   let tenv = 
 	     match cont_name with
-	       Some kname -> let () = unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt) in (* If the user is `As-pattern-matching on the continuation parameter, then the unify side effect will ensure that the both aliases get the same type. *)
-					   Env.bind tenv (kname, kt) (* Bind the continuation parameter to the constructed type in the environment *)
+	       Some kname -> let () = unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt) in (* If the user uses `As-pattern-matching on the continuation parameter, then the unify side effect will ensure that the both aliases get the same type. *)
+			     Env.bind tenv (kname, kt) (* Bind the continuation parameter to the constructed type in the environment *)
 	     | None -> tenv
+	   in
+	   let () = print_endline (Types.string_of_datatype dt)
 	   in
 	   (tenv, dt)   
 	| _ -> Gripers.die pos "The pattern is not an operation-pattern."
@@ -1688,8 +1768,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       let binders, pats =
         List.fold_right
           (fun (pat, body) (binders, pats) ->
-	     let pat = type_operation_case pat (ktail,krow) in
-             (*let pat = tpo pat in*)	     
+	   let pat = type_operation_case pat (ktail,krow) in
+	   (*let (pat,k) = type_operation_case' pat in
+	   let (_,tenv,_) = pat in
+	   let () = print_endline (Types.string_of_environment tenv) in*)
              let () =
                unify ~handle:hpatterns
                  (ppos_and_typ pat, no_pos pt)
@@ -1713,7 +1795,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           binders []
       in
       binders, pt, bt in   
-    let type_cases binders = (*type_cases' binders Gripers.switch_patterns Gripers.switch_branches in*)
+    let type_cases binders = 
             let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
       let binders, pats =
@@ -2719,11 +2801,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Handle (exp, cases, _, spec) ->
 	   let unify_all_with handle body_type types
 	     = if List.length types > 0 then
-		 List.fold_left (fun _ t -> unify ~handle:handle (no_pos body_type, no_pos t)) () types
+		 List.fold_left (fun _ t -> print_endline (Types.string_of_datatype t); unify ~handle:handle (no_pos body_type, no_pos t)) () types
 	       else ()
 	   in	   	 
 	   let m = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches     in  (* Type check cases. *)
+	   let cases, pattern_type, body_type = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)
 	   let (effects, operations_row) =
 	     match pattern_type with
 	       `Variant _ -> let effects  = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
@@ -2759,6 +2841,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     else ()
 	   in
 	   (*let () = unify ~handle:Gripers.handle_patterns (no_pos body_type, no_pos (Types.fresh_type_variable (`Unl, `Any))) in*)
+	   let () = print_endline ("Handler types: " ^ (Types.string_of_datatype body_type) ^ ", " ^ (Types.string_of_row effects)) in
 	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in

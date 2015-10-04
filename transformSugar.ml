@@ -328,7 +328,7 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in
                    (o, `UnaryAppl ((tyargs, op), e), t))
       | `FnAppl (f, args) ->
-          let (o, f, ft) = o#phrase f in
+         let (o, f, ft) = o#phrase f in
           let (o, args, _) = list o (fun o -> o#phrase) args in
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAbstr (tyvars, e) ->
