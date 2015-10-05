@@ -10,8 +10,8 @@ fun fromJust(x) {
 
 fun escapeViaJust(x) {
     handle(x) {
-    	      case Escape(p,k) -> Just(k)
-	      case Return(x)   -> Just(x)
+    	      case Escape(k) -> Just(k)
+	      case Return(x) -> Just(x)
     }
 }
 

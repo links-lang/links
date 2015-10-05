@@ -1,32 +1,31 @@
 # Currently, there is a bug in Links' effect system which prevents this example from running
 # Coroutines in Links
 
-typename Thread = forall r::Row . () ~r~> ();
+typename Thread = forall e :: Row . Comp({Spawn:(Thread) {}-> (),Yield:()|e},());
 
+sig start : (Thread) {Spawn:(Thread) {}-> ()|_}~> ()
 fun start(m) { do Spawn(m) }
-fun yield()  { do Yield() }
 
-handler queue(m) {
-     case Enqueue(p,k) -> fun(q) {
-                           k(())(q ++ [p])
-                          }
-     case Dequeue(_,k) -> fun(q) {
-			    k(hd(q))(tl(q))
-                          }
-     case Peek(_,k)    -> fun(q) {
-     	  	       	     k(q)(q)
-                          }
-     case Return(x)    -> fun(q) { x }			  
+sig yield : Comp({Yield:()|_},())
+fun yield()  { do Yield }
+
+sig enqueue : (a, [a]) {}-> [a]
+fun enqueue(e,q) {
+    q ++ [e]
 }
 
-open handler scheduler(m) {
-      case Spawn(t : Thread,k) -> { var q = do Enqueue(k); t() }
-      case Yield(_,k) -> { var q = do Enqueue(k); var t = do Dequeue() : Thread; t() }
-      case Return(x)  -> x
+sig dequeue : ([a]) {}-> Maybe((a,[a]))
+fun dequeue(q) {
+    switch (q) {
+    	   case p :: q -> Just((p, q))
+	   case other -> Nothing
+    }
 }
 
-handler test(m) {
-      case Op(t,k)    -> test(t)
+sig scheduler : (Comp({Spawn:(Thread) {}-> (),Yield:()|e}, ())) -> ([Thread]) -> Comp({Spawn{_},Yield{_}|e}, ())
+open handler scheduler(m)(q) {
+      case Spawn(t : Thread,k) -> { () }
+      case Yield(k : Thread)   -> { () }
       case Return(x)  -> x
 }
 
