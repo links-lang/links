@@ -276,10 +276,6 @@ sig
   val cp_fuse_session : griper
   val cp_fuse_dual : griper
 
-  (* Ambiguity in name resolution introduced by modules.
-   * Takes name, list of qualified alternatives *)
-  val ambiguous_name : string -> string list -> griper
-
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
   = struct
@@ -938,18 +934,6 @@ The left-hand computation in a composition must have
 EndBang type, but has type" ^ nl () ^
 tab () ^ code (show_type rt) ^ nl () ^
 "instead.")
-
-
-    (* val ambiguous_name : string -> string list -> griper *)
-    let ambiguous_name unqual_name qual_name_list =
-      let rec print_list = function
-        | [] -> ""
-        | e::[] -> e
-        | e::xs -> e ^ ", " ^ (print_list xs) in
-      let printed_list = "[" ^ (print_list qual_name_list) ^ "]" in
-      die pos ("\
-The name \"" ^ unqual_name ^ "\" is ambiguous. Possible options:" ^
-nl() ^ printed_list ^ ".")
 
     let non_linearity pos uses v t =
       die pos ("\
