@@ -1,3 +1,5 @@
+(*pp deriving *)
+
 (*
  * Desugars modules into plain binders.
  * Bindingnode -> [Bindingnode]
@@ -28,9 +30,17 @@ open Printf
 
 (* Reference tree node: name of module, set of names in the module, list of
  * submodules *)
-type reference_tree_node = (name * string Set.t * (name, reference_tree_node) Hashtbl.t)
+type reference_tree_node =
+    ReferenceTreeNode of (name * stringset * (name, reference_tree_node) Hashtbl.t)
 
-let empty_tree name = (name, Set.empty, Hashtbl.create 50)
+let empty_tree name = `ReferenceTreeNode(name, StringSet.empty, Hashtbl.create 50)
+
+let rec print_tree = function
+  | `ReferenceTreeNode(n, ss, ht) ->
+      printf "Module Name: %s\n, variable names: %s\n"
+          n (StringSet.fold (fun x acc -> acc ^ " " ^ x) ss "");
+      Hashtbl.iter(fun x y -> print_tree y) ht
+
 
 (* Flatten modules out. By this point the renaming will already have
  * happened.
@@ -67,85 +77,106 @@ let performFlattening : program -> program =
  * module prior to the renaming pass.
  *
  *)
-let build_env module_name node =
+let rec build_env module_name node =
 object(self)
   inherit SugarTraversals.fold as super
   val tree_node = node
 
   method add plain_name =
-    let (module_name, names, children) = tree_node in
-    {< tree_node = (module_name, StringSet.add plain_name names, children) >}
+    let `ReferenceTreeNode (module_name, names, children) = tree_node in
+    {< tree_node = `ReferenceTreeNode (module_name, StringSet.add plain_name names, children) >}
 
-  method add_child child_name children =
-    let (module_name, names, children) = tree_node in
-    Hashtbl.add child_name children;
+  method add_child child_name new_child =
+    let `ReferenceTreeNode (module_name, names, children) = tree_node in
+    Hashtbl.add children child_name new_child;
     self
 
   method get_tree = tree_node
 
   method phrasenode = function
-    | `Var name -> add name
+    | `Var name -> self#add name
     | x -> super#phrasenode x
 
-  method binder : binder -> binder = function
-    | (name, dt, pos) -> add name
+  method binder = function
+    | (name, dt, pos) -> self#add name
 
-  method bindingnode : bindingnode -> bindingnode = function
+  method bindingnode = function
     | `Module (child_name, block) ->
         let child_node =
           (* Recursive step: generate a reference tree node for module *)
-          ((build_env name (empty_tree name))#binding block)#get_tree in
-        add_child child_name child_node
+          ((build_env child_name (empty_tree child_name))#phrase block)#get_tree in
+        self#add_child child_name child_node
+    | `Fun (b, _, _, _, _) -> self#binder b
     | x -> super#bindingnode x
 end
 
 let generateReferenceTree prog =
-  ((build_env prog (empty_tree ""))#program prog)#get_tree
+  ((build_env "" (empty_tree ""))#program prog)#get_tree
 
 
-let getSubstFor module_name open_modules reference_tree plain_var_name =
-  let splitPath path = Str.split "\." path in
+let checkSubsts plain_var_name poss_substs pos =
+  (* TODO: Is there a "proper" way to report errors when not in typeSugar? *)
+  let rec print_list = function
+        | [] -> ""
+        | e::[] -> e
+        | e::xs -> e ^ ", " ^ (print_list xs) in
+  let printed_list xs = "[" ^ (print_list xs) ^ "]" in
+
+  match poss_substs with
+    | [] -> plain_var_name
+    | [subst_name] -> subst_name
+    | xs -> failwith ("Name " ^ plain_var_name ^
+      " is ambiguous. Possible options: " ^ printed_list xs ^ ".")
+
+let getSubstFor module_name open_modules reference_tree plain_var_name var_pos =
+  let splitPath path = Str.split (Str.regexp "\\.") path in
 
   (* Checks whether the module at the given path contains plain_var_name *)
-  let rec isContainedIn (_, vars, tbl) split_path = (
+  let rec isContainedIn ((`ReferenceTreeNode (_, vars, tbl)) as rtn) split_path = (
      match split_path with
-       | [] -> Set.mem plain_var_name vars (* TODO: Handle qualified variables here *)
+       | [] -> StringSet.mem plain_var_name vars (* FIXME: Handle qualified variables here *)
        | m::ms ->
            let child_node = Hashtbl.find tbl m in
-           isContainedIn child_node tbl) in
+           isContainedIn child_node ms) in
   (* For the current module, and all open modules, check whether the
    * plain name is contained there. *)
-  List.filter (fun p ->
+  let substs = ListUtils.filter_map (fun p ->
     let split_p = splitPath p in
-    isContainedIn reference_tree 
+    isContainedIn reference_tree split_p)
+      (fun p -> if p = "" then plain_var_name else p ^ "." ^ plain_var_name)
+      (module_name::open_modules) in
+  checkSubsts plain_var_name substs var_pos
+
 
 (* Add module prefix to all internal binder names and variables *)
-let rec add_module_prefix prefix =
+let rec add_module_prefix prefix reference_tree =
 object(self)
   inherit SugarTraversals.map as super
 
-  method phrasenode : phrasenode -> phrasenode = function
-    | `Var old_name ->
+  method phrase : phrase -> phrase = function
+    | (`Var old_name, pos) ->
         (* Add prefix onto var name*)
         let new_name =
-          if prefix == "" then old_name else prefix ^ "." ^ old_name in
-        (`Var new_name)
-    | x -> super#phrasenode x
+          (* TEMP until we get Open working *)
+          getSubstFor prefix [] reference_tree old_name pos in
+        (`Var new_name, pos)
+    | x -> super#phrase x
+
 
   method binder : binder -> binder = function
     | (old_name, dt, pos) ->
         let new_name =
-          if prefix == "" then old_name else prefix ^ "." ^ old_name in
+          if prefix = "" then old_name else prefix ^ "." ^ old_name in
         (new_name, dt, pos)
 
   method bindingnode : bindingnode -> bindingnode = function
     | `Module (name, (`Block (bindings, dummy_phrase), pos)) ->
-        (* Recursively rename everything in the phrase *)
+        (* Recursive step: change current path, recursively rename modules *)
         let new_prefix =
-          if prefix == "" then name else prefix ^ "." ^ name in
+          if prefix = "" then name else prefix ^ "." ^ name in
         let renamed_bindings =
-          List.map (fun binding -> (add_module_prefix new_prefix)#binding binding) bindings in
-          (* self#list (fun o -> o#binding) bindings in *)
+          List.map (fun binding ->
+            (add_module_prefix new_prefix reference_tree)#binding binding) bindings in
         `Module (new_prefix, (`Block (renamed_bindings, dummy_phrase), pos))
     | x -> super#bindingnode x
 
@@ -157,8 +188,10 @@ object(self)
 
 end
 
-let performRenaming : program -> program =
-  (add_module_prefix "")#program
+let performRenaming prog =
+  let ref_tree = generateReferenceTree prog in
+  (* print_tree ref_tree; *)
+  (add_module_prefix "" ref_tree)#program prog
 
 (* 1) Perform a renaming pass to expand names in modules to qualified names
  * 2) Peform a flattening pass to flatten modules to lists of bindings
