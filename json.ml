@@ -55,7 +55,7 @@ let rec json_of_xmlitem = function
 let jsonize_primitive : Value.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> Num.string_of_num value
-  | `Float value -> string_of_float value
+  | `Float value -> string_of_float' value
   | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t

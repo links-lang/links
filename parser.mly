@@ -272,7 +272,7 @@ arg:
 | VARIABLE                                                     { $1 }
 | CONSTRUCTOR                                                  { $1 }
 | UINTEGER                                                     { Num.string_of_num $1 }
-| UFLOAT                                                       { string_of_float $1 }
+| UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 

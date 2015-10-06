@@ -405,7 +405,7 @@ and string_of_value : t -> string = function
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_num value
-  | `Float value -> string_of_float value
+  | `Float value -> string_of_float' value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"

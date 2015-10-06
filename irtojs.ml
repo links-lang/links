@@ -428,7 +428,7 @@ let rec generate_value env : Ir.value -> code =
             match c with
               | `Int v  -> Lit (Num.string_of_num v)
               | `Float v    ->
-                  let s = string_of_float v in
+                  let s = string_of_float' v in
                   let n = String.length s in
                     (* strip any trailing '.' *)
                     if n > 1 && (s.[n-1] = '.') then

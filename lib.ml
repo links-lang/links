@@ -252,7 +252,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
   "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float) PURE;
   "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:(num_of_int -<- int_of_float) ~box:box_int ~into:(`Primitive `Int) PURE;
-  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float ~box:box_string ~into:Types.string_type PURE;
+  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float' ~box:box_string ~into:Types.string_type PURE;
   "stringToFloat", conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
   "stringToXml",
@@ -268,7 +268,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "floatToXml",
   (`PFun (string_to_xml -<-
-            (conversion_op' ~unbox:unbox_float ~conv:(string_of_float) ~box:box_string)),
+            (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string)),
    datatype "(Float) -> Xml",
   PURE);
 
