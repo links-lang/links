@@ -89,6 +89,12 @@ let list     = {
   arity      = [`Type, (`Unl, `Any)] ;
 }
 
+let prov = {
+    Abstype.id = "Prov" ;
+    name       = "Prov" ;
+    arity      = [`Type, (`Any, `Any) ] ; (* I don't know what this means... --Stefan *)
+  }
+
 let event    = {
   Abstype.id = "Event" ;
   name       = "Event" ;

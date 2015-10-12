@@ -85,7 +85,7 @@ exception UnexpectedFreeVar of string
 
 module Desugar =
 struct
-  let rec datatype var_env (alias_env : Types.tycon_environment) t =
+  let rec datatype var_env (alias_env : Types.tycon_environment) (t : Sugartypes.datatype) =
   let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t var_env.tenv in
       match t with
@@ -144,6 +144,10 @@ struct
         | `Variant r -> `Variant (row var_env alias_env r)
         | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
+        | `TypeApplication ("Prov", [`Type t]) -> `Application (Types.prov, [`Type (datatype var_env t)])
+        | `TypeApplication ("Prov", ts) ->
+           failwith (Printf.sprintf "Prov type constructor expects exactly one argument, given: %s"
+                                    (string_of_int (List.length ts)))
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)

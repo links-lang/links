@@ -60,6 +60,7 @@ end
 
 val process      : Abstype.t
 val list         : Abstype.t
+val prov         : Abstype.t
 val event        : Abstype.t
 val dom_node     : Abstype.t
 val access_point : Abstype.t
