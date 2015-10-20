@@ -832,11 +832,11 @@ fun inputRadiogroup(items, selected, layout) {
   sequence (for (x <- items) [nextName]) >>= fun (keys) {
     var keyedItems = zip(keys,items);
     fun itemXml(selected) {
-      for ((key, data) <- keyedItems)
+      for ((key, ddata) <- keyedItems)
         [(addAttributes(<input type="radio" name="{name}" value="{key}" />,
-                        if (data == selected)
+                        if (ddata == selected)
                           [("checked","on")] else []),
-          data)]
+          ddata)]
     }
     var xml = layout(itemXml(selected));
     return ((xml,
@@ -854,13 +854,13 @@ fun inputRadiogroup(items, selected, layout) {
 # function for determining whether this option was selected.
 sig preludeOptionKeyed : (String, (a,String), Bool) ~>
                         (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
-fun preludeOptionKeyed (key, (data,text), selected) {
+fun preludeOptionKeyed (key, (ddata,text), selected) {
   if (selected) {
      ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
-      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+      (fun (k) (aKey) { if (aKey == key) ddata::k(aKey) else k(aKey) })))
   } else {
      ((<option value="{key}">{stringToXml(text)}</option>,
-      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+      (fun (k) (aKey) { if (aKey == key) ddata::k(aKey) else k(aKey) })))
   }
 }
 
@@ -936,8 +936,8 @@ fun choices (items) {
          var selectedKeys = assocAll(fieldName,env);
          # now re-mark the items as selected or not according to
          #     whether they appear in the query env.
-         var keyedItems = for (((key, (data, text, sel))) <- keyedItems)
-                            [(key, (data, text, key `elem` selectedKeys))];
+         var keyedItems = for (((key, (ddata, text, sel))) <- keyedItems)
+                            [(key, (ddata, text, key `elem` selectedKeys))];
          var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
          (<select name="{fieldName}" multiple="multiple">{xml}</select>,
           pureE(concatMap(retrieve, selectedKeys)))

@@ -177,6 +177,7 @@ let datatype d = d, None
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT
 %token OFFER SELECT
+%token DATA PROV
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -499,6 +500,8 @@ postfix_expression:
 | SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
 | SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
 | SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
+| DATA exp                                                     { `Data $2, pos () }
+| PROV exp                                                     { `Prov $2, pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int 0), pos ())),

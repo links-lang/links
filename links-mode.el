@@ -47,6 +47,7 @@
 (defconst links-keywords
   '(
     "case"
+    "data"
     "database"
     "delete"
     "else"
@@ -60,9 +61,12 @@
     "infixr"
     "insert"
     "linfun"
+    "offer"
     "op"
     "orderby"
+    "prov"
     "query"
+    "select"
     "sig"
     "spawn"
     "spawnAngel"
@@ -76,8 +80,6 @@
     "where"
     "with"
     "yields"
-    "offer"
-    "select"
     ))
 
 (defconst links-font-lock-keywords

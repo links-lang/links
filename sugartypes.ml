@@ -198,6 +198,8 @@ and phrasenode = [
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
+| `Data             of phrase
+| `Prov             of phrase
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
 | `Iteration        of iterpatt list * phrase
@@ -341,6 +343,8 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
+    | `Data p
+    | `Prov p
     | `Spawn (_, _, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)

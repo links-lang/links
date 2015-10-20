@@ -156,6 +156,8 @@ class map =
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
                                             let _x_i2 = o#phrase _x_i2 in `Spawn (_x, _x_i1, _x_i2, _x_i3)
+      | `Prov _x -> let _x = o#phrase _x in `Prov _x
+      | `Data _x -> let _x = o#phrase _x in `Data _x
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -715,6 +717,8 @@ class fold =
       | `Var _x -> let o = o#name _x in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
+      | `Data _x
+      | `Prov _x -> let o = o#phrase _x in o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -1255,6 +1259,8 @@ class fold_map =
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let (o, _x_i1) = o#location _x_i1 in
                                             let (o, _x_i2) = o#phrase _x_i2 in (o, (`Spawn (_x, _x_i1, _x_i2, _x_i3)))
+      | `Data _x -> let (o, _x) = o#phrase _x in (o, (`Data _x))
+      | `Prov _x -> let (o, _x) = o#phrase _x in (o, (`Prov _x))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option

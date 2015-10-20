@@ -34,7 +34,7 @@ struct
   let generalise = Generalise.generalise
 
   let rec opt_generalisable o = opt_app is_pure true o
-  and is_pure (p, _) = match p with
+  and is_pure ((p, _) : Sugartypes.phrase) = match p with
     | `Constant _
     | `Var _
     | `FunLit _
@@ -51,6 +51,8 @@ struct
     | `Projection (p, _)
     | `TypeAnnotation (p, _)
     | `Upcast (p, _, _)
+    | `Prov p
+    | `Data p
     | `Escape (_, p) -> is_pure p
     | `ConstructorLit (_, p, _) -> opt_generalisable p
     | `RecordLit (fields, p) ->
@@ -1567,7 +1569,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       in
         binders, pt, bt in
 
-    let e, t, usages =
+    let (e: Sugartypes.phrasenode), (t : Types.datatype), (usages : usagemap) =
       match (expr : phrasenode) with
         | `Var v            ->
             (
@@ -2034,6 +2036,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `CP p ->
            let (p, t, u) = type_cp context p in
            `CP p, t, u
+
+        (* Not exactly applications, but could be *)
+        | `Prov (e, _pos_e) as a -> Gripers.die pos ("TODO typecheck `prov` keyword")
+        | `Data (e, pos_e) as a ->
+           let (_, typ, usages) = tc (e, pos_e) in
+           (* TODO should this use `unify`? *)
+           (match typ with
+            | `Application (ptype, [`Type inner]) when ptype = Types.prov -> (a, inner, usages)
+            | _ -> Gripers.die pos ("You can only get `data` out of a value of provenance type."))
 
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->
