@@ -2038,7 +2038,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            `CP p, t, u
 
         (* Not exactly applications, but could be *)
-        | `Prov (e, _pos_e) as a -> Gripers.die pos ("TODO typecheck `prov` keyword")
+        | `Prov (e, pos_e) as a ->
+           (* I don't know what the `usages` thing is.*)
+           let (_, typ, usages) = tc (e, pos_e) in
+           (* TODO should this use `unify`? *)
+           (match typ with
+            | `Application (ptype, [`Type _inner]) when ptype = Types.prov ->
+               let prov_triple = Types.make_tuple_type [Types.string_type; Types.string_type; Types.int_type] in
+               (a, prov_triple, usages)
+            | _ -> Gripers.die pos ("You can only get `prov` out of a value of provenance type."))
         | `Data (e, pos_e) as a ->
            let (_, typ, usages) = tc (e, pos_e) in
            (* TODO should this use `unify`? *)
