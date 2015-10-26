@@ -210,6 +210,10 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
+      | `Data e -> let (o, i, t) = o#phrase e in
+                   (o, (`Data i), t)
+      | `Prov e -> let (o, i, t) = o#phrase e in
+                   (o, (`Prov i), t)
       | `FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
@@ -504,9 +508,9 @@ class transform (env : Types.typing_environment) =
           let (o, p) = o#pattern p in
           let o = {< var_env=var_env;
                      formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
-            (o, `FormBinding (f, p), Types.xml_type)
-      | e -> failwith ("oops: "^Show_phrasenode.show  e)
-      
+          (o, `FormBinding (f, p), Types.xml_type)
+    (*      | e -> failwith ("oops: "^Show_phrasenode.show e) *)
+
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
         let (o, e, t) = o#phrasenode e in (o, (e, pos), t)

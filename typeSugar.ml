@@ -2194,7 +2194,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let t = Types.for_all(qs, t) in
               tabstr (qs, e), t, u
         | `TAppl (e, qs) ->
-            let (e, _), t, u = tc e in e, t, u
+           let (e, _), t, u = tc e in e, t, u
 
         (* xml *)
         | `Xml (tag, attrs, attrexp, children) ->
@@ -3019,8 +3019,8 @@ struct
         match body with
           | None -> (bindings, None), Types.unit_type, tyenv'
           | Some (_,pos as body) ->
-              let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
-              let typ = Types.normalise_datatype typ in
+             let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+             let typ = Types.normalise_datatype typ in
                 (bindings, Some body), typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg
