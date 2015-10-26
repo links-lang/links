@@ -397,19 +397,15 @@ tab() ^ code (show_type rt) ^ "."
 		     tab() ^ code (show_row (TypeUtils.extract_row rt))
 	      )	  
 
-    let handle_continuations ~pos ~t1:(kexpr,kt) ~t2:(_,body_type) ~error:_ =
-      die pos ("The continuation " ^ nl() ^
-		 tab() ^ code kexpr ^ nl() ^
-		   "has type" ^ nl() ^
+    let handle_continuations ~pos ~t1:(kexpr,kt) ~t2:(body_expr,body_type) ~error:_ =
+      die pos ("The codomain of continuation " ^ code kexpr ^ " has type" ^ nl() ^
 		     tab() ^ code (show_type kt) ^ nl() ^
 		       "but a type compatible with" ^ nl() ^
-			 tab() ^ code(show_type body_type) ^ nl() ^
+			 tab() ^ code (show_type body_type) ^ nl() ^
 			   "was expected.")
 
     let continuation_effect_rows ~pos ~t1:(_,lt) ~t2:(rexpr,rt)	~error:_ =
-      die pos ("The continuation" ^ nl() ^
-		 tab() ^ code rexpr ^ nl() ^
-		   "has effect row" ^ nl() ^
+      die pos ("The continuation " ^ code rexpr ^ nl() ^ " has effect row" ^ nl() ^
 		     tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
 		   "but it is not unifiable with the current effect context" ^ nl() ^
 		     tab() ^ code (show_row (TypeUtils.extract_row lt))
