@@ -93,7 +93,7 @@ let fix_operation_arity : Types.row -> Types.row
       `Function (dt,eff,rt) as t -> 
       begin
 	match dt with
-	  `Record (fields,_,_) as r when StringMap.size fields = 0 || StringMap.size fields > 1 -> (name, `Function (wrap_in_record r, eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
+	  `Record (fields,_,_) as r when StringMap.size fields = 0 || StringMap.size fields > 1 -> (name, `Function (Types.make_tuple_type [r], eff, rt)) (* Ensures that Op() is interpreted as Op(()), and Op(x1,...,xN) is interpreted as Op((x1,...,xN)) *)
 	  | _ -> (name, t)
       end
     | _ as t -> (name, t)
