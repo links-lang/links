@@ -858,6 +858,8 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
+| typed_handler_binding                                        { let (m, spec, hnlit, pos) = $1 in
+								 `Handler (m, spec, hnlit, None), pos }
 
 bindings:
 | binding                                                      { [$1] }
