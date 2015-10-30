@@ -94,6 +94,19 @@ Operation parameter pattern-matching (Records)
 handler h1(m) { case Op1((_,y),k) -> k(y) case Op2((x,y,z),k) -> k(z) case Op3(_,(a,b,c),_) -> a case Return(x) -> x }
 stdout : () : ()
 
+Pattern-matching on continuation parameter (hiding)
+handler h1(m) { case Op(_) -> 0 case Return(x) -> x }
+stdout : () : ()
+
+Pattern-matching on continuation parameter (aliasing)
+handler h1(m) { case Op(k as f) -> f(1) case Return(x) -> x }
+stdout : () : ()
+
+Pattern-matching on continuation parameter (Constant)
+handler h1(m) { case Op(2) -> f(1) case Return(x) -> x }
+stderr : @.
+exit : 1
+
 Return parameter pattern-matching (hiding)
 handler h1(m) { case Op1(k) -> 1 case Return(_) -> 0 }
 stdout : () : ()
@@ -121,3 +134,7 @@ stdout : () : ()
 Open handler composition (1)
 open handler h1(m) { case Op1(k) -> k(1) case Return(x) -> x } open handler h2(m) { case Op2(k) -> k(2) case Return(x) -> x } open handler h3(m) { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
+
+Type annotation on continuation parameter
+handler h1(m) { case Op(k : ((Int) {Op{_}}~> Int)) -> k(1) case Return(x) -> x }
+stdout : () : ()
