@@ -938,10 +938,10 @@ let compile_handle_cases : raw_env -> (Types.datatype * Types.row * bool * var *
     (*let result =
       match_handle_cases var clauses (output_type,effects,isclosed) initial_env
     in*)
-    let is_matching_ok = check_handler_pattern_matching clauses in
+    (*let is_matching_ok = check_handler_pattern_matching clauses in*)
     (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
     (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
-     Afterwards we transform the  `Case to a `Handle construct. *)
+     Afterwards we transform the `Case to a `Handle construct. *)
     let (bs,tc) =  (* The compiled cases *)
       let t' = TEnv.lookup tenv var in (* Backup original type *)
       let tenv = TEnv.bind tenv (var, `Variant effects) in (* Override the type with a variant type s.t. match_cases is happy *)
