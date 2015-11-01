@@ -59,8 +59,8 @@ let effectrow_of_oplist : operation list -> Sugartypes.handler_spec -> Types.row
   let fields = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty ops in  
   match spec with
     `Closed -> Types.make_closed_row fields
-  | `Open -> let row = Types.make_empty_open_row (`Unl, `Any) in
-	     Types.extend_row fields row
+  | `Open   -> let row = Types.make_empty_open_row (`Unl, `Any) in
+	       Types.extend_row fields row
   | _ -> failwith "handlerUtils.ml: Handler specialisation not yet support."
     
 

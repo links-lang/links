@@ -1678,6 +1678,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       | None -> (((pat,pos),tenv,dt),k)
     in
     let type_handler_cases binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
+      let liftPresent f x =
+	match x with
+	  `Present x -> `Present (f x)
+	| _ -> assert false
+      in
+      let unPresent x =
+	match x with
+	  `Present x -> x
+	| _ -> assert false
+      in
       let pt = Types.fresh_type_variable (`Unl, `Any) in
       let bt = Types.fresh_type_variable (`Unl, `Any) in
       let binders, pats, ks =
@@ -1696,36 +1706,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                (pat, body)::binders, pat :: pats, ks)
           binders ([], [], []) in
       let pt = close_pattern_type (List.map fst3 pats) pt in
-      let (ret,effect_row) = TypeUtils.split_row "Return" (TypeUtils.extract_row pt) in (* FIXME: Make sure it is safe to split *)
+      let (ret,(opfields,row_var,dualised)) = TypeUtils.split_row "Return" (TypeUtils.extract_row pt) in (* FIXME: Make sure it is safe to split *)
 
       (* Prettify operation signatures *)
-      (*let get_continuation_domain_type k = List.hd (TypeUtils.arg_types (Types.concrete_type k)) in
-      let (fields,row_var,dualised) = effect_row in
-      let fields = StringMap.map
-	(function
-	| `Present p ->
-	   begin
-	     match p with
-	       `Record (fields,row_var,dual) ->
-		 let (k,fields) = StringMap.pop (string_of_int (StringMap.size fields)) fields in
-		 let k = match k with
-		     `Present k -> k
-		   | _ -> assert false
-		 in
-		 let fields = StringMap.map
-		   (function
-		   | `Present p -> `Present (`Function (Types.make_tuple_type [p], Types.make_empty_closed_row (), get_continuation_domain_type k))
-		   | _ -> assert false
-		   ) fields
-		 in
-		 `Present (`Record (fields,row_var,dual))
-	     | `MetaTypeVar p -> assert false (*`Present (get_continuation_domain_type p) (* USE UNIONFIND HERE *)*)
-	     | _ -> assert false
-	   end
-	| _ -> assert false)
-	fields
+      let operations = StringMap.to_alist opfields in
+      let operations = List.map
+	(fun (opname,p) ->
+	  (opname,
+	   unPresent (liftPresent
+	     (function
+	     | `Variant (fields,_,_)
+	     | `Record (fields,_,_) ->
+		let (k,fields) = StringMap.pop (string_of_int (StringMap.size fields)) fields in	       
+		let ps = Types.make_tuple_type (List.rev (StringMap.fold (fun _ p ps -> (unPresent p) :: ps) fields [])) in
+		let r  = List.hd (TypeUtils.arg_types (Types.concrete_type (unPresent k))) in
+		`Function (ps, Types.make_empty_closed_row (), r)
+	     | k -> List.hd (TypeUtils.arg_types (Types.concrete_type k))
+	     ) p))
+	) operations
       in
-	let pretty_effect_row = (fields,row_var,dualised) in*)
+      let operations = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty operations in
+      let effect_row = (operations,row_var,dualised) in
       (* NOTE: it is important to type the patterns in isolation first in order
          to allow them to be closed before typing the bodies *)
       let binders =
@@ -1738,14 +1739,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
            (pat, update_usages body us)::binders)
           binders []
-      in
-      (* Make continuation codomains and body type agree *)
-      let _        = List.fold_left
-	(fun _ ((kpat, tenv, t) as k) ->
-	  let ktail = (kpat, tenv, TypeUtils.return_type t) in
-	  unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos bt)
-	) () ks in
-      binders, pt, bt, ks in   
+      in      
+      binders, pt, bt, ks, (effect_row,ret)
+    in   
     let type_cases binders = 
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
@@ -2754,10 +2750,48 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     = if List.length patterns > 0 then
 		 List.fold_left (fun _ p -> unify ~handle:handle (no_pos body_type, ppos_and_typ p)) () patterns
 	       else ()
-	   in	   	 
+	   in
+	   let fst3 (x,_,_) = x in
 	   let m = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type, continuations = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)
-	   let effects         = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
+	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)
+	   let effects         = TypeUtils.extract_row pattern_type in
+	   let effect_row =
+	     match spec with
+	       `Closed -> let row = Types.make_empty_closed_row () in
+			  Types.extend_row (fst3 effect_row) row
+	     | `Open   -> let row = Types.make_empty_open_row (`Unl, `Any) in
+			  Types.extend_row (fst3 effect_row) row		  
+	     | _ -> assert false
+	   in
+	   let effect_row =
+	     match spec with
+	       `Closed
+	     | `Open -> HandlerUtils.allow_wild effect_row
+	     | _ -> effect_row
+	   in
+	   let _ =
+	     match spec with
+	       `Closed
+	     | `Open -> (* Make continuation codomains and body type agree *)
+		List.fold_left
+		  (fun _ ((kpat, tenv, t) as k) ->
+		    let ktail = (kpat, tenv, TypeUtils.return_type t) in
+		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type))
+		  () continuations
+	     | _ -> assert false (* Future: Shallow handlers *)
+	   in
+	   let _ = List.fold_left (fun _ k -> unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record (HandlerUtils.make_operations_presence_polymorphic effect_row)), ppos_and_row k)) () continuations in
+	   let thunk_type = Types.make_thunk_type effect_row ret in (* type: () {e}-> a *) 
+	   let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in	   
+	   let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
+	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
+	   let () =
+	     match spec with
+	       `Open -> let effect_row = HandlerUtils.make_operations_presence_polymorphic effect_row in
+			unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record effect_row)) 
+	     | _ -> ()
+	   in
+(*	   let effects         = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
 	   let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
 	   let raw_operations  = HandlerUtils.extract_operations ops in
 	   let operations      = HandlerUtils.simplify_operations raw_operations in
@@ -2779,7 +2813,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       let operations_row = HandlerUtils.make_operations_presence_polymorphic operations_row in
 	       unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row))
 	     else ()
-	   in
+	   in*)
 	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
