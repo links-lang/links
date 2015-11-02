@@ -1,0 +1,128 @@
+#
+# Mathematical game Nim
+#
+# Rules:
+#  - Two players: Alice and Bob; Alice always starts.
+#  - One heap of N sticks
+#  - A player may pick between 1-3 sticks at each turn
+#  - The player, who takes the last stick, wins.
+#
+
+# Datatype modelling the players
+typename Player = [|Alice|Bob|];
+
+# String of player
+sig showPlayer : (Player) -> String
+fun showPlayer(player) {
+  switch (player) {
+    case Alice -> "Alice"
+    case Bob   -> "Bob"
+  }
+}
+
+# Abstract operation "Move"
+sig move : (Player,Int) {Move:(Player,Int) {}-> Int|_}~> Int
+fun move(player,n) {do Move(player,n)}
+
+# We model the game as two mutual recursive functions
+sig aliceTurn : (Int) {Move:(Player,Int) {}-> Int|_}~> Player
+fun aliceTurn(n) {
+  if (n == 0) {Bob} # Bob wins
+  else {bobTurn( n - move(Alice,n) )}
+}
+
+sig bobTurn : (Int) {Move:(Player,Int) {}-> Int|_}~> Player
+fun bobTurn(n) {
+  if (n == 0) {Alice} # Alice wins
+  else {aliceTurn( n - move(Bob,n) )}
+}
+
+# A game is parameterised by the number of starting sticks,
+# moreover it enforces the rule that Alice always starts
+sig game : (Int) -> Comp({Move:(Player,Int) {}-> Int|_},Player)
+fun game(n)() {aliceTurn(n)}
+
+#
+# Encoding players' strategies as handlers
+#
+
+# An interpretation of Move corresponds to assigning a particular
+# strategy to a given player
+
+# Type alias for strategy handlers
+typename StrategyHandler = forall p :: Presence . (Comp({Move:(Player,Int) {}-> Int},Player)) {Move{p}}~> Player;
+
+#typename Strategy(e :: Row) = (Player,Int,(Int) ~e~> Player) ~e~> Player;
+typename Strategy = forall p :: Presence, e :: Row . (Player,Int,(Int) {Move{p}|e}~> Player) {Move{p}|e}~> Player;
+
+# A first strategy: Always pick one stick
+#sig ns : (Player,Int,(Int) ~e~> Player) ~e~> Player
+sig ns : Strategy
+fun ns(player,n,k) { k(1) }
+
+#sig strategy : ((Player,Int,(Int) ~e~> Player) ~e~> Player, (Player,Int,(Int) ~e~> Player) ~e~> Player) -> (() ~e~> Player) ~e~> Player
+#fun strategy(s1,s2) {
+#    handler(m) {
+#    	  case Move(Alice,n,k) -> s1(Alice,n,k)
+#	  case Move(Bob,n,k)   -> s2(Bob,n,k)
+#	  case Return(x)       -> x
+#    }
+#}
+
+# The naive-strategy-handler assigns the naive-strategy to both players
+sig naive : StrategyHandler
+handler naive(m) {
+  case Move(p,n,k) -> ns(p,n,k)
+  case Return(x)   -> x
+}
+
+sig max2 : (a,a) -> a
+fun max2(x,y) {
+  if (x > y) {x}
+  else {y}
+}
+
+# The perfect strategy is to pick "max(n `mod` 4, 1)" sticks
+#sig ps : (Player,Int,(Int) ~e~> Player) ~e~> Player
+#sig ps : Strategy({Move:(Player,Int) {}-> Int|_})
+sig ps : Strategy
+fun ps(p,n,k) {
+    k(max2(n `mod` 4, 1))
+}
+
+# The perfect handler assigns the perfect strategy to both players
+sig perfect : StrategyHandler
+handler perfect(m) {
+    case Move(p,n,k) -> ps(p,n,k)
+    case Return(x)   -> x
+}
+
+# List of valid moves
+sig validMoves : (Int) -> [Int]
+fun validMoves(n) {
+    filter(fun(m) { m <= n }, [1,2,3])
+}
+
+# The brute force strategy enumerates all future plays
+# if any particular play leads to a win, then play that strategy
+sig bfs : Strategy
+fun bfs(player,n,k) {
+  # Map the continuation over all possible moves
+  # this effectively determines all potential winners
+  var winners = map(k, validMoves(n));
+  # Ask whether 'player' is among the potential winners
+  var hasPlayerWon = elemIndex(player, winners);
+  switch (hasPlayerWon) {
+    case Nothing -> k(1)   # Not winning.
+    case Just(i) -> k(i+1) # Among winners; play the winning-strategy.
+  }
+}
+
+# The perfect vs brute force handler assigns 
+# Alice the perfect strategy and Bob the brute force strategy
+sig pvb : StrategyHandler
+handler pvb(m) {
+  case Move(Alice,n,k) -> ps(Alice,n,k)
+  case Move(Bob,n,k)   -> bfs(Bob,n,k)
+  case Return(x)       -> x
+}
