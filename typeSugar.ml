@@ -1636,6 +1636,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       let k = (* Next, extract and type the continuation parameter (k) if it exists *)
 	match pat with
 	  `Variant ("Return", Some _) -> None
+	| `Variant ("Return", None) -> Gripers.die pos ("Return-cases must be parameterised")
 	| `Variant (opname, None) -> Gripers.die pos ("Improper pattern matching on " ^ opname)
 	| `Variant (opname, Some (p,pos)) ->
 	   begin
@@ -1677,7 +1678,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		      (((pat,pos),tenv,dt),k)
       | None -> (((pat,pos),tenv,dt),k)
     in
-    let type_handler_cases binders hpatterns hbranches = (* Generalised type_cases; the two additional parameters are Griper handlers *)
+    let type_handler_cases binders =
       let liftPresent f x =
 	match x with
 	  `Present x -> `Present (f x)
@@ -1700,14 +1701,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     | None -> ks
 	   in
              let () =
-               unify ~handle:hpatterns
+               unify ~handle:Gripers.handle_patterns
                  (ppos_and_typ pat, no_pos pt)
              in
                (pat, body)::binders, pat :: pats, ks)
           binders ([], [], []) in
       let pt = close_pattern_type (List.map fst3 pats) pt in
-      let (ret,(opfields,row_var,dualised)) = TypeUtils.split_row "Return" (TypeUtils.extract_row pt) in (* FIXME: Make sure it is safe to split *)
-
+      let operations = TypeUtils.extract_row pt in
+      let (ret,(opfields,row_var,dualised)) =
+	if StringMap.mem "Return" (fst3 operations) then
+	  TypeUtils.split_row "Return" operations
+	else
+	  Gripers.die SourceCode.dummy_pos "Missing Return-case"
+      in
       (* Prettify operation signatures *)
       let operations = StringMap.to_alist opfields in
       let operations = List.map
@@ -1733,7 +1739,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         List.fold_right
           (fun (pat, body) binders ->
            let body = type_check (context ++ pattern_env pat) body in
-           let () = unify ~handle:hbranches
+           let () = unify ~handle:Gripers.handle_branches
 			  (pos_and_typ body, no_pos bt) in
            let vs = Env.domain (pattern_env pat) in
            let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
@@ -2753,7 +2759,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   in
 	   let fst3 (x,_,_) = x in
 	   let m = tc exp in (* Type-check expression under current context *)
-	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases Gripers.handle_patterns Gripers.handle_branches in  (* Type check cases. *)
+	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
 	   let effects         = TypeUtils.extract_row pattern_type in
 	   let effect_row =
 	     match spec with

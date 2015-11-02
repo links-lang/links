@@ -91,12 +91,13 @@ let to_var : Sugartypes.patternnode -> Sugartypes.phrasenode
 
 let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes.funlit
   = fun (m, cases, params) spec ->
+  let pos = snd m in
   let (m_name,_,_) = 
 	 match m with
 	   `Variable b, _ -> b
 	 | _ -> assert false
   in       
-  let mvar = (`Var m_name, dp) in
+  let mvar = (`Var m_name, pos) in
   let cases = parameterize cases params in
   let handle : phrase = `Block ([], (`Handle (mvar, cases, None, spec), dp)),dp in
   let body =
