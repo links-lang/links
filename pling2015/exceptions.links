@@ -14,7 +14,7 @@ handler try(m) {
 }
 
 # Throw a descriptive exception
-sig throw : Comp({Exception:(String) {}-> a|_}, a)
+sig throw : (String) {Exception:(String) {}-> a|_}~> a
 fun throw(msg) {do Exception(msg)}
 
 # Try-catch handler interprets computations that might fail
@@ -24,4 +24,22 @@ handler tryCatch(m) {
 	case Return(x)        -> x
 }
 
+
+# Out of bounds
+sig get : (Int, [a]) {Exception:(String) {}-> a}~> a
+fun get(i, xs) {
+    if (i >= 0 && i < length(xs)) {
+       xs !! i
+    } else {throw("Out of bounds!")}
+}
+
 # The functional approach to exception handling
+# 
+typename Maybe(a) = [|Just:a|Nothing|];
+
+# Maybe handler
+sig maybe : (Comp({Fail:_},a)) ~> Maybe(a)
+handler maybe(m) {
+	case Fail(_)   -> Nothing
+	case Return(x) -> Just(x)
+}
