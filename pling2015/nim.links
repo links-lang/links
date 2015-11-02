@@ -50,10 +50,10 @@ fun game(n)() {aliceTurn(n)}
 # strategy to a given player
 
 # Type alias for strategy handlers
-typename StrategyHandler = forall p :: Presence . (Comp({Move:(Player,Int) {}-> Int},Player)) {Move{p}}~> Player;
+typename StrategyHandler = forall a :: Type, p :: Presence . (Comp({Move:(Player,Int) {}-> Int},a)) {Move{p}}~> a;
 
 #typename Strategy(e :: Row) = (Player,Int,(Int) ~e~> Player) ~e~> Player;
-typename Strategy = forall p :: Presence, e :: Row . (Player,Int,(Int) {Move{p}|e}~> Player) {Move{p}|e}~> Player;
+typename Strategy = forall a :: Type, p :: Presence, e :: Row . (Player,Int,(Int) {Move{p}|e}~> a) {Move{p}|e}~> a;
 
 # A first strategy: Always pick one stick
 #sig ns : (Player,Int,(Int) ~e~> Player) ~e~> Player
@@ -97,7 +97,10 @@ handler perfect(m) {
     case Return(x)   -> x
 }
 
-# List of valid moves
+# Observation: Alice wins whenever the starting number of sticks are not divisible by 4
+# under the interpretation of perfect.
+
+# Auxiliary function. Given the number of sticks n it returns a list of valid moves.
 sig validMoves : (Int) -> [Int]
 fun validMoves(n) {
     filter(fun(m) { m <= n }, [1,2,3])
@@ -126,3 +129,121 @@ handler pvb(m) {
   case Move(Bob,n,k)   -> bfs(Bob,n,k)
   case Return(x)       -> x
 }
+
+#
+# Computing game data
+#
+# Instead of simply evaluating the winner according to some strategy,
+# we can also compute other data. For instance, we can compute a tree
+# representing the possible moves of each player.
+
+# Game tree data type
+typename GameTree =
+  [| Take   : (Player, [(Int, GameTree)])
+   | Winner : Player
+   |];
+
+# Reify a move as part of the move tree
+sig reifyMove : (Player, Int, (Int) ~e~> GameTree) ~e~> GameTree
+fun reifyMove(player, n, k) {
+  var moves = map(k, validMoves(n));
+  var subgames = zip([1..length(moves)], moves);
+  Take(player, subgames)
+}
+
+# Complete game tree generator
+# The Return-case lifts the result of the computation, m, into a leaf in the game tree
+sig gametree : (Comp({Move:(Player, Int) {}-> Int}, Player)) {Move{_}}~> GameTree
+handler gametree(m) {
+  case Return(x)          -> Winner(x)
+  case Move(player, n, k) -> reifyMove(player, n, k)
+}
+
+# links> gametree(game(3))
+#  Take((Alice, [(1, Take((Bob, [(1, Take((Alice, [(1, Winner(Alice))]))),
+#                                (2, Winner(Bob))]))),
+#                  (2, Take((Bob, [(1, Winner(Bob))]))),
+#                  (3, Winner(Alice))]))
+
+#
+# Generate a game tree in which Bob plays the perfect strategy
+#
+sig forwardBob : (Comp({Move:(Player, Int) {}-> Int|e}, Player)) -> Comp({Move:(Player,Int) {}-> Int|e},GameTree)
+open handler forwardBob(m) {
+     case Return(x) -> Winner(x)
+     case Move(Bob, n, k)    -> {
+     	  var take = move(Bob,n); # Explicit forwarding of move
+     	  var tree = k(take);
+	  Take(Bob, [(take, tree)])
+     }
+     case Move(player, n, k) -> reifyMove(player, n, k)
+}
+
+# Handler composition operator
+# Data flows from right to left (or inside-out)
+sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+op g -<- f {fun (x) {g(f(x))}}
+
+# Combine a sequence of handlers with a computation m
+sig -< : ((a) -e-> b, a) -e-> b
+op f -< m  {f(m)}
+
+# Alternative pipeline operator; data flows from left-to-right
+# Maybe more natural?
+op m >> f {f(m)}
+
+# We can reuse our closed handler perfect to interpret the forwarded move-operation.
+# Note, the handler composition order matters here, because perfect is defined for Alice,
+# we wish only to play the perfect strategy for Bob, therefore perfect must be on top of
+# the handler stack.
+# links> (perfect -<- forwardBob) -< game(3)
+#  Take((Alice, [(1, Take((Bob, [(2, Winner(Bob))]))),
+#                (2, Take((Bob, [(1, Winner(Bob))]))),
+#                (3, Winner(Alice))]))
+
+#
+# Returning to strategies
+#
+
+# Using open handlers we can give an interpretation of randomness
+# thus we can encode mixed strategies.
+
+sig rand : () {Rand:a|_}~> a
+fun rand() {do Rand}
+
+sig ms : (Player,Int, (Int) {Rand:Float|e}~> a) {Rand:Float|e}~> a
+fun ms(p,n,k) {
+  var r = floatToInt(rand() *. 1000.0);
+  var take = (r `mod` 3) + 1; # Make sure take is in {1,2,3}
+  if (take <= n) {k(take)}    # Make sure it is a legal move...
+  else {k(1)}                 # ... otherwise just pick one (might be suboptimal)
+}
+
+# mixed strategy handler assigns a random strategy to both players
+sig mixed : (Comp({Move:(Player,Int) {}-> Int,Rand:Float|e}, a)) -> Comp({Move{_},Rand:Float|e}, a)
+open handler mixed(m) {
+  case Move(p,n,k) -> ms(p,n,k)
+  case Return(x)   -> x
+}
+
+# randomFloat handler uses Links' builtin random number generator
+sig randomFloat : (Comp({Rand:Float|e}, a)) -> Comp({Rand{_}|e}, a)
+open handler randomFloat(m) {
+  case Return(x) -> x
+  case Rand(k)   -> k(random())
+}
+
+# notReallyRandom is entirely deterministic; it always returns 3.0
+sig notReallyRandom : (Comp({Rand:Float|e}, a)) -> Comp({Rand{_}|e}, a)
+open handler notReallyRandom(m) {
+  case Return(x) -> x
+  case Rand(k)   -> k(3.0)
+}
+
+#
+# Power of Composition
+#
+
+#
+# Extending the game with a cheat detection mechanism
+#
