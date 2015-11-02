@@ -227,14 +227,16 @@ open handler mixed(m) {
 }
 
 # randomFloat handler uses Links' builtin random number generator
-sig randomFloat : (Comp({Rand:Float|e}, a)) -> Comp({Rand{_}|e}, a)
+sig randomFloat : (Comp({Rand:Float|e}, a)) ->
+                   Comp({Rand{_}|e}, a)
 open handler randomFloat(m) {
   case Return(x) -> x
   case Rand(k)   -> k(random())
 }
 
 # notReallyRandom is entirely deterministic; it always returns 3.0
-sig notReallyRandom : (Comp({Rand:Float|e}, a)) -> Comp({Rand{_}|e}, a)
+sig notReallyRandom : (Comp({Rand:Float|e}, a)) ->
+                       Comp({Rand{_}|e}, a)
 open handler notReallyRandom(m) {
   case Return(x) -> x
   case Rand(k)   -> k(3.0)
@@ -247,3 +249,173 @@ open handler notReallyRandom(m) {
 #
 # Extending the game with a cheat detection mechanism
 #
+
+# Abstract operation cheat
+# Invoked when a player cheats.
+sig cheat : (Player,Int) {Cheat:(Player,Int) {}-> Zero|_}~> a
+fun cheat(player, n) {switch(do Cheat(player,n)) { } }
+
+# Cheater's strategy is to take all sticks and thereby win in one move
+sig cheater : Strategy
+fun cheater(p,n,k) {k(n)}
+
+# checkMove checks whether a given player p has cheated
+sig checkMove : Strategy
+fun checkMove(p,n,k) {
+  var take = move(p,n);
+  if (take < 1 || 3 < take) { # Cheater detected!
+     cheat(p, n)
+  } else {
+     k(take)                  # Otherwise OK
+  }
+}
+
+# The check handler detects cheating
+sig check : (Comp({Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}, a)) ->
+             Comp({Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}, a)
+open handler check(m) {
+  case Return(x)          -> x
+  case Move(player, n, k) -> checkMove(player, n, k)
+}
+
+# Checked game
+sig checkedGame : (Int) -> Comp ({Move:(Player, Int) {}-> Int, Cheat:(Player, Int) {}-> Zero|e}, Player)
+fun checkedGame(n) { check(game(n)) }
+
+# aliceCheats assigns Alice the cheater's strategy
+sig aliceCheats : (Comp({Move:(Player,Int) {}-> Int|e}, a)) ->
+                   Comp({Move:(Player,Int) {}-> Int|e}, a)
+open handler aliceCheats(m) {
+  case Move(Alice,n,k) -> cheater(Alice,n,k)
+  case Move(Bob,n,k)   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
+  case Return(x)       -> x
+}
+
+# links> perfect -<- aliceCheats -< game(36)
+#  Alice
+
+# Interpreting cheating
+# Abandon the game and report the cheater
+sig cheatReport : (Comp({Cheat:(Player,Int) {}-> Zero|e}, a)) ->
+                   Comp({Cheat{_}|e}, a)
+open handler cheatReport(m) {
+  case Cheat(p,n,_) -> error("Cheater " ^^ showPlayer(p) ^^ " took " ^^ intToString(n) ^^ " sticks!")
+  case Return(x)   -> x
+}
+
+# Alternatively, upon cheating the opponent is given the victory
+sig cheatLose : (Comp({Cheat:(Player,Int) {}-> Zero|e}, Player)) ->
+                 Comp({Cheat{_}|e}, Player)
+open handler cheatLose(m) {
+  case Cheat(Alice,_,_) -> Bob
+  case Cheat(Bob,_,_)   -> Alice
+  case Return(x)        -> x
+}
+
+# Alice cheats against Bob's perfect strategy
+#
+# (If n < 4 then Alice wins, otherwise the game is abandoned because
+# Alices cheats.)
+sig cpReport : (Int) {Move{_}}~> Player
+fun cpReport(n) {
+    perfect(cheatReport(aliceCheats(checkedGame(n))))
+}
+
+# Alice cheats against Bob's perfect strategy
+# 
+# (If n < 4 then Alice wins, otherwise Bob wins because Alice
+# cheats.)
+sig cpLose : (Int) {Move{_}}~> Player
+fun cpLose(n) {
+  perfect(aliceCheats(cheatLose(checkedGame(n))))
+}
+
+
+#
+# A stateful game
+#
+
+typename GameState = [(Player,Int)];
+
+sig get : (Comp({Get:s|_}, s))
+fun get() {do Get}
+
+sig put : (s) {Put:(s) {}-> ()|_}~> ()
+fun put(s) {do Put(s)}
+
+sig state : (Comp({Get:s,Put:(s) {}-> ()|e}, a)) ->
+    	    (s) ->
+	    Comp({Get{_},Put{_}|e}, a)
+open handler state(m)(s) {
+     case Get(k)    -> k(s)(s)
+     case Put(p,k)  -> k(())(p)
+     case Return(x) -> x
+}
+
+fun updateGS(p,s) {
+  put(map(fun(e) {
+    if (p == first(e)) {
+       (p, second(e)+1)
+    } else { e }
+  }, s))
+}
+
+handler track(m) {
+     case Return(x) -> {
+     	  updateGS(x, get());
+	  x
+     }
+}
+
+var initialState = [(Alice,0),(Bob,0)];
+
+fun makeWhitespace(n) {
+    implode(replicate(n, ' '))
+}
+
+fun printBoard(s) {
+    var xs = map(fun(p) {
+    	var player = showPlayer(first(p));
+	var wins   = intToString(second(p));
+	var ws_c1 = 12 - strlen(player);
+	var ws_c2 = 10 - strlen(wins);
+	"| " ^^ player ^^ makeWhitespace(11 - strlen(player)) ^^ "|" ^^ makeWhitespace(8 - strlen(wins)) ^^ wins ^^ " |"
+    }, s);
+
+    print("/======================\\");
+    print("|   Player   |  Wins   |");
+    print("|============|=========|");
+    print(hd(xs));
+    print("|============|=========|");
+    print(hd(tl(xs)));
+    print("\\======================/");
+}
+
+sig boardPrinter : (Comp({Get:GameState|e}, a)) ->
+                    Comp({Get:GameState|e}, ())
+open handler boardPrinter(m) {
+     case Return(x) -> printBoard(get())
+}
+
+
+# Strategy handler factory
+sig strategy : (Strategy, Strategy) ->
+               (Comp({Move:(Player,Int) {}-> Int |e}, a)) ->
+	        Comp({Move{_} | e}, a)
+fun strategy(s1, s2) {
+    open handler(m) {
+    	 case Move(Alice,n,k) -> s1(Alice,n,k)
+	 case Move(Bob,n,k)   -> s2(Bob,n,k)
+	 case Return(x)       -> x
+    }
+}
+
+
+fun trackedGame(r, m)() {
+    var xs = for (_ <- [1..r]) {
+    	[track(m)]
+    };
+    hd(reverse(xs))
+}
+
+# (state -<- boardPrinter -< trackedGame(5, randomFloat(strategy(ms,ms)(game(5)))))(initialState)();
