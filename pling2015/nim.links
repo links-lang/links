@@ -336,6 +336,7 @@ fun cpLose(n) {
 #
 
 typename GameState = [(Player,Int)];
+var initialState = [(Alice,0),(Bob,0)] : GameState;
 
 sig get : (Comp({Get:s|_}, s))
 fun get() {do Get}
@@ -352,7 +353,8 @@ open handler state(m)(s) {
      case Return(x) -> x
 }
 
-fun updateGS(p,s) {
+sig updateScore : (Player, GameState) {Put:(GameState) {}-> ()|_}~> ()
+fun updateScore(p,s) {
   put(map(fun(e) {
     if (p == first(e)) {
        (p, second(e)+1)
@@ -360,19 +362,21 @@ fun updateGS(p,s) {
   }, s))
 }
 
-handler track(m) {
+sig track : (Comp({Get:GameState,Put:(GameState) {}-> ()|e}, Player)) ->
+             Comp({Get:GameState,Put:(GameState) {}-> ()|e}, Player)
+open handler track(m) {
      case Return(x) -> {
-     	  updateGS(x, get());
+     	  updateScore(x, get());
 	  x
      }
 }
 
-var initialState = [(Alice,0),(Bob,0)];
-
+sig makeWhitespace : (Int) ~> String
 fun makeWhitespace(n) {
     implode(replicate(n, ' '))
 }
 
+sig printBoard : (GameState) ~> ()
 fun printBoard(s) {
     var xs = map(fun(p) {
     	var player = showPlayer(first(p));
@@ -383,7 +387,9 @@ fun printBoard(s) {
     }, s);
 
     print("/======================\\");
-    print("|   Player   |  Wins   |");
+    print("|     NIM HIGHSCORE    |");
+    print("|======================|");
+    print("|   Player   |  #Wins  |");
     print("|============|=========|");
     print(hd(xs));
     print("|============|=========|");
@@ -410,12 +416,10 @@ fun strategy(s1, s2) {
     }
 }
 
-
-fun trackedGame(r, m)() {
-    var xs = for (_ <- [1..r]) {
-    	[track(m)]
-    };
-    hd(reverse(xs))
+fun repeatGame(r, m)() {
+    for (_ <- [1..r]) {
+    	[m()]
+    }
 }
 
-# (state -<- boardPrinter -< trackedGame(5, randomFloat(strategy(ms,ms)(game(5)))))(initialState)();
+# (state -<- boardPrinter -<- randomFloat -< strategy(ms,ms)(repeatGame(10, track -< game(33))))(initialState)();
