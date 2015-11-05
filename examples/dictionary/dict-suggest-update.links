@@ -83,8 +83,8 @@ fun format(defs) {
   </div>
 }
 
-fun addForm(handler) {
-  <form l:onsubmit="{handler!NewDef((word=w, meaning=m))}">
+fun addForm(manager) {
+  <form l:onsubmit="{manager!NewDef((word=w, meaning=m))}">
    <table>
     <tr><td class="label-col">Word:</td><td>
      <input type="text" l:name="w"/></td></tr>
@@ -96,7 +96,7 @@ fun addForm(handler) {
 }
 
 fun main() {
-  var handler = spawn {
+  var manager = spawn {
     fun receiver(s) {
       receive {
         case Suggest(s) -> suggest(s); receiver(s)
@@ -136,14 +136,14 @@ fun main() {
     <body>
      <h1>Dictionary suggest</h1>
      <h3>Search for definitions</h3>
-     <form l:onkeyup="{handler!Suggest(s)}">
+     <form l:onkeyup="{manager!Suggest(s)}">
       Search: <input type="text" l:name="s" autocomplete="off"/>
      </form>
      <div id="suggestions"/>
      <div class="section">
      <h3>New definition</h3>
      <div id="add">
-      {addForm(handler)}
+      {addForm(manager)}
      </div>
      </div>
     </body>
