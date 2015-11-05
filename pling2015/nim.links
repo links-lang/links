@@ -154,7 +154,9 @@ handler perfect(m) {
 # Auxiliary function.
 # Given the number of sticks n it returns a list of valid moves.
 sig validMoves : (Int) -> [Int]
-fun validMoves(n) { [1..n] }
+fun validMoves(n) {
+    filter(fun(m) { m <= n }, [1..3])
+}
 
 # The brute force strategy enumerates all future plays
 # if any particular play leads to a win, then play that strategy
