@@ -739,8 +739,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
+  (* event handlers *)
+  (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
-  (`Client, datatype "([(String,(Event) -> ())]) ~> String",
+  (`PFun (fun _ -> assert false),
+  datatype "([(String, (Event) ~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)

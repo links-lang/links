@@ -175,6 +175,13 @@ module Eval = struct
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
       computation env cont body
+    | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
+      (* TODO: generate a unique key *)
+      let key = 42 in
+      (* TODO: record the event handlers somewhere and pick them up
+         again when we move over to the client *)
+      apply_cont cont env (`String (string_of_int key))
+    (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
@@ -232,7 +239,8 @@ module Eval = struct
               in
               Proc.block (fun () -> apply_cont (recv_frame::cont) env (`Record []))
         end
-    (* Session stuff *)
+    (* end of mailbox stuff *)
+    (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
         apply_cont cont env (`Int (Num.num_of_int apid))
@@ -335,7 +343,7 @@ module Eval = struct
         unblock out1;
         unblock out2;
         apply cont env (value env end_bang, [])
-    (*****************)
+    (* end of session stuff *)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
