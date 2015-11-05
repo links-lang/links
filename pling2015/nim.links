@@ -30,6 +30,13 @@ fun showPlayer(player) {
 sig move : (Player,Int) {Move:(Player,Int) {}-> Int|_}~> Int
 fun move(player,n) {do Move(player,n)}
 
+
+
+
+
+
+
+
 # We model the game as two mutual recursive functions
 sig aliceTurn : (Int) {Move:(Player,Int) {}-> Int|_}~> Player
 fun aliceTurn(n) {
@@ -49,6 +56,20 @@ fun bobTurn(n) {
 sig game : (Int) -> Comp({Move:(Player,Int) {}-> Int|_},Player)
 fun game(n)() {aliceTurn(n)}
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #
 # Encoding players' strategies as handlers
 #
@@ -61,9 +82,14 @@ typename StrategyHandler = forall a :: Type, p :: Presence .
 typename Strategy = forall a :: Type, p :: Presence, e :: Row .
                            (Int,(Int) {Move{p}|e}~> a) {Move{p}|e}~> a;
 
+
+
+
+
 # A first strategy: Always pick one stick
 sig ns : Strategy
 fun ns(n,k) { k(1) }
+
 
 
 # The naive-strategy-handler assigns the naive-strategy to both players
@@ -76,6 +102,22 @@ handler naive(m) {
 # Observation: When both players are playing the naive-strategy, the
 # winner is determined by the parity of the number of sticks at the beginning.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Auxiliary function
 # Given two comparable inputs, it returns the greatest of those two.
 sig max2 : (a,a) -> a
@@ -83,6 +125,7 @@ fun max2(x,y) {
   if (x > y) {x}
   else {y}
 }
+
 
 # The perfect strategy is to pick "max{n (mod 4), 1}" sticks
 sig ps : Strategy
@@ -100,6 +143,14 @@ handler perfect(m) {
 # Observation: Alice wins whenever the starting number of sticks are not divisible by 4
 # under the interpretation of perfect.
 
+
+
+
+
+
+
+
+
 # Auxiliary function.
 # Given the number of sticks n it returns a list of valid moves.
 sig validMoves : (Int) -> [Int]
@@ -107,7 +158,8 @@ fun validMoves(n) { [1..n] }
 
 # The brute force strategy enumerates all future plays
 # if any particular play leads to a win, then play that strategy
-sig bfs : (a,Int,(Int) {Move:(Player,Int) {}-> Int|e}~> a) {Move:(Player,Int) {}-> Int|e}~> a
+sig bfs : (a,Int,(Int) {Move:(Player,Int) {}-> Int|e}~> a)
+                       {Move:(Player,Int) {}-> Int|e}~> a
 fun bfs(player,n,k) {
   # Map the continuation over all possible moves
   # this effectively determines all potential winners
@@ -126,8 +178,20 @@ sig pvb : StrategyHandler
 handler pvb(m) {
   case Move(Alice,n,k) -> ps(n,k)
   case Move(Bob,n,k)   -> bfs(Bob,n,k)
-  case Return(x)       -> x
+  case Return(x)       -> x : Player
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 #
 # Computing game data
@@ -167,6 +231,15 @@ handler gametree(m) {
 #                  (2, Take((Bob, [(1, Winner(Bob))]))),
 #                  (3, Winner(Alice))]))
 
+
+
+
+
+
+
+
+
+
 #
 # Open handlers
 #
@@ -197,6 +270,17 @@ open handler bobStrat(m) {
 #                (3, Winner(Alice))]))
 
 
+
+
+
+
+
+
+
+
+
+
+
 #
 # Power of Composition
 #
@@ -210,9 +294,19 @@ open handler bobStrat(m) {
 sig cheat : (Player,Int) {Cheat:(Player,Int) {}-> Zero|_}~> a
 fun cheat(player, n) {switch(do Cheat(player,n)) { } }
 
+
+
+
+
 # Cheater's strategy is to take all sticks and thereby win in one move
 sig cheater : Strategy
 fun cheater(n,k) {k(n)}
+
+
+
+
+
+
 
 # checkMove checks whether a given player p has cheated
 sig checkMove : (Player,Int,
@@ -227,6 +321,9 @@ fun checkMove(p,n,k) {
   }
 }
 
+
+
+
 # The check handler detects cheating
 sig check : (Comp({Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}, a)) ->
              Comp({Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}, a)
@@ -234,6 +331,10 @@ open handler check(m) {
   case Return(x)          -> x
   case Move(player, n, k) -> checkMove(player, n, k)
 }
+
+
+
+
 
 # Convenient function to launch a checked game
 sig checkedGame : (Int) ->
@@ -253,6 +354,11 @@ open handler aliceCheats(m) {
 # links> perfect(aliceCheats(game(36)))
 #  Alice
 
+
+
+
+
+
 # Interpreting cheating
 # Abandon the game and report the cheater
 sig cheatReport : (Comp({Cheat:(Player,Int) {}-> Zero|e}, a)) ->
@@ -271,6 +377,9 @@ open handler cheatLose(m) {
   case Return(x)        -> x
 }
 
+
+
+
 # Alice cheats against Bob's perfect strategy
 #
 # (If n < 4 then Alice wins, otherwise the game is abandoned because
@@ -288,6 +397,24 @@ sig cpLose : (Int) {Move{_}}~> Player
 fun cpLose(n) {
   perfect(cheatLose(aliceCheats(checkedGame(n))))
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #
 # Returning to strategies
@@ -343,6 +470,17 @@ fun strategy(s1, s2) {
 	 case Return(x)       -> x
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 #
@@ -410,6 +548,23 @@ fun repeatGame(r, m)() {
 }
 
 # (state -<- boardPrinter -<- randomFloat -< strategy(ms,ms)(repeatGame(10, scorerecorder -< game(33))))(initialState)();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #
