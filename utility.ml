@@ -853,6 +853,15 @@ module UnixLabels = Notfound.UnixLabels
 
 exception NotFound = Notfound.NotFound
 
+(** string of float with a trailing 0 *)
+let string_of_float' : float -> string =
+  fun f ->
+    let s = string_of_float f in
+    if String.get s ((String.length s)-1) = '.' then
+      s ^ "0"
+    else
+      s
+
 (* HACK:
 
    This functionality should really be provided by the Num module and

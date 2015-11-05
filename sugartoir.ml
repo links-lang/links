@@ -299,21 +299,21 @@ struct
 
     let fun_binding (f_info, (tyvars, xsb, body), location) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (`Fun (fb, (tyvars, xsb, body), location)) f
+        lift_binding (`Fun (fb, (tyvars, xsb, body), None, location)) f
 
     let rec_binding defs =
       let defs, fs =
         List.fold_right
           (fun (f_info, (tyvars, xsb, body), location) (defs, fs) ->
              let fb, f = Var.fresh_var f_info in
-               ((fb, (tyvars, xsb, body), location) :: defs, f :: fs))
+               ((fb, (tyvars, xsb, body), None, location) :: defs, f :: fs))
           defs ([], [])
       in
         lift_binding
           (`Rec
              (List.map
-                (fun (fb, (tyvars, xsb, body), location) ->
-                   (fb, (tyvars, xsb, body fs), location))
+                (fun (fb, (tyvars, xsb, body), None, location) ->
+                   (fb, (tyvars, xsb, body fs), None, location))
                 defs))
           fs
 
@@ -1037,7 +1037,7 @@ struct
      bindings may depend, i.e., all top-level bindings from the start
      of the file up to and including the last global binding.
 
-     The locals list contains all top-level binding on which global
+     The locals list contains all top-level bindings on which global
      bindings may not depend, i.e., all top-level bindings after the
      last global binding. *)
   let partition_program : program -> binding list * computation * nenv =
@@ -1050,12 +1050,14 @@ struct
               match b with
                 | `Let ((x, (_xt, x_name, `Global)), _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
-                | `Fun ((f, (_ft, f_name, `Global)), _, _) ->
+                | `Fun ((f, (_ft, f_name, `Global)), _, _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | `Rec defs ->
+                  (* we depend on the invariant that mutually
+                     recursive definitions all have the same scope *)
                     let scope, nenv =
                       List.fold_left
-                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _) ->
+                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _) ->
                            match f_scope with
                              | `Global -> `Global, Env.String.bind nenv (f_name, f)
                              | `Local -> scope, nenv)
@@ -1064,7 +1066,7 @@ struct
                       begin
                         match scope with
                           | `Global ->
-                              partition (b::globals, locals, nenv) bs
+                              partition (b::locals @ globals, [], nenv) bs
                           | `Local ->
                               partition (globals, b::locals, nenv) bs
                       end

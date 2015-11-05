@@ -117,3 +117,7 @@ exit : 1
 Polymorphic type aliases (Church numerals)
 typename Nat = forall a.(a) {}-> ((a) {}-> a) {}-> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) {}-> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(zero))(0)(fun (x) {x+1})
 stdout : 2 : Int
+
+Recursive polymorphic type aliases
+typename Foo = forall a.Foo; sig bar : (Foo) {}-> () fun bar(m) {()} bar
+stdout : fun : (Foo) {}-> ()

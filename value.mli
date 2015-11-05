@@ -63,8 +63,6 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
-                     env * Ir.var * Ir.scope)
 | `FunctionPtr of (Ir.var * env)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
@@ -77,7 +75,7 @@ and delim_continuation = frame list (* Delimited continuation *)
 and continuation = delim_continuation list (* (Generalised) continuation *)
 and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * bool
 and handlers = handler list				 
-and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
+and env
     deriving (Show)
 
 (** Continuation helpers **)    
@@ -88,20 +86,18 @@ val append_delim_cont : delim_continuation -> continuation -> continuation
 val toplevel_hs   : handlers
 val toplevel_cont : continuation
 
-val empty_env : Ir.closures -> env
+val empty_env : env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
 val find : Ir.var -> env -> t
+val mem : Ir.var -> env -> bool
 val lookup : Ir.var -> env -> t option
 val lookupS : Ir.var -> env -> (t * Ir.scope) option
 val shadow : env -> by:env -> env
 val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
-val get_closures : env -> Ir.closures
 (* used only by json.ml, webif.ml ... *)
 val get_parameters : env -> (t*Ir.scope) Utility.intmap
 
-val find_closure : env -> Ir.var -> Utility.IntSet.t
-val with_closures : env -> Ir.closures -> env
 val extend : env -> (t*Ir.scope) Utility.intmap -> env
 
 
@@ -144,16 +140,8 @@ val string_of_cont : continuation -> string
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
 
-type unmarshal_envs =
-    env * Ir.scope Utility.IntMap.t *
-      Ir.computation Utility.IntMap.t *
-      (Ir.var list * Ir.computation) Utility.IntMap.t
-
-val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
-  -> Ir.program -> unmarshal_envs
-
-val unmarshal_continuation : unmarshal_envs -> string -> continuation
-val unmarshal_value : unmarshal_envs -> string -> t
+val unmarshal_continuation : env -> string -> continuation
+val unmarshal_value : env -> string -> t
 
 val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)

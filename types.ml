@@ -1474,7 +1474,7 @@ struct
                 (fun (bound_vars, vars) tyvar ->
                    let var, spec = varspec_of_tyvar tyvar in
                      TypeVarSet.add var bound_vars, (var, spec)::vars)
-                (TypeVarSet.empty, [])
+                (bound_vars, [])
                 (unbox_quantifiers tyvars)
             in
               (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
@@ -1533,7 +1533,7 @@ struct
             List.fold_left
               (fun (bound_vars, vars) tyvar ->
                  let var, spec = varspec_of_tyvar tyvar in
-                   (TypeVarSet.add var bound_vars, (var, spec)::vars)) (TypeVarSet.empty, []) tyvars
+                   (TypeVarSet.add var bound_vars, (var, spec)::vars)) (bound_vars, []) tyvars
           in
             (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
       | `Abstract _ -> []
@@ -2097,7 +2097,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
               (fun bound_vars tyvar ->
                  let var = var_of_quantifier tyvar in
                    TypeVarSet.add var bound_vars)
-                (TypeVarSet.empty)
+                bound_vars
                 (unbox_quantifiers tyvars)
           in
             flexible_type_vars bound_vars body

@@ -1,4 +1,6 @@
 (*pp deriving *)
+open Utility
+
 type num = Num.num
 type constant =
     [ `Float  of float
@@ -26,4 +28,4 @@ let string_of_constant =
     | `Int value -> Num.string_of_num value
     | `Char c -> "'"^ Char.escaped c ^"'" 
     | `String s -> "'" ^ escape_string s ^ "'"
-    | `Float value   -> string_of_float value
+    | `Float value   -> string_of_float' value
