@@ -322,34 +322,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
-(* <<<<<<< HEAD *)
-(*   (p1 (fun f -> *)
-(*          (\* if Settings.get_value Basicsettings.web_mode then *\) *)
-(*          (\*   failwith("Can't spawn at the server in web mode."); *\) *)
-(*          let var = Var.dummy_var in *)
-(*          let delim = [(`Local, var, Value.empty_env IntMap.empty, *)
-(*                      ([], `Apply (`Variable var, [])))] in *)
-(* 	 let cont = Value.append_delim_cont delim Value.toplevel_cont in *)
-(*          let new_pid = Proc.create_process false (cont, Value.toplevel_hs, f) in (\* TODO: Figure out whether it is correct to pass an empty handler stack *\) *)
-(*            (`Int (num_of_int new_pid))), *)
-(* ======= *)
   (* And now it is *)
   (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngel",
-(* <<<<<<< HEAD *)
-(*   (p1 (fun f -> *)
-(*          (\* if Settings.get_value Basicsettings.web_mode then *\) *)
-(*          (\*   failwith("Can't spawn at the server in web mode."); *\) *)
-(*          let var = Var.dummy_var in *)
-(*          let delim = [(`Local, var, Value.empty_env IntMap.empty, *)
-(*                      ([], `Apply (`Variable var, [])))] in *)
-(* 	 let cont = Value.append_delim_cont delim Value.toplevel_cont in *)
-(*          let new_pid = Proc.create_process true (cont, Value.toplevel_hs, f) in (\* TODO: Figure out whether it is correct to pass an empty handler stack *\) *)
-(*            (`Int (num_of_int new_pid))), *)
-(* ======= *)
   (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);

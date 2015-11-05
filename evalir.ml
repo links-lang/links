@@ -70,53 +70,6 @@ module Eval = struct
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
 
-(* <<<<<<< HEAD *)
-(*   (\** {0 Scheduling} *\) *)
-
-(*   (\** {1 Scheduler parameters} *\) *)
-(*   (\** [switch_granularity]: The number of steps to take before *)
-(*       switching threads.  *\) *)
-(*   let switch_granularity = 5 *)
-
-(*   (\* If this flag is set then context switching is prohibited. *)
-(*      It is currently used for running pure functions. *\) *)
-(*   let atomic = ref false *)
-
-(*   let rec switch_context env = *)
-(*     assert (not (!atomic)); *)
-(*     match Proc.pop_ready_proc() with *)
-(*     | Some((cont, hs, value), pid) when Proc.active_main() || Proc.active_angels() -> *)
-(*       begin *)
-(*         Proc.activate pid; *)
-(*         apply_cont cont hs env value *)
-(*       end *)
-(*     | _ -> *)
-(*       if not(Proc.singlethreaded()) then *)
-(*         failwith("Server stuck with suspended threads, none runnable.") *)
-(*         (\* Outside web mode, this case indicates deadlock: *)
-(*            all running processes are blocked. *\) *)
-(*       else *)
-(*         (\* TODO: should we really be exiting here? *\) *)
-(*         exit 0 *)
-
-(*   and scheduler env state stepf = *)
-(*     if !atomic || Proc.singlethreaded() then stepf() *)
-(*     else (\* No need to schedule if we're in an atomic section or there are no threads *\) *)
-(*       let step_ctr = Proc.count_step() in *)
-(*         if step_ctr mod switch_granularity == 0 then *)
-(*           begin *)
-(*             (\* Debug.print ("Scheduled context switch"); *\) *)
-(*             (\* Debug.print ("  Continuation: " ^ Value.string_of_cont (fst state)); *\) *)
-(*             (\* Debug.print ("  Value: " ^ Value.string_of_value (snd state)); *\) *)
-(*             Proc.reset_step_counter(); *)
-(*             Proc.suspend_current state; *)
-(*             switch_context env *)
-(*           end *)
-(*         else *)
-(*           stepf() *)
-
-(* ======= *)
-(* >>>>>>> sessions *)
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
     | `Constant `Bool b -> `Bool b
@@ -278,12 +231,6 @@ module Eval = struct
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
               in
-(* <<<<<<< HEAD *)
-(*               (\* the value passed to block_current is ignored, so can be anything *\) *)
-(*               let cont = Value.append_cont_frame recv_frame cont in *)
-(*               Proc.block_current (cont, hs, `Record []); *)
-(*               switch_context env *)
-(* ======= *)
               Proc.block (fun () -> apply_cont (Value.append_cont_frame recv_frame cont) hs env (`Record []))
         end
     (* Session stuff *)
@@ -302,14 +249,6 @@ module Eval = struct
                 (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
                                      (StringMap.add "2" (`Constant (`Int d'))
                                         StringMap.empty), None)))
-(* <<<<<<< HEAD *)
-(*           in *)
-(*           let cont = Value.append_cont_frame accept_frame cont in *)
-(*           Proc.block_current (cont, hs, `Record []); *)
-(*           (\* block my end of the channel *\) *)
-(*           Session.block c (Proc.get_current_pid ()); *)
-(*           switch_context env *)
-(* ======= *)
             in
               (* block my end of the channel *)
               Session.block c (Proc.get_current_pid ());
@@ -338,19 +277,10 @@ module Eval = struct
                 (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
                                      (StringMap.add "2" (`Constant (`Int d'))
                                         StringMap.empty), None)))
-(* <<<<<<< HEAD *)
-(*           in *)
-(*           let cont = Value.append_cont_frame request_frame cont in *)
-(*           Proc.block_current (cont, hs, `Record []); *)
-(*           (\* block my end of the channel *\) *)
-(*           Session.block c (Proc.get_current_pid ()); *)
-(*           switch_context env *)
-(* ======= *)
             in
               (* block my end of the channel *)
               Session.block c (Proc.get_current_pid ());
               Proc.block (fun () -> apply_cont (Value.append_cont_frame request_frame cont) hs env (`Record []))
-(* >>>>>>> sessions *)
         else
           begin
             begin
@@ -388,12 +318,6 @@ module Eval = struct
                                                                                 (StringMap.add "2" (`Constant (`Int in'))
                                                                                    StringMap.empty), None)])
             in
-(* <<<<<<< HEAD *)
-(*             let cont = Value.append_cont_frame grab_frame cont in *)
-(*             Proc.block_current (cont, hs, `Record []); *)
-(*             Session.block inp (Proc.get_current_pid ()); *)
-(*             switch_context env *)
-(* ======= *)
               Session.block inp (Proc.get_current_pid ());
               Proc.block (fun () -> apply_cont (Value.append_cont_frame grab_frame cont) hs env (`Record []))
       end
