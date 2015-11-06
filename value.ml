@@ -395,7 +395,7 @@ and string_of_value : t -> string = function
          "(" ^ mapstrcat "," (fun (label, value) ->
                                 label ^ "=" ^ string_of_value value)
            (List.sort (fun (l,_) (r, _) -> compare l r) fields) ^ ")")
-  | `Variant (label, `Record []) -> label ^ "()"
+  | `Variant (label, `Record []) -> label
   | `Variant (label, value) -> label ^ "(" ^ string_of_value value ^ ")"
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
