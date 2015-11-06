@@ -176,10 +176,7 @@ module Eval = struct
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
       computation env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
-      (* TODO: generate a unique key *)
-      let key = 42 in
-      (* TODO: record the event handlers somewhere and pick them up
-         again when we move over to the client *)
+      let key = EventHandlers.register hs in
       apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->

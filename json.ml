@@ -37,31 +37,6 @@ let js_dq_escape_char =
   | '\\' -> "\\\\"
   | ch -> String.make 1 ch
 
-let rec json_of_xmlitem = function
-  | Value.Text s ->
-      "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
-  | Value.Node (tag, xml) ->
-      let attrs, body =
-        List.fold_right (fun xmlitem (attrs, body) ->
-                           match xmlitem with
-                             | Value.Attr (label, value) ->
-                                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
-                             | _ -> attrs, (json_of_xmlitem xmlitem) :: body) xml ([], [])
-      in
-        "[\"ELEMENT\",\"" ^ tag ^ "\",{" ^ String.concat "," attrs
-        ^"},[" ^ String.concat "," body ^ "]]"
-  | Value.Attr _ -> assert false
-
-let jsonize_primitive : Value.primitive_value -> string = function
-  | `Bool value -> string_of_bool value
-  | `Int value -> Num.string_of_num value
-  | `Float value -> string_of_float' value
-  | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
-  | `Database db -> json_of_db db
-  | `Table t -> json_of_table t
-  | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
-
 let jsonize_location : Ir.location -> string = function
   | `Client  -> "client"
   | `Server  -> "server"
@@ -95,6 +70,36 @@ let rec jsonize_value : Value.t -> string = function
   | `List (elems) ->
       "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
   | `Socket _ -> failwith "Cannot jsonize sockets"
+and jsonize_primitive : Value.primitive_value -> string = function
+  | `Bool value -> string_of_bool value
+  | `Int value -> Num.string_of_num value
+  | `Float value -> string_of_float' value
+  | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
+  | `Database db -> json_of_db db
+  | `Table t -> json_of_table t
+  | `XML xmlitem -> json_of_xmlitem xmlitem
+  | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
+and json_of_xmlitem = function
+  | Value.Text s ->
+      "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
+  | Value.Node (tag, xml) ->
+      let attrs, body =
+        List.fold_right (fun xmlitem (attrs, body) ->
+            match xmlitem with
+            | Value.Attr (label, value) ->
+              if label = "key" then
+                begin
+                  let key = int_of_string value in
+                  let hs = EventHandlers.find key in
+                  ("\"key\" : " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
+                end
+              else
+                ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
+            | _ -> attrs, (json_of_xmlitem xmlitem) :: body) xml ([], [])
+      in
+        "[\"ELEMENT\",\"" ^ tag ^ "\",{" ^ String.concat "," attrs
+        ^"},[" ^ String.concat "," body ^ "]]"
+  | Value.Attr _ -> assert false
 
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
