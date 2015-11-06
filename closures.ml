@@ -30,23 +30,15 @@ struct
       method private bound x =
         {< bound_vars = IntSet.add x bound_vars >}
 
-      method private register_var x =
-        if IntSet.mem x globals then
-          o
-        else if IntSet.mem x bound_vars then
+      (* recursively gather free variables required by inner closures *)
+      method private close x =
+        if IntSet.mem x bound_vars then
           if IntMap.mem x fenv then
             let zs = IntMap.find x fenv in
-            let free_vars =
-              List.fold_left
-                (fun free_vars (z, _) ->
-                   if IntSet.mem z bound_vars then
-                     free_vars
-                   else
-                     IntSet.add z free_vars)
-                free_vars
-                zs
-            in
-            {< free_vars = free_vars >}
+            List.fold_left
+              (fun o (z, _) -> o#close z)
+              o
+              zs
           else
             o
         else
@@ -54,6 +46,12 @@ struct
             (* Debug.print ("free var: "^string_of_int x); *)
             {< free_vars = IntSet.add x free_vars >}
           end
+
+      method private register_var x =
+        if IntSet.mem x globals then
+          o
+        else
+          o#close x
 
       method private reset =
         {< bound_vars = IntSet.empty; free_vars = IntSet.empty >}
