@@ -92,7 +92,7 @@ let list     = {
 let prov = {
     Abstype.id = "Prov" ;
     name       = "Prov" ;
-    arity      = [`Type, (`Any, `Any) ] ; (* I don't know what this means... --Stefan *)
+    arity      = [`Type, (`Unl, `Base)] ;
   }
 
 let event    = {
@@ -2539,3 +2539,4 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+let prov_triple_type = make_tuple_type [string_type; string_type; int_type]

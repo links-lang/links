@@ -346,3 +346,4 @@ val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 val string_of_tycon_spec : tycon_spec -> string
+val prov_triple_type : datatype
