@@ -23,14 +23,20 @@ struct
   let after_typing f (a, b, c) = (f a, b, c)
   let after_alias_expansion f (a, b) = (f a, b)
 
-  let program =
+  let program :
+        Types.typing_environment ->
+        SourceCode.source_code ->
+        Sugartypes.program ->
+        (Sugartypes.program * Types.datatype * Types.typing_environment) =
     fun tyenv pos_context program ->
-      let program = (ResolvePositions.resolve_positions pos_context)#program program in
+    let program = (ResolvePositions.resolve_positions pos_context)#program program in
+    let transform =
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv
+        ->- DesugarProvT.desugar
         ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)
         ->- after_typing ((DesugarProv.desugar_prov tyenv)#program ->- snd3)
         ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
@@ -41,8 +47,8 @@ struct
         ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
         ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
         ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-          program
+        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3)) in
+    transform program
 
   let interactive =
     fun tyenv pos_context sentence ->
