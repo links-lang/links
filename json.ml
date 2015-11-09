@@ -91,7 +91,7 @@ and json_of_xmlitem = function
                 begin
                   let key = int_of_string value in
                   let hs = EventHandlers.find key in
-                  ("\"key\" : " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
+                  ("\"eventHandlers\" : " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
                 end
               else
                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
