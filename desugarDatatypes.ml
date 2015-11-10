@@ -144,7 +144,9 @@ struct
         | `Variant r -> `Variant (row var_env alias_env r)
         | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
-        | `TypeApplication ("Prov", [`Type t]) -> `Application (Types.prov, [`Type (datatype var_env t)])
+        (* TODO This is probably wrong. We should rely on the mechanism for abstract datatypes. *)
+        | `TypeApplication ("Prov", [`Type t]) ->
+           `Application (Types.prov, [`Type (datatype var_env t)])
         | `TypeApplication ("Prov", ts) ->
            failwith (Printf.sprintf "Prov type constructor expects exactly one argument, given: %s"
                                     (string_of_int (List.length ts)))
