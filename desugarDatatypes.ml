@@ -44,13 +44,13 @@ object (self)
 
   method bind ((name, _, _) as tv) = {< bound = StringMap.add name tv bound >}
 
-  method! bindingnode = function
+  method bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
     | `Type _    -> self
     | b          -> super#bindingnode b
 
-  method! datatype = function
+  method datatype = function
     | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
     | `Mu (v, t)       -> let o = self#bind (v, (`Type, (`Any, `Any)), `Rigid) in o#datatype t
     | `Forall (qs, t)  ->
@@ -64,12 +64,12 @@ object (self)
           o#datatype t
     | dt                  -> super#datatype dt
 
-  method! row_var = function
+  method row_var = function
     | `Closed               -> self
     | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
     | `Recursive (s, r)     -> let o = self#bind (s, (`Row, (`Any, `Any)), `Rigid) in o#row r
 
-  method! fieldspec = function
+  method fieldspec = function
     | `Absent -> self
     | `Present t -> self#datatype t
     | `Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
@@ -151,24 +151,8 @@ struct
                   (* TODO: check that the kinds match up *)
                   Instantiate.alias tycon ts alias_env
               | Some (`Abstract abstype) ->
-                 let arity = Types.Abstype.arity abstype in
-                 (* TODO Report error location *)
-                 let expected_n = List.length arity in
-                 let provided_n = List.length ts in
-                 if expected_n <> provided_n
-                 then failwith (Printf.sprintf "Wrong number of type arguments to type constructor `%s`: expected %n, provided %n." tycon expected_n provided_n);
-                 let check_kind (expected : Types.kind) (provided : Types.type_arg) =
-                   match (expected, provided) with
-                   | ((`Type, (_, `Base)), `Type pt)
-                        (* Should this use Types.is_baseable_type instead? What's the difference? *)
-                        when not (Types.is_base_type pt) ->
-                      failwith (Printf.sprintf "Argument to type constructor `%s` is not of base type." tycon)
-                   (* TODO missing cases, move to types.ml *)
-                   | (_, _) -> ()
-                   | (_, _) -> failwith "TODO implement missing cases, then remove this" in
-                 let ts' = List.map (type_arg var_env alias_env) ts in
-                 List.iter2 check_kind arity ts';
-                 `Application (abstype, ts')
+                  (* TODO: check that the kinds match up *)
+                  `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
         | `Primitive k -> `Primitive k
         | `DB -> `Primitive `DB
@@ -338,14 +322,14 @@ object (self)
 
   val alias_env = initial_alias_env
 
-  method! patternnode = function
+  method patternnode = function
     | `HasType (pat, dt) ->
         let o, pat = self#pattern pat in
           o, `HasType (pat, Desugar.datatype' map alias_env dt)
     | p -> super#patternnode p
 
 
-  method! phrasenode = function
+  method phrasenode = function
     | `Block (bs, p) ->
         (* aliases bound in `bs'
            should not escape the scope of the block *)
@@ -372,7 +356,7 @@ object (self)
        this point, so we ignore them.  *)
     | p -> super#phrasenode p
 
-  method! bindingnode = function
+  method bindingnode = function
     | `Type (t, args, dt) ->
         let args, dt' = Desugar.typename alias_env t args dt in
         let (name, vars, (t, Some dt)) = (t, args, dt') in
@@ -404,18 +388,18 @@ object (self)
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->
-        let _o, bind = self#binder bind in
+        let o, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
           self, `Foreign (bind, lang, dt')
     | b -> super#bindingnode b
 
-  method! sentence =
+  method sentence =
     (* return any aliases bound to the interactive loop so that they
        are available to future input.  The default definition will
        do fine here *)
     super#sentence
 
-  method! program (bindings, e) =
+  method program (bindings, e) =
     (* as with a block, bindings should not escape here *)
     let o           = {<>} in
     let o, bindings = o#list (fun o -> o#binding) bindings in
