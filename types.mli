@@ -189,6 +189,7 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
+val prov_triple_type : datatype
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
@@ -315,6 +316,7 @@ val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
+val make_prov_type : datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
@@ -346,4 +348,3 @@ val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 val string_of_tycon_spec : tycon_spec -> string
-val prov_triple_type : datatype

@@ -253,6 +253,8 @@ sig
   val bind_rec_rec : griper
 
   val bind_exp : griper
+  val prov_elim : griper
+  val data_elim : griper
 
   val list_pattern : griper
   val cons_pattern : griper
@@ -777,6 +779,18 @@ tab() ^ code (show_type rt))
 
     let bind_exp ~pos ~t1:l ~t2:(_,t) ~error:_ =
       fixed_type pos "Side-effect expressions" t l
+
+    let prov_elim ~pos ~t1:(l, lt) ~t2:_ ~error:_ =
+      die pos ("The argument of `prov` must have provenance type, but the expression"^nl()^
+                 tab() ^ code l ^ nl() ^
+                   "has type" ^ nl() ^
+                     tab() ^ code (show_type lt))
+
+    let data_elim ~pos ~t1:(l, lt) ~t2:_ ~error:_ =
+      die pos ("The argument of `data` must have provenance type, but the expression"^nl()^
+                 tab() ^ code l ^ nl() ^
+                   "has type" ^ nl() ^
+                     tab() ^ code (show_type lt))
 
     (* patterns *)
     let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -2037,22 +2051,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let (p, t, u) = type_cp context p in
            `CP p, t, u
 
-        (* Not exactly applications, but could be *)
-        | `Prov (e, pos_e) as a ->
-           (* I don't know what the `usages` thing is.*)
-           let (_, typ, usages) = tc (e, pos_e) in
-           (* TODO should this use `unify`? *)
-           (match typ with
-            | `Application (ptype, [`Type _inner]) when ptype = Types.prov ->
-               let prov_triple = Types.make_tuple_type [Types.string_type; Types.string_type; Types.int_type] in
-               (a, prov_triple, usages)
-            | _ -> Gripers.die pos ("You can only get `prov` out of a value of provenance type."))
-        | `Data (e, pos_e) as a ->
-           let (_, typ, usages) = tc (e, pos_e) in
-           (* TODO should this use `unify`? *)
-           (match typ with
-            | `Application (ptype, [`Type inner]) when ptype = Types.prov -> (a, inner, usages)
-            | _ -> Gripers.die pos ("You can only get `data` out of a value of provenance type."))
+        (* Provenance elimination rules
+           Not exactly applications, but similar *)
+        | `Prov e ->
+           let e = tc e in
+           let rettype = Types.fresh_type_variable (`Unl, `Base) (* `Unl or `Any? *) in
+           unify ~handle:Gripers.prov_elim
+                 (pos_and_typ e,
+                  no_pos (Types.make_prov_type rettype));
+           `Prov (erase e), Types.prov_triple_type, usages e
+        | `Data e ->
+           let e = tc e in
+           let rettype = Types.fresh_type_variable (`Unl, `Base) (* `Unl or `Any? *) in
+           unify ~handle:Gripers.data_elim
+                 (pos_and_typ e,
+                  no_pos (Types.make_prov_type rettype));
+           `Data (erase e), rettype, usages e
 
         (* applications of various sorts *)
         | `UnaryAppl ((_, op), p) ->

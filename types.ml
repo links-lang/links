@@ -2524,6 +2524,9 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = `Application (list, [`Type t])
 let make_process_type r = `Application (process, [`Row r])
 
+let make_prov_type t = `Application (prov, [`Type t])
+let prov_triple_type = make_tuple_type [string_type; string_type; int_type]
+
 let extend_row fields (fields', row_var, dual) =
   (FieldEnv.fold
      (fun name t fields -> FieldEnv.add name (`Present t) fields)
@@ -2539,4 +2542,3 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
-let prov_triple_type = make_tuple_type [string_type; string_type; int_type]
