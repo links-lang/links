@@ -8,6 +8,7 @@ let alias_env : Types.tycon_environment =
     [
       (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)])); *)
       "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
+      "Prov"    , `Abstract Types.prov;
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;
