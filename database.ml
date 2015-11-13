@@ -1,4 +1,3 @@
-open Num
 open List
 
 open Utility
@@ -25,7 +24,7 @@ let value_of_db_string (value:string) t =
         Value.box_bool (value = "1" || value = "t" || value = "true")
     | `Primitive `Char -> Value.box_char (String.get value 0)
     | `Primitive `String -> Value.box_string value
-    | `Primitive `Int  -> Value.box_int (num_of_string value)
+    | `Primitive `Int  -> Value.box_int (int_of_string value)
     | `Primitive `Float -> (if value = "" then Value.box_float 0.00      (* HACK HACK *)
                             else Value.box_float (float_of_string value))
     | t -> failwith ("value_of_db_string: unsupported datatype: '" ^ 
@@ -55,7 +54,7 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
                    let rows = result#get_all_lst in
                      begin
                        match rows with
-                         | [[id]] -> Value.box_int (Num.num_of_string id)
+                         | [[id]] -> Value.box_int (int_of_string id)
                          | _ -> raise (Runtime_error ("Returned the wrong number of results executing " ^ q))
                      end
                | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))

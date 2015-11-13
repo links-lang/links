@@ -6,8 +6,6 @@ open Notfound
 open Utility
 open PP
 
-type num = Num.num
-
 type scope = Var.scope
   deriving (Show)
 (* term variables *)

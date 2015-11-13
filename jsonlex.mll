@@ -26,7 +26,7 @@ rule jsonlex = parse
   | "false"                              { Jsonparse.FALSE }
   | "null"                               { Jsonparse.NULL }
   | ('\"' (string_contents as var) '\"') { Jsonparse.STRING (Utility.decode_escapes var) }
-  | def_integer as var                   { Jsonparse.INT (Num.num_of_string var) }
+  | def_integer as var                   { Jsonparse.INT (int_of_string var) }
   | def_float as var                     { Jsonparse.FLOAT (float_of_string var) }
   | def_blank                            { jsonlex lexbuf }
 

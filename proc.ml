@@ -327,7 +327,7 @@ module Session = struct
       forward in1 out2;
       forward in2 out1
 
-  let unbox_port = Num.int_of_num -<- Value.unbox_int
+  let unbox_port = Value.unbox_int
   let unbox_chan' chan =
     let (outp, inp) = Value.unbox_pair chan in
       (Value.unbox_int outp, Value.unbox_int inp)
