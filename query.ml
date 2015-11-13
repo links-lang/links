@@ -185,7 +185,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
 let default_of_base_type : Types.primitive -> t =
   function
     | `Bool   -> `Constant (`Bool false)
-    | `Int    -> `Constant (`Int (Num.num_of_int 42))
+    | `Int    -> `Constant (`Int 42)
     | `Char   -> `Constant (`Char '?')
     | `Float  -> `Constant (`Float 0.0)
     | `String -> `Constant (`String "")
@@ -797,7 +797,7 @@ struct
     let eq_constant =
       function
         | (`Bool a  , `Bool b)   -> bool (a = b)
-        | (`Int a   , `Int b)    -> bool (Num.eq_num a b)
+        | (`Int a   , `Int b)    -> bool (a = b)
         | (`Float a , `Float b)  -> bool (a = b)
         | (`Char a  , `Char b)   -> bool (a = b)
         | (`String a, `String b) -> bool (a = b)
@@ -949,7 +949,7 @@ struct
         | `DefVal t     -> [default_of_base_type t]
         | `DefGen g     -> List.map default_of_base_value (gen g)
         | `DefTailGen g -> []
-        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
+        | `Branch i     -> [`Constant (`Int i)]
     in
       concat_map long
 
@@ -968,7 +968,7 @@ struct
         | `DefVal t     -> [default_of_base_type t]
         | `DefGen g
         | `DefTailGen g -> List.map default_of_base_value (gen g)
-        | `Branch i     -> [`Constant (`Int (Num.num_of_int i))]
+        | `Branch i     -> [`Constant (`Int i)]
     in
       concat_map strict_long
 
@@ -1054,7 +1054,7 @@ struct
   (* compute the order indexes for the specified query tree along a
      path *)
   let rec flatten_at path active : query_tree -> orders =
-    let box branch = `Constant (`Int (Num.num_of_int branch)) in
+    let box branch = `Constant (`Int branch) in
       function
         | `Leaf (_, os) -> os
         | `Node (os, cs) ->
@@ -1353,7 +1353,7 @@ struct
     let range =
       match range with
         | None -> ""
-        | Some (limit, offset) -> " limit " ^Num.string_of_num limit^" offset "^Num.string_of_num offset
+        | Some (limit, offset) -> " limit " ^ string_of_int limit^" offset "^ string_of_int offset
     in
       string_of_query db false q ^ range
 
@@ -1577,7 +1577,7 @@ struct
       "delete from "^table^where
 end
 
-let compile : Value.env -> (Num.num * Num.num) option * Ir.computation -> (Value.database * string * Types.datatype) option =
+let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.Show_computation.show e); *)
     let v = Eval.eval env e in
