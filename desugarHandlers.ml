@@ -70,7 +70,7 @@ let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * 
     List.map (fun param -> hide_names param clashes) params
   in
   let wrap_fun params body =
-    (`FunLit (None, `Unl, ([params], body)), dp)
+    (`FunLit (None, `Unl, ([params], body), `Unknown), dp)
   in
   match params with
     None
@@ -126,7 +126,7 @@ object
   method phrasenode = function
     | `HandlerLit (None, spec, hnlit) ->      
        let handle = make_handle hnlit spec in
-       let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle) in       
+       let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle, `Unknown) in
        super#phrasenode funlit
     | e -> super#phrasenode e
 
