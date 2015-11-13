@@ -12,7 +12,7 @@ stdout : [[42, 41, 40, 39]] : [[Int]]
 
 Maybe handler (Nothing)
 {fun maybe(m) { handle(m) { case Fail(_) -> Nothing case Return(x) -> Just(x) } } maybe(fun() { do Fail; 42 }) }
-stdout : Nothing() : [|Just:Int|Nothing|_|]
+stdout : Nothing : [|Just:Int|Nothing|_|]
 
 Maybe handler (Just(42))
 {fun maybe(m) { handle(m) { case Fail(_) -> Nothing case Return(x) -> Just(x) } } maybe(fun() { 42 }) }
