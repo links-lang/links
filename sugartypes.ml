@@ -192,7 +192,7 @@ and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
+| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
@@ -384,7 +384,7 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit (_, _, fnlit) -> funlit fnlit
+    | `FunLit (_, _, fnlit, location) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
