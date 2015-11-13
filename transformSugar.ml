@@ -210,8 +210,7 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lin, lam) as phrase ->
-	 (*let () = prerr_endline ("Expression: " ^ Show_phrasenode.show phrase) in*)
+      | `FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
@@ -223,7 +222,7 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-          (o, `FunLit (Some argss, lin, lam), t)
+            (o, `FunLit (Some argss, lin, lam, location), t)
       | `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->
 	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
 	 let (o, hnlit, ht) = o#handlerlit ht hnlit in

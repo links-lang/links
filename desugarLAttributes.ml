@@ -37,7 +37,7 @@ let desugar_lhref : phrasenode -> phrasenode = function
           | [_,[target]], rest ->
               (("href",
                 [`Constant (`String "?_k="), dummy_pos;
-                 apply dummy_pos "pickleCont" [`FunLit (None, `Unl, ([[]], target)),
+                 apply dummy_pos "pickleCont" [`FunLit (None, `Unl, ([[]], target), `Server),
                                                dummy_pos]]))
               :: rest
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
@@ -57,7 +57,7 @@ let desugar_laction : phrasenode -> phrasenode = function
                     ["type",  [`Constant (`String "hidden"), dummy_pos];
                      "name",  [`Constant (`String "_k"), dummy_pos];
                      "value", [apply dummy_pos "pickleCont"
-                                [`FunLit(None,`Unl,([[]],action_expr)), dummy_pos]]],
+                                [`FunLit(None,`Unl,([[]],action_expr), `Server), dummy_pos]]],
                     None,
                     []), dummy_pos
             and action = ("action", [`Constant (`String "#"), dummy_pos])
@@ -74,7 +74,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
     | (name, [rhs]) ->
         let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
           `TupleLit [`Constant (`String event), pos;
-                     `FunLit (None, `Unl, ([[`Variable ("event", None, pos), pos]], rhs)), pos], pos
+                     `FunLit (None, `Unl, ([[`Variable ("event", None, pos), pos]], rhs), `Client), pos], pos
     | _ -> assert false
   in function
     | `Xml (tag, attrs, attrexp, children)

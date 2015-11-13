@@ -80,7 +80,7 @@ let results :  Types.row ->
               in
                 `FunLit
                   (Some [a, eff], `Unl,
-                   ([ps], (`TupleLit (q::qs), dp))), dp in
+                   ([ps], (`TupleLit (q::qs), dp)), `Unknown), dp in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
@@ -90,7 +90,7 @@ let results :  Types.row ->
                    ([[qb]],
                     (`FnAppl
                        ((`TAppl ((`Var "map", dp), [a; `Row eff; b]), dp),
-                        [inner; r]), dp))), dp in
+                        [inner; r]), dp)), `Unknown), dp in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
               `FnAppl
@@ -178,7 +178,8 @@ object (o : 'self_type)
           `FunLit
             (Some [Types.make_tuple_type [arg_type], eff],
              `Unl,
-             ([arg], body)), dp in
+             ([arg], body),
+             `Unknown), dp in
 
         let results = results eff (es, xs, ts) in
         let results =
@@ -192,7 +193,8 @@ object (o : 'self_type)
                   `FunLit
                     (Some [Types.make_tuple_type [arg_type], eff],
                      `Unl,
-                     ([arg], sort)), dp
+                     ([arg], sort),
+                     `Unknown), dp
                 in
                   `FnAppl
                     ((`TAppl ((`Var sort_by, dp), [`Type arg_type; `Row eff; sort_type_arg]), dp),
