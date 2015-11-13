@@ -67,6 +67,7 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
+| `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
@@ -113,6 +114,8 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_pid : int * Sugartypes.location -> t
+val unbox_pid : t -> int * Sugartypes.location
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 

@@ -191,6 +191,7 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
+| `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
@@ -281,6 +282,7 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `Pid (pid, location) -> assert false
       | `Socket (inc, outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -400,6 +402,7 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
+  | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -490,6 +493,10 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
+let box_pid (pid, location) = `Pid (pid, `Unknown)
+let unbox_pid = function
+  | `Pid (pid, location) -> (pid, location)
+  | _ -> failwith "Type error unboxing pid"
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p

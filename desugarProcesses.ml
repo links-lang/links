@@ -19,7 +19,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (`Wait, body, Some inner_eff) ->
+    | `Spawn (`Wait, location, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
 
@@ -34,7 +34,7 @@ object (o : 'self_type)
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
         in
           (o, e, body_type)
-    | `Spawn (k, body, Some inner_eff) ->
+    | `Spawn (k, location, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in

@@ -154,7 +154,8 @@ class map =
       | `Var _x -> let _x = o#name _x in `Var _x
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
-      | `Spawn (_x, _x_i1, _x_i2) -> let _x_i1 = o#phrase _x_i1 in `Spawn (_x, _x_i1, _x_i2)
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
+                                            let _x_i2 = o#phrase _x_i2 in `Spawn (_x, _x_i1, _x_i2, _x_i3)
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -712,7 +713,7 @@ class fold =
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | `Spawn (_x, _x_i1, _x_i2) -> let o = o#phrase _x_i1 in o
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -1249,7 +1250,8 @@ class fold_map =
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
-      | `Spawn (_x, _x_i1, _x_i2) -> let (o, _x_i1) = o#phrase _x_i1 in (o, (`Spawn (_x, _x_i1, _x_i2)))
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let (o, _x_i1) = o#location _x_i1 in
+                                            let (o, _x_i2) = o#phrase _x_i2 in (o, (`Spawn (_x, _x_i1, _x_i2, _x_i3)))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option

@@ -1953,7 +1953,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, p, _) ->
+        | `Spawn (`Wait, location, p, _) ->
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -1965,8 +1965,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, p, _) ->
+              `Spawn (`Wait, location, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, location, p, _) ->
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -1979,7 +1979,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (k, erase p, Some inner_effects), pid_type, usages p
+            `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
 
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in

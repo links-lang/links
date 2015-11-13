@@ -297,7 +297,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Int (Proc.get_current_pid())),
+  (`PFun (fun _ -> `Pid (Proc.get_current_pid(), `Unknown)),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 

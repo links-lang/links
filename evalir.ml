@@ -183,7 +183,7 @@ module Eval = struct
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
         else
-          let pid = Value.unbox_int pid in
+          let (pid, location) = Value.unbox_pid pid in
             (try
                Mailbox.send_message msg pid;
                Proc.awaken pid
@@ -201,7 +201,8 @@ module Eval = struct
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
             let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            apply_cont cont env (`Int new_pid)
+            let location = `Unknown in
+            apply_cont cont env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
@@ -214,7 +215,8 @@ module Eval = struct
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
             let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            apply_cont cont env (`Int new_pid)
+            let location = `Unknown in
+            apply_cont cont env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the

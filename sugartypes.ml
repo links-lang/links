@@ -67,6 +67,11 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
+let string_of_location = function
+| `Client -> "client"
+| `Server -> "server"
+| `Native -> "native"
+| `Unknown -> "unknown"
 
 type restriction = [ `Any | `Base | `Session ]
     deriving (Eq, Show)
@@ -191,7 +196,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| `Spawn            of spawn_kind * phrase * Types.row option
+| `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -335,7 +340,7 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (_, p, _)
+    | `Spawn (_, _, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)

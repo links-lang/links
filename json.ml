@@ -69,6 +69,7 @@ let rec jsonize_value : Value.t -> string = function
   | `List [] -> "[]"
   | `List (elems) ->
       "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
+  | `Pid _ -> failwith "Cannot yet jsonize proceses"
   | `Socket _ -> failwith "Cannot jsonize sockets"
 and jsonize_primitive : Value.primitive_value -> string = function
   | `Bool value -> string_of_bool value
