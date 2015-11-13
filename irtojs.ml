@@ -535,6 +535,10 @@ let generate_remote_call f_name xs_names env =
             xs_names
         )])
 
+(* TODO: refactor this lambdalifting nonsense in the light of having
+   implemented closure conversion.
+ *)
+
 (** The [lambdalift] operations build up a [code->code] function (effectively
     a code context consisting of definitions) by function composition. *)
 let rec lambdalift_function ((fb, (_, xsb, body), zb, location) : Ir.fun_def) =
