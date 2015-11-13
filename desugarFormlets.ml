@@ -127,7 +127,7 @@ object (o : 'self_type)
                         let base : phrase =
                           (`FnAppl
                              ((`TAppl ((`Var "pure", dp), [`Type ft; mb]), dp),
-                              [`FunLit (Some (List.rev args), `Unl, (List.rev pss, (`TupleLit vs, dp))), dp]), dp) in
+                              [`FunLit (Some (List.rev args), `Unl, (List.rev pss, (`TupleLit vs, dp)), `Unknown), dp]), dp) in
                         let (e, _), et =
                           List.fold_right
                             (fun arg (base, ft) ->
@@ -153,7 +153,7 @@ object (o : 'self_type)
                   (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
                             `Unl,
                             ([[`Variable xb, dp]],
-                             (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp))), dp) in
+                             (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp)), `Unknown), dp) in
               let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
                 (o,
                  `FnAppl
@@ -191,7 +191,7 @@ object (o : 'self_type)
              [body;
               `FnAppl
                 ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
-                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], `Unl, (pss, yields)), dp]), dp])
+                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], `Unl, (pss, yields), `Unknown), dp]), dp])
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e

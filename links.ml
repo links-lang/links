@@ -4,7 +4,8 @@ open Performance
 open Getopt
 open Utility
 open List
-open Basicsettings
+
+module BS = Basicsettings
 
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
@@ -14,7 +15,7 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
   print_string (Value.string_of_value value);
-  print_endline (if Settings.get_value(printing_types) then
+  print_endline (if Settings.get_value(BS.printing_types) then
 		   " : "^ Types.string_of_datatype rtype
                  else "")
 
@@ -47,13 +48,13 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   in
 
   let program =
-    if Settings.get_value optimise
+    if Settings.get_value BS.optimise
     then measure "optimise" optimise_program program
     else program
   in
 
   let program = Closures.program tenv Lib.primitive_vars program in
-  (* Debug.print ("Closure converted program: " ^ Ir.Show_program.show program); *)
+  Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
   BuildTables.program tenv Lib.primitive_vars program;
 
   let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
@@ -232,11 +233,27 @@ let interact envs =
 
                       Env.String.fold
                         (fun name var () ->
-                           let v = Value.find var valenv in
-                           let t = Env.String.lookup tyenv'.Types.var_env name in
-                             prerr_endline(name
-                                           ^" = "^Value.string_of_value v
-                                           ^" : "^Types.string_of_datatype t);())
+                           let v, t =
+                             (* function values are bound in a global
+                                table, whereas other values are bound
+                                in the value environment *)
+                             match Tables.lookup Tables.fun_defs var with
+                             | None ->
+                               let v = Value.find var valenv in
+                               let t = Env.String.lookup tyenv'.Types.var_env name in
+                               v, t
+                             | Some (finfo, _, None, location) ->
+                               let v =
+                                 match location with
+                                 | `Server | `Unknown ->
+                                   `FunctionPtr (var, Value.empty_env)
+                                 | `Client ->
+                                   `ClientFunction (Js.var_name_binder (var, finfo)) in
+                               let t = Var.info_type finfo in
+                               v, t in
+                           prerr_endline(name
+                                         ^" = "^Value.string_of_value v
+                                         ^" : "^Types.string_of_datatype t))
                         nenv'
                         ();
 
@@ -293,14 +310,14 @@ let invert_env env =
     env IntMap.empty
 
 let run_file prelude envs filename =
-  Settings.set_value interacting false;
+  Settings.set_value BS.interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
       ((globals @ locals, main), t), (nenv, tyenv)
   in
-    if Settings.get_value web_mode then
+    if Settings.get_value BS.web_mode then
        Webif.serve_request envs prelude filename
     else
       ignore (evaluate parse_and_desugar envs filename)
@@ -311,7 +328,7 @@ let run_file prelude envs filename =
 
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s =
-    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
+    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
     let program, t, _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
@@ -319,13 +336,13 @@ let evaluate_string_in envs v =
     let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
     ((globals @ locals, main), t), (nenv, tyenv)
   in
-    (Settings.set_value interacting false;
+    (Settings.set_value BS.interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value prelude_file))
+       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
@@ -352,7 +369,7 @@ let cache_load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
        (Loader.wpcache "prelude.ir")
-	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)))
+	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file)))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
@@ -390,7 +407,7 @@ let set_web_mode() = (
     Unix.putenv "REQUEST_METHOD" "GET";
   if not(is_some(getenv "QUERY_STRING")) then
     Unix.putenv "QUERY_STRING" "";
-  Settings.set_value web_mode true
+  Settings.set_value BS.web_mode true
   )
 
 let config_file   : string option ref = ref None
@@ -399,19 +416,19 @@ let options : opt list =
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web-mode",            Some set_web_mode,                None);
-    (noshort, "optimise",            set optimise true,                None);
+    (noshort, "optimise",            set BS.optimise true,                None);
     (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set printing_types false,         None);
+    ('n',     "no-types",            set BS.printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
      Some(fun filename -> Loader.print_cache filename;
-            Settings.set_value interacting false));
+            Settings.set_value BS.interacting false));
     (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
-    (noshort, "pp",                  None,                             Some (Settings.set_value pp));
+    (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     ]
 
 let file_list = ref []
@@ -425,11 +442,11 @@ let main () =
   lazy (for_each
           !to_precompile
           (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <|measure_as|> "precompile";
-  if !to_precompile <> [] then Settings.set_value interacting false;
+  if !to_precompile <> [] then Settings.set_value BS.interacting false;
   for_each !file_list (run_file prelude envs);
-  if Settings.get_value interacting then
+  if Settings.get_value BS.interacting then
     begin
-      print_endline (Settings.get_value welcome_note);
+      print_endline (Settings.get_value BS.welcome_note);
       interact envs
     end
 
@@ -454,8 +471,8 @@ let main () =
 let whole_program_caching_main () =
   Debug.print ("Whole program caching mode activated.");
 
-  if Settings.get_value interacting
-  then Settings.set_value interacting false;
+  if Settings.get_value BS.interacting
+  then Settings.set_value BS.interacting false;
 
   if !to_precompile <> []
   then failwith "Cannot precompile in whole program caching mode";
@@ -481,7 +498,7 @@ let whole_program_caching_main () =
 let _ =
 (* parse common cmdline arguments and settings *)
   begin match Utility.getenv "REQUEST_METHOD" with
-    | Some _ -> Settings.set_value web_mode true
+    | Some _ -> Settings.set_value BS.web_mode true
     | None -> ()
   end;
 
@@ -493,6 +510,6 @@ let _ =
   (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
 
-  if Settings.get_value cache_whole_program
+  if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()
   else main()

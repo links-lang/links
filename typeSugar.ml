@@ -1667,7 +1667,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-        | `FunLit (_, lin, (pats, body)) ->
+        | `FunLit (_, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
@@ -1727,7 +1727,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Needs more thought...
             *)
 
-            let e = `FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body)) in
+            let e = `FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
               if Settings.get_value Instantiate.quantified_instantiation then
                 let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
                 let _, ftype = Instantiate.typ ftype in

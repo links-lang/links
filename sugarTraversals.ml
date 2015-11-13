@@ -150,7 +150,8 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
-      | `FunLit (_x, _x1, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x1, _x_i1)
+      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
+                                           let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
       | `Spawn (_x, _x_i1, _x_i2) -> let _x_i1 = o#phrase _x_i1 in `Spawn (_x, _x_i1, _x_i2)
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
@@ -708,7 +709,7 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
-      | `FunLit (_x, _x1, _x_i1) -> let o = o#funlit _x_i1 in o
+      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | `Spawn (_x, _x_i1, _x_i2) -> let o = o#phrase _x_i1 in o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
@@ -1245,7 +1246,9 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `FunLit (_x, _x1, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x1, _x_i1)))
+      | `FunLit (_x, _x1, _x_i1, _x_i2) ->
+        let (o, _x_i1) = o#funlit _x_i1 in
+        let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
       | `Spawn (_x, _x_i1, _x_i2) -> let (o, _x_i1) = o#phrase _x_i1 in (o, (`Spawn (_x, _x_i1, _x_i2)))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
