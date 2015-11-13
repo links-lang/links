@@ -72,7 +72,7 @@ let rec jsonize_value : Value.t -> string = function
   | `Socket _ -> failwith "Cannot jsonize sockets"
 and jsonize_primitive : Value.primitive_value -> string = function
   | `Bool value -> string_of_bool value
-  | `Int value -> Num.string_of_num value
+  | `Int value -> string_of_int value
   | `Float value -> string_of_float' value
   | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
   | `Database db -> json_of_db db

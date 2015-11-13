@@ -1,5 +1,4 @@
 open Sys
-open Num
 open List
 
 open Notfound
@@ -133,7 +132,7 @@ let client_only_2 fn =
 let rec equal l r =
   match l, r with
     | `Bool l  , `Bool r   -> l = r
-    | `Int l   , `Int r    -> eq_num l r
+    | `Int l   , `Int r    -> l = r
     | `Float l , `Float r  -> l = r
     | `Char l  , `Char r   -> l = r
     | `String l, `String r -> l = r
@@ -157,7 +156,7 @@ and equal_lists l r =
 let rec less l r =
   match l, r with
     | `Bool l, `Bool r   -> l < r
-    | `Int l, `Int r     -> lt_num l r
+    | `Int l, `Int r     -> l < r
     | `Float l, `Float r -> l < r
     | `Char l, `Char r -> l < r
     | `String l, `String r -> l < r
@@ -202,12 +201,12 @@ let prelude_tyenv = ref None (* :-( *)
 let prelude_nenv = ref None (* :-( *)
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
-  "+", int_op (+/) PURE;
-  "-", int_op (-/) PURE;
-  "*", int_op ( */) PURE;
-  "/", int_op (fun x y -> integer_num (x // y)) IMPURE;
-  "^", int_op ( **/ ) PURE;
-  "mod", int_op mod_num IMPURE;
+  "+", int_op (+) PURE;
+  "-", int_op (-) PURE;
+  "*", int_op ( *) PURE;
+  "/", int_op (/) IMPURE;
+  "^", int_op pow PURE;
+  "mod", int_op (mod) IMPURE;
   "+.", float_op (+.) PURE;
   "-.", float_op (-.) PURE;
   "*.", float_op ( *.) PURE;
@@ -248,10 +247,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (** Conversions (any missing?) **)
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_num ~box:box_string ~into:Types.string_type PURE;
-  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:num_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
-  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_num ~box:box_float ~into:(`Primitive `Float) PURE;
-  "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:(num_of_int -<- int_of_float) ~box:box_int ~into:(`Primitive `Int) PURE;
+  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_int ~box:box_string ~into:Types.string_type PURE;
+  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:int_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
+  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_int ~box:box_float ~into:(`Primitive `Float) PURE;
+  "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:int_of_float ~box:box_int ~into:(`Primitive `Int) PURE;
   "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:unbox_float ~conv:string_of_float' ~box:box_string ~into:Types.string_type PURE;
   "stringToFloat", conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:float_of_string ~box:box_float ~into:(`Primitive `Float) IMPURE;
 
@@ -262,7 +261,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "intToXml",
   (`PFun (string_to_xml -<-
-            (conversion_op' ~unbox:unbox_int ~conv:(string_of_num) ~box:box_string)),
+            (conversion_op' ~unbox:unbox_int ~conv:(string_of_int) ~box:box_string)),
    datatype "(Int) -> Xml",
   PURE);
 
@@ -298,7 +297,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Int (num_of_int(Proc.get_current_pid()))),
+  (`PFun (fun _ -> `Int (Proc.get_current_pid())),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
@@ -423,19 +422,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "length",
-  (p1 (unbox_list ->- List.length ->- num_of_int ->- box_int),
+  (p1 (unbox_list ->- List.length ->- box_int),
    datatype "([a]) -> Int",
   PURE);
 
   "take",
   (p2 (fun n l ->
-         box_list (Utility.take (int_of_num (unbox_int n)) (unbox_list l))),
+         box_list (Utility.take (unbox_int n) (unbox_list l))),
    datatype "(Int, [a]) ~> [a]",
   PURE);
 
   "drop",
   (p2 (fun n l ->
-         box_list (Utility.drop (int_of_num (unbox_int n)) (unbox_list l))),
+         box_list (Utility.drop (unbox_int n) (unbox_list l))),
    datatype "(Int, [a]) ~> [a]",
   PURE);
 
@@ -525,7 +524,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "negate",
-  (p1 (unbox_int ->- minus_num ->- box_int), datatype "(Int) -> Int",
+  (p1 (unbox_int ->- (~-) ->- box_int), datatype "(Int) -> Int",
   PURE);
 
   "negatef",
@@ -902,7 +901,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "serverTime",
   (`Server
      (`PFun (fun _ ->
-               box_int(num_of_float(Unix.time())))),
+               box_int(int_of_float(Unix.time())))),
    datatype "() ~> Int",
    IMPURE);
 
@@ -911,7 +910,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          match r with
            | `Record r ->
                let lookup s =
-                 int_of_num (unbox_int (List.assoc s r)) in
+                 unbox_int (List.assoc s r) in
                let tm = {
                  Unix.tm_sec = lookup "seconds";
    	         Unix.tm_min = lookup "minutes";
@@ -924,15 +923,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    	         Unix.tm_isdst = false} in
 
                let t, _ = Unix.mktime tm in
-                 box_int (num_of_float t)
+                 box_int (int_of_float t)
            | _ -> assert false),
    datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) ~> Int",
    IMPURE);
 
   "intToDate",
   (p1 (fun t ->
-         let tm = Unix.localtime(float_of_num (unbox_int t)) in
-         let box_int = box_int -<- num_of_int in
+         let tm = Unix.localtime(float_of_int (unbox_int t)) in
            `Record [
              "year", box_int (tm.Unix.tm_year + 1900);
              "month", box_int tm.Unix.tm_mon;
@@ -1054,12 +1052,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "toLower", char_conversion Char.lowercase PURE;
 
   "ord",
-  (p1 (fun c -> box_int (num_of_int (Char.code (unbox_char c)))),
+  (p1 (fun c -> box_int (Char.code (unbox_char c))),
    datatype "(Char) -> Int",
   PURE);
 
   "chr",
-  (p1 (fun n -> (box_char (Char.chr (int_of_num (unbox_int n))))),
+  (p1 (fun n -> (box_char (Char.chr (unbox_int n)))),
    datatype "(Int) -> Char",
   PURE);
 
@@ -1124,7 +1122,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* String utilities *)
   ("charAt",
    (p2 (fun s i ->
-	  let int = Num.int_of_num -<- unbox_int in
+	  let int = unbox_int in
 	    try
               box_char ((unbox_string s).[int i])
 	    with
@@ -1134,7 +1132,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("strsub",
    (p3 (fun s start len ->
-	  let int = Num.int_of_num -<- unbox_int in
+	  let int = unbox_int in
 	    try
 	      box_string (String.sub (unbox_string s) (int start) (int len))
 	    with
@@ -1144,7 +1142,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("strlen",
    (p1 (fun s -> match s with
-          | `String s -> `Int (Num.num_of_int (String.length s))
+          | `String s -> `Int (String.length s)
 	  |  _ -> failwith "Internal error: strlen got wrong arguments"),
     datatype ("(String) ~> Int "),
     PURE));
@@ -1429,8 +1427,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in
                     let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c}, _) = c-b in
 
-                    let box_int = num_of_int ->- box_int in
-
                     let resolve (name, t, pos) =
                       (* HACK: we need to be more principled about foralls  *)
                       let t =
@@ -1460,7 +1456,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                       try  Unix.inet_addr_of_string server
                       with Failure("inet_addr_of_string") ->
                         (Unix.gethostbyname server).Unix.h_addr_list.(0) in
-                    let sockaddr = Unix.ADDR_INET(server_addr, Num.int_of_num port) in
+                    let sockaddr = Unix.ADDR_INET(server_addr, port) in
                     let domain = Unix.domain_of_sockaddr sockaddr in
                     let sock = Unix.socket domain Unix.SOCK_STREAM 0 in
                     Unix.connect sock sockaddr;

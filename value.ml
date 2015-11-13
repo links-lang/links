@@ -1,5 +1,4 @@
 (*pp deriving *)
-open Num
 open Utility
 open Notfound
 
@@ -142,18 +141,18 @@ and string_of_item : xmlitem -> string =
 type table = (database * string) * string * Types.row
   deriving (Show)
 
-type number = num
-module Show_number = Deriving_num.Show_num
-module Typeable_number = Deriving_num.Typeable_num
-module Eq_number = Deriving_num.Eq_num
-module Pickle_number = Deriving_num.Pickle_num
-module Dump_number = Deriving_num.Dump_num
+(* type number = num *)
+(* module Show_number = Deriving_num.Show_num *)
+(* module Typeable_number = Deriving_num.Typeable_num *)
+(* module Eq_number = Deriving_num.Eq_num *)
+(* module Pickle_number = Deriving_num.Pickle_num *)
+(* module Dump_number = Deriving_num.Dump_num *)
 
 type primitive_value_basis =  [
 | `Bool of bool
 | `Char of char
 | `Float of float
-| `Int of number
+| `Int of int
 | `XML of xmlitem
 | `String of string ]
   deriving (Show, Typeable, Eq, Pickle, Dump)
@@ -404,7 +403,7 @@ and string_of_value : t -> string = function
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
-  | `Int value -> string_of_num value
+  | `Int value -> string_of_int value
   | `Float value -> string_of_float' value
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
@@ -463,7 +462,7 @@ let box_bool b = `Bool b
 and unbox_bool : t -> bool   = function
   | `Bool b  -> b | _ -> failwith "Type error unboxing bool"
 and box_int i = `Int i
-and unbox_int  : t -> num    = function
+and unbox_int  : t -> int    = function
   | `Int i   -> i
   | other -> failwith("Type error unboxing int")
 and box_float f = `Float f
