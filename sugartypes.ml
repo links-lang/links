@@ -5,8 +5,6 @@ open Utility
 
 type name = string deriving (Show)
 
-type num = Num.num
-
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
 

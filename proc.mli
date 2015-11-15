@@ -52,6 +52,6 @@ sig
   val fuse : chan -> chan -> unit
 
   val unbox_port : Value.t -> portid
-  val unbox_chan' : Value.t -> Num.num * Num.num
+  val unbox_chan' : Value.t -> int * int
   val unbox_chan : Value.t -> chan
 end

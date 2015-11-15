@@ -51,7 +51,7 @@ type primitive_value = [
 | `Database of (database * string)
 | `Table of table
 | `Float of float
-| `Int of Num.num
+| `Int of int
 | `XML of xmlitem
 | `String of string ]
 
@@ -109,7 +109,7 @@ val untuple : t -> t list
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : t -> bool
 val box_int : 'a -> [> `Int of 'a ]
-val unbox_int : t -> Num.num
+val unbox_int : t -> int
 val box_float : 'a -> [> `Float of 'a ]
 val unbox_float : t -> float
 val box_char : 'a -> [> `Char of 'a ]

@@ -426,7 +426,7 @@ let rec generate_value env : Ir.value -> code =
       | `Constant c ->
           begin
             match c with
-              | `Int v  -> Lit (Num.string_of_num v)
+              | `Int v  -> Lit (string_of_int v)
               | `Float v    ->
                   let s = string_of_float' v in
                   let n = String.length s in

@@ -178,7 +178,7 @@ module Eval = struct
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont hs [pid; msg]
         else
-          let pid = Num.int_of_num (Value.unbox_int pid) in
+          let pid = Value.unbox_int pid in
             (try
                Mailbox.send_message msg pid;
                Proc.awaken pid
@@ -197,7 +197,7 @@ module Eval = struct
                           ([], `Apply (`Variable var, [])))] in
 	    let cont' = Value.append_delim_cont delim Value.toplevel_cont in
             let new_pid = Proc.create_process false (fun () -> apply_cont cont' Value.toplevel_hs env func) in
-            apply_cont cont hs env (`Int (Num.num_of_int new_pid))
+            apply_cont cont hs env (`Int new_pid)
           end
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
@@ -211,7 +211,7 @@ module Eval = struct
                           ([], `Apply (`Variable var, [])))] in
 	    let cont' = Value.append_delim_cont delim Value.toplevel_cont in
             let new_pid = Proc.create_process true (fun () -> apply_cont cont' Value.toplevel_hs env func) in
-            apply_cont cont hs env (`Int (Num.num_of_int new_pid))
+            apply_cont cont hs env (`Int new_pid)
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -236,18 +236,16 @@ module Eval = struct
     (* Session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
-        apply_cont cont hs env (`Int (Num.num_of_int apid))
+        apply_cont cont hs env (`Int apid)
     | `PrimitiveFunction ("accept", _), [ap] ->
-      let apid = Num.int_of_num (Value.unbox_int ap) in
+      let apid = Value.unbox_int ap in
       let (c, d), blocked = Session.accept apid in
       Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
-      let c' = Num.num_of_int c in
-      let d' = Num.num_of_int d in
         if blocked then
           let accept_frame =
               Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
-                                     (StringMap.add "2" (`Constant (`Int d'))
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
+                                     (StringMap.add "2" (`Constant (`Int d))
                                         StringMap.empty), None)))
             in
               (* block my end of the channel *)
@@ -262,20 +260,18 @@ module Eval = struct
               | None     -> assert false
             end;
             apply_cont cont hs env (Value.box_pair
-                                   (Value.box_int (Num.num_of_int c))
-                                   (Value.box_int (Num.num_of_int d)))
+                                   (Value.box_int c)
+                                   (Value.box_int d))
           end
     | `PrimitiveFunction ("request", _), [ap] ->
-      let apid = Num.int_of_num (Value.unbox_int ap) in
+      let apid = Value.unbox_int ap in
       let (c, d), blocked = Session.request apid in
       Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
-      let c' = Num.num_of_int c in
-      let d' = Num.num_of_int d in
         if blocked then
           let request_frame =
               Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c'))
-                                     (StringMap.add "2" (`Constant (`Int d'))
+                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
+                                     (StringMap.add "2" (`Constant (`Int d))
                                         StringMap.empty), None)))
             in
               (* block my end of the channel *)
@@ -290,8 +286,8 @@ module Eval = struct
               | None     -> assert false
             end;
             apply_cont cont hs env (Value.box_pair
-                                   (Value.box_int (Num.num_of_int c))
-                                   (Value.box_int (Num.num_of_int d)))
+                                   (Value.box_int c)
+                                   (Value.box_int d))
           end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
@@ -307,7 +303,7 @@ module Eval = struct
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let (out', in') = Session.unbox_chan' chan in
-        let inp = Num.int_of_num in' in
+        let inp = in' in
           match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
@@ -516,7 +512,7 @@ module Eval = struct
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
         let (out', in') = Session.unbox_chan' chan in
-        let inp = Num.int_of_num in' in
+        let inp = in' in
           match Session.receive inp with
           | Some v ->
             Debug.print ("chose: " ^ Value.string_of_value v);

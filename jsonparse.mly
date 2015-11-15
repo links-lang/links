@@ -15,7 +15,7 @@ open Utility
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
 %token COLON COMMA UNDERSCORE TRUE FALSE NULL 
 %token <string> STRING
-%token <Num.num> INT
+%token <int> INT
 %token <float> FLOAT
 
 %start parse_json
@@ -99,7 +99,7 @@ object_:
                             | ["_closureTable", id] ->
                               `ClientFunction("_closureTable["^Value.string_of_value id^"]")
                             | ["_serverFunc", id] ->
-                              `FunctionPtr(Num.int_of_num (Value.unbox_int id), Value.empty_env)
+                              `FunctionPtr(Value.unbox_int id, Value.empty_env)
                             | ["_serverFunc", id; "_env", env]
                             | ["_env", env; "_serverFunc", id] ->
                               let env' =
@@ -108,7 +108,7 @@ object_:
                                      (fun v -> (v, `Local))
                                      (Utility.val_of (Value.intmap_of_record env)))
                               in
-                              `FunctionPtr(Num.int_of_num (Value.unbox_int id), env')
+                              `FunctionPtr(Value.unbox_int id, env')
                             | _ -> `Record (List.rev $2)
                         }
 
