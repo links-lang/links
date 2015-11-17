@@ -54,7 +54,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   in
 
   let program = Closures.program tenv Lib.primitive_vars program in
-  Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
+  (* Debug.print ("Closure converted program: " ^ Ir.Show_program.show program); *)
   BuildTables.program tenv Lib.primitive_vars program;
 
   let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
