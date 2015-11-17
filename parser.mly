@@ -163,7 +163,7 @@ let parseRegexFlags f =
       List.rev l
     else
       asList f (i+1) ((String.get f i)::l) in
-    List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
+    List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal | _ -> assert false ) (asList f 0 [])
 
 let datatype d = d, None
 
@@ -785,6 +785,7 @@ field_constraints:
 field_constraint:
 | READONLY                                                     { `Readonly }
 | DEFAULT                                                      { `Default }
+| PROV exp                                                     { `Prov $2 }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }

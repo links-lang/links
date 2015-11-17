@@ -101,9 +101,6 @@ type quantifier = type_variable
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-type fieldconstraint = [ `Readonly | `Default ]
-    deriving (Show)
-
 type datatype =
   [ `TypeVar         of known_type_variable
   | `Function        of datatype list * row * datatype
@@ -245,6 +242,7 @@ and phrasenode = [
 | `CP               of cp_phrase
 ]
 and phrase = phrasenode * position
+and fieldconstraint = [ `Readonly | `Default | `Prov of phrase ]
 and bindingnode = [
 (*
    TODO: (aesthetic change)
