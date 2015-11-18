@@ -344,8 +344,9 @@ module Eval = struct
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | (v,vs)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
-
-  and apply_cont cont hs env v : Proc.thread_result Lwt.t =
+  and apply_cont cont hs env v =
+    Proc.yield (fun () -> apply_cont' cont hs env v)
+  and apply_cont' cont hs env v : Proc.thread_result Lwt.t =
     match cont, hs with
     | [] :: conts, h :: hs ->
       invoke_return_clause conts hs env h v
