@@ -23,11 +23,13 @@ struct
 
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
+        client_processes : (pid, Value.t) Hashtbl.t;
         angels : (pid, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
   let state = {
     blocked          = Hashtbl.create 10000;
+    client_processes = Hashtbl.create 10000;
     angels           = Hashtbl.create 10000;
     step_counter     = ref 0 }
 
@@ -135,6 +137,12 @@ struct
       end
     else
       async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
+    new_pid
+
+  (** Create a new client process and return its identifier *)
+  let create_client_process func =
+    let new_pid = fresh_pid () in
+    Hashtbl.add state.client_processes new_pid func;
     new_pid
 
   let finish r =

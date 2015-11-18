@@ -11,6 +11,7 @@ sig
   val get_current_pid : unit -> pid
 
   val create_process : bool -> thread -> pid
+  val create_client_process : Value.t -> pid
   val awaken : pid -> unit
 
   val finish : thread_result -> thread_result Lwt.t

@@ -204,6 +204,10 @@ module Eval = struct
             let location = `Unknown in
             apply_cont cont env (`Pid (new_pid, location))
           end
+    | `PrimitiveFunction ("spawnClient",_), [func] ->
+      let var = Var.dummy_var in
+      let new_pid = Proc.create_client_process func in
+      apply_cont cont env (`Pid (new_pid, `Client))
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
