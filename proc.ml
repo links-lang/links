@@ -27,9 +27,11 @@ struct
         step_counter : int ref }
 
   let state = {
-    blocked        = Hashtbl.create 10000;
-    angels         = Hashtbl.create 10000;
-    step_counter   = ref 0 }
+    blocked          = Hashtbl.create 10000;
+    angels           = Hashtbl.create 10000;
+    step_counter     = ref 0 }
+
+  let atomic : bool ref = ref false
 
   (** Test that there is only one thread total (the running one)? *)
   (* todo: broken *)
@@ -67,14 +69,12 @@ struct
     Ignores if the process does not exist.
    *)
   let awaken pid =
-    try
-      Debug.print ("Awakening thread " ^ string_of_int pid);
-      let doorbell = Hashtbl.find state.blocked pid in
+    match Hashtbl.lookup state.blocked pid with
+    | None -> () (* process not blocked *)
+    | Some doorbell ->
+      Debug.print ("Awakening blocked process " ^ string_of_int pid);
       Hashtbl.remove state.blocked pid;
       Lwt.wakeup doorbell ()
-    with Notfound.NotFound _ ->
-      Debug.print ("Attempt to awaken non existent process");
-      ()
 
   (** Increment the scheduler's step counter and return the new value. *)
   let count_step () =
@@ -92,7 +92,7 @@ struct
     | None -> assert false
     | Some pid -> pid
 
-  let switch_granularity = 5
+  let switch_granularity = 100
 
   (** If the current process has executed for than switch_granularity, suspend the current process
       and execute something else.
@@ -100,8 +100,11 @@ struct
   let yield pstate =
     let step_ctr = count_step () in
     let pid = get_current_pid () in
-    if step_ctr mod switch_granularity == 0 then
+    (* Debug.print ("pid: " ^string_of_int pid); *)
+    (* Debug.print ("step_ctr: "^string_of_int step_ctr); *)
+    if not !atomic && step_ctr mod switch_granularity == 0 then
       begin
+        (* Debug.print ("yielding"); *)
         reset_step_counter ();
         Lwt_main.yield () >>= pstate
       end
@@ -113,7 +116,7 @@ struct
       blocking suspended (i.e. runnable) processes *)
   let block pstate =
     let pid = get_current_pid () in
-    Debug.print ("Blocking thread " ^ string_of_int pid);
+    Debug.print ("Blocking process " ^ string_of_int pid);
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
@@ -131,12 +134,14 @@ struct
                           (fun () -> Lwt.with_value angel_done (Some w) pstate))
       end
     else
-        async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
+      async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
     new_pid
 
   let finish r =
     let pid = get_current_pid () in
-    Debug.print ("Finishing thread " ^ string_of_int pid);
+    (* This process is only actually finished if we're not executing atomically *)
+    if not (!atomic) then
+      Debug.print ("Finishing process " ^ string_of_int pid);
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -153,10 +158,7 @@ struct
   (** Is the current process is the main process? *)
   let current_is_main() = get_current_pid () == main_process_pid
 
-  let atomic : bool ref = ref false
-
-  let run pfun =
-   state.step_counter := 0;
+  let run' pfun =
    Lwt_main.run (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun r ->
                  (if not !atomic then
                     Lwt.join (Hashtbl.fold (fun _ t ts -> t :: ts) state.angels [])
@@ -164,12 +166,16 @@ struct
                     Lwt.return ()) >>= fun _ ->
                  Lwt.return r)
 
+  let run pfun =
+    reset_step_counter ();
+    run' pfun
+
   (* Pretty sure that Lwt.run does what we want here---at least, the document reasons not to nest
   calls to Lwt.run match the desired behavior of atomically. :) *)
   let atomically pfun =
     let previously_atomic = !atomic in
     atomic := true;
-    let v = snd (run pfun) in
+    let v = snd (run' pfun) in
     atomic := previously_atomic;
     v
 
