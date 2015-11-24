@@ -127,7 +127,7 @@ let rec erase_type names t =
         StringSet.fold
           (fun name field_env ->
             match StringMap.lookup name field_env with
-            | Some (`Present t) ->
+            | Some (`Present _t) ->
               if closed then
                 StringMap.remove name field_env
               else
@@ -143,6 +143,20 @@ let rec erase_type names t =
       in
         `Record (field_env, row_var, duality)
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
+
+(* Apply a function to every present type in a record.
+   The function takes the row name as a second argument. *)
+let rec map_record_type f t =
+  match concrete_type t with
+  | `ForAll (_, t) -> map_record_type f t
+  | `Record row ->
+      let (field_env, row_var, duality) = fst (unwrap_row row) in
+      let field_env = StringMap.mapi (fun n -> function
+                                            | `Present t -> `Present (f t n)
+                                            | x -> x)
+                                    field_env
+      in `Record (field_env, row_var, duality)
+  | t -> error ("Attempt to map over fields of non-record type "^string_of_datatype t)
 
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t

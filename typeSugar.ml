@@ -166,6 +166,8 @@ sig
   val table_db : griper
   val table_keys : griper
 
+  val tablelit_nonbase : griper
+
   val delete_table : griper
   val delete_pattern : griper
   val delete_where : griper
@@ -792,6 +794,9 @@ tab() ^ code (show_type rt))
                    "has type" ^ nl() ^
                      tab() ^ code (show_type lt))
 
+    let tablelit_nonbase ~pos ~t1:(l, lt) ~t2:(r, rt) ~error:_ =
+      die pos ("Table declaration declares a column that is not of base type."^nl())
+
     (* patterns *)
     let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
       die pos ("\
@@ -1416,7 +1421,7 @@ let update_pattern_vars env =
 (object (self)
   inherit SugarTraversals.map as super
 
-  method patternnode : patternnode -> patternnode =
+  method! patternnode : patternnode -> patternnode =
     fun n ->
       let update (x, _, pos) =
         let t = Env.lookup env x in
@@ -1444,6 +1449,18 @@ let show_context : context -> context =
     flush stderr;
     context
 
+(* TODO rename *)
+let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> Sugartypes.phrase StringMap.t =
+  fun l ->
+  let res = ref StringMap.empty in
+  List.iter (fun (name, constraints) ->
+             List.iter (function
+                         | `Prov e -> if StringMap.mem name !res
+                                      then failwith "Duplicate provenance declaration"
+                                      else res := StringMap.add name e !res
+                         | _ -> ())
+                       constraints) l;
+  !res
 
 (* given a list of argument patterns and a return type
    return the corresponding function type *)
@@ -1775,6 +1792,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and name   = tc name in
               `DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive `DB,
               merge_usages [from_option StringMap.empty (opt_map usages driver); from_option StringMap.empty (opt_map usages args); usages name]
+
         | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
             let tname = tc tname
             and db = tc db
@@ -1782,9 +1800,28 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
             and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type)
             and () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
+            (* DONE copied checking of rows here (from DBDelete, Update, ...) *)
+            (* TODO check that it actually works *)
+            let read  = `Record (Types.make_empty_open_row (`Any, `Base)) in
+            let write = `Record (Types.make_empty_open_row (`Any, `Base)) in
+            let needed = `Record (Types.make_empty_open_row (`Any, `Base)) in
+            unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, read_row), no_pos read);
+            unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, write_row), no_pos write);
+            unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, needed_row), no_pos needed);
+            let prov_rows = prov_rows constraints in
+            Debug.print (string_of_alist (StringMap.to_alist (StringMap.map Sugartypes.Show_phrase.show prov_rows)));
+            (* TODO check that prov functions have type read_row -> (String, String, Int) (not wild!)*)
+            (* TODO apply type constructor to write_row and needed_row? *)
+            let read_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
+                                                                 then Types.make_prov_type t
+                                                                 else t)
+                                                     read_row in
+            Debug.print (Types.Show_datatype.show read_row);
+            (* TODO decide what keeps the unmodified type, what needs the new type *)
               `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db),
               `Table (read_row, write_row, needed_row),
               merge_usages [usages tname; usages db]
+
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
