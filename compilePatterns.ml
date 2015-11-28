@@ -931,8 +931,8 @@ let check_handler_pattern_matching : clause list -> bool =
     true
     clauses
 			    
-let compile_handle_cases : raw_env -> (Types.datatype * Types.row * bool * var * raw_clause list) -> Ir.computation =
-  fun (nenv, tenv, eff) (output_type, effects, isclosed, var, raw_clauses) ->
+let compile_handle_cases : raw_env -> (Types.datatype * Types.row * HandlerUtils.handler_spec * var * raw_clause list) -> Ir.computation =
+  fun (nenv, tenv, eff) (output_type, effects, spec, var, raw_clauses) ->
     let clauses = List.map reduce_clause raw_clauses in
     (*let initial_env = (nenv, tenv, eff, PEnv.empty) in*)
     (*let result =
@@ -952,7 +952,7 @@ let compile_handle_cases : raw_env -> (Types.datatype * Types.row * bool * var *
     in
     let result =
       match tc with
-	`Case (_, name_map, _) ->   ([], `Special (`Handle (`Variable var, name_map, isclosed)))
+	`Case (_, name_map, _) ->   ([], `Special (`Handle (`Variable var, name_map, spec)))
       | _ -> assert false
     in
     (* END OF THE BIG HACK *)    

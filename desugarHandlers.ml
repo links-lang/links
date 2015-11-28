@@ -108,9 +108,9 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes
       `FnAppl (handle, params),dp
   in
   let fnparams =
-    match spec with
-      `Open -> [[]]
-    | _ -> []
+    match HandlerUtils.is_closed spec with
+      true -> []
+    | _ -> [[]]
   in
   let fnparams =
     match params with

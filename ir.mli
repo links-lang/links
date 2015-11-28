@@ -37,6 +37,9 @@ type constant = Constant.constant
 type location = Sugartypes.location
   deriving (Show)
 
+type handler_spec = Sugartypes.handler_spec
+  deriving (Show)
+  
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
@@ -83,7 +86,7 @@ and special =
   | `CallCC of value
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map * bool)
+  | `Handle of (value * (binder * computation) name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)

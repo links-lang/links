@@ -178,7 +178,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE OPEN SHALLOW IMPURE HANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE OPEN HANDLER SHALLOWHANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -322,8 +322,8 @@ fun_declaration:
 								 `Handler (m, spec, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_spec HANDLER var handler_parameterization            { let (name,bpos) = $3 in
- 		                                                ( (name,None,bpos), $1, $4, pos()) }
+| handler_nature handler_depth var handler_parameterization    { let (name,bpos) = $3 in
+ 		                                                ( (name,None,bpos), ($1,$2), $4, pos()) }
   
 perhaps_uinteger:
 | /* empty */                                                  { None }
@@ -449,16 +449,19 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_spec HANDLER handler_parameterization { let hnlit = $3 in
-						  `HandlerLit (None, $1, hnlit), pos() }
+| handler_nature handler_depth handler_parameterization        {  let hnlit = $3 in						  
+						                  `HandlerLit (None, ($1, $2), hnlit), pos() }
 handler_parameterization:
 | LPAREN pattern RPAREN handler_body { ($2, $4, None) }
 | LPAREN pattern RPAREN LPAREN patterns RPAREN handler_body { ($2, $7, Some $5) }
 
-handler_spec:
-| /* empty */                                                  { `Closed }
-| OPEN                                                         { `Open }
-| SHALLOW                                                      { `Shallow }
+handler_nature:
+| /* empty */                { `Closed }
+| OPEN                       { `Open }
+    
+handler_depth:
+| HANDLER                    { `Deep }
+| SHALLOWHANDLER             { `Shallow }
 
 handler_body:	  
 | LBRACE cases RBRACE    	                               { $2 }
@@ -745,8 +748,8 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, `Closed), pos() }
-| OPEN HANDLE LPAREN exp RPAREN LBRACE cases RBRACE            { `Handle ($4, $7, None, `Open), pos() }
+| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle ($3, $6, None, (`Closed, `Deep)), pos() }
+| OPEN HANDLE LPAREN exp RPAREN LBRACE cases RBRACE            { `Handle ($4, $7, None, (`Open, `Deep)), pos() }
 
 iteration_expression:
 | case_expression                                              { $1 }

@@ -196,7 +196,7 @@ and t = [
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
-and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * bool (* Collection of cases *)
+and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * Ir.handler_spec (* Collection of cases *)
 and handlers = handler list
   deriving (Show)					    
   

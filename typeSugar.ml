@@ -423,9 +423,9 @@ tab() ^ code (show_type rt) ^ "."
     let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
       die pos ("The operation " ^ nl() ^
 		 tab() ^ code rexpr ^ nl() ^
-		   "has type" ^ nl() ^
+		   "implies effect context" ^ nl() ^
 		     tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
-		       "but in current effect context it has type" ^ nl()
+		       "but the currently allowed effects are" ^ nl()
 		       ^ tab() ^ code ( show_row (TypeUtils.extract_row lt)))
 	  
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
@@ -1821,7 +1821,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            5. Unify with current effect context
          *)
 	   if String.compare opname HandlerUtils.return_case == 0 then
-	     Gripers.die pos "The implicit effect Return cannot be discharged"
+	     Gripers.die pos "The implicit effect Return is not invocable"
 	   else
 	     let (optype, return_type, args) =
 	       match args with
@@ -1836,8 +1836,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       | None -> let t = Types.fresh_type_variable (`Unl, `Any) in (t, t, [])
 	     in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
+	     let (_,_,p) = SourceCode.resolve_pos pos in
 	     let () = unify ~handle:Gripers.discharge_operation
-			    (no_pos (`Record context.effect_row), no_pos (`Record effects))
+			    (no_pos (`Record context.effect_row), (p, `Record effects))
 	     in
 	     (`DoOperation (opname, Some (List.map erase args), Some optype), return_type, StringMap.empty)	     
         (* literals *)
@@ -2762,29 +2763,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
 	   let effects         = TypeUtils.extract_row pattern_type in
 	   let effect_row =
-	     match spec with
-	       `Closed -> let row = Types.make_empty_closed_row () in
-			  Types.extend_row (fst3 effect_row) row
-	     | `Open   -> let row = Types.make_empty_open_row (`Unl, `Any) in
-			  Types.extend_row (fst3 effect_row) row		  
-	     | _ -> assert false
+	     match HandlerUtils.is_closed spec with
+	       true -> let row = Types.make_empty_closed_row () in
+		       Types.extend_row (fst3 effect_row) row
+	     | false -> let row = Types.make_empty_open_row (`Unl, `Any) in
+			Types.extend_row (fst3 effect_row) row
 	   in
-	   let effect_row =
-	     match spec with
-	       `Closed
-	     | `Open -> HandlerUtils.allow_wild effect_row
-	     | _ -> effect_row
-	   in
+	   let effect_row = HandlerUtils.allow_wild effect_row in
 	   let _ =
-	     match spec with
-	       `Closed
-	     | `Open -> (* Make continuation codomains and body type agree *)
+	     match HandlerUtils.is_shallow spec with	       
+	       false -> (* Deep handlers: Make continuation codomains and body type agree *)
+		 List.fold_left
+		   (fun _ ((kpat, tenv, t) as k) ->
+		     let ktail = (kpat, tenv, TypeUtils.return_type t) in
+		     unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type))
+		   () continuations
+	     | _ -> (* Shallow handlers *)
 		List.fold_left
 		  (fun _ ((kpat, tenv, t) as k) ->
 		    let ktail = (kpat, tenv, TypeUtils.return_type t) in
-		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type))
+		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), pos_and_typ m))
 		  () continuations
-	     | _ -> assert false (* Future: Shallow handlers *)
 	   in
 	   let _ = List.fold_left (fun _ k -> unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record (HandlerUtils.make_operations_presence_polymorphic effect_row)), ppos_and_row k)) () continuations in
 	   let thunk_type = Types.make_thunk_type effect_row ret in (* type: () {e}-> a *) 
@@ -2792,8 +2791,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
 	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
 	   let () =
-	     match spec with
-	       `Open -> let effect_row = HandlerUtils.make_operations_presence_polymorphic effect_row in
+	     match HandlerUtils.is_closed spec with
+	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic effect_row in
 			unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record effect_row)) 
 	     | _ -> ()
 	   in

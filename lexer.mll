@@ -178,7 +178,6 @@ let keywords = [
  "handle"   , HANDLE;
  "handler"  , HANDLER;
  "if"       , IF;
- "impure"   , IMPURE;
  "in"       , IN;
  "include"  , INCLUDE;
  "yields"   , YIELDS;
@@ -203,7 +202,7 @@ let keywords = [
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;
- "shallow"  , SHALLOW;
+ "shallowhandler"  , SHALLOWHANDLER;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;

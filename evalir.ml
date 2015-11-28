@@ -488,8 +488,8 @@ module Eval = struct
     | `CallCC f ->
        apply cont hs env (value env f, [`Continuation (cont, hs)])
     (* Handlers *)
-    | `Handle (v, cases, isclosed) ->
-       let hs = (env, cases, isclosed) :: hs in
+    | `Handle (v, cases, spec) ->
+       let hs = (env, cases, spec) :: hs in
        let cont = [] :: cont in 
        let comp = value env v in
        apply cont hs env (comp, [])
@@ -546,16 +546,16 @@ module Eval = struct
         used for restoring the stacks when [k] is invoked  *)
     let rec handle' (cont', hs') =
       function
-      | delim :: cont, (henv, h, isclosed) :: hs ->
+      | delim :: cont, (henv, h, spec) :: hs ->
          let cont' = delim :: cont' in
-         let hs' = (henv, h, isclosed) :: hs' in
+         let hs' = (henv, h, spec) :: hs' in
          begin
-           match StringMap.lookup opname h with
+           match StringMap.lookup opname h with	    
            | Some ((var, _), comp) ->
               let k = `ProgramSlice (env, cont', hs') in
               computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->
-              if not isclosed then
+              if not (HandlerUtils.is_closed spec) then
                 begin
                   Debug.print ("Forwarding: " ^ opname);
                   handle' (cont', hs') (cont, hs)

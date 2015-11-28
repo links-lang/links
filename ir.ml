@@ -6,6 +6,11 @@ open Notfound
 open Utility
 open PP
 
+(* Handlers *)
+type handler_spec = Sugartypes.handler_spec
+  deriving (Show)
+
+  
 type scope = Var.scope
   deriving (Show)
 (* term variables *)
@@ -89,7 +94,7 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map * bool)
+  | `Handle of (value * (binder * computation) name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)

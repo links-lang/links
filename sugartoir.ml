@@ -645,7 +645,7 @@ struct
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, HandlerUtils.is_closed spec, var, cases) in
+                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, spec, var, cases) in
                   reflect (bs, (tc, t))))
     
 	     

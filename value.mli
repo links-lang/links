@@ -73,7 +73,7 @@ type t = [
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
 and delim_continuation = frame list (* Delimited continuation *)
 and continuation = delim_continuation list (* (Generalised) continuation *)
-and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * bool
+and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * Ir.handler_spec
 and handlers = handler list				 
 and env
     deriving (Show)
