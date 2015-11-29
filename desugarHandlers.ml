@@ -99,12 +99,12 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes
   in       
   let mvar = (`Var m_name, pos) in
   let cases = parameterize cases params in
-  let handle : phrase = `Block ([], (`Handle (mvar, cases, None, spec), dp)),dp in
+  let handle : phrase = `Block ([], (`Handle (mvar, cases, None, spec), pos)),pos in
   let body =
     match params with
       None -> handle
     | Some params ->
-      let params = List.map (fun (p,pos) -> (to_var p, pos)) params  in
+      let params = List.map (fun (p,pos) -> (to_var p, pos)) params in
       `FnAppl (handle, params),dp
   in
   let fnparams =

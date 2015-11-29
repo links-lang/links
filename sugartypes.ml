@@ -218,7 +218,6 @@ and phrasenode = [
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of name * phrase list option * Types.datatype option
-(*| `DoOperation      of phrase * Types.datatype option*)
 (* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
 | `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option

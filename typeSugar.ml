@@ -382,12 +382,13 @@ tab() ^ code (show_type rt) ^ "."
 		   "has type" ^ nl() ^
 		     tab() ^ code (show_type lt) ^ nl() ^
 		       "while the subsequent expressions have type" ^ nl() ^
-			 tab() ^ code (show_type rt))
+		       tab() ^ code (show_type rt))
+	
     let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
-      die pos ("The handled computation type " ^ nl() ^
-		 tab() ^ code (show_type lt) ^ nl() ^
-		   "is not compatible with" ^ nl() ^
-		     tab() ^ code (show_type rt)
+      die pos ("The inferred type for computation " ^ code lexpr ^ nl() ^
+		  tab() ^ code (show_type rt) ^ nl() ^
+		  "is not compatible with" ^ nl() ^
+		    tab() ^ code (show_type lt)
 	      )
 
     let output_effect_row ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
@@ -421,8 +422,10 @@ tab() ^ code (show_type rt) ^ "."
 		       ^ tab() ^ code (show_type lt))	
 	  
     let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+      let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
+      let operation = dropDoPrefix (code rexpr) in      
       die pos ("The operation " ^ nl() ^
-		 tab() ^ code rexpr ^ nl() ^
+		 tab() ^ operation ^ nl() ^
 		   "implies effect context" ^ nl() ^
 		     tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
 		       "but the currently allowed effects are" ^ nl()
@@ -1802,23 +1805,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                     Gripers.die pos ("Unknown variable " ^ v ^ ".")
             )
         | `Section _ as s   -> type_section context s
-	(* Two possible typing rules for "do op(x)": 
-	 * 1. do op    : (a) { op: A {}-> B | p }-> B
-	 * 2. do op(x) : ()  { op: A {}-> B | p }-> B where A is the type of x
-         *
-         * For now, we use the second which 'captures' the operation's argument.
-         *
-         * Naming convention: the expression p always refers to the operation
-         * argument, e.g. do Op(p). Furthermore, the expression pt refers to the
-         * type of p.
-	 *)
 	| `DoOperation (opname, args, None) ->
 	(* Strategy: 
            1. List.map tc args
-           2. Construct Variant with above types (unless nullary)
-           3. Construct return type
-           4. Construct function type (unless nullary)
-           5. Unify with current effect context
+           2. Construct operation type
+           3. Construct effect row where the operation name gets bound to the previously constructed operation type
+           4. Unify with current effect context
          *)
 	   if String.compare opname HandlerUtils.return_case == 0 then
 	     Gripers.die pos "The implicit effect Return is not invocable"
@@ -2753,11 +2745,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Handle (exp, cases, _, spec) ->
-	   let unify_all_with handle body_type patterns
-	     = if List.length patterns > 0 then
-		 List.fold_left (fun _ p -> unify ~handle:handle (no_pos body_type, ppos_and_typ p)) () patterns
-	       else ()
-	   in
 	   let fst3 (x,_,_) = x in
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
@@ -2789,36 +2776,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let thunk_type = Types.make_thunk_type effect_row ret in (* type: () {e}-> a *) 
 	   let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in	   
 	   let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
-	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
-	   let () =
+	   let (_,_,p)  = SourceCode.resolve_pos pos in
+	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p,thunk_type)) in (* Unify m and and the constructed type. *)
+	   let _ =
 	     match HandlerUtils.is_closed spec with
 	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic effect_row in
 			unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record effect_row)) 
 	     | _ -> ()
 	   in
-(*	   let effects         = TypeUtils.extract_row pattern_type in  (* Extract inferred effect row *)
-	   let (ret,ops)       = TypeUtils.split_row HandlerUtils.return_case effects in
-	   let raw_operations  = HandlerUtils.extract_operations ops in
-	   let operations      = HandlerUtils.simplify_operations raw_operations in
-	   let operations_row  = HandlerUtils.effectrow_of_oplist operations spec in
-	   let operations_row  = (* Decide whether to allow wild *)
-	     match spec with
-	       `Closed 
-	     | `Open -> HandlerUtils.allow_wild operations_row
-	     | _ -> operations_row
-	   in
-	   let _ = List.fold_left (fun _ k -> unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record (HandlerUtils.make_operations_presence_polymorphic operations_row)), ppos_and_row k)) () continuations in
-	   let thunk_type = Types.make_thunk_type operations_row ret in (* type: () {e}-> a *) 
-	   let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-	   
-	   let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
-	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, no_pos thunk_type) in (* Unify m and and the constructed type. *)
-	   let () =
-	     if HandlerUtils.is_closed spec == false then
-	       let operations_row = HandlerUtils.make_operations_presence_polymorphic operations_row in
-	       unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record operations_row))
-	     else ()
-	   in*)
 	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in

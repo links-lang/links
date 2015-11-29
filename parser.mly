@@ -549,7 +549,6 @@ unary_expression:
 | constructor_expression                                       { $1 }
 | DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, Some $3, None), pos() }
 | DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }       
-/*| DOOP constructor_expression	                               { `DoOperation ($2, None), pos() }*/
 	
 
 infixr_9:
