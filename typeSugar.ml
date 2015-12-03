@@ -2772,7 +2772,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		List.fold_left
 		  (fun _ ((kpat, tenv, t) as k) ->
 		    let ktail = (kpat, tenv, TypeUtils.return_type t) in
-		    let ()    = unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), pos_and_typ m) in
+		    let t     = TypeUtils.return_type (typ m) in
+		    let (p,_)  = pos_and_typ m in
+		    let ()    = unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t)) in
 		    unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record effect_row), ppos_and_row k)
 		  )
 		  () continuations
