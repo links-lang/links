@@ -2749,47 +2749,55 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
 	   let effects         = TypeUtils.extract_row pattern_type in
-	   let effect_row =
+	   let input_effect_row =
 	     match HandlerUtils.is_closed spec with
 	       true -> let row = Types.make_empty_closed_row () in
 		       Types.extend_row (fst3 effect_row) row
 	     | false -> let row = Types.make_empty_open_row (`Unl, `Any) in
-			Types.extend_row (fst3 effect_row) row
+		       Types.extend_row (fst3 effect_row) row
 	   in
-	   let effect_row = HandlerUtils.allow_wild effect_row in
-	   let _ =
-	     match HandlerUtils.is_shallow spec with	       
-	       false -> (* Deep handlers: Make continuation codomains and body type agree *)
-		 let poly_presence_row = `Record (HandlerUtils.make_operations_presence_polymorphic effect_row) in		 
-		 List.fold_left
-		   (fun _ ((kpat, tenv, t) as k) ->
-		     let ktail = (kpat, tenv, TypeUtils.return_type t) in
-		     let ()    = unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type) in
-		     unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
-		   )
-		   () continuations
-	     | _ -> (* Shallow handlers *)
-		List.fold_left
-		  (fun _ ((kpat, tenv, t) as k) ->
-		    let ktail = (kpat, tenv, TypeUtils.return_type t) in
-		    let t     = TypeUtils.return_type (typ m) in
-		    let (p,_)  = pos_and_typ m in
-		    let ()    = unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t)) in
-		    unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record effect_row), ppos_and_row k)
-		  )
-		  () continuations
-	   in
-	   (*	   let _ = List.fold_left (fun _ k -> unify ~handle:Gripers.continuation_effect_rows (no_pos (`Record (HandlerUtils.make_operations_presence_polymorphic effect_row)), ppos_and_row k)) () continuations in*)
-	   let thunk_type = Types.make_thunk_type effect_row ret in (* type: () {e}-> a *) 
-	   let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-	   let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
+	   let input_effect_row = HandlerUtils.allow_wild input_effect_row in
+	   let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)	   
 	   let (_,_,p)  = SourceCode.resolve_pos pos in
 	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
+	   
+	   let output_effect_row =
+	     let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
+	     let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
+	     context.effect_row
+	   in
 	   let _ =
 	     match HandlerUtils.is_closed spec with
-	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic effect_row in
-			unify ~handle:Gripers.handle_patterns (no_pos (`Record context.effect_row), no_pos (`Record effect_row)) 
+	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic input_effect_row in
+			unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record effect_row)) 
 	     | _ -> ()
+	   in
+	   let _ =
+	     (* Pair up continuations with their codomains *)
+	     let ks = List.fold_right
+	       (fun ((kpat, tenv, t) as k) ks ->
+		     (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
+		) continuations []
+	     in
+	     match HandlerUtils.is_shallow spec with
+	       false -> (* Deep handlers: Make continuation codomains and body type agree *)
+		 let poly_presence_row = `Record (HandlerUtils.make_operations_presence_polymorphic output_effect_row) in
+		 List.fold_left
+		   (fun _ (k, ktail) ->
+		     unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type);
+		     unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
+		   )
+		   () ks
+	     | _ -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
+		let poly_presence_row = `Record (HandlerUtils.make_operations_presence_polymorphic input_effect_row) in
+		List.fold_left
+		  (fun _ (k,ktail) ->
+		    let t      = TypeUtils.return_type (typ m) in
+		    let (p,_)  = pos_and_typ m in
+		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t));
+		    unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
+		  )
+		  () ks
 	   in
 	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
