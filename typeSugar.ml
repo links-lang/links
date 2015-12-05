@@ -2749,6 +2749,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
 	   let effects         = TypeUtils.extract_row pattern_type in
+	   (** First construct the effect row for the input computation m
+             * It is important to construct the entire type for m before typing continuations, 
+             * as we need to known the return type of m to type continuations in shallow handlers *)
 	   let input_effect_row =
 	     match HandlerUtils.is_closed spec with
 	       true -> let row = Types.make_empty_closed_row () in
@@ -2760,18 +2763,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)	   
 	   let (_,_,p)  = SourceCode.resolve_pos pos in
 	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
-	   
+
+	   (** Next, construct the (output) effect row the handler *)
 	   let output_effect_row =
 	     let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
 	     let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
 	     context.effect_row
 	   in
+
+	   (** If the handler is open then unify the input and output effect rows  *)
 	   let _ =
 	     match HandlerUtils.is_closed spec with
 	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic input_effect_row in
 			unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record effect_row)) 
 	     | _ -> ()
 	   in
+
+	   (** Next, type continuation effect rows *)
 	   let _ =
 	     (* Pair up continuations with their codomains *)
 	     let ks = List.fold_right

@@ -551,9 +551,12 @@ module Eval = struct
          let hs' = (henv, h, spec) :: hs' in
          begin
            match StringMap.lookup opname h with	    
-           | Some ((var, _), comp) ->
-              let k = `ProgramSlice (env, cont', hs') in
-              computation (Value.bind var (box vs k, `Local) henv) cont hs comp
+           | Some ((var, _), comp) when HandlerUtils.is_shallow spec ->
+	      let k = `ProgramSlice (env, cont', List.tl hs') in
+	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
+	   | Some ((var, _), comp) ->
+	      let k = `ProgramSlice (env, cont', hs') in
+	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->
               if not (HandlerUtils.is_closed spec) then
                 begin
