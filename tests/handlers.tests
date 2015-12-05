@@ -62,12 +62,20 @@ Shadowing handler parameter (3)
 { handler state(m)(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(comp)(0)  }
 stdout : 2 : Int
 
-Signature, closed handler (1)
-sig h1 : (Comp({Op:(Int) {}-> Int},Int)) {Op{_}}~> Int handler h1(m) { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
+Signature for handler (deep, closed handler)
+sig h1 : (Comp({Op:(Int) {}-> Int},Int)) {}~> Int handler h1(m) { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
 stdout : () : ()
 
-Signature, open handler (1)
-sig h1 : (Comp({Op:(Int) {}-> Int},Int)) -> () {Op{_}}~> Int open handler h1(m) { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
+Signature for handler (deep, open handler)
+sig h1 : (Comp({Op:(Int) {}-> Int|e}, Int)) -> Comp({Op{_}|e}, Int) open handler h1(m) { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
+stdout : () : ()
+
+Signature for handler (shallow, closed handler)
+sig h1 : (Comp({Op:(Int) {}-> Int}, Int)) ~> Int shallowhandler h1(m) { case Op(p,k) -> h1(fun() {k(p+1)}) case Return(x) -> 2 }
+stdout : () : ()
+
+Signature for handler (shallow, open handler)
+sig h1 : (Comp({Op:(Int) {}-> Int|e},Int)) -> Comp({Op{_}|e}, Int) open shallowhandler h1(m) { case Op(p,k) -> h1(fun() {k(p+1)})() case Return(x) -> 2 }
 stdout : () : ()
 
 Operation parameter pattern-matching (hiding)
@@ -135,6 +143,18 @@ Open handler composition (1)
 open handler h1(m) { case Op1(k) -> k(1) case Return(x) -> x } open handler h2(m) { case Op2(k) -> k(2) case Return(x) -> x } open handler h3(m) { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 
-Type annotation on continuation parameter
+Type annotation on continuation parameter (deep, closed handler)
 handler h1(m) { case Op(k : ((Int) {Op{_}}~> Int)) -> k(1) case Return(x) -> x }
+stdout : () : ()
+
+Type annotation on continuation parameter (deep, open handler)
+open handler h1(m) { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) case Return(x) -> x }
+stdout : () : ()
+
+Type annotation on continuation parameter (shallow, closed handler)
+shallowhandler h1(m) { case Op(k : ((Int) {Op:Int}~> Int)) -> h1(fun() { k(1) }) case Return(x) -> x }
+stdout : () : ()
+
+Type annotation on continuation parameter (shallow, open handler)
+open shallowhandler h1(m) { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
 stdout : () : ()

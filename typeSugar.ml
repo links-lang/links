@@ -2791,7 +2791,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     | _ -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
 		let poly_presence_row = `Record (HandlerUtils.make_operations_presence_polymorphic input_effect_row) in
 		List.fold_left
-		  (fun _ (k,ktail) ->
+		  (fun _ (k,ktail) ->		    
 		    let t      = TypeUtils.return_type (typ m) in
 		    let (p,_)  = pos_and_typ m in
 		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t));
