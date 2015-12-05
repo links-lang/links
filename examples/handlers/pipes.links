@@ -1,0 +1,88 @@
+# Shallow pipes in Links
+
+#
+# Type aliases
+#
+typename Consumer (e::Row,i,a) = Comp({Await:i          |e},  a);
+typename Down     (e::Row,i,a) = (i)  {Await:i          |e}~> a;
+typename Producer (e::Row,o,a) = Comp({Yield:(o) {}-> ()|e},  a);
+typename Up       (e::Row,o,a) = (()) {Yield:(o) {}-> ()|e}~> a;
+#typename Pipe(e::Row,s,a)     = (Consumer({ |e},s,a), Producer({ |e},s,a)) -> Comp({ |e}, a);
+
+#
+# Operations
+#
+sig await : Comp({Await:s|_}, s)
+fun await() {do Await}
+
+sig yield : (s) {Yield:(s) {}-> ()|_}~> ()
+fun yield(s) {do Yield(s)}
+
+sig putString : (String) {PutString:(String) {}-> ()|_}~> ()
+fun putString(str) {do PutString(str)}
+
+#
+# Operators
+#
+sig <+< : (Consumer({Yield{c} |e}, s, a),
+           Producer({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
+op consumer <+< producer {
+   down(consumer)(fun(_) {producer()})
+}
+
+#
+# Handlers
+#
+
+sig down : (Consumer({Yield{c} |e}, s, a)) ->
+           (Up      ({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
+open shallowhandler down(m)(producer) {
+  case Return(x) -> x
+  case Await(k)  -> up(fun() { producer(()) })(k)()
+}
+
+sig up : (Producer({Await{b} |e}, s, a)) ->
+         (Down    ({Yield{c} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
+open shallowhandler up(m)(consumer) {
+  case Return(x)  -> x
+  case Yield(s,k) -> down(fun() { consumer(s) })(k)()
+}
+
+sig printHandler : (Comp({PutString:(String) {}-> ()}, a)) ~> a
+shallowhandler printHandler(m) {
+  case Return(x)         -> x
+  case PutString(str,k)  -> { print(str); printHandler(fun() { k(()) }) }
+}
+
+sig printHandler2 : (Comp({PutString:(String) {}-> ()}, a)) ~> a
+handler printHandler2(m) {
+  case Return(x)         -> x
+  case PutString(str,k)  -> { print(str); k(()) }
+}
+
+#
+# Producers and consumers
+#
+sig produceFrom : (Int) -> Producer({ |_}, Int, _)
+fun produceFrom(n)() {
+    print("Before yield in produceFrom");
+    yield(n);
+    produceFrom(n+1)()
+}
+
+sig count : Consumer({Yield:(Int) {}-> () |_}, _, _)
+fun count() {
+  print("Before await in count");
+  var _ = await();
+  print("Before yield in count");
+  yield(1); count()
+}
+
+sig printer : Consumer({PutString:(String) {}-> () |_}, Int, _)
+fun printer() {
+  print("Before await in printer");
+  var x = await();
+  print("Before putString");
+  putString(intToString(x));
+  printer()
+}

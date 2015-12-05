@@ -159,9 +159,17 @@ Type annotation on continuation parameter (shallow, open handler)
 open shallowhandler h1(m) { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
 stdout : () : ()
 
-Closed shallow handler (Addition)
+Closed shallow handler (Addition, one handler)
 { shallowhandler h1(m) { case One(k) -> h1(fun() { k(1) }) case Return(x) -> x - 1} h1(fun() { do One + do One }) }
 stdout : 1 : Int
+
+Closed shallow handler (Addition, two handlers)
+{ shallowhandler h1(m) { case One(k) -> h1(fun() { k(1) }) case Return(x) -> x} shallowhandler h2(m) { case One(k) -> h1(fun() { k(2) }) case Return(x) -> x} h2(fun() { do One + do One }) }
+stdout : 3 : Int
+
+Open shallow handler composition
+{ open shallowhandler h1(m) { case Op1(k) -> h1(fun() { k(1) })() case Return(x) -> x } open shallowhandler h2(m) { case Op2(k) -> h2(fun() { k(2) })() case Return(x) -> x } h1(h2(fun() { do Op1 + do Op2 }))() }
+stdout : 3 : Int
 
 Simple shallow state
 { shallowhandler simpleState(m)(s) { case Get(k) -> simpleState(fun() { k(s) })(s) case Put(s,k) -> simpleState(fun() { k(()) })(s) case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(count)(10) }

@@ -80,6 +80,7 @@
     "handle"
     "open"
     "handler"
+    "shallowhandler"
     "do"
     ))
 
@@ -106,7 +107,7 @@
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; handler names
-   '("\\<\\(open handler\\|handler\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+   '("\\<\\(open handler\\|handler\\|open shallowhandler\\|shallowhandler\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; type operators
