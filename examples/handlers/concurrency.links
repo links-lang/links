@@ -1,57 +1,192 @@
-# Concurrency encoded in Links
+#
+# Auxiliary functions
+#
+sig splitAt : (Int, [a]) ~> ([a], [a])
+fun splitAt(i, xs) {
+    (take(i,xs), drop(i,xs))
+}
 
+sig removeAt : (Int, [a]) ~> (a, [a])
+fun removeAt(i, xs) {
+  if (length(xs) >= i) {
+    if (i == 0) {
+       (hd(xs), tl(xs))
+    } else {
+       var (xs, ys) = splitAt(i, xs);
+       (hd(reverse(xs)), reverse(tl(reverse(xs))) ++ ys)
+    }
+  } else { error("Index out of bounds!") }
+}
 
+#
+# Randomness
+#
+sig rand : Comp({Rand:a|_},a)
+fun rand() {do Rand}
 
-#open handler queuer(m)(q) {
-#  case Enqueue(e,k) -> k(())(q ++ [e])
-#  case Dequeue(k)   -> { var e = hd(q); k(e)(tl(q)) }
-#  case Return(x)    -> x
-#}
+# Returns a random integer from [min; max]
+sig randomInteger : (Int, Int) -> (Comp({Rand:Int|e},a)) -> Comp({Rand{_}|e}, a)
+fun randomInteger(min, max) {
+    open handler(m) {
+      case Rand(k)   -> { var r = floatToInt(random() *. intToFloat((max - min) + 1)); k(r) }
+      case Return(x) -> x
+    }
+}
 
-#open handler scheduler(m) {
-#  case Fork(t,k) -> { do Enqueue(k); scheduler(fun() { t })() }
-#  case Yield(k)  -> { var t = do Dequeue; do Enqueue(k); t(()) }
-#  case Return(x) -> x
-#}
+# Returns an integer from [min; max]
+sig randIn : (Int, Int) {Rand:a|_}~> Int
+fun randIn(a,b) { randomInteger(a, b)(fun() { rand() })() }
 
-sig fork_t : (a) {Fork:(a) {}-> b|_}-> b
-fun fork_t(t) { do Fork(t) }
+#
+# Queue interface
+#
+typename Queue(a::Type) = [a];
 
-sig sched : (Comp({Fork: (() -e-> _) {}-> Process({ |e}) | p}, d)) -> Comp({Fork{_}|p}, d)
+sig enqueue : (a) {Enqueue:(a) {}-> ()|_}~> ()
+fun enqueue(e) {do Enqueue(e)}
+
+sig dequeue : Comp({Dequeue:a|_}, a)
+fun dequeue() {do Dequeue}
+
+sig is_empty : Comp({IsEmpty:Bool|_}, Bool)
+fun is_empty() {do IsEmpty}
+
+# Fair queue implementation
+sig fair_queuer : (Comp({Dequeue:a ,Enqueue:(a) {}-> (),IsEmpty:Bool|e}, b)) -> (Queue(a)) ->
+                   Comp({Dequeue{_},Enqueue{_}         ,IsEmpty{_}  |e}, b)
+open handler fair_queuer(m)(q) {
+  case Enqueue(e,k) -> k(())(q ++ [e])
+  case Dequeue(k)   -> { var e = hd(q); k(e)(tl(q)) }
+  case IsEmpty(k)   -> switch (q) {
+                         case []    -> k(true)(q)
+			 case other -> k(false)(q)
+                       }
+  case Return(x)    -> x
+}
+
+# Random dequeuer: Dequeues a random element
+sig random_dequeuer : (Comp({Dequeue:a ,Enqueue:(a) {}-> (),IsEmpty:Bool,Rand:b|e}, b)) -> (Queue(a)) ->
+                       Comp({Dequeue{_},Enqueue{_}         ,IsEmpty{_}  ,Rand:b|e}, b)
+open handler random_dequeuer(m)(q) {
+  case Enqueue(e,k) -> k(())(e :: q)
+  case Dequeue(k)   -> { var i = randIn(0,length(q)-1);
+                         var (t, ts) = removeAt(i, q);
+			 k(t)(ts)
+                       }
+  case IsEmpty(k)   -> switch (q) {
+                         case []    -> k(true)(q)
+			 case other -> k(false)(q)
+                       }
+  case Return(x)    -> x		       
+}
+
+#
+# Concurrency interface
+#
+sig fork : (a) {Fork:(a) {}-> b|_}~> b
+fun fork(t) {do Fork(t)}
+
+sig yield : Comp({Yield:()|_}, ())
+fun yield() {do Yield}
+
+# Cooperative routines scheduler
+open handler scheduler(m) {
+  case Fork(t,k) -> { enqueue(k); scheduler(t)() }
+  case Yield(k)  -> { var t = dequeue(); enqueue(k); t(()) }
+  case Return(x) -> { if (is_empty()) { x }
+                      else { var t = dequeue(); t(()) }
+		    }
+}
+
+# The below is for testing purposes
 open handler sched(m) {
+  case Fork(t, k) -> { enqueue(k); sched(t)() }
+  case Yield(k)   -> { var t = dequeue(); t(()) }
+  case Return(x)  -> x
+}
+
+# Runs the coroutines scheduler on comp
+fun runScheduler(policy)(comp) {
+    policy(scheduler(comp))([])()
+}
+
+# Spawning a thread from within another
+fun nested_forking() {
+    var _ = fork(fun() {
+		   print("Thread 1: Hello from thread 1!");
+		   yield();
+		   var _ = fork(fun() {
+		       	          print("Thread 1.1: Spawned from within Thread 1!");
+				  yield();
+				  print("Thread 1.1: Finished!");
+			        });
+	           print("Thread 1: Finished!");
+		   
+ 	         });
+    
+    var _ = fork(fun() {
+    	           print("Thread 2: Hello from thread 2!");
+	  	   yield();
+		   print("Thread 2: Finished!");		   
+		 });
+		 ()
+}
+
+# Use list comprehension to print "Hello!" n times
+fun helloNtimes(n) {
+    var _ = fork(fun() {
+    	  var _ = for (_ <- [1..n]) {
+	      	   print("Hello!");
+		   []
+	  	 };
+          ()
+    });
+    ()
+}
+
+# Dynamic nested thread forking
+fun fib(n) {
+  print("fib(" ^^ intToString(n) ^^ ")");
+  if (n <= 1) { () }
+  else {       
+       var f1 = fork(fun() { fib(n-1) });
+       var f2 = fork(fun() { fib(n-2) });
+       ()
+  }
+}
+
+# Concurrency handler using Links' built-in primitives
+open handler spawner(m) {
   case Fork(t,k) -> { var pid = spawn { t() }; k(pid) }
   case Return(x) -> x
 }
 
-fun comp() {
-    fun echoer() {
-    	var msg = recv();
-	switch (msg) {
-	   case "quit" -> print("[Echoer] Goodbye!");
-	   case other  -> print("[Echoer] Echoing: " ^^ msg); echoer();
-	}
+# Alternative fibonacci
+fun fib2(n) {
+    if (n <= 1) { n }
+    else {
+      var master = self();
+      var _ = fork(fun() {
+                  spawner(fun() {master ! fib2(n-1)})()
+              });
+      var _ = fork(fun() {
+                  spawner(fun() {master ! fib2(n-2)})()
+              });
+      recv() + recv()
     }
-    
-    var pid = fork_t(echoer);
-    var _   = fork_t(fun() { pid ! "Hello from another thread!"; pid ! "quit"; });
-    ()
 }
 
-open handler channel(m) {
-  case Send(pid,msg,k) -> { pid ! msg; k(()) }
-  case Recv(k)         -> { k(recv()) }
-  case Return(x)       -> x
-}
-
-#(() {Fork:(() {Recv:a,Send:(Process ({ hear:b|_ }), b) {}-> (),hear:a|_}~> _) {}-> Process ({ |_::Any })|g}~> h) -> () {Fork{_}|g}~> h
-#sig sched2 : (Comp({Fork: (() {Recv:a,Send:(Process ({ hear:b|_}), b) {}-> hear:a|_}, _) {}-> Process({ |_} |c ~> d) -> Comp({Fork{_}|p}, d)
-open handler sched2(m) {
-  case Fork(t,k) -> { var pid = spawn { channel(t) }; k(pid) }
+# Fork/join concurrency
+open handler scheduler2(m) {
+  case Fork(t,k) -> { var x = scheduler2(t)(); k(x) }
   case Return(x) -> x
 }
 
-fun comp2() {
-    var pid = fork_t(fun() { channel(fun() { print(do Recv); })(); () });
-    var _   = fork_t(fun() { channel(fun() { do Send(pid,"Hello from another thread!"); })(); () } );
-    ()
+fun fib3(n) {
+    if (n <= 1) { n }
+    else {
+      var f1 = fork(fun() { fib3(n-1) });
+      var f2 = fork(fun() { fib3(n-2) });
+      f1 + f2
+    }
 }
