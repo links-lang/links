@@ -193,6 +193,7 @@ and t = [
 | `ClientFunction of string
 | `Continuation of continuation * handlers
 | `ProgramSlice of env * continuation * handlers
+| `ShallowProgramSlice of env * delim_continuation * continuation * handlers    
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
@@ -423,6 +424,7 @@ and string_of_value : t -> string = function
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
   | `ProgramSlice (env,cont,hs) -> "\"ProgramSlice\""
+  | `ShallowProgramSlice _ -> "\"ShallowProgramSlice\""     
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value

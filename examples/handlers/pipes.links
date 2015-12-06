@@ -3,11 +3,12 @@
 #
 # Type aliases
 #
-typename Consumer (e::Row,i,a) = Comp({Await:i          |e},  a);
-typename Down     (e::Row,i,a) = (i)  {Await:i          |e}~> a;
-typename Producer (e::Row,o,a) = Comp({Yield:(o) {}-> ()|e},  a);
-typename Up       (e::Row,o,a) = (()) {Yield:(o) {}-> ()|e}~> a;
-#typename Pipe(e::Row,s,a)     = (Consumer({ |e},s,a), Producer({ |e},s,a)) -> Comp({ |e}, a);
+typename Consumer (e::Row,i,a)   = Comp({Await:i                     |e},  a);
+typename Down     (e::Row,i,a)   = (i)  {Await:i                     |e}~> a ;
+typename Producer (e::Row,o,a)   = Comp({Yield:(o) {}-> ()           |e},  a);
+typename Up       (e::Row,o,a)   = (()) {Yield:(o) {}-> ()           |e}~> a ;
+typename Pipe     (e::Row,i,o,a) = Comp({Await:i, Yield:(o) {}-> ()  |e},  a);
+#typename Pipe     (e::Row,i,o,a) = forall b :: Presence, c :: Presence . Comp({Await{b},Yield{c} |e}, a)
 
 #
 # Operations
@@ -25,7 +26,7 @@ fun putString(str) {do PutString(str)}
 # Operators
 #
 sig <+< : (Consumer({Yield{c} |e}, s, a),
-           Producer({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
+           Producer({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a) # Pipe({Await{b}, Yield{c} |e}, s, s, a)
 op consumer <+< producer {
    down(consumer)(fun(_) {producer()})
 }
@@ -33,7 +34,6 @@ op consumer <+< producer {
 #
 # Handlers
 #
-
 sig down : (Consumer({Yield{c} |e}, s, a)) ->
            (Up      ({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
 open shallowhandler down(m)(producer) {
@@ -54,8 +54,8 @@ shallowhandler printHandler(m) {
   case PutString(str,k)  -> { print(str); printHandler(fun() { k(()) }) }
 }
 
-sig printHandler2 : (Comp({PutString:(String) {}-> ()}, a)) ~> a
-handler printHandler2(m) {
+sig printDeepHandler : (Comp({PutString:(String) {}-> ()}, a)) ~> a
+handler printDeepHandler(m) {
   case Return(x)         -> x
   case PutString(str,k)  -> { print(str); k(()) }
 }
@@ -65,24 +65,64 @@ handler printHandler2(m) {
 #
 sig produceFrom : (Int) -> Producer({ |_}, Int, _)
 fun produceFrom(n)() {
-    print("Before yield in produceFrom");
-    yield(n);
-    produceFrom(n+1)()
+  yield(n);
+  produceFrom(n+1)()
 }
 
-sig count : Consumer({Yield:(Int) {}-> () |_}, _, _)
+sig produceFromTo : (Int, Int) -> Producer({ |_}, Int, ())
+fun produceFromTo(start,end)() {
+  if (start > end) { () }
+  else {
+    yield(start);
+    produceFromTo(start+1,end)()
+  }
+}
+
+sig sumTo : (Int)  -> Pipe({ |_}, Int, Int, ())
+fun sumTo(limit)() {
+  fun sumTo_aux(i, limit) {
+    if (i >= limit) { yield(i) }
+    else {
+      var j = await();
+      sumTo_aux(i+j, limit)
+    }
+  }
+  sumTo_aux(0, limit)
+}
+
+sig count : Pipe({ |_}, Int, Int, _)
 fun count() {
-  print("Before await in count");
-  var _ = await();
-  print("Before yield in count");
-  yield(1); count()
+  var n = await();
+  yield(n);
+  count()
 }
 
 sig printer : Consumer({PutString:(String) {}-> () |_}, Int, _)
 fun printer() {
-  print("Before await in printer");
   var x = await();
-  print("Before putString");
   putString(intToString(x));
   printer()
 }
+
+#
+# Examples
+#
+# Finite streams
+#   links> printHandler(printer <+< count <+< sumTo(900) <+< produceFromTo(0,100));
+#   903
+#
+#   links> printHandler(printer <+< count <+< sumTo(100) <+< produceFrom(0));
+#   105
+#
+# Infinite streams
+#   links> printHandler(printer <+< count <+< produceFrom(0));
+#   0
+#   1
+#   2
+#   3
+#   4
+#   ... etc
+#
+# Mixing shallow and deep handlers
+#   links> printDeepHandler(printer <+< count <+< sumTo(900) <+< produceFromTo(0,100));
+#   903

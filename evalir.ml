@@ -338,6 +338,10 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
         apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
+    | `ShallowProgramSlice (env', delim, cont', hs'), [p] ->
+       (** *)
+       let cont = Value.append_delim_cont delim cont in
+       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env' p
     | `ProgramSlice (env', cont', hs'), [p] ->
        apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env' p
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
@@ -489,8 +493,8 @@ module Eval = struct
        apply cont hs env (value env f, [`Continuation (cont, hs)])
     (* Handlers *)
     | `Handle (v, cases, spec) ->
-       let hs = (env, cases, spec) :: hs in
-       let cont = [] :: cont in 
+       let hs = (env, cases, spec) :: hs in       
+       let cont = [] :: cont in
        let comp = value env v in
        apply cont hs env (comp, [])
     | `DoOperation (name, v, t) ->
@@ -551,11 +555,12 @@ module Eval = struct
          let hs' = (henv, h, spec) :: hs' in
          begin
            match StringMap.lookup opname h with	    
-           | Some ((var, _), comp) when HandlerUtils.is_shallow spec ->
-	      let k = `ProgramSlice (env, cont', List.tl hs') in
-	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
 	   | Some ((var, _), comp) ->
-	      let k = `ProgramSlice (env, cont', hs') in
+	      let k = if HandlerUtils.is_shallow spec then
+		  `ShallowProgramSlice (env, delim, List.tl cont', List.tl hs')
+		else
+		  `ProgramSlice (env, cont', hs')
+	      in
 	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->
               if not (HandlerUtils.is_closed spec) then

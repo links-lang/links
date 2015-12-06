@@ -68,6 +68,7 @@ type t = [
 | `ClientFunction of string
 | `Continuation of continuation * handlers
 | `ProgramSlice of env * continuation * handlers
+| `ShallowProgramSlice of env * delim_continuation * continuation * handlers    
 | `Socket of in_channel * out_channel
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
