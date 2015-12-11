@@ -36,6 +36,7 @@ struct
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv
+        ->- after_typing ((WhereProvRewriting.where_prov_rewriting tyenv)#program ->- snd3)
         ->- DesugarProvT.desugar tyenv
         ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)
         ->- after_typing ((DesugarProv.desugar_prov tyenv)#program ->- snd3)

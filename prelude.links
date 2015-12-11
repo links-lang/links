@@ -452,9 +452,9 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-fun asList(t) server {
-  for (x <-- t) [x]
-}
+# fun asList(t) server {
+#   for (x <-- t) [x]
+# }
 
 #### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax

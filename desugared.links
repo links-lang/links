@@ -1,0 +1,30 @@
+var db = database "stefan";
+
+typename Where = (String, String, Int);
+
+
+sig recorded_prov : ((origin_table: String,
+                      origin_column: String,
+                      origin_row: Int |_)) -> Where
+fun recorded_prov (c) {
+  (c.origin_table,
+   c.origin_column,
+   c.origin_row)
+}
+
+sig actual_prov : ((id: Int |_)) -> Where
+fun actual_prov (c) {
+  ("top_comments", "text", c.id)
+}
+
+var actual_table = table "top_comments" with (id: Int, text: String) from db;
+
+# pair up table with prov calculation
+var top_comments =
+  (actual_table,
+   for (p <-- actual_table)
+     [(id   = p.id,
+       text = ("data" = p.text,
+               "prov" = actual_prov(p)))]);
+
+top_comments

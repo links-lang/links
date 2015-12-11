@@ -2256,7 +2256,7 @@ let extend_typing_environment
 
 let string_of_environment = Show_environment.show
 
-let string_of_typing_environment {var_env=env} = string_of_environment env
+let string_of_typing_environment {var_env=env;_} = string_of_environment env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec IntMap.t =
   let module S = IntSet in

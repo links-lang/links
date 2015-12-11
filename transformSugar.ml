@@ -509,7 +509,7 @@ class transform (env : Types.typing_environment) =
           let o = {< var_env=var_env;
                      formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
           (o, `FormBinding (f, p), Types.xml_type)
-    (*      | e -> failwith ("oops: "^Show_phrasenode.show e) *)
+      (* | e -> failwith ("oops: "^Show_phrasenode.show e) *)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->

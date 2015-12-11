@@ -1809,17 +1809,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, write_row), no_pos write);
             unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, needed_row), no_pos needed);
             let prov_rows = prov_rows constraints in
-            Debug.print (string_of_alist (StringMap.to_alist (StringMap.map Sugartypes.Show_phrase.show prov_rows)));
+            (* Debug.print (string_of_alist (StringMap.to_alist (StringMap.map Sugartypes.Show_phrase.show prov_rows))); *)
             (* TODO check that prov functions have type read_row -> (String, String, Int) (not wild!)*)
             (* TODO apply type constructor to write_row and needed_row? *)
-            let read_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
+            let prov_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
                                                                  then Types.make_prov_type t
                                                                  else t)
                                                      read_row in
-            Debug.print (Types.Show_datatype.show read_row);
+            let pair = Types.make_tuple_type [`Table (prov_row, write_row, needed_row);
+                                              Types.make_list_type prov_row] in
+            (* Debug.print (Types.Show_datatype.show read_row); *)
             (* TODO decide what keeps the unmodified type, what needs the new type *)
               `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db),
-              `Table (read_row, write_row, needed_row),
+              pair,
               merge_usages [usages tname; usages db]
 
         | `DBDelete (pat, from, where) ->
@@ -2344,15 +2346,28 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             usages e :: generator_usages,
                             pattern_env pattern :: environments)
                      | `Table (pattern, e) ->
-                         let a = Types.fresh_type_variable (`Any, `Any) in
-                         let tt = Types.make_table_type (a, Types.fresh_type_variable (`Any, `Any), Types.fresh_type_variable (`Any, `Any)) in
-                         let pattern = tpc pattern in
-                         let e = tc e in
-                         let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
-                         let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
-                           (`Table (erase_pat pattern, erase e) :: generators,
-                            usages e :: generator_usages,
-                            pattern_env pattern:: environments))
+                        (* Type of provenance-enriched read-row *)
+                        let a' = Types.fresh_type_variable (`Any, `Any) in
+                        let lt = Types.make_list_type a' in
+
+                        (* Type of actual table *)
+                        let a = Types.fresh_type_variable (`Any, `Any) in
+                        let tt = Types.make_table_type (a, Types.fresh_type_variable (`Any, `Any), Types.fresh_type_variable (`Any, `Any)) in
+                        (* Paired up *)
+                        let pair = Types.make_tuple_type [tt; lt] in
+
+                        let pattern = tpc pattern in
+                        let (_,e',_) as e = tc e in
+
+                        (* e should have tablelit's pair type *)
+                        (* let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos pair) in *)
+                        let () = unify ~handle:Gripers.iteration_table_body
+                                       (pos_and_typ e, no_pos pair) in
+                        (* Pattern should match element-type of list thing, a' *)
+                        let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a')) in
+                        (`Table (erase_pat pattern, erase e) :: generators,
+                         usages e :: generator_usages,
+                         pattern_env pattern:: environments))
                 ([], [], []) generators in
             let generators = List.rev generators in
             let context = context ++ List.fold_left Env.extend Env.empty environments in

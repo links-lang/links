@@ -1,0 +1,78 @@
+var db = database "stefan";
+
+typename Where = (String, String, Int);
+
+
+sig recorded_prov : ((origin_table: String,
+                      origin_column: String,
+                      origin_row: Int |_)) -> Where
+fun recorded_prov (c) {
+  (c.origin_table,
+   c.origin_column,
+   c.origin_row)
+}
+
+sig actual_prov : ((id: Int |_)) -> Where
+fun actual_prov (c) {
+  ("top_comments", "text", c.id)
+}
+
+var top_comments =
+  table "top_comments"
+  with
+   (id: Int,
+    text: String
+    # ,
+    # origin_table: String,
+    # origin_column: String,
+    # origin_row: Int,
+    # text2: String
+    )
+  where text prov fun (c) {
+                    ("top_comments", "text", c.id)
+                  }
+  from db;
+
+# Enable caching (make_cache=on) and move these to prelude
+# to make the following code compile and run
+#foo( ("data"=48, "prov"=("abc", "cde", 5)) )
+
+sig foo : (Prov (Int)) -> Int
+fun foo (x) { data x }
+
+sig bar : (Prov (Int)) -> Where
+fun bar (x) { prov x }
+
+# sig quux : (List (Int, String)) -> Int
+# fun quux (l) { 5 }
+
+# This should not compile, because the argument to Prov is not of base type.
+# sig qux : (Prov ((a: Int))) -> (a:Int)
+# fun qux (x) { data x }
+
+var foo = [];
+
+# fun asentuh() {
+#   for (c <-- top_comments)
+#     [(text=data c.text)]
+# }
+
+# fun osene() {
+#   for (c <- for (p <-- top_comments)
+#               [(id = p.id,
+#                 text = p.text2,
+#                 text_prov_table = (fun (pp) { pp.origin_table })(p))])
+#     [(text=c.text)]
+# }
+
+# fun f(x) { [(text="bar")] } 
+
+# fun blaergh() {
+#   for (c <- (for (cc <- foo)
+#                f(cc)))
+#     [(text = c.text)]
+# }
+
+# asentuh()
+
+top_comments

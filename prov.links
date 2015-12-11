@@ -1,0 +1,21 @@
+var db = database "stefan";
+
+var top_comments =
+  table "top_comments"
+  with
+   (id: Int,
+    text: String,
+    origin_table: String,
+    origin_column: String,
+    origin_row: String)
+  prov
+   (text = fun (c) {
+      (relation = c.origin_table,
+       column = c.origin_column,
+       row = c.origin_row)})
+  from db;
+
+sig watch_comment : ({String}) -> Bool
+fun watch_comment(c) {
+  (prov c).relation == "watch" || data c =~/.*pWatch.*/
+}
