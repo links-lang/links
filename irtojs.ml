@@ -249,6 +249,8 @@ let string_js_quote s =
   let sub old repl s = Str.global_replace (Str.regexp old) repl s in
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
 
+(** Return a JS literal string from an OCaml int. *)
+let intlit i = Lit (string_of_int i)
 (** Return a JS literal string from an OCaml string. *)
 let strlit s = Lit (string_js_quote s)
 (** Return a JS literal string from an OCaml character. *)
@@ -524,9 +526,9 @@ and generate_xml env tag attrs children =
                                 (name, generate_value env v) :: bs) attrs []);
         Arr (List.map (generate_value env) children)])
 
-let generate_remote_call f_name xs_names env =
+let generate_remote_call f_var xs_names env =
   Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
-       [strlit f_name;
+       [intlit f_var;
         env;
         Dict (
           List.map2
@@ -560,7 +562,7 @@ let rec lambdalift_function ((fb, (_, xsb, body), zb, location) : Ir.fun_def) =
        reason. *)
     | `Server | `Unknown ->
       Ret(Fn(xs_names@["__kappa"],
-             generate_remote_call (string_of_int f_var) xs_names
+             generate_remote_call f_var xs_names
                (Var "_env")))
   in
   let f_lifted = fun code ->
@@ -739,7 +741,7 @@ and generate_function env fs :
       match location with
       | `Client | `Unknown ->
         snd (generate_computation body_env body (Var "__kappa"))
-      | `Server -> generate_remote_call (string_of_int f) xs_names (Dict [])
+      | `Server -> generate_remote_call f xs_names (Dict [])
       | `Native -> failwith ("Not implemented native calls yet")
     in
     (f_name,
@@ -875,10 +877,10 @@ let wrap_with_server_stubs (code : code) : code =
   let server_library_funcs =
     List.rev
       (Env.Int.fold
-         (fun var v funcs ->
+         (fun var _v funcs ->
             let name = Lib.primitive_name var in
               if Lib.primitive_location name = `Server then
-                (name, v)::funcs
+                (name, var)::funcs
               else
                 funcs)
          (Lib.value_env) []) in
@@ -888,12 +890,12 @@ let wrap_with_server_stubs (code : code) : code =
     | n -> (some_vars (n-1) @ ["x"^string_of_int n]) in
 
   let prim_server_calls =
-    concat_map (fun (name, _) ->
+    concat_map (fun (name, var) ->
                   match Lib.primitive_arity name with
                         None -> []
                     | Some arity ->
                         let args = some_vars arity in
-                          [(name, args, generate_remote_call name args (Dict[]))])
+                          [(name, args, generate_remote_call var args (Dict[]))])
       server_library_funcs
   in
     List.fold_right
