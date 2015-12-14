@@ -158,7 +158,6 @@ module Eval = struct
       begin
         match location with
         | `Server | `Unknown ->
-          let r = value env v in
           let locals = Value.bind z (value env v, `Local) Value.empty_env in
           `FunctionPtr (f, locals)
         | `Client ->
