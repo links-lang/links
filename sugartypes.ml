@@ -164,7 +164,7 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [

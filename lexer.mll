@@ -201,6 +201,7 @@ let keywords = [
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;
+ "spawnClient" , SPAWNCLIENT;
  "spawnDemon" , SPAWNDEMON;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;

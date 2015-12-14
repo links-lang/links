@@ -46,6 +46,7 @@ object (o : 'self_type)
 
         let spawn_fun =
           match k with
+          | `Client -> "spawnClient"
           | `Demon -> "spawn"
           | `Angel -> "spawnAngel"
           | `Wait  -> assert false in

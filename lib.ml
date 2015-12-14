@@ -326,6 +326,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
+  "spawnClient",
+  (`PFun (fun _ -> assert false),
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   IMPURE);
+
   "spawnAngel",
   (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",

@@ -157,12 +157,12 @@ module Eval = struct
       in
       begin
         match location with
-        | `Server | `Unknown ->
+        | `Server | `Unknown | `Client ->
           let r = value env v in
           let locals = Value.bind z (value env v, `Local) Value.empty_env in
           `FunctionPtr (f, locals)
-        | `Client ->
-          `ClientFunction (Js.var_name_binder (f, finfo))
+        (* | `Client -> *)
+          (* `ClientFunction (Js.var_name_binder (f, finfo)) *)
       end
     | `Coerce (v, t) -> value env v
 
