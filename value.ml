@@ -187,7 +187,7 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
@@ -236,7 +236,7 @@ and compressed_t = [
 | `List of compressed_t list
 | `Record of (string * compressed_t) list
 | `Variant of string * compressed_t
-| `FunctionPtr of (Ir.var * compressed_env)
+| `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
@@ -276,8 +276,8 @@ and compress_t (v : t) : compressed_t =
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
-      | `FunctionPtr(x, env) ->
-        `FunctionPtr (x, compress_env env)
+      | `FunctionPtr(x, fvs) ->
+        `FunctionPtr (x, opt_map compress_t fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
@@ -329,7 +329,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `List vs -> `List (List.map uv vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
-      | `FunctionPtr (x, locals) -> `FunctionPtr (x, uncompress_env globals locals)
+      | `FunctionPtr (x, fvs) -> `FunctionPtr (x, opt_map uv fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
@@ -370,9 +370,9 @@ and charlist_as_string chlist =
 
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
-  | `FunctionPtr (x, env) ->
+  | `FunctionPtr (x, fvs) ->
     if Settings.get_value (Basicsettings.printing_functions) then
-      string_of_int x ^ string_of_environment env
+      string_of_int x ^ opt_app string_of_value "" fvs
     else
       "fun"
   | `PrimitiveFunction (name,_op) -> name

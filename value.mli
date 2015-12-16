@@ -63,7 +63,7 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation

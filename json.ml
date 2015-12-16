@@ -74,16 +74,21 @@ let rec jsonize_value : Value.t -> string = function
       as r ->
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
   (* | `FunctionPtr _ -> assert false (\* should've been resolved when 1st parsed. *\) *)
-  | `FunctionPtr (f, env) ->
+  | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
-      "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
-      " \"location\":\"" ^ location ^ "\"," ^
-      " \"environment\": {" ^
-        String.concat "," (IntMap.to_list(fun k (v,_) ->
-                                            string_of_int k ^ ":" ^
-                                              jsonize_value v) (Value.get_parameters env))
-      ^ "}}"
+    let env_string =
+      match fvs with
+      | None     -> ""
+      | Some fvs -> ", environment\":" ^ jsonize_value fvs in
+
+    "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
+    " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
+    (* " \"environment\": {" ^ *)
+    (* String.concat "," (IntMap.to_list(fun k (v,_) -> *)
+    (*     string_of_int k ^ ":" ^ *)
+    (*     jsonize_value v) (Value.get_parameters env)) *)
+    (* ^ "}}" *)
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
