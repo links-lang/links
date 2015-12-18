@@ -117,7 +117,7 @@ struct
         | Fn _ as f -> show_func "" f
         | DeclareVar (x, c) -> "var "^x^(opt_app (fun c -> " = " ^ show c) "" c)
 
-        | LetFun ((name, vars, body, location), rest) ->
+        | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^ show rest
         | LetRec (defs, rest) ->
             String.concat ";\n" (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs) ^ show rest
@@ -191,7 +191,7 @@ struct
         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
         | Lit literal -> PP.text literal
 
-        | LetFun ((name, vars, body, location), rest) ->
+        | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^^ break ^^ show rest
         | LetRec (defs, rest) ->
             PP.vsep (punctuate " " (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs)) ^^
@@ -537,78 +537,56 @@ let generate_remote_call f_var xs_names env =
             xs_names
         )])
 
-(** The [lambdalift] operations build up a [code->code] function (effectively
-    a code context consisting of definitions) by function composition. *)
-let rec lambdalift_function ((fb, (_, xsb, body), zb, location) : Ir.fun_def) =
-  let body_fs = lambdalift_computation body in
-  let f_var, f_name = fb in
-  (* optionally add an additional closure environment argument *)
-  let xsb =
-    match zb with
-    | None -> xsb
-    | Some zb -> zb :: xsb
-  in
-  let bs = List.map name_binder xsb in
-  let xs, xs_names = List.split bs in
-  let fbody =
-    match location with
-    | `Client | `Native -> Ret(Var (snd(name_binder fb)))
-    (* Note: this is wrong for nested functions--those with
-       free variables. But these stubs are only used for
-       server->client calls. Such calls, when they involve
-       nested closures, will use the _closureTable mechanism
-       rather than this one. For unlabeled functions (below)
-       we treat them as server functions, for the same
-       reason. *)
-    | `Server | `Unknown ->
-      Ret(Fn(xs_names@["__kappa"],
-             generate_remote_call f_var xs_names
-               (Var "_env")))
-  in
-  let f_lifted = fun code ->
-    LetFun((Js.var_name_binder fb, ["_env"],
-            (* Note: This function is unlike regular compiled Links
-               functions in that it is not in CPS; it is applied only in the
-               [_resolveFunctions] routine in jslib.js. *)
-            fbody,
-            `Client),
-           code)
-  in
-  f_lifted -<- body_fs
-and lambdalift_binding =
-  function
-  | `Fun def -> lambdalift_function def
-  | `Rec defs -> List.fold_right (-<-)
-      (List.map (lambdalift_function) defs)
+
+(** Generate stubs for processing functions serialised in remote calls *)
+module GenStubs =
+struct
+  let rec fun_def : Ir.fun_def -> code -> code =
+    fun ((fb, (_, xsb, _), zb, location) : Ir.fun_def) code ->
+      let f_var, _ = fb in
+      let bs = List.map name_binder xsb in
+      let xs, xs_names = List.split bs in
+
+      let xs_names', env =
+        match zb with
+        | None -> xs_names, Dict []
+        | Some _ ->  "_env" :: xs_names, Var "_env" in
+
+      (* this code relies on eta-expanding functions in order to take
+         advantage of dynamic scoping *)
+
+      match location with
+      | `Client | `Native ->
+        LetFun ((Js.var_name_binder fb,
+                 xs_names'@["__kappa"],
+                 Call (Var (snd (name_binder fb)),
+                       List.map (fun x -> Var x) xs_names'),
+                 location),
+                code)
+      (* Seq (DeclareVar (Js.var_name_binder fb, Some (Var (snd (name_binder fb)))), code) *)
+      | `Server | `Unknown ->
+        LetFun ((Js.var_name_binder fb,
+                 xs_names'@["__kappa"],
+                 generate_remote_call f_var xs_names env,
+                 location),
+                code)
+  and binding : Ir.binding -> code -> code =
+    function
+    | `Fun def ->
+      fun_def def
+    | `Rec defs ->
+      List.fold_right (-<-)
+        (List.map (fun_def) defs)
         identity
-  | `Let (_x, (_tbs, tc)) ->
-      lambdalift_tailcomp tc
-  | `Alien _ -> identity
-  | _ -> failwith "Not implemented"
-and lambdalift_tailcomp : Ir.tail_computation -> (code->code) =
-  function
-  | `Apply _
-  | `Special _
-  | `Return _ -> identity
-  | `Case (_, branches, default) ->
-      ((StringMap.fold (fun _lbl (_b, comp) acc ->
-                          acc -<- lambdalift_computation comp)
-          branches) identity
-       -<-
-         begin match default with
-             None -> identity
-           | Some (_b, comp) ->
-               lambdalift_computation comp
-         end)
-  | `If (_, t, f) ->
-      lambdalift_computation t -<-
-      lambdalift_computation f
-and lambdalift_computation (bindings, tailcomp : Ir.computation)
-    : code -> code =
-  (List.fold_right (-<-)
-     (List.map (lambdalift_binding) bindings) identity
-     : code -> code)
-  -<- (lambdalift_tailcomp tailcomp : code->code)
+    | _ -> identity
+  and bindings : Ir.binding list -> code -> code =
+    fun bindings code ->
+      (List.fold_right
+         (-<-)
+         (List.map binding bindings)
+         identity)
+        code
+end
 
 let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
   fun tc kappa ->
@@ -826,9 +804,9 @@ and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
       else
         env, with_declarations
 
-and generate_program env : Ir.program -> (venv * code) = fun comp ->
+and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
   let (venv, code) = generate_computation env comp (Var "_start") in
-  (venv, lambdalift_computation comp code)
+  (venv, GenStubs.bindings bs code)
 
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
@@ -873,7 +851,8 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   _startTimer();" ^ body ^ ";
   </script>")
 
-let wrap_with_server_stubs (code : code) : code =
+(** stubs for server-only primitives *)
+let wrap_with_server_lib_stubs : code -> code = fun code ->
   let server_library_funcs =
     List.rev
       (Env.Int.fold
@@ -943,7 +922,7 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
     let _, code = generate_program venv program in
-    let code = wrap_with_server_stubs code in
+    let code = wrap_with_server_lib_stubs code in
     show code)
   in
   (make_boiler_page

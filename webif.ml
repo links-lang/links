@@ -46,7 +46,7 @@ let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   let args = Utility.base64decode (assoc "__args" cgi_args) in
   (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
   let args = Value.untuple (Json.parse_json args) in
-  (* TODO: get rid of __env, which should be handled by closure conversion *)
+
   let r = Json.parse_json_b64 (assoc "__env" cgi_args) in
   let local_env =
     (* Unpack the record to an alist *)

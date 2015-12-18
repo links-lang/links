@@ -98,7 +98,9 @@ object_:
                                   end
                             | ["_closureTable", id] ->
                               `ClientFunction("_closureTable["^Value.string_of_value id^"]")
-                            | ["_serverFunc", id] ->
+                            | ["_serverFunc", id]
+                            | ["_serverFunc", id; "_env", `Record []]
+                            | ["_env", `Record []; "_serverFunc", id] ->
                               `FunctionPtr(Value.unbox_int id, None)
                             | ["_serverFunc", id; "_env", fvs]
                             | ["_env", fvs; "_serverFunc", id] ->
