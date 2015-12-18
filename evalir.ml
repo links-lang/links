@@ -35,7 +35,7 @@ module Eval = struct
           (* TODO: perhaps we should actually use env here - and make
              sure we only call this function when it is sufficiently
              small *)
-          Some (`FunctionPtr (f, Value.empty_env))
+          Some (`FunctionPtr (f, None))
         | `Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
       end
@@ -157,20 +157,21 @@ module Eval = struct
       in
       begin
         match location with
-        | `Server | `Unknown | `Client ->
-          let r = value env v in
-          let locals = Value.bind z (value env v, `Local) Value.empty_env in
-          `FunctionPtr (f, locals)
-        (* | `Client -> *)
-          (* `ClientFunction (Js.var_name_binder (f, finfo)) *)
+        | `Server | `Unknown ->
+          `FunctionPtr (f, Some (value env v))
+        | `Client ->
+          `ClientFunction (Js.var_name_binder (f, finfo))
       end
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
-    | `FunctionPtr (f, locals), ps ->
-      let (_finfo, (xs, body), _z, _location) as def = find_fun f in
-      let env = Value.shadow env ~by:locals in
+    | `FunctionPtr (f, fvs), ps ->
+      let (_finfo, (xs, body), z, _location) as def = find_fun f in
+      let env =
+        match z, fvs with
+        | None, None            -> env
+        | Some z, Some fvs -> Value.bind z (fvs, `Local) env in
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in

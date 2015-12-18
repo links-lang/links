@@ -46,6 +46,7 @@ let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   let args = Utility.base64decode (assoc "__args" cgi_args) in
   (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
   let args = Value.untuple (Json.parse_json args) in
+
   let r = Json.parse_json_b64 (assoc "__env" cgi_args) in
   let local_env =
     (* Unpack the record to an alist *)
@@ -58,19 +59,8 @@ let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   (* Debug.print ("env: " ^ Value.Show_env.show env); *)
   Debug.print("Resolving server call to " ^ fname);
 
-  (* FIXME *)
-  (* ridiculousness: fname is sometimes an integer and sometimes a
-     real name! *)
-
   let func =
-    let var =
-      try int_of_string fname with
-        _ ->
-        if not (Env.String.has nenv fname) then
-          failwith ("fname: " ^ fname ^ " isn't an integer and isn't in the nenv environment!")
-        else
-          Env.String.lookup nenv fname
-    in
+    let var = int_of_string fname in
     try resolve_function var valenv with
       _ ->
       begin
