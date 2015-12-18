@@ -556,7 +556,7 @@ struct
          advantage of dynamic scoping *)
 
       match location with
-      | `Client | `Native ->
+      | `Client | `Native | `Unknown ->
         let xs_names'' = xs_names'@["__kappa"] in
         LetFun ((Js.var_name_binder fb,
                  xs_names'',
@@ -565,7 +565,7 @@ struct
                  location),
                 code)
       (* Seq (DeclareVar (Js.var_name_binder fb, Some (Var (snd (name_binder fb)))), code) *)
-      | `Server | `Unknown ->
+      | `Server ->
         LetFun ((Js.var_name_binder fb,
                  xs_names'@["__kappa"],
                  generate_remote_call f_var xs_names env,
@@ -851,6 +851,11 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
   <script type='text/javascript'>
   _startTimer();" ^ body ^ ";
   </script>")
+
+(* FIXME: this code should really be merged with the other
+   stub-generation code and we should generate a numbered version of
+   every library function.
+*)
 
 (** stubs for server-only primitives *)
 let wrap_with_server_lib_stubs : code -> code = fun code ->

@@ -4,7 +4,7 @@ open Utility
 let show_json = Settings.add_bool("show_json", false, `User)
 
 (*
-  REMARK (SL):
+  SL:
     Having implemented jsonisation of database values, I'm now
     unsure if this is what we really want. From a security point
     of view it certainly isn't a very good idea to pass this kind of
@@ -48,25 +48,19 @@ let rec jsonize_value : Value.t -> string = function
   | `Continuation _
       as r ->
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
-  (* | `FunctionPtr _ -> assert false (\* should've been resolved when 1st parsed. *\) *)
   | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
     let env_string =
       match fvs with
       | None     -> ""
-      | Some fvs -> ", environment\":" ^ jsonize_value fvs in
+      | Some fvs -> ", environment:" ^ jsonize_value fvs in
 
-    "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
-    " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
-    (* " \"environment\": {" ^ *)
-    (* String.concat "," (IntMap.to_list(fun k (v,_) -> *)
-    (*     string_of_int k ^ ":" ^ *)
-    (*     jsonize_value v) (Value.get_parameters env)) *)
-    (* ^ "}}" *)
-  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
+    "{func:\"" ^ Js.var_name_var f ^ "\"," ^
+    " location:\"" ^ location ^ "\"" ^ env_string ^ "}"
+  | `ClientFunction name -> "{func:\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
-  | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
+  | `Variant (label, value) -> Printf.sprintf "{_label:\"%s\",_value:%s}" label (jsonize_value value)
   | `Record fields ->
       "{" ^
         mapstrcat "," (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields
@@ -77,9 +71,9 @@ let rec jsonize_value : Value.t -> string = function
   | `Pid (pid, `Client) ->
     let process = Proc.Proc.get_client_process pid in
     let messages = Proc.Mailbox.pop_all_messages_for pid in
-    "{\"pid\":" ^ string_of_int pid ^ "," ^
-    " \"process\":" ^ jsonize_value process ^ "," ^
-    " \"messages\":" ^ jsonize_value (`List messages) ^
+    "{pid:" ^ string_of_int pid ^ "," ^
+    " process:" ^ jsonize_value process ^ "," ^
+    " messages:" ^ jsonize_value (`List messages) ^
     "}"
   | `Pid (pid, _) -> failwith "Cannot yet jsonize non-client proceses"
   | `Socket _ -> failwith "Cannot jsonize sockets"
@@ -104,7 +98,7 @@ and json_of_xmlitem = function
                 begin
                   let key = int_of_string value in
                   let hs = EventHandlers.find key in
-                  ("\"eventHandlers\" : " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
+                  ("eventHandlers: " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
                 end
               else
                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
@@ -135,7 +129,7 @@ let jsonize_value value =
 *)
 let jsonize_call continuation name args =
   Printf.sprintf
-    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
+    "{__continuation:\"%s\",__name:\"%s\",__args:[%s]}"
     (encode_continuation continuation)
     name
     (Utility.mapstrcat ", " jsonize_value args)

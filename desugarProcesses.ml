@@ -44,17 +44,17 @@ object (o : 'self_type)
         let (o, body, body_type) = o#phrase body in
         let o = o#with_effects outer_eff in
 
-        let spawn_fun =
+        let spawn_location, spawn_fun =
           match k with
-          | `Client -> "spawnClient"
-          | `Demon -> "spawn"
-          | `Angel -> "spawnAngel"
-          | `Wait  -> assert false in
+          | `Client -> `Client, "spawnClient"
+          | `Demon  -> `Unknown, "spawn"
+          | `Angel  -> `Unknown, "spawnAngel"
+          | `Wait   -> assert false in
 
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var spawn_fun, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), spawn_location), dp)])
         in
           (o, e, process_type)
     | `Receive (cases, Some t) ->

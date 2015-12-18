@@ -155,13 +155,18 @@ module Eval = struct
         | None -> failwith ("Closure without environment variable: " ^ Ir.Show_value.show (`Closure (f, v)));
         | Some z -> z
       in
-      begin
-        match location with
-        | `Server | `Unknown ->
-          `FunctionPtr (f, Some (value env v))
-        | `Client ->
-          `ClientFunction (Js.var_name_binder (f, finfo))
-      end
+      (* begin *)
+
+      (* TODO: consider getting rid of `ClientFunction *)
+      (* Currently, it's only necessary for built-in client
+         functions *)
+
+      (* match location with *)
+      (* | `Server | `Unknown | `Client -> *)
+      `FunctionPtr (f, Some (value env v))
+      (* | `Client -> *)
+      (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
+      (* end *)
     | `Coerce (v, t) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
