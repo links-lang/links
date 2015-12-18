@@ -60,7 +60,7 @@ let rec jsonize_value : Value.t -> string = function
     " location:\"" ^ location ^ "\"" ^ env_string ^ "}"
   | `ClientFunction name -> "{func:\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
-  | `Variant (label, value) -> Printf.sprintf "{_label:\"%s\",_value:%s}" label (jsonize_value value)
+  | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
   | `Record fields ->
       "{" ^
         mapstrcat "," (fun (kj, v) -> "\"" ^ kj ^ "\":" ^ jsonize_value v) fields
@@ -81,7 +81,7 @@ and jsonize_primitive : Value.primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value
   | `Float value -> string_of_float' value
-  | `Char c -> "{_c:\"" ^ (js_dq_escape_char c) ^"\"}"
+  | `Char c -> "{\"_c\":\"" ^ (js_dq_escape_char c) ^"\"}"
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
@@ -129,7 +129,7 @@ let jsonize_value value =
 *)
 let jsonize_call continuation name args =
   Printf.sprintf
-    "{__continuation:\"%s\",__name:\"%s\",__args:[%s]}"
+    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
     (encode_continuation continuation)
     name
     (Utility.mapstrcat ", " jsonize_value args)
