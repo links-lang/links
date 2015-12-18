@@ -557,10 +557,11 @@ struct
 
       match location with
       | `Client | `Native ->
+        let xs_names'' = xs_names'@["__kappa"] in
         LetFun ((Js.var_name_binder fb,
-                 xs_names'@["__kappa"],
+                 xs_names'',
                  Call (Var (snd (name_binder fb)),
-                       List.map (fun x -> Var x) xs_names'),
+                       List.map (fun x -> Var x) xs_names''),
                  location),
                 code)
       (* Seq (DeclareVar (Js.var_name_binder fb, Some (Var (snd (name_binder fb)))), code) *)
