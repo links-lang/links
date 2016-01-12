@@ -31,12 +31,6 @@ sig move : (Player,Int) {Move:(Player,Int) {}-> Int|_}~> Int
 fun move(player,n) {do Move(player,n)}
 
 
-
-
-
-
-
-
 # We model the game as two mutual recursive functions
 sig aliceTurn : (Int) {Move:(Player,Int) {}-> Int|_}~> Player
 fun aliceTurn(n) {
@@ -56,20 +50,6 @@ fun bobTurn(n) {
 sig game : (Int) -> Comp({Move:(Player,Int) {}-> Int|_},Player)
 fun game(n)() {aliceTurn(n)}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #
 # Encoding players' strategies as handlers
 #
@@ -77,20 +57,19 @@ fun game(n)() {aliceTurn(n)}
 # strategy to a given player
 
 # Type alias for strategy handlers
+typename StratCont(e::Row, a::Type) = (Int) ~e~> a;
 typename StrategyHandler = forall a :: Type, p :: Presence .
                            (Comp({Move:(Player,Int) {}-> Int},a)) {Move{p}}~> a;
-typename Strategy = forall a :: Type, p :: Presence, e :: Row .
-                           (Int,(Int) {Move{p}|e}~> a) {Move{p}|e}~> a;
+typename Strategy = forall a :: Type, p :: Presence, e :: Row, f :: Row .
+                           (Int,StratCont({Move{p}|f},a)) {Move{p}|e}~> a;
 
 
-
-
+typename Cont(a::Type,b::Type) = forall e :: Row . (a) ~e~> b;
+typename Strategy2 = forall e :: Row, a :: Type . (Int, Cont(Int, a)) ~e~> a;
 
 # A first strategy: Always pick one stick
 sig ns : Strategy
 fun ns(n,k) { k(1) }
-
-
 
 # The naive-strategy-handler assigns the naive-strategy to both players
 sig naive : StrategyHandler
@@ -103,21 +82,6 @@ handler naive(m) {
 # winner is determined by the parity of the number of sticks at the beginning.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Auxiliary function
 # Given two comparable inputs, it returns the greatest of those two.
 sig max2 : (a,a) -> a
@@ -128,13 +92,16 @@ fun max2(x,y) {
 
 
 # The perfect strategy is to pick "max{n (mod 4), 1}" sticks
-sig ps : Strategy
+#sig ps : Strategy
+sig ps : (Int, (Int) ~e~> a) ~e~> a
+#sig ps : Strategy2
 fun ps(n,k) {
     k(max2(n `mod` 4, 1))
 }
 
 # The perfect handler assigns the perfect strategy to both players
-sig perfect : StrategyHandler
+#sig perfect : StrategyHandler
+sig perfect : (Comp({Move:(Player,Int) {}-> Int}, a)) {Move{_}}~> a
 handler perfect(m) {
     case Move(_,n,k) -> ps(n,k)
     case Return(x)   -> x
@@ -142,13 +109,6 @@ handler perfect(m) {
 
 # Observation: Alice wins whenever the starting number of sticks are not divisible by 4
 # under the interpretation of perfect.
-
-
-
-
-
-
-
 
 
 # Auxiliary function.
@@ -160,8 +120,10 @@ fun validMoves(n) {
 
 # The brute force strategy enumerates all future plays
 # if any particular play leads to a win, then play that strategy
-sig bfs : (a,Int,(Int) {Move:(Player,Int) {}-> Int|e}~> a)
-                       {Move:(Player,Int) {}-> Int|e}~> a
+#sig bfs : (a,Int,(Int) {Move:(Player,Int) {}-> Int|e}~> a)
+#                       {Move:(Player,Int) {}-> Int|e}~> a
+sig bfs : (a, Int, (Int) ~e~> a)
+                         ~e~> a
 fun bfs(player,n,k) {
   # Map the continuation over all possible moves
   # this effectively determines all potential winners
@@ -176,23 +138,13 @@ fun bfs(player,n,k) {
 
 # The perfect vs brute force handler assigns 
 # Alice the perfect strategy and Bob the brute force strategy
-sig pvb : StrategyHandler
+#sig pvb : StrategyHandler
+sig pvb : (Comp({Move:(Player,Int) {}-> Int}, Player)) {}~> Player
 handler pvb(m) {
   case Move(Alice,n,k) -> ps(n,k)
   case Move(Bob,n,k)   -> bfs(Bob,n,k)
   case Return(x)       -> x : Player
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 #
@@ -234,14 +186,6 @@ handler gametree(m) {
 #                  (3, Winner(Alice))]))
 
 
-
-
-
-
-
-
-
-
 #
 # Open handlers
 #
@@ -273,16 +217,6 @@ open handler bobStrat(m) {
 
 
 
-
-
-
-
-
-
-
-
-
-
 #
 # Power of Composition
 #
@@ -296,19 +230,15 @@ open handler bobStrat(m) {
 sig cheat : (Player,Int) {Cheat:(Player,Int) {}-> Zero|_}~> a
 fun cheat(player, n) {switch(do Cheat(player,n)) { } }
 
-
-
-
-
 # Cheater's strategy is to take all sticks and thereby win in one move
 sig cheater : Strategy
 fun cheater(n,k) {k(n)}
 
-
-
-
-
-
+sig cheater2 : Strategy
+fun cheater2(n,k) {
+  if (n > 3) { k(0) }
+  else { k(n) }
+}
 
 # checkMove checks whether a given player p has cheated
 sig checkMove : (Player,Int,
@@ -316,15 +246,13 @@ sig checkMove : (Player,Int,
 		      {Move:(Player,Int) {}-> Int,Cheat:(Player,Int) {}-> Zero|e}~> a  # Effects + return type
 fun checkMove(p,n,k) {
   var take = move(p,n);
-  if (take < 1 || 3 < take) { # Cheater detected!
-     cheat(p, n)
+  #if (take < 1 || 3 < take) { # Cheater detected!
+  if (not(elem(take,validMoves(n)))) {
+     cheat(p, take)
   } else {
      k(take)                  # Otherwise OK
   }
 }
-
-
-
 
 # The check handler detects cheating
 sig check : (Comp({Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}, a)) ->
@@ -333,9 +261,6 @@ open handler check(m) {
   case Return(x)          -> x
   case Move(player, n, k) -> checkMove(player, n, k)
 }
-
-
-
 
 
 # Convenient function to launch a checked game
@@ -353,13 +278,16 @@ open handler aliceCheats(m) {
   case Return(x)       -> x
 }
 
+sig aliceCheats2 : (Comp({Move:(Player,Int) {}-> Int|e}, a)) ->
+                    Comp({Move:(Player,Int) {}-> Int|e}, a)
+open handler aliceCheats2(m) {
+  case Move(Alice,n,k) -> cheater2(n,k)
+  case Move(Bob,n,k)   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
+  case Return(x)       -> x
+}
+
 # links> perfect(aliceCheats(game(36)))
 #  Alice
-
-
-
-
-
 
 # Interpreting cheating
 # Abandon the game and report the cheater
@@ -379,9 +307,6 @@ open handler cheatLose(m) {
   case Return(x)        -> x
 }
 
-
-
-
 # Alice cheats against Bob's perfect strategy
 #
 # (If n < 4 then Alice wins, otherwise the game is abandoned because
@@ -399,24 +324,6 @@ sig cpLose : (Int) {Move{_}}~> Player
 fun cpLose(n) {
   perfect(cheatLose(aliceCheats(checkedGame(n))))
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #
 # Returning to strategies
@@ -472,17 +379,6 @@ fun strategy(s1, s2) {
 	 case Return(x)       -> x
     }
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 #
@@ -550,24 +446,6 @@ fun repeatGame(r, m)() {
 }
 
 # (state -<- boardPrinter -<- randomFloat -< strategy(ms,ms)(repeatGame(10, scorerecorder -< game(33))))(initialState)();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #
 # Auxiliary functions
