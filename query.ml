@@ -1613,7 +1613,7 @@ struct
       | v -> [v]
 
   let rec clause : Value.database -> t -> query = fun db v ->
-(*    Debug.print ("clause: "^string_of_t v); *)
+   (* Debug.print ("clause: "^string_of_t v); *)
     match v with
       | `Concat _ -> assert false
       | `For (_, [], _, body) ->
@@ -1707,7 +1707,7 @@ struct
       | `Project (`Var (x, _field_types), name) ->
           `Project (x, name)
       | `Constant c -> `Constant c
-      | e -> Debug.print ("base: "^Show_t.show e); assert false
+      | _ -> assert false
 
   (* convert a regexp to a like if possible *)
   and likeify v =
@@ -2016,7 +2016,7 @@ struct
     let range =
       match range with
         | None -> ""
-        | Some (limit, offset) -> " limit " ^Num.string_of_num limit^" offset "^Num.string_of_num offset
+        | Some (limit, offset) -> " limit " ^string_of_int limit^" offset "^string_of_int offset
     in
       string_of_query db false q ^ range
 
@@ -2226,7 +2226,7 @@ struct
     fun db cs ->
       `UnionAll (List.map (let_clause db) cs, 0)
 
-  let unordered_query_package db range t v =
+  let unordered_query_package db (range: (int * int) option) t v =
     let t = Shred.nested_type_of_type t in
     (* Debug.print ("v: "^string_of_t v); *)
     reset_dummy_counter ();
@@ -2280,9 +2280,8 @@ struct
 end
    
 
-let compile_shredded :
-    Value.env -> (Num.num * Num.num) option * Ir.computation ->
-  (Value.database * (string * Shred.flat_type) Shred.package) option =
+let compile_shredded : Value.env -> (int * int) option * Ir.computation
+                       -> (Value.database * (string * Shred.flat_type) Shred.package) option =
   fun env (range, e) ->
     let v = Eval.eval env e in
       match used_database v with
@@ -2292,7 +2291,8 @@ let compile_shredded :
           let p = ShreddedSql.unordered_query_package db range t v in
             Some (db, p)
 
-let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =
+let compile : Value.env -> (int * int) option * Ir.computation
+              -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.Show_computation.show e); *)
     let v = Eval.eval env e in
