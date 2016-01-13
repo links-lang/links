@@ -213,6 +213,8 @@ let keywords = [
  "var"      , VAR; 
  "where"    , WHERE; 
  "with"     , WITH; 
+(* SAND *)
+ "tablekeys"     , TABLEKEYS;
 ]
 
 exception LexicalError of (string * Lexing.position)
