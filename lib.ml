@@ -966,7 +966,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (** Database functions **)
   "AsList",
-  (p1 (fun _ -> failwith "Unoptimized table access!!!"),
+  (p1 (fun t -> failwith ("Unoptimized table access!!!: " ^ Value.Show_t.show t)),
    datatype "(TableHandle(r, w, n)) -> [r]",
   IMPURE);
 

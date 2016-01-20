@@ -1817,7 +1817,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                  else t)
                                                      read_row in
             let pair = Types.make_tuple_type [`Table (prov_row, write_row, needed_row);
-                                              Types.make_list_type prov_row] in
+                                              Types.make_pure_function_type Types.unit_type (Types.make_list_type prov_row)] in
             (* Debug.print (Types.Show_datatype.show read_row); *)
             (* TODO decide what keeps the unmodified type, what needs the new type *)
               `TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db),
@@ -2346,9 +2346,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             usages e :: generator_usages,
                             pattern_env pattern :: environments)
                      | `Table (pattern, e) ->
-                        (* Type of provenance-enriched read-row *)
+                        (* Type of provenance-enriched read-row (delayed list of..) *)
                         let a' = Types.fresh_type_variable (`Any, `Any) in
-                        let lt = Types.make_list_type a' in
+                        let lt = Types.make_pure_function_type Types.unit_type (Types.make_list_type a') in
 
                         (* Type of actual table *)
                         let a = Types.fresh_type_variable (`Any, `Any) in

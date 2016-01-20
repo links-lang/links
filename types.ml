@@ -2542,3 +2542,5 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+
+let make_pure_function_type args res = `Function (args, make_closed_row FieldEnv.empty, res)

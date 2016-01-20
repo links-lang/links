@@ -652,8 +652,8 @@ struct
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
-          (*     | `Continuation cont ->  *)
-      | _ -> failwith "Cannot convert value to expression"
+      (*     | `Continuation cont ->  *)
+      | _t -> failwith ("Cannot convert value to expression "^Value.Show_t.show _t)
 
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))
@@ -986,7 +986,7 @@ struct
          have the problem that we currently have no way of enforcing
          that only one database be used inside a query block - see
          SML#.)  *)
-      failwith "special not allowed in query block"
+      failwith ("special not allowed in query block "^Ir.Show_special.show _s)
     | `Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match v with
