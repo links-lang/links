@@ -37,6 +37,7 @@ type t =
     [ `For of tag option * (Var.var * t) list * t list * t
     | `If of t * t * t
     | `Table of Value.table
+    | `Database of (Value.database * string)
     | `Singleton of t | `Concat of t list
     | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t
     | `Variant of string * t
@@ -89,6 +90,7 @@ let tag_query : t -> t =
         | `Primitive p -> `Primitive p
         | `Var (x, t) -> `Var (x, t)
         | `Constant c -> `Constant c
+        | `Database db -> `Database db
     in
       tag e
 
@@ -561,6 +563,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
           `For (tag, List.rev gs', List.map (freshen_for_bindings env') os, freshen_for_bindings env' b)
       | `If (c, t, e) -> `If (ffb c, ffb t, ffb e)
       | `Table t -> `Table t
+      | `Database db -> `Database db
       | `Singleton v -> `Singleton (ffb v)
       | `Concat vs -> `Concat (List.map ffb vs)
       | `Record fields -> `Record (StringMap.map ffb fields)
@@ -628,6 +631,7 @@ struct
       | `Float f -> `Constant (`Float f)
       | `String s -> `Constant (`String s)
       | `Table t -> `Table t
+      | `Database db -> `Database db
       | `List vs ->
           `Concat (List.map (fun v -> `Singleton (expression_of_value v)) vs)
       | `Record fields ->
@@ -960,13 +964,25 @@ struct
     | `Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
     | `Special (`Query (None, e, _)) -> computation env e
+    | `Special (`Table (db, name, keys, (readtype, _, _))) as _s ->
+       (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
+       begin
+         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
+         | `Database (db, params), name, keys, `Record row ->
+	    let unboxed_keys =
+	      List.map
+		(fun key ->
+		 List.map unbox_string (unbox_list key))
+		(unbox_list keys)
+	    in
+            `Table ((db, params), unbox_string name, unboxed_keys, row)
+         | _ -> eval_error "Error evaluating table handle"
+       end
     | `Special _s ->
-      (* FIXME:
+       (* FIXME:
 
          There's no particular reason why we can't allow
-         table declarations in query blocks.
-
-         Same goes for database declarations. (However, we do still
+         database declarations in query blocks. (However, we do still
          have the problem that we currently have no way of enforcing
          that only one database be used inside a query block - see
          SML#.)  *)
