@@ -19,9 +19,6 @@ object (o : 'self_type)
     | `List _ as i -> super#iterpatt i
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `FunLit stuff ->
-       Debug.print ("Functions look like this:"^(Sugartypes.Show_phrasenode.show (`FunLit stuff)));
-       super#phrasenode (`FunLit stuff)
     | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
        Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg);
        let (o, name, _) = o#phrase name in

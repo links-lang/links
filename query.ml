@@ -771,7 +771,7 @@ struct
                        fields)
           | _ -> eval_error "Error adding fields: non-record"
       end
-    | `Project (label, r) ->
+    | `Project (label, r) as _dbg ->
       let rec project (r, label) =
         match r with
           | `Record fields ->
@@ -782,7 +782,8 @@ struct
           | `Var (x, field_types) ->
             assert (StringMap.mem label field_types);
             `Project (`Var (x, field_types), label)
-          | _ -> eval_error "Error projecting from record"
+          | _ -> Debug.print ("Error projecting from record. Projection: "^Ir.Show_value.show _dbg);
+                 eval_error "Error projecting from record"
       in
         project (value env r, label)
     | `Erase (labels, r) ->

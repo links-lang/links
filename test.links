@@ -44,8 +44,6 @@ fun bar (x) { prov x }
 # sig qux : (Prov ((a: Int))) -> (a:Int)
 # fun qux (x) { data x }
 
-var foo = [];
-
 fun asentuh() {
   for (c <-- top_comments)
     [(text=data c.text)]
