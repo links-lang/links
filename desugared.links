@@ -22,9 +22,83 @@ var actual_table = table "top_comments" with (id: Int, text: String) from db;
 # pair up table with prov calculation
 var top_comments =
   (actual_table,
-   for (p <-- actual_table)
-     [(id   = p.id,
-       text = ("data" = p.text,
-               "prov" = actual_prov(p)))]);
+   fun () {
+     for (p <-- actual_table)
+       [(id   = p.id,
+         text = ("data" = p.text,
+                 "prov" = actual_prov(p)))]});
 
-top_comments
+# ## PLinks:
+# query {
+#   for (c <-- top_comments)
+#     [(text=data c.text)]
+# }
+
+# query {
+#   for (c <- top_comments.2())
+#     [(text=c.text.data)]
+# }
+
+# Generated query:
+# select (0)            as "1_1",
+#        (t1770."2")    as "1_2",
+#        (t1768."text") as "2_text"
+# from   (select (1) as "2") as t1770,
+#        top_comments        as t1768
+
+# [(text="foo"), (text="qux"), (text="quuix")] : [(text:String)]
+
+
+# #############################################
+
+# ## PLinks:
+# query {
+#   for (c <-- top_comments.2())
+#     [(text = c.text)]
+# }
+
+# query {
+#   for (c <- top_comments.2())
+#     [(text = (data = c.text.data,
+#               prov = c.text.prov))]
+# }
+
+# Generated query:
+# select (0) as "1_1",
+#        (t1770."2") as "1_2",
+#        (t1768."text") as "2_text_data",
+#        ('top_comments') as "2_text_prov_1",
+#        ('text') as "2_text_prov_2",
+#        (t1768."id") as "2_text_prov_3"
+# from (select (1) as "2") as t1770,
+#      top_comments as t1768
+
+# [(text=(data="foo",  prov=("top_comments", "text", 1))),
+#  (text=(data="qux",  prov=("top_comments", "text", 2))),
+#  (text=(data="quuix",prov=("top_comments", "text", 3)))]
+# : [(text:(data:String,prov:Where))]
+
+
+# #############################################
+
+# query {
+#   for (c <-- top_comments)
+#   where ((prov c.text).3 == 2)
+#     [(text = data c.text)]
+# }
+
+# query {
+#   for (c <- top_comments.2())
+#   where (c.text.prov.3 == 2)
+#     [(text = c.text.data)]
+# }
+
+# Generated query:
+# select (0)            as "1_1",
+#        (t1770."2")    as "1_2",
+#        (t1768."text") as "2_text"
+# from (select (1) as "2") as t1770,
+#      top_comments        as t1768
+# where (t1768."id") = (2)
+
+# [(text="qux")] : [(text:String)]
