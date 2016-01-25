@@ -12,7 +12,7 @@ object (o : 'self_type)
        let (o, phrase, _t) = o#phrase phrase in
        let phrase' : Sugartypes.phrase = (`Projection (phrase, "2"), dp) in
        let phrase' = `FnAppl (phrase', []), dp in
-       Debug.print ("Before: "^Sugartypes.Show_phrase.show phrase^"\n after: "^Sugartypes.Show_phrase.show phrase'^"\n type: "^Types.Show_datatype.show _t);
+       (* Debug.print ("Before: "^Sugartypes.Show_phrase.show phrase^"\n after: "^Sugartypes.Show_phrase.show phrase'^"\n type: "^Types.Show_datatype.show _t); *)
        (* We don't actually *change* the type (apparently, everywhere, something...), so don't try to extract *)
        (* let t = TypeUtils.project_type "1" t in *)
        (o, `List (pattern, phrase'))
@@ -28,16 +28,13 @@ object (o : 'self_type)
        let (o, read_row) = o#datatype read_row in
        let (o, write_row) = o#datatype write_row in
        let (o, needed_row) = o#datatype needed_row in
+       (* TODO only remove prov constraints from constraints, not all constraints *)
        let tablelit : Sugartypes.phrasenode =
-         `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) in
+         `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), [], keys, db) in
        let tablelit_type = `Table (read_row, write_row, needed_row) in
 
-       let pattern : Sugartypes.pattern = (`Variable ("p", Some read_row, dp), dp) in
-       (* Not sure what the `datatype option` in a ListLit is.
-          - None fails pattern matching in transformSugar
-          - Could be the element type. Could be the list type. *)
-       let prov_calc_expr : Sugartypes.phrasenode = `ListLit ([`Var "p", dp], Some read_row) in
-       let iter : Sugartypes.phrasenode = `Iteration ([`Table (pattern, (tablelit, dp))], (prov_calc_expr, dp), None, None) in
+       (* FIXME Ask Sam how to introduce a new variable with a fresh name. *)
+       let pattern : Sugartypes.pattern = (`Variable ("t", Some read_row, dp), dp) in
 
        (* Move this mess somewhere... *)
        let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> Sugartypes.phrase StringMap.t =
@@ -52,6 +49,30 @@ object (o : 'self_type)
                               constraints) l;
          !res in
        let prov_rows = prov_rows constraints in
+
+       let prov_calc_record : Sugartypes.phrasenode = begin
+           let (fsm, _, _) = TypeUtils.extract_row read_row in
+           let fields : string list = StringMap.fold (fun k v a -> k :: a) fsm [] in
+           let non_prov_e : string -> Sugartypes.phrase = fun name ->
+             `Projection ((`Var "t", dp), name), dp in
+           let prov_e : string -> Sugartypes.phrase -> Sugartypes.phrase = fun name e ->
+             `RecordLit ([("data", non_prov_e name);
+                          (* TODO What if the prov function is polymorphic? Insert appropriate `TAppl? *)
+                          ("prov", (`FnAppl (e, [non_prov_e name]), dp))], None), dp in
+           let record : (string * Sugartypes.phrase) list  =
+             List.map
+               (fun name -> match StringMap.lookup name prov_rows with
+                            | Some e -> name, prov_e name e
+                            | None -> name, non_prov_e name)
+               fields in
+           `RecordLit (record, None)
+         end in
+
+       (* TODO The second argument to `ListLit is the type of the list elements.
+               I'm not sure whether this needs to be the one with Provs or the desugared type. *)
+       let prov_calc_expr : Sugartypes.phrasenode = `ListLit ([prov_calc_record, dp], Some read_row) in
+       let iter : Sugartypes.phrasenode = `Iteration ([`Table (pattern, (tablelit, dp))], (prov_calc_expr, dp), None, None) in
+
        let prov_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
                                                             then Types.make_prov_type t (* Types.make_record_type (StringMap.from_alist [("data", t); ("prov", Types.prov_triple_type)]) *)
                                                             else t)
@@ -59,7 +80,7 @@ object (o : 'self_type)
        let prov_type = Types.make_list_type prov_row in
 
        let delayed_type = Types.make_pure_function_type Types.unit_type prov_type in
-       Debug.print ("Delayed prov type: "^(Types.Show_datatype.show delayed_type));
+       (* Debug.print ("Delayed prov type: "^(Types.Show_datatype.show delayed_type)); *)
 
        (* TODO this is probably wrong. Should be, roughly
           fun () server {
@@ -73,7 +94,7 @@ object (o : 'self_type)
                   `Unl,
                   ([[]], (`Block ([], (iter, dp)), dp)),
                   `Server) in
-       Debug.print ("Delayed prov fun: "^(Sugartypes.Show_phrasenode.show delayed_prov));
+       (* Debug.print ("Delayed prov fun: "^(Sugartypes.Show_phrasenode.show delayed_prov)); *)
        
        let pair : Sugartypes.phrasenode = `TupleLit [(tablelit, dp); (delayed_prov, dp)] in
        let pair_type = Types.make_tuple_type [tablelit_type; delayed_type] in
@@ -81,9 +102,9 @@ object (o : 'self_type)
        (o, pair, pair_type)
        
     | `Iteration (gens, body, cond, orderby) as _dbg ->
-       Debug.print ("Iteration: \n" ^ Sugartypes.Show_phrasenode.show _dbg);
+       (* Debug.print ("Iteration: \n" ^ Sugartypes.Show_phrasenode.show _dbg); *)
        let (o, e, t) = super#phrasenode _dbg in
-       Debug.print ("Desugared iteration:\n" ^ Sugartypes.Show_phrasenode.show e);
+       (* Debug.print ("Desugared iteration:\n" ^ Sugartypes.Show_phrasenode.show e); *)
        (o, e, t)
 
     | e -> super#phrasenode e

@@ -12,7 +12,7 @@ fun recorded_prov (c) {
    c.origin_row)
 }
 
-sig actual_prov : ((id: Int |_)) -> Where
+sig actual_prov : ((id: Int |_)) {}-> Where
 fun actual_prov (c) {
   ("top_comments", "text", c.id)
 }
@@ -22,9 +22,7 @@ var top_comments =
   with
    (id: Int,
     text: String)
-  where text prov fun (c) {
-                    ("top_comments", "text", c.id)
-                  }
+  where text prov actual_prov # for some reason a fun lit here will break things..
   from db;
 
 # Enable caching (make_cache=on) and move these to prelude
