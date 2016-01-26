@@ -59,7 +59,7 @@ object (o : 'self_type)
            let prov_e : string -> Sugartypes.phrase -> Sugartypes.phrase = fun name e ->
              `RecordLit ([("data", non_prov_e name);
                           (* TODO What if the prov function is polymorphic? Insert appropriate `TAppl? *)
-                          ("prov", (`FnAppl (e, [non_prov_e name]), dp))], None), dp in
+                          ("prov", (`FnAppl (e, [(`Var "t", dp)]), dp))], None), dp in
            let record : (string * Sugartypes.phrase) list  =
              List.map
                (fun name -> match StringMap.lookup name prov_rows with

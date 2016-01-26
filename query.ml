@@ -782,8 +782,6 @@ struct
          | `Var (x, field_types) ->
             assert (StringMap.mem label field_types);
             `Project (`Var (x, field_types), label)
-         | `Project (r', l') ->
-            `Project (r', l')
          | _ -> Debug.print ("Error projecting from record.\n Projection: "^Ir.Show_value.show _dbg);
                 eval_error "Error projecting from record"
        in
