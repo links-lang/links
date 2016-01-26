@@ -772,20 +772,22 @@ struct
           | _ -> eval_error "Error adding fields: non-record"
       end
     | `Project (label, r) as _dbg ->
-      let rec project (r, label) =
-        match r with
-          | `Record fields ->
+       let rec project : (t * string) -> t = fun (r, label) ->
+         match r with
+         | `Record fields ->
             assert (StringMap.mem label fields);
             StringMap.find label fields
-          | `If (c, t, e) ->
+         | `If (c, t, e) ->
             `If (c, project (t, label), project (e, label))
-          | `Var (x, field_types) ->
+         | `Var (x, field_types) ->
             assert (StringMap.mem label field_types);
             `Project (`Var (x, field_types), label)
-          | _ -> Debug.print ("Error projecting from record. Projection: "^Ir.Show_value.show _dbg);
-                 eval_error "Error projecting from record"
-      in
-        project (value env r, label)
+         | `Project (r', l') ->
+            `Project (r', l')
+         | _ -> Debug.print ("Error projecting from record.\n Projection: "^Ir.Show_value.show _dbg);
+                eval_error "Error projecting from record"
+       in
+       project (value env r, label)
     | `Erase (labels, r) ->
       let rec erase (r, labels) =
         match r with

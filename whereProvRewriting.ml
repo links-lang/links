@@ -7,20 +7,21 @@ object (o : 'self_type)
   val dp = Sugartypes.dummy_position
 
   method! iterpatt : Sugartypes.iterpatt -> ('self_type * Sugartypes.iterpatt) = function
-    | `Table (pattern, phrase) ->
+    | `Table (pattern, phrase) as _tbl ->
        let (o, pattern) = o#pattern pattern in
        let (o, phrase, _t) = o#phrase phrase in
        let phrase' : Sugartypes.phrase = (`Projection (phrase, "2"), dp) in
        let phrase' = `FnAppl (phrase', []), dp in
-       (* Debug.print ("Before: "^Sugartypes.Show_phrase.show phrase^"\n after: "^Sugartypes.Show_phrase.show phrase'^"\n type: "^Types.Show_datatype.show _t); *)
+       let res = `List (pattern, phrase') in
+       (* Debug.print ("Before: "^Sugartypes.Show_iterpatt.show _tbl^"\n after: "^Sugartypes.Show_iterpatt.show res); *)
        (* We don't actually *change* the type (apparently, everywhere, something...), so don't try to extract *)
        (* let t = TypeUtils.project_type "1" t in *)
-       (o, `List (pattern, phrase'))
+       (o, res)
     | `List _ as i -> super#iterpatt i
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
-       Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg);
+       (* Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg); *)
        let (o, name, _) = o#phrase name in
        let (o, keys, _) = o#phrase keys in
        let (o, db, _) = o#phrase db in
@@ -98,14 +99,17 @@ object (o : 'self_type)
        
        let pair : Sugartypes.phrasenode = `TupleLit [(tablelit, dp); (delayed_prov, dp)] in
        let pair_type = Types.make_tuple_type [tablelit_type; delayed_type] in
-       Debug.print ("TableLit desugared:\n"^Sugartypes.Show_phrasenode.show pair);
+       (* Debug.print ("TableLit desugared:\n"^Sugartypes.Show_phrasenode.show pair); *)
        (o, pair, pair_type)
-       
-    | `Iteration (gens, body, cond, orderby) as _dbg ->
-       (* Debug.print ("Iteration: \n" ^ Sugartypes.Show_phrasenode.show _dbg); *)
-       let (o, e, t) = super#phrasenode _dbg in
-       (* Debug.print ("Desugared iteration:\n" ^ Sugartypes.Show_phrasenode.show e); *)
-       (o, e, t)
+
+    | `Iteration (gens, body, cond, orderby) as _iteration ->
+       let (o, gens) = TransformSugar.listu o (fun o -> o#iterpatt) gens in
+       let (o, body, t) = o#phrase body in
+       let (o, cond, _) = TransformSugar.option o (fun o -> o#phrase) cond in
+       let (o, orderby, _) = TransformSugar.option o (fun o -> o#phrase) orderby in
+       let res = `Iteration (gens, body, cond, orderby) in
+       (* Debug.print ("Before: "^Sugartypes.Show_phrasenode.show _iteration^"\n after: "^Sugartypes.Show_phrasenode.show res); *)
+       (o, res, t)
 
     | e -> super#phrasenode e
 end
