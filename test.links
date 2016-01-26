@@ -44,7 +44,9 @@ fun bar (x) { prov x }
 
 fun asentuh() {
   for (c <-- top_comments)
-    [(text=prov c.text)]
+  # (prov c.text).3 does not work for some reason :/
+  # where ((prov c.text) == ("top_comments", "text", 2))
+    [(text=data c.text)]
 }
 
 # fun osene() {

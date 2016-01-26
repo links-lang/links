@@ -167,6 +167,7 @@ sig
   val table_keys : griper
 
   val tablelit_nonbase : griper
+  val provenance_function : griper
 
   val delete_table : griper
   val delete_pattern : griper
@@ -796,6 +797,9 @@ tab() ^ code (show_type rt))
 
     let tablelit_nonbase ~pos ~t1:(l, lt) ~t2:(r, rt) ~error:_ =
       die pos ("Table declaration declares a column that is not of base type."^nl())
+
+    let provenance_function ~pos ~t1:(a, at) ~t2:(e, et) ~error:_ =
+      die pos ("Provenance calculation function must have type "^show_type et)
 
     (* patterns *)
     let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -1809,9 +1813,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, write_row), no_pos write);
             unify ~handle:Gripers.tablelit_nonbase ((exp_pos tname, needed_row), no_pos needed);
             let prov_rows = prov_rows constraints in
-            (* Debug.print (string_of_alist (StringMap.to_alist (StringMap.map Sugartypes.Show_phrase.show prov_rows))); *)
             (* TODO check that prov functions have type read_row -> (String, String, Int) (not wild!)*)
-            (* TODO apply type constructor to write_row and needed_row? *)
+            (* How do I do that? It's not as easy as this: (because of type abstraction and stuff... I think *)
+            (* StringMap.iter (fun l e -> *)
+            (*                 let e = tc e in *)
+            (*                 Debug.print ("e: "^Sugartypes.Show_phrase.show (fst3 e)); *)
+            (*                 let expected_type = Types.make_pure_function_type read_row Types.prov_triple_type in *)
+            (*                 unify ~handle:Gripers.provenance_function (pos_and_typ e, no_pos expected_type) *)
+            (*                ) prov_rows; *)
             let prov_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
                                                                  then Types.make_prov_type t
                                                                  else t)
