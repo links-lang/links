@@ -1,4 +1,6 @@
-Links: Linking Theory to Practice for the Web
+[![Build Status](https://travis-ci.org/fehrenbach/links.svg)](https://travis-ci.org/fehrenbach/links)
+
+### Links: Linking Theory to Practice for the Web
 
 Links helps to build modern Ajax-style applications: those with
 significant client- and server-side components.
@@ -25,7 +27,7 @@ database-query support from Kleisli, web-interaction proposals from
 PLT Scheme, and distributed-computing support from Erlang. On top of
 this, it adds some new web-centric features of its own.
 
-FEATURES
+## FEATURES
 
  * Allows web programs to be written in a single programming language
  * Call-by-value functional language
@@ -37,4 +39,4 @@ FEATURES
  * Statically typed Erlang-esque message passing
  * Polymorphic records and variants
  * An effect system for supporting abstraction over database queries
-whilst guaranteeing that they can be efficiently compiled to SQL
+   whilst guaranteeing that they can be efficiently compiled to SQL
