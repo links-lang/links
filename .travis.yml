@@ -10,4 +10,4 @@ before_install:
 install:
   - opam install -y deriving lwt
 script:
-  - make nc
+  - make -j2 nc
