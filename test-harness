@@ -93,6 +93,10 @@ def main():
     for name, code, opts in parse(open(filename)):
         evaluate(name, code, **opts)
     print "%d failures\n%d successes" % (failures, successes)
+    if failures > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
 if __name__ == '__main__':
     main()

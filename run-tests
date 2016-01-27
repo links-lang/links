@@ -1,5 +1,15 @@
 #!/bin/bash
 
-make test-raw | perl -lne \
-  '($f) = /(\d+) failures/;\
-   print "1 failure" if ($f == 1); print "$f failures" if ($f > 1); $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'
+ret=0
+
+for i in tests/*.tests; do
+    cmnd="./test-harness $i"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [ $ret_code != 0 ]; then
+        ret=1
+    fi
+done
+
+exit $ret
