@@ -11,3 +11,4 @@ install:
   - opam install -y deriving lwt
 script:
   - make -j2 nc
+  - make tests
