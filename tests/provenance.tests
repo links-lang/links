@@ -1,0 +1,24 @@
+Type of where-provenance
+fun (x) { prov x }
+stdout : @fun : \(.*\) -> \(String, String, Int\)
+exit : 0
+
+Error on prov of non-prov
+fun (x : Int) { prov x }
+stderr : @.* Type error:.*
+exit : 1
+
+Error on data of non-prov
+fun (x : Int) { data x }
+stderr : @.* Type error:.*
+exit : 1
+
+Data of Prov(String) is String
+fun (x : Prov(String)) { data x }
+stdout : @fun : \(.*\) -> String
+exit : 0
+
+Data of Prov(Int) is Int
+fun (x : Prov(Int)) { data x }
+stdout : @fun : \(.*\) -> Int
+exit : 0
