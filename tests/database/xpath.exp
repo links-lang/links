@@ -1,0 +1,11 @@
+#!/usr/bin/env expect
+
+spawn psql -U postgres -d links -f xpath.sql -q
+expect {
+    timeout {exit 1}
+    "psql:xpath.sql:1: NOTICE:  table \"xml\" does not exist, skipping"
+}
+
+spawn ../../links --config=config xpath.links
+expect -exact "\[(name=\"b\"), (name=\"d\")] : \[(name:String)\]" {exit 0}
+exit 1

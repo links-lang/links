@@ -1,14 +1,18 @@
 sudo: required
 dist: trusty
 language: c
+services:
+  - postgresql
 before_install:
   - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
-  - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam expect
   - opam init -a
   - eval `opam config env`
+  - psql -c 'create database links;' -U postgres
 install:
-  - opam install -y deriving lwt
+  - opam install -y deriving lwt postgresql
 script:
+  - cp Makefile.config.postgres Makefile.config
   - make -j2 nc
   - make tests
