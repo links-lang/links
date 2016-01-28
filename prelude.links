@@ -1158,6 +1158,19 @@ typename Comp(e::Row, a) = () ~e~> a;
 
 typename Zero = [||];
 
+# Handler composition operator
+# Data flows from right to left (or inside-out)
+sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+op f -<- g {
+  fun(x) { f(g(x)) }
+}
+
+# Plugs a computation into a handler
+sig -< : ((a) -e-> b, a) -e-> b
+op f -< m {
+  f(m)
+}
+
 
 ## Utility functions
 # Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
