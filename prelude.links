@@ -157,6 +157,7 @@ fun replicate(n, item) {
   else item :: replicate(n-1, item)
 }
 
+
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }
@@ -168,6 +169,10 @@ fun curry(f) {
 fun uncurry(f) {
   fun (x, y) { f(x)(y) }
 }
+
+# Curried flip
+sig cflip : ((a::Any) -e-> (b::Any) -e-> c::Any) -> (b::Any) -> (a::Any) -e-> c::Any
+fun cflip(h) { curry(flip(uncurry(h))) }
 
 fun compose(f, g) {
   fun (x) { f(g(x)) }
