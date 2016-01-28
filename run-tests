@@ -12,4 +12,16 @@ for i in tests/*.tests; do
     fi
 done
 
+cd "tests/database"
+for t in *.exp; do
+    cmnd="expect -f $t"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [ $ret_code != 0 ]; then
+        echo "FAILED $t"
+        ret=1
+    fi
+done
+
 exit $ret
