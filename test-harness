@@ -5,7 +5,7 @@ links = './links'
 import sys, re, time
 from subprocess import Popen, PIPE
 
-successes = failures = 0
+successes = failures = ignored = 0
 TIMEOUT = 15 # seconds before a test is timed out.
 
 def FAIL(name, msg):
@@ -57,7 +57,7 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode=''):
+def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode='', ignore = None):
     if filemode.startswith('true') :
         proc = Popen((links, code), stdout=PIPE, stderr=PIPE, env=env)
     else:
@@ -73,12 +73,17 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
             if passed:
                 OK(name)
             else:
-                global failures
-                failures += 1
-                print '!FAILURE: %s' % name
-                for i, j in errors:
-                    print i
-                    print j
+                if ignore <> None:
+                    global ignored
+                    ignored += 1
+                    print '?IGNORE: %s' % ignore
+                else:
+                    global failures
+                    failures += 1
+                    print '!FAILURE: %s' % name
+                    for i, j in errors:
+                        print i
+                        print j
             return
         else:
             time.sleep(0.01)
@@ -92,7 +97,7 @@ def main():
         raise SystemExit, 'Usage: run <filename>'
     for name, code, opts in parse(open(filename)):
         evaluate(name, code, **opts)
-    print "%d failures\n%d successes" % (failures, successes)
+    print "%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes)
     if failures > 0:
         sys.exit(1)
     else:
