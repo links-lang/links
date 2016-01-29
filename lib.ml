@@ -276,6 +276,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(Int) ~> a",
    IMPURE);
 
+  "show",
+  (p1 (fun v -> box_string (Value.string_of_value v)),
+   datatype "(a) ~> String",
+   PURE);
+
   "exit",
   (`Continuation Value.toplevel_cont,
   (* Return type must be free so that it unifies with things that
