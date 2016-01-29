@@ -60,6 +60,7 @@
     "insert"
     "linfun"
     "op"
+    "orderby"
     "query"
     "sig"
     "spawn"
