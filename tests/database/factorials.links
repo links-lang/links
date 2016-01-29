@@ -10,4 +10,9 @@ fun lookupFactorials(n) server {
   }
 }
 
-lookupFactorials(8)
+fun test() {
+  assert(lookupFactorials(1), [(f=1,i=1)]);
+  assert(lookupFactorials(8), [(f=40320,i=8), (f=5040,i=7), (f=720,i=6), (f=120,i=5), (f=24,i=4), (f=6,i=3), (f=2,i=2), (f=1,i=1)]);
+}
+
+test()

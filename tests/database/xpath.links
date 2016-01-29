@@ -95,7 +95,11 @@ fun xpath(p) {
   }
 }
 
-xpath(xp0)
+fun test() {
+  assert(xpath(xp0), [(name="b"), (name="d")]);
+}
+
+test()
 
 # xp0 in Links
 #
