@@ -55,9 +55,7 @@ object(self)
 
   method binding = function
     | (`Module (_, (`Block (bindings, _), _)), _) ->
-        (* We'll reverse the whole list later, so need to add
-         * these bindings reversed first *)
-        List.fold_left (fun acc binding -> acc#binding binding) self (List.rev bindings)
+        List.fold_left (fun acc binding -> acc#binding binding) self bindings
     | (x, pos) -> self#add_binding (x, pos)
 end
 
@@ -128,13 +126,42 @@ let checkSubsts plain_var_name poss_substs pos =
     | xs -> failwith ("Name " ^ plain_var_name ^
       " is ambiguous. Possible options: " ^ printed_list xs ^ ".")
 
-let getSubstFor module_name open_modules reference_tree plain_var_name var_pos =
+(*
+ * Given a reference tree, the name of the current module, a list of open
+ * modules, and a variable name, find all relevant entries in the reference tree
+ * and find a substitution. If none exist, leave the variable alone; if more
+ * than one exists, then report an ambiguity error.
+ *
+ * module_name: The name of the module
+ * open_modules: The list of modules that are open (currently unused)
+ * reference_tree: The current reference tree allowing us to look up current
+ *                 qualified variables
+ * plain_var_name: the variable name we wish to qualify with module info
+ * var_pos: the position of the variable
+ *
+ * *)
+let getSubstFor module_name open_modules reference_tree var_name var_pos =
   let splitPath path = Str.split (Str.regexp "\\.") path in
+  (* Given a possibly-qualified variable, returns a tuple of list of module
+   * names, and the plain variable.
+   * As an example, splitVariable A.B.foo --> (["A", "B"], foo)
+   *)
+  let splitVariable var =
+    let splitList = Str.split (Str.regexp"\\.") var in
+    let revSplitList = List.rev splitList in
+    (List.hd revSplitList, List.rev (List.tl revSplitList))
+  in
 
+  let (plain_var_name, qual_var_path) = splitVariable var_name in
   (* Checks whether the module at the given path contains plain_var_name *)
   let rec isContainedIn ((`ReferenceTreeNode (_, vars, tbl)) as rtn) split_path = (
+
      match split_path with
-       | [] -> StringSet.mem plain_var_name vars (* FIXME: Handle qualified variables here *)
+       | [] ->
+           (* At this point, we've traversed the entire path (including
+            * qualified variables) in the reference tree. We can now check
+            * whether there's a viable substitution we can make. *)
+           StringSet.mem plain_var_name vars
        | m::ms ->
            let child_node = Hashtbl.find tbl m in
            isContainedIn child_node ms) in
@@ -142,10 +169,10 @@ let getSubstFor module_name open_modules reference_tree plain_var_name var_pos =
    * plain name is contained there. *)
   let substs = ListUtils.filter_map (fun p ->
     let split_p = splitPath p in
-    isContainedIn reference_tree split_p)
-      (fun p -> if p = "" then plain_var_name else p ^ "." ^ plain_var_name)
+    isContainedIn reference_tree (split_p @ qual_var_path))
+      (fun p -> if p = "" then var_name else p ^ "." ^ var_name)
       (module_name::open_modules) in
-  checkSubsts plain_var_name substs var_pos
+  checkSubsts var_name substs var_pos
 
 
 (* Add module prefix to all internal binder names and variables *)
@@ -190,7 +217,7 @@ end
 
 let performRenaming prog =
   let ref_tree = generateReferenceTree prog in
-  (* print_tree ref_tree; *)
+  (* print_tree ref_tree;*)
   (add_module_prefix "" ref_tree)#program prog
 
 (* 1) Perform a renaming pass to expand names in modules to qualified names
@@ -200,6 +227,7 @@ let desugar_modules program =
   let renamedProgram = performRenaming program in
   let (renamedBindings, renamedBody) = renamedProgram in
   let flattenedProgram = performFlattening renamedProgram in
+  (* printf "%s\n" (Sugartypes.Show_program.show flattenedProgram); *)
   flattenedProgram
 
 
