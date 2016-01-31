@@ -26,6 +26,9 @@ type name_set = Utility.stringset
 type 'a name_map = 'a Utility.stringmap
   deriving (Show)
 
+type 'a var_map = 'a Utility.intmap
+  deriving (Show)
+
 type language = string
 
 type constant = Constant.constant
@@ -37,32 +40,37 @@ type location = Sugartypes.location
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
-  [ `Constant of constant
-  | `Variable of var
-  | `Extend of value name_map * value option
-  | `Project of name * value
-  | `Erase of name_set * value
-  | `Inject of name * value * Types.datatype
+  [ `Constant of constant                     (* constant: c *)
+  | `Variable of var                          (* variable use: x *)
+  | `Extend of value name_map * value option  (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
+  | `Project of name * value                  (* record projection: r.l *)
+  | `Erase of name_set * value                (* erase fields from a record: r\{ls} *)
+  | `Inject of name * value * Types.datatype  (* variant injection: L(v) *)
 
-  | `TAbs of tyvar list * value
-  | `TApp of value * tyarg list
+  | `TAbs of tyvar list * value       (* type abstraction: /\xs.v *)
+  | `TApp of value * tyarg list       (* type application: v ts *)
 
   | `XmlNode of name * value name_map * value list
-  | `ApplyPure of value * value list
+                                      (* XML node construction: <tag attributes>body</tag> *)
+  | `ApplyPure of value * value list  (* non-side-effecting application: v ws *)
 
-  | `Coerce of value * Types.datatype
+  | `Closure of var * value           (* closure creation: f env *)
+
+  | `Coerce of value * Types.datatype (* type coercion: v:A *)
   ]
 and tail_computation =
   [ `Return of value
   | `Apply of value * value list
+  (* | `ApplyClosure of value * value list *)
   | `Special of special
   | `Case of value * (binder * computation) name_map * (binder * computation) option
   | `If of value * computation * computation
   ]
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
 and binding =
   [ `Let of binder * (tyvar list * tail_computation)
-  | `Fun of binder * (tyvar list * binder list * computation) * location
-  | `Rec of (binder * (tyvar list * binder list * computation) * location) list
+  | `Fun of fun_def
+  | `Rec of fun_def list
   | `Alien of binder * language
   | `Module of (string * binding list option) ]
 and special =
@@ -77,6 +85,9 @@ and special =
   | `Choice of (value * (binder * computation) name_map) ]
 and computation = binding list * tail_computation
   deriving (Show)
+
+val binding_scope : binding -> scope
+val binder_of_fun_def : fun_def -> binder
 
 val tapp : value * tyarg list -> value
 
@@ -108,7 +119,7 @@ sig
   object ('self_type)
     val tyenv : environment
 
-    method lookup_type : var -> Types.datatype
+    method private lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
     method optionu :
       'a.
@@ -126,7 +137,12 @@ sig
       'a.
       ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
       'a name_map -> 'a name_map * Types.datatype name_map * 'self_type
+    method var_map :
+      'a.
+      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
+      'a var_map -> 'a var_map * Types.datatype var_map * 'self_type
     method var : var -> (var * Types.datatype * 'self_type)
+    (* method closure_var : var -> (var * Types.datatype * 'self_type) *)
     method value : value -> (value * Types.datatype * 'self_type)
 
     method tail_computation :
@@ -136,6 +152,7 @@ sig
     method computation : computation -> (computation * Types.datatype * 'self_type)
     method binding : binding -> (binding * 'self_type)
     method binder : binder -> (binder * 'self_type)
+    (* method closure_binder : binder -> (binder * 'self_type) *)
 
     method program : program -> (program * Types.datatype * 'self_type)
 
@@ -155,21 +172,5 @@ sig
   val program : Types.datatype Env.Int.t -> program -> program
 end
 
-type closures = Utility.intset Utility.intmap
-    deriving (Show)
-
-module ClosureTable :
-sig
-  type t = closures
-
-  val value : Types.datatype Env.Int.t -> Utility.IntSet.t ->  value -> t
-  val tail_computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> tail_computation -> t
-  val computation : Types.datatype Env.Int.t -> Utility.IntSet.t -> computation -> t
-  val bindings : Types.datatype Env.Int.t -> Utility.IntSet.t -> binding list -> t
-  val program : Types.datatype Env.Int.t -> Utility.IntSet.t -> program -> t
-end
-
-val var_appln : var Env.String.t -> Env.String.name -> value list ->
-  tail_computation
-
-val funcmap : program -> (Var.var * binding) list
+type eval_fun_def = var_info * (var list * computation) * Var.var option * location
+  deriving (Show)

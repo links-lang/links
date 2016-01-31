@@ -262,7 +262,8 @@ let parse_args (args : string) : db =
             dbhost = Some host;
             dbport = Some (int_of_string port);
             dbuser = Some user;
-            dbpwd  = Some pass
+            dbpwd  = Some pass;
+            dbsocket = None;
           }
          with Failure "int_of_string" -> 
            failwith ("Couldn't parse mysql port number : " ^ port))

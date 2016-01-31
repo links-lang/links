@@ -18,6 +18,7 @@ class map :
     method string          : string -> string
     method option          : 'a 'a_out. ('self -> 'a -> 'a_out) -> 'a option -> 'a_out option
     method list            : 'a 'a_out. ('self -> 'a -> 'a_out) -> 'a list -> 'a_out list
+    method int             : int -> int
     method float           : float -> float
     method char            : char -> char
     method bool            : bool -> bool
@@ -44,7 +45,6 @@ class map :
     method patternnode     : patternnode -> patternnode
     method pattern         : pattern -> pattern
     method operator        : operator -> operator
-    method num             : num -> num
     method name            : name -> name
     method logical_binop   : logical_binop -> logical_binop
     method location        : location -> location
@@ -85,6 +85,7 @@ class fold :
     method string          : string -> 'self
     method option          : 'a. ('self -> 'a -> 'self) -> 'a option -> 'self
     method list            : 'a. ('self -> 'a -> 'self) -> 'a list -> 'self
+    method int             : int -> 'self
     method float           : float -> 'self
     method char            : char -> 'self
     method bool            : bool -> 'self
@@ -111,7 +112,6 @@ class fold :
     method patternnode     : patternnode -> 'self
     method pattern         : pattern -> 'self
     method operator        : operator -> 'self
-    method num             : num -> 'self
     method name            : name -> 'self
     method logical_binop   : logical_binop -> 'self
     method location        : location -> 'self
@@ -160,15 +160,14 @@ object ('self)
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
   method fieldspec       : fieldspec -> 'self * fieldspec
+  method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit
-  method int             : int -> 'self * int
   method iterpatt        : iterpatt -> 'self * iterpatt
   method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
   method location        : location -> 'self * location
   method logical_binop   : logical_binop -> 'self * logical_binop
   method name            : name -> 'self * name
-  method num             : num -> 'self * num
   method operator        : operator -> 'self * operator
   method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
   method patternnode     : patternnode -> 'self * patternnode

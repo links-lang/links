@@ -1,30 +1,61 @@
 (** Process management *)
-type pid (* FIXME: don't reveal impl type of `pid' *) = int
-type proc_state = Value.continuation * Value.t
+module Proc :
+sig
+  type pid = int (* leaky abstraction what *)
+  type thread_result = Value.env * Value.t
+  type thread = unit -> thread_result Lwt.t
 
-val debug_process_status : unit -> unit
-val singlethreaded : unit -> bool
-val fresh_pid : unit -> pid
-val string_of_pid : pid -> string
-val pop_message_for : pid -> Value.t option
-val pop_message : unit -> Value.t option
-val pop_ready_proc : unit -> (proc_state * pid) option
-val activate : pid -> unit
-val send_message : Value.t -> pid -> unit
-val awaken : pid -> unit
-val get_current_pid : unit -> pid
-val create_process : bool -> proc_state -> pid
-val finish_current : unit -> unit
-val suspend_current : proc_state -> unit
-val block_current : proc_state -> unit
+  val debug_process_status : unit -> unit
 
-val count_step : unit -> int
-val reset_step_counter : unit -> unit
+  val string_of_pid : pid -> string
+  val get_current_pid : unit -> pid
 
-val active_main : unit -> bool
-val active_angels : unit -> bool
+  val get_client_process : pid -> Value.t
 
-val is_main : pid -> bool
-val current_is_main : unit -> bool
+  val create_process : bool -> thread -> pid
+  val create_client_process : Value.t -> pid
+  val awaken : pid -> unit
 
-exception UnknownProcessID of pid
+  val finish : thread_result -> thread_result Lwt.t
+  val yield : thread -> thread_result Lwt.t
+  val block : thread -> thread_result Lwt.t
+
+  val atomically : thread -> Value.t
+
+  val singlethreaded : unit -> bool (* Exposed to prevent client calls from killing server-side threads... *)
+
+  val run : thread -> Value.env * Value.t
+end
+
+module Mailbox :
+sig
+  val pop_message_for : Proc.pid -> Value.t option
+  val pop_all_messages_for : Proc.pid -> Value.t list
+  val pop_message : unit -> Value.t option
+  val send_message : Value.t -> Proc.pid -> unit
+end
+
+exception UnknownProcessID of Proc.pid
+
+module Session :
+sig
+  type apid = int
+  type portid = int
+  type chan = portid * portid
+
+  val new_access_point : unit -> apid
+  val accept : apid -> chan * bool
+  val request : apid -> chan * bool
+
+  val block : portid -> Proc.pid -> unit
+  val unblock : portid -> Proc.pid option
+
+  val send : Value.t -> portid -> unit
+  val receive : portid -> Value.t option
+
+  val fuse : chan -> chan -> unit
+
+  val unbox_port : Value.t -> portid
+  val unbox_chan' : Value.t -> int * int
+  val unbox_chan : Value.t -> chan
+end

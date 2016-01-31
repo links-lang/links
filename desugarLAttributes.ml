@@ -2,7 +2,12 @@ open Utility
 open Sugartypes
 open List
 
-(* See http://frege/wiki/LAttributeSugar *)
+(* TODO:
+
+   Either disallow l:href and l:action in client-side XML or, more
+   usefully, provide proper support for sending client-side closures
+   to the server.
+*)
 
 let has_lattrs : phrasenode -> bool = function
   | `Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
@@ -24,12 +29,6 @@ let fresh_names () =
   let name = gensym ~prefix:"lname_" () in
   id, name
 
-  (* let counter = ref 0 in *)
-  (*   (fun () ->  *)
-  (*      incr counter; *)
-  (*      ("_lnameid_" ^ string_of_int !counter, *)
-  (*       "lname_" ^ string_of_int !counter)) *)
-
 let desugar_lhref : phrasenode -> phrasenode = function
   | `Xml (("a"|"A") as a, attrs, attrexp, children)
       when mem_assoc "l:href" attrs ->
@@ -38,7 +37,7 @@ let desugar_lhref : phrasenode -> phrasenode = function
           | [_,[target]], rest ->
               (("href",
                 [`Constant (`String "?_k="), dummy_pos;
-                 apply dummy_pos "pickleCont" [`FunLit (None, `Unl, ([[]], target)),
+                 apply dummy_pos "pickleCont" [`FunLit (None, `Unl, ([[]], target), `Server),
                                                dummy_pos]]))
               :: rest
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
@@ -58,7 +57,7 @@ let desugar_laction : phrasenode -> phrasenode = function
                     ["type",  [`Constant (`String "hidden"), dummy_pos];
                      "name",  [`Constant (`String "_k"), dummy_pos];
                      "value", [apply dummy_pos "pickleCont"
-                                [`FunLit(None,`Unl,([[]],action_expr)), dummy_pos]]],
+                                [`FunLit(None,`Unl,([[]],action_expr), `Server), dummy_pos]]],
                     None,
                     []), dummy_pos
             and action = ("action", [`Constant (`String "#"), dummy_pos])
@@ -71,11 +70,11 @@ let desugar_laction : phrasenode -> phrasenode = function
   | e -> e
 
 let desugar_lonevent : phrasenode -> phrasenode =
-  let pair pos = function
+  let event_handler_pair pos = function
     | (name, [rhs]) ->
-        let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
-          `TupleLit [`Constant (`String event), pos;
-                     `FunLit (None, `Unl, ([[`Variable ("event", None, pos), pos]], rhs)), pos], pos
+        let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
+          `TupleLit [`Constant (`String event_name), pos;
+                     `FunLit (None, `Unl, ([[`Variable ("event", None, pos), pos]], rhs), `Client), pos], pos
     | _ -> assert false
   in function
     | `Xml (tag, attrs, attrexp, children)
@@ -84,7 +83,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
         let idattr =
           ("key",
            [apply dummy_pos "registerEventHandlers"
-              [`ListLit (List.map (pair dummy_pos) lons, None), dummy_pos]]) in
+              [`ListLit (List.map (event_handler_pair dummy_pos) lons, None), dummy_pos]]) in
           `Xml (tag, idattr::others, attrexp, children)
     | e -> e
 

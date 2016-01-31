@@ -1464,23 +1464,6 @@ let merge_usages (ms:usagemap list) : usagemap =
                                     | Some x, Some y -> Some (x + y)
                                     | Some x, None   -> Some x
                                     | None, Some y   -> Some y) m n) ms m
-let compat_usages (u::us) =
-  let same m n =
-    let mvs = List.map fst (StringMap.bindings m) in
-    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-                          mvs in
-    let f v resulting_usages =
-      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-        StringMap.add v (StringMap.find v m) resulting_usages
-      else
-        (* We need to treat anything appearing in this case as unlimited; '2' assures that no
-            matter whether the variable in question is used anywhere else or not, it must be
-            unlimited. *)
-        StringMap.add v 2 resulting_usages in
-    List.fold_right f vs StringMap.empty in
-  List.fold_right same us u
-
-let usages_cases bs = compat_usages (List.map (fun (_, (_, _, m)) -> m) bs)
 
 let uses_of v us =
   try
@@ -1488,21 +1471,30 @@ let uses_of v us =
   with
     _ -> 0
 
-let usage_compat (u::us) =
-  let same m n =
-    let mvs = List.map fst (StringMap.bindings m) in
-    let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-                          mvs in
-    let f v resulting_usages =
-      if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-        StringMap.add v (StringMap.find v m) resulting_usages
-      else
+let usage_compat =
+  function
+  | [] ->
+    (* HACK: for now we take the conservative choice of assuming that
+       no linear variables are used in empty cases. We could keep
+       track of all variables in scope so that we can treat them as
+       linear if possible. This would require a further map recording
+       all variables that have empty pattern matching 'sink'. *)
+    StringMap.empty
+  | (u::us) ->
+    let same m n =
+      let mvs = List.map fst (StringMap.bindings m) in
+      let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
+          mvs in
+      let f v resulting_usages =
+        if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
+          StringMap.add v (StringMap.find v m) resulting_usages
+        else
         (* We need to treat anything appearing in this case as unlimited; '2' assures that no
            matter whether the variable in question is used anywhere else or not, it must be
            unlimited. *)
-        StringMap.add v 2 resulting_usages in
-    List.fold_right f vs StringMap.empty in
-  List.fold_right same us u
+          StringMap.add v 2 resulting_usages in
+      List.fold_right f vs StringMap.empty in
+    List.fold_right same us u
 
 let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
@@ -1674,7 +1666,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-        | `FunLit (_, lin, (pats, body)) ->
+        | `FunLit (_, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
@@ -1734,7 +1726,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Needs more thought...
             *)
 
-            let e = `FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body)) in
+            let e = `FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
               if Settings.get_value Instantiate.quantified_instantiation then
                 let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
                 let _, ftype = Instantiate.typ ftype in
@@ -1960,7 +1952,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
               `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, p, _) ->
+        | `Spawn (`Wait, location, p, _) ->
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -1972,8 +1964,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, p, _) ->
+              `Spawn (`Wait, location, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, location, p, _) ->
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -1986,7 +1978,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (k, erase p, Some inner_effects), pid_type, usages p
+            `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
 
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in
@@ -2958,7 +2950,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let branches = List.map check_branch branches in
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
-       let u = compat_usages (List.map (fun (_, _, u) -> u) branches) in
+       let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
     | `Fuse ((c, _, cpos), (d, _, dpos)) ->
       let (_, tc, uc) = type_check context (`Var c, pos) in

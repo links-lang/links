@@ -5,8 +5,6 @@ open Utility
 
 type name = string deriving (Show)
 
-type num = Num.num
-
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
 
@@ -69,6 +67,11 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
+let string_of_location = function
+| `Client -> "client"
+| `Server -> "server"
+| `Native -> "native"
+| `Unknown -> "unknown"
 
 type restriction = [ `Any | `Base | `Session ]
     deriving (Eq, Show)
@@ -161,7 +164,7 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [
@@ -192,8 +195,8 @@ and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
-| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit
-| `Spawn            of spawn_kind * phrase * Types.row option
+| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
+| `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -338,7 +341,7 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (_, p, _)
+    | `Spawn (_, _, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)
@@ -385,7 +388,7 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit (_, _, fnlit) -> funlit fnlit
+    | `FunLit (_, _, fnlit, location) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)

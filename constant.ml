@@ -1,8 +1,9 @@
 (*pp deriving *)
-type num = Num.num
+open Utility
+
 type constant =
     [ `Float  of float
-    | `Int    of num
+    | `Int    of int
     | `String of string
     | `Bool   of bool
     | `Char   of char ]
@@ -22,8 +23,8 @@ let string_of_constant =
   (* This function is actually specific to database query generation;
      it should be moved to the database module(s). *)
   function
-    | `Bool value -> string_of_bool value
-    | `Int value -> Num.string_of_num value
-    | `Char c -> "'"^ Char.escaped c ^"'" 
-    | `String s -> "'" ^ escape_string s ^ "'"
-    | `Float value   -> string_of_float value
+    | `Bool value  -> string_of_bool value
+    | `Int value   -> string_of_int value
+    | `Char c      -> "'"^ Char.escaped c ^"'" 
+    | `String s    -> "'" ^ escape_string s ^ "'"
+    | `Float value -> string_of_float' value

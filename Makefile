@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -84,12 +84,15 @@ SOURCES = $(OPC)                                \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
+          tables.ml                             \
+          closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
 					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \
+          eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
           resolvePositions.mli resolvePositions.ml       \
@@ -111,13 +114,13 @@ SOURCES = $(OPC)                                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
+          proc.mli proc.ml                      \
           jsonparse.mly                         \
           jsonlex.mll                           \
           js.ml                                 \
           json.ml                               \
           database.mli database.ml              \
           linksregex.ml                         \
-          proc.mli proc.ml                      \
           lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
@@ -125,6 +128,7 @@ SOURCES = $(OPC)                                \
           irtojs.mli irtojs.ml                  \
           query.ml                              \
           evalir.ml                             \
+          buildTables.ml                        \
           webif.mli webif.ml                    \
           links.ml                              \
 

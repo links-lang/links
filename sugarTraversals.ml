@@ -27,6 +27,8 @@ class map =
             let _x = _f_a o _x in
             let _x_i1 = o#list _f_a _x_i1 in _x :: _x_i1
 
+    method int : int -> int = o#unknown
+
     method float : float -> float = o#unknown
 
     method char : char -> char = o#unknown
@@ -150,8 +152,10 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
-      | `FunLit (_x, _x1, _x_i1) -> let _x_i1 = o#funlit _x_i1 in `FunLit (_x, _x1, _x_i1)
-      | `Spawn (_x, _x_i1, _x_i2) -> let _x_i1 = o#phrase _x_i1 in `Spawn (_x, _x_i1, _x_i2)
+      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
+                                           let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
+                                            let _x_i2 = o#phrase _x_i2 in `Spawn (_x, _x_i1, _x_i2, _x_i3)
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -403,8 +407,6 @@ class map =
       | (#binop as x) -> (o#binop x :> operator)
       | `Project _x -> let _x = o#name _x in `Project _x
 
-    method num : num -> num = o#unknown
-
     method name : name -> name = o#string
 
     method logical_binop : logical_binop -> logical_binop =
@@ -500,7 +502,7 @@ class map =
     method constant : constant -> constant =
       function
       | `Float _x -> let _x = o#float _x in `Float _x
-      | `Int _x -> let _x = o#num _x in `Int _x
+      | `Int _x -> let _x = o#int _x in `Int _x
       | `String _x -> let _x = o#string _x in `String _x
       | `Bool _x -> let _x = o#bool _x in `Bool _x
       | `Char _x -> let _x = o#char _x in `Char _x
@@ -595,6 +597,8 @@ class fold =
         function
         | [] -> o
         | _x :: _x_i1 -> let o = _f_a o _x in let o = o#list _f_a _x_i1 in o
+
+    method int : int -> 'self_type = o#unknown
 
     method float : float -> 'self_type = o#unknown
 
@@ -712,8 +716,8 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
-      | `FunLit (_x, _x1, _x_i1) -> let o = o#funlit _x_i1 in o
-      | `Spawn (_x, _x_i1, _x_i2) -> let o = o#phrase _x_i1 in o
+      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -930,8 +934,6 @@ class fold =
       | (#binop as x) -> o#binop x
       | `Project _x -> let o = o#name _x in o
 
-    method num : num -> 'self_type = o#unknown
-
     method name : name -> 'self_type = o#string
 
     method logical_binop : logical_binop -> 'self_type =
@@ -1019,7 +1021,7 @@ class fold =
     method constant : constant -> 'self_type =
       function
       | `Float _x -> let o = o#float _x in o
-      | `Int _x -> let o = o#num _x in o
+      | `Int _x -> let o = o#int _x in o
       | `String _x -> let o = o#string _x in o
       | `Bool _x -> let o = o#bool _x in o
       | `Char _x -> let o = o#char _x in o
@@ -1253,8 +1255,11 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `FunLit (_x, _x1, _x_i1) -> let (o, _x_i1) = o#funlit _x_i1 in (o, (`FunLit (_x, _x1, _x_i1)))
-      | `Spawn (_x, _x_i1, _x_i2) -> let (o, _x_i1) = o#phrase _x_i1 in (o, (`Spawn (_x, _x_i1, _x_i2)))
+      | `FunLit (_x, _x1, _x_i1, _x_i2) ->
+        let (o, _x_i1) = o#funlit _x_i1 in
+        let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let (o, _x_i1) = o#location _x_i1 in
+                                            let (o, _x_i2) = o#phrase _x_i2 in (o, (`Spawn (_x, _x_i1, _x_i2, _x_i3)))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option
@@ -1548,8 +1553,6 @@ class fold_map =
       | (#binop as x) -> (o#binop x :> 'self_type * operator)
       | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
 
-    method num : num -> ('self_type * num) = o#unknown
-
     method name : name -> ('self_type * name) = o#string
 
     method logical_binop : logical_binop -> ('self_type * logical_binop) =
@@ -1657,7 +1660,7 @@ class fold_map =
     method constant : constant -> ('self_type * constant) =
       function
       | `Float _x -> let (o, _x) = o#float _x in (o, (`Float _x))
-      | `Int _x -> let (o, _x) = o#num _x in (o, (`Int _x))
+      | `Int _x -> let (o, _x) = o#int _x in (o, (`Int _x))
       | `String _x -> let (o, _x) = o#string _x in (o, (`String _x))
       | `Bool _x -> let (o, _x) = o#bool _x in (o, (`Bool _x))
       | `Char _x -> let (o, _x) = o#char _x in (o, (`Char _x))

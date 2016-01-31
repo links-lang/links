@@ -70,7 +70,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `FunLit (Some argss, lin, lam) ->
+    | `FunLit (Some argss, lin, lam, location) ->
         let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
         let ft =
@@ -82,7 +82,7 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           `Block
-            ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), `Unknown, None)),
+            ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), location, None)),
               dp],
              ((`Var f), dp))
         in
