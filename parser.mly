@@ -293,7 +293,7 @@ declaration:
 | nofun_declaration                                            { $1 }
 
 preamble_declaration:
-| OPEN STRING                                                  { `Open $2, pos() }
+| OPEN STRING                                                  { `Import $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in

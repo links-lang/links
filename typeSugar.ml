@@ -95,7 +95,7 @@ struct
     | `Funs _
     | `Infix
     | `Type _
-    | `Open _
+    | `Import _
     | `Foreign _ -> true
     | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
@@ -2529,7 +2529,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Open _ -> assert false
+      | `Import _ -> assert false
       | `Val (_, pat, body, location, datatype) ->
           let body = tc body in
           let pat = tpc pat in

@@ -33,7 +33,7 @@ let refine_bindings : binding list -> binding list =
               | `Funs _ -> assert false
               | `Exp _
               | `Foreign _
-              | `Open _
+              | `Import _
               | `Type _
               | `Val _ ->
                   (* collapse the group we're collecting, then start a
@@ -262,7 +262,7 @@ module RefineTypeBindings = struct
           | `Funs _
           | `Fun _
           | `Foreign _
-          | `Open _
+          | `Import _
           | `Val _
           | `Exp _
           | `Infix ->
