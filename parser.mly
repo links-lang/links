@@ -248,7 +248,6 @@ let datatype d = d, None
 %%
 
 interactive:
-| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -281,7 +280,6 @@ var:
 | VARIABLE                                                     { $1, pos() }
 
 preamble:
-| preamble_declaration preamble                                { $1 :: $2 }
 | /* empty */                                                  { [] }
 
 declarations:
@@ -291,9 +289,6 @@ declarations:
 declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
-
-preamble_declaration:
-| OPEN STRING                                                  { `Import $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
@@ -833,6 +828,7 @@ record_labels:
 | record_label                                                 { [$1] }
 
 binding:
+| OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
@@ -844,10 +840,6 @@ bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
 
-/* For now, I don't see it making much sense to allow values
- * or expressions in module blocks. F# allows side-effecting
- * functions in modules -- but I'm still not a fan.
- */
 moduleblock:
 | LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
 

@@ -44,6 +44,8 @@ let rec print_tree = function
 
 (* Flatten modules out. By this point the renaming will already have
  * happened.
+ * Also, remove import statements (as they will have been used by the renaming
+ * pass already, and we won't need them any more)
  *)
 let flatten_modules =
 object(self)
@@ -56,6 +58,7 @@ object(self)
   method binding = function
     | (`Module (_, (`Block (bindings, _), _)), _) ->
         List.fold_left (fun acc binding -> acc#binding binding) self bindings
+    | (`Import _, _) -> self
     | (x, pos) -> self#add_binding (x, pos)
 end
 
@@ -176,16 +179,27 @@ let getSubstFor module_name open_modules reference_tree var_name var_pos =
 
 
 (* Add module prefix to all internal binder names and variables *)
-let rec add_module_prefix prefix reference_tree =
+let rec add_module_prefix prefix reference_tree init_open_modules
+  init_seen_modules =
 object(self)
   inherit SugarTraversals.map as super
+
+  val mutable cur_open_modules = init_open_modules
+  val mutable cur_seen_modules = init_seen_modules
+  method add_open_module x =
+    cur_open_modules <- StringSet.add x cur_open_modules
+  method add_seen_module x =
+    cur_seen_modules <- StringSet.add x cur_seen_modules
+
+  method prefixWith name =
+    if prefix = "" then name else prefix ^ "." ^ name
 
   method phrase : phrase -> phrase = function
     | (`Var old_name, pos) ->
         (* Add prefix onto var name*)
         let new_name =
           (* TEMP until we get Open working *)
-          getSubstFor prefix [] reference_tree old_name pos in
+          getSubstFor prefix (StringSet.elements cur_open_modules) reference_tree old_name pos in
         (`Var new_name, pos)
     | x -> super#phrase x
 
@@ -197,13 +211,27 @@ object(self)
         (new_name, dt, pos)
 
   method bindingnode : bindingnode -> bindingnode = function
+    | `Import name ->
+        (* Check to see whether module is in our seen list. If so, we're golden,
+         * add to the open module list (qualified with our current prefix).
+         * If not, throw an error. *)
+        let prefixed_name = self#prefixWith name in
+        if StringSet.mem prefixed_name cur_seen_modules then
+          (self#add_open_module prefixed_name;
+           `Import name)
+        else
+          (* FIXME: It would be much better to do this as a binding, and
+           * report the position... *)
+          failwith ("Trying to import unknown module " ^ prefixed_name)
     | `Module (name, (`Block (bindings, dummy_phrase), pos)) ->
+        let new_prefix = self#prefixWith name in
+        (* Add to seen module list *)
+        self#add_seen_module new_prefix;
         (* Recursive step: change current path, recursively rename modules *)
-        let new_prefix =
-          if prefix = "" then name else prefix ^ "." ^ name in
         let renamed_bindings =
           List.map (fun binding ->
-            (add_module_prefix new_prefix reference_tree)#binding binding) bindings in
+            (add_module_prefix new_prefix reference_tree cur_open_modules
+            cur_seen_modules)#binding binding) bindings in
         `Module (new_prefix, (`Block (renamed_bindings, dummy_phrase), pos))
     | x -> super#bindingnode x
 
@@ -218,7 +246,7 @@ end
 let performRenaming prog =
   let ref_tree = generateReferenceTree prog in
   (* print_tree ref_tree;*)
-  (add_module_prefix "" ref_tree)#program prog
+  (add_module_prefix "" ref_tree (StringSet.empty) (StringSet.empty))#program prog
 
 (* 1) Perform a renaming pass to expand names in modules to qualified names
  * 2) Peform a flattening pass to flatten modules to lists of bindings
