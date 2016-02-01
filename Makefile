@@ -105,7 +105,6 @@ SOURCES = $(OPC)                                \
           desugarFors.mli desugarFors.ml                 \
           desugarDbs.mli desugarDbs.ml                   \
           whereProvRewriting.mli whereProvRewriting.ml   \
-          desugarProv.mli desugarProv.ml                 \
           desugarProvT.mli desugarProvT.ml               \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \

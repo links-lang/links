@@ -86,9 +86,16 @@ let rec project_type name t = match concrete_type t with
   | `ForAll (_, t) -> project_type name t
   | `Record row ->
       let t, _ = split_row name row in
-        t
+      t
+  | `Application (abs, [_]) when abs == Types.prov -> begin
+      match name with
+      | "1" -> `Primitive `String
+      | "2" -> `Primitive `String
+      | "3" -> `Primitive `Int
+      | _ -> error ("Attempt to project provenance triple to field "^name)
+    end
   | t ->
-      error ("Attempt to project non-record type "^string_of_datatype t)
+      error ("Attempt to project non-record type "^string_of_datatype t^" to field "^name)
 
 let rec select_type name t = match concrete_type t with
   | `ForAll (_, t) -> select_type name t

@@ -20,6 +20,14 @@ object (o : 'self_type)
     | `List _ as i -> super#iterpatt i
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+    | `Data e as _dbg ->
+       let a, e, c = o#phrase e in
+       let e : Sugartypes.phrasenode = `Projection (e, "data") in
+       (o, e, c)
+    | `Prov e as _dbg ->
+       let a, e, c = o#phrase e in
+       let e : Sugartypes.phrasenode = `Projection (e, "prov") in
+       (o, e, c)
     | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
        (* Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg); *)
        let (o, name, _) = o#phrase name in
