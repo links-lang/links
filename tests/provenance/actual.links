@@ -1,0 +1,63 @@
+var db = database "links";
+
+typename Where = (String, String, Int);
+
+sig actual_prov : ((id: Int |_)) {}-> Where
+fun actual_prov (c) {
+  ("top_comments", "text", c.id)
+}
+
+var top_comments =
+  table "top_comments"
+  with (id: Int, text: String)
+  where text prov actual_prov
+  from db;
+
+fun text_data() {
+  query {
+    for (c <-- top_comments)
+      [(text = data c.text)]
+  }
+}
+
+fun text_prov() {
+  query {
+    for (c <-- top_comments)
+      [(textp = prov c.text)]
+  }
+}
+
+fun text() {
+  query {
+    for (c <-- top_comments)
+      [(text = c.text)]
+  }
+}
+
+fun text_where_id(id) {
+  query {
+    for (c <-- top_comments)
+    where ((prov c.text) == ("top_comments", "text", id))
+      [(id = c.id, text = data c.text)]
+  }
+}
+
+fun test() {
+  assert(text_data(), [(text="foo"), (text="qux"), (text="quuix")]);
+  assert(text_prov(), [(textp=("top_comments", "text", 1)),
+                       (textp=("top_comments", "text", 2)),
+                       (textp=("top_comments", "text", 3))]);
+  # We can't compare data directly, because we can't construct values
+  # of type Prov(String), only the database can. Instead, we compare
+  # strings. The string representation is ugly because of the
+  # desugaring approach of the current implementation. We need to
+  # quote the record field names data and prov because parsing is
+  # hard.
+  assert(show(text()),
+         show([(text=("data"="foo","prov"=("top_comments", "text", 1))),
+               (text=("data"="qux","prov"=("top_comments", "text", 2))),
+               (text=("data"="quuix","prov"=("top_comments", "text", 3)))]));
+  assert(text_where_id(2), [(id=2,text="qux")]);
+}
+
+test()

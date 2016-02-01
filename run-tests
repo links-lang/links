@@ -56,5 +56,26 @@ for t in tests/shredding/*.links; do
     fi
 done
 
+for s in tests/provenance/*.sql; do
+    cmnd="psql -v ON_ERROR_STOP=1 -q -U postgres -d links -f $s"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [ $ret_code != 0 ]; then
+        echo "FAILED DATABASE PREPARATION $s"
+        ret=1
+    fi
+done
+
+for t in tests/provenance/*.links; do
+    cmnd="./links --config=tests/provenance/config $t"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [ $ret_code != 0 ]; then
+        echo "FAILED TEST $t"
+        ret=1
+    fi
+done
 
 exit $ret
