@@ -200,7 +200,7 @@ let datatype d = d, None
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
 %token <string> QUALIFIEDVARIABLE VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
-%token <string> LXML ENDTAG
+%token <string> QUALIFIEDMODULE LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
 %token MODULE
@@ -303,6 +303,8 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 
 | links_module                                                 { $1 }
+| links_open                                                   { $1 }
+
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
@@ -830,14 +832,21 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
-binding:
+/* QUALIFIEDVARIABLE is temp -- because if I spend any more time
+   * on the lexer / parser, I will probably go insane */
+links_open:
 | OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
+| OPEN QUALIFIEDMODULE                                         { `Import $2, pos () }
+| OPEN CONSTRUCTOR                                             { `Import $2, pos () }
+
+binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 | links_module                                                 { $1 }
+| links_open                                                   { $1 }
 
 bindings:
 | binding                                                      { [$1] }
