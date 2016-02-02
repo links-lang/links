@@ -96,29 +96,7 @@ fun xpath(p) {
 }
 
 fun test() {
-  assert(xpath(xp0), [(name="b"), (name="d")]);
+  assertEq(xpath(xp0), [(name="b"), (name="d")]);
 }
 
 test()
-
-# xp0 in Links
-#
-# select (t1755."id") as "id"
-#   from xml as t1754,xml as t1755
-#  where ((t1752."parent") = (-(1))) -- t1752 is not bound, but t1754 is
-#    and (exists (select 0 as dummy
-#                   from xml as t1759
-#                  where ((t1752."id") = (t1759."parent"))
-#                    and ((t1759."id") = (t1755."parent"))))
-
-# xp0 in F#
-#
-# SELECT [s].[ID]
-# FROM [dbo].[Data] AS [t0], [dbo].[Data] AS [s]
-# WHERE ([t0].[Parent] = @p0) AND ([t0].[Entry] = @p1) AND (EXISTS(
-#      SELECT NULL AS [EMPTY]
-#      FROM [dbo].[Data] AS [t2]
-#      WHERE ([t0].[Entry] = [t2].[Entry]) AND ([t0].[ID] =
-# [t2].[Parent]) AND ([t2].[Entry] = [s].[Entry]) AND ([t2].[ID] =
-# [s].[Parent])
-#      ))
