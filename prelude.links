@@ -1153,8 +1153,8 @@ fun groupByFlat(project, ts) {
     [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
 }
 
-sig assert : (a, a) ~> ()
-fun assert (actual, expected) server {
+sig assertEq : (a, a) ~> ()
+fun assertEq (actual, expected) server {
   if (expected == actual)
       ()
   else {
