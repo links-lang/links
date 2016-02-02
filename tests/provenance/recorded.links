@@ -51,21 +51,21 @@ fun text_where_id(id) {
 }
 
 fun test() {
-  assert(text_data(), [(text="foo"), (text="qux"), (text="quuix")]);
-  assert(text_prov(), [(textp=("bar", "baz", 5)),
-                       (textp=("bar", "baz", 7)),
-                       (textp=("fasl", "lror", 42))]);
+  assertEq(text_data(), [(text="foo"), (text="qux"), (text="quuix")]);
+  assertEq(text_prov(), [(textp=("bar", "baz", 5)),
+                         (textp=("bar", "baz", 7)),
+                         (textp=("fasl", "lror", 42))]);
   # We can't compare data directly, because we can't construct values
   # of type Prov(String), only the database can. Instead, we compare
   # strings. The string representation is ugly because of the
   # desugaring approach of the current implementation. We need to
   # quote the record field names data and prov because parsing is
   # hard.
-  assert(show(text()),
-         show([(text=("data"="foo","prov"=("bar", "baz", 5))),
-               (text=("data"="qux","prov"=("bar", "baz", 7))),
-               (text=("data"="quuix","prov"=("fasl", "lror", 42)))]));
-  assert(text_where_id(42), [(id=3, text="quuix")])
+  assertEq(show(text()),
+           show([(text=("data"="foo","prov"=("bar", "baz", 5))),
+                 (text=("data"="qux","prov"=("bar", "baz", 7))),
+                 (text=("data"="quuix","prov"=("fasl", "lror", 42)))]));
+  assertEq(text_where_id(42), [(id=3, text="quuix")])
 }
 
 test()
