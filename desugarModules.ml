@@ -95,7 +95,7 @@ object(self)
   method get_tree = tree_node
 
   method phrasenode = function
-    | `Var name -> self#add name
+    (* | `Var name -> self#add name *)
     | x -> super#phrasenode x
 
   method binder = function
@@ -114,20 +114,22 @@ end
 let generateReferenceTree prog =
   ((build_env "" (empty_tree ""))#program prog)#get_tree
 
+let print_list xs =
+  let rec print_list_inner = function
+      | [] -> ""
+      | e::[] -> e
+      | e::xs -> e ^ ", " ^ (print_list_inner xs) in
+  "[" ^ print_list_inner xs ^ "]"
+
 
 let checkSubsts plain_var_name poss_substs pos =
   (* TODO: Is there a "proper" way to report errors when not in typeSugar? *)
-  let rec print_list = function
-        | [] -> ""
-        | e::[] -> e
-        | e::xs -> e ^ ", " ^ (print_list xs) in
-  let printed_list xs = "[" ^ (print_list xs) ^ "]" in
 
   match poss_substs with
     | [] -> plain_var_name
     | [subst_name] -> subst_name
     | xs -> failwith ("Name " ^ plain_var_name ^
-      " is ambiguous. Possible options: " ^ printed_list xs ^ ".")
+      " is ambiguous. Possible options: " ^ (print_list xs) ^ ".")
 
 (*
  * Given a reference tree, the name of the current module, a list of open
@@ -172,6 +174,9 @@ let getSubstFor module_name open_modules reference_tree var_name var_pos =
    * plain name is contained there. *)
   let substs = ListUtils.filter_map (fun p ->
     let split_p = splitPath p in
+    (printf "calling isContainedIn with PVN: %s, path: %s\n" plain_var_name
+      (print_list (split_p @ qual_var_path)));
+
     isContainedIn reference_tree (split_p @ qual_var_path))
       (fun p -> if p = "" then var_name else p ^ "." ^ var_name)
       (module_name::open_modules) in
@@ -257,7 +262,7 @@ end
 
 let performRenaming prog =
   let ref_tree = generateReferenceTree prog in
-  (* print_tree ref_tree;*)
+  print_tree ref_tree;
   snd ((add_module_prefix "" ref_tree (StringSet.empty) (StringSet.empty))#program prog)
 
 (* 1) Perform a renaming pass to expand names in modules to qualified names
