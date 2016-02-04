@@ -95,7 +95,7 @@ object(self)
   method get_tree = tree_node
 
   method phrasenode = function
-    (* | `Var name -> self#add name *)
+    | `Var name -> self (* self#add name *)
     | x -> super#phrasenode x
 
   method binder = function
@@ -174,9 +174,10 @@ let getSubstFor module_name open_modules reference_tree var_name var_pos =
    * plain name is contained there. *)
   let substs = ListUtils.filter_map (fun p ->
     let split_p = splitPath p in
+    (*
     (printf "calling isContainedIn with PVN: %s, path: %s\n" plain_var_name
       (print_list (split_p @ qual_var_path)));
-
+    *)
     isContainedIn reference_tree (split_p @ qual_var_path))
       (fun p -> if p = "" then var_name else p ^ "." ^ var_name)
       (module_name::open_modules) in
@@ -239,7 +240,7 @@ object(self)
           failwith ("Trying to import unknown module " ^ prefixed_name)
     | `Module (name, (`Block (bindings, dummy_phrase), pos)) ->
         let new_prefix = self#prefixWith name in
-        (* Add to seen module list *)
+        (* Add fully-qualified module to seen module list *)
         let new_obj = self#add_seen_module new_prefix in
         (* Recursive step: change current path, recursively rename modules *)
         let (o, reversed_renamed_bindings) =
@@ -247,10 +248,14 @@ object(self)
             let (o1, new_binding) =
               (add_module_prefix new_prefix reference_tree o#get_open_modules
                o#get_seen_modules)#binding binding in
-               (o1, new_binding :: bindings)
+            let o2 = {< cur_seen_modules = o1#get_seen_modules >} in
+               (o2, new_binding :: bs)
           ) (new_obj, []) bindings in
+        (* printf "Renamed bindings for module %s: %s\n" name (print_list
+         * (List.map (Sugartypes.Show_binding.show)  (List.rev reversed_renamed_bindings))); *)
         (o, `Module (new_prefix, (`Block (List.rev reversed_renamed_bindings, dummy_phrase), pos)))
     | x -> super#bindingnode x
+
 
   method program = function
     | (bindings, body) ->
@@ -262,7 +267,7 @@ end
 
 let performRenaming prog =
   let ref_tree = generateReferenceTree prog in
-  print_tree ref_tree;
+  (* print_tree ref_tree; *)
   snd ((add_module_prefix "" ref_tree (StringSet.empty) (StringSet.empty))#program prog)
 
 (* 1) Perform a renaming pass to expand names in modules to qualified names
