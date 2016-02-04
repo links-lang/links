@@ -62,7 +62,7 @@ object (o : 'self_type)
     | `Variant row -> `Variant (desugar_row row)
     (* TODO we probably need to modify this *)
     | `Table (r, w, n) -> `Table (desugar r, desugar w, desugar n)
-    | `Alias (_, t) -> desugar t
+    | `Alias (n, t) -> `Alias (n, desugar t)
     (* This is where interesting this happen! *)
     | `Application (abstype, [`Type data_t]) when abstype = Types.prov ->
        let prov_t = Types.prov_triple_type in
@@ -129,7 +129,6 @@ let desugar
     : (Sugartypes.program * Types.datatype * Types.typing_environment) =
   (* Debug.print ("tyenv: "^ Types.Show_typing_environment.show tyenv); *)
   (* Debug.print ("env before: "^ Types.Show_typing_environment.show e); *)
-  (* Debug.print (Sugartypes.Show_program.show p); *)
   let e = typing_environment e in
   (* Debug.print ("env after: "^ Types.Show_typing_environment.show e); *)
   let e = (Types.extend_typing_environment e tyenv) in
@@ -137,5 +136,7 @@ let desugar
   (* Debug.print ("Program before: "^Sugartypes.Show_program.show p); *)
   let p = program e p in
   (* Debug.print ("Program after: "^Sugartypes.Show_program.show p); *)
+  (* Debug.print ("Type before: "^Types.Show_datatype.show t); *)
   let t = mydesugaring e t in
+  (* Debug.print ("Type after: "^Types.Show_datatype.show t); *)
   (p, t, e)
