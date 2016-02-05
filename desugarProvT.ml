@@ -36,7 +36,7 @@ object (o : 'self_type)
   (* Copied from types.ml. Should figure out what to do here.
      We most certainly not need to do anything with the `dual` thing... *)
   method desugar_row = fun rec_points row ->
-    let (fields, row_var, dual) = fst (Types.unwrap_row row) in
+    let (fields, row_var, dual) = row (* fst (Types.unwrap_row row) *) in
     let fields' = StringMap.map (o#desugar_field_spec rec_points) fields in
     (fields', row_var, dual)
 
