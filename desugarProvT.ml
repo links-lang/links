@@ -31,7 +31,12 @@ object (o : 'self_type)
     function
     | `Absent -> `Absent
     | `Present t -> `Present (o#desugar rec_points t)
-    | `Var _ -> (* TODO: what should happen here? *) assert false
+    | `Var meta_presence_var ->
+       match Unionfind.find meta_presence_var with
+       (* I don't have a clue what to do in any of these cases, but the other ones don't appear in tests... *)
+       | `Body field_spec ->
+          Unionfind.change meta_presence_var (`Body (o#desugar_field_spec rec_points field_spec));
+          `Var meta_presence_var
 
   (* Copied from types.ml. Should figure out what to do here.
      We most certainly not need to do anything with the `dual` thing... *)
