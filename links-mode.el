@@ -48,6 +48,7 @@
   '(
     "case"
     "database"
+    "delete"
     "else"
     "for"
     "forall"
