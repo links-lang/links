@@ -1840,7 +1840,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let write = `Record (Types.make_empty_open_row (`Any, `Base)) in
             let needed = `Record (Types.make_empty_open_row (`Any, `Base)) in
             let () = unify ~handle:Gripers.delete_table
-              (pos_and_typ from, no_pos (`Table (read, write, needed))) in
+                           (pos_and_typ from, no_pos (Types.make_tuple_type [`Table (read, write, needed);
+                                                                             Types.fresh_type_variable (`Any, `Any)])) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
 
             let hide =
@@ -1873,7 +1874,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let write = `Record (Types.make_empty_open_row (`Any, `Base)) in
             let needed = `Record (Types.make_empty_open_row (`Any, `Base)) in
             let () = unify ~handle:Gripers.insert_table
-              (pos_and_typ into, no_pos (`Table (read, write, needed))) in
+              (pos_and_typ into, no_pos (Types.make_tuple_type [`Table (read, write, needed);
+                                                                Types.fresh_type_variable (`Any, `Any)])) in
 
             let field_env =
               List.fold_right

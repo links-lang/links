@@ -119,6 +119,31 @@ object (o : 'self_type)
        (* Debug.print ("Before: "^Sugartypes.Show_phrasenode.show _iteration^"\n after: "^Sugartypes.Show_phrasenode.show res); *)
        (o, res, t)
 
+    (* TODO What to do with where clauses? *)
+    | `DBDelete (p, from, where) ->
+       let (o, from, _) = o#phrase from in
+       let (o, p) = o#pattern p in
+       let (o, where, _) = TransformSugar.option o (fun o -> o#phrase) where in
+       (o, `DBDelete (p, (`Projection (from, "1"), dp), where), Types.unit_type)
+
+    | `DBInsert (into, labels, values, id) ->
+       let (o, into, _) = o#phrase into in
+       let (o, values, _) = o#phrase values in
+       let (o, id, _) = TransformSugar.option o (fun o -> o#phrase) id in
+       (o, `DBInsert ((`Projection (into, "1"), dp), labels, values, id), Types.unit_type)
+
+    | `DBUpdate (p, from, where, set) ->
+       let (o, from, _) = o#phrase from in
+       let (o, p) = o#pattern p in
+       let (o, where, _) = TransformSugar.option o (fun o -> o#phrase) where in
+       let (o, set) =
+         TransformSugar.listu o
+                              (fun o (name, value) ->
+                               let (o, value, _) = o#phrase value in (o, (name, value)))
+                              set
+       in
+       (o, `DBUpdate (p, (`Projection (from, "1"), dp), where, set), Types.unit_type)
+
     | e -> super#phrasenode e
 end
 
