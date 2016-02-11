@@ -1825,7 +1825,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                  then Types.make_prov_type t
                                                                  else t)
                                                      read_row in
-            let pair = Types.make_tuple_type [`Table (prov_row, write_row, needed_row);
+            let pair = Types.make_tuple_type [`Table (read_row, write_row, needed_row);
                                               Types.make_pure_function_type Types.unit_type (Types.make_list_type prov_row)] in
             (* Debug.print (Types.Show_datatype.show read_row); *)
             (* TODO decide what keeps the unmodified type, what needs the new type *)
