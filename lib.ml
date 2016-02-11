@@ -978,7 +978,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
               | `Table ((db, params), table_name, _, _), _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
-                    prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
+                  Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                     (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s]) ~> ()",
@@ -1005,7 +1005,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   let vss = row_values db rows in
 
                   let returning = unbox_string returning in
-                    prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                    Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                     (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
