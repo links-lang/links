@@ -113,3 +113,7 @@ let deforest_stitching = Settings.add_bool("deforest_stitching",true,`User)
 
 (* Generic flag for A/B testing *)
 let feature_test = Settings.add_bool("feature_test",false,`User)
+
+(* experimental: new pretty printer for Value.t *)
+let new_pretty_printer = Settings.add_bool ("new_pretty_printer", false, `User)
+let terminal_width = Settings.add_int ("terminal_width", 80, `User)

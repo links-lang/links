@@ -14,7 +14,7 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  print_string (Value.string_of_value value);
+  print_string (Value.pprint_value value);
   print_endline (if Settings.get_value(BS.printing_types) then
 		   " : "^ Types.string_of_datatype rtype
                  else "")
