@@ -5,3 +5,5 @@ make_cache=off
 use_cache=off
 relax_query_type_constraint=on
 shredding=on
+new_pretty_printer=on
+terminal_width=120
