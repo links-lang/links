@@ -517,6 +517,76 @@ and string_of_channel (ep1, ep2) =
   let ep2_str = ChannelID.to_string ep2 in
   "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
 
+(* New pretty printer
+   ==================
+
+   `string_of_value` is a bit overloaded. It seems to be used in a
+   number of places for serialising values. It is also used for
+   "pretty" printing results on the REPL.
+
+   Ideally, we would use p_value for both purposes. We could use two
+   formatters: one for plain, predictable serialisation to strings; a
+   second for formatted printing with line breaks and indentation.
+ *)
+open Format
+
+let rec p_value (ppf : formatter) : t -> 'a = function
+  | `Bool true -> fprintf ppf "true"
+  | `Bool false -> fprintf ppf "false"
+  | `Int i -> fprintf ppf "%i" i
+  | `Char c -> fprintf ppf "'%c'" c
+  | `String s -> fprintf ppf "\"%s\"" s
+  | `Record fields -> begin
+      try p_tuple ppf fields
+      with Not_tuple ->
+        fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
+  | `List [] -> fprintf ppf "[]"
+  | `List [v] -> fprintf ppf "[%a]" p_value v
+  | `List l -> fprintf ppf "[@[<hov 0>";
+               p_list_elements ppf l
+  | v -> failwith ("New pretty printer is incomplete :/ "^string_of_value v)
+  (* | _ -> fprintf ppf "not implemented" *)
+and p_record_fields ppf = function
+  | [] -> fprintf ppf ""
+  | [(l, v)] -> fprintf ppf "@[%a = %a@]"
+                        p_record_label l
+                        p_value v
+  | (l, v)::xs -> fprintf ppf "%a = %a,@ "
+                          p_record_label l
+                          p_value v;
+                  p_record_fields ppf xs
+and p_record_label ppf = function
+  | "client" -> fprintf ppf "\"client\""
+  | s -> fprintf ppf "%s" s
+and p_list_elements ppf = function
+  | [] -> assert false (* We only call this with lists of at least one element *)
+  | [v] -> fprintf ppf "%a]@]" p_value v
+  | v::vs -> fprintf ppf "%a,@ " p_value v;
+             p_list_elements ppf vs
+and p_tuple ppf (fields : (string * t) list) =
+  let fields = List.map (function
+                          | x, y when numberp x  -> (int_of_string x, y)
+                          | _ -> raise Not_tuple) fields in
+  let sorted = List.sort (fun (x,_) (y, _) -> compare x y) fields in
+  let numbers, values = List.split sorted in
+  if ordered_consecutive numbers && List.length numbers > 1 && List.hd numbers = 1 then
+    fprintf ppf "(@[<hv 0>%a@])" p_tuple_elements values
+  else raise Not_tuple
+and p_tuple_elements ppf = function
+  | [] -> assert false
+  | [v] -> fprintf ppf "%a" p_value v
+  | v::vs -> fprintf ppf "%a,@ " p_value v;
+             p_tuple_elements ppf vs
+
+
+let mypprint : t -> string = fun v ->
+  (* TODO make this configurable / read actual terminal width *)
+  pp_set_margin str_formatter (Settings.get_value Basicsettings.terminal_width);
+  p_value str_formatter v;
+  flush_str_formatter ()
+
+let pprint_value v = if Settings.get_value Basicsettings.new_pretty_printer then mypprint v else string_of_value v
+
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
 

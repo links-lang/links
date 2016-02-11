@@ -142,3 +142,7 @@ let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `Us
 
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths = Settings.add_string("links_file_paths", "", `User)
+
+(* experimental: new pretty printer for Value.t *)
+let new_pretty_printer = Settings.add_bool ("new_pretty_printer", false, `User)
+let terminal_width = Settings.add_int ("terminal_width", 80, `User)
