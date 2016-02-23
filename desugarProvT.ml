@@ -74,7 +74,7 @@ object (o : 'self_type)
        (* We don't think we need the recursive call currently (since data_t has to be of base type),
           but we might in the future. *)
        let data_t = desugar data_t in
-       Types.make_record_type (StringMap.from_alist [("prov", prov_t); ("data", data_t)])
+       Types.make_record_type (StringMap.from_alist [("!prov", prov_t); ("!data", data_t)])
     | `Application (abs, ts) -> `Application (abs, List.map (o#desugar_type_arg rec_points) ts)
     | `ForAll (qs, body) -> `ForAll (qs, desugar body)
     (* Not sure this is entirely correct. If there is trouble with recursive types, look here first. *)

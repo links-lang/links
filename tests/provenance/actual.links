@@ -54,9 +54,9 @@ fun test() {
   # quote the record field names data and prov because parsing is
   # hard.
   assertEq(show(text()),
-           show([(text=("data"="foo","prov"=("top_comments", "text", 1))),
-                 (text=("data"="qux","prov"=("top_comments", "text", 2))),
-                 (text=("data"="quuix","prov"=("top_comments", "text", 3)))]));
+           show([(text=("!data"="foo","!prov"=("top_comments", "text", 1))),
+                 (text=("!data"="qux","!prov"=("top_comments", "text", 2))),
+                 (text=("!data"="quuix","!prov"=("top_comments", "text", 3)))]));
   assertEq(text_where_id(2), [(id=2,text="qux")]);
 }
 

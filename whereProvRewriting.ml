@@ -22,11 +22,11 @@ object (o : 'self_type)
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `Data e as _dbg ->
        let a, e, c = o#phrase e in
-       let e : Sugartypes.phrasenode = `Projection (e, "data") in
+       let e : Sugartypes.phrasenode = `Projection (e, "!data") in
        (o, e, c)
     | `Prov e as _dbg ->
        let a, e, c = o#phrase e in
-       let e : Sugartypes.phrasenode = `Projection (e, "prov") in
+       let e : Sugartypes.phrasenode = `Projection (e, "!prov") in
        (o, e, c)
     | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
        (* Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg); *)
@@ -65,9 +65,9 @@ object (o : 'self_type)
            let non_prov_e : string -> Sugartypes.phrase = fun name ->
              `Projection ((`Var "t", dp), name), dp in
            let prov_e : string -> Sugartypes.phrase -> Sugartypes.phrase = fun name e ->
-             `RecordLit ([("data", non_prov_e name);
+             `RecordLit ([("!data", non_prov_e name);
                           (* TODO What if the prov function is polymorphic? Insert appropriate `TAppl? *)
-                          ("prov", (`FnAppl (e, [(`Var "t", dp)]), dp))], None), dp in
+                          ("!prov", (`FnAppl (e, [(`Var "t", dp)]), dp))], None), dp in
            let record : (string * Sugartypes.phrase) list  =
              List.map
                (fun name -> match StringMap.lookup name prov_rows with
@@ -83,7 +83,7 @@ object (o : 'self_type)
        let iter : Sugartypes.phrasenode = `Iteration ([`Table (pattern, (tablelit, dp))], (prov_calc_expr, dp), None, None) in
 
        let prov_row = TypeUtils.map_record_type (fun t n -> if StringMap.mem n prov_rows
-                                                            then Types.make_prov_type t (* Types.make_record_type (StringMap.from_alist [("data", t); ("prov", Types.prov_triple_type)]) *)
+                                                            then Types.make_prov_type t
                                                             else t)
                                                 read_row in
        let prov_type = Types.make_list_type prov_row in

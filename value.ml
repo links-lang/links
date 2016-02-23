@@ -360,6 +360,7 @@ let escape =
 let string_of_cont = Show_continuation.show 
 
 exception Not_tuple
+exception Not_prov
 
 exception Match of string
 
@@ -462,7 +463,10 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Record fields -> begin
       try p_tuple ppf fields
       with Not_tuple ->
-        fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
+        try p_prov ppf fields
+        with Not_prov ->
+          fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields)
+    end
   | `List [] -> fprintf ppf "[]"
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
@@ -495,6 +499,16 @@ and p_tuple ppf (fields : (string * t) list) =
   if ordered_consecutive numbers && List.length numbers > 1 && List.hd numbers = 1 then
     fprintf ppf "(@[<hv 0>%a@])" p_tuple_elements values
   else raise Not_tuple
+and p_prov ppf (fields : (string * t) list) =
+  try begin
+      let prov = List.assoc "!prov" fields in
+      let data = List.assoc "!data" fields in
+      if List.length fields == 2 then
+        fprintf ppf "%a@ \x1b[4m#%a\x1b[24m" p_value data p_value prov
+      else raise Not_prov
+    end
+  with Notfound.NotFound _ ->
+    raise Not_prov
 and p_tuple_elements ppf = function
   | [] -> assert false
   | [v] -> fprintf ppf "%a" p_value v
