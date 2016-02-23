@@ -1,8 +1,8 @@
 let resolve_positions source =
 object
-  inherit SugarTraversals.map as super
+  inherit SugarTraversals.map
     
-  method position =
+  method! position =
     function
       | (start, finish, None) ->
           (start, finish, Some source)

@@ -7,7 +7,7 @@ class desugar_cp env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method phrasenode = function
+  method! phrasenode = function
     | `CP p ->
        let rec desugar_cp = fun o (p, pos) ->
          let add_pos x = (x, pos) in
