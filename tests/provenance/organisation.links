@@ -1,6 +1,7 @@
 var db = database "links";
 
 fun depNameProv (d) { ("departments", "name", d.id) }
+fun empNameProv (e) { ("employees", "name", e.id) }
 
 var departments =
   table "departments"
@@ -15,6 +16,7 @@ var employees =
         dept: String,
         name: String,
         salary : Int)
+  where name prov empNameProv
   # tablekeys [["emp"]]
   from db;
 
@@ -91,7 +93,7 @@ fun setup() {
 
 fun tasksOfEmp(e) {
   for (t <-- tasks)
-  where (t.employee == e.name)
+  where (t.employee == data e.name)
     [t.task]
 }
 
