@@ -441,7 +441,7 @@ class map =
       function
       | `Readonly -> `Readonly
       | `Default -> `Default
-      | `Prov _x -> let _x = o#phrase _x in `Prov _x
+      | `Prov _x -> let _x = o#option (fun o -> o#phrase) _x in `Prov _x
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -969,7 +969,7 @@ class fold =
       function
       | `Readonly -> o
       | `Default -> o
-      | `Prov _x -> let o = o#phrase _x in o
+      | `Prov _x -> let o = o#option (fun o -> o#phrase) _x in o
 
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1593,7 +1593,7 @@ class fold_map =
       function
       | `Readonly -> (o, `Readonly)
       | `Default -> (o, `Default)
-      | `Prov _x -> let (o, _x) = o#phrase _x in (o, `Prov _x)
+      | `Prov _x -> let (o, _x) = o#option (fun o -> o#phrase) _x in (o, `Prov _x)
 
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->

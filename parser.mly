@@ -785,7 +785,8 @@ field_constraints:
 field_constraint:
 | READONLY                                                     { `Readonly }
 | DEFAULT                                                      { `Default }
-| PROV exp                                                     { `Prov $2 }
+| PROV DEFAULT                                                 { `Prov None }
+| PROV exp                                                     { `Prov (Some $2) }
 
 perhaps_db_args:
 | atomic_expression                                            { Some $1 }

@@ -28,9 +28,9 @@ object (o : 'self_type)
        let a, e, c = o#phrase e in
        let e : Sugartypes.phrasenode = `Projection (e, "!prov") in
        (o, e, c)
-    | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
+    | `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) as _dbg ->
        (* Debug.print ("TableLit: "^Sugartypes.Show_phrasenode.show _dbg); *)
-       let (o, name, _) = o#phrase name in
+       let (o, tname, _) = o#phrase tname in
        let (o, keys, _) = o#phrase keys in
        let (o, db, _) = o#phrase db in
        let (o, dtype) = o#sugar_datatype dtype in
@@ -39,14 +39,14 @@ object (o : 'self_type)
        let (o, needed_row) = o#datatype needed_row in
        (* TODO only remove prov constraints from constraints, not all constraints *)
        let tablelit : Sugartypes.phrasenode =
-         `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), [], keys, db) in
+         `TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), [], keys, db) in
        let tablelit_type = `Table (read_row, write_row, needed_row) in
 
        (* FIXME Ask Sam how to introduce a new variable with a fresh name. *)
        let pattern : Sugartypes.pattern = (`Variable ("t", Some read_row, dp), dp) in
 
        (* Move this mess somewhere... *)
-       let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> Sugartypes.phrase StringMap.t =
+       let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> (Sugartypes.phrase option) StringMap.t =
          fun l ->
          let res = ref StringMap.empty in
          List.iter (fun (name, constraints) ->
@@ -68,10 +68,18 @@ object (o : 'self_type)
              `RecordLit ([("!data", non_prov_e name);
                           (* TODO What if the prov function is polymorphic? Insert appropriate `TAppl? *)
                           ("!prov", (`FnAppl (e, [(`Var "t", dp)]), dp))], None), dp in
-           let record : (string * Sugartypes.phrase) list  =
+           let default_prov : string -> string -> Sugartypes.phrase = fun table column ->
+             `RecordLit ([("!data", non_prov_e column);
+                          ("!prov", (`TupleLit [`Constant (`String table), dp;
+                                                `Constant (`String column), dp;
+                                                `Projection ((`Var "t", dp), "oid"), dp], dp))], None), dp in
+           let table_name = match tname with
+             | `Constant (`String n), _ -> n | _ -> assert false in
+           let record : (string * Sugartypes.phrase) list =
              List.map
                (fun name -> match StringMap.lookup name prov_rows with
-                            | Some e -> name, prov_e name e
+                            | Some None -> name, default_prov table_name name
+                            | Some (Some e) -> name, prov_e name e
                             | None -> name, non_prov_e name)
                fields in
            `RecordLit (record, None)

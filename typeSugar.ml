@@ -1454,7 +1454,7 @@ let show_context : context -> context =
     context
 
 (* TODO rename *)
-let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> Sugartypes.phrase StringMap.t =
+let prov_rows : (Sugartypes.name * Sugartypes.fieldconstraint list) list -> (Sugartypes.phrase option) StringMap.t =
   fun l ->
   let res = ref StringMap.empty in
   List.iter (fun (name, constraints) ->

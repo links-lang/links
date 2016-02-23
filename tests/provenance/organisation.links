@@ -13,10 +13,12 @@ var departments =
 var employees =
   table "employees"
   with (id: Int,
+        oid: Int,
         dept: String,
         name: String,
         salary : Int)
-  where name prov empNameProv
+  where oid readonly, name prov default
+#  where oid readonly, name prov empNameProv
   # tablekeys [["emp"]]
   from db;
 

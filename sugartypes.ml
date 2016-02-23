@@ -242,7 +242,7 @@ and phrasenode = [
 | `CP               of cp_phrase
 ]
 and phrase = phrasenode * position
-and fieldconstraint = [ `Readonly | `Default | `Prov of phrase ]
+and fieldconstraint = [ `Readonly | `Default | `Prov of phrase option ]
 and bindingnode = [
 (*
    TODO: (aesthetic change)

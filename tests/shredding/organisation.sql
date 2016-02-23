@@ -20,7 +20,7 @@ CREATE TABLE employees (
     dept   text,
     name   text,
     salary integer
-);
+) WITH OIDS;
 
 CREATE TABLE tasks (
     id       integer primary key,
