@@ -47,7 +47,9 @@
 (defconst links-keywords
   '(
     "case"
+    "client"
     "database"
+    "default"
     "delete"
     "else"
     "for"
@@ -60,9 +62,13 @@
     "infixr"
     "insert"
     "linfun"
+    "offer"
     "op"
     "orderby"
     "query"
+    "readonly"
+    "select"
+    "server"
     "sig"
     "spawn"
     "spawnAngel"
@@ -76,8 +82,6 @@
     "where"
     "with"
     "yields"
-    "offer"
-    "select"
     ))
 
 (defconst links-font-lock-keywords
@@ -104,7 +108,7 @@
      (2 font-lock-function-name-face))
    ;; type operators
    '("\\(-\\|~\\)\\(>\\|@\\)" . font-lock-function-name-face)
-   '("\\(-\\|~\\)\\([a-z]+\\)\\(-\\|~\\)\\(>\\|@\\)"
+   '("\\(-\\|~\\)\\(%\\|[a-z]+\\)\\(-\\|~\\)\\(>\\|@\\)"
      (1 font-lock-function-name-face)
      (2 font-lock-variable-name-face)
      (3 font-lock-function-name-face)
