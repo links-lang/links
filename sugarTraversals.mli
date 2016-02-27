@@ -64,7 +64,8 @@ class map :
     method binding         : binding -> binding
     method program         : program -> program
     method unknown         : 'a. 'a -> 'a
-    method handler_spec    : handler_spec -> handler_spec					 
+    method handler_spec    : handler_spec -> handler_spec
+    method hdescriptor     : hdescriptor -> hdescriptor
   end
 
 (* Reduce a value.  See
@@ -135,7 +136,8 @@ class fold :
     method binding         : binding -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
-    method handler_spec    : handler_spec -> 'self					 
+    method handler_spec    : handler_spec -> 'self
+    method hdescriptor     : hdescriptor -> 'self
   end
 
 
@@ -201,5 +203,6 @@ object ('self)
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a
-  method handler_spec    : handler_spec -> 'self * handler_spec						
+  method handler_spec    : handler_spec -> 'self * handler_spec
+  method hdescriptor     : hdescriptor -> 'self * hdescriptor
 end

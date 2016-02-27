@@ -2744,7 +2744,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 end
               else
                 Gripers.upcast_subtype pos t2 t1
-        | `Handle (exp, cases, _, spec) ->
+        | `Handle (exp, cases, desc) ->	   
 	   let fst3 (x,_,_) = x in
 	   let m = tc exp in (* Type-check expression under current context *)
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
@@ -2753,7 +2753,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              * It is important to construct the entire type for m before typing continuations, 
              * as we need to known the return type of m to type continuations in shallow handlers *)
 	   let input_effect_row =
-	     match HandlerUtils.is_closed spec with
+	     match HandlerUtils.SugarHandler.is_closed desc with
 	       true -> let row = Types.make_empty_closed_row () in
 		       Types.extend_row (fst3 effect_row) row
 	     | false -> let row = Types.make_empty_open_row (`Unl, `Any) in
@@ -2773,7 +2773,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
 	   (** If the handler is open then unify the input and output effect rows  *)
 	   let _ =
-	     match HandlerUtils.is_closed spec with
+	     match HandlerUtils.SugarHandler.is_closed desc with
 	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic input_effect_row in
 			unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record effect_row)) 
 	     | _ -> ()
@@ -2787,7 +2787,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		     (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
 		) continuations []
 	     in
-	     match HandlerUtils.is_shallow spec with
+	     match HandlerUtils.SugarHandler.is_shallow desc with
 	       false -> (* Deep handlers: Make continuation codomains and body type agree *)
 		 let poly_presence_row = `Record (HandlerUtils.make_operations_presence_polymorphic output_effect_row) in
 		 List.fold_left
@@ -2807,7 +2807,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		  )
 		  () ks
 	   in
-	   `Handle (erase m, erase_cases cases, Some (body_type, effects), spec), body_type, merge_usages [usages m; usages_cases cases]
+	   let desc = HandlerUtils.SugarHandler.set_type_info desc (body_type, effects) in (*(HandlerUtils.spec desc, Some (body_type, effects)) in*)
+	   `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in

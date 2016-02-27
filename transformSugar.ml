@@ -223,11 +223,12 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
-      | `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->
+	 (*| `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->*)
+      | `HandlerLit _ -> assert false
 	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
-	 let (o, hnlit, ht) = o#handlerlit ht hnlit in
-	 let (o, effects) = o#row effects in
-         (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)
+	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
+	   let (o, effects) = o#row effects in
+           (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
       | `Spawn (`Wait, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -425,17 +426,19 @@ class transform (env : Types.typing_environment) =
       | `DoOperation (name, Some ps, Some t) ->
 	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
 	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
-      | `Handle (expr, cases, Some (t, effects), spec) ->
+      | `Handle (expr, cases, desc) ->
+	  let Some (t, effects) = HandlerUtils.SugarHandler.get_type_info desc in
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
             listu o
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
-              cases in
+              cases in	  
           let (o, t) = o#datatype t in
 	  let (o, effects) = o#row effects in
-            (o, `Handle (expr, cases, Some (t,effects), spec), t)
+	  let desc = HandlerUtils.SugarHandler.set_type_info desc (t, effects) in
+            (o, `Handle (expr, cases, desc), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =

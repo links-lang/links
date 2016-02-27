@@ -192,7 +192,7 @@ and phrasenode = [
 | `Constant         of constant
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| `HandlerLit       of (Types.row * Types.datatype * Types.datatype) option * handler_spec * handlerlit (* optional (computation type, input effects, optional output effects), handler specialisation, handler literal *)
+| `HandlerLit       of handler_spec * handlerlit 
 | `Spawn            of spawn_kind * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
@@ -219,7 +219,7 @@ and phrasenode = [
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of name * phrase list option * Types.datatype option
 (* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
-| `Handle           of phrase * (pattern * phrase) list * (Types.datatype * Types.row) option * handler_spec
+| `Handle           of phrase * (pattern * phrase) list * hdescriptor 
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -261,9 +261,10 @@ and bindingnode = [
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
-and handler_spec   = handler_nature * handler_type
-and handler_nature = [ `Open | `Closed ]
-and handler_type   = [ `Deep | `Shallow ]
+and handler_spec    = handler_nature * handler_depth
+and handler_nature  = [ `Open | `Closed ]
+and handler_depth   = [ `Deep | `Shallow ]
+and hdescriptor     = handler_spec * (Types.datatype * Types.row) option (* handler specialisation, optional (output type and input effects) *)
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -392,7 +393,7 @@ struct
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
     | `FunLit (_, _, fnlit, location) -> funlit fnlit
-    | `HandlerLit (_,_, hnlit) -> handlerlit hnlit				      
+    | `HandlerLit (_, hnlit) -> handlerlit hnlit				      
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -411,7 +412,7 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Handle (p, cases, _, _)
+    | `Handle (p, cases, _)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp

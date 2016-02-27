@@ -136,7 +136,7 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 														 
-  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype * Types.row * handler_spec) -> tail_computation sem
+  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.hdescriptor) -> tail_computation sem
 														 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -633,7 +633,7 @@ struct
     let vs = lift_list vs in
     M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
 	 
-  let handle env (v, cases, t, effects, spec) =
+  let handle env (v, cases, desc) =
     let cases =
       List.map
         (fun (p, body) -> ([p], fun env -> reify (body env))) cases
@@ -645,7 +645,8 @@ struct
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (t, effects, spec, var, cases) in
+                let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in
+		let Some (t, _) = HandlerUtils.SugarHandler.get_type_info desc in
                   reflect (bs, (tc, t))))
     
 	     
@@ -828,7 +829,7 @@ struct
 	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
 
-          | `Handle (e, cases, Some (t,effects), spec) ->
+          | `Handle (e, cases, desc) ->
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -836,7 +837,7 @@ struct
                        (p, fun env -> eval (env ++ penv) body))
                   cases
               in
-                I.handle env (ev e, cases, t, effects, spec)
+                I.handle env (ev e, cases, desc)
 		   
           | `Switch (e, cases, Some t) ->
               let cases =

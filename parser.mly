@@ -450,7 +450,7 @@ primary_expression:
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
 | handler_nature handler_depth handler_parameterization        {  let hnlit = $3 in						  
-						                  `HandlerLit (None, ($1, $2), hnlit), pos() }
+						                  `HandlerLit (($1, $2), hnlit), pos() }
 handler_parameterization:
 | LPAREN pattern RPAREN handler_body { ($2, $4, None) }
 | LPAREN pattern RPAREN LPAREN patterns RPAREN handler_body { ($2, $7, Some $5) }
@@ -747,7 +747,9 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| handler_nature handle_depth LPAREN exp RPAREN LBRACE cases RBRACE { `Handle ($4, $7, None, ($1, $2)), pos() }
+| handler_nature handle_depth LPAREN exp RPAREN LBRACE cases RBRACE {
+                                                                 let descriptor = (($1, $2), None) in
+                                                                 `Handle ($4, $7, descriptor), pos() }
 
 handle_depth:
 | HANDLE                                                       { `Deep }
