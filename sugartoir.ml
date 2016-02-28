@@ -646,7 +646,7 @@ struct
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
                 let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in
-		let Some (t, _) = HandlerUtils.SugarHandler.get_type_info desc in
+		let Some (t, _) = HandlerUtils.SugarHandler.type_info desc in
                   reflect (bs, (tc, t))))
     
 	     

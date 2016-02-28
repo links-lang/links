@@ -37,7 +37,9 @@ type constant = Constant.constant
 type location = Sugartypes.location
   deriving (Show)
 
-type handler_spec = Sugartypes.handler_spec
+type handler_spec  = handler_nature * handler_depth
+and handler_nature = [ `Open | `Closed ]
+and handler_depth  = [ `Deep | `Shallow ]
   deriving (Show)
   
 (* INVARIANT: all IR binders have unique names *)

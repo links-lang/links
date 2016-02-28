@@ -40,8 +40,9 @@ let make_operations_presence_polymorphic : Types.row -> Types.row
 module type Handler = sig
   type t
 
-  val is_closed  : t -> bool
-  val is_shallow : t -> bool
+  val is_closed      : t -> bool
+  val is_shallow     : t -> bool
+  val specialization : t -> handler_spec
 end
 
 module type FrontendHandler = sig
@@ -49,30 +50,43 @@ module type FrontendHandler = sig
 
   include Handler with type t := Sugartypes.hdescriptor
 
-  val set_type_info   : t -> (Types.datatype * Types.row) -> t
-  val get_type_info   : t -> (Types.datatype * Types.row) option
-  val get_spec        : t -> handler_spec
+  val update_type_info   : t -> (Types.datatype * Types.row) -> t
+  val type_info          : t -> (Types.datatype * Types.row) option
 end
 
 module SugarHandler : (FrontendHandler with type t = Sugartypes.hdescriptor) = struct
   type t = Sugartypes.hdescriptor
 
-  let is_closed = function
-    | (spec,_) ->
-      match nature spec with
-      | `Closed -> true
-      | _       -> false
-     
-  let is_shallow = function
-    | (spec, _) ->
-       match depth spec with
-       | `Shallow -> true
-       | _        -> false
-    
-  let set_type_info (spec,_) info = (spec, Some info)
-  let get_type_info = function
-    | (_, info) -> info
-
-  let get_spec = function
+  let specialization = function
     | (spec, _) -> spec
+    
+  let is_closed h =
+    match nature (specialization h) with
+    | `Closed -> true
+    | _       -> false
+     
+  let is_shallow h =
+    match depth (specialization h) with
+    | `Shallow -> true
+    | _        -> false
+    
+  let update_type_info (spec,_) info = (spec, Some info)
+  let type_info = function
+    | (_, info) -> info
+end
+
+module IrHandler : (Handler with type t = Ir.handler_spec) = struct
+  type t = Sugartypes.handler_spec
+    
+  let specialization = fun s -> s
+    
+  let is_closed h =
+    match nature (specialization h) with
+    | `Closed -> true
+    | _       -> false
+     
+  let is_shallow h =
+    match depth (specialization h) with
+    | `Shallow -> true
+    | _        -> false
 end

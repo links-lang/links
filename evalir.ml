@@ -556,14 +556,14 @@ module Eval = struct
          begin
            match StringMap.lookup opname h with	    
 	   | Some ((var, _), comp) ->
-	      let k = if HandlerUtils.is_shallow (spec,None) then
+	      let k = if HandlerUtils.IrHandler.is_shallow spec then
 		  `ShallowProgramSlice (env, delim, List.tl cont', List.tl hs')
 		else
 		  `ProgramSlice (env, cont', hs')
 	      in
 	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->
-              if not (HandlerUtils.is_closed (spec,None)) then
+              if not (HandlerUtils.IrHandler.is_closed spec) then
                 begin
                   Debug.print ("Forwarding: " ^ opname);
                   handle' (cont', hs') (cont, hs)

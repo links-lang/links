@@ -2807,7 +2807,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		  )
 		  () ks
 	   in
-	   let desc = HandlerUtils.SugarHandler.set_type_info desc (body_type, effects) in (*(HandlerUtils.spec desc, Some (body_type, effects)) in*)
+	   let desc = HandlerUtils.SugarHandler.update_type_info desc (body_type, effects) in (*(HandlerUtils.spec desc, Some (body_type, effects)) in*)
 	   `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in

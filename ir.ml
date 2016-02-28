@@ -7,7 +7,9 @@ open Utility
 open PP
 
 (* Handlers *)
-type handler_spec = Sugartypes.handler_spec
+type handler_spec   = handler_nature * handler_depth
+and handler_nature  = [ `Open | `Closed ]
+and handler_depth   = [ `Deep | `Shallow ]
   deriving (Show)
 
   

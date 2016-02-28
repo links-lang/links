@@ -19,67 +19,67 @@ open Sugartypes
 
 
 let dp = Sugartypes.dummy_position
+
+(* Computes the set of names in a given pattern *)
+let rec names : pattern -> string list
+  = fun (pat,_) ->
+    match pat with
+      `Variant (_,pat_opt) -> opt_app names [] pat_opt
+    | `Record (name_pats,pat_opt) ->
+       let optns = opt_app names [] pat_opt in
+       (List.fold_left (fun ns p -> (names p) @ ns) [] (List.map snd name_pats)) @ optns
+    | `Variable (name,_,_)        -> [name]
+    | `Cons (pat,pat')            -> (names pat) @ (names pat')
+    | `Tuple pats
+    | `List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats   
+    | `Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
+    | `As  ((name,_,_),pat)       -> [name] @ (names pat)
+    | _                           -> []
+
+let resolve_name_conflicts : pattern -> stringset -> pattern
+  = fun pat conflicts ->
+    let rec hide_names : pattern -> pattern
+      = fun (pat,pos) ->
+	(begin
+	  match pat with
+	  | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
+	  | `Record (name_pats, pat_opt) -> `Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
+	  | `Variable (name,_,_)         ->
+	     if StringSet.mem name conflicts
+	     then `Any
+	     else pat
+	  | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
+	  | `Tuple pats                  -> `Tuple (List.map hide_names pats)
+	  | `List pats                   -> `List (List.map hide_names pats)
+	  | `Negative names              -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
+	  | `As ((name,t,pos') as n,pat) -> let (p,_) as pat = hide_names pat in
+					    if StringSet.mem name conflicts
+					    then p
+					    else `As (n, pat)
+	  | _ -> pat
+	 end
+	   , pos)
+    in hide_names pat
+    
   
 let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * phrase) list 
   = fun cases params ->
-  let rec get_names_opt optpat names =
-    match optpat with
-      Some pat -> get_names pat names
-    | None -> names
-  and get_names ((pat,_) : pattern) names =
-    match pat with
-      `Variant (_,pat_opt) -> get_names_opt pat_opt names
-    | `Record (name_pats,pat_opt) -> StringSet.union_all [(List.fold_left (fun names p -> get_names p names) names (List.map snd name_pats)); (get_names_opt pat_opt names)]
-    | `Variable (name,_,_) -> StringSet.add name names
-    | `Cons (pat,pat') -> StringSet.union_all [get_names pat names; get_names pat' names]
-    | `Tuple pats
-    | `List pats -> List.fold_left (fun names pat -> get_names pat names) names pats   
-    | `Negative names' -> List.fold_left (fun names name -> StringSet.add name names) names names'
-    | `As  ((name,_,_),pat) -> StringSet.add name (get_names pat names)
-    | _ -> names
-  in
-  let find_name_clashes pat params =
-    let param_names = List.fold_left (fun names pat -> get_names pat names) StringSet.empty params in
-    let pat_names = get_names pat StringSet.empty in
-    StringSet.inter param_names pat_names
-  in
-  let fix_clashes params clashes =
-    let rec hide_names_opt optpat names =
-      match optpat with
-	Some pat -> Some (hide_names pat names)
-      | None -> None
-    and hide_names (pat, pos) names =
-      match pat with
-	`Variant (name,pat_opt) -> `Variant (name, hide_names_opt pat_opt names),pos
-      | `Record (name_pats,pat_opt) -> `Record (List.map (fun (n,pat) -> (n,hide_names pat names)) name_pats, hide_names_opt pat_opt names),pos
-      | `Variable (name,_,_) -> if StringSet.mem name names then
-				  `Any,pos
-				else
-				  (pat,pos)
-      | `Cons (pat,pat') -> `Cons (hide_names pat names, hide_names pat' names),pos
-      | `Tuple pats
-      | `List pats -> `List (List.map (fun pat -> hide_names pat names) pats),pos
-      | `Negative names' -> failwith "desugarHandlers.ml: How to hide negative pattern names? Can the case ever occur?"
-      | `As  ((name,t,pos'),pat) -> let pat = hide_names pat names in
-				    if StringSet.mem name names then
-				      `As (("_" ^ name,t,pos'),pat),pos (* Todo: Figure out whether this is *safe*, e.g. _name*)
-				    else
-				      `As ((name,t,pos'),pat),pos
-      | _ -> (pat,pos)     
-    in
-    List.map (fun param -> hide_names param clashes) params
-  in
   let wrap_fun params body =
     (`FunLit (None, `Unl, ([params], body), `Unknown), dp)
   in
   match params with
     None
   | Some [] -> cases
-  | Some params  -> List.map (fun (pat, ph) ->
-			      let name_clashes = find_name_clashes pat params in
-			      let params = fix_clashes params name_clashes in
-			      (pat, wrap_fun params ph)
-			     ) cases
+  | Some params ->
+     List.map (fun (pat, body) ->
+       let name_conflicts =
+	 let param_names = List.concat (List.map names params) in
+	 let pat_names   = names pat in
+	 StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
+       in
+       let params = List.map (fun p -> resolve_name_conflicts p name_conflicts) params in
+       (pat, wrap_fun params body)
+     ) cases
   
 
 let to_var : Sugartypes.patternnode -> Sugartypes.phrasenode

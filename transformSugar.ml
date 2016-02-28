@@ -427,7 +427,7 @@ class transform (env : Types.typing_environment) =
 	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
 	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
       | `Handle (expr, cases, desc) ->
-	  let Some (t, effects) = HandlerUtils.SugarHandler.get_type_info desc in
+	  let Some (t, effects) = HandlerUtils.SugarHandler.type_info desc in
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
             listu o
@@ -437,7 +437,7 @@ class transform (env : Types.typing_environment) =
               cases in	  
           let (o, t) = o#datatype t in
 	  let (o, effects) = o#row effects in
-	  let desc = HandlerUtils.SugarHandler.set_type_info desc (t, effects) in
+	  let desc = HandlerUtils.SugarHandler.update_type_info desc (t, effects) in
             (o, `Handle (expr, cases, desc), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
