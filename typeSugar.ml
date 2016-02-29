@@ -156,6 +156,7 @@ sig
   val if_branches  : griper
 
   val handle_patterns : griper
+  val handle_patterns' : pos:SourceCode.pos -> t1:(string * Types.datatype) -> 'a
   val handle_branches : griper			  
   val handle_computation : griper
   val handle_continuations : griper
@@ -163,7 +164,7 @@ sig
   val continuation_effect_rows : griper
   
   val operation_case_cont_param	: griper
-  val discharge_operation : griper
+  val do_operation : griper
 		       
   val switch_pattern : griper
   val switch_patterns : griper
@@ -326,6 +327,7 @@ end
 
     let show_type = Types.string_of_datatype
     let show_row = Types.string_of_row
+    let show_effectrow row = "{ " ^ (Types.string_of_row row) ^ " }"
 
     let die pos msg = raise (Errors.Type_error (pos, msg))
 
@@ -366,29 +368,34 @@ tab() ^ code (show_type rt) ^ "."
       with_but2 pos ("Both branches of an " ^ code "if (...) ... else ..." ^
                        " expression should have the same type") l r
 
-    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,_) ~error:_ =
+
+    let handle_patterns' ~pos ~t1:(lexpr,lt) =
       die pos ("\
-		Handler cases can only pattern match on operation types, but
-		the pattern" ^ nl () ^
-		 tab () ^ code lexpr ^ nl () ^
-		   "has type" ^ nl () ^
-		     tab () ^ code (show_type lt) ^ nl ())
+		Handler cases may only pattern match on operation names, but the pattern" ^ nl () ^
+		  tab () ^ code lexpr ^ " of type " ^ code (show_type lt) ^ nl() ^
+	          "is not an operation name.")
+	
+    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:_ ~error:_ =
+      handle_patterns' ~pos:pos ~t1:(lexpr,lt)
 
     let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
-		All handler cases must have the same type, but
-		the expression" ^ nl() ^
+		All handler clauses must have the same type, but
+		the clause expression" ^ nl() ^
 		 tab() ^ code lexpr ^ nl() ^
 		   "has type" ^ nl() ^
 		     tab() ^ code (show_type lt) ^ nl() ^
-		       "while the subsequent expressions have type" ^ nl() ^
+		       "while the subsequent clauses have type" ^ nl() ^
 		       tab() ^ code (show_type rt))
 	
     let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
-      die pos ("The inferred type for computation " ^ code lexpr ^ nl() ^
-		  tab() ^ code (show_type rt) ^ nl() ^
-		  "is not compatible with" ^ nl() ^
-		    tab() ^ code (show_type lt)
+      die pos ("The type of an input to a handler must be a computation, whose type signature matches the input type signature of the handler, but
+the expression " ^ nl () ^
+		  tab() ^ code rexpr ^ nl() ^
+  		    "has type " ^ nl() ^
+		      tab() ^ code (show_type lt) ^ nl() ^
+		        "while the handler accepts only computations of type " ^ nl() ^
+		           tab() ^ code (show_type rt)
 	      )
 
     let output_effect_row ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
@@ -421,15 +428,15 @@ tab() ^ code (show_type rt) ^ "."
 		       "which is not unifiable with" ^ nl()
 		       ^ tab() ^ code (show_type lt))	
 	  
-    let discharge_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+    let do_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
       let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
       let operation = dropDoPrefix (code rexpr) in      
-      die pos ("The operation " ^ nl() ^
+      die pos ("Invocation of the operation " ^ nl() ^
 		 tab() ^ operation ^ nl() ^
-		   "implies effect context" ^ nl() ^
-		     tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
-		       "but the currently allowed effects are" ^ nl()
-		       ^ tab() ^ code ( show_row (TypeUtils.extract_row lt)))
+		   "requires an effect context " ^ nl() ^
+		     tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
+		       "but, the currently allowed effects are" ^ nl()
+		       ^ tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
 	  
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
@@ -1635,7 +1642,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     in
     let type_operation_case : pattern -> ((pattern * Types.environment * Types.datatype)) * ((Sugartypes.pattern * Types.environment * Types.datatype) option) =
       fun pat ->
-      let ((pat,pos),tenv,dt) = tpo pat in (* Type the variant pattern *)
+      let ((pat,pos),tenv,dt) as p = tpo pat in (* Type the variant pattern *)
       let k = (* Next, extract and type the continuation parameter (k) if it exists *)
 	match pat with
 	  `Variant ("Return", Some _) -> None
@@ -1651,7 +1658,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 			      Gripers.die pos ("Improper pattern matching on " ^ opname)
 	     | k -> Some (type_continuation_param opname (k,pos))
 	   end
-	| _ -> assert false
+	| _ -> Gripers.handle_patterns' ~pos:pos ~t1:(ppos_and_typ p)
       in
       match k with
 	Some k' ->    let (fields,row_var,dual) = TypeUtils.extract_row dt in
@@ -1829,7 +1836,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     in
 	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     let (_,_,p) = SourceCode.resolve_pos pos in
-	     let () = unify ~handle:Gripers.discharge_operation
+	     let () = unify ~handle:Gripers.do_operation
 			    (no_pos (`Record context.effect_row), (p, `Record effects))
 	     in
 	     (`DoOperation (opname, Some (List.map erase args), Some optype), return_type, StringMap.empty)	     
@@ -2744,9 +2751,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 end
               else
                 Gripers.upcast_subtype pos t2 t1
-        | `Handle (exp, cases, desc) ->	   
-	   let fst3 (x,_,_) = x in
-	   let m = tc exp in (* Type-check expression under current context *)
+        | `Handle (m, cases, desc) ->	   
+	   let m = tc m in (* Type-check the input computation m under current context *)
 	   let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
 	   let effects         = TypeUtils.extract_row pattern_type in
 	   (** First construct the effect row for the input computation m
@@ -2764,14 +2770,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let (_,_,p)  = SourceCode.resolve_pos pos in
 	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
 
-	   (** Next, construct the (output) effect row the handler *)
+	   (** Next, construct the (output) effect row for the handler *)
 	   let output_effect_row =
 	     let wild_effect_row = HandlerUtils.allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
 	     let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
 	     context.effect_row
 	   in
 
-	   (** If the handler is open then unify the input and output effect rows  *)
+	   (** If the handler is open, then unify the input and output effect rows  *)
 	   let _ =
 	     match HandlerUtils.SugarHandler.is_closed desc with
 	       false -> let effect_row = HandlerUtils.make_operations_presence_polymorphic input_effect_row in
@@ -2807,7 +2813,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		  )
 		  () ks
 	   in
-	   let desc = HandlerUtils.SugarHandler.update_type_info desc (body_type, effects) in (*(HandlerUtils.spec desc, Some (body_type, effects)) in*)
+	   let desc = HandlerUtils.SugarHandler.update_type_info desc (body_type, effects) in 
 	   `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
         | `Switch (e, binders, _) ->
             let e = tc e in
