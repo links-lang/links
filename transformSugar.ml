@@ -597,25 +597,12 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun t (pat, cases, params) ->
+      fun t (m, cases, params) -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
-      let (o, pat) = o#pattern pat in
-      let (o, cases) =
-        listu o
-	      (fun o (p, e) ->
-               let (o, p) = o#pattern p in
-               let (o, e, _) = o#phrase e in (o, (p, e)))
-	      cases
-      in
-      let o = o#restore_envs envs in
-      (o, (pat, cases, params), t)
-      (*let envs = o#backup_envs in
-      let (o, pats) =
-	listu o
-	      (fun o ->
-	       listu o (fun o -> o#pattern)
-	      )
-	      pats
+      let (o, m) =
+	match m with
+	  `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
+	| `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
       in
       let (o, cases) =
         listu o
@@ -624,10 +611,8 @@ class transform (env : Types.typing_environment) =
                let (o, e, _) = o#phrase e in (o, (p, e)))
 	      cases
       in
-      let o = o#with_effects inner_e in
-      let (o, e, t) = o#
       let o = o#restore_envs envs in
-      (o, (pats, cases), t)*)
+													 (o, (m, cases, params), t)*)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
       function

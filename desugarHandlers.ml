@@ -85,7 +85,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * phrase) list 
   = fun cases params ->
   let wrap_fun params body =
-    (`FunLit (None, `Unl, ([params], body), `Unknown), dp)
+    (`FunLit (None, `Unl, (params, body), `Unknown), dp)
   in
   match params with
     None
@@ -98,7 +98,7 @@ let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * 
 	 StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
        in
        let params = List.map (fun p -> resolve_name_conflicts p name_conflicts) params in
-       (pat, wrap_fun params body)
+       (pat, wrap_fun [params] body)
      ) cases
   
 
@@ -109,77 +109,85 @@ let fresh_name : unit -> name =
     incr name_counter;
     "__THIS_IS_A_GENERATED_NAME" ^ (string_of_int !name_counter)
 
-(* TODO: Add a name-pass that generates fresh names for `Any *)
+(* This function assigns fresh names to `Any (_) *)
+let rec deanonymize : pattern -> pattern
+  = fun (pat, pos) ->
+    (begin
+      match pat with
+	`Any                         -> `Variable (fresh_name (), None, dp)
+      | `Nil                         -> `Nil
+      | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
+      | `List ps                     -> `List (List.map deanonymize ps)
+      | `Variant (name, pat_opt)     -> `Variant (name, opt_map deanonymize pat_opt)
+      | `Negative ns                 -> `Negative ns
+      | `Record (name_pats, pat_opt) -> `Record (List.map (fun (n,p) -> (n, deanonymize p)) name_pats, opt_map deanonymize pat_opt)
+      | `Tuple ps                    -> `Tuple (List.map deanonymize ps)
+      | `Constant c                  -> `Constant c
+      | `Variable b                  -> `Variable b
+      | `As (b,p)                    -> `As (b, deanonymize p)
+      | `HasType (p,t)               -> `HasType (deanonymize p, t)
+     end, pos)
+
+(* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)      
 let rec phrase_of_pattern : pattern -> phrase
   = fun (pat,pos) ->
     (begin
       match pat with
-	`Any                     -> assert false (* can never happen after the fresh name generation pass *)
-      | `Nil                     -> `ListLit ([], None)
-      | `Cons (p, p')            -> `InfixAppl (([], `Name "++"), (`ListLit ([phrase_of_pattern p], None), dp), (`ListLit ([phrase_of_pattern p'], None), dp))
-      | `List ps                 -> `ListLit (List.map phrase_of_pattern ps, None)
-      | `Variant (name, pat_opt) -> `ConstructorLit (name, opt_map phrase_of_pattern pat_opt, None)
-      | `Negative ns             -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
+	`Any                         -> assert false (* can never happen after the fresh name generation pass *)
+      | `Nil                         -> `ListLit ([], None)
+      | `Cons (hd, tl)               -> `InfixAppl (([], `Cons), phrase_of_pattern hd, phrase_of_pattern tl) (* x :: xs => (phrase_of_pattern x) :: (phrase_of_pattern xs) *)
+      | `List ps                     -> `ListLit (List.map phrase_of_pattern ps, None)
+      | `Variant (name, pat_opt)     -> `ConstructorLit (name, opt_map phrase_of_pattern pat_opt, None)
+      | `Negative ns                 -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
       | `Record (name_pats, pat_opt) -> `RecordLit (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats, opt_map phrase_of_pattern pat_opt)
-      | `Tuple ps                -> `TupleLit (List.map phrase_of_pattern ps)
-      | `Constant c              -> `Constant c
-      | `Variable b              -> `Var (fst3 b)
-      | `As (b,_)                -> `Var (fst3 b)
-      | `HasType (p,t)           -> `TypeAnnotation (phrase_of_pattern p, t)
+      | `Tuple ps                    -> `TupleLit (List.map phrase_of_pattern ps)
+      | `Constant c                  -> `Constant c
+      | `Variable b                  -> `Var (fst3 b)
+      | `As (b,_)                    -> `Var (fst3 b)
+      | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
     end, pos)
        
-let to_var : Sugartypes.patternnode -> Sugartypes.phrasenode
-  = fun p ->
-  match p with
-    `Variable b -> let (name,_,_) = b in
-		   `Var name
-  | _ -> assert false
-
-let make_handle : Sugartypes.handlerlit -> Sugartypes.handler_spec -> Sugartypes.funlit
-  = fun (m, cases, params) spec ->
-  let pos = snd m in
-  let (m_name,_,_) = 
-	 match m with
-	   `Variable b, _ -> b
-	 | _ -> assert false
-  in       
-  let mvar = (`Var m_name, pos) in
-  let cases = parameterize cases params in
-  let desc  = (spec, None) in
-  let handle : phrase = `Block ([], (`Handle (mvar, cases, desc), pos)),pos in
-  let body =
-    match params with
-      None -> handle
-    | Some params ->
-      let params = List.map (fun (p,pos) -> phrase_of_pattern (p,pos)) params in
-      `FnAppl (handle, params),dp
-  in
-  let fnparams =
-    if HandlerUtils.SugarHandler.is_closed desc
-    then []
-    else [[]]
-  in
-  let fnparams =
-    match params with
-      Some params -> [m] :: (params :: fnparams)
-    | None -> [m] :: fnparams
-  in
-  let fnlit = (fnparams, body) in
-  fnlit
+let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.funlit
+  = fun (m, cases, params) desc ->
+    let pos = snd m in
+    let m    = deanonymize m in
+    let comp = phrase_of_pattern m in
+    let cases = parameterize cases params in
+    let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in  
+    let params = opt_map (List.map deanonymize) params in
+    let body  =
+      match params with
+	None -> handle
+      | Some params ->
+	 let params = List.map phrase_of_pattern params in
+	 `FnAppl (handle, params),dp
+    in
+    let fnparams =
+      if HandlerUtils.SugarHandler.is_closed desc
+      then []
+      else [[]]
+    in
+    let fnparams = 
+      match params with
+	Some params -> [m] :: (params :: fnparams)
+      | None -> [m] :: fnparams
+    in
+    let fnlit = (fnparams, body) in
+    fnlit
 			     
 let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method phrasenode = function
     | `HandlerLit (spec, hnlit) ->      
-       let handle = make_handle hnlit spec in
+       let handle = make_handle hnlit (spec,None) in
        let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle, `Unknown) in
        super#phrasenode funlit
     | e -> super#phrasenode e
 
   method bindingnode = function
     | `Handler (binder, spec, hnlit, annotation) ->
-       let handle  = make_handle hnlit spec in
+       let handle  = make_handle hnlit (spec,None) in
        `Fun (binder, `Unl, ([], handle), `Unknown, annotation)
     | b -> super#bindingnode b
 end
