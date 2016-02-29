@@ -1165,7 +1165,7 @@ op f -<- g {
   fun(x) { f(g(x)) }
 }
 
-# Plugs a computation into a handler
+# Plugs a computation into sequence of handlers
 sig -< : ((a) -e-> b, a) -e-> b
 op f -< m {
   f(m)
