@@ -162,14 +162,14 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
 	 let params = List.map phrase_of_pattern params in
 	 `FnAppl (handle, params),dp
     in
-    let fnparams =
+    let fnparams : pattern list list =
       if HandlerUtils.SugarHandler.is_closed desc
       then []
       else [[]]
     in
     let fnparams = 
       match params with
-	Some params -> [m] :: (params :: fnparams)
+	Some params -> params :: ([m] :: fnparams)
       | None -> [m] :: fnparams
     in
     let fnlit = (fnparams, body) in

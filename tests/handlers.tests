@@ -51,15 +51,15 @@ stderr : @.
 exit : 1
 
 Shadowing handler parameter (1)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(comp)(0)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
 stdout : 2 : Int
 
 Shadowing handler parameter (2)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(p as s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(comp)(0)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(p as s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
 stdout : 2 : Int
 
 Shadowing handler parameter (3)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(comp)(0)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
 stdout : 2 : Int
 
 Signature for handler (deep, closed handler)
@@ -172,5 +172,5 @@ Open shallow handler composition
 stdout : 3 : Int
 
 Simple shallow state
-{ shallowhandler simpleState(s) { case Get(k) -> simpleState(fun() { k(s) })(s) case Put(s,k) -> simpleState(fun() { k(()) })(s) case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(count)(10) }
+{ shallowhandler simpleState(s) { case Get(k) -> simpleState(s)(fun() { k(s) }) case Put(s,k) -> simpleState(s)(fun() { k(()) }) case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(10)(count) }
 stdout : 0 : Int

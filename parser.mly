@@ -318,12 +318,17 @@ fun_declaration:
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 | signature typed_handler_binding                              { annotate $1 (`Handler $2) }
-| typed_handler_binding                                        { let (m, spec, hnlit, pos) = $1 in
-								 `Handler (m, spec, hnlit, None), pos }
+| typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in
+								 `Handler (b, spec, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_nature handler_depth var handler_parameterization    { let (name,bpos) = $3 in
- 		                                                ( (name,None,bpos), ($1,$2), $4, pos()) }
+| handler_specialization handled_computation var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
+			   						     let hnlit  = ($2, fst $4, snd $4) in
+ 									     (binder, $1, hnlit, pos()) }
+
+handled_computation:
+| /* empty */             { (`Any, pos()) }
+| LPAREN pattern RPAREN   { $2 }
   
 perhaps_uinteger:
 | /* empty */                                                  { None }
@@ -449,11 +454,15 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_nature handler_depth handler_parameterization        {  let hnlit = $3 in						  
-						                  `HandlerLit (($1, $2), hnlit), pos() }
+| handler_specialization LPAREN pattern RPAREN handler_parameterization              {  let (body, args) = $5 in
+											let hnlit = ($3, body, args) in						  
+											`HandlerLit ($1, hnlit), pos() }
+handler_specialization:
+| handler_nature handler_depth { ($1, $2) }
+    
 handler_parameterization:
-| LPAREN pattern RPAREN handler_body { ($2, $4, None) }
-| LPAREN pattern RPAREN LPAREN patterns RPAREN handler_body { ($2, $7, Some $5) }
+| handler_body                        { ($1, None) }
+| LPAREN patterns RPAREN handler_body { ($4, Some $2) }
 
 handler_nature:
 | /* empty */                { `Closed }
@@ -747,10 +756,13 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| handler_nature handle_depth LPAREN exp RPAREN LBRACE cases RBRACE {
-                                                                 let descriptor = (($1, $2), None) in
-                                                                 `Handle ($4, $7, descriptor), pos() }
+| handle_specialisation LPAREN exp RPAREN LBRACE cases RBRACE  {
+                                                                 let descriptor = ($1, None) in
+                                                                 `Handle ($3, $6, descriptor), pos() }
 
+handle_specialisation:
+| handler_nature handle_depth                                  { ($1, $2) }
+    
 handle_depth:
 | HANDLE                                                       { `Deep }
 | SHALLOWHANDLE                                                { `Shallow }
