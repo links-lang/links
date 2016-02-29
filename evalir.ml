@@ -338,12 +338,12 @@ module Eval = struct
     | `PrimitiveFunction (n,Some code), args ->
         apply_cont cont hs env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args   -> client_call name cont hs args
-    | `ShallowProgramSlice (env', delim, cont', hs'), [p] ->
+    | `ShallowContinuation (delim, cont', hs'), [p] ->
        (** *)
        let cont = Value.append_delim_cont delim cont in
-       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env' p
-    | `ProgramSlice (env', cont', hs'), [p] ->
-       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env' p
+       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env p
+    | `DeepContinuation (cont', hs'), [p] ->
+       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env p
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -557,9 +557,9 @@ module Eval = struct
            match StringMap.lookup opname h with	    
 	   | Some ((var, _), comp) ->
 	      let k = if HandlerUtils.IrHandler.is_shallow spec then
-		  `ShallowProgramSlice (env, delim, List.tl cont', List.tl hs')
+		  `ShallowContinuation (delim, List.tl cont', List.tl hs')
 		else
-		  `ProgramSlice (env, cont', hs')
+		  `DeepContinuation (cont', hs')
 	      in
 	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->
