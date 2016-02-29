@@ -107,14 +107,14 @@ let name_counter = ref dummy_name
 let fresh_name : unit -> name =
   fun () ->
     incr name_counter;
-    "_v" ^ (string_of_int !name_counter)
+    "__THIS_IS_A_GENERATED_NAME" ^ (string_of_int !name_counter)
 
 (* TODO: Add a name-pass that generates fresh names for `Any *)
 let rec phrase_of_pattern : pattern -> phrase
   = fun (pat,pos) ->
     (begin
       match pat with
-	`Any                     -> `TupleLit []
+	`Any                     -> assert false (* can never happen after the fresh name generation pass *)
       | `Nil                     -> `ListLit ([], None)
       | `Cons (p, p')            -> `InfixAppl (([], `Name "++"), (`ListLit ([phrase_of_pattern p], None), dp), (`ListLit ([phrase_of_pattern p'], None), dp))
       | `List ps                 -> `ListLit (List.map phrase_of_pattern ps, None)
