@@ -77,7 +77,6 @@ SOURCES = $(OPC)                                \
           parser.mly                            \
           lexer.mli lexer.mll                   \
           typeUtils.mli typeUtils.ml            \
-          handlerUtils.ml                       \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
@@ -85,6 +84,7 @@ SOURCES = $(OPC)                                \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
+	  handlerUtils.ml                       \
           tables.ml                             \
           closures.ml                           \
           parse.mli parse.ml                    \

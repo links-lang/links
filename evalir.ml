@@ -341,9 +341,9 @@ module Eval = struct
     | `ShallowContinuation (delim, cont', hs'), [p] ->
        (** *)
        let cont = Value.append_delim_cont delim cont in
-       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env p
+       apply_cont (cont' @ cont) (hs' @ hs) env p
     | `DeepContinuation (cont', hs'), [p] ->
-       apply_cont (List.rev_append cont' cont) (List.rev_append hs' hs) env p
+       apply_cont (cont' @ cont) (hs' @  hs) env p
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -557,9 +557,9 @@ module Eval = struct
            match StringMap.lookup opname h with	    
 	   | Some ((var, _), comp) ->
 	      let k = if HandlerUtils.IrHandler.is_shallow spec then
-		  `ShallowContinuation (delim, List.tl cont', List.tl hs')
+		  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
 		else
-		  `DeepContinuation (cont', hs')
+		  `DeepContinuation (List.rev cont', List.rev hs')
 	      in
 	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
            | None ->

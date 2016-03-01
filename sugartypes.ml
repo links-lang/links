@@ -181,7 +181,8 @@ and regex = [
 | `Replace   of regex * replace_rhs
 ]
 and funlit = pattern list list * phrase
-and handlerlit = pattern * (pattern * phrase) list * pattern list option (* computation, cases, parameters *)	   
+and handlerlit = pattern * (pattern * phrase) list * pattern list option (* computation arg, cases, parameters *)
+and handler    = phrase * (pattern * phrase) list * hdescriptor (* computation, cases, descriptor *)
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -218,8 +219,7 @@ and phrasenode = [
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of name * phrase list option * Types.datatype option
-(* Handle:             handled computation, list of cases, optional (output type and effects), boolean indicating whether it is closed *)
-| `Handle           of phrase * (pattern * phrase) list * hdescriptor 
+| `Handle           of handler
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)

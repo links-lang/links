@@ -163,7 +163,7 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
 	 `FnAppl (handle, params),dp
     in
     let fnparams : pattern list list =
-      if HandlerUtils.SugarHandler.is_closed desc
+      if HandlerUtils.HandlerDescriptor.is_closed desc
       then []
       else [[]]
     in

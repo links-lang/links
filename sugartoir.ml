@@ -51,7 +51,6 @@ exception ASTSyntaxError = SourceCode.ASTSyntaxError
 let dp = Sugartypes.dummy_position
 
 type datatype = Types.datatype
-type handler_spec = Sugartypes.handler_spec	  
 
 module NEnv = Env.String
 module TEnv = Env.Int
@@ -646,7 +645,7 @@ struct
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
                 let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in
-		let Some (t, _) = HandlerUtils.SugarHandler.type_info desc in
+		let Some (t, _) = HandlerUtils.HandlerDescriptor.type_info desc in
                   reflect (bs, (tc, t))))
     
 	     
