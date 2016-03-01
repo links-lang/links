@@ -461,8 +461,8 @@ handler_specialization:
 | handler_nature handler_depth { ($1, $2) }
     
 handler_parameterization:
-| handler_body                        { ($1, None) }
-| LPAREN patterns RPAREN handler_body { ($4, Some $2) }
+| handler_body                         { ($1, None) }
+| arg_lists handler_body { ($2, Some $1) }
 
 handler_nature:
 | /* empty */                { `Closed }

@@ -45,9 +45,9 @@ struct
           program
 
   let interactive =
-    fun tyenv pos_context sentence ->    
-    let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
-        CheckXmlQuasiquotes.checker#sentence sentence;
+    fun tyenv pos_context sentence ->
+      let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
+        CheckXmlQuasiquotes.checker#sentence sentence; 
         ( DesugarHandlers.desugar_handlers_early#sentence
 	->- DesugarLAttributes.desugar_lattributes#sentence
         ->- RefineBindings.refine_bindings#sentence

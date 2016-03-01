@@ -461,18 +461,18 @@ class map =
 	    )
             cases
 	in
-	let params =
+(*	let params =
 	  o#option
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
-	    ) params in
-      (*      let params =
+	    ) params in*)
+            let params =
 	o#option
 	  (fun o -> o#list
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
 	    )
-	) params in*)
+	) params in
 	(m,cases,params)
 
     method fieldspec : fieldspec -> fieldspec =
@@ -1036,18 +1036,18 @@ class fold =
 	    )
             cases
 	in
-	let params =
+(*	let params =
 	  o#option
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
-	    ) params in o
-(*      let params =
+	    ) params in o*)
+      let params =
 	o#option
 	  (fun o -> o#list
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
 	    )
-	) params in o*)
+	) params in o
 
     method fieldspec : fieldspec -> 'self_type =
       function
@@ -1708,18 +1708,18 @@ class fold_map =
 	    )
             cases
 	in
-	let (o, params) =
+(*	let (o, params) =
 	  o#option
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
-	    ) params in
-(*      let (o, params) =
+	) params in*)
+      let (o, params) =
 	o#option
 	  (fun o -> o#list
 	    (fun o -> o#list
 	      (fun o -> o#pattern)
 	    )
-	) params in*)
+	) params in
 	(o, (m, cases, params))
 
 					     

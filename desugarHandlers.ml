@@ -34,6 +34,7 @@ let rec names : pattern -> string list
     | `List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats   
     | `Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
     | `As  ((name,_,_),pat)       -> [name] @ (names pat)
+    | `HasType (pat,_)            -> names pat
     | _                           -> []
 
 (* This function resolves name conflicts in a given pattern p.
@@ -60,6 +61,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 					    if StringSet.mem name conflicts
 					    then p
 					    else `As (n, pat)
+	  | `HasType (pat, t)            -> `HasType (hide_names pat, t)
 	  | _ -> pat
 	 end
 	   , pos)
@@ -82,7 +84,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
  and the parameters of the introduced functions which encompass clause bodies. Currently,
  the clause-parameters shadow the introduced function parameters.
 *)
-let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * phrase) list 
+let parameterize : (pattern * phrase) list -> pattern list list option -> (pattern * phrase) list 
   = fun cases params ->
   let wrap_fun params body =
     (`FunLit (None, `Unl, (params, body), `Unknown), dp)
@@ -93,12 +95,12 @@ let parameterize : (pattern * phrase) list -> pattern list option -> (pattern * 
   | Some params ->
      List.map (fun (pat, body) ->
        let name_conflicts =
-	 let param_names = List.concat (List.map names params) in
+	 let param_names = List.concat (List.map names (List.concat params)) in
 	 let pat_names   = names pat in
 	 StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
        in
-       let params = List.map (fun p -> resolve_name_conflicts p name_conflicts) params in
-       (pat, wrap_fun [params] body)
+       let params = List.map (List.map (fun p -> resolve_name_conflicts p name_conflicts)) params in
+       (pat, wrap_fun params body)
      ) cases
   
 
@@ -146,7 +148,12 @@ let rec phrase_of_pattern : pattern -> phrase
       | `As (b,_)                    -> `Var (fst3 b)
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
     end, pos)
-       
+
+(* This function applies the list of parameters to the generated handle. *)      
+let rec apply_params : phrase -> phrase list list -> phrase
+  = fun h pss ->
+    List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h 
+           
 let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.funlit
   = fun (m, cases, params) desc ->
     let pos = snd m in
@@ -154,13 +161,13 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
     let comp = phrase_of_pattern m in
     let cases = parameterize cases params in
     let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in  
-    let params = opt_map (List.map deanonymize) params in
+    let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
 	None -> handle
       | Some params ->
-	 let params = List.map phrase_of_pattern params in
-	 `FnAppl (handle, params),dp
+	 let params = List.map (List.map phrase_of_pattern) params in
+	 apply_params handle params
     in
     let fnparams : pattern list list =
       if HandlerUtils.HandlerDescriptor.is_closed desc
@@ -169,7 +176,7 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
     in
     let fnparams = 
       match params with
-	Some params -> params :: ([m] :: fnparams)
+	Some params -> params @ ([m] :: fnparams)
       | None -> [m] :: fnparams
     in
     let fnlit = (fnparams, body) in
