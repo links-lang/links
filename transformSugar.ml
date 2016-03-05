@@ -210,7 +210,7 @@ class transform (env : Types.typing_environment) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
       | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lin, lam) ->
+      | `FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
@@ -222,8 +222,8 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lin, lam), t)
-      | `Spawn (`Wait, body, Some inner_effects) ->
+            (o, `FunLit (Some argss, lin, lam, location), t)
+      | `Spawn (`Wait, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -231,8 +231,8 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, body, Some inner_effects), body_type)
-      | `Spawn (k, body, Some inner_effects) ->
+            (o, `Spawn (`Wait, location, body, Some inner_effects), body_type)
+      | `Spawn (k, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -241,7 +241,7 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, body, Some inner_effects)), process_type)
+            (o, (`Spawn (k, location, body, Some inner_effects)), process_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
          (o, (`Select (l, e)), TypeUtils.select_type l t)

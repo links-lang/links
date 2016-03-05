@@ -4,7 +4,8 @@ open Performance
 open Getopt
 open Utility
 open List
-open Basicsettings
+
+module BS = Basicsettings
 
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
@@ -12,12 +13,11 @@ let ps1 = "links> "
 type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
-let print_value rtype value = 
+let print_value rtype value =
   print_string (Value.string_of_value value);
-  print_endline (if Settings.get_value(printing_types) then
+  print_endline (if Settings.get_value(BS.printing_types) then
 		   " : "^ Types.string_of_datatype rtype
                  else "")
-
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
@@ -40,48 +40,47 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
      tuple containing all of them. That way we could also optimise the
      prelude.
   *)
-  
-  let optimise_program program = 
+
+  let optimise_program program =
     let program = Ir.ElimDeadDefs.program tenv program in
     let program = Ir.Inline.program tenv program in
     program
   in
-  
-  let program = 
-    if Settings.get_value optimise 
-    then measure "optimise" optimise_program program   
-    else program 
+
+  let program =
+    if Settings.get_value BS.optimise
+    then measure "optimise" optimise_program program
+    else program
   in
 
-  let closures = lazy (Ir.ClosureTable.program tenv Lib.primitive_vars program ) <|measure_as|> "closures" in
-  let valenv = Value.with_closures valenv closures in
+  let program = Closures.program tenv Lib.primitive_vars program in
+  Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
+  BuildTables.program tenv Lib.primitive_vars program;
 
-  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program"
-  in
-    lazy (printer t v) <|measure_as|> "print";
-    valenv, v
+  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
+  lazy (printer t v) <|measure_as|> "print";
+  valenv, v
 
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
-  let evaluate_inner x = 
+  let evaluate_inner x =
     let (program, t), (nenv', tyenv') = parse (nenv, tyenv) x in
-    
+
     let valenv, v = process_program envs (program, t) in
     (valenv,
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v
   in
-  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate"
-  in 
+  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
   handle_errors evaluate_inner
 
 
 
 (** Definition of the various repl directives *)
-let rec directives 
+let rec directives
     : (string
      * ((envs ->  string list -> envs)
         * string)) list Lazy.t =
@@ -89,27 +88,27 @@ let rec directives
   let ignore_envs fn (envs : envs) arg = let _ = fn arg in envs in lazy
   (* lazy so we can have applications on the rhs *)
 [
-    "directives", 
-    (ignore_envs 
-       (fun _ -> 
+    "directives",
+    (ignore_envs
+       (fun _ ->
           iter (fun (n, (_, h)) -> Printf.fprintf stderr " @%-20s : %s\n" n h)
             (Lazy.force directives)),
      "list available directives");
-    
+
     "settings",
     (ignore_envs
-       (fun _ -> 
+       (fun _ ->
           iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
      "print available settings");
-    
+
     "set",
     (ignore_envs
        (function (name::value::_) -> Settings.parse_and_set_user (name, value)
           | _ -> prerr_endline "syntax : @set name value"),
      "change the value of a setting");
-    
+
     "builtins",
-    (ignore_envs 
+    (ignore_envs
        (fun _ ->
           Env.String.fold
             (fun k s () ->
@@ -118,7 +117,7 @@ let rec directives
             (Lib.typing_env.Types.tycon_env) ();
           StringSet.iter (fun n ->
                             let t = Env.String.lookup Lib.type_env n in
-                              Printf.fprintf stderr " %-16s : %s\n" 
+                              Printf.fprintf stderr " %-16s : %s\n"
                                 n (Types.string_of_datatype t))
             (Env.String.domain Lib.type_env)),
      "list builtin functions and values");
@@ -128,12 +127,12 @@ let rec directives
 
     "typeenv",
     ((fun ((_, _, {Types.var_env = typeenv; Types.tycon_env = tycon_env}) as envs) _ ->
-        StringSet.iter 
+        StringSet.iter
           (fun k ->
              let t = Env.String.lookup typeenv k in
-               Printf.fprintf stderr " %-16s : %s\n" k 
+               Printf.fprintf stderr " %-16s : %s\n" k
                  (Types.string_of_datatype t))
-          (StringSet.diff (Env.String.domain typeenv) 
+          (StringSet.diff (Env.String.domain typeenv)
              (Env.String.domain Lib.type_env));
         envs),
      "display the current type environment");
@@ -175,16 +174,16 @@ let rec directives
 
     "withtype",
     ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases} as envs) args ->
-        match args with 
+        match args with
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
               StringSet.iter
-                (fun id -> 
+                (fun id ->
                    try begin
                      let t' = Env.String.lookup tenv id in
                      let ttype = Types.string_of_datatype t' in
                      let fresh_envs = Types.make_fresh_envs t' in
-                     let t' = Instantiate.datatype fresh_envs t' in 
+                     let t' = Instantiate.datatype fresh_envs t' in
                        Unify.datatypes (t,t');
                        Printf.fprintf stderr " %s : %s\n" id ttype
                    end with _ -> ())
@@ -194,10 +193,10 @@ let rec directives
 
   ]
 
-let execute_directive (name, args) (valenv, nenv, typingenv) = 
-  let envs = 
+let execute_directive (name, args) (valenv, nenv, typingenv) =
+  let envs =
     (try fst (assoc name (Lazy.force directives)) (valenv, nenv, typingenv) args;
-     with NotFound _ -> 
+     with NotFound _ ->
        Printf.fprintf stderr "unknown directive : %s\n" name;
        (valenv, nenv, typingenv))
   in
@@ -234,11 +233,27 @@ let interact envs =
 
                       Env.String.fold
                         (fun name var () ->
-                           let v = Value.find var valenv in
-                           let t = Env.String.lookup tyenv'.Types.var_env name in
-                             prerr_endline(name
-                                           ^" = "^Value.string_of_value v
-                                           ^" : "^Types.string_of_datatype t);())
+                           let v, t =
+                             (* function values are bound in a global
+                                table, whereas other values are bound
+                                in the value environment *)
+                             match Tables.lookup Tables.fun_defs var with
+                             | None ->
+                               let v = Value.find var valenv in
+                               let t = Env.String.lookup tyenv'.Types.var_env name in
+                               v, t
+                             | Some (finfo, _, None, location) ->
+                               let v =
+                                 match location with
+                                 | `Server | `Unknown ->
+                                   `FunctionPtr (var, None)
+                                 | `Client ->
+                                   `ClientFunction (Js.var_name_binder (var, finfo)) in
+                               let t = Var.info_type finfo in
+                               v, t in
+                           prerr_endline(name
+                                         ^" = "^Value.string_of_value v
+                                         ^" : "^Types.string_of_datatype t))
                         nenv'
                         ();
 
@@ -257,7 +272,7 @@ let interact envs =
       let parse_and_desugar input =
         let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
         let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
-          (* FIXME: What's going on here? Why is this not part of 
+          (* FIXME: What's going on here? Why is this not part of
              Frontend.Pipeline.interactive?*)
         let sentence' = match sentence with
           | `Definitions defs ->
@@ -295,25 +310,25 @@ let invert_env env =
     env IntMap.empty
 
 let run_file prelude envs filename =
-  Settings.set_value interacting false;
+  Settings.set_value BS.interacting false;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
       ((globals @ locals, main), t), (nenv, tyenv)
   in
-    if Settings.get_value web_mode then
+    if Settings.get_value BS.web_mode then
        Webif.serve_request envs prelude filename
-    else 
-      ignore (evaluate parse_and_desugar envs filename) 
-          
+    else
+      ignore (evaluate parse_and_desugar envs filename)
 
-let run_file prelude envs filename = 
+
+let run_file prelude envs filename =
   lazy (run_file prelude envs filename) <|measure_as|> ("run_file "^filename)
 
 let evaluate_string_in envs v =
-  let parse_and_desugar (nenv, tyenv) s = 
-    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value pp) Parse.program s in
+  let parse_and_desugar (nenv, tyenv) s =
+    let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
     let program, t, _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
@@ -321,24 +336,28 @@ let evaluate_string_in envs v =
     let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
     ((globals @ locals, main), t), (nenv, tyenv)
   in
-    (Settings.set_value interacting false;
+    (Settings.set_value BS.interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
-let load_prelude () = 
+let load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value prelude_file))
+       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
 
-  let () = Lib.prelude_tyenv := Some tyenv in
-  let () = Lib.prelude_nenv := Some nenv in
+  Lib.prelude_tyenv := Some tyenv;
+  Lib.prelude_nenv := Some nenv;
 
-  let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals
-  in
-  let valenv = Evalir.run_defs (Value.empty_env closures) globals in
-  let envs = 
+  let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
+
+  let globals = Closures.bindings tenv Lib.primitive_vars globals in
+  (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
+  BuildTables.bindings tenv Lib.primitive_vars globals;
+
+  let valenv = Evalir.run_defs Value.empty_env globals in
+  let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
      Types.extend_typing_environment Lib.typing_env tyenv)
@@ -346,33 +365,32 @@ let load_prelude () =
     globals, envs
 
 (*Impure so caching is painful *)
-let cache_load_prelude () = 
+let cache_load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       (Loader.wpcache "prelude.ir") 
-	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value prelude_file)))
+       (Loader.wpcache "prelude.ir")
+	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file)))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
 
-  let () = Lib.prelude_tyenv := Some tyenv in
-  let () = Lib.prelude_nenv := Some nenv in
+  Lib.prelude_tyenv := Some tyenv;
+  Lib.prelude_nenv := Some nenv;
 
-  Loader.wpcache "prelude.closures" (fun () -> 
-    let closures = Ir.ClosureTable.bindings (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) (Lib.primitive_vars) globals
-    in
-    let valenv = Evalir.run_defs (Value.empty_env closures) globals in
-    let envs = 
+  Loader.wpcache "prelude.closures" (fun () ->
+    (* TODO: either scrap whole program caching or add closure
+       conversion code here *)
+    let valenv = Evalir.run_defs Value.empty_env globals in
+    let envs =
       (valenv,
        Env.String.extend Lib.nenv nenv,
        Types.extend_typing_environment Lib.typing_env tyenv)
     in
-    globals, envs
-   )
+    globals, envs)
 
 
 
-let run_tests tests () = 
+let run_tests tests () =
   begin
 (*    Test.run tests;*)
     exit 0
@@ -389,64 +407,62 @@ let set_web_mode() = (
     Unix.putenv "REQUEST_METHOD" "GET";
   if not(is_some(getenv "QUERY_STRING")) then
     Unix.putenv "QUERY_STRING" "";
-  Settings.set_value web_mode true
+  Settings.set_value BS.web_mode true
   )
 
 let config_file   : string option ref = ref None
-let options : opt list = 
+let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web-mode",            Some set_web_mode,                None);
-    (noshort, "optimise",            set optimise true,                None);
+    (noshort, "optimise",            set BS.optimise true,                None);
     (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set printing_types false,         None);
+    ('n',     "no-types",            set BS.printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
-     Some(fun filename -> Loader.print_cache filename;  
-            Settings.set_value interacting false));
+     Some(fun filename -> Loader.print_cache filename;
+            Settings.set_value BS.interacting false));
     (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
-    (noshort, "pp",                  None,                             Some (Settings.set_value pp));
+    (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     ]
 
 let file_list = ref []
 
-let old_main () =
-
+let main () =
   let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
-  let () = Utility.for_each !to_evaluate (evaluate_string_in envs) in
+  for_each !to_evaluate (evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  let () =
-    lazy(
-      Utility.for_each
-      !to_precompile
-      (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <|measure_as|> "precompile" in
-  let () = if !to_precompile <> [] then Settings.set_value interacting false in
-          
-  let () = Utility.for_each !file_list (run_file prelude envs) in       
-    if Settings.get_value interacting then
-      let () = print_endline (Settings.get_value welcome_note) in
+  lazy (for_each
+          !to_precompile
+          (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <|measure_as|> "precompile";
+  if !to_precompile <> [] then Settings.set_value BS.interacting false;
+  for_each !file_list (run_file prelude envs);
+  if Settings.get_value BS.interacting then
+    begin
+      print_endline (Settings.get_value BS.welcome_note);
       interact envs
-    
+    end
+
 
 (* jcheney:
    Implementation of "cache_whole_program" setting.
 
-   Alternative version of main that aggressively caches whole 
-   program (prelude plus source), including closures and 
+   Alternative version of main that aggressively caches whole
+   program (prelude plus source), including closures and
    HTML/JS generated by irtojs.
 
    This avoids expensive re-computation of :
-   - irtojs conversion (per page load) 
+   - irtojs conversion (per page load)
    - and closures (per page load and XHR call).
 
-   Thus, in the common case of a client-mode program, we just 
+   Thus, in the common case of a client-mode program, we just
    return the cached html right away, instead of recomputing it.
 
    Assumes web mode and single source file.
@@ -454,20 +470,20 @@ let old_main () =
 
 let whole_program_caching_main () =
   Debug.print ("Whole program caching mode activated.");
-  
-  if Settings.get_value interacting
-  then Settings.set_value interacting false;
 
-  if !to_precompile <> [] 
+  if Settings.get_value BS.interacting
+  then Settings.set_value BS.interacting false;
+
+  if !to_precompile <> []
   then failwith "Cannot precompile in whole program caching mode";
-  
-  if !to_evaluate <> [] 
+
+  if !to_evaluate <> []
   then failwith "Cannot evaluate in whole program caching mode";
-  
+
   (* caching_main assumes exactly one source file *)
   let file_list = ref [] in
-  Errors.display_fatal_l (lazy 
-			    (parse_cmdline options 
+  Errors.display_fatal_l (lazy
+			    (parse_cmdline options
 			       (fun i -> push_back i file_list)));
   if(length (!file_list) <> 1)
   then failwith "Whole program caching mode expects exactly one source file";
@@ -478,26 +494,22 @@ let whole_program_caching_main () =
   let prelude, envs = measure "prelude" cache_load_prelude ()
   in
    Webif.serve_request envs prelude filename
-;;
 
-
-
-let _ =  
+let _ =
 (* parse common cmdline arguments and settings *)
-  begin match Utility.getenv "REQUEST_METHOD" with 
-    | Some _ -> Settings.set_value web_mode true
+  begin match Utility.getenv "REQUEST_METHOD" with
+    | Some _ -> Settings.set_value BS.web_mode true
     | None -> ()
   end;
 
   config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
 
-  Errors.display_fatal_l (lazy 
+  Errors.display_fatal_l (lazy
      (parse_cmdline options (fun i -> push_back i file_list)));
 
-  (match !config_file with None -> () 
+  (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
-  
-  if Settings.get_value cache_whole_program
+
+  if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()
-  else old_main()
-;;
+  else main()

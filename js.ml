@@ -64,21 +64,23 @@ end
 
 (** Generate a JavaScript name from a binder *)
 let name_binder (x, info) =
-  let name =
-    match info with
-      | (_, "", `Local) -> "_" ^ string_of_int x
-      | (_, name, `Local) when (Str.string_match (Str.regexp "^_g[0-9]") name 0) ->
-          "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
-      | (_, name, `Local) -> name ^ "_" ^ string_of_int x
-      | (_, name, `Global) -> name
-  in
-    Symbols.wordify name
+  let (_, name, scope) = info in
+  if String.length name = 0 then
+    "_" ^ string_of_int x
+  else
+    (* Closure conversion means we can no longer rely on top-level
+       functions having unique names *)
+    (* match scope with *)
+    (* | `Local -> *)
+      if (Str.string_match (Str.regexp "^_g[0-9]") name 0) then
+        "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
+      else
+        Symbols.wordify name ^ "_" ^ string_of_int x
+    (* | `Global -> Symbols.wordify name *)
 
-(** Generate a JavaScript name from a binder based on the unique
-    integer for that binder. *)
+(** Generate a JavaScript name from a variable number. *)
 let var_name_var x = "_" ^ string_of_int x
 
 (** Generate a JavaScript name from a binder based on the unique
     integer for that binder. *)
 let var_name_binder (x, info) = var_name_var x
-open Utility

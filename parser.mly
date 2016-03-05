@@ -39,7 +39,7 @@ let ensure_match (start, finish, _) (opening : string) (closing : string) = func
 
 let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos (), None
 
-let default_fixity = Num.num_of_int 9
+let default_fixity = 9
 
 let annotate (signame, datatype) : _ -> binding =
   let checksig (signame, _) name =
@@ -175,7 +175,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT
 %token OFFER SELECT
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
@@ -194,7 +194,7 @@ let datatype d = d, None
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP
-%token <Num.num> UINTEGER
+%token <int> UINTEGER
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
@@ -271,8 +271,8 @@ arg:
 | STRING                                                       { $1 }
 | VARIABLE                                                     { $1 }
 | CONSTRUCTOR                                                  { $1 }
-| UINTEGER                                                     { Num.string_of_num $1 }
-| UFLOAT                                                       { string_of_float $1 }
+| UINTEGER                                                     { string_of_int $1 }
+| UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true" }
 | FALSE                                                        { "false" }
 
@@ -298,7 +298,7 @@ nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
                                                                    `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (Num.int_of_num (from_option default_fixity $2)) (fst $3);
+                                                                   set assoc (from_option default_fixity $2) (fst $3);
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
@@ -435,8 +435,8 @@ primary_expression:
 | LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() }
 | LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() }
 | xml                                                          { $1 }
-| FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ()))), pos() }
-| LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ()))), pos() }
+| FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
+| LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
 
 constructor_expression:
@@ -493,13 +493,14 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN block                                                  { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNANGEL block                                             { `Spawn (`Angel, (`Block $2, pos()), None), pos () }
-| SPAWNDEMON block                                             { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNWAIT block                                              { `Spawn (`Wait, (`Block $2, pos()), None), pos () }
+| SPAWN perhaps_location block                                 { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNCLIENT perhaps_location block                           { `Spawn (`Client, $2, (`Block $3, pos()), None), pos () }
+| SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
+| SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
-                                                                               (`Constant (`Int (Num.num_of_int 0)), pos ())),
+                                                                               (`Constant (`Int 0), pos ())),
                                                                          (`Block $5, pos ()), None), pos () }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
@@ -1028,7 +1029,7 @@ field_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
 | STRING                                                       { $1 }
-| UINTEGER                                                     { Num.string_of_num $1 }
+| UINTEGER                                                     { string_of_int $1 }
 
 rfields:
 | rfield                                                       { [$1], `Closed }

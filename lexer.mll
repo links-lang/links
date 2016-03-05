@@ -201,6 +201,7 @@ let keywords = [
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;
+ "spawnClient" , SPAWNCLIENT;
  "spawnDemon" , SPAWNDEMON;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
@@ -305,7 +306,7 @@ rule lex ctxt nl = parse
   | "'" (char_contents as c) "'"        { let c' = decode_escapes c in
                                             if String.length c' = 1 then CHAR (c'.[0])
                                             else raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-  | def_integer as var                  { UINTEGER (Num.num_of_string var) }
+  | def_integer as var                  { UINTEGER (int_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
   | "infix"                             { INFIX ctxt#setprec }

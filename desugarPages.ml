@@ -53,7 +53,7 @@ let rec desugar_page (o, page_type) =
                              `Unl,
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
-                                     [`Block ([], (`Var x, pos)), pos]), pos))), pos);
+                                     [`Block ([], (`Var x, pos)), pos]), pos)), `Unknown), pos);
                          desugar_nodes pos children]), pos)
         | _ ->
           raise (Errors.SugarError (pos, "Invalid element in page literal"))

@@ -51,7 +51,7 @@ type primitive_value = [
 | `Database of (database * string)
 | `Table of table
 | `Float of float
-| `Int of Num.num
+| `Int of int
 | `XML of xmlitem
 | `String of string ]
 
@@ -63,34 +63,31 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `RecFunction of ((Ir.var * (Ir.var list * Ir.computation)) list *
-                     env * Ir.var * Ir.scope)
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
+| `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and env (*= (t * Ir.scope) Utility.intmap * Ir.closures*)
+and env
     deriving (Show)
 
 val toplevel_cont : continuation
 
-val empty_env : Ir.closures -> env
+val empty_env : env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
 val find : Ir.var -> env -> t
+val mem : Ir.var -> env -> bool
 val lookup : Ir.var -> env -> t option
 val lookupS : Ir.var -> env -> (t * Ir.scope) option
 val shadow : env -> by:env -> env
 val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
-val get_closures : env -> Ir.closures
 (* used only by json.ml, webif.ml ... *)
 val get_parameters : env -> (t*Ir.scope) Utility.intmap
 
-val find_closure : env -> Ir.var -> Utility.IntSet.t
-val with_closures : env -> Ir.closures -> env
 val extend : env -> (t*Ir.scope) Utility.intmap -> env
 
 
@@ -102,7 +99,7 @@ val untuple : t -> t list
 val box_bool : 'a -> [> `Bool of 'a ]
 val unbox_bool : t -> bool
 val box_int : 'a -> [> `Int of 'a ]
-val unbox_int : t -> Num.num
+val unbox_int : t -> int
 val box_float : 'a -> [> `Float of 'a ]
 val unbox_float : t -> float
 val box_char : 'a -> [> `Char of 'a ]
@@ -117,6 +114,8 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_pid : int * Sugartypes.location -> t
+val unbox_pid : t -> int * Sugartypes.location
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 
@@ -132,16 +131,8 @@ val string_of_cont : continuation -> string
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
 
-type unmarshal_envs =
-    env * Ir.scope Utility.IntMap.t *
-      Ir.computation Utility.IntMap.t *
-      (Ir.var list * Ir.computation) Utility.IntMap.t
-
-val build_unmarshal_envs : env * Ir.var Env.String.t * Types.typing_environment
-  -> Ir.program -> unmarshal_envs
-
-val unmarshal_continuation : unmarshal_envs -> string -> continuation
-val unmarshal_value : unmarshal_envs -> string -> t
+val unmarshal_continuation : env -> string -> continuation
+val unmarshal_value : env -> string -> t
 
 val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)

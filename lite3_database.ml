@@ -1,3 +1,4 @@
+open Utility
 open Sqlite3
 
 (* TODO: Better type/error handling *)
@@ -39,7 +40,7 @@ let data_to_string data =
     Data.NONE -> ""
   | Data.NULL -> ""
   | Data.INT i -> Int64.to_string i
-  | Data.FLOAT f -> string_of_float f
+  | Data.FLOAT f -> string_of_float' f
   | Data.TEXT s | Data.BLOB s -> s
 ;;
 

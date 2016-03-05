@@ -252,7 +252,7 @@ fun distinct(xs) {
 fun main () {
   # granularity of server requests
   var w = 1;
-    fun startSuggester(handler) {
+    fun startSuggester(manager) {
       spawn {
         fun suggester(a, p, t) {
           receive {
@@ -264,7 +264,7 @@ fun main () {
               var u = clientTime();        
               if(u-t < w) { sleep(w-(u-t)) } else {()};
 
-              handler!GetCurrentState;
+              manager!GetCurrentState;
               fun f() {
                 receive {
                   case Change -> f()
@@ -285,7 +285,7 @@ fun main () {
       }
     }
 
-  var handler = spawn {
+  var manager = spawn {
     fun receiver(a, p, s) {
       receive {
         case Suggest(authorPrefix, paperPrefix) -> {
@@ -319,7 +319,7 @@ page
    {header("Citations")}
    <body>
     <h1>Find authors and papers</h1>
-    <form l:onkeyup="{handler!Suggest(authorPrefix, paperPrefix)}">
+    <form l:onkeyup="{manager!Suggest(authorPrefix, paperPrefix)}">
      <table>
       <tr>
        <td>{stringToXml(authorLabel)}:</td>

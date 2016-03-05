@@ -19,7 +19,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (`Wait, body, Some inner_eff) ->
+    | `Spawn (`Wait, location, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
 
@@ -31,10 +31,10 @@ object (o : 'self_type)
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "spawnWait", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
         in
           (o, e, body_type)
-    | `Spawn (k, body, Some inner_eff) ->
+    | `Spawn (k, location, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
@@ -44,16 +44,17 @@ object (o : 'self_type)
         let (o, body, body_type) = o#phrase body in
         let o = o#with_effects outer_eff in
 
-        let spawn_fun =
+        let spawn_location, spawn_fun =
           match k with
-          | `Demon -> "spawn"
-          | `Angel -> "spawnAngel"
-          | `Wait  -> assert false in
+          | `Client -> `Client, "spawnClient"
+          | `Demon  -> `Unknown, "spawn"
+          | `Angel  -> `Unknown, "spawnAngel"
+          | `Wait   -> assert false in
 
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var spawn_fun, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body)), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), spawn_location), dp)])
         in
           (o, e, process_type)
     | `Receive (cases, Some t) ->
