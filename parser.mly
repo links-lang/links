@@ -327,8 +327,8 @@ typed_handler_binding:
  									     (binder, $1, hnlit, pos()) }
 
 handled_computation:
-| /* empty */             { (`Any, pos()) }
-| LPAREN pattern RPAREN   { $2 }
+| /* empty */                                                 { (`Any, pos()) }
+| LBRACKET pattern RBRACKET                                   { $2 }
   
 perhaps_uinteger:
 | /* empty */                                                  { None }
@@ -454,12 +454,13 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_specialization LPAREN pattern RPAREN handler_parameterization              {  let (body, args) = $5 in
-											let hnlit = ($3, body, args) in						  
-											`HandlerLit ($1, hnlit), pos() }
+| handler_specialization handled_computation handler_parameterization              {  let (body, args) = $3 in
+										      let hnlit = ($2, body, args) in						  
+											`HandlerLit ($1, hnlit), pos() } 
+    
 handler_specialization:
 | handler_nature handler_depth { ($1, $2) }
-    
+
 handler_parameterization:
 | handler_body                         { ($1, None) }
 | arg_lists handler_body { ($2, Some $1) }
