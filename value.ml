@@ -479,7 +479,10 @@ and p_record_fields ppf = function
                           p_value v;
                   p_record_fields ppf xs
 and p_record_label ppf = function
+  (* TODO can we get a list of keywords from the lexer? *)
   | "client" -> fprintf ppf "\"client\""
+  | "table" -> fprintf ppf "\"table\""
+  (* TODO labels with spaces and other "weird" characters that would confuse the lexer. *)
   | s -> fprintf ppf "%s" s
 and p_list_elements ppf = function
   | [] -> assert false (* We only call this with lists of at least one element *)
