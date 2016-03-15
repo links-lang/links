@@ -32,7 +32,7 @@ let prelude_file =
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
-"  _     _ __   _ _  __  ___\n\
+" _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
