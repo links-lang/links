@@ -15,18 +15,14 @@ sig
 end
 =
 struct
-  let show s program =
-    Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
-    program
-
   (* (These functions correspond to 'first' in an arrow) *)
   let after_typing f (a, b, c) = (f a, b, c)
-  let after_alias_expansion f (a, b) = (f a, b)
+  (* let after_alias_expansion f (a, b) = (f a, b) *)
 
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
-        CheckXmlQuasiquotes.checker#program program;
+        ignore (CheckXmlQuasiquotes.checker#program program);
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
@@ -46,7 +42,7 @@ struct
   let interactive =
     fun tyenv pos_context sentence ->
       let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
-        CheckXmlQuasiquotes.checker#sentence sentence;
+        ignore (CheckXmlQuasiquotes.checker#sentence sentence);
         (   DesugarLAttributes.desugar_lattributes#sentence
         ->- RefineBindings.refine_bindings#sentence
         ->- DesugarDatatypes.sentence tyenv
