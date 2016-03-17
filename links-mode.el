@@ -76,6 +76,7 @@
     "spawnWait"
     "switch"
     "table"
+    "tablekeys"
     "typename"
     "values"
     "var"
