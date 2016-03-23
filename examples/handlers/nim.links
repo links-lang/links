@@ -418,12 +418,11 @@ open handler state(m)(s) {
 # Next, we define a simple handler which records
 # the winner of a single game
 sig scorerecorder : (Comp({Get:GameState,Put:(GameState) {}-> ()|e}, Player)) ->
-                     Comp({Get:GameState,Put:(GameState) {}-> ()|e}, Player)
+                     Comp({Get:GameState,Put:(GameState) {}-> ()|e}, ())
 open handler scorerecorder(m) {
   case Return(x) -> {
     var s = updateScore(x, get()); # Update the game state
-    put(s);                        # Commit the change
-    x
+    put(s);                        # Commit the change    
   }
 }
 
@@ -444,6 +443,23 @@ fun repeatGame(r, m)() {
     	[m()]
     }
 }
+
+sig repeatGame2 : (Int, Comp({ |e},  a)) ->
+                        Comp({ |e},  ())
+fun repeatGame2(r, m)() {
+    fold_left(fun(_,_) {
+      var _ = m(); ()
+    }, (), [1..r])
+}
+
+sig repeatGame3 : (Int) -> (Comp({ |e}, a)) ->
+                            Comp({ |e}, ())
+fun repeatGame3(r)(m)() {
+    fold_left(fun(_,_) {
+      var _ = m(); ()
+    }, (), [1..r])
+}
+			    
 
 # (state -<- boardPrinter -<- randomFloat -< strategy(ms,ms)(repeatGame(10, scorerecorder -< game(33))))(initialState)();
 

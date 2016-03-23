@@ -5,6 +5,8 @@ OCAMLMAKEFILE = ./OCamlMakefile
 PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
 export OCAMLFLAGS=-syntax camlp4o
 
+POSTGRESQL_LIBDIR=$(HOME)/.opam/4.02.3/lib/postgresql
+
 PATH := $(PATH):deriving
 
 ifdef SQLITE_LIBDIR
