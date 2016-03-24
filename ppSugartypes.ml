@@ -333,9 +333,9 @@ let rec phrasenode (ppf : formatter) : phrasenode -> 'a = function
              phrase left
              binop op
              phrase right
-  | `FnAppl (f, args) -> fprintf ppf "%a%a"
+  | `FnAppl (f, args) -> fprintf ppf "%a(@[%a@])"
                                  phrase f
-                                 (argument_list phrase) args
+                                 (comma_separated_list phrase) args
 
   (* TODO Deduplicate with toplevel `Fun.
           Unlike the toplevel fun, this supports printing on one line for short functions without binding lists *)
@@ -471,7 +471,8 @@ and bindingnode (ppf : formatter) : Sugartypes.bindingnode -> 'a = function
              (separated_list "%a@])@ (@[<hov>" pattern_list) pss
              binding_list bl
              phrase bod
-  | `Exp p -> phrase ppf p
+  | `Exp p -> fprintf ppf "%a;"
+                      phrase p
   | `Type (n, q_mtyvar_s, dt') ->
      fprintf ppf "@[<2>%a %s%a =@ @[%a;@]@]"
              keyword "typename"
