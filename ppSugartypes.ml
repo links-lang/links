@@ -123,7 +123,7 @@ let constant (ppf : formatter) : constant -> 'a = function
   | `Bool true -> fprintf ppf "@{<constant>true@}"
   | `Bool false -> fprintf ppf "@{<constant>false@}"
   (* NOTE Char.escaped uses OCaml rules for special characters. Not sure Links' are the same. *)
-  | `Char c -> fprintf ppf "@{<constant>'%s@}" (Char.escaped c)
+  | `Char c -> fprintf ppf "@{<constant>'%s'@}" (Char.escaped c)
   (* NOTE String.escaped uses OCaml rules for special characters in strings. Not sure Links' are the same. *)
   | `String s -> fprintf ppf "@{<constant>\"%s\"@}" (String.escaped s)
   (* TODO Better printing for floats. Ideally, we would like to keep
