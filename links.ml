@@ -441,6 +441,7 @@ let linksfmt file =
   let process (bindings, tail) comments =
     PpSugartypes.comments := comments;
     let ppf = let ppf = Format.std_formatter in
+              Format.pp_set_margin ppf (Settings.get_value Basicsettings.terminal_width);
               Format.pp_set_tags ppf true;
               Format.pp_set_mark_tags ppf true;
               Format.pp_set_print_tags ppf true;
@@ -476,6 +477,7 @@ let linksfmt file =
 
 let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []
+let to_linksfmt : string option ref = ref None
 
 let set_web_mode() = (
   (* When forcing web mode using the command-line argument, default the
@@ -506,7 +508,7 @@ let options : opt list =
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
     (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
-    (noshort, "linksfmt",            None,                             Some (fun file -> linksfmt file));
+    (noshort, "linksfmt",            None,                             Some (fun file -> to_linksfmt := Some file));
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     ]
 
@@ -588,6 +590,10 @@ let _ =
 
   (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
+
+  (match !to_linksfmt with
+   | None -> ()
+   | Some file -> linksfmt file);
 
   if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()
