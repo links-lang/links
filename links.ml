@@ -396,6 +396,84 @@ let run_tests tests () =
     exit 0
   end
 
+(** Pretty print a Links source file and quit, inspired by Go's `gofmt`.
+
+    This reads the file using the Links parser, extracts comments, and pretty prints the file,
+    trying to place comments where they were in the input file.
+ *)
+let linksfmt file =
+  let find_comments filename =
+    (* Match # if it is at the beginning of the line, or preceded by at least one
+     space or tab. This does not match the XML forest pseudo-tags <#>, </#>, and
+     <#/>. *)
+    let r = Str.regexp "\\(^\\|[ \t]\\)#\\(.*\\)$" in
+    let comments = ref [] in
+    let file = open_in filename in
+    begin
+      try
+        let bol = ref 0 in
+        while true do
+          let s = input_line file in
+          bol := !bol + 1; (* +1 for previous lines newline character. NOTE: CRLF line endings? *)
+          begin
+            try
+              let column = Str.search_forward r s 0 in
+              let comment = String.trim (Str.matched_string s) in
+              comments := (!bol + column, comment) :: !comments;
+            with
+            | Not_found -> ()
+            | NotFound _ -> () (* I wish we'd get rid of this overriding functions from the stdlib business... *)
+          end;
+          bol := !bol + String.length s
+        done
+      with End_of_file -> close_in file
+    end;
+    List.rev !comments
+  in
+
+  let parse file =
+    try
+      let ((bindings, tail), _) = Parse.parse_file Parse.program file in
+      (bindings, tail)
+    with e -> (print_endline (Errors.format_exception e); exit 2)
+  in
+
+  let process (bindings, tail) comments =
+    PpSugartypes.comments := comments;
+    let ppf = let ppf = Format.std_formatter in
+              Format.pp_set_tags ppf true;
+              Format.pp_set_mark_tags ppf true;
+              Format.pp_set_print_tags ppf true;
+              Format.pp_set_formatter_tag_functions
+                ppf
+                {mark_open_tag = (function
+                                   | "keyword" -> "\x1b[33m"
+                                   (* | "record_label" -> "\x1b[35m" *) (* purple *)
+                                   (* | "record_label" -> "\x1b[3m" *) (* italics *)
+                                   | _ -> "");
+                 mark_close_tag  = (function
+                                     | "keyword" -> "\x1b[39m"
+                                     (* | "record_label" -> "\x1b[39m" *) (* purple *)
+                                     (* | "record_label" -> "\x1b[23m" *) (* italics *)
+                                     | _ -> "");
+                 Format.print_open_tag  = ignore;
+                 Format.print_close_tag = ignore;
+                };
+              ppf in
+    PpSugartypes.toplevel_binding_list ppf bindings;
+    begin match tail with
+          | None -> ()
+          | Some tail -> PpSugartypes.phrase ppf tail
+    end;
+    (* TODO trailing comments *)
+    Format.pp_print_newline ppf ()
+  in
+
+  let comments = find_comments file in
+  let (bindings, tail) = parse file in
+  process (bindings, tail) comments;
+  exit 0
+
 let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []
 
@@ -427,7 +505,8 @@ let options : opt list =
     (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
-(*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
+    (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
+    (noshort, "linksfmt",            None,                             Some (fun file -> linksfmt file));
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     ]
 

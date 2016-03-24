@@ -76,6 +76,7 @@ SOURCES = $(OPC)                                \
           sugartypes.ml                         \
           parser.mly                            \
           lexer.mli lexer.mll                   \
+          ppSugartypes.ml                       \
           typeUtils.mli typeUtils.ml            \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
