@@ -19,6 +19,11 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
     program
 
+  let show_sentence s sentence =
+    Debug.print (s ^ ": " ^ Sugartypes.Show_sentence.show sentence);
+    sentence
+
+      
   (* (These functions correspond to 'first' in an arrow) *)
   let after_typing f (a, b, c) = (f a, b, c)
   let after_alias_expansion f (a, b) = (f a, b)
@@ -26,6 +31,7 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
+	show "AST" program;
         CheckXmlQuasiquotes.checker#program program;
         ( DesugarHandlers.desugar_handlers_early#program
 	->- DesugarLAttributes.desugar_lattributes#program	
@@ -47,6 +53,7 @@ struct
   let interactive =
     fun tyenv pos_context sentence ->
       let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
+      show_sentence "AST" sentence;
         CheckXmlQuasiquotes.checker#sentence sentence; 
         ( DesugarHandlers.desugar_handlers_early#sentence
 	->- DesugarLAttributes.desugar_lattributes#sentence
