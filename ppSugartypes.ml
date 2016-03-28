@@ -278,8 +278,8 @@ let rec phrasenode (ppf : formatter) : phrasenode -> 'a = function
              phrase name
              (maybe "@ %a" phrase) mdriver
              (maybe "@ %a" phrase) mparams
-  | `TableLit (name, (withdt, None), nfcll, tk, db) as _dbg ->
-     (* fprintf ppf "%s" (Show_phrasenode.show _dbg) *)
+  (* TODO print rwn_rows for debugging purposes *)
+  | `TableLit (name, (withdt, rwn_rows), nfcll, tk, db) as _dbg ->
      fprintf ppf "@[<hv>%a %a@ %a %a%a%a@ %a %a@]"
              keyword "table"
              phrase name
@@ -289,7 +289,9 @@ let rec phrasenode (ppf : formatter) : phrasenode -> 'a = function
              tablekeys tk
              keyword "from"
              phrase db
-  | `Query (limits, (`Block ([], p), _), dt) ->
+  (* TODO This should get rid of nested query blocks. Alternatively, get rid of this nonsense with
+          the parser inserting query blocks around iterations with <-- *)
+  | `Query (None, p, dt) ->
      fprintf ppf "%a {@;<1 2>@[<hov>%a@]@\n}"
              keyword "query"
              phrase p
@@ -337,14 +339,13 @@ let rec phrasenode (ppf : formatter) : phrasenode -> 'a = function
                                  phrase f
                                  (comma_separated_list phrase) args
 
-  (* TODO Deduplicate with toplevel `Fun.
-          Unlike the toplevel fun, this supports printing on one line for short functions without binding lists *)
-  | `FunLit (None, `Unl, (pss, (`Block ([], bod), _)), `Unknown) as _dbg ->
+  (* TODO debug printing for (inferred) type and location *)
+  | `FunLit (typ, `Unl, (pss, (`Block ([], bod), _)), loc) as _dbg ->
      fprintf ppf "@[<hv>%a @[<hv>(@[<hov>%a@])@] {@;<1 2>@[%a@]@ @]}"
              keyword "fun"
              (separated_list "%a@])@ (@[<hov>" pattern_list) pss
              phrase bod
-  | `FunLit (None, `Unl, (pss, (`Block (bl, bod), _)), `Unknown) as _dbg ->
+  | `FunLit (typ, `Unl, (pss, (`Block (bl, bod), _)), loc) as _dbg ->
      fprintf ppf "@[<v>%a @[<hv>(@[<hov>%a@])@] {@;<1 2>@[%a%a@]@ @]}"
              keyword "fun"
              (separated_list "%a@])@ (@[<hov>" pattern_list) pss
@@ -359,6 +360,8 @@ let rec phrasenode (ppf : formatter) : phrasenode -> 'a = function
                                       keyword "else"
                                       phrase f
   | `Section _ -> fprintf ppf "SECTION"
+  | `TAppl (p, args) -> phrase ppf p (* TODO optionally print type applications for debugging purposes *)
+  | `TAbstr (tyvarlistref, p) -> phrase ppf p (* TODO optionally print type abstractions for debugging purposes *)
   (* | p -> failwith ("Can't pretty print " ^ Sugartypes.Show_phrasenode.show p) *)
   | p -> fprintf ppf "%s" (Show_phrasenode.show p) (* TODO *)
 
