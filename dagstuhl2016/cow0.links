@@ -1,0 +1,10 @@
+fun cow() {(do Cow) ()}
+
+fun eat(m) {
+  handle (m) {
+    case Cow(k)    -> k(cow)
+    case Return(x) -> x
+  }
+}
+
+fun go() {eat(cow)}
