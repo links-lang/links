@@ -104,19 +104,12 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
      ) cases
   
 
-let dummy_name = 0
-let name_counter = ref dummy_name
-let fresh_name : unit -> name =
-  fun () ->
-    incr name_counter;
-    "__THIS_IS_A_GENERATED_NAME" ^ (string_of_int !name_counter)
-
 (* This function assigns fresh names to `Any (_) *)
 let rec deanonymize : pattern -> pattern
   = fun (pat, pos) ->
     (begin
       match pat with
-	`Any                         -> `Variable (fresh_name (), None, dp)
+	`Any                         -> `Variable (Utility.gensym ~prefix:"dsh" (), None, dp)
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)

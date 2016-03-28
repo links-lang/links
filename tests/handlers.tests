@@ -174,3 +174,11 @@ stdout : 3 : Int
 Simple shallow state
 { shallowhandler simpleState(s) { case Get(k) -> simpleState(s)(fun() { k(s) }) case Put(s,k) -> simpleState(s)(fun() { k(()) }) case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(10)(count) }
 stdout : 0 : Int
+
+Parameterised handlers (anonymous parameters) [1]
+{ handler(_ : Int)(_ : Float)(_ : String) { case Op(p,k) -> k(p)(42)(3.14)("Foo") case Return(x) -> x } }
+stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(d) {}-> d}~> e) ~> e
+
+Parameterised handlers (anonymous parameters) [2]
+{ handler(_ : Float,_ : String,_ : Int) { case Op(p,k) -> k(p)(3.14,"Bar",99) case Return(x) -> x } }
+stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b}~> c) ~> c
