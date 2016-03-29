@@ -389,7 +389,6 @@ let cache_load_prelude () =
     globals, envs)
 
 
-
 let run_tests tests () =
   begin
 (*    Test.run tests;*)
@@ -410,6 +409,9 @@ let set_web_mode() = (
   Settings.set_value BS.web_mode true
   )
 
+let print_keywords =
+  Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
+
 let config_file   : string option ref = ref None
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
@@ -428,6 +430,7 @@ let options : opt list =
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
+    (noshort, "print-keywords",      print_keywords,                   None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
     ]
