@@ -171,6 +171,18 @@
                     ,buffer-file-name))))
     (compile command)))
 
+(defun links-fmt-region ()
+  "Replace region with result of running linksfmt on that region."
+  (interactive)
+  (let ((tempfile (make-temp-file "code")))
+    (write-region (mark) (point) tempfile)
+    (kill-region (mark) (point))
+    ;; TODO insert into temp buffer and trim empty lines
+    ;; TODO pass fill-column as terminal-width
+    ;; TODO disable coloured output
+    ;; TODO restore killed region on error return
+    (call-process "links" nil t nil (concat "--linksfmt=" tempfile))))
+
 (defvar links-mode-map
   (let ((m (make-keymap)))
     (define-key m (kbd "C-c C-k") 'links-compile-and-run-file)
