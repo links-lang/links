@@ -1600,20 +1600,20 @@ module Print =
 struct
   let show_quantifiers = Settings.add_bool ("show_quantifiers", false, `User)
   let show_flavours = Settings.add_bool ("show_flavours", false, `User)
-  let show_full_kinds = Settings.add_bool ("show_full_kinds", false, `User)
+  let show_kinds = Settings.add_string ("show_kinds", "default", `User)
   let hide_fresh_type_vars = Settings.add_bool ("hide_fresh_type_vars", true, `User)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; full_kinds:bool}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
   type names = (string * Vars.spec) IntMap.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
      flavours=Settings.get_value show_flavours;
      hide_fresh=Settings.get_value hide_fresh_type_vars;
-     full_kinds=Settings.get_value show_full_kinds}
+     kinds=Settings.get_value show_kinds}
 
   let primitive : primitive -> string = function
     | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"
@@ -1635,8 +1635,10 @@ struct
     let full (l, r) = "(" ^ linearity l ^ "," ^ restriction r ^ ")" in
 
     fun (policy, _vars) ->
-    if policy.full_kinds then
+    if policy.kinds = "full" then
       full
+    else if policy.kinds = "hide" then
+      function (_, _) -> ""
     else
       function
       | (`Unl, `Any) -> ""
@@ -1657,18 +1659,20 @@ struct
     let full (policy, _vars) (k, sk) =
       primary_kind k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
-    if policy.full_kinds then
+    if policy.kinds = "full" then
       full (policy, _vars) (k, sk)
+    else if policy.kinds = "hide" then
+      primary_kind k
     else
       match (k, sk) with
       | `Type, (`Unl, `Any) -> ""
       | `Type, (`Unl, `Base) -> restriction `Base
       | `Type, (`Any, `Session) -> restriction `Session
-      | `Type, sk -> subkind ({policy with full_kinds=true}, _vars) sk
+      | `Type, sk -> subkind ({policy with kinds="full"}, _vars) sk
       | `Row, (`Unl, `Any) -> primary_kind `Row
       | `Presence, (`Unl, `Any) -> primary_kind `Presence
       | `Row, _
-      | `Presence, _ -> full ({policy with full_kinds=true}, _vars) (k, sk)
+      | `Presence, _ -> full ({policy with kinds="full"}, _vars) (k, sk)
 
   let quantifier : (policy * names) -> quantifier -> string =
     fun (policy, vars) q ->
