@@ -440,27 +440,7 @@ let linksfmt file =
 
   let process (bindings, tail) comments =
     PpSugartypes.comments := comments;
-    let ppf = let ppf = Format.std_formatter in
-              Format.pp_set_margin ppf (Settings.get_value Basicsettings.terminal_width);
-              Format.pp_set_tags ppf true;
-              Format.pp_set_mark_tags ppf true;
-              Format.pp_set_print_tags ppf true;
-              Format.pp_set_formatter_tag_functions
-                ppf
-                {mark_open_tag = (function
-                                   | "keyword" -> "\x1b[33m"
-                                   (* | "record_label" -> "\x1b[35m" *) (* purple *)
-                                   (* | "record_label" -> "\x1b[3m" *) (* italics *)
-                                   | _ -> "");
-                 mark_close_tag  = (function
-                                     | "keyword" -> "\x1b[39m"
-                                     (* | "record_label" -> "\x1b[39m" *) (* purple *)
-                                     (* | "record_label" -> "\x1b[23m" *) (* italics *)
-                                     | _ -> "");
-                 Format.print_open_tag  = ignore;
-                 Format.print_close_tag = ignore;
-                };
-              ppf in
+    let ppf = PpSugartypes.formatter () in
     PpSugartypes.toplevel_binding_list ppf bindings;
     begin match tail with
           | None -> ()

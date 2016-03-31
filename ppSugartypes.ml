@@ -507,3 +507,39 @@ and type_variable (ppf : formatter) : type_variable -> 'a = function
                          n
 and datatype' (ppf : formatter) : datatype' -> 'a = function
   | dt, None -> datatype ppf dt
+
+
+let plain_formatter ppf =
+  pp_set_margin ppf (Settings.get_value Basicsettings.terminal_width);
+  Format.pp_set_tags ppf false;
+  Format.pp_set_mark_tags ppf false;
+  Format.pp_set_print_tags ppf false;
+  ppf
+
+let color_formatter ppf =
+  pp_set_margin ppf (Settings.get_value Basicsettings.terminal_width);
+  Format.pp_set_tags ppf true;
+  Format.pp_set_mark_tags ppf true;
+  Format.pp_set_print_tags ppf true;
+  Format.pp_set_formatter_tag_functions
+    ppf
+    {mark_open_tag = (function
+                       | "keyword" -> "\x1b[33m"
+                       (* | "record_label" -> "\x1b[35m" *) (* purple *)
+                       (* | "record_label" -> "\x1b[3m" *) (* italics *)
+                       | _ -> "");
+     mark_close_tag  = (function
+                         | "keyword" -> "\x1b[39m"
+                         (* | "record_label" -> "\x1b[39m" *) (* purple *)
+                         (* | "record_label" -> "\x1b[23m" *) (* italics *)
+                         | _ -> "");
+     Format.print_open_tag  = ignore;
+     Format.print_close_tag = ignore;
+    };
+  ppf
+
+let formatter : unit -> formatter = fun () ->
+  match Settings.get_value Basicsettings.pp_style with
+  | "plain" -> plain_formatter std_formatter
+  | "color" -> color_formatter std_formatter
+  | _ -> color_formatter std_formatter
