@@ -1612,13 +1612,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
-    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e) in
+    and erase_cases = List.map (fun ((p, _, t), (e, _, _)) -> p, e)
+    (* Convenient functions for working with rows *)
+    and fmapPresent f = function
+      | `Present x -> `Present (f x)
+      | _ -> assert false
+    and unPresent = function
+      | `Present x -> x
+      | _ -> assert false
+    in
     let rec type_continuation_param : string -> pattern -> (Sugartypes.pattern * Types.environment * Types.datatype) =
       fun opname (k,pos) ->
       let fresh_continuation_type =
 	let domain = Types.fresh_type_variable (`Unl, `Any) in
 	let codomain = Types.fresh_type_variable (`Unl, `Any) in
-	let effrow = Types.make_empty_open_row (`Unl, `Any) in (* Maybe the same across all continuations? *)
+	let effrow = Types.make_empty_open_row (`Unl, `Any) in
 	`Function (Types.make_tuple_type [domain], effrow, codomain)
       in
       let k' = tpo (k,pos) in
@@ -1661,44 +1669,29 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	| _ -> Gripers.handle_patterns' ~pos:pos ~t1:(ppos_and_typ p)
       in
       match k with
-	Some k' ->    let (fields,row_var,dual) = TypeUtils.extract_row dt in
-		      let fields = StringMap.map
-			(function
-			| `Present p ->
-			   begin
-			     match p with
-			       `Record _ -> let (fields, row_var,dual) = TypeUtils.extract_row p in
-					    let last_element = string_of_int (StringMap.size fields) in
-					    let (ktype,fields) = StringMap.pop last_element fields in
-					    let ktype = match ktype with
-						`Present t -> t
-					      | _ -> assert false
-					    in
-					    let () = unify ~handle:Gripers.operation_case_cont_param (no_pos ktype, ppos_and_typ k') in
-										(* Get the identifier for the last parameter (the continuation parameter) *)
-					    `Present ((`Record (StringMap.add last_element (`Present (pattern_typ k')) fields, row_var, dual))) (* Overwrite the continuation parameter type *)
-			     | `MetaTypeVar _ ->
-				let () = unify ~handle:Gripers.operation_case_cont_param (no_pos p, ppos_and_typ k') in
-				`Present (pattern_typ k')
-			     | _ -> assert false
-			   end
-			| _ -> assert false) fields
-		      in
-		      let dt = `Variant (fields,row_var,dual) in			       
+	Some k' -> let (fields,row_var,dual) = TypeUtils.extract_row dt in
+		   let fields = StringMap.map
+		     (fmapPresent
+                        (fun p ->
+                          match p with
+                            `Record _ -> let (fields, row_var,dual) = TypeUtils.extract_row p in
+					 let last_element = string_of_int (StringMap.size fields) in
+					 let (ktype,fields) = StringMap.pop last_element fields in
+					 let () = unify ~handle:Gripers.operation_case_cont_param (no_pos (unPresent ktype), ppos_and_typ k') in
+				         (* Get the identifier for the last parameter (the continuation parameter) *)
+					 `Record (StringMap.add last_element (`Present (pattern_typ k')) fields, row_var, dual) (* Overwrite the continuation parameter type *)
+			  | `MetaTypeVar _ ->
+			     let () = unify ~handle:Gripers.operation_case_cont_param (no_pos p, ppos_and_typ k') in
+			     pattern_typ k'
+			  | _ -> assert false
+			)
+                     ) fields
+		   in
+		   let dt = `Variant (fields,row_var,dual) in			       
 		      (((pat,pos),tenv,dt),k)
       | None -> (((pat,pos),tenv,dt),k)
     in
     let type_handler_cases binders =
-      let liftPresent f x =
-	match x with
-	  `Present x -> `Present (f x)
-	| _ -> assert false
-      in
-      let unPresent x =
-	match x with
-	  `Present x -> x
-	| _ -> assert false
-      in
       let pt = Types.fresh_type_variable (`Unl, `Any) in
       let bt = Types.fresh_type_variable (`Unl, `Any) in
       let binders, pats, ks =
@@ -1729,7 +1722,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       let operations = List.map
 	(fun (opname,p) ->
 	  (opname,
-	   unPresent (liftPresent
 	     (function
 	     | `Variant (fields,_,_)
 	     | `Record (fields,_,_) ->
@@ -1738,7 +1730,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		let r  = List.hd (TypeUtils.arg_types (Types.concrete_type (unPresent k))) in
 		`Function (ps, Types.make_empty_closed_row (), r)
 	     | k -> List.hd (TypeUtils.arg_types (Types.concrete_type k))
-	     ) p))
+	     ) (unPresent p))
 	) operations
       in
       let operations = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty operations in
