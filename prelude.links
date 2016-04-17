@@ -1160,13 +1160,13 @@ typename Zero = [||];
 
 # Handler composition operator
 # Data flows from right to left (or inside-out)
-sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+#sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
 op f -<- g {
   fun(x) { f(g(x)) }
 }
 
 # Plugs a computation into sequence of handlers
-sig -< : ((a) -e-> b, a) -e-> b
+#sig -< : ((a) -e-> b, a) -e-> b
 op f -< m {
   f(m)
 }

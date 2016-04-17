@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck
 export OCAMLFLAGS=-syntax camlp4o
 
 POSTGRESQL_LIBDIR=$(HOME)/.opam/4.02.3/lib/postgresql
@@ -62,7 +62,7 @@ TRASH=*.tmp *.output *.cache
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
-SOURCES = $(OPC)                                \
+SOURCE_FILES = $(OPC)                                \
           notfound.ml                           \
           utility.ml                            \
           env.mli env.ml                        \
@@ -131,8 +131,7 @@ SOURCES = $(OPC)                                \
           query.ml                              \
           evalir.ml                             \
           buildTables.ml                        \
-          webif.mli webif.ml                    \
-          links.ml                              \
+          webif.mli webif.ml                    
 
 # TODO: get these working again
 #
@@ -140,15 +139,35 @@ SOURCES = $(OPC)                                \
 #          tests.ml                              \
 
 
+# Set-up the testsuite as a subproject s.t.
+# $ make testsuite
+# generates a binary "testsuite" which runs the tests.
+define PROJ_testsuite
+  SOURCES=$(SOURCE_FILES) \
+          testsuite.ml
+  RESULT="testsuite"
+endef
+export PROJ_testsuite
+
+ifndef SUBPROJS
+  export SUBPROJS = testsuite
+endif
+
+# Replicate previous makefile
+SOURCES=$(SOURCE_FILES) links.ml
+RESULT="links"
+
 LIBS    = $(DB_LIBS)
 
-RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
 INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
 LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
 
 include $(OCAMLMAKEFILE)
+
+testsuite:
+	@make -f $(OCAMLMAKEFILE) subprojs
 
 test-raw:
 	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
@@ -179,11 +198,14 @@ prelude.links.cache: prelude.links links
 cache-clean:
 	-rm -f prelude.links.cache
 
+testsuite-clean:
+	rm -f testsuite
+
 byte-code: cache-clean
 
 native-code: cache-clean
 
-clean :: docs-clean cache-clean
+clean :: docs-clean cache-clean testsuite-clean
 
 .PHONY: install
 install: nc
