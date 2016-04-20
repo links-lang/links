@@ -1,0 +1,9 @@
+#!/bin/sh
+
+FILE=$1
+
+if [ -z $FILE ]; then 
+	FILE="programs/hello.links"
+fi
+
+./links $FILE

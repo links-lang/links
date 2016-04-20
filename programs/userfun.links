@@ -1,0 +1,2 @@
+fun myId(x) { x }
+print(myId("Foobar"))
