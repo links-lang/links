@@ -430,11 +430,27 @@ let options : opt list =
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     ]
-
+    
 let file_list = ref []
 
+let compile prelude ((valenv,nenv,tyenv) as envs) filename =
+  let parse_and_desugar ((nenv,tyenv) as envs) filename =
+    let envs, (globals, (locals, main), t) =
+      Errors.display_fatal (Loader.load_file envs) filename
+    in
+    ((globals @ locals, main), t), envs
+  in
+  let closure_conversion (valenv, nenv, tyenv) (program, t) =
+    let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+    Closures.program tenv Lib.primitive_vars program
+  in
+  let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
+  (*let program  = closure_conversion envs (program, t) in*)
+  print_endline (Irtoocaml.ocaml_of_ir nenv prelude program)
+
+		    
 let main () =
-  let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
+  (*let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
   for_each !to_evaluate (evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
@@ -448,7 +464,10 @@ let main () =
     begin
       print_endline (Settings.get_value BS.welcome_note);
       interact envs
-    end
+    end*)
+  Settings.set_value BS.interacting false;
+  let (prelude, envs) =  load_prelude () in
+  for_each !file_list (compile prelude envs)
 
 
 (* jcheney:

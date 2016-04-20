@@ -128,6 +128,7 @@ SOURCE_FILES = $(OPC)                                \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
+          irtoocaml.mli irtoocaml.ml                  \
           query.ml                              \
           evalir.ml                             \
           buildTables.ml                        \
