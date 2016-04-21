@@ -779,9 +779,14 @@ let base64decode s =
 
 let base64encode = Netencoding.Base64.encode
 
-(** (0 Ocaml Version Comparison) ***)
-let ocaml_version_number = (List.map int_of_string
-                              (split_string Sys.ocaml_version '.'))
+(** (0 Ocaml Version Comparison) ***)		     
+let ocaml_version_number =
+  (* OCaml version numbers have the format "MAJOR.MINOR.REVISION<+experimental-compiler-name>" *)
+  let version = Sys.ocaml_version in
+  let re = Str.regexp "[0-9]\\([.0-9]\\)*" in
+  if Str.string_match re version 0
+  then Some (List.map int_of_string (split_string (Str.matched_string version) '.'))
+  else None
 
 (* Ocaml team says string comparison would work here. Do we believe them? *)
 let rec version_atleast a b =
@@ -789,7 +794,10 @@ let rec version_atleast a b =
       _, [] -> true
     | [], _ -> false
     | (ah::at), (bh::bt) -> ah > bh || (ah = bh && version_atleast at bt)
-let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
+let ocaml_version_atleast min_vsn =
+  match ocaml_version_number with
+  | Some v -> version_atleast v min_vsn
+  | None -> false
 
 let gensym_counter = ref 0
 
@@ -869,3 +877,4 @@ let string_of_float' : float -> string =
       s ^ "0"
     else
       s
+	
