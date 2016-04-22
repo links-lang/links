@@ -2,7 +2,9 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck compiler-libs.bytecomp
+BACKEND=compiler-libs.bytecomp #compiler-libs.optcomp
+
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck $(BACKEND)
 export OCAMLFLAGS=-syntax camlp4o
 
 #POSTGRESQL_LIBDIR=$(HOME)/.opam/4.02.3/lib/postgresql
