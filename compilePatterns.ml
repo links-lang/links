@@ -1,4 +1,6 @@
 (*pp deriving *)
+module Types = Types_links
+module Env = Env_links
 (*** pattern matching compiler ***)
 (*
   This pattern matching compiler is tree-based (like the one used in

@@ -1,3 +1,5 @@
+module Types = Types_links
+module Env = Env_links
 (** Converts the tree returned by the parser into our internal
     representation *)
 

@@ -1,4 +1,5 @@
 (*pp deriving *)
+module Types = Types_links
 (* Values and environments *)
 
 class type otherfield

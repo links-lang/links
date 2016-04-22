@@ -1,4 +1,6 @@
 (*pp deriving *)
+module Types = Types_links
+module Env = Env_links
 open Utility
 open Ir
 open PP
@@ -306,4 +308,5 @@ let ocaml_of_ir env bindings prog =
   print_endline "Invoking ocamlc on out/a.ml";
   Unix.system "/home/dhil/projects/ocaml-effects/local/bin/ocamlc /home/dhil/projects/links/out/a.ml -o /home/dhil/projects/links/out/a.out";
   print_endline "=====================================================================";		
+  let v = Lambda.Pidentity in
   "Hello World"

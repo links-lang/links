@@ -1,4 +1,6 @@
 open Utility
+module Types = Types_links
+module Env = Env_links
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their

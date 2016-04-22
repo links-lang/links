@@ -1,7 +1,8 @@
 open Utility
+module Types = Types_links
 open Types
 
-module Env = Env.String
+module Env = Env_links.String
 
 (** type destructors *)
 exception TypeDestructionError of string

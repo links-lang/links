@@ -1,3 +1,5 @@
+module Parser = Parser_links
+module Lexer  = Lexer_links		  
 open Utility
 open Lexing
 

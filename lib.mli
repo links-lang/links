@@ -1,4 +1,6 @@
 
+module Types = Types_links
+module Env = Env_links
 val http_response_headers : (string * string) list ref
 val http_response_code : int ref
 

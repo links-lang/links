@@ -1,4 +1,5 @@
 open Utility
+module Types = Types_links
 open Types
 open Typevarcheck
 

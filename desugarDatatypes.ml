@@ -1,4 +1,7 @@
-open Types
+module Types = Types_links
+module Env = Env_links
+module Parse = Parse_links	       
+open Types	       
 open Sugartypes
 open Utility
 open List

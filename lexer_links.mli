@@ -10,4 +10,4 @@ exception LexicalError of (string * Lexing.position)
 (** The entry point to the lexer. *)
 val lexer : lexer_context
          -> newline_hook:(unit -> unit) 
-         -> (Lexing.lexbuf -> Parser.token)
+         -> (Lexing.lexbuf -> Parser_links.token)

@@ -1,3 +1,6 @@
+module Env = Env_links
+module Types = Types_links
+module Parse = Parse_links		 
 (*
   This function is intended to be used to dump the types and
   positions of all variables in a program. It should be useful for

@@ -1,4 +1,6 @@
 (* Alias environment *)
+module Types = Types_links
+module Env = Env_links
 module AliasEnv = Env.String
 
 let alias_env : Types.tycon_environment =

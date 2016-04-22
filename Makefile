@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck compiler-libs.bytecomp
 export OCAMLFLAGS=-syntax camlp4o
 
 #POSTGRESQL_LIBDIR=$(HOME)/.opam/4.02.3/lib/postgresql
@@ -65,19 +65,19 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
 SOURCE_FILES = $(OPC)                                \
           notfound.ml                           \
           utility.ml                            \
-          env.mli env.ml                        \
+          env_links.mli env_links.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
           debug.mli debug.ml                    \
           performance.mli performance.ml        \
           graph.ml                              \
-          types.mli types.ml                    \
+          types_links.mli types_links.ml                    \
           constant.ml                           \
           sourceCode.ml                         \
           regex.ml                              \
           sugartypes.ml                         \
-          parser.mly                            \
-          lexer.mli lexer.mll                   \
+          parser_links.mly                            \
+          lexer_links.mli lexer_links.mll                   \
           typeUtils.mli typeUtils.ml            \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
@@ -88,8 +88,8 @@ SOURCE_FILES = $(OPC)                                \
           ir.mli ir.ml                          \
 	  handlerUtils.ml                       \
           tables.ml                             \
-          closures.ml                           \
-          parse.mli parse.ml                    \
+          closures_links.ml                           \
+          parse_links.mli parse_links.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
@@ -122,7 +122,7 @@ SOURCE_FILES = $(OPC)                                \
           json.ml                               \
           database.mli database.ml              \
           linksregex.ml                         \
-          proc.mli proc.ml                      \
+          proc_links.mli proc_links.ml                      \
           lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \

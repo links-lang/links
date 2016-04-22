@@ -1,3 +1,4 @@
+module Types = Types_links
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
 class virtual db_args : string -> object 

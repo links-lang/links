@@ -1,4 +1,5 @@
 open Sugartypes
+module Types = Types_links
 
 let rec is_raw (phrase, pos) =
   match phrase with

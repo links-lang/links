@@ -1,3 +1,4 @@
+module Types = Types_links
 val read : aliases:Types.tycon_environment -> string -> Types.datatype
 
 val sentence : Types.typing_environment -> Sugartypes.sentence -> Types.typing_environment * Sugartypes.sentence

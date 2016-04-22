@@ -1,4 +1,6 @@
 open Utility
+module Types = Types_links
+module Env = Env_links
 open Sugartypes
 
 module TyEnv = Env.String

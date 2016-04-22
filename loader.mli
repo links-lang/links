@@ -1,3 +1,5 @@
+module Types = Types_links
+module Env = Env_links
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
 

@@ -1,3 +1,4 @@
+module Types = Types_links
 type error = [
   `Msg of string
 | `PresentAbsentClash of string * Types.row * Types.row

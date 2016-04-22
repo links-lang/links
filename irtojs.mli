@@ -1,3 +1,5 @@
+module Types = Types_links
+module Env = Env_links
 (* JavaScript code generation *)
 
 val generate_program_defs : 

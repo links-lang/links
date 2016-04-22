@@ -1,4 +1,6 @@
 (*pp deriving *)
+module Types = Types_links
+module Env = Env_links.String
 open Utility
 open Sugartypes
 
@@ -16,8 +18,6 @@ type var_env =
     Types.meta_type_var StringMap.t *
       Types.meta_row_var StringMap.t
       deriving (Show)
-
-module Env = Env.String
 
 module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit

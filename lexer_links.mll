@@ -35,7 +35,7 @@
 
 open Lexing
 open Utility
-open Parser
+open Parser_links
 
 (* Constructors are not first class in OCaml *)
 let infix0  x = INFIX0  x
@@ -141,7 +141,7 @@ object
     in
       optable <- (name, value) :: optable
 
-  method push_lexer (lexer : Lexing.lexbuf -> Parser.token) =
+  method push_lexer (lexer : Lexing.lexbuf -> Parser_links.token) =
     Stack.push lexer lexers
 
   method pop_lexer =

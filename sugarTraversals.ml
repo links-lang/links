@@ -1,4 +1,5 @@
 (* This file is generated mostly automatically using Hand in Left-or-right-handed 1.0.0 *)
+module Types = Types_links
 (* Generated mostly automatically using Camlp4 in OCaml 3.10.0.
 
    NB: DO NOT EDIT (except to keep it in line with sugartypes.ml).

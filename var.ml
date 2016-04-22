@@ -1,4 +1,6 @@
 (*pp deriving *)
+module Types = Types_links
+module Env = Env_links
 (** {0 IR variables} *)
 
 open Utility

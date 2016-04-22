@@ -1,4 +1,7 @@
 open Notfound
+module Proc = Proc_links
+module Types = Types_links
+module Env = Env_links
 open Utility
 open Proc
 

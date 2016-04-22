@@ -1,4 +1,6 @@
 open Notfound
+module Types = Types_links
+module Env = Env_links
 
 open Utility
 open Types

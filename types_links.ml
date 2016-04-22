@@ -1,4 +1,5 @@
 (*pp deriving *)
+module Env = Env_links
 open Utility
 
 module FieldEnv = Utility.StringMap
@@ -580,7 +581,7 @@ module Show_meta_row_var = Show_unprintable (struct type a = meta_row_var end)
 
 let type_var_number = var_of_quantifier
 
-module Env = Env.String
+module StringEnv = Env_links.String
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -2239,8 +2240,8 @@ module Show_tycon_spec =
         Format.pp_print_string fmt (string_of_tycon_spec a)
      end)
 
-type environment        = datatype Env.t
-and tycon_environment  = tycon_spec Env.t
+type environment        = datatype StringEnv.t
+and tycon_environment  = tycon_spec StringEnv.t
 and typing_environment = { var_env   : environment ;
                            tycon_env : tycon_environment ;
                            effect_row : row }
@@ -2248,7 +2249,7 @@ and typing_environment = { var_env   : environment ;
 
 let normalise_typing_environment env =
   { env with
-      var_env = Env.map normalise_datatype env.var_env;
+      var_env = StringEnv.map normalise_datatype env.var_env;
       (* what about tycon_env? *)
       effect_row = normalise_row env.effect_row }
 
@@ -2256,7 +2257,7 @@ let normalise_typing_environment env =
 let extend_typing_environment
     {var_env = l ; tycon_env = al ; effect_row = _el }
     {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
-  {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
+  {var_env = StringEnv.extend l r ; tycon_env = StringEnv.extend al ar ; effect_row = er }
 
 let string_of_environment = Show_environment.show
 

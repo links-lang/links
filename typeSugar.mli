@@ -1,3 +1,4 @@
+module Types = Types_links
 module Check :
   sig
     open Sugartypes

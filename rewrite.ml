@@ -1,4 +1,5 @@
 (* Tools for rewriting trees *)
+module Proc = Proc_links
 
 module type RewritePrimitives =
 sig

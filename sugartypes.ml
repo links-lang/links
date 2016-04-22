@@ -1,4 +1,5 @@
 (*pp deriving *)
+module Types = Types_links
 open Utility
 
 (** The syntax tree created by the parser. *)

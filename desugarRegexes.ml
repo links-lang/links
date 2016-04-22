@@ -1,4 +1,5 @@
 open Sugartypes
+module Types = Types_links
 
 let desugar_repeat regex_type : Regex.repeat -> phrasenode = function
   | Regex.Star      -> `ConstructorLit ("Star"     , None, Some regex_type)

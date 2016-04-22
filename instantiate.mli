@@ -1,4 +1,5 @@
 exception ArityMismatch
+module Types = Types_links
 
 val show_recursion : bool Settings.setting
 val quantified_instantiation : bool Settings.setting

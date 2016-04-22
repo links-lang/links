@@ -1,4 +1,5 @@
 (*pp deriving *)
+module Types = Types_links
 open Notfound
 open Utility
 open Ir

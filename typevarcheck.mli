@@ -1,3 +1,4 @@
+module Types = Types_links
 val is_guarded : int -> Types.datatype -> bool
 val is_guarded_row : int -> Types.row -> bool
 

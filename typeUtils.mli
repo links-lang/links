@@ -1,4 +1,5 @@
 (** type destructors *)
+module Types = Types_links
 exception TypeDestructionError of string
 
 val concrete_type : Types.datatype -> Types.datatype

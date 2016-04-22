@@ -1,4 +1,8 @@
 (*pp deriving *)
+module Closures = Closures_links
+module Proc = Proc_links
+module Types = Types_links
+module Env = Env_links
 
 open Notfound
 open List
