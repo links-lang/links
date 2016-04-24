@@ -1,9 +1,9 @@
 #!/bin/sh
 
-FILE=$1
+ARGS=$1
 
-if [ -z $FILE ]; then 
-	FILE="programs/hello.links"
+if [ -z $ARGS ]; then 
+	ARGS="programs/hello.links"
 fi
 
-./links $FILE
+./links -c $@

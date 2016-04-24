@@ -434,6 +434,11 @@ let options : opt list =
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
+    (noshort, "dlambda",             set BS.show_lambda_ir true,       None);
+    (noshort, "dclambda",            set BS.show_clambda_ir true,      None);
+    (noshort, "danf",                set BS.show_compiled_ir true,      None);
+    (noshort, "dry-run",             set BS.dry_run true,              None);
+    ('c',     "compile",             set BS.compiling true,            None);
     ]
     
 let file_list = ref []
@@ -450,12 +455,20 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
     Closures.program tenv Lib.primitive_vars program
   in
   let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
-  (*let program  = closure_conversion envs (program, t) in*)
-  print_endline (Irtoocaml.ocaml_of_ir nenv prelude program)
+  let program  = closure_conversion envs (program, t) in
+  Compileir.compile nenv prelude program
 
 		    
+let compile_main () =
+  Settings.set_value BS.cache_whole_program false;
+  Settings.set_value BS.make_cache false;
+  Settings.set_value BS.use_cache false;
+  Settings.set_value BS.interacting false;
+  let (prelude, envs) = load_prelude () in
+  for_each !file_list (compile prelude envs)
+
 let main () =
-  (*let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
+  let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
   for_each !to_evaluate (evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
@@ -469,11 +482,8 @@ let main () =
     begin
       print_endline (Settings.get_value BS.welcome_note);
       interact envs
-    end*)
-  Settings.set_value BS.interacting false;
-  let (prelude, envs) =  load_prelude () in
-  for_each !file_list (compile prelude envs)
-
+    end
+	   
 
 (* jcheney:
    Implementation of "cache_whole_program" setting.
@@ -534,6 +544,8 @@ let _ =
   (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
 
-  if Settings.get_value BS.cache_whole_program
-  then whole_program_caching_main ()
-  else main()
+  if Settings.get_value BS.compiling
+  then compile_main ()
+  else if Settings.get_value BS.cache_whole_program
+       then whole_program_caching_main ()
+       else main()

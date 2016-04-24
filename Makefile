@@ -2,9 +2,9 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-BACKEND=compiler-libs.bytecomp #compiler-libs.optcomp
+COMPILER_LIBS=compiler-libs.bytecomp compiler-libs.optcomp
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck $(BACKEND)
+PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck $(COMPILER_LIBS)
 export OCAMLFLAGS=-syntax camlp4o
 
 #POSTGRESQL_LIBDIR=$(HOME)/.opam/4.02.3/lib/postgresql
@@ -63,6 +63,9 @@ TRASH=*.tmp *.output *.cache
 # Other people's code.
 OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
+
+
+BACKEND=comp/primitives.ml comp/irtolambda.ml comp/compileir.ml
 
 SOURCE_FILES = $(OPC)                                \
           notfound.ml                           \
@@ -130,11 +133,11 @@ SOURCE_FILES = $(OPC)                                \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
-          irtoocaml.mli irtoocaml.ml                  \
           query.ml                              \
           evalir.ml                             \
           buildTables.ml                        \
-          webif.mli webif.ml                    
+          webif.mli webif.ml                    \
+          $(BACKEND)                    
 
 # TODO: get these working again
 #

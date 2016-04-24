@@ -98,3 +98,14 @@ let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
+
+(* Dump lambda IR *)
+let show_lambda_ir = Settings.add_bool("show_lambda_ir", false, `User)
+let show_clambda_ir = Settings.add_bool("show_clambda_ir", false, `User)
+let show_compiled_ir = Settings.add_bool("show_anf_ir", false, `User) (* FIXME: Duplicate of Sugartoir.show_compiled_ir.*)				       
+
+(* Compiling *)				       
+let compiling = Settings.add_bool("compile_mode", false, `System)
+let bytecomp  = Settings.add_bool("byte", true, `System)
+let nativecomp = Settings.add_bool("native", false, `System)
+let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)				  
