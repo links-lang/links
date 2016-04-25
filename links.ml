@@ -439,24 +439,28 @@ let options : opt list =
     (noshort, "danf",                set BS.show_compiled_ir true,      None);
     (noshort, "dry-run",             set BS.dry_run true,              None);
     ('c',     "compile",             set BS.compiling true,            None);
+    (noshort, "byte",                Some (fun () -> Settings.set_value BS.nativecomp false; Settings.set_value BS.bytecomp true),             None);
+    (noshort, "native",              Some (fun () -> Settings.set_value BS.bytecomp false; Settings.set_value BS.nativecomp true),             None);
     ]
     
 let file_list = ref []
 
 let compile prelude ((valenv,nenv,tyenv) as envs) filename =
-  let parse_and_desugar ((nenv,tyenv) as envs) filename =
-    let envs, (globals, (locals, main), t) =
-      Errors.display_fatal (Loader.load_file envs) filename
+  let parse envs filename =
+    let parse_and_desugar ((nenv,tyenv) as envs) filename =
+      let envs, (globals, (locals, main), t) =
+	Errors.display_fatal (Loader.load_file envs) filename
+      in
+      ((globals @ locals, main), t), envs
     in
-    ((globals @ locals, main), t), envs
+    let closure_conversion (valenv, nenv, tyenv) (program, t) =
+      let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+      Closures.program tenv Lib.primitive_vars program
+    in
+    let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
+    closure_conversion envs (program, t)
   in
-  let closure_conversion (valenv, nenv, tyenv) (program, t) =
-    let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
-    Closures.program tenv Lib.primitive_vars program
-  in
-  let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
-  let program  = closure_conversion envs (program, t) in
-  Compileir.compile nenv prelude program
+  Compileir.compile parse envs prelude filename
 
 		    
 let compile_main () =

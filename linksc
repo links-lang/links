@@ -1,9 +1,3 @@
-#!/bin/sh
-
-ARGS=$1
-
-if [ -z $ARGS ]; then 
-	ARGS="programs/hello.links"
-fi
+#!/bin/bash
 
 ./links -c $@

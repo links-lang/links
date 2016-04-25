@@ -1,0 +1,24 @@
+#!/bin/bash
+FILE=$1
+
+if [[ -z $FILE ]]; then
+	echo "usage: $FILE FILE.links"
+	exit 1
+fi
+echo -n "Compiling $1..."
+./linksc --native $1
+if [[ $? -ne 0 ]]; then
+	exit 1
+fi
+echo " DONE!"
+
+echo -n "Running ocamlopt..."
+FILE=${FILE%.*}
+ocamlopt "$FILE.cmx" -o "a.out"
+if [[ $? -ne 0 ]]; then
+	exit 1
+fi
+echo " DONE!"
+
+echo "Executing program: "
+./a.out

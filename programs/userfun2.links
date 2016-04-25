@@ -1,0 +1,4 @@
+fun add(x,y) { x + y }
+fun minus(x,y) { x - y }
+
+print(intToString(add(minus(1,2),10)))
