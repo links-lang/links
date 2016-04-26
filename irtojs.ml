@@ -836,7 +836,8 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
     script_tag("  var cgiEnv = {" ^
                mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
               "};\n  _makeCgiEnvironment();\n") in
-  let version_comment = "<!-- $Id: js.ml 1367 2007-12-10 16:24:38Z sam $ -->" in
+  (* There seems little point in including an out-of-date version comment *)
+  (* let version_comment = "<!-- $Id: js.ml 1367 2007-12-10 16:24:38Z sam $ -->" in *)
     in_tag "html" (in_tag "head"
                      (  extLibs
                       ^ debug_flag (Settings.get_value Debug.debugging_enabled)
@@ -845,7 +846,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
                       ^ env
                       ^ head
                       ^ script_tag (String.concat "\n" defs)
-                      ^ version_comment
+                      (* ^ version_comment *)
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
