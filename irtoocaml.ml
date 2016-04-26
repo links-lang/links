@@ -36,16 +36,26 @@ let ocaml_of_ir _ _ _ =
   let print_hello : Lambda.lambda =
   Lambda.(
     Compmisc.init_path false;
-    let () = Ident.reinit() in
+    let () = Ident.reinit () in
     let print_endline, _ = Env.lookup_value
-      (Longident.(Ldot (Lident "Pervasives", "print_endline")))
-      Env.empty
+			     (Longident.(Ldot (Lident "Pervasives", "print_endline")))
+			     Env.empty
     in
-    Lapply (transl_path ~loc:Location.none Env.empty print_endline,
-        [Lconst (Const_immstring "Hello, world")],
-        no_apply_info)
+    Lsequence ((Lapply (transl_path ~loc:Location.none Env.empty print_endline,
+			[Lconst (Const_immstring "Hello, world")],
+			no_apply_info))
+	      , Lprim (Pmakeblock (0, Asttypes.Immutable), []))
+	      
   )
-  in  
+  in
+  let hello_world : Lambda.lambda =
+    Lambda.(
+      Compmisc.init_path false;
+      let () = Ident.reinit () in
+      Lsequence (Lconst (Const_immstring "Hello, world")
+		, Lprim (Pmakeblock (0, Asttypes.Immutable), []))
+    )
+  in
   let bytecomp () =
     let impl = Bytegen.compile_implementation "helloworld" print_hello in
     let fd = open_out "helloworld.cmo" in
@@ -65,5 +75,5 @@ let ocaml_of_ir _ _ _ =
     let () = Asmgen.compile_implementation "helloworld" Format.err_formatter (0, impl) in
     Compilenv.save_unit_info "helloworld.cmx"
   in*)
-  let _ = Format.fprintf Format.err_formatter "%a@\n@." Printlambda.lambda print_hello in
-  bytecomp (); "TEST"
+  let _ = Format.fprintf Format.err_formatter "%a@\n@." Printlambda.lambda hello_world in
+  nativecomp(); "TEST"
