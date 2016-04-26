@@ -29,6 +29,7 @@ type binder_map = (int * string) list
 		 deriving (Show)
 type lwlambda = [
   | `Let of binder * lwlambda * lwlambda
+  | `Letrec of (binder * lwlambda) list * lwlambda
   | `Fun of binder list * lwlambda
   | `Constant of Constant.constant
   | `Variable of var
@@ -60,9 +61,10 @@ module Translate = struct
            | `Fun (b, (_, args, comp), _, _) ->
 	      let map = computation ((binder b :: (List.map binder args)) @ map) comp in
 	      bindings map bs
-           | `Rec ((b, _, _, _) :: rest) ->
+           | `Rec ((b, (_, args, comp), _, _) :: rest) ->	      
 	      let funs = List.map (fun f -> `Fun f) rest in
-	      let map = bindings (binder b :: map) funs in
+	      let map = computation map comp in
+	      let map = bindings (binder b :: (List.map binder args) @ map) funs in
 	      bindings map bs
 	   | _ -> assert false
 	 end
@@ -138,6 +140,7 @@ module Translate = struct
 	       [   "print", ocaml_function stdlib "print_endline"
 		 ; "intToString", ocaml_function stdlib "string_of_int"
 		 ; "floatToString", ocaml_function stdlib "string_of_float"
+		 ; "^^", ocaml_function stdlib "^"
 	       ]
 	       
   let compenv modulename function_name =
@@ -189,6 +192,12 @@ module Translate = struct
       | `ApplyPure (f,args) -> tail_computation (`Apply (f,args))
       | _ -> assert false   
     and bindings : Ir.binding list -> (lwlambda -> lwlambda) =
+      let recursive_funs funs =
+	  List.fold_right
+	    (fun (b,(_, args, body), _, _) funs ->
+	      (binder b, `Fun (List.map binder args, computation body)) :: funs)
+	    funs []
+      in
       function
       | b :: bs ->
 	 (fun k ->
@@ -196,6 +205,7 @@ module Translate = struct
 	     match b with
 	     | `Let (b,(_,comp)) -> `Let (binder b, tail_computation comp, bindings bs k)
 	     | `Fun (b, (_, args, body), _, _) -> `Let (binder b, `Fun (List.map binder args, computation body), bindings bs k)
+	     | `Rec funs -> `Letrec (recursive_funs funs, bindings bs k)
 	     | _ -> assert false
 	   end)
       | [] -> fun x -> x
@@ -214,6 +224,7 @@ module Translate = struct
 	 L.(transl_path ~loc:Location.none Env.empty (fst (compenv module_name function_name)))
       | `PrimOperation (op, args) -> L.(Lprim (primop op, List.map translate args))
       | `Apply (f, args) -> L.(Lapply (translate f, List.map translate args, no_apply_info))
+      | `Letrec (funs, e) -> L.(Lletrec (List.map (fun (b,comp) -> (ident_of_binder b, translate comp)) funs, translate e))
       | `Let (b, e1, e2) -> L.(Llet (Strict, ident_of_binder b, translate e1, translate e2))
       | `Fun (args, body) -> L.(Lfunction { kind = Curried
 					  ; params = List.map ident_of_binder args
