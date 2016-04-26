@@ -36,6 +36,7 @@ type lwlambda = [
   | `Apply of lwlambda * lwlambda list
   | `Primitive of string
   | `PrimOperation of string * lwlambda list
+  | `If of lwlambda * lwlambda * lwlambda
   | `Empty (* Escape hatch *)
   ]
   deriving (Show)
@@ -49,6 +50,10 @@ module Translate = struct
     and tail_computation : (Ir.var * string) list -> Ir.tail_computation -> (Ir.var * string) list =
       fun map ->
       function
+      | `Case (v, clauses, default_clause) ->
+	 let map = Utility.StringMap.fold (fun _ (b,c) map -> computation (binder b :: map) c) clauses map in
+	 map @ (Utility.from_option [] (Utility.opt_map (fun (b,c) -> computation (binder b :: map) c) default_clause))
+      | `If (v, c1, c2) -> (computation map c2) @ (computation map c2)
       | _ -> map
     and bindings : (Ir.var * string) list -> Ir.binding list -> (Ir.var * string) list  =
       fun map -> 
@@ -170,6 +175,7 @@ module Translate = struct
 	   | Some fname -> `PrimOperation (fname, List.map value args)
 	   | None       -> `Apply (value f, List.map value args)
 	 end
+      | `If (v, e1, e2) -> `If (value v, computation e1, computation e2)
       | `Return v -> value v
       | _ -> assert false
     and value : Ir.value -> lwlambda =
@@ -229,26 +235,42 @@ module Translate = struct
       | `Fun (args, body) -> L.(Lfunction { kind = Curried
 					  ; params = List.map ident_of_binder args
 					  ; body = translate body
-					  })
+			     })
+      | `If (cond, trueb, falseb) -> L.(Lifthenelse (translate cond, translate trueb, translate falseb))
       | _ -> assert false
     and constant : Constant.constant -> L.structured_constant =
       function
       | `String s -> L.Const_immstring s
       | `Int i    -> L.Const_base (Asttypes.Const_int i)
       | `Float f  -> L.Const_base (Asttypes.Const_float (string_of_float f))
+      | `Bool true   -> L.Const_base (Asttypes.Const_int 1)
+      | `Bool false   -> L.Const_base (Asttypes.Const_int 0)
       | _ -> assert false
     and primop   : string -> L.primitive =
-      function
-      | "+" -> L.Paddint
-      | "-" -> L.Psubint
-      | "*" -> L.Pmulint
-      | "/" -> L.Pdivint
-      | "mod" -> L.Pmodint		 
-      | "+." -> L.Paddfloat
-      | "-." -> L.Psubfloat
-      | "*." -> L.Pmulfloat
-      | "/." -> L.Pdivfloat
-      | _ -> assert false
+      fun op ->
+      if is_arithmetic_operation op then
+	match op with       
+	| "+" -> L.Paddint
+	| "-" -> L.Psubint
+	| "*" -> L.Pmulint
+	| "/" -> L.Pdivint
+	| "mod" -> L.Pmodint		 
+	| "+." -> L.Paddfloat
+	| "-." -> L.Psubfloat
+	| "*." -> L.Pmulfloat
+	| "/." -> L.Pdivfloat
+	| _ -> assert false
+      else if is_relational_operation op then
+	L.Pintcomp (
+	    match op with
+	    | "==" -> Ceq
+	    | "<>" -> Cneq
+	    | "<"  -> Clt
+	    | ">"  -> Cgt
+	    | "<=" -> Cle
+	    | ">=" -> Cge
+	    | _ -> assert false)
+      else assert false
     and ident_of_binder : binder -> Ident.t =
       fun (id,bname) ->
       let bname =

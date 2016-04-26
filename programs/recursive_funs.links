@@ -1,0 +1,11 @@
+fun foo(i) {
+   bar(i+1)
+}
+fun bar(j) {
+   baz(j+1)
+}
+fun baz(k) {
+  print("k is " ^^ intToString(k))
+}
+
+foo(1)
