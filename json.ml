@@ -56,9 +56,9 @@ let rec jsonize_value : Value.t -> string = function
       | None     -> ""
       | Some fvs -> ", environment:" ^ jsonize_value fvs in
 
-    "{func:\"" ^ Js.var_name_var f ^ "\"," ^
-    " location:\"" ^ location ^ "\"" ^ env_string ^ "}"
-  | `ClientFunction name -> "{func:\"" ^ name ^ "\"}"
+    "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
+    " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
+  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) -> Printf.sprintf "{\"_label\":\"%s\",\"_value\":%s}" label (jsonize_value value)
   | `Record fields ->
@@ -71,9 +71,9 @@ let rec jsonize_value : Value.t -> string = function
   | `Pid (pid, `Client) ->
     let process = Proc.Proc.get_client_process pid in
     let messages = Proc.Mailbox.pop_all_messages_for pid in
-    "{pid:" ^ string_of_int pid ^ "," ^
-    " process:" ^ jsonize_value process ^ "," ^
-    " messages:" ^ jsonize_value (`List messages) ^
+    "{\"pid\":" ^ string_of_int pid ^ "," ^
+    " \"process\":" ^ jsonize_value process ^ "," ^
+    " \"messages\":" ^ jsonize_value (`List messages) ^
     "}"
   | `Pid (pid, _) -> failwith "Cannot yet jsonize non-client proceses"
   | `Socket _ -> failwith "Cannot jsonize sockets"
@@ -98,7 +98,7 @@ and json_of_xmlitem = function
                 begin
                   let key = int_of_string value in
                   let hs = EventHandlers.find key in
-                  ("eventHandlers: " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
+                  ("\"eventHandlers\": " ^ "\"" ^ js_dq_escape_string (jsonize_value hs) ^ "\"") :: attrs, body
                 end
               else
                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
