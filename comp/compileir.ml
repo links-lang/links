@@ -17,7 +17,24 @@ let hello_world : Lambda.lambda =
     in
     Lsequence (body, Lprim (Pmakeblock(0, Immutable), []))
   )
-       
+
+
+(* (catch
+      (let (match/1209 = 1 switcher/1210 =a (-1+ match/1209))
+        (if (isout 6 switcher/1210) (exit 1)
+          (switch* switcher/1210
+           case int 0: 1
+           case int 1: 2
+           case int 2: 3
+           case int 3: (exit 1)
+           case int 4: 5
+           case int 5: 6
+           case int 6: 7)))
+     with (1)
+      (raise
+        (makeblock 0 (global Match_failure/18g)
+          [0: "/tmp/tmpvrgltaik/tmpmu0lu0s7.ml" 1 0])))
+	 *)
 let dump_lambda lam =
   if Settings.get_value Basicsettings.show_lambda_ir
   then Format.fprintf Format.err_formatter "%a@\n@." Printlambda.lambda lam

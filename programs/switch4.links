@@ -1,0 +1,5 @@
+switch (Foo(100,200)) {
+  case Foo(50,x) -> print("Foo(50,x)")
+  case Foo(100,200) -> print("Foo(100,200)")
+#  case _ -> print("Nothing")
+}

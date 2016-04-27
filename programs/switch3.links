@@ -1,0 +1,8 @@
+switch (Foo(42)) {
+  case Foo(3)       -> print("Foo(3)")
+  case Foo(i)       -> print("Foo(" ^^ intToString(i) ^^ ")")
+  case Bar("Hello") -> print("Bar(Hello)")
+  case Bar(s)       -> print("Bar(" ^^ s ^^ ")")
+  case Baz(f)       -> print("Baz(" ^^ floatToString(f) ^^ ")")
+  case _            -> print("I don't know...")
+}

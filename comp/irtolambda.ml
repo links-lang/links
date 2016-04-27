@@ -38,7 +38,11 @@ type lwlambda = [
   | `PrimOperation of string * lwlambda list
   | `If of lwlambda * lwlambda * lwlambda
   | `Inject of string * lwlambda option
-  | `Empty (* Escape hatch *)
+  | `Project of string * lwlambda
+  | `Unit
+  | `Record of lwlambda list
+  | `Case of lwlambda * (string * (binder * lwlambda)) list * (binder * lwlambda) option 
+  | `Wrong (* Escape hatch *)
   ]
   deriving (Show)
 
@@ -141,12 +145,15 @@ module Translate = struct
 	         	   
   let ocaml_of_links_function f =
     let stdlib = "Pervasives" in
+    let listlib = "List" in
     (* Links function, (module name, ocaml function) *)
     List.assoc f
 	       [   "print", ocaml_function stdlib "print_endline"
 		 ; "intToString", ocaml_function stdlib "string_of_int"
 		 ; "floatToString", ocaml_function stdlib "string_of_float"
 		 ; "^^", ocaml_function stdlib "^"
+		 ; "hd", ocaml_function listlib "hd"
+		 ; "tl", ocaml_function listlib "tl"
 	       ]
 	       
   let compenv modulename function_name =
@@ -177,7 +184,16 @@ module Translate = struct
 	   | None       -> `Apply (value f, List.map value args)
 	 end
       | `If (v, e1, e2) -> `If (value v, computation e1, computation e2)
+      | `Case (v, clauses, default) ->
+	 let clauses' = Utility.StringMap.to_list (fun k (b,c) -> (k, (binder b, computation c))) clauses in
+	 let default' = Utility.opt_map (fun (b,c) -> (binder b, computation c)) default in
+	 `Case (value v, clauses', default')
       | `Return v -> value v
+      | `Special s -> special s
+      | _ -> assert false
+    and special : Ir.special -> lwlambda =
+      function
+      | `Wrong _ -> `Wrong
       | _ -> assert false
     and value : Ir.value -> lwlambda =
       function
@@ -199,11 +215,15 @@ module Translate = struct
       | `ApplyPure (f,args) -> tail_computation (`Apply (f,args))
       | `Inject (label, v,_) ->
 	 begin
-	 match v with
-	 | `Extend (vs, None) when Utility.StringMap.size vs == 0 -> `Inject (label, None)
-	 | _ -> `Inject (label, Some (value v))
+	   match v with
+	   | `Extend (vs, None) when Utility.StringMap.size vs == 0 -> `Inject (label, None)
+	   | _ -> `Inject (label, Some (value v))
 	 end
-      | _ -> assert false   
+      | `Project (label, v) -> `Project (label, value v)
+      | `Extend (vs, None) when Utility.StringMap.size vs == 0 -> `Unit
+      | `Extend (vs, None) ->
+	 `Record (Utility.StringMap.to_list (fun _ v -> value v) vs)
+      | p -> (print_endline (Ir.Show_value.show p); assert false)   
     and bindings : Ir.binding list -> (lwlambda -> lwlambda) =
       let recursive_funs funs =
 	  List.fold_right
@@ -228,51 +248,74 @@ module Translate = struct
     computation ir
 
   let lambda_of_lwlambda module_name ir =
+    let open LambdaDSL in
     let rec translate : lwlambda -> L.lambda =
       function
-      | `Constant c -> L.(Lconst (constant c))
-      | `Variable var -> L.(Lvar (ident_of_var var))
+      | `Constant c -> lconst (constant c)
+      | `Variable var -> lvar (ident_of_var var)
+      | `Primitive "Nil" -> lconst ff				   
       | `Primitive prim ->
 	 let {module_name ; function_name} = ocaml_of_links_function prim in
-	 L.(transl_path ~loc:Location.none Env.empty (fst (compenv module_name function_name)))
-      | `PrimOperation (op, args) -> L.(Lprim (primop op, List.map translate args))
+	 lookup module_name function_name
+      | `PrimOperation (op, args) ->	 
+	 L.(Lprim (primop op, List.map translate args))
+      | `Apply (`Primitive "Cons", args) ->
+	 lprim box (List.map translate args)
       | `Apply (f, args) ->
 	 let args =
 	   if List.length args > 0 then
 	     List.map translate args
 	   else
-	     [L.(Lconst (Const_pointer 0))]
+	     [lconst unit]
 	 in
-	 L.(Lapply (translate f, args, no_apply_info))
-      | `Letrec (funs, e) -> L.(Lletrec (List.map (fun (b,comp) -> (ident_of_binder b, translate comp)) funs, translate e))
-      | `Let (b, e1, e2) -> L.(Llet (Strict, ident_of_binder b, translate e1, translate e2))
+	 lapply (translate f) args
+      | `Letrec (funs, e) ->
+	 lletrec (List.map (fun (b,comp) -> (ident_of_binder b, translate comp) ) funs)
+		 (translate e)
+      | `Let (b, e1, e2) ->
+	 llet (ident_of_binder b) (translate e1) (translate e2)
       | `Fun (args, body) ->
 	 let args =
 	   if List.length args > 0 then
 	     List.map ident_of_binder args
 	   else
-	     [L.(Ident.create (Utility.gensym ()))]
+	     [Ident.create (Utility.gensym ())]
 	 in
-	 L.(Lfunction { kind = Curried
-		      ; params = args
-		      ; body = translate body
-	 })
-      | `If (cond, trueb, falseb) -> L.(Lifthenelse (translate cond, translate trueb, translate falseb))
+	 lfunction args (translate body)
+      | `If (cond, trueb, falseb) ->
+	 lif (translate cond) (translate trueb) (translate falseb)
       | `Inject (label, v) ->
-	 let label_hash = L.(Lconst (Const_base (Asttypes.Const_int (Btype.hash_variant label)))) in
 	 begin
-	 match v with
-	 | Some arg -> L.(Lprim (Pmakeblock (0, Immutable), [label_hash; Lprim (Pmakeblock (0, Immutable), [translate arg])]))
-	 | None -> label_hash
-	 end	 
+	   match v with
+	   | Some (`Record vs) -> polyvariant label (Some (List.map translate vs))
+	   | None -> polyvariant label (Some []) (* FIXME: Nullary variants carry an empty record in order to make pattern-matching easy to implement. *)
+	 end
+      | `Project (label, v) -> lproject ((int_of_string label)-1) (translate v) (* FIXME: Assuming tuples *)
+      | `Unit -> lconst unit
+      | `Record vs -> lprim box (List.map translate vs)      
+      | `Case (v, clauses, default) ->
+	 let v = translate v in
+	 let default =
+	   match default with
+	   | None -> lapply (pervasives "failwith") [lstring "Pattern-matching failed"]
+	   | Some (b,c) -> llet (ident_of_binder b) v (translate c)
+	 in
+	 List.fold_left
+	   (fun matchfail (v',(b,c)) ->	     
+	     lif (neq (lproject 0 v) (polyvariant v' None))
+		 matchfail
+		 (llet (ident_of_binder b) (lproject 1 v) (translate c))
+	   ) default clauses
+      (*      | `Empty -> lprim Pidentity []*)
+      | `Wrong -> lapply (pervasives "failwith") [lstring "Fatal error."]
       | _ -> assert false
     and constant : Constant.constant -> L.structured_constant =
       function
-      | `String s -> L.Const_immstring s
-      | `Int i    -> L.Const_base (Asttypes.Const_int i)
-      | `Float f  -> L.Const_base (Asttypes.Const_float (string_of_float f))
-      | `Bool true   -> L.Const_pointer 1
-      | `Bool false   -> L.Const_pointer 0
+      | `String s -> string s
+      | `Int i    -> const_base int i
+      | `Float f  -> const_base float f
+      | `Bool true   -> tt
+      | `Bool false  -> ff
       | _ -> assert false
     and primop   : string -> L.primitive =
       fun op ->

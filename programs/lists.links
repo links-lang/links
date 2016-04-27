@@ -1,0 +1,18 @@
+fun map(f,xs) {
+  switch(xs) {
+    case x1 :: xs -> f(x1) :: map(f,xs)
+    case [] -> []
+  }
+}
+
+fun fold_left(f,acc,xs) {  
+  switch(xs) {
+    case x :: xs -> fold_left(f, f(acc,x), xs)
+    case []      -> acc
+  }
+}
+
+fold_left(fun(_,x2) { 
+            print(" " ^^ x2)
+          }, (), map(intToString, [1,2,3,4,5]))
+

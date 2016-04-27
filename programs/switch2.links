@@ -1,0 +1,6 @@
+switch (Foo) {
+  case Foo -> print("Foo")
+  case Bar -> print("Bar")
+  case Baz -> print("Baz")
+  case _   -> print("Is not Foo, Bar or Baz")
+}

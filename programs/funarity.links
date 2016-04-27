@@ -1,0 +1,9 @@
+fun many_args(a,b,c,d,e,f,g) {
+  if (a == b) {
+     print("e * f - g = " ^^ intToString(e * f - g))
+  } else {
+     print("c + d = " ^^ intToString(c + d))
+  }
+}
+
+many_args(true,true,1,2,3,4,5)

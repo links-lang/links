@@ -1,0 +1,6 @@
+switch (0) {
+  case 0 -> print("Zero")
+  case 1 -> print("One")
+  case 2 -> print("Two")
+  case 3 -> print("Less than zero or greater than two")
+}

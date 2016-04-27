@@ -1,0 +1,4 @@
+switch ([]) {
+   case x :: xs -> print("not empty")
+   case []      -> print("empty")
+}

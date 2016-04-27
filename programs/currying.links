@@ -1,0 +1,6 @@
+fun max(x)(y) {
+  if (x > y) x
+  else y
+}
+
+print("max(5,4) = " ^^ intToString(max(5)(4)))

@@ -1,0 +1,21 @@
+fun fib(n) {
+  if (n <= 0) 0
+  else { if (n == 1) 1
+         else { fib(n-1) + fib(n-2) }
+       }
+}
+
+fun printFib(i) {
+  var si = intToString(i);
+  print("Fib(" ^^ si ^^ ") = " ^^ intToString(fib(i)))
+}
+
+fun printFibUpTo(n) {
+  fun printFibUpTo_aux(i) {
+     if (i <= n) { printFib(i); printFibUpTo_aux(i+1) }
+     else ()
+  }
+  printFibUpTo_aux(0)
+}
+
+printFibUpTo(10)
