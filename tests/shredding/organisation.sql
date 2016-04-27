@@ -8,12 +8,12 @@ CREATE TABLE contacts (
     dept   text,
     name   text,
     client boolean
-);
+) WITH OIDS;
 
 CREATE TABLE departments (
     id     integer primary key,
     name   text
-);
+) WITH OIDS;
 
 CREATE TABLE employees (
     id     integer primary key,
@@ -26,4 +26,4 @@ CREATE TABLE tasks (
     id       integer primary key,
     employee text,
     task     text
-);
+) WITH OIDS;
