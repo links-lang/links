@@ -1,0 +1,153 @@
+var db = database "links";
+
+var departments =
+  table "departments"
+  with (oid: Int,
+        name: String)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+var employees =
+  table "employees"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        salary : Int)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+var tasks =
+  table "tasks"
+  with (oid: Int,
+        employee: String,
+        task: String)
+  where oid readonly
+  tablekeys [["employee", "task"]]
+  from db;
+
+var contacts =
+  table "contacts"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        "client": Bool)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter (cmd,l) {
+  switch (l) {
+    case x::xs -> cmd(x); iter(cmd,xs)
+    case [] -> ()
+  }
+}
+
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun addDepts(ds) {
+  var ds = map(fun (n) { (name=n) }, ds);
+  insert departments
+  values (name)
+    ds
+}
+
+fun addEmployees(es) {
+  insert employees
+  values (name, dept, salary)
+  es
+}
+
+fun addTasks(ts) {
+  insert tasks
+  values (employee, task)
+    ts
+}
+
+fun addContacts(cs) {
+  insert contacts
+  values (name,dept,"client")
+    cs
+}
+
+fun nth(n,l) {
+  if (n == 0)  {hd(l)}
+  else {nth(n-1,tl(l))}
+}
+
+fun randomList(l) {
+  nth(rand(length(l)),l)
+}
+
+fun randomName() {
+  var name = randomList(["alan","bert","charlie","david","edward",
+	      "alice","betty","clara","dora","eve"]);
+  name ^^ intToString(gensym())
+}
+
+fun randomTask() {
+  randomList( ["abstract","buy","call","dissemble","enthuse"])
+}
+
+fun randomDepartment() {
+  randomList( ["Sales","Research","Quality","Product"])
+}
+
+sig tabulate: ((Int) ~a~> b, Int) ~a~> [b]
+fun tabulate(f,n) {
+  fun g(m) {
+    if (m < n) { f(m)::g(m+1) } else { [] }
+  }
+  g(0)
+}
+
+fun randomEmployees(n,depts) {
+  tabulate (fun (_) { (name=randomName(), dept=randomList (depts), salary = randomList([700,900,20000,50000,60000,100000,2000000])) }, n)
+}
+
+
+fun randomContacts(n,depts) {
+  tabulate (fun (_) { (name=randomName(), dept=randomList (depts), "client" = randomList([true,false])) }, n)
+}
+
+
+fun randomEmployeesInDepartments(depts,n) {
+  for(d <- depts)
+  randomEmployees(n,[d])
+}
+
+fun randomTasks(emps) {
+  for (r <- emps) 
+  tabulate(fun (x) { (employee=r.name,task=randomTask()) }, 1+rand(3))
+}
+
+
+fun addRandom (ds,n) {
+  var depts = tabulate (fun (x) {randomDepartment() ^^ intToString(gensym())}, 
+      	      	        ds);
+  addDepts(depts);
+  var employees = randomEmployees(n,depts);
+  addEmployees(employees);
+  var tasks = randomTasks(employees);
+  addTasks(tasks);
+  var contacts = randomContacts(n*10,depts);
+  addContacts(contacts)
+}
+
+
+fun go(n) {addRandom(n,n*100)}
+
+fun gonm(n,m) {
+  if (m > 0) {
+    var _ = addRandom(n,n*100);
+    gonm(n,m-1)
+  } else {}
+}
+
+# go(400) overflows the stack...
+go(200)
+

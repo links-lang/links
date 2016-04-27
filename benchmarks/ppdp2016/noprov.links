@@ -1,0 +1,79 @@
+var db = database "links";
+
+var departments =
+  table "departments"
+  with (oid: Int,
+        name: String)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+var employees =
+  table "employees"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        salary : Int)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+var tasks =
+  table "tasks"
+  with (oid: Int,
+        employee: String,
+        task: String)
+  where oid readonly
+  tablekeys [["employee", "task"]]
+  from db;
+
+var contacts =
+  table "contacts"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        "client": Bool)
+  where oid readonly
+  tablekeys [["name"]]
+  from db;
+
+fun tasksOfEmp(e) {
+  for (t <-- tasks)
+  where (t.employee == e.name)
+    [t.task]
+}
+
+fun contactsOfDept(d) {
+  for (c <-- contacts)
+  where ((d.name) == c.dept)
+    [(name = c.name,
+      "client" = c."client")]
+}
+
+fun employeesByTask (t) {
+  for (e <-- employees,
+       d <-- departments)
+  where (e.name == t.employee && e.dept == d.name)
+    [(name = e.name,
+      salary = e.salary,
+      tasks = tasksOfEmp(e))]
+}
+
+fun employeesOfDept (d) {
+  for (e <-- employees)
+  where ((d.name) == e.dept)
+    [(name = e.name,
+      salary = e.salary,
+      tasks = tasksOfEmp(e))]
+}
+
+fun q_org () {
+  query {
+    for (d <-- departments)
+      [(name = d.name,
+        employees = employeesOfDept(d),
+        contacts = contactsOfDept(d))]
+  }
+}
+
+length(q_org())
