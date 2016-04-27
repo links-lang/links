@@ -164,16 +164,11 @@ class pg_database host port dbname user password = object(self)
             *)
             failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
         | _::_,  _ ->
-            (* HACK:               
-               This translation is compatible with PostgreSQL versions
-               prior to 8.2, but perhaps we should now switch to the
-               more idiomatic multi-row insert supported by version
-               8.2 and later. *)
-            "(" ^ String.concat "," quoted_field_names ^") "^
-              String.concat " union all " (List.map (fun vs -> "select " ^ 
-                                                       String.concat "," vs) vss)
+           let values : string =
+             String.concat "), (" (List.map (fun vs -> String.concat "," vs) vss)
+           in "(" ^ String.concat "," quoted_field_names ^") VALUES (" ^ values ^ ")"
     in
-      "insert into " ^ table_name ^ body
+    "insert into " ^ table_name ^ body
   (* 
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
