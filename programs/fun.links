@@ -1,0 +1,3 @@
+var g = fun() { print("Called g") };
+var f = fun(s) { print(s) };
+var x = f("Called f"); g()

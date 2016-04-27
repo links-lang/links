@@ -1,0 +1,2 @@
+if (Foo == Bar) print("Foo is Bar")
+else print("Foo is not bar")

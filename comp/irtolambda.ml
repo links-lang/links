@@ -37,6 +37,7 @@ type lwlambda = [
   | `Primitive of string
   | `PrimOperation of string * lwlambda list
   | `If of lwlambda * lwlambda * lwlambda
+  | `Inject of string * lwlambda option
   | `Empty (* Escape hatch *)
   ]
   deriving (Show)
@@ -196,6 +197,12 @@ module Translate = struct
       | `TAbs (_,v)
       | `TApp (v,_) -> value v
       | `ApplyPure (f,args) -> tail_computation (`Apply (f,args))
+      | `Inject (label, v,_) ->
+	 begin
+	 match v with
+	 | `Extend (vs, None) when Utility.StringMap.size vs == 0 -> `Inject (label, None)
+	 | _ -> `Inject (label, Some (value v))
+	 end
       | _ -> assert false   
     and bindings : Ir.binding list -> (lwlambda -> lwlambda) =
       let recursive_funs funs =
@@ -229,22 +236,43 @@ module Translate = struct
 	 let {module_name ; function_name} = ocaml_of_links_function prim in
 	 L.(transl_path ~loc:Location.none Env.empty (fst (compenv module_name function_name)))
       | `PrimOperation (op, args) -> L.(Lprim (primop op, List.map translate args))
-      | `Apply (f, args) -> L.(Lapply (translate f, List.map translate args, no_apply_info))
+      | `Apply (f, args) ->
+	 let args =
+	   if List.length args > 0 then
+	     List.map translate args
+	   else
+	     [L.(Lconst (Const_pointer 0))]
+	 in
+	 L.(Lapply (translate f, args, no_apply_info))
       | `Letrec (funs, e) -> L.(Lletrec (List.map (fun (b,comp) -> (ident_of_binder b, translate comp)) funs, translate e))
       | `Let (b, e1, e2) -> L.(Llet (Strict, ident_of_binder b, translate e1, translate e2))
-      | `Fun (args, body) -> L.(Lfunction { kind = Curried
-					  ; params = List.map ident_of_binder args
-					  ; body = translate body
-			     })
+      | `Fun (args, body) ->
+	 let args =
+	   if List.length args > 0 then
+	     List.map ident_of_binder args
+	   else
+	     [L.(Ident.create (Utility.gensym ()))]
+	 in
+	 L.(Lfunction { kind = Curried
+		      ; params = args
+		      ; body = translate body
+	 })
       | `If (cond, trueb, falseb) -> L.(Lifthenelse (translate cond, translate trueb, translate falseb))
+      | `Inject (label, v) ->
+	 let label_hash = L.(Lconst (Const_base (Asttypes.Const_int (Btype.hash_variant label)))) in
+	 begin
+	 match v with
+	 | Some arg -> L.(Lprim (Pmakeblock (0, Immutable), [label_hash; Lprim (Pmakeblock (0, Immutable), [translate arg])]))
+	 | None -> label_hash
+	 end	 
       | _ -> assert false
     and constant : Constant.constant -> L.structured_constant =
       function
       | `String s -> L.Const_immstring s
       | `Int i    -> L.Const_base (Asttypes.Const_int i)
       | `Float f  -> L.Const_base (Asttypes.Const_float (string_of_float f))
-      | `Bool true   -> L.Const_base (Asttypes.Const_int 1)
-      | `Bool false   -> L.Const_base (Asttypes.Const_int 0)
+      | `Bool true   -> L.Const_pointer 1
+      | `Bool false   -> L.Const_pointer 0
       | _ -> assert false
     and primop   : string -> L.primitive =
       fun op ->
