@@ -302,7 +302,7 @@ module Translate = struct
 	 in
 	 List.fold_left
 	   (fun matchfail (v',(b,c)) ->	     
-	     lif (neq (lproject 0 v) (polyvariant v' None))
+	     lif (neq (lproject 0 v) (polyvariant v' None)) (* FIXME: assuming we always match on a "box" *)
 		 matchfail
 		 (llet (ident_of_binder b) (lproject 1 v) (translate c))
 	   ) default clauses
