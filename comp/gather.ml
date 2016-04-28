@@ -53,7 +53,7 @@ module TraverseIr = struct
       | name -> (Var.var_of_binder b, name)
     in
     let map = computation [] prog in
-    print_endline (Show_name_map.show map); 
+    (*    print_endline (Show_name_map.show map); *)
     IntMap.from_alist map
   
   class gatherer =
@@ -119,7 +119,7 @@ module TraverseIr = struct
 
     method binding : Ir.binding -> 'self_type =      
       function
-      | `Let (b, _)
+      | `Let (b, (_, tc)) -> (o#with_name_map (o#binder b :: name_map))#tail_computation tc
       | `Alien (b,_) -> o#with_name_map (o#binder b :: name_map)
       | `Fun (b, (_, args, comp), _, _) ->
 	 (o#with_name_map (o#binder b :: (List.map o#binder args) @ name_map))#computation comp

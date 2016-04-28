@@ -159,6 +159,10 @@ end
     fun lhs rhs ->
     lprim (Pintcomp Cneq) [lhs;rhs]
 
+  let eq : lambda -> lambda -> lambda =
+    fun lhs rhs ->
+    lprim (Pintcomp Ceq) [lhs;rhs]
+
   let create_ident : string -> int -> Ident.t =
     fun label id ->
     Ident.({ name = label ; stamp = id ; flags = 0 })	 

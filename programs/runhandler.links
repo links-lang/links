@@ -1,0 +1,7 @@
+fun run(m) {
+  handle(m) {
+    case Return(x) -> x
+  }
+}
+
+run(fun() { print("Forcing thunk") })

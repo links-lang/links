@@ -1,0 +1,13 @@
+fun positive(m) {
+  handle(m) {
+    case Choose(k) -> k(true)
+    case Return(x) -> x
+  }
+}
+
+var x = positive(fun() {
+  if (do Choose) 0
+  else 1
+});
+
+print(intToString(x))
