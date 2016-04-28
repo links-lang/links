@@ -455,7 +455,8 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
     in
     let closure_conversion (valenv, nenv, tyenv) (program, t) =
       let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
-      Closures.program tenv Lib.primitive_vars program
+      (*Closures.program tenv Lib.primitive_vars program*)
+      program
     in
     let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
     closure_conversion envs (program, t)

@@ -1,0 +1,6 @@
+print(
+  intToString(
+    handle(fun() { 0 }) {
+      case Return(x) -> x + 1
+    }
+  ))

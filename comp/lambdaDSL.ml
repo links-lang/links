@@ -30,6 +30,9 @@ end
 						  ; params = params
 						  ; body   = body
 						 })
+
+  let lfun = lfunction
+	       
   let int : int -> constant =
     fun i -> Const_int i
 
@@ -60,16 +63,61 @@ end
   let makeblock : int -> mutable_flag -> primitive =
     fun tag flag -> Pmakeblock (tag, flag)
 
-  let box : primitive = makeblock 0 Immutable
   let lprim : primitive -> lambda list -> lambda =
     fun prim args -> Lprim (prim, args)
 			       
   let field : int -> primitive =
     fun i -> Pfield i
 
+  let set_field_imm : int -> primitive =
+    fun i -> Psetfield (i, false)
+
+  let box : primitive = makeblock 0 Immutable
+				  
+  let leffect : string -> lambda =
+    fun label ->
+    (** Copied from translmod.ml **)
+    let prim_set_oo_id =
+      Pccall {Primitive.prim_name = "caml_set_oo_id"; prim_arity = 1;
+              prim_alloc = false; prim_native_name = "";
+              prim_native_float = false}
+    in
+    lprim
+      prim_set_oo_id
+      [lprim (makeblock 248 Mutable) [lstring label; linteger 0]]
+
+  let lalloc_stack : lambda -> lambda -> lambda -> lambda =
+    fun val_handler exn_handler eff_handler ->
+    (** Copied from translmod.ml **)
+    let prim_alloc_stack =
+      Pccall { prim_name = "caml_alloc_stack"; prim_arity = 3; prim_alloc = true;
+               prim_native_name = ""; prim_native_float = false }
+    in
+    lprim
+      prim_alloc_stack
+      [val_handler ; exn_handler ; eff_handler]
+
+  let lresume : lambda list -> lambda =
+    fun args ->
+    lprim Presume args
+
+  let lperform : Ident.t -> lambda list -> lambda =
+    fun id args ->
+    lprim
+      Pperform
+      [lprim box (lvar id :: args) ]
+
+  let ldelegate : Ident.t -> Ident.t -> lambda =
+    fun eff cont ->
+    lprim Pdelegate [lvar eff ; lvar cont]
+
   let lproject : int -> lambda -> lambda =
     fun label row -> lprim (field label) [row]
-		    
+
+
+  let lraise : raise_kind -> lambda -> lambda =
+    fun kind lam ->
+    lprim (Praise kind) [lam]
 						 
   let polyvariant : string -> lambda list option -> lambda =
     fun label args ->
@@ -77,6 +125,13 @@ end
     match args with
     | Some args -> lprim box ([id; lprim box args])
     | None -> id
+
+  let lpolyvariant : string -> lambda list option -> lambda =
+    fun label args ->
+    let id = linteger (Btype.hash_variant label) in
+    match args with
+    | Some args -> lprim box (id :: args)
+    | None -> id		
 
   let lookup : string -> string -> lambda =
     fun module_name fun_name ->
@@ -103,7 +158,11 @@ end
   let neq : lambda -> lambda -> lambda =
     fun lhs rhs ->
     lprim (Pintcomp Cneq) [lhs;rhs]
-			     
+
+  let create_ident : string -> int -> Ident.t =
+    fun label id ->
+    Ident.({ name = label ; stamp = id ; flags = 0 })	 
+	  
   (*let parith : string -> primitive option =
     fun op ->
     let linst =
