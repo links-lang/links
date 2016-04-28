@@ -209,8 +209,46 @@ let translate (op_map,name_map) module_name ir =
 	 let forward =
 	   ldelegate eff cont
 	 in
-	 let compile clauses = assert false in
-	 lfun [eff ; cont] forward (*(compile clauses)*)
+	 let kid = ident ("_k", Var.fresh_raw_var ()) in
+	 let k =
+	   let param = ident ("param", Var.fresh_raw_var ()) in
+	   lfun [param]
+		(lapply (pervasives "continue") [lvar kid ; lvar param])
+	 in
+	 let bind_k scope =
+	   llet ~kind:Alias
+		kid
+		(lprim (makeblock 0 Mutable) [lvar cont])
+		scope
+	 in
+	 let compile clauses =
+	   StringMap.fold
+	     (fun label (b,(bs,tc)) lam ->
+	       let kid =
+		 match List.hd (List.rev bs) with
+		 | `Let ((uid,(_,name,_)),_) -> (name, uid)
+		 | _ -> assert false
+	       in
+	       let bs = List.rev (List.tl (List.rev bs)) in
+	       let clause body =
+		 llet (ident kid)
+		      k
+		      (llet (ident_of_binder b) (* bind b to *)
+			    (lvar eff)
+			    body)
+	       in
+	       let label =
+		 match get_op_uid label with
+		 | Some uid -> lvar (ident (label, uid))
+		 | None -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
+	       in
+	       lif (eq (lvar eff) label)
+		   (clause (bindings bs (tail_computation tc)))
+		   lam
+	     )
+	     clauses forward
+	 in
+	 lfun [eff ; cont] (bind_k (compile clauses))
        in
        let alloc_stack =
 	 lalloc_stack
@@ -222,11 +260,9 @@ let translate (op_map,name_map) module_name ir =
 	 let unit' = ident ("unit", Var.fresh_raw_var ()) in
 	 lfun [unit'] (lapply (value v) [lconst unit])
        in
-(*       if StringMap.size clauses == 0 then
-	 let (b, comp) = value_clause in
-	 llet (ident_of_binder b) (lapply (value v) [lconst unit]) (computation comp)
-       else	 *)
-	 lresume [alloc_stack ; thunk ; lconst unit]
+       lresume [ alloc_stack
+	       ; thunk
+	       ; lconst unit]
     | _ -> assert false
   and value : value -> lambda =
     function
