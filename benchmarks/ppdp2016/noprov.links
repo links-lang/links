@@ -38,34 +38,33 @@ var contacts =
   tablekeys [["name"]]
   from db;
 
+sig tasksOfEmp: ((name:String|_)) -> [String]
 fun tasksOfEmp(e) {
   for (t <-- tasks)
   where (t.employee == e.name)
     [t.task]
 }
 
+sig contactsOfDept: ((name:String|_)) -> [("client":Bool,name:String)]
 fun contactsOfDept(d) {
   for (c <-- contacts)
   where ((d.name) == c.dept)
-    [(name = c.name,
-      "client" = c."client")]
+    [("client" = c."client", name = c.name)]
 }
 
-fun employeesByTask (t) {
-  for (e <-- employees,
-       d <-- departments)
-  where (e.name == t.employee && e.dept == d.name)
-    [(name = e.name,
-      salary = e.salary,
-      tasks = tasksOfEmp(e))]
+sig employeesByTask: ((employee:String|_)) -> [(name:String,salary:Int,tasks:[String])]
+fun employeesByTask(t) {
+  for (e <-- employees)
+    for (d <-- departments)
+    where (e.name == t.employee && e.dept == d.name)
+      [(name = e.name, salary = e.salary, tasks = tasksOfEmp(e))]
 }
 
-fun employeesOfDept (d) {
+sig employeesOfDept: ((name:String|_)) -> [(name:String,salary:Int,tasks:[String])]
+fun employeesOfDept(d) {
   for (e <-- employees)
   where ((d.name) == e.dept)
-    [(name = e.name,
-      salary = e.salary,
-      tasks = tasksOfEmp(e))]
+    [(name = e.name, salary = e.salary, tasks = tasksOfEmp(e))]
 }
 
 sig any : ([a],(a) -a-> Bool) -a-> Bool
@@ -74,22 +73,39 @@ fun any(xs,p) {
 }
 
 sig all : ([a],(a) -a-> Bool) -a-> Bool
-fun all(xs,p) {
-  not(any(xs,fun (x) {not(p(x))}))
+fun all(xs, p) {
+  not(any(xs, fun (x) { not(p(x)) }))
 }
 
-sig contains : ([a],a) -> Bool
-fun contains(xs,u) {
-  any(xs,fun (x) {x==u})
+sig contains: ([a], a) -> Bool
+fun contains(xs, u) {
+  any(xs, fun (x) { x == u })
 }
 
-fun q_org () {
-  query {
-    for (d <-- departments)
-      [(name = d.name,
-        employees = employeesOfDept(d),
-        contacts = contactsOfDept(d))]
-  }
+fun isPoor(x) { x.salary < 1000 }
+fun isRich(x) { x.salary > 1000000 }
+
+sig get: ([(name:a::Any|b)], ((name:a::Any|b)) -c-> d::Any) -c-> [(name:a::Any,tasks:d::Any)]
+fun get(xs, f) {
+  for (x <- xs)
+    [(name = x.name, tasks = f(x))]
+}
+
+sig outliers: ([(salary:Int|a)]) -> [(salary:Int|a)]
+fun outliers(xs) {
+  filter(fun (x) { isRich(x) || isPoor(x) }, xs)
+}
+
+sig clients: ([("client":Bool|a)]) -> [("client":Bool|a)]
+fun clients(xs) {
+  filter(fun (x) { x."client" }, xs)
+}
+
+fun q_org() {
+  for (d <-- departments)
+    [(contacts = contactsOfDept(d),
+      employees = employeesOfDept(d),
+      name = d.name)]
 }
 
 # q_org()
@@ -101,58 +117,44 @@ var q1 = q_org;
 
 # Q2: expertise (factored)
 
-fun q2 () {
+fun q2() {
   for (d <- q1())
-  where (all(d.employees,
-             fun (e) {contains(e.tasks, "abstract")}))
-   [(d=d.name)]
+  where (all(d.employees, fun (e) { contains(e.tasks, "abstract") }))
+    [(d = d.name)]
 }
 
 # Q3: employees with lists of tasks
 
 fun q3() {
-  query {
-    for(e <-- employees)
-    [(e=(e.name),b=tasksOfEmp(e))]
-  }
+  for (e <-- employees)
+    [(b = tasksOfEmp(e), e = (e.name))]
 }
 
 # # Q4: departments with lists of employees
 
 fun q4() {
-  query {
-    for(d <-- departments)
-    [(dpt=(d.name),emps=for (e <-- employees) where ((d.name) == (e.dept)) [(e.name)])]
-  }
+  for (d <-- departments)
+    [(dpt = (d.name),
+      emps = for (e <-- employees)
+             where ((d.name) == (e.dept))
+               [(e.name)])]
 }
 
 # # Q5: Tasks with employees and departments
 
-fun employeesByTask(t) {
-  for(e <-- employees)
-  for (d <-- departments)
-    where (e.name == t.employee && e.dept == d.name)
-      [(b=e.name, c=d.name)]
-}
-
 fun q5() {
-  for(t <-- tasks)
-  [(a=t.task, b=employeesByTask(t))]
+  for (t <-- tasks)
+    [(a = t.task, b = employeesByTask(t))]
 }
 
 # # Q6: shredding paper example (factored)
 
-fun isPoor(x) {x.salary < 1000}
-fun isRich(x) {x.salary > 1000000}
-fun get(xs,f) {for(x <- xs) [(name=x.name,tasks=f(x))]}
-fun outliers(xs) {filter (fun (x) {isRich(x) || isPoor(x)},xs)}
-fun clients(xs) {filter (fun (x) {x."client"},xs)}
-
+sig q6: () -> [(department: String, people: [(name: String, tasks: [String])])]
 fun q6() {
-  query {
-    for (x <- q1())
-    [(department=x.name,
-      people=get(outliers(x.employees), fun (y) {y.tasks}) ++
-             get(clients(x.contacts), fun (y) {["buy"]}))]
-  }
+  for (x <- q1())
+    [(department = x.name,
+      people = get(outliers(x.employees), fun (y) { y.tasks }) ++
+                 get(clients(x.contacts), fun (y) { ["buy"] }))]
 }
+
+query { q6() }
