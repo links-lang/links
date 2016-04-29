@@ -467,6 +467,11 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
+  | `FunctionPtr (x, fvs) as v ->
+     if Settings.get_value Basicsettings.printing_functions
+     then failwith ("New pretty printer is incomplete :/ "^string_of_value v)
+     else fprintf ppf "fun"
+  | `ClientFunction n -> fprintf ppf "%s" n
   | v -> failwith ("New pretty printer is incomplete :/ "^string_of_value v)
   (* | _ -> fprintf ppf "not implemented" *)
 and p_record_fields ppf = function
