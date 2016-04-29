@@ -1,0 +1,208 @@
+var db = database "links";
+
+var departments =
+  table "departments"
+  with (oid: Int,
+        name: String)
+  where oid readonly, name prov default
+  tablekeys [["name"]]
+  from db;
+
+var employees =
+  table "employees"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        salary : Int)
+  where oid readonly, dept prov default, name prov default, salary prov default
+  tablekeys [["name"]]
+  from db;
+
+var tasks =
+  table "tasks"
+  with (oid: Int,
+        employee: String,
+        task: String)
+  where oid readonly, employee prov default, task prov default
+  tablekeys [["oid"]]
+  # tablekeys [["employee", "task"]]
+  from db;
+
+var contacts =
+  table "contacts"
+  with (oid: Int,
+        dept: String,
+        name: String,
+        "client": Bool)
+  where oid readonly, dept prov default, name prov default, "client" prov default
+  tablekeys [["name"]]
+  from db;
+
+sig tasksOfEmp: ((name:Prov(String)|_)) -> [Prov(String)]
+fun tasksOfEmp(e) {
+  for (t <-- tasks)
+  where ((data t.employee) == data e.name)
+    [t.task]
+}
+
+sig contactsOfDept: ((name:Prov(String)|_)) -> [("client":Prov(Bool),name:Prov(String))]
+fun contactsOfDept(d) {
+  for (c <-- contacts)
+  where ((data d.name) == data c.dept)
+    [("client" = c."client", name = c.name)]
+}
+
+sig employeesByTask: ((employee:Prov(String)|_)) -> [(name:Prov(String),salary:Prov(Int),tasks:[Prov(String)])]
+fun employeesByTask(t) {
+  for (e <-- employees)
+    for (d <-- departments)
+    where ((data e.name) == (data t.employee) && (data e.dept) == (data d.name))
+      [(name = e.name, salary = e.salary, tasks = tasksOfEmp(e))]
+}
+
+sig employeesOfDept: ((name:Prov(String)|_)) -> [(name:Prov(String),salary:Prov(Int),tasks:[Prov(String)])]
+fun employeesOfDept(d) {
+  for (e <-- employees)
+  where ((data d.name) == data e.dept)
+    [(name = e.name, salary = e.salary, tasks = tasksOfEmp(e))]
+}
+
+sig any : ([a],(a) -a-> Bool) -a-> Bool
+fun any(xs,p) {
+  not(empty(for (x <- xs) where (p(x)) [()]))
+}
+
+sig all : ([a],(a) -a-> Bool) -a-> Bool
+fun all(xs, p) {
+  not(any(xs, fun (x) { not(p(x)) }))
+}
+
+sig contains: ([a], a) -> Bool
+fun contains(xs, u) {
+  any(xs, fun (x) { x == u })
+}
+
+fun isPoor(x) { (data x.salary) < 1000 }
+fun isRich(x) { (data x.salary) > 1000000 }
+
+# sig get: ([(name:a::Any|b)], ((name:a::Any|b)) -c-> d::Any) -c-> [(name:a::Any,tasks:d::Any)]
+fun get(xs, f) {
+  for (x <- xs)
+    [(name = x.name, tasks = f(x))]
+}
+
+sig outliers: ([(salary:Prov(Int)|a)]) -> [(salary:Prov(Int)|a)]
+fun outliers(xs) {
+  filter(fun (x) { isRich(x) || isPoor(x) }, xs)
+}
+
+sig clients: ([("client":Prov(Bool)|a)]) -> [("client":Prov(Bool)|a)]
+fun clients(xs) {
+  filter(fun (x) { data x."client" }, xs)
+}
+
+fun q_org() {
+  for (d <-- departments)
+    [(contacts = contactsOfDept(d),
+      employees = employeesOfDept(d),
+      name = d.name)]
+}
+
+# q_org()
+
+
+# Q1: nestedOrg (factored)
+
+var q1 = q_org;
+
+# Q2: expertise (factored)
+
+fun q2() {
+  for (d <- q1())
+  where (all(d.employees, fun (e) { contains(map(fun (x) { data x }, e.tasks), "abstract") }))
+    [(d = d.name)]
+}
+
+# Q3: employees with lists of tasks
+
+fun q3() {
+  for (e <-- employees)
+    [(b = tasksOfEmp(e), e = (e.name))]
+}
+
+# Q4: departments with lists of employees
+
+sig q4 : () -> [(dpt:Prov(String),emps:[Prov(String)])]
+fun q4() {
+  for (d <-- departments)
+    [(dpt = (d.name),
+      emps = for (e <-- employees)
+             where ((data d.name) == (data e.dept))
+               [(e.name)])]
+}
+
+# # Q5: Tasks with employees and departments
+
+fun q5() {
+  for (t <-- tasks)
+    [(a = t.task, b = employeesByTask(t))]
+}
+
+# # Q6: shredding paper example (factored)
+
+sig q6: () -> [(department: Prov(String), people: [(name: Prov(String), tasks: [String])])]
+fun q6() {
+  for (x <- q1())
+    [(department = x.name,
+      people = get(outliers(x.employees), fun (y) { map(fun (z) { data z }, y.tasks) }) ++
+                 get(clients(x.contacts), fun (y) { ["buy"] }))]
+}
+
+
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query { f() });
+  var total = serverTimeMilliseconds() - start;
+  total
+}
+
+fun repeat(n,f) {
+  if (n == 0) { [] }
+  else f()::repeat(n-1,f)
+}
+
+fun median(xs) {
+  var ys = sortBy(id, xs);
+  hd(drop(length(ys)/2,ys))
+}
+
+fun test(t) {
+  print(t.msg);
+  var ts = repeat(t.iters, fun () { time(t.q) });
+  var time = median(ts);
+  print("Time: " ^^ intToString(time));
+  (median = time, msg = t.msg, times = ts)
+}
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter(f,l) {
+  switch(l) {
+    case [] -> ();
+    case (x::xs) -> f(x); iter(f,xs)
+  }
+}
+
+var iters = 5;
+
+var tests =
+  [test((iters = iters, msg = "Q1", q = q1)),
+   test((iters = iters, msg = "Q2", q = q2)),
+   test((iters = iters, msg = "Q3", q = q3)),
+   test((iters = iters, msg = "Q4", q = q4)),
+   test((iters = iters, msg = "Q5", q = q5)),
+   test((iters = iters, msg = "Q6", q = q6))];
+
+iter(fun (u) {
+  print(u.msg ^^ ":\t" ^^ intToString(u.median) ^^ "\t" ^^ show(u.times))
+}, tests)

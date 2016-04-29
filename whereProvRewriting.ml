@@ -1,5 +1,9 @@
 open Utility
 
+let pps printer p =
+  printer Format.str_formatter p;
+  Format.flush_str_formatter ()
+
 class where_prov_rewriting env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -112,7 +116,7 @@ object (o : 'self_type)
                   ([[]], (`Block ([], (iter, dp)), dp)),
                   `Server) in
        (* Debug.print ("Delayed prov fun: "^(Sugartypes.Show_phrasenode.show delayed_prov)); *)
-       
+
        let pair : Sugartypes.phrasenode = `TupleLit [(tablelit, dp); (delayed_prov, dp)] in
        let pair_type = Types.make_tuple_type [tablelit_type; delayed_type] in
        (* Debug.print ("TableLit desugared:\n"^Sugartypes.Show_phrasenode.show pair); *)
@@ -124,7 +128,7 @@ object (o : 'self_type)
        let (o, cond, _) = TransformSugar.option o (fun o -> o#phrase) cond in
        let (o, orderby, _) = TransformSugar.option o (fun o -> o#phrase) orderby in
        let res = `Iteration (gens, body, cond, orderby) in
-       (* Debug.print ("Before: "^Sugartypes.Show_phrasenode.show _iteration^"\n after: "^Sugartypes.Show_phrasenode.show res); *)
+       (* Debug.print ("Before:\n"^(pps PpSugartypes.phrasenode _iteration)^"\nAfter:\n"^(pps PpSugartypes.phrasenode res)); *)
        (o, res, t)
 
     (* TODO What to do with where clauses? *)
@@ -155,4 +159,5 @@ object (o : 'self_type)
     | e -> super#phrasenode e
 end
 
-let where_prov_rewriting env = ((new where_prov_rewriting env) : where_prov_rewriting :> TransformSugar.transform)
+let where_prov_rewriting env =
+  ((new where_prov_rewriting env) : where_prov_rewriting :> TransformSugar.transform)
