@@ -44,8 +44,13 @@
     (modify-syntax-entry ?' "w" st)
     st))
 
+;; Can be generated with `links --print-keywords`.
+;; TODO We should do that automatically as part of the build process somehow.
 (defconst links-keywords
   '(
+    "TableHandle"
+    "alien"
+    "as"
     "case"
     "data"
     "client"
@@ -53,33 +58,46 @@
     "default"
     "delete"
     "else"
+    "escape"
+    "false"
     "for"
     "forall"
-    "form"
+    "formlet"
     "from"
     "fun"
     "if"
-    "infixl"
-    "infixr"
+    "in"
+    "include"
     "insert"
     "linfun"
+    "mu"
+    "native"
+    "nu"
     "offer"
     "op"
     "orderby"
+    "page"
     "prov"
     "query"
     "select"
     "readonly"
+    "receive"
+    "returning"
     "select"
     "server"
+    "set"
     "sig"
     "spawn"
     "spawnAngel"
+    "spawnClient"
     "spawnDemon"
     "spawnWait"
     "switch"
     "table"
+    "tablekeys"
+    "true"
     "typename"
+    "update"
     "values"
     "var"
     "where"
@@ -156,9 +174,37 @@
                     ,buffer-file-name))))
     (compile command)))
 
+(defun links--write-fmt-config ()
+  (let ((file (make-temp-file "config")))
+    (with-temp-file file
+      (insert "terminal_width=" (int-to-string fill-column))
+      (newline)
+      (insert "pp_style=plain"))
+    file))
+
+(defun links-fmt-region ()
+  "Replace region with result of running linksfmt on that region."
+  (interactive)
+  (let ((tempfile (make-temp-file "code")))
+    (write-region (mark) (point) tempfile)
+    (let ((ret (with-current-buffer (get-buffer-create "*linksfmt-output*")
+                 (erase-buffer)
+                 (prog1 (call-process "links" nil t nil
+                                      (concat "--linksfmt=" tempfile)
+                                      (concat "--config=" (links--write-fmt-config)))
+                   (end-of-buffer)
+                   (delete-blank-lines)
+                   (delete-blank-lines)
+                   (kill-ring-save (point-min) (point-max))))))
+      (if (not (zerop ret))
+          (message "An error occured during pretty printing, see *linksfmt-output*.")
+        (delete-region (mark) (point))
+        (yank)))))
+
 (defvar links-mode-map
   (let ((m (make-keymap)))
     (define-key m (kbd "C-c C-k") 'links-compile-and-run-file)
+    (define-key m (kbd "C-c C-m") 'links-fmt-region)
     m))
 
 ;;;###autoload

@@ -32,7 +32,7 @@ let prelude_file =
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
-"  _     _ __   _ _  __  ___\n\
+" _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
@@ -116,4 +116,5 @@ let feature_test = Settings.add_bool("feature_test",false,`User)
 
 (* experimental: new pretty printer for Value.t *)
 let new_pretty_printer = Settings.add_bool ("new_pretty_printer", false, `User)
+let pp_style = Settings.add_string ("pp_style", "", `User)
 let terminal_width = Settings.add_int ("terminal_width", 80, `User)
