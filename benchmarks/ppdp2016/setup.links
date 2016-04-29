@@ -148,6 +148,13 @@ fun gonm(n,m) {
   } else {}
 }
 
-# go(400) overflows the stack...
-go(200)
+fun go_large(n) {
+  if (n > 200) {
+    addRandom(200, 200*100);
+    go_large(n - 200)
+  } else {
+    addRandom(n, n*100);
+  }
+}
 
+go_large(4096)

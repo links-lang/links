@@ -24,7 +24,8 @@ var tasks =
         employee: String,
         task: String)
   where oid readonly
-  tablekeys [["employee", "task"]]
+  tablekeys [["oid"]]
+  # tablekeys [["employee", "task"]]
   from db;
 
 var contacts =
@@ -67,6 +68,21 @@ fun employeesOfDept (d) {
       tasks = tasksOfEmp(e))]
 }
 
+sig any : ([a],(a) -a-> Bool) -a-> Bool
+fun any(xs,p) {
+  not(empty(for (x <- xs) where (p(x)) [()]))
+}
+
+sig all : ([a],(a) -a-> Bool) -a-> Bool
+fun all(xs,p) {
+  not(any(xs,fun (x) {not(p(x))}))
+}
+
+sig contains : ([a],a) -> Bool
+fun contains(xs,u) {
+  any(xs,fun (x) {x==u})
+}
+
 fun q_org () {
   query {
     for (d <-- departments)
@@ -76,4 +92,67 @@ fun q_org () {
   }
 }
 
-length(q_org())
+# q_org()
+
+
+# Q1: nestedOrg (factored)
+
+var q1 = q_org;
+
+# Q2: expertise (factored)
+
+fun q2 () {
+  for (d <- q1())
+  where (all(d.employees,
+             fun (e) {contains(e.tasks, "abstract")}))
+   [(d=d.name)]
+}
+
+# Q3: employees with lists of tasks
+
+fun q3() {
+  query {
+    for(e <-- employees)
+    [(e=(e.name),b=tasksOfEmp(e))]
+  }
+}
+
+# # Q4: departments with lists of employees
+
+fun q4() {
+  query {
+    for(d <-- departments)
+    [(dpt=(d.name),emps=for (e <-- employees) where ((d.name) == (e.dept)) [(e.name)])]
+  }
+}
+
+# # Q5: Tasks with employees and departments
+
+fun employeesByTask(t) {
+  for(e <-- employees)
+  for (d <-- departments)
+    where (e.name == t.employee && e.dept == d.name)
+      [(b=e.name, c=d.name)]
+}
+
+fun q5() {
+  for(t <-- tasks)
+  [(a=t.task, b=employeesByTask(t))]
+}
+
+# # Q6: shredding paper example (factored)
+
+fun isPoor(x) {x.salary < 1000}
+fun isRich(x) {x.salary > 1000000}
+fun get(xs,f) {for(x <- xs) [(name=x.name,tasks=f(x))]}
+fun outliers(xs) {filter (fun (x) {isRich(x) || isPoor(x)},xs)}
+fun clients(xs) {filter (fun (x) {x."client"},xs)}
+
+fun q6() {
+  query {
+    for (x <- q1())
+    [(department=x.name,
+      people=get(outliers(x.employees), fun (y) {y.tasks}) ++
+             get(clients(x.contacts), fun (y) {["buy"]}))]
+  }
+}
