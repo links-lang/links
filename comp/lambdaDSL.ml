@@ -37,7 +37,9 @@ end
     fun i -> Const_int i
 
   let float : float -> constant =
-    fun f -> Const_float (string_of_float f)
+    fun f ->
+    let _ = print_endline ("Float-to-string: " ^ (string_of_float f)) in
+    Const_float (string_of_float f)
 
   let string : string -> structured_constant =
     fun s -> Const_immstring s
@@ -101,11 +103,11 @@ end
     fun args ->
     lprim Presume args
 
-  let lperform : Ident.t -> lambda list -> lambda =
-    fun id args ->
+  let lperform : lambda -> lambda list -> lambda =
+    fun eff args ->
     lprim
       Pperform
-      [lprim box (lvar id :: args) ]
+      [lprim box (eff :: args) ]
 
   let ldelegate : Ident.t -> Ident.t -> lambda =
     fun eff cont ->
@@ -118,6 +120,10 @@ end
   let lraise : raise_kind -> lambda -> lambda =
     fun kind lam ->
     lprim (Praise kind) [lam]
+
+  let lgetglobal : string -> lambda =
+    fun name ->
+    lprim (Pgetglobal (Ident.create_persistent name)) []
 						 
   let polyvariant : string -> lambda list option -> lambda =
     fun label args ->

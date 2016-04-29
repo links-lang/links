@@ -1,0 +1,4 @@
+handle (fun () { do Op(42) }) {
+  case Op(i,k)   -> k(i-42)
+  case Return(x) -> print(intToString(x))
+}

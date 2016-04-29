@@ -118,6 +118,7 @@ let translate (op_map,name_map) module_name ir =
     | "" -> ident_of_var var
     | name -> ident (name, var)
   in
+  let getglobal = lgetglobal (String.capitalize module_name) in
   let rec computation : computation -> lambda =
     fun (bs,tc) ->
     bindings bs (tail_computation tc)
@@ -151,6 +152,9 @@ let translate (op_map,name_map) module_name ir =
 		 begin
 		   match fname with
 		   | "Cons" -> lprim box args'
+		   | "random" ->
+		      let random = lookup "Random" "float" in
+		      (lapply random [lfloat 1.0])
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in
@@ -187,12 +191,22 @@ let translate (op_map,name_map) module_name ir =
     function
     | `Wrong _ -> lapply (pervasives "failwith") [lstring "Fatal error."]
     | `DoOperation (label, args, _) ->
+       let perform label args =	 
+	 lperform (lprim (field 0)
+			 [ getglobal ])
+		  [ lprim box args ]
+       in
        let id =
 	 match get_op_uid label with
 	 | Some id -> id
-	 | None -> failwith ("Internal compiler failure: Cannot not find identifier for operation name " ^ label)
+	 | None    -> failwith ("Internal compiler failure: Cannot not find identifier for operation name " ^ label)
        in	 
-       lperform (ident (label, id)) (List.map value args)
+    (*       lperform (ident (label, id)) (List.map value args) *)
+(*       Lambda.(lprim (Pperform)
+		     [ lprim (field 0)
+		      [lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []]
+                     ])*)
+       perform label (List.map value args)
     | `Handle (v, clauses, _) ->
        let (value_clause, clauses) = StringMap.pop "Return" clauses in
        let value_handler =
@@ -221,28 +235,65 @@ let translate (op_map,name_map) module_name ir =
 		(lprim (makeblock 0 Mutable) [lvar cont])
 		scope
 	 in
+	 let rec take n xs =
+	   if n <> 0 then
+	     List.hd xs :: take (n-1) (List.tl xs)
+	   else
+	     []
+	 in
+	 let rec drop n xs =
+	   if n <> 0 then
+	     drop (n-1) (List.tl xs)
+	   else
+	     xs
+	 in
+	 let pop_k bs =
+	   match List.length bs with
+	   | 0 -> assert false
+	   | 1 -> (List.hd bs, [])
+	   | 2 -> (List.hd bs, List.tl bs)
+	   | n -> (List.nth bs (n/2), (take ((n/2) - 1) bs) @ (drop ((n/2) + 1) bs))
+	 in
 	 let compile clauses =
 	   StringMap.fold
 	     (fun label (b,(bs,tc)) lam ->
-	       let kid =
+(*	       let kid =
 		 match List.hd (List.rev bs) with
-		 | `Let ((uid,(_,name,_)),_) -> (name, uid)
+		 | `Let ((uid,(_,name,_)),_) -> let _ = print_endline name in (name, uid)
 		 | _ -> assert false
 	       in
-	       let bs = List.rev (List.tl (List.rev bs)) in
+	       let bs = List.rev (List.tl (List.rev bs)) in*)
+	       let (kb, bs) = pop_k bs in
+	       let kid =
+		 match kb with
+		 | `Let ((uid,(_,name,_)),_) -> let _ = print_endline name in (name, uid)
+		 | _ -> assert false
+	       in
 	       let clause body =
-		 llet (ident kid)
-		      k
-		      (llet (ident_of_binder b) (* bind b to *)
+		 let bind_args_in body =
+		   if List.length bs > 0 then
+		     llet (ident_of_binder b)
+			  (lproject 1 (lvar eff))
+			  body
+		   else
+		     body
+		 in
+		 bind_args_in
+		   (llet (ident kid)
+			 k
+			 body)
+		      (*(llet (ident_of_binder b) (* bind b to *)
 			    (lvar eff)
-			    body)
+			    body)*)
 	       in
 	       let label =
 		 match get_op_uid label with
 		 | Some uid -> lvar (ident (label, uid))
 		 | None -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
 	       in
-	       lif (eq (lvar eff) label)
+	       let effname = lproject 0 (lvar eff) in
+	       (*lif (eq (lvar eff) label)*)
+	       lif (eq effname (lprim (field 0) [ getglobal ]))
 		   (clause (bindings bs (tail_computation tc)))
 		   lam
 	     )
@@ -273,7 +324,8 @@ let translate (op_map,name_map) module_name ir =
 	 | Some "Nil" -> lconst ff
 	 | Some prim ->
 	    let (module_name, fun_name) = ocaml_of_links_function prim in
-	    lookup module_name fun_name	    
+	    lookup module_name fun_name
+	 | Some "random" -> failwith "Random as a variable"
 	 | None -> failwith ("Internal compiler failure: Cannot find primitive name for var " ^ (string_of_int var))
        else
 	 lvar (ident_of_var var)
@@ -351,9 +403,12 @@ let translate (op_map,name_map) module_name ir =
       fun k ->
       (StringMap.fold
 	 (fun label (uid,_) body ->
-	   llet (ident (label,uid))
-		(leffect label)
-		k
+	   let efflabel = (String.capitalize module_name) ^ "." ^ label in
+	   lseq
+	     (llet (ident (label,uid))
+		   (leffect efflabel)
+		   (lprim (set_field_imm 0) [(lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []) ; lvar (ident (label,uid))]))
+	     body
 	 )
       ) op_map k
     in
@@ -361,17 +416,23 @@ let translate (op_map,name_map) module_name ir =
 		(fun label (_,pos) xs -> (label,pos) :: xs) op_map []
 		
     in*)
+    let random_init k =
+      let init = lookup "Random" "self_init" in
+      llet (ident ("_rand_init", Var.fresh_raw_var ()))
+	   (lapply init [lconst unit])
+	   k
+    in
     (** translate to lambda **)
     let exit_success = lconst ff in (* in this context "lconst ff" represents the exit code 0 *)
-    lseq (preamble (computation prog)) exit_success
+    lseq (preamble (random_init (computation prog))) exit_success
   in
   program ir
 			    
-let lambda_of_ir ((_,nenv,_) as envs) prog =
+let lambda_of_ir ((_,nenv,_) as envs) module_name prog =
   let maps =
     let gather = Gather.TraverseIr.gather prog in
     (gather#get_operation_env, Gather.TraverseIr.binders_map prog)
   in
-  translate maps "test" prog
+  translate maps module_name prog
 (*  let ir_translator = new translator (invert env) in
   ir_translator#program "Helloworld" prog*)

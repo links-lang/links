@@ -1,0 +1,55 @@
+typename Toss = [|Heads|Tails|];
+typename Maybe(a) = [|Just:a|Nothing|];
+
+var x = fun () { do Choose };
+var y = fun () { do Fail };
+
+sig toss : () {Choose:Bool|_}~> Toss
+fun toss() {
+  if (do Choose) Heads
+  else Tails
+}
+
+fun showToss(t) {
+   switch(t) {
+     case Heads -> "Heads"
+     case Tails -> "Tails"
+   }
+}
+
+fun run(m) {
+  handle(m) {
+    case Return(x) -> x
+  }
+}
+
+fun randomResult(m)() {
+  open handle(m) {
+     case Choose(k) -> var r = random(); print(floatToString(r)); k(r > 0.5)
+     case Return(x) -> x
+  }
+}
+
+print(showToss(randomResult(toss)()))
+
+# fun maybeResult(m)() {
+#   open handle(m) {
+#     case Fail(_)   -> Nothing
+#     case Return(x) -> Just(x)
+#   }
+# }
+
+# fun showMaybe(s)(m) {
+#    switch (m) {
+#       case Just(x) -> "Just(" ^^ s(x) ^^ ")"
+#       case Nothing -> "Nothing"
+#    }
+# }
+
+# var show = showMaybe(showToss);
+
+# print(
+#   show(
+#     run(maybeResult(randomResult(toss)))
+#     )
+#   )

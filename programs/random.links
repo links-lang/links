@@ -1,0 +1,2 @@
+var x = print(floatToString(random()));
+print(floatToString(random()))

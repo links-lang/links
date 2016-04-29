@@ -93,7 +93,7 @@ let compile parse_and_desugar env prelude filename =
 	   else ()
   in    
   let module_name = remove_links_extension filename in
-  let lam = lambda_of_ir env program in  
+  let lam = lambda_of_ir env module_name program in  
   dump_lambda lam;
   if Settings.get_value Basicsettings.dry_run
   then ()

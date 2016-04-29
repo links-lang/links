@@ -6,8 +6,11 @@ fun positive(m) {
 }
 
 var x = positive(fun() {
-  if (do Choose) 0
-  else 1
+  var y = if (do Choose) 0
+          else 1;
+  var z = if (do Choose) 2
+          else 3;
+  y + z
 });
 
 print(intToString(x))

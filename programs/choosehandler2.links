@@ -1,0 +1,4 @@
+handle(fun() { do Choose }) {
+  case Choose(k) -> k(true)
+  case Return(x) -> x
+}
