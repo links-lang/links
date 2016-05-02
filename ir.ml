@@ -98,7 +98,7 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map * handler_spec)
+  | `Handle of (value * (binder * (binder option) * computation) name_map * (binder * computation) * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
   deriving (Show)
@@ -478,17 +478,27 @@ struct
            `Choice (v, bs), t, o
 	(* Input arguments: (value, (binder, computation)) 
          * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
-	| `Handle (v, bs, isclosed) ->
+	| `Handle (v, clauses, rclause, isclosed) ->
 	   let (v, _, o) = o#value v in
-	   let (bs, branch_types, o) =
-	     o#name_map (fun o (b, c) ->
-			 let (b, o) = o#binder b in
-			 let (c, t, o) = o#computation c in
-			 (b, c), t, o)
-			bs
+	   let (clauses, branch_types, o) =
+	     o#name_map (fun o (b, kb, c) ->
+	       let (b, o) = o#binder b in
+               let (kb, o) =
+                 match kb with
+                 | Some b -> let (b, o) = o#binder b in (Some b, o)
+                 | None   -> (None, o)
+               in
+	       let (c, t, o) = o#computation c in
+	       (b, kb, c), t, o
+             ) clauses
 	   in
-    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle (v, bs, isclosed), t, o
+           let (rclause, branch_type, o) =
+             let (b, o) = o#binder (fst rclause) in
+             let (comp, t, o) = o#computation (snd rclause) in
+             ((b,comp), t, o)
+           in
+    	   let t = (StringMap.to_alist ->- List.hd ->- snd) (StringMap.add "Return" branch_type branch_types) in
+	   `Handle (v, clauses, rclause, isclosed), t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

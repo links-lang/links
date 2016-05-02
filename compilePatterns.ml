@@ -852,33 +852,70 @@ let compile_cases
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
 
-				 
+       
 (* Handler cases compilation *)
 let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescriptor) -> Ir.computation =
   fun (nenv, tenv, eff) (var, raw_clauses, desc) ->
     let Some (output_type, effects) = HandlerUtils.HandlerDescriptor.type_info desc in
-    let clauses = List.map reduce_clause raw_clauses in
+    let clauses = List.map reduce_clause raw_clauses in   
     (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
     (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
-     Afterwards we transform the `Case to a `Handle construct. *)
+       Afterwards we transform the `Case to a `Handle construct. *)
     let (bs,tc) =  (* The compiled cases *)
       let t' = TEnv.lookup tenv var in (* Backup original type *)
       let tenv = TEnv.bind tenv (var, `Variant effects) in (* Override the type with a variant type s.t. match_cases is happy *)
       let initial_env = (nenv, tenv, eff, PEnv.empty) in   
       let compiled_cases = match_cases [var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env in
+      (*let _ = failwith (Ir.Show_computation.show compiled_cases) in*)
       let tenv = TEnv.bind tenv (var, t') in (* Restore original type (probably not necessary) *)
       compiled_cases
+    in    
+    let arities =
+      List.fold_left
+        (fun xs ([(_, pattern)], _) ->
+          let (opname, arity) =
+            match pattern with
+            | `Variant (name, `Any)        -> (name, 0)
+            | `Variant (name, `Record (r,_))   -> (name, StringMap.size r)
+            | `Variant (name, _)           -> (name, 1)
+            | _ -> assert false
+          in
+          (opname, arity) :: xs)
+        [] clauses
+    in
+    let fix_continuation_param opname (bs,tc) =
+      let arity = List.assoc opname arities in
+      let (kb,bs') =
+        if arity > 0 then
+          let kbinding = List.nth bs (arity-1) in
+          let kb =
+            match kbinding with
+            | `Let (kb, _) -> kb
+            | _ -> assert false
+          in
+          Some kb, ListUtils.drop_nth bs (arity-1)
+        else
+          None, bs
+      in
+      (kb, (bs',tc))
     in
     let compiled_handle =
       let specialization = HandlerUtils.HandlerDescriptor.specialization desc in
-      match tc with
-	`Case (_, name_map, _) ->   ([], `Special (`Handle (`Variable var, name_map, specialization)))
-      | _ -> assert false
+        match tc with
+	| `Case (_, name_map, _) ->
+            let (return_clause, name_map') = StringMap.pop "Return" name_map in
+            let op_clauses = StringMap.fold
+              (fun opname (b,comp) op_map ->
+                let (kb,comp) = fix_continuation_param opname comp in
+                StringMap.add opname (b,kb,comp) op_map)
+              name_map' StringMap.empty
+            in ([], `Special (`Handle (`Variable var, op_clauses, return_clause, specialization)))
+        | _ -> assert false
     in
     (* END OF THE BIG HACK *)    
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
-      compiled_handle
+    compiled_handle
 				  
 (* Session typing choice compilation *)
 let rec match_choices : var -> clause list -> bound_computation =

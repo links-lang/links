@@ -495,8 +495,8 @@ module Eval = struct
     | `CallCC f ->
        apply cont hs env (value env f, [`Continuation (cont, hs)])
     (* Handlers *)
-    | `Handle (v, cases, spec) ->
-       let hs = (env, cases, spec) :: hs in       
+    | `Handle (v, clauses, return_clause, spec) ->
+       let hs = (env, clauses, return_clause, spec) :: hs in       
        let cont = [] :: cont in
        let comp = value env v in
        apply cont hs env (comp, [])
@@ -553,18 +553,23 @@ module Eval = struct
         used for restoring the stacks when [k] is invoked  *)
     let rec handle' (cont', hs') =
       function
-      | delim :: cont, (henv, h, spec) :: hs ->
+      | delim :: cont, (henv, clauses, rclause, spec) :: hs ->
          let cont' = delim :: cont' in
-         let hs' = (henv, h, spec) :: hs' in
+         let hs' = (henv, clauses, rclause, spec) :: hs' in
          begin
-           match StringMap.lookup opname h with	    
-	   | Some ((var, _), comp) ->
+           match StringMap.lookup opname clauses with	    
+	   | Some ((var, _),kb,comp) ->
 	      let k = if HandlerUtils.IrHandler.is_shallow spec then
 		  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
 		else
 		  `DeepContinuation (List.rev cont', List.rev hs')
-	      in
-	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
+	      in              
+              let env =
+                match kb with
+                | Some kb -> Value.bind (Var.var_of_binder kb) (k, `Local) henv
+                | _ -> henv
+              in
+	      computation (Value.bind var (Value.box vs, `Local) env) cont hs comp
            | None ->
               if not (HandlerUtils.IrHandler.is_closed spec) then
                 begin
@@ -576,19 +581,16 @@ module Eval = struct
          end
       | _, [] -> eval_error "Unhandled operation: %s" opname
     in
-    handle' ([], []) (cont, hs)
-  and invoke_return_clause cont hs env (henv, h, _) v =
-    match StringMap.lookup "Return" h with
-    | Some ((var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp
-    | None -> eval_error "Pattern matching failed on Return"      
+      handle' ([], []) (cont, hs)
+  and invoke_return_clause cont hs env (henv, _, (b,comp), _) v =
+    computation (Value.bind (Var.var_of_binder b) (v, `Local) henv) cont hs comp
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =
     fun env ->
     computation env Value.toplevel_cont Value.toplevel_hs
 end
 
-let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-  (Value.env * Value.t) =
+let run_program_with_cont : Value.continuation -> Value.env -> Ir.program -> (Value.env * Value.t) =
   fun cont env program ->
   let hs = Value.toplevel_hs in
     try (

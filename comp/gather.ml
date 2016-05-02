@@ -3,9 +3,9 @@ open Utility
 (*module Env = Env_links
 open Env	       *)
 
-type name_map = (int * string) list
+type name_map = string intmap
 		deriving (Show)
-       
+                
 module TraverseIr = struct
   (** TODO: Remove binders_map after the bug in the class below has been fixed. **)
   let binders_map prog =    
@@ -24,8 +24,8 @@ module TraverseIr = struct
     and special : (Ir.var * string) list -> Ir.special -> (Ir.var * string) list =
       fun map ->
       function
-      | `Handle (v, clauses, _) ->
-	 StringMap.fold (fun _ (b,c) map -> binder b :: map @ (computation map c)) clauses map
+      | `Handle (v, clauses, rclause, _) ->
+	 StringMap.fold (fun _ (b,kb,c) map -> binder b :: map @ (computation map c)) clauses map
       | _ -> map
     and bindings : (Ir.var * string) list -> Ir.binding list -> (Ir.var * string) list  =
       fun map -> 
@@ -59,20 +59,20 @@ module TraverseIr = struct
   class gatherer =
   object ((o : 'self_type))
 
-    val name_map : (int * string) list = []
-    method with_name_map : (int * string) list -> 'self_type =
-      fun env ->
-      {< name_map = env >}
+    val name_map : string IntMap.t = IntMap.empty
+    method add_binder : int -> string -> 'self_type =
+      fun uid name ->
+      (*      let _ = print_endline (Show_name_map.show name_map) in*)
+      {< name_map = IntMap.add uid name name_map >}
 
     method get_name_map : string IntMap.t =
-      print_endline (Show_name_map.show name_map);
-      IntMap.from_alist name_map
+      name_map
 					 	
     val operations = StringSet.empty
 		       
-    method with_operations : StringSet.t -> 'self_type =
-      fun ops ->
-      {< operations = ops  >}
+    method add_operation : string -> 'self_type =
+      fun name ->
+      {< operations = StringSet.add name operations >}
 
     method get_operation_env : int StringMap.t  =
       let operations = StringSet.fold (fun s acc -> (s, Var.fresh_raw_var ()) :: acc) operations [] in
@@ -88,23 +88,30 @@ module TraverseIr = struct
       | `Case (v, clauses, default_clause) ->
 	 let o' = o#value v in
 	 (* Collect binders *)
-	 let collect_from = fun (b,c) -> (o#with_name_map (o#binder b :: name_map))#computation c in
-	 let o'' = StringMap.fold (fun _ clause o -> collect_from clause) clauses o' in
-	 from_option o'' (opt_map collect_from default_clause)
+	 let collect_from = fun o (b,c) -> (o#binder b)#computation c in
+	 let o'' = StringMap.fold (fun _ clause o -> collect_from o clause) clauses o' in
+	 from_option o'' (opt_map (collect_from o'') default_clause)
       | `If (v, c1, c2) ->
-	 let o' = o#computation c1 in
-	 o'#computation c2
+         let o = o#value v in
+	 (o#computation c1)#computation c2
       | `Special s -> o#special s
       | _ -> o
 
     method special : Ir.special -> 'self_type =
       function
-      | `Handle (v, clauses,_) ->
+      | `Handle (v, clauses, (b,comp), _) ->
 	 let o = o#value v in
 	 (* Collect binders *)
-	 StringMap.fold (fun _ (b,c) o -> (o#with_name_map (o#binder b :: name_map))#computation c) clauses o
+	 let o = StringMap.fold
+           (fun opname (b,kb,c) o ->
+             let o = o#add_operation opname in
+             let o = (o#binder b)#computation c in
+             from_option o (opt_map o#binder kb)
+           ) clauses o
+         in
+         (o#binder b)#computation comp
       | `DoOperation (name, args, _) ->
-	 o#with_operations (StringSet.add name operations)
+	 o#add_operation name
       | _ -> o
 		    
     method value : Ir.value -> 'self_type =
@@ -119,27 +126,31 @@ module TraverseIr = struct
 
     method binding : Ir.binding -> 'self_type =      
       function
-      | `Let (b, (_, tc)) -> (o#with_name_map (o#binder b :: name_map))#tail_computation tc
-      | `Alien (b,_) -> o#with_name_map (o#binder b :: name_map)
+      | `Let (b, (_, tc)) ->
+         (o#binder b)#tail_computation tc
+      | `Alien (b,_) -> o#binder b
       | `Fun (b, (_, args, comp), _, _) ->
-	 (o#with_name_map (o#binder b :: (List.map o#binder args) @ name_map))#computation comp
+         let o = o#binder b in
+         let o = List.fold_left (fun o b -> o#binder b) o args in
+         o#computation comp
       | `Rec ((b, (_, args, comp), _, _) :: rest) ->	      
 	 let funs = List.map (fun f -> `Fun f) rest in
 	 let o = o#computation comp in
-	 (o#with_name_map (o#binder b :: (List.map o#binder args) @ name_map))#bindings funs
+         let o = o#binder b in
+         let o = List.fold_left (fun o b -> o#binder b) o args in
+	 o#bindings funs
       | _ -> assert false
 
-    method binder : Ir.binder -> (int * string) =
+    method binder : Ir.binder -> 'self_type =
       fun b ->
-      (Var.var_of_binder b, match Var.name_of_binder b with
-			    | "" -> "_v"
-			    | n  -> n)
-
-    method funbinder : Ir.binder -> (int * string) =
-      fun b ->
-      (Var.var_of_binder b, match Var.name_of_binder b with
-			    | "" -> "_fun"
-			    | n  -> n)
+        let uid = Var.var_of_binder b in
+        let _ = print_endline ("Collected " ^ (string_of_int uid)) in
+        let name =
+          match Var.name_of_binder b with
+	  | "" -> "_v"
+	  | n  -> n
+        in
+        o#add_binder uid name
 
     method program : Ir.program -> 'self_type =
       fun comp ->

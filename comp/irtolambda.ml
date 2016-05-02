@@ -104,13 +104,16 @@ let translate (op_map,name_map) module_name ir =
       let (uid,_) = StringMap.find label op_map in
       Some uid
     with
-    | Not_found -> None
+    | _ -> None
   in
   let ident (var_name,uid) = create_ident var_name uid in
   let ident_of_var var =
-    match IntMap.find var name_map with
-    | name -> ident (name, var)
-    | exception Not_found -> failwith ("Internal compiler failure: Cannot find name for var " ^ (string_of_int var))
+    let _ = print_endline (string_of_int var) in
+    try
+      let name = IntMap.find var name_map in
+      ident (name, var)
+    with
+    | _ -> failwith ("Internal compiler failure: Cannot find name for var " ^ (string_of_int var))
   in
   let ident_of_binder b =
     let var = Var.var_of_binder b in
@@ -207,8 +210,7 @@ let translate (op_map,name_map) module_name ir =
 		      [lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []]
                      ])*)
        perform label (List.map value args)
-    | `Handle (v, clauses, _) ->
-       let (value_clause, clauses) = StringMap.pop "Return" clauses in
+    | `Handle (v, clauses, value_clause, _) ->
        let value_handler =
 	 let (b, comp) = value_clause in
 	 lfun [ident_of_binder b] (computation comp)
@@ -235,40 +237,20 @@ let translate (op_map,name_map) module_name ir =
 		(lprim (makeblock 0 Mutable) [lvar cont])
 		scope
 	 in
-	 let rec take n xs =
-	   if n <> 0 then
-	     List.hd xs :: take (n-1) (List.tl xs)
-	   else
-	     []
-	 in
-	 let rec drop n xs =
-	   if n <> 0 then
-	     drop (n-1) (List.tl xs)
-	   else
-	     xs
-	 in
-	 let pop_k bs =
-	   match List.length bs with
-	   | 0 -> assert false
-	   | 1 -> (List.hd bs, [])
-	   | 2 -> (List.hd bs, List.tl bs)
-	   | n -> (List.nth bs (n/2), (take ((n/2) - 1) bs) @ (drop ((n/2) + 1) bs))
-	 in
 	 let compile clauses =
 	   StringMap.fold
-	     (fun label (b,(bs,tc)) lam ->
+	     (fun label (b,kb,(bs,tc)) lam ->
 (*	       let kid =
 		 match List.hd (List.rev bs) with
 		 | `Let ((uid,(_,name,_)),_) -> let _ = print_endline name in (name, uid)
 		 | _ -> assert false
 	       in
 	       let bs = List.rev (List.tl (List.rev bs)) in*)
-	       let (kb, bs) = pop_k bs in
 	       let kid =
-		 match kb with
-		 | `Let ((uid,(_,name,_)),_) -> let _ = print_endline name in (name, uid)
-		 | _ -> assert false
-	       in
+                 match kb with
+                 | Some kb -> Some (ident_of_binder kb)
+                 | None    -> None
+               in
 	       let clause body =
 		 let bind_args_in body =
 		   if List.length bs > 0 then
@@ -279,21 +261,31 @@ let translate (op_map,name_map) module_name ir =
 		     body
 		 in
 		 bind_args_in
-		   (llet (ident kid)
-			 k
-			 body)
-		      (*(llet (ident_of_binder b) (* bind b to *)
-			    (lvar eff)
-			    body)*)
+		   (if is_some kid
+                    then
+                       let (Some kid) = kid in
+                       llet kid
+		         k
+		         body
+                    else
+                       body)                       
 	       in
-	       let label =
+(*	       let label =
 		 match get_op_uid label with
 		 | Some uid -> lvar (ident (label, uid))
-		 | None -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
-	       in
+		 | None     -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
+	       in*)
 	       let effname = lproject 0 (lvar eff) in
-	       (*lif (eq (lvar eff) label)*)
-	       lif (eq effname (lprim (field 0) [ getglobal ]))
+               let clauselabel =
+                 let pos =
+                   try
+                     snd (StringMap.find label op_map)
+                   with
+                   | _ -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
+                 in
+                 lprim (field pos) [ getglobal ]
+               in
+	       lif (eq effname clauselabel)
 		   (clause (bindings bs (tail_computation tc)))
 		   lam
 	     )
@@ -313,7 +305,7 @@ let translate (op_map,name_map) module_name ir =
        in
        lresume [ alloc_stack
 	       ; thunk
-	       ; lconst unit]
+	 ; lconst unit]
     | _ -> assert false
   and value : value -> lambda =
     function
@@ -402,12 +394,12 @@ let translate (op_map,name_map) module_name ir =
     let preamble =
       fun k ->
       (StringMap.fold
-	 (fun label (uid,_) body ->
+	 (fun label (uid,pos) body ->
 	   let efflabel = (String.capitalize module_name) ^ "." ^ label in
 	   lseq
 	     (llet (ident (label,uid))
 		   (leffect efflabel)
-		   (lprim (set_field_imm 0) [(lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []) ; lvar (ident (label,uid))]))
+		   (lprim (set_field_imm pos) [(lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []) ; lvar (ident (label,uid))]))
 	     body
 	 )
       ) op_map k
@@ -431,7 +423,8 @@ let translate (op_map,name_map) module_name ir =
 let lambda_of_ir ((_,nenv,_) as envs) module_name prog =
   let maps =
     let gather = Gather.TraverseIr.gather prog in
-    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)
+    gather#get_operation_env, gather#get_name_map
+  (*    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)*)
   in
   translate maps module_name prog
 (*  let ir_translator = new translator (invert env) in
