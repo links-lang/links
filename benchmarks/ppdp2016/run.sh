@@ -42,15 +42,16 @@ function loadDump {
 # time noprov
 
 function prepareCSV {
-    # echo '"prov";"N";"query";"mean";"timems"' > data.csv
-    echo '"prov";"N";"query";"meanms"' > data.csv
+    # echo '"prov";"N";"query";"medianms";"timems"' > data.csv
+    echo '"prov";"N";"query";"medianms"' > data.csv
 }
 
 function sanitizeCSV {
     sed -i '/() : ()/d' data.csv
 }
 
-sizes=(16 32 64 128)
+# sizes=(16 32 64 128)
+sizes=(16 32 64 128 256 512)
 # sizes=(16 32 64 128 256 512 1024 2048 4096)
 
 prepareCSV
