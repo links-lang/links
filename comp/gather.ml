@@ -144,7 +144,7 @@ module TraverseIr = struct
     method binder : Ir.binder -> 'self_type =
       fun b ->
         let uid = Var.var_of_binder b in
-        let _ = print_endline ("Collected " ^ (string_of_int uid)) in
+        (*        let _ = print_endline ("Collected " ^ (string_of_int uid)) in*)
         let name =
           match Var.name_of_binder b with
 	  | "" -> "_v"
