@@ -194,6 +194,8 @@ fun iter(f,l) {
 
 var iters = 5;
 
+var n = query { length(for (d <-- departments) [d]) };
+
 var tests =
   [test((iters = iters, msg = "Q1", q = q1)),
    test((iters = iters, msg = "Q2", q = q2)),
@@ -202,7 +204,6 @@ var tests =
    test((iters = iters, msg = "Q5", q = q5)),
    test((iters = iters, msg = "Q6", q = q6))];
 
-var n = query { length(for (d <-- departments) [d]) };
 
 iter(fun (u) {
   print("noprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median));
