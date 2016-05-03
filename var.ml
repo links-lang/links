@@ -67,6 +67,3 @@ let varify_env (nenv, tenv) : Types.datatype Env.Int.t =
        Env.Int.bind tenv (Env.String.lookup nenv name, t))
     tenv
     Env.Int.empty
-
-(* Create unit binder. Helpful during code generation. *)
-let fresh_unit_binder () = fresh_binder (Types.unit_type, "unit", `Local)

@@ -1,0 +1,43 @@
+fun allResults(m) {
+  handle(m) {
+    case Choose(k) -> k(true) ++ k(false)
+    case Return(x) -> [x]
+  }
+}
+
+fun fold_left(f,acc,xs) {  
+  switch(xs) {
+    case x :: xs -> fold_left(f, f(acc,x), xs)
+    case []      -> acc
+  }
+}
+
+fun map(f,xs) {
+  switch(xs) {
+    case x1 :: xs -> f(x1) :: map(f,xs)
+    case [] -> []
+  }
+}
+
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []    
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+fun showList(showX)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(showX, xs)));
+  "[" ^^ xs ^^ "]"
+}
+
+fun comp() {
+  var x = if (do Choose) { 2 } else { 4 };
+  var y = if (do Choose) { 8 } else { 16 };
+  x + y
+}
+
+print(showList(intToString)(allResults(comp)))

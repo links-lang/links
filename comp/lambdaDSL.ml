@@ -149,6 +149,9 @@ end
   let pervasives : string -> lambda =
     fun fun_name -> lookup "Pervasives" fun_name
 
+  let obj : string -> lambda =
+    fun fun_name -> lookup "Obj" fun_name
+
   let lif : lambda -> lambda -> lambda -> lambda =
     fun cond trueb falseb -> Lifthenelse (cond, trueb, falseb)
 

@@ -13,6 +13,7 @@ let ocaml_of_links_function f =
 	     [   "print", ocaml_function stdlib "print_endline"
 	       ; "intToString", ocaml_function stdlib "string_of_int"
 	       ; "floatToString", ocaml_function stdlib "string_of_float"
+               ; "Concat", ocaml_function stdlib "@"
 	       ; "^^", ocaml_function stdlib "^"
 	       ; "hd", ocaml_function listlib "hd"
 	       ; "tl", ocaml_function listlib "tl"
@@ -95,25 +96,27 @@ let translate (op_map,name_map) module_name ir =
   let open LambdaDSL in
   let open Ir in
   let op_map =
-    let dummy = -1 in
-    let pos = ref dummy in
-    StringMap.map (fun uid -> let _ = incr pos in (uid, !pos)) op_map
+    snd
+      (StringMap.fold
+         (fun opname uid (pos,op_map) -> (pos+1,StringMap.add opname (uid,pos) op_map))
+         op_map (0, StringMap.empty))
   in
-  let get_op_uid label =
+  let lookup_op label =
     try
-      let (uid,_) = StringMap.find label op_map in
-      Some uid
+      Some (StringMap.find label op_map)
     with
     | _ -> None
   in
+  let get_op_uid label = opt_map fst (lookup_op label) in
+  let get_op_pos label = opt_map snd (lookup_op label) in
+  let error s = failwith ("Internal compiler error: " ^ s ^ ".") in
   let ident (var_name,uid) = create_ident var_name uid in
   let ident_of_var var =
-    let _ = print_endline (string_of_int var) in
     try
       let name = IntMap.find var name_map in
       ident (name, var)
     with
-    | _ -> failwith ("Internal compiler failure: Cannot find name for var " ^ (string_of_int var))
+    | _ -> error ("Cannot find name for var " ^ (string_of_int var))
   in
   let ident_of_binder b =
     let var = Var.var_of_binder b in
@@ -122,6 +125,7 @@ let translate (op_map,name_map) module_name ir =
     | name -> ident (name, var)
   in
   let getglobal = lgetglobal (String.capitalize module_name) in
+  let unit_binder = Var.fresh_binder (Types_links.unit_type, "_unit", `Local) in
   let rec computation : computation -> lambda =
     fun (bs,tc) ->
     bindings bs (tail_computation tc)
@@ -145,7 +149,7 @@ let translate (op_map,name_map) module_name ir =
 	    let fname =
 	      match primitive_name uid with
 	      | Some name -> name
-	      | None -> failwith ("Internal compiler failure: Cannot find primitive name for var " ^ (string_of_int uid))
+	      | None -> error ("Cannot find primitive name for var " ^ (string_of_int uid))
 	    in
 	    begin
 	      match primop fname with
@@ -164,7 +168,7 @@ let translate (op_map,name_map) module_name ir =
 			let f = lookup module_name fun_name in
 			lapply f args'
 		      with
-		      | _ -> failwith ("Internal compiler failure: Unsupported primitive function " ^ fname)
+		      | _ -> error ("Unsupported primitive function " ^ fname)
 		 end
 	    end
        end
@@ -177,7 +181,7 @@ let translate (op_map,name_map) module_name ir =
 	 | None -> lapply (pervasives "failwith") [lstring "Pattern-matching failed"]
 	 | Some (b,c) -> llet (ident_of_binder b) v (computation c)
        in
-       let v'' = ident ("switch", Var.fresh_raw_var ()) in
+       let v'' = ident ("_switch", Var.fresh_raw_var ()) in
        let switch_expr k =
 	 llet v'' (lproject 0 v) k (* FIXME: assuming we always match on a "box" *)
        in
@@ -202,7 +206,7 @@ let translate (op_map,name_map) module_name ir =
        let id =
 	 match get_op_uid label with
 	 | Some id -> id
-	 | None    -> failwith ("Internal compiler failure: Cannot not find identifier for operation name " ^ label)
+	 | None    -> error ("Cannot not find identifier for operation name " ^ label)
        in	 
     (*       lperform (ident (label, id)) (List.map value args) *)
 (*       Lambda.(lprim (Pperform)
@@ -222,14 +226,15 @@ let translate (op_map,name_map) module_name ir =
        let eff_handler =
 	 let eff  = ident ("eff", Var.fresh_raw_var ()) in
 	 let cont = ident ("cont", Var.fresh_raw_var ()) in
-	 let forward =
-	   ldelegate eff cont
-	 in
+	 let forward_effect = ldelegate eff cont in
 	 let kid = ident ("_k", Var.fresh_raw_var ()) in
 	 let k =
 	   let param = ident ("param", Var.fresh_raw_var ()) in
+           let kid'  = ident ("_k'", Var.fresh_raw_var ()) in
 	   lfun [param]
-		(lapply (pervasives "continue") [lvar kid ; lvar param])
+             (llet kid'
+                (lapply (obj "clone") [lvar kid])
+		(lapply (pervasives "continue") [lvar kid' ; lvar param]))
 	 in
 	 let bind_k scope =
 	   llet ~kind:Alias
@@ -240,12 +245,6 @@ let translate (op_map,name_map) module_name ir =
 	 let compile clauses =
 	   StringMap.fold
 	     (fun label (b,kb,(bs,tc)) lam ->
-(*	       let kid =
-		 match List.hd (List.rev bs) with
-		 | `Let ((uid,(_,name,_)),_) -> let _ = print_endline name in (name, uid)
-		 | _ -> assert false
-	       in
-	       let bs = List.rev (List.tl (List.rev bs)) in*)
 	       let kid =
                  match kb with
                  | Some kb -> Some (ident_of_binder kb)
@@ -270,18 +269,12 @@ let translate (op_map,name_map) module_name ir =
                     else
                        body)                       
 	       in
-(*	       let label =
-		 match get_op_uid label with
-		 | Some uid -> lvar (ident (label, uid))
-		 | None     -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
-	       in*)
 	       let effname = lproject 0 (lvar eff) in
                let clauselabel =
                  let pos =
-                   try
-                     snd (StringMap.find label op_map)
-                   with
-                   | _ -> failwith ("Internal compiler failure: Could not find unique identifier for operation " ^ label)
+                   match get_op_pos label with
+                   | Some pos -> pos
+                   | _ -> error ("Could not find unique location identifier for operation " ^ label)
                  in
                  lprim (field pos) [ getglobal ]
                in
@@ -289,7 +282,7 @@ let translate (op_map,name_map) module_name ir =
 		   (clause (bindings bs (tail_computation tc)))
 		   lam
 	     )
-	     clauses forward
+	     clauses forward_effect
 	 in
 	 lfun [eff ; cont] (bind_k (compile clauses))
        in
@@ -300,12 +293,12 @@ let translate (op_map,name_map) module_name ir =
 	   eff_handler
        in
        let thunk =
-	 let unit' = ident ("unit", Var.fresh_raw_var ()) in
-	 lfun [unit'] (lapply (value v) [lconst unit])
+	 let unitb = ident_of_binder unit_binder in
+	 lfun [unitb] (lapply (value v) [lconst unit])
        in
        lresume [ alloc_stack
 	       ; thunk
-	 ; lconst unit]
+	       ; lconst unit]
     | _ -> assert false
   and value : value -> lambda =
     function
@@ -317,8 +310,8 @@ let translate (op_map,name_map) module_name ir =
 	 | Some prim ->
 	    let (module_name, fun_name) = ocaml_of_links_function prim in
 	    lookup module_name fun_name
-	 | Some "random" -> failwith "Random as a variable"
-	 | None -> failwith ("Internal compiler failure: Cannot find primitive name for var " ^ (string_of_int var))
+         | Some name -> error ("Unknown primitive " ^ name)
+         | None -> error ("Cannot find primitive name for var " ^ (string_of_int var))
        else
 	 lvar (ident_of_var var)
     | `TAbs (_, v)
@@ -332,10 +325,10 @@ let translate (op_map,name_map) module_name ir =
        let vs = StringMap.to_list (fun _ v -> value v) map in
        begin
        match row with
-       | Some r -> failwith "Internal compiler failure: Record extension not yet implemented."
+       | Some r -> error "Record extension not yet implemented."
        | None -> lprim box vs
        end
-    | v -> failwith ("Internal compiler failure: Unimplemented feature:\n" ^ (Ir.Show_value.show v))
+    | v -> error ("Unimplemented feature:\n" ^ (Ir.Show_value.show v))
   and bindings : binding list -> (lambda -> lambda) =
     function
     | b :: bs -> fun k -> binding b (bindings bs k)
@@ -346,7 +339,7 @@ let translate (op_map,name_map) module_name ir =
 	if List.length params > 0 then
 	  params
 	else
-	  [Var.fresh_unit_binder ()]
+	  [unit_binder]
       in
       (lfun (List.map ident_of_binder params') (computation body))
     in
@@ -385,7 +378,7 @@ let translate (op_map,name_map) module_name ir =
     | `Variable var -> if is_primitive var then Some var else None
     | `TAbs (_,v) 
     | `TApp (v,_) -> is_primitive_function v
-    | v -> failwith ("Internal compiler failure: Unknown, possibly primitive, node:\n " ^ (Show_value.show v))
+    | v -> error ("Unknown, possibly primitive, node:\n " ^ (Show_value.show v))
   and program : program -> lambda =
     fun prog ->
     Compmisc.init_path false;

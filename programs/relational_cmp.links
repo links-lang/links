@@ -1,0 +1,9 @@
+var r = 2.0;
+
+fun c() {
+  print(floatToString(r));
+  if (r > 0.5) print("r > 0.5")
+  else print("Must be that r <= 0.5")
+}
+
+c()
