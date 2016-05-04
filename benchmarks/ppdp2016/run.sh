@@ -52,17 +52,18 @@ function prepareCSV {
 
 function sanitizeCSV {
     sed -i '/() : ()/d' data.csv
+    sed -i '/^Q/d' data.csv
 }
 
 # sizes=(4096 2048 1024 512 256 128 64 32 16)
-sizes=(128 64 32 16)
+sizes=(64 32 16)
 
 prepareCSV
 for n in "${sizes[@]}"
 do
     loadDump $n
-    noprov >> data.csv
-    someprov >> data.csv
     allprov >> data.csv
+    someprov >> data.csv
+    noprov >> data.csv
 done
 sanitizeCSV

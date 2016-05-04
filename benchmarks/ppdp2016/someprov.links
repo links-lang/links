@@ -113,14 +113,19 @@ fun q_org() {
 
 # Q1: nestedOrg (factored)
 
-sig q1 : () -> [(contacts: [("client": Prov(Bool),
-                             name: Prov(String))],
+sig q1 : () -> [(contacts: [("client": Bool,
+                             name: String)],
                  employees: [(name: Prov(String),
                               salary: Prov(Int),
                               tasks: [Prov(String)])],
                  name: Prov(String))]
-var q1 = q_org;
-
+fun q1() {
+  for (d <-- departments)
+    [(contacts = for (c <- contactsOfDept(d)) [("client" = data c."client",
+                                                name = data c.name)],
+      employees = employeesOfDept(d),
+      name = d.name)]
+}
 # Q2: expertise (factored)
 
 sig q2 : () -> [(d: Prov(String))]
@@ -139,13 +144,15 @@ fun q3() {
 
 # Q4: departments with lists of employees
 
-sig q4 : () -> [(dpt:Prov(String), emps:[Prov(String)])]
+# Only get employees' provenance. Not sure why that would be useful, but it's possible.
+
+sig q4 : () -> [(dpt:Prov(String), emps:[(String, String, Int)])]
 fun q4() {
   for (d <-- departments)
     [(dpt = (d.name),
       emps = for (e <-- employees)
              where ((data d.name) == (data e.dept))
-               [(e.name)])]
+               [prov e.name])]
 }
 
 # # Q5: Tasks with employees and departments
@@ -173,10 +180,12 @@ fun q5() {
 
 # # Q6: shredding paper example (factored)
 
-sig q6: () -> [(department: Prov(String), people: [(name: Prov(String), tasks: [String])])]
+# Drop prov on department.
+
+sig q6: () -> [(department: String, people: [(name: Prov(String), tasks: [String])])]
 fun q6() {
-  for (x <- q1())
-    [(department = x.name,
+  for (x <- q_org())
+    [(department = data x.name,
       people = get(outliers(x.employees), fun (y) { map(fun (z) { data z }, y.tasks) }) ++
                  get(clients(x.contacts), fun (y) { ["buy"] }))]
 }
@@ -202,15 +211,16 @@ var n = query { length(for (d <-- departments) [d]) };
 
 fun exclude(q) {
   switch (q) {
-    case "Q1" -> n > 1024
-    case "Q5" -> n > 1024
-    case "Q6" -> n > 2048
+    # TODO determine cutoffs, if necessary
+    case "Q1" -> false # n > 1024 
+    case "Q5" -> false # n > 1024
+    case "Q6" -> false # n > 2048
     case _ -> false
   }
 }
 
 fun test(t) {
-  # print(t.msg);
+  print(t.msg ^^ " " ^^ intToString(n));
   if (exclude(t.msg)) {
     # print("Excluding " ^^ t.msg ^^ " at size " ^^ intToString(n));
     (median = -1, msg = t.msg, res = "", times = [])

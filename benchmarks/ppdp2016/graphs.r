@@ -9,8 +9,7 @@ cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"
 
 df <- read.csv2("data.csv")
 str(df)
-
-
+           
 tikz("~/Documents/language-integrated-provenance/ppdp2016/graph.tex", width=3.3, height=3)
 ggplot(df, aes(factor(N), medianms, group=prov, color=prov)) +
     geom_line() +
