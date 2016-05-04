@@ -150,13 +150,25 @@ fun q4() {
 
 # # Q5: Tasks with employees and departments
 
+# sig dropProv : ([Prov(a::Base)]) -> [a::Base]
+fun dropProv(l) {
+  map(fun (x) { data x }, l)
+}
+
+# Only get provenance of tasks, drop other provenance. Reuses
+# employeesByTask, which still has provenance types, but does not
+# actually compute all provenance.
+
 sig q5: () -> [(a: Prov(String),
-                b: [(name: Prov(String),
-                     salary: Prov(Int),
-                     tasks: [Prov(String)])])]
+                b: [(name: String,
+                     salary: Int,
+                     tasks: [String])])]
 fun q5() {
   for (t <-- tasks)
-    [(a = t.task, b = employeesByTask(t))]
+    [(a = t.task, b = for (x <- employeesByTask(t))
+                        [(name = data x.name,
+                          salary = data x.salary,
+                          tasks = dropProv(x.tasks))])]
 }
 
 # # Q6: shredding paper example (factored)
@@ -230,9 +242,5 @@ var tests =
 
 
 iter(fun (u) {
-  print("allprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ u.res);
-  # iter(fun (t) {
-    # print("allprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median) ^^ ";" ^^ show(t))
-  # }, u.times);
+  print("someprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ u.res);
 }, tests)
-

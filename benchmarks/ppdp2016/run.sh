@@ -25,6 +25,10 @@ function allprov {
     "$LINKSROOT/links" --config=db.config allprov.links
 }
 
+function someprov {
+    "$LINKSROOT/links" --config=db.config someprov.links
+}
+
 # Dump
 # pg_dump links -t departments -t employees -t tasks -t contacts > filename.sql
 
@@ -50,13 +54,15 @@ function sanitizeCSV {
     sed -i '/() : ()/d' data.csv
 }
 
-sizes=(4096 2048 1024 512 256 128 64 32 16)
+# sizes=(4096 2048 1024 512 256 128 64 32 16)
+sizes=(128 64 32 16)
 
 prepareCSV
 for n in "${sizes[@]}"
 do
     loadDump $n
     noprov >> data.csv
+    someprov >> data.csv
     allprov >> data.csv
 done
 sanitizeCSV
