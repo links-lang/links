@@ -451,18 +451,23 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
       let envs, (globals, (locals, main), t) =
 	Errors.display_fatal (Loader.load_file envs) filename
       in
-      ((globals @ locals, main), t), envs
+      let program = (globals @ locals, main) in
+      let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+      (program, t, tenv)
     in
-    let closure_conversion (valenv, nenv, tyenv) (program, t) =
+    let (program, _, tenv) = parse_and_desugar (nenv, tyenv) filename in
+    (program, tenv)
+  in
+  Compileir.compile parse envs prelude filename
+
+      (*((globals @ locals, main), t), envs*)
+    (*let closure_conversion (valenv, nenv, tyenv) (program, t) =
       let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
       (*Closures.program tenv Lib.primitive_vars program*)
       program
     in
     let (program, t), _ = parse_and_desugar (nenv,tyenv) filename in
-    closure_conversion envs (program, t)
-  in
-  Compileir.compile parse envs prelude filename
-
+      closure_conversion envs (program, t)*)
 		    
 let compile_main () =
   Settings.set_value BS.cache_whole_program false;

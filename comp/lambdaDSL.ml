@@ -175,7 +175,26 @@ end
   let create_ident : string -> int -> Ident.t =
     fun label id ->
     Ident.({ name = label ; stamp = id ; flags = 0 })	 
-	  
+
+  let prim_description : string -> int -> bool -> string -> bool -> Primitive.description =
+    fun name arity allocates cname onfloats -> failwith ""
+
+  let prim_binary_op : string -> Primitive.description =
+    fun name -> prim_description name 2 false name true
+
+  let pcmp : string -> primitive =
+    function
+    | "==" -> Pintcomp Ceq
+    | "!=" -> Pintcomp Cneq
+    | op -> let cmp =
+              match op with
+              | "<"  -> "caml_lessthan"
+              | ">"  -> "caml_greaterthan"
+              | "<=" -> "caml_lessequal"
+              | ">=" -> "caml_greaterequal"
+            in
+            Pccall (prim_binary_op cmp)
+      
   (*let parith : string -> primitive option =
     fun op ->
     let linst =

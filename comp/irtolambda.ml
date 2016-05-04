@@ -155,13 +155,12 @@ let translate (op_map,name_map) module_name ir =
 	      match primop fname with
 	      | Some instr -> lprim instr args'
 	      | _ -> 
-		 (* Must be Cons *)
 		 begin
 		   match fname with
 		   | "Cons" -> lprim box args'
 		   | "random" ->
 		      let random = lookup "Random" "float" in
-		      (lapply random [lfloat 1.0])
+		      lapply random [lfloat 1.0]
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in
@@ -412,8 +411,19 @@ let translate (op_map,name_map) module_name ir =
     lseq (preamble (random_init (computation prog))) exit_success
   in
   program ir
-			    
-let lambda_of_ir ((_,nenv,_) as envs) module_name prog =
+
+
+let transform tenv ir =
+  object (o)
+    inherit Ir.Transform.visitor(tenv) as super
+    method tail_computation =
+      function
+      | `Apply (f, args) -> failwith ""
+      | tc -> super#tail_computation tc
+  end
+
+    
+let lambda_of_ir ((_,nenv,_) as envs,tenv) module_name prog =
   let maps =
     let gather = Gather.TraverseIr.gather prog in
     gather#get_operation_env, gather#get_name_map

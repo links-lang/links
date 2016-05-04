@@ -86,14 +86,14 @@ let nativecomp name lambda_program =
 let remove_links_extension filename =
   Filename.chop_suffix filename ".links"
 			   
-let compile parse_and_desugar env prelude filename =
-  let program = parse_and_desugar env filename in
+let compile parse_and_desugar envs prelude filename =
+  let (program, tenv) = parse_and_desugar envs filename in
   let () = if Settings.get_value Basicsettings.show_compiled_ir
 	   then print_endline (Ir.Show_program.show program)
 	   else ()
   in    
   let module_name = remove_links_extension filename in
-  let lam = lambda_of_ir env module_name program in  
+  let lam = lambda_of_ir (envs,tenv) module_name program in  
   dump_lambda lam;
   if Settings.get_value Basicsettings.dry_run
   then ()
