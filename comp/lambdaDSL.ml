@@ -38,7 +38,6 @@ end
 
   let float : float -> constant =
     fun f ->
-    let _ = print_endline ("Float-to-string: " ^ (string_of_float f)) in
     Const_float (string_of_float f)
 
   let string : string -> structured_constant =
@@ -177,10 +176,16 @@ end
     Ident.({ name = label ; stamp = id ; flags = 0 })	 
 
   let prim_description : string -> int -> bool -> string -> bool -> Primitive.description =
-    fun name arity allocates cname onfloats -> failwith ""
+    fun name arity allocates cname onfloats ->
+      { prim_name         = name            (* Name of primitive  or C function *)
+      ; prim_arity        = arity           (* Number of arguments *)
+      ; prim_alloc        = allocates       (* Does it allocates or raise? *)
+      ; prim_native_name  = cname           (* Name of C function for the nat. code gen. *)
+      ; prim_native_float = onfloats }      (* Does the above operate on unboxed floats? *)
+
 
   let prim_binary_op : string -> Primitive.description =
-    fun name -> prim_description name 2 false name true
+    fun name -> prim_description name 2 true name false
 
   let pcmp : string -> primitive =
     function

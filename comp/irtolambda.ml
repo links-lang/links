@@ -69,15 +69,27 @@ let primop   : string -> Lambda.primitive option =
 	  | "*." -> Pmulfloat
 	  | "/." -> Pdivfloat
 	  | _ -> raise Not_found
-	else if is_relational_operation op then   
-	  Pintcomp (match op with
+	else if is_relational_operation op then
+          match op with
+          | "==" -> Pintcomp Ceq
+          | "!=" -> Pintcomp Cneq
+          | op -> let cmp =
+                    match op with
+                    | "<"  -> "caml_lessthan"
+                    | ">"  -> "caml_greaterthan"
+                    | "<=" -> "caml_lessequal"
+                    | ">=" -> "caml_greaterequal"
+                    | _ -> raise Not_found
+                  in
+                  Pccall (LambdaDSL.prim_binary_op cmp)
+(*	  Pintcomp (match op with
 		    | "==" -> Ceq
 		    | "<>" -> Cneq
 		    | "<"  -> Clt
 		    | ">"  -> Cgt
 		    | "<=" -> Cle
 		    | ">=" -> Cge
-		    | _ -> raise Not_found)
+	  | _ -> raise Not_found)*)
 	else raise Not_found
       )
   with
@@ -197,8 +209,13 @@ let translate (op_map,name_map) module_name ir =
     function
     | `Wrong _ -> lapply (pervasives "failwith") [lstring "Fatal error."]
     | `DoOperation (label, args, _) ->
+       let pos =
+         match get_op_pos label with
+         | Some pos -> pos
+         | _ -> error ("Could not find unique location identifier for operation " ^ label)
+       in
        let perform label args =	 
-	 lperform (lprim (field 0)
+	 lperform (lprim (field pos)
 			 [ getglobal ])
 		  [ lprim box args ]
        in
@@ -414,13 +431,27 @@ let translate (op_map,name_map) module_name ir =
 
 
 let transform tenv ir =
-  object (o)
-    inherit Ir.Transform.visitor(tenv) as super
-    method tail_computation =
-      function
-      | `Apply (f, args) -> failwith ""
-      | tc -> super#tail_computation tc
-  end
+  let transformer = 
+object (o)
+  inherit Ir.Transform.visitor(tenv) as super
+  method value =
+    function
+    | `Variable var ->
+       if is_primitive var then
+         match primitive_name var with
+         | Some (">" as name) ->
+            begin
+              print_endline name;
+              failwith (Types_links.string_of_datatype (o#lookup_type var))               
+            end
+         | Some _   -> super#value (`Variable var)
+         | None -> failwith "ERROR"
+       else
+         super#value (`Variable var)
+    | v -> super#value v 
+end
+  in
+  transformer#program ir
 
     
 let lambda_of_ir ((_,nenv,_) as envs,tenv) module_name prog =
@@ -429,6 +460,7 @@ let lambda_of_ir ((_,nenv,_) as envs,tenv) module_name prog =
     gather#get_operation_env, gather#get_name_map
   (*    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)*)
   in
+  (*  let _ = transform tenv prog in*)
   translate maps module_name prog
 (*  let ir_translator = new translator (invert env) in
   ir_translator#program "Helloworld" prog*)

@@ -4,6 +4,13 @@ typename Maybe(a) = [|Just:a|Nothing|];
 var x = fun () { do Choose };
 var y = fun () { do Fail };
 
+fun boolToString(c) {
+  switch (c) {
+    case true -> "true"
+    case _    -> "false"
+  }
+}
+
 sig toss : () {Choose:Bool|_}~> Toss
 fun toss() {
   if (do Choose) Heads
@@ -30,26 +37,26 @@ fun randomResult(m)() {
   }
 }
 
-print(showToss(randomResult(toss)()))
+fun maybeResult(m)() {
+  open handle(m) {
+    case Fail(_)   -> Nothing
+    case Return(x) -> Just(x)
+  }
+}
 
-# fun maybeResult(m)() {
-#   open handle(m) {
-#     case Fail(_)   -> Nothing
-#     case Return(x) -> Just(x)
-#   }
-# }
+fun showMaybe(s)(m) {
+   switch (m) {
+      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
+      case Nothing -> "Nothing"
+   }
+}
 
-# fun showMaybe(s)(m) {
-#    switch (m) {
-#       case Just(x) -> "Just(" ^^ s(x) ^^ ")"
-#       case Nothing -> "Nothing"
-#    }
-# }
+var show = showMaybe(showToss);
 
-# var show = showMaybe(showToss);
+print(
+  show(
+    run(maybeResult(randomResult(toss)))
+    )
+  )
 
-# print(
-#   show(
-#     run(maybeResult(randomResult(toss)))
-#     )
-#   )
+#print(showToss(randomResult(toss)()))

@@ -1,0 +1,3 @@
+var fp = random();
+if (fp > 0.5) print(floatToString(fp) ^^ " > 0.5")
+else print(floatToString(fp) ^^ " <= 0.5")

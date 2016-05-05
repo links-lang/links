@@ -209,7 +209,7 @@ end
 
 module Transform : TRANSFORM =
 struct
-  open Types
+  open Types_links
   open TypeUtils
 
   type environment = datatype Env.Int.t

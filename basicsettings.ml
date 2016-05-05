@@ -4,6 +4,18 @@
 *)
 let interacting = Settings.add_bool ("interacting", true, `System)
 
+(* Dump lambda IR *)
+let show_lambda_ir = Settings.add_bool("show_lambda_ir", false, `User)
+let show_clambda_ir = Settings.add_bool("show_clambda_ir", false, `User)
+let show_compiled_ir = Settings.add_bool("show_anf_ir", false, `User) (* FIXME: Duplicate of Sugartoir.show_compiled_ir.*)				       
+
+(* Compiling *)				       
+let compiling = Settings.add_bool("compile_mode", false, `System)
+let bytecomp  = Settings.add_bool("byte", true, `System)
+let nativecomp = Settings.add_bool("native", false, `System)
+let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)				  
+
+  
 (** [true] if we're in web mode *)
 let web_mode = Settings.add_bool ("web_mode", false, `System)
 
@@ -28,7 +40,19 @@ let prelude_file =
   let prelude_dir = match Utility.getenv "LINKS_LIB" with
       None -> Filename.dirname Sys.executable_name
     | Some path -> path
-  in Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
+  in
+  let prelude_src =
+    if Settings.get_value compiling
+    then "prelude-compiler.links"
+    else "prelude.links"
+  in
+  Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
+
+(* FIXME: Have one prelude *)
+let prelude_file_compiler = 
+  let prelude_dir = Filename.dirname Sys.executable_name in
+  let prelude_src = "prelude-compiler.links" in
+  Settings.add_string ("prelude_compiler", Filename.concat prelude_dir prelude_src, `System)    
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
@@ -98,14 +122,3 @@ let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
-
-(* Dump lambda IR *)
-let show_lambda_ir = Settings.add_bool("show_lambda_ir", false, `User)
-let show_clambda_ir = Settings.add_bool("show_clambda_ir", false, `User)
-let show_compiled_ir = Settings.add_bool("show_anf_ir", false, `User) (* FIXME: Duplicate of Sugartoir.show_compiled_ir.*)				       
-
-(* Compiling *)				       
-let compiling = Settings.add_bool("compile_mode", false, `System)
-let bytecomp  = Settings.add_bool("byte", true, `System)
-let nativecomp = Settings.add_bool("native", false, `System)
-let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)				  

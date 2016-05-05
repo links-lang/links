@@ -445,6 +445,31 @@ let options : opt list =
     
 let file_list = ref []
 
+let load_prelude_compiler () =
+  let (nenv, tyenv), (globals, _, _) =
+    (Errors.display_fatal
+       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file_compiler))
+  in
+
+  let tyenv = Lib.patch_prelude_funs tyenv in
+
+  Lib.prelude_tyenv := Some tyenv;
+  Lib.prelude_nenv := Some nenv;
+
+  let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
+
+  (*let globals = Closures.bindings tenv Lib.primitive_vars globals in
+  (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
+    BuildTables.bindings tenv Lib.primitive_vars globals;*)
+
+  let valenv = Evalir.run_defs Value.empty_env globals in
+  let envs =
+    (valenv,
+     Env.String.extend Lib.nenv nenv,
+     Types.extend_typing_environment Lib.typing_env tyenv)
+  in
+    globals, envs
+  
 let compile prelude ((valenv,nenv,tyenv) as envs) filename =
   let parse envs filename =
     let parse_and_desugar ((nenv,tyenv) as envs) filename =
@@ -474,7 +499,7 @@ let compile_main () =
   Settings.set_value BS.make_cache false;
   Settings.set_value BS.use_cache false;
   Settings.set_value BS.interacting false;
-  let (prelude, envs) = load_prelude () in
+  let (prelude, envs) = load_prelude_compiler () in
   for_each !file_list (compile prelude envs)
 
 let main () =

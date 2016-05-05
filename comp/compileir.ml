@@ -87,11 +87,17 @@ let remove_links_extension filename =
   Filename.chop_suffix filename ".links"
 			   
 let compile parse_and_desugar envs prelude filename =
-  let (program, tenv) = parse_and_desugar envs filename in
+  let ((bs,tc) as program, tenv) = parse_and_desugar envs filename in
   let () = if Settings.get_value Basicsettings.show_compiled_ir
 	   then print_endline (Ir.Show_program.show program)
 	   else ()
-  in    
+  in
+  let program =
+    if true then
+      (prelude @ bs, tc)
+    else
+      (bs,tc)
+  in
   let module_name = remove_links_extension filename in
   let lam = lambda_of_ir (envs,tenv) module_name program in  
   dump_lambda lam;
