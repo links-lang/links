@@ -1,0 +1,38 @@
+# Microbenchmark stateful counting (Handlers)
+
+sig get : () {Get:s|_}-> s
+fun get() {do Get}
+
+sig put : (s) {Put:(s) {}-> ()|_}-> ()
+fun put(s) {do Put(s)}
+
+fun countAbs() {
+    var i = get();
+    if (i == 0) { i }
+    else { put(i - 1); countAbs() }
+}
+
+sig evalState : (s) -> (() {Get:s,Put:(s) {}-> ()}~> a) {}~> a
+fun evalState(s)(m) {
+  var h = handle(m) {
+           case Get(k)    -> fun(s) { k(s)(s) }
+           case Put(s,k)  -> fun(_) { k(())(s) }
+           case Return(x) -> fun(_) { x }
+          };
+  h(s)
+}
+
+fun b(n) {
+    var x = evalState(n)(countAbs);
+    x
+}
+
+fun pow(b,e) {
+  fun pow_aux(b,e,acc) {
+    if (e == 0) acc
+    else pow_aux(b,e-1,acc*b)
+  }
+  pow_aux(b,e,1)
+}
+
+print(intToString(b(pow(10,7))))
