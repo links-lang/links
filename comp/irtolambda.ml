@@ -15,8 +15,10 @@ let ocaml_of_links_function f =
 	       ; "floatToString", ocaml_function stdlib "string_of_float"
                ; "Concat", ocaml_function stdlib "@"
 	       ; "^^", ocaml_function stdlib "^"
+               ; "error", ocaml_function stdlib "failwith"
 	       ; "hd", ocaml_function listlib "hd"
-	       ; "tl", ocaml_function listlib "tl"
+   	       ; "tl", ocaml_function listlib "tl"
+               ; "length", ocaml_function listlib "length"
 	     ]
        
 let arith_ops =

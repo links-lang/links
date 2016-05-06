@@ -1,0 +1,20 @@
+# Microbenchmark stateful counting (Handlers)
+
+fun countAbs(i) {
+    if (i == 0) { i }
+    else { countAbs(i-1) }
+}
+
+fun b(n) {
+    countAbs(n)
+}
+
+fun pow(b,e) {
+  fun pow_aux(b,e,acc) {
+    if (e == 0) acc
+    else pow_aux(b,e-1,acc*b)
+  }
+  pow_aux(b,e,1)
+}
+
+print(intToString(b(pow(10,7))))

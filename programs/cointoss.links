@@ -1,20 +1,16 @@
 typename Toss = [|Heads|Tails|];
 typename Maybe(a) = [|Just:a|Nothing|];
 
-var x = fun () { do Choose };
-var y = fun () { do Fail };
+fun fail() { switch(do Fail) { } }
+fun choose() { do Choose }
 
+
+### BOILERPLATE
 fun boolToString(c) {
   switch (c) {
     case true -> "true"
     case _    -> "false"
   }
-}
-
-sig toss : () {Choose:Bool|_}~> Toss
-fun toss() {
-  if (do Choose) Heads
-  else Tails
 }
 
 fun showToss(t) {
@@ -24,15 +20,31 @@ fun showToss(t) {
    }
 }
 
-fun run(m) {
-  handle(m) {
-    case Return(x) -> x
-  }
+fun showMaybe(s)(m) {
+   switch (m) {
+      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
+      case Nothing -> "Nothing"
+   }
+}
+###
+
+### The interesting stuff
+sig toss : () {Choose:Bool|_}~> Toss
+fun toss() {
+  if (do Choose) Heads
+  else Tails
 }
 
+## Drunk toss
+fun drunkToss() {
+  if (choose()) toss()
+  else fail()
+}
+
+## Handlers
 fun randomResult(m)() {
   open handle(m) {
-     case Choose(k) -> var r = random(); print(floatToString(r)); k(r > 0.5)
+     case Choose(k) -> k(random() > 0.5)
      case Return(x) -> x
   }
 }
@@ -44,19 +56,25 @@ fun maybeResult(m)() {
   }
 }
 
-fun showMaybe(s)(m) {
-   switch (m) {
-      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
-      case Nothing -> "Nothing"
-   }
+fun run(m) {
+  handle(m) {
+    case Return(x) -> x
+  }
+}
+
+fun persevere(m)() {
+  open handle(m) {
+    case Return(x) -> x
+    case Fail(k)   -> persevere(m)()
+  }
 }
 
 var show = showMaybe(showToss);
 
-print(
-  show(
-    run(maybeResult(randomResult(toss)))
-    )
-  )
+# print(
+#   show(
+#     run(maybeResult(randomResult(toss)))
+#     )
+#   )
 
-#print(showToss(randomResult(toss)()))
+print(showToss(run(persevere(randomResult(drunkToss)))))

@@ -483,7 +483,7 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
     let (program, _, tenv) = parse_and_desugar (nenv, tyenv) filename in
     (program, tenv)
   in
-  Compileir.compile parse envs prelude filename
+  Compileir.compile parse envs [] filename
 
       (*((globals @ locals, main), t), envs*)
     (*let closure_conversion (valenv, nenv, tyenv) (program, t) =
