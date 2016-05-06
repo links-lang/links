@@ -55,8 +55,8 @@ function sanitizeCSV {
     sed -i '/^Q/d' data.csv
 }
 
-# sizes=(4096 2048 1024 512 256 128 64 32 16)
-sizes=(64 32 16)
+sizes=(4096 2048 1024 512 256 128 64 32 16 8 4)
+# sizes=(128 64 32 16)
 
 prepareCSV
 for n in "${sizes[@]}"

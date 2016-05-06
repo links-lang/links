@@ -128,11 +128,12 @@ fun q1() {
 }
 # Q2: expertise (factored)
 
-sig q2 : () -> [(d: Prov(String))]
+sig q2 : () -> [(d: String, p: (String, String, Int))]
 fun q2() {
-  for (d <- q1())
+  for (d <- q_org())
   where (all(d.employees, fun (e) { contains(map(fun (x) { data x }, e.tasks), "abstract") }))
-    [(d = d.name)]
+    [(d = data d.name,
+      p = prov d.name)]
 }
 
 # Q3: employees with lists of tasks
@@ -211,10 +212,9 @@ var n = query { length(for (d <-- departments) [d]) };
 
 fun exclude(q) {
   switch (q) {
-    # TODO determine cutoffs, if necessary
-    case "Q1" -> false # n > 1024 
+    case "Q1" -> n > 2048
     case "Q5" -> false # n > 1024
-    case "Q6" -> false # n > 2048
+    case "Q6" -> n > 2048
     case _ -> false
   }
 }

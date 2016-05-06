@@ -157,4 +157,4 @@ fun go_large(n) {
   }
 }
 
-go_large(4096)
+go_large(4)
