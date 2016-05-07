@@ -1,16 +1,63 @@
+## Data type modelling a the outcome of a coin toss
 typename Toss = [|Heads|Tails|];
+
+## Data type modelling the potential for failure
 typename Maybe(a) = [|Just:a|Nothing|];
 
-fun fail() { switch(do Fail) { } }
+## The empty type
+typename Zero = [||];
+
+## Data type modelling a thunk
+typename Comp(e::Row,a) = () ~e~> a;
+
+
+## Non-deterministic choice operation
+sig choose : () {Choose:Bool |_}~> Bool
 fun choose() { do Choose }
+
+## Failure (exception) operation
+sig fail : () {Fail:Zero |_}~> _
+fun fail() { switch(do Fail) { } }
 
 
 ### BOILERPLATE
+
+## Various standard library functions
 fun boolToString(c) {
   switch (c) {
     case true -> "true"
     case _    -> "false"
   }
+}
+
+fun fold_left(f,acc,xs) {  
+  switch(xs) {
+    case x :: xs -> fold_left(f, f(acc,x), xs)
+    case []      -> acc
+  }
+}
+
+fun map(f,xs) {
+  switch(xs) {
+    case x1 :: xs -> f(x1) :: map(f,xs)
+    case [] -> []
+  }
+}
+
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []    
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+## Various conversion functions
+fun showList(showX)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(showX, xs)));
+  "[" ^^ xs ^^ "]"
 }
 
 fun showToss(t) {
@@ -29,19 +76,15 @@ fun showMaybe(s)(m) {
 ###
 
 ### The interesting stuff
+## Function modelling a coin toss
 sig toss : () {Choose:Bool|_}~> Toss
 fun toss() {
-  if (do Choose) Heads
+  if (choose()) Heads
   else Tails
 }
 
-## Drunk toss
-fun drunkToss() {
-  if (choose()) toss()
-  else fail()
-}
-
-## Handlers
+## Different interpretations of Choose
+sig randomResult : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, a)
 fun randomResult(m)() {
   open handle(m) {
      case Choose(k) -> k(random() > 0.5)
@@ -49,6 +92,23 @@ fun randomResult(m)() {
   }
 }
 
+sig allResults : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, [a])
+fun allResults(m)() {
+  open handle(m) {
+     case Choose(k) -> k(true) ++ k(false)
+     case Return(x) -> [x]
+  }
+}
+
+## Function modelling a drunk toss
+sig drunkToss : () {Choose:Bool,Fail:Zero|_}~> Toss
+fun drunkToss() {
+  if (choose()) toss()
+  else fail()
+}
+
+## Different interpretations of Fail
+sig maybeResult : (Comp({Fail:Zero |e}, a)) -> Comp({Fail{_} |e}, Maybe(a))
 fun maybeResult(m)() {
   open handle(m) {
     case Fail(_)   -> Nothing
@@ -56,12 +116,7 @@ fun maybeResult(m)() {
   }
 }
 
-fun run(m) {
-  handle(m) {
-    case Return(x) -> x
-  }
-}
-
+sig persevere : (Comp({Fail:Zero|e}, a)) -> Comp({Fail{_} |e}, a)
 fun persevere(m)() {
   open handle(m) {
     case Return(x) -> x
@@ -69,12 +124,35 @@ fun persevere(m)() {
   }
 }
 
-var show = showMaybe(showToss);
+## Running a computation
+fun run(m) { m() }
 
-# print(
-#   show(
-#     run(maybeResult(randomResult(toss)))
-#     )
-#   )
+fun examples() {
+    var showMaybeToss = showMaybe(showToss);
 
-print(showToss(run(persevere(randomResult(drunkToss)))))
+    print ("# examples");
+    print("#1 randomResult(toss):");
+    var _ = print(showToss(run(randomResult(toss))));
+    print("\n#2 allResults(toss):");
+    var _ = print(showList(showToss)(run(allResults(toss))));
+    
+    print("\n#3 maybeResult(randomResult(toss)):");
+    var _ = print(showMaybeToss(run(maybeResult(randomResult(toss)))));
+    print("\n#4 allResults(maybeResult(toss)):");    
+    var _ = print(showList(showMaybeToss)(run(allResults(maybeResult(toss)))));
+    print("\n#5 maybeResult(allResults(toss)):");      
+    var _ = print(showMaybe(showList(showToss))(run(maybeResult(allResults(toss)))));
+
+    print("\n#6 maybeResult(randomResult(drunkToss)):");
+    var _ = print(showMaybe(showToss)(run(maybeResult(randomResult(drunkToss)))));
+    print("\n#7 persevere(randomResult(drunkToss)):");    
+    var _ = print(showToss(run(persevere(randomResult(drunkToss)))));
+    
+    print("\n#8 maybeResult(allResults(drunkToss)):");
+    var _ = print(showMaybe(showList(showToss))(run(maybeResult(allResults(drunkToss)))));
+    print("\n#9 allResults(maybeResult(drunkToss)):");
+    var _ = print(showList(showMaybeToss)(run(allResults(maybeResult(drunkToss)))));
+    ()
+}
+
+examples()
