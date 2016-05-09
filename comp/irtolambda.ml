@@ -59,41 +59,41 @@ let primop   : string -> Lambda.primitive option =
   let open Lambda in
   try 
     Some (
-	if is_arithmetic_operation op then
-	  match op with       
-	  | "+" -> Paddint
-	  | "-" -> Psubint
-	  | "*" -> Pmulint
-	  | "/" -> Pdivint
-	  | "mod" -> Pmodint		 
-	  | "+." -> Paddfloat
-	  | "-." -> Psubfloat
-	  | "*." -> Pmulfloat
-	  | "/." -> Pdivfloat
-	  | _ -> raise Not_found
-	else if is_relational_operation op then
-          match op with
-          | "==" -> Pintcomp Ceq
-          | "!=" -> Pintcomp Cneq
-          | op -> let cmp =
-                    match op with
-                    | "<"  -> "caml_lessthan"
-                    | ">"  -> "caml_greaterthan"
-                    | "<=" -> "caml_lessequal"
-                    | ">=" -> "caml_greaterequal"
-                    | _ -> raise Not_found
-                  in
-                  Pccall (LambdaDSL.prim_binary_op cmp)
-(*	  Pintcomp (match op with
-		    | "==" -> Ceq
-		    | "<>" -> Cneq
-		    | "<"  -> Clt
-		    | ">"  -> Cgt
-		    | "<=" -> Cle
-		    | ">=" -> Cge
-	  | _ -> raise Not_found)*)
-	else raise Not_found
-      )
+      if is_arithmetic_operation op then
+	match op with       
+	| "+" -> Paddint
+	| "-" -> Psubint
+	| "*" -> Pmulint
+	| "/" -> Pdivint
+	| "mod" -> Pmodint		 
+	| "+." -> Paddfloat
+	| "-." -> Psubfloat
+	| "*." -> Pmulfloat
+	| "/." -> Pdivfloat
+	| _ -> raise Not_found
+      else if is_relational_operation op then
+        match op with
+        | "==" -> Pintcomp Ceq
+        | "!=" -> Pintcomp Cneq
+        | op -> let cmp =
+                  match op with
+                  | "<"  -> "caml_lessthan"
+                  | ">"  -> "caml_greaterthan"
+                  | "<=" -> "caml_lessequal"
+                  | ">=" -> "caml_greaterequal"
+                  | _ -> raise Not_found
+                in
+                Pccall (LambdaDSL.prim_binary_op cmp)
+        (*	  Pintcomp (match op with
+		  | "==" -> Ceq
+		  | "<>" -> Cneq
+		  | "<"  -> Clt
+		  | ">"  -> Cgt
+		  | "<=" -> Cle
+		  | ">=" -> Cge
+	          | _ -> raise Not_found)*)
+      else raise Not_found
+    )
   with
   | Not_found -> None
 	       
@@ -175,13 +175,14 @@ let translate (op_map,name_map) module_name ir =
 		   | "random" ->
 		      let random = lookup "Random" "float" in
 		      lapply random [lfloat 1.0]
+                   | "not" -> lprim Pnot args'
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in
 			let f = lookup module_name fun_name in
 			lapply f args'
 		      with
-		      | _ -> error ("Unsupported primitive function " ^ fname)
+		      | _ -> error ("Unsupported primitive function '" ^ fname ^ "'")
 		 end
 	    end
        end

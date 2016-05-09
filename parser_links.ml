@@ -3777,7 +3777,7 @@ let yyact = [|
 ; (fun __caml_parser_env ->
     Obj.repr(
 # 469 "parser_links.mly"
-                             ( `Closed )
+                             ( `Open )
 # 3782 "parser_links.ml"
                : 'handler_nature))
 ; (fun __caml_parser_env ->

@@ -466,7 +466,7 @@ handler_parameterization:
 | arg_lists handler_body { ($2, Some $1) }
 
 handler_nature:
-| /* empty */                { `Closed }
+| /* empty */                { `Open }
 | OPEN                       { `Open }
     
 handler_depth:
