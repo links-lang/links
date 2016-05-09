@@ -10,22 +10,6 @@
 #
 #{END}
 
-#{BEGIN: nim-rules}
-# Nim game (https://en.wikipedia.org/wiki/Nim)
-# This example is adapted from Kammar et al. (2013)
-#     (https://github.com/slindley/effect-handlers)
-#
-# Mathematical game Nim
-#
-# Rules:
-#  - Two players: Alice and Bob; Alice always starts.
-#  - One heap of N sticks.
-#  - Turn-based, one move per turn.
-#  - A player may pick between 1-3 sticks at each turn.
-#  - The player, who takes the last stick, wins.
-#
-#{END}
-
 ## Some standard functions
 fun maximum(a,b) {
  if (a < b) b
@@ -99,24 +83,75 @@ fun range(a,b) {
     range_aux(b, [])
 }
 
+fun any(p, l) {
+   switch (l) {
+     case [] -> false
+     case x::xs -> p(x) || any(p, xs)
+   }
+}
+
+fun elem(x,xs) {
+  any(fun(y) { x == y }, xs) 
+}
+
+fun const(x)(_) { x }
+
 fun run(m) { m() }
+
+fun example(m)() { run(m) }
+
+## Motivation
+#{BEGIN: motivation}
+# Virtually, every program comprise an *effectful* component, e.g.
+#   - raise exceptions
+#   - perform input/output
+#   - mutate some state
+#   - fork threads
+#   - non-determinism
+#   - \dots and so forth
+#
+# In most programming languages effects are dealt with *implicitly*.
+#
+# Algebraic effects and handlers provide a modular abstraction for modelling and controlling effects *explicitly*.
+#{END}
+
+## Warm-up example
+#{BEGIN: choose}
+# An algebraic effect is a collection of abstract operations. A
+# concrete example is *nondeterminism* which is described by a
+# nondeterministic choice operation, called Choose:
+
+sig choose : () {Choose:Bool |_}-> Bool
+fun choose() { do Choose }
+
+# The imperative primitive 'do' invokes the operation. Operations are
+# entirely syntactical; on their own they are meaningless.
+#{END}
+
+#{BEGIN: coin-flip}
+# We can use Choose to model a coin flip:
+
+typename Toss = [|Heads|Tails|];
+
+sig toss : () {Choose:Bool |_}-> Toss
+fun toss() {
+  if (choose()) Heads
+  else Tails
+}
+
+# The function 'toss' is said to be an abstract computation. Abstract
+# computations are composed from abstract operations. Again, they are
+# meaningless.
+#{END}
+
+#{BEGIN: randomResult}
+# An effect handler interpret operations by instantiating them with
+# concrete implementations.  For example, we can give a random
+# interpretation of Choose:
 
 typename Comp(e::Row, a) = () ~e~> a;
 
-# INTRO
-fun choose() { do Choose }
-fun chooseFrom(xs) {
-  var len = length(xs);
-  if (len > 1) {
-    if (choose())
-      chooseFrom(take(len / 2, xs))
-    else
-      chooseFrom(drop(len / 2, xs))   
-  } else {
-      hd(xs)
-} }
-
-
+sig randomResult : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, a)
 fun randomResult(m)() {
   handle(m) {
     case Return(x) -> x
@@ -124,6 +159,23 @@ fun randomResult(m)() {
   }
 }
 
+# The Return-clause is invoked when the computation m returns. The
+# parameter x gets bound tot the return value of m.
+
+# The Choose-clause exposes a parameter k which is the continuation of
+# Choose in the computation m.
+
+# Example 1
+var ex1 = example( randomResult(toss) );
+#{END}
+
+#{BEGIN: allResults}
+# We can give an alternative interpretation that enumerates the sample
+# space. The key idea is to interpret Choose twice:
+#   - First as true,
+#   - and afterwards as false.
+
+sig allResults : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, [a])
 fun allResults(m)() {
   handle(m) {
     case Return(x) -> [x]
@@ -131,16 +183,72 @@ fun allResults(m)() {
   }
 }
 
+# The Return-clause lifts each outcome into a singleton list.
+
+# The Choose-clause concatenates the results of both interpretations.
+
+# Example 2
+var ex2 = example( allResults(toss) );
+#{END}
+
+#{BEGIN: generalised-choice}
+
+# We may easily generalise the binary choice to a n-ary choice:
+
+sig chooseFrom : ([a]) {Choose:Bool |_}~> a
+fun chooseFrom(xs) {
+  var len = length(xs);
+  if (len > 1) {
+    if (choose())
+      chooseFrom(take(len / 2, xs))
+    else
+      chooseFrom(drop(len / 2, xs)) 
+  } else {
+      hd(xs)
+} }
+
+# Examples 3 and 4:
+var ex3 = example( randomResult( fun() { chooseFrom([Heads,Tails]) : Toss } ) );
+
+var ex4 = example( allResults( fun() { chooseFrom([Heads,Tails]) : Toss } ) );
+#{END}
+
+
+
+#{BEGIN: nim-rules}
+# Nim game (https://en.wikipedia.org/wiki/Nim)
+# This example is adapted from Kammar et al. (2013)
+#     (https://github.com/slindley/effect-handlers)
+#
+# Mathematical game Nim
+#
+# Rules:
+#  - Two players: Alice and Bob; Alice always starts.
+#  - One heap of N sticks.
+#  - Turn-based, one move per turn.
+#  - A player may pick between 1-3 sticks at each turn.
+#  - The player, who takes the last stick, wins.
+#
+#{END}
+
 #{BEGIN: player-model}
+# A datatype modelling the players:
 typename Player = [|Alice|Bob|];
 #{END}
 
 #{BEGIN: move}
+
+# The notion of *move* is centric to the game.
+
+# We model a move as an abstract operation, that is parameterised by
+# the active player and the number of sticks left in the heap:
 sig move : (Player, Int) {Move:(Player,Int) {}-> Int |_}~> Int
 fun move(p, n) { do Move(p,n) }
 #{END}
 
 #{BEGIN: aliceTurn}
+# We model the game as two mutually recursive functions, that are
+# parameterised by the number of sticks left in the game:
 sig aliceTurn : (Int) {Move:(Player,Int) {}-> Int |_}~> Player
 fun aliceTurn(n) {
   if (n <= 0) Bob
@@ -149,6 +257,7 @@ fun aliceTurn(n) {
 #{END: aliceTurn}
 
 #{BEGIN: bobTurn}
+# The definition of bobTurn is completely analogous:
 sig bobTurn : (Int) {Move:(Player,Int) {}-> Int |_}~> Player
 fun bobTurn(n) {
   if (n <= 0) Alice
@@ -157,6 +266,7 @@ fun bobTurn(n) {
 #{END: bobTurn}
 
 #{BEGIN: game}
+# A convenient function that starts a game with n sticks:
 fun game(n)() {
   aliceTurn(n)
 }
@@ -181,6 +291,13 @@ fun game(n)() {
 #{END: strategies}
 
 #{BEGIN: perfect}
+# It seems natural to interpret Move as part of some strategy.
+# For example, the perfect strategy is defined by
+#            ps(n) = max{1, n mod 4}
+# in our game.
+#
+# We may implement handler *perfect* that assigns the ps to both
+# players:
 sig perfect : (Comp({Move:(Player,Int) {}-> Int |e}, a)) -> Comp({Move{_} |e}, a)
 fun perfect(m)() {
   handle(m) {
@@ -191,6 +308,8 @@ fun perfect(m)() {
 #{END}
 
 #{BEGIN: perfect-sugar}
+# The abstract-over-handle idiom is so common that we provide some
+# syntactic sugar for it:
 sig perfect_s : (Comp({Move:(Player,Int) {}-> Int |e}, a)) -> Comp({Move{_} |e}, a)
 handler perfect_s {
    case Return(x)   -> x
@@ -199,9 +318,8 @@ handler perfect_s {
 #{END}
 
 #{BEGIN: strategy}
-#
-# Assigns strategy s(p) to player p
-#
+# Handlers are first-class citizens. We may define a generic strategy
+# handler that assigns a strategy s(p) to player p:
 fun strategy(s) {
   handler {
     case Return(x)   -> x
@@ -211,14 +329,19 @@ fun strategy(s) {
 #{END}
 
 #{BEGIN: ps}
+# Now, we can define ps as:
 fun ps(n,k) {
   k( maximum(1, n `mod` 4) )
 }
 
-var perfect = strategy(fun (_) { ps });
+# Then, we can define perfect as:
+var perfect = strategy(const(ps));
+# Here, const is a function that always returns its first argument.
 #{END}
 
 #{BEGIN: ms}
+# We may implement *mixed* strategies using our generalised choice
+# function:
 fun ms(n, k) {
   var choice = chooseFrom( range(1,n) );
   k(choice)
@@ -244,25 +367,35 @@ fun ms(n, k) {
 #                                        
 #{END}
 
+#{BEGIN: data-intro}
+# We may extend the idea of exXX to compute data about the game.
+#
 
+# Let's define a handler that computes the game tree of a given game.
+# We define a game tree inductively:
 typename GameTree = [|Take:(Player,[(Int,GameTree)])
                      |Winner:(Player)|];
+#{END}
 
 # Auxiliary function that computes the set of legal moves
 sig validMoves : (Int) ~> [Int]
 fun validMoves(n)
  { filter(fun(m) {m <= n}, [1,2,3]) }
 
-# The following (deep, closed) handler generates a game tree for a given game m
-# The Return clause generates leaf nodes.
+#{BEGIN: gametree}
+# The following handler generates a game tree for a given game
+#  - The Return-clause generates leaf nodes.
+#  - In the Move-clause we explore every possible by subgame, by invoking
+#    the continuation multiple times.
 sig gametree : (Comp({Move:(Player,Int) {}-> Int |e}, Player)) -> Comp({Move{_} |e}, GameTree)
 handler gametree {
   case Return(x)   -> Winner(x)
   case Move(p,n,k) ->
     var subgames = map(k, validMoves(n));
     var subtrees = zip([1,2,3], subgames);
-    Take(p, subtrees) }
-#end
+    Take(p, subtrees)
+}
+#{END}
 
 
 #{BEGIN: cheat-detection}
@@ -282,6 +415,62 @@ handler gametree {
 #                                                                                                                                                
 #{END}
 
+#{BEGIN: cheat-strategy}
+# It is very easy to cheat in our game. An example of a cheating
+# strategy is:
+fun cs(n,k) { k(n) }
+# Any player playing cs will win any game in a single move.
+#{END}
+
+#{BEGIN: cheat}
+# We introduce a new operation: cheat.
+# It's intended to signal that a cheater has been caught:
+
+typename Zero = [||];
+
+sig cheat : (Player) {Cheat:(Player) {}-> Zero|_}-> _
+fun cheat(p) { switch (do Cheat(p)) { } }
+
+# The codomain of Cheat is the empty type Zero, thus an invocation of
+# Cheat may never return. In fact, Cheat is an instance of an
+# exception.  Exceptions are algebraic effects that never returns
+# control to its caller.
+#{END}
+
+sig checker :
+  (Comp({Cheat:(Player) {}-> Zero,
+         Move: (Player,Int) {}-> Int|e},a)) ->
+     Comp({Cheat:(Player) {}-> Zero,
+           Move: (Player,Int) {}-> Int|e},a)
+#{BEGIN}
+
+# We need some mechanism to check whether cheating has occurred.
+# To achieve this we introduce *yet another layer of indirection*.
+#
+# The checker analyses the moves of players. If a player perform an
+# illegal move, then the player gets reported:
+handler checker {
+  case Return(x)   -> x
+  case Move(p,n,k) ->
+    var m = move(p,n); 
+    if (m `elem` validMoves(n)) k(m)
+    else cheat(p)
+}
+#end
+#{END}
+
+sig cheatReport : (Comp({Cheat:(Player) {}-> Zero|e},a)) -> Comp({Cheat{p}|e},a)
+#{BEGIN: cheatReport}
+# Finally, we need some mechanism for handling the Cheat operation.
+# 
+# Let us treat Cheat as a fatal exception that prints the cheater's
+# name, and afterwards halts the program:
+handler cheatReport {
+  case Return(x)    -> x
+  case Cheat(p,_)   -> error(showPlayer(p) ^^ " was caught cheating!")
+}
+#{END}
+
 #{BEGIN: scoreboard}
 #  _____           _     _______      __    
 # |  __ \         | |   |_   _\ \    / /  _ 
@@ -299,5 +488,13 @@ handler gametree {
 #                                                                                                             
 #{END}
 
+
+#{BEGIN: conclusion}
+# ...
+#{END}
+
+#{BEGIN: epilogue}
+# Connection to concurrency and parallelism: ...
+#{END}
 
 print(showPlayer(run(randomResult(strategy(fun(_) { ms })(game(5))))))
