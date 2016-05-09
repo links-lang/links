@@ -1,0 +1,303 @@
+#{BEGIN: header}
+#
+#   PROGRAMMING WITH ALGEBRAIC EFFECTS AND HANDLERS
+#                Daniel Hillerström
+#            The University of Edinburgh
+#            
+#  E-mail : daniel.hillerstrom@ed.ac.uk
+#  Website: http://homepages.inf.ac.ed.uk/s1467124
+#  Twitter: @dhillerstrom
+#
+#{END}
+
+#{BEGIN: nim-rules}
+# Nim game (https://en.wikipedia.org/wiki/Nim)
+# This example is adapted from Kammar et al. (2013)
+#     (https://github.com/slindley/effect-handlers)
+#
+# Mathematical game Nim
+#
+# Rules:
+#  - Two players: Alice and Bob; Alice always starts.
+#  - One heap of N sticks.
+#  - Turn-based, one move per turn.
+#  - A player may pick between 1-3 sticks at each turn.
+#  - The player, who takes the last stick, wins.
+#
+#{END}
+
+## Some standard functions
+fun maximum(a,b) {
+ if (a < b) b
+ else a
+}
+
+fun showPlayer(p) {
+  switch(p) {
+    case Alice -> "Alice"
+    case Bob   -> "Bob"
+  }
+}
+
+
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+fun filter(p, l) {
+  concatMap (fun (x) {if(p(x)) [x] else []}, l)
+}
+
+fun drop(n, xs) {
+  switch((n,xs)) {
+    case (0,xs) -> xs
+    case (_,[]) -> []
+    case (_,x :: xs) -> drop(n-1, xs)
+  }
+}
+
+fun take(n, xs) {
+  switch ((n,xs)) {
+    case (0, _)  -> []
+    case (_, []) -> []
+    case (_, x :: xs) -> x :: take(n-1, xs)
+  }
+}
+
+fun fold_left(f,acc,xs) {  
+  switch(xs) {
+    case x :: xs -> fold_left(f, f(acc,x), xs)
+    case []      -> acc
+  }
+}
+
+fun map(f,xs) {
+  switch(xs) {
+    case x1 :: xs -> f(x1) :: map(f,xs)
+    case [] -> []
+  }
+}
+
+sig zip : ([a], [b]) ~> [(a, b)]
+fun zip(l, r) {
+  switch ((l, r)) {
+    case ([], []) -> []
+    case (lh::lt, rh::rt) ->
+        (lh, rh) :: zip (lt, rt)
+    case (_, _) -> []
+  }
+}
+
+fun range(a,b) {
+    fun range_aux(n, acc) {
+      if (n < a) acc
+      else range_aux(n-1, n :: acc)
+    }
+    range_aux(b, [])
+}
+
+fun run(m) { m() }
+
+typename Comp(e::Row, a) = () ~e~> a;
+
+# INTRO
+fun choose() { do Choose }
+fun chooseFrom(xs) {
+  var len = length(xs);
+  if (len > 1) {
+    if (choose())
+      chooseFrom(take(len / 2, xs))
+    else
+      chooseFrom(drop(len / 2, xs))   
+  } else {
+      hd(xs)
+} }
+
+
+fun randomResult(m)() {
+  handle(m) {
+    case Return(x) -> x
+    case Choose(k) -> k(random() > 0.5)
+  }
+}
+
+fun allResults(m)() {
+  handle(m) {
+    case Return(x) -> [x]
+    case Choose(k) -> k(true) ++ k(false)
+  }
+}
+
+#{BEGIN: player-model}
+typename Player = [|Alice|Bob|];
+#{END}
+
+#{BEGIN: move}
+sig move : (Player, Int) {Move:(Player,Int) {}-> Int |_}~> Int
+fun move(p, n) { do Move(p,n) }
+#{END}
+
+#{BEGIN: aliceTurn}
+sig aliceTurn : (Int) {Move:(Player,Int) {}-> Int |_}~> Player
+fun aliceTurn(n) {
+  if (n <= 0) Bob
+  else bobTurn(n - move(Alice,n))
+}
+#{END: aliceTurn}
+
+#{BEGIN: bobTurn}
+sig bobTurn : (Int) {Move:(Player,Int) {}-> Int |_}~> Player
+fun bobTurn(n) {
+  if (n <= 0) Alice
+  else aliceTurn(n - move(Bob,n))
+}
+#{END: bobTurn}
+
+#{BEGIN: game}
+fun game(n)() {
+  aliceTurn(n)
+}
+#{END}
+
+#{BEGIN: strategies}
+#  _____           _     _____   
+# |  __ \         | |   |_   _|  _ 
+# | |__) |_ _ _ __| |_    | |   (_)
+# |  ___/ _` | '__| __|   | |    
+# | |  | (_| | |  | |_   _| |_   _ 
+# |_|   \__,_|_|   \__| |_____| (_)
+#   _____ _             _             _           
+#  / ____| |           | |           (_)          
+# | (___ | |_ _ __ __ _| |_ ___  __ _ _  ___  ___ 
+#  \___ \| __| '__/ _` | __/ _ \/ _` | |/ _ \/ __|
+#  ____) | |_| | | (_| | ||  __/ (_| | |  __/\__ \
+# |_____/ \__|_|  \__,_|\__\___|\__, |_|\___||___/
+#                                __/ |            
+#                               |___/             
+#                               
+#{END: strategies}
+
+#{BEGIN: perfect}
+sig perfect : (Comp({Move:(Player,Int) {}-> Int |e}, a)) -> Comp({Move{_} |e}, a)
+fun perfect(m)() {
+  handle(m) {
+    case Return(x)   -> x
+    case Move(p,n,k) -> k( maximum(1, n `mod` 4) )
+  }
+}
+#{END}
+
+#{BEGIN: perfect-sugar}
+sig perfect_s : (Comp({Move:(Player,Int) {}-> Int |e}, a)) -> Comp({Move{_} |e}, a)
+handler perfect_s {
+   case Return(x)   -> x
+   case Move(p,n,k) -> k( maximum(1, n `mod` 4) )
+}
+#{END}
+
+#{BEGIN: strategy}
+#
+# Assigns strategy s(p) to player p
+#
+fun strategy(s) {
+  handler {
+    case Return(x)   -> x
+    case Move(p,n,k) -> s(p)(n,k)
+  }
+}
+#{END}
+
+#{BEGIN: ps}
+fun ps(n,k) {
+  k( maximum(1, n `mod` 4) )
+}
+
+var perfect = strategy(fun (_) { ps });
+#{END}
+
+#{BEGIN: ms}
+fun ms(n, k) {
+  var choice = chooseFrom( range(1,n) );
+  k(choice)
+}
+#{END}
+
+#{BEGIN: gamedata}
+#  _____           _     _____ _____     
+# |  __ \         | |   |_   _|_   _|  _ 
+# | |__) |_ _ _ __| |_    | |   | |   (_)
+# |  ___/ _` | '__| __|   | |   | |      
+# | |  | (_| | |  | |_   _| |_ _| |_   _ 
+# |_|   \__,_|_|   \__| |_____|_____| (_)
+#
+#   _____                            _   _                   _       _        
+#  / ____|                          | | (_)                 | |     | |       
+# | |     ___  _ __ ___  _ __  _   _| |_ _ _ __   __ _    __| | __ _| |_ __ _ 
+# | |    / _ \| '_ ` _ \| '_ \| | | | __| | '_ \ / _` |  / _` |/ _` | __/ _` |
+# | |___| (_) | | | | | | |_) | |_| | |_| | | | | (_| | | (_| | (_| | || (_| |
+#  \_____\___/|_| |_| |_| .__/ \__,_|\__|_|_| |_|\__, |  \__,_|\__,_|\__\__,_|
+#                       | |                       __/ |                       
+#                       |_|                      |___/                        
+#                                        
+#{END}
+
+
+typename GameTree = [|Take:(Player,[(Int,GameTree)])
+                     |Winner:(Player)|];
+
+# Auxiliary function that computes the set of legal moves
+sig validMoves : (Int) ~> [Int]
+fun validMoves(n)
+ { filter(fun(m) {m <= n}, [1,2,3]) }
+
+# The following (deep, closed) handler generates a game tree for a given game m
+# The Return clause generates leaf nodes.
+sig gametree : (Comp({Move:(Player,Int) {}-> Int |e}, Player)) -> Comp({Move{_} |e}, GameTree)
+handler gametree {
+  case Return(x)   -> Winner(x)
+  case Move(p,n,k) ->
+    var subgames = map(k, validMoves(n));
+    var subtrees = zip([1,2,3], subgames);
+    Take(p, subtrees) }
+#end
+
+
+#{BEGIN: cheat-detection}
+#  _____           _     _____ _____ _____     
+# |  __ \         | |   |_   _|_   _|_   _|  _ 
+# | |__) |_ _ _ __| |_    | |   | |   | |   (_)
+# |  ___/ _` | '__| __|   | |   | |   | |      
+# | |  | (_| | |  | |_   _| |_ _| |_ _| |_   _ 
+# |_|   \__,_|_|   \__| |_____|_____|_____| (_)
+#
+#   _____ _                _         _      _            _   _             
+#  / ____| |              | |       | |    | |          | | (_)            
+# | |    | |__   ___  __ _| |_    __| | ___| |_ ___  ___| |_ _  ___  _ __  
+# | |    | '_ \ / _ \/ _` | __|  / _` |/ _ \ __/ _ \/ __| __| |/ _ \| '_ \ 
+# | |____| | | |  __/ (_| | |_  | (_| |  __/ ||  __/ (__| |_| | (_) | | | |
+#  \_____|_| |_|\___|\__,_|\__|  \__,_|\___|\__\___|\___|\__|_|\___/|_| |_|
+#                                                                                                                                                
+#{END}
+
+#{BEGIN: scoreboard}
+#  _____           _     _______      __    
+# |  __ \         | |   |_   _\ \    / /  _ 
+# | |__) |_ _ _ __| |_    | |  \ \  / /  (_)
+# |  ___/ _` | '__| __|   | |   \ \/ /      
+# | |  | (_| | |  | |_   _| |_   \  /     _ 
+# |_|   \__,_|_|   \__| |_____|   \/     (_)
+#
+#   _____                    _                         _ 
+#  / ____|                  | |                       | |
+# | (___   ___ ___  _ __ ___| |__   ___   __ _ _ __ __| |
+#  \___ \ / __/ _ \| '__/ _ \ '_ \ / _ \ / _` | '__/ _` |
+#  ____) | (_| (_) | | |  __/ |_) | (_) | (_| | | | (_| |
+# |_____/ \___\___/|_|  \___|_.__/ \___/ \__,_|_|  \__,_|
+#                                                                                                             
+#{END}
+
+
+print(showPlayer(run(randomResult(strategy(fun(_) { ms })(game(5))))))
