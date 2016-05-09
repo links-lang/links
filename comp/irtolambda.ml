@@ -46,13 +46,20 @@ let rel_ops =
   ; "<="
   ; ">="
   ]
-      
+
+let logical_ops =
+  [ "&&"
+  ; "||"
+  ]
+    
 let is_arithmetic_operation : string -> bool =
   fun op -> List.mem op arith_ops
 		     
 let is_relational_operation : string -> bool =
   fun op -> List.mem op rel_ops
 
+let is_logical_operation : string -> bool =
+  fun op -> List.mem op logical_ops
 
 let primop   : string -> Lambda.primitive option =
   fun op ->
@@ -92,6 +99,11 @@ let primop   : string -> Lambda.primitive option =
 		  | "<=" -> Cle
 		  | ">=" -> Cge
 	          | _ -> raise Not_found)*)
+      else if is_logical_operation op then
+        match op with
+        | "&&" -> Psequand
+        | "||" -> Psequor
+        | _ -> raise Not_found
       else raise Not_found
     )
   with
