@@ -87,16 +87,16 @@ fun toss() {
 sig randomResult : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, a)
 fun randomResult(m)() {
   open handle(m) {
+     case Return(x) -> x      
      case Choose(k) -> k(random() > 0.5)
-     case Return(x) -> x
   }
 }
 
 sig allResults : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, [a])
 fun allResults(m)() {
   open handle(m) {
-     case Choose(k) -> k(true) ++ k(false)
      case Return(x) -> [x]
+     case Choose(k) -> k(true) ++ k(false)
   }
 }
 
@@ -111,8 +111,8 @@ fun drunkToss() {
 sig maybeResult : (Comp({Fail:Zero |e}, a)) -> Comp({Fail{_} |e}, Maybe(a))
 fun maybeResult(m)() {
   open handle(m) {
-    case Fail(_)   -> Nothing
     case Return(x) -> Just(x)
+    case Fail(_)   -> Nothing
   }
 }
 
@@ -121,6 +121,16 @@ fun persevere(m)() {
   open handle(m) {
     case Return(x) -> x
     case Fail(k)   -> persevere(m)()
+  }
+}
+
+## A silly interpretation of Choose to show that the abstraction is
+## not leaky
+sig chooseNot : (Comp({Choose:Bool |e}, a)) -> Comp({Choose:Bool |e}, a)
+fun chooseNot(m)() {
+  handle(m) {
+     case Return(x) -> x
+     case Choose(k) -> k(not(choose()))
   }
 }
 
@@ -152,6 +162,9 @@ fun examples() {
     var _ = print(showMaybe(showList(showToss))(run(maybeResult(allResults(drunkToss)))));
     print("\n#9 allResults(maybeResult(drunkToss)):");
     var _ = print(showList(showMaybeToss)(run(allResults(maybeResult(drunkToss)))));
+
+    print("\n#10 allResults(chooseNot(toss)):");
+    var _ = print(showList(showToss)(run(allResults(chooseNot(toss)))));
     ()
 }
 
