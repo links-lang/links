@@ -20,9 +20,7 @@ fun dummy() client {
 }
 
 page
-  <html>
-    <body>
-      <b l:onmousedown="{replaceNode(f(), getNodeById("hole"))}">hello</b>
-      <div><div id="hole">to be replaced</div></div>
-    </body>
-  </html>
+  <body>
+    <b l:onmousedown="{replaceNode(f(), getNodeById("hole"))}">hello</b>
+    <div><div id="hole">to be replaced</div></div>
+  </body>
