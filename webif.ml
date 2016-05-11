@@ -7,6 +7,8 @@ open Proc
 open Performance
 open Utility
 
+let realpages = Settings.add_bool ("realpages", false, `System)
+
 type web_request =
   | ServerCont of
       Value.t                (* thunk *)
@@ -160,8 +162,19 @@ let perform_request cgi_args (valenv, nenv, tyenv) render_cont =
         Debug.print("Doing EvalMain");
         ("text/html",
          if is_client_program (globals @ locals, main) then
-           let program = (globals @ locals, main) in
-           Debug.print "Running client program.";
+           if Settings.get_value realpages then
+             begin
+               Debug.print "Running client program from server";
+               let _env, v = Evalir.run_program valenv (locals, main) in
+               Irtojs.generate_real_client_page
+                 ~cgi_env:cgi_args
+                 (Lib.nenv, Lib.typing_env)
+                 globals
+                 v
+             end
+           else
+             let program = (globals @ locals, main) in
+             Debug.print "Running client program.";
              lazy (Irtojs.generate_program_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
