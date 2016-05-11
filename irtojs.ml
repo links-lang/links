@@ -756,6 +756,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
     | `Module _
     | `Alien _ -> env, (fun code -> code)
 
+(* SL: seems to be dead code *)
 and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
   function
     | `Let (b, (_, `Return v)) as binding ->
@@ -771,6 +772,7 @@ and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
                Seq (DeclareVar (x_name, None), code))
     | binding -> generate_binding env binding
 
+(* SL: seems to be dead code *)
 and generate_definition env
     : Ir.binding -> code -> code =
   function
@@ -784,7 +786,7 @@ and generate_definition env
     | `Rec _
     | `Module _
     | `Alien _ -> (fun code -> code)
-
+(* SL: seems to be dead code *)
 and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
   fun bs ->
     let rec declare env c =
@@ -813,7 +815,7 @@ and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) -
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
-let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
+let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") defs =
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
@@ -852,7 +854,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(head="") defs =
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
   _startTimer();" ^ body ^ ";
-  </script>")
+  </script>" ^ html)
 
 (* FIXME: this code should really be merged with the other
    stub-generation code and we should generate a numbered version of
@@ -939,6 +941,24 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
 
+and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
+  let (venv, code) = generate_computation env comp (Fn ([], Nothing)) in
+  (venv, GenStubs.bindings bs code)
+
+let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs v =
+  let printed_code =
+    let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
+    let _venv, code = generate_computation venv (defs, `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
+    let code = GenStubs.bindings defs code in
+    let code = wrap_with_server_lib_stubs code in
+    show code in
+  make_boiler_page
+    ~cgi_env:cgi_env
+    ~body:printed_code
+    ~html:(Value.string_of_value v)
+    []
+
+(* SL: seems to be dead code *)
 let generate_program_defs (nenv, tyenv) bs =
   let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
   let _, code = generate_defs venv bs in

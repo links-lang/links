@@ -71,6 +71,8 @@ let rec jsonize_value : Value.t -> string = function
   | `List [] -> "[]"
   | `List (elems) ->
       "[" ^ String.concat "," (List.map jsonize_value elems) ^ "]"
+  (* FIXME: we shouldn't copy the entire process every time it appears
+     in a value! *)
   | `Pid (pid, `Client) ->
     let process = Proc.Proc.get_client_process pid in
     let messages = Proc.Mailbox.pop_all_messages_for pid in
