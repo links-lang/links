@@ -1,0 +1,104 @@
+sig choose : ([a]) {Choose:([a]) {}-> a |_}-> a
+fun choose(xs) { do Choose(xs) }
+
+fun fold_left(f,acc,xs) {  
+  switch(xs) {
+    case x :: xs -> fold_left(f, f(acc,x), xs)
+    case []      -> acc
+  }
+}
+
+fun replicate(n, x) {
+  fold_left(fun(acc,_) { x :: acc }, [], [1..n])
+}
+
+sig filter : ((a) ~e~> Bool, [a]) ~e~> [a]
+fun filter(p,xs) {
+  reverse(fold_left(fun(acc, x) { if (p(x)) x :: acc else acc }
+                   , [], xs))
+}
+
+fun for_all(p, xs) {
+  switch (xs) {
+    case [] -> true
+    case x :: xs -> if (p(x)) for_all(p, xs) else false
+  }
+}
+
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []    
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+fun showList(showX)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(showX, xs)));
+  "[" ^^ xs ^^ "]"
+}
+
+fun showMaybe(s)(m) {
+   switch (m) {
+      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
+      case Nothing -> "Nothing"
+   }
+}
+
+sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
+fun showPair(showX,showY)((x,y)) {
+    "(" ^^ showX(x) ^^ ", " ^^ showY(y) ^^ ")"
+}
+
+fun noAttack((a,b))((c,d)) {
+  a <> c && b <> d && abs(a - c) <> abs(b - d)
+}
+
+fun available(a, qs, l) {
+  filter(fun(b) { for_all(noAttack((a,b)), qs) }
+        , l)
+}
+
+fun chooseHandler(m) {
+    handle(m) {
+      case Return(x) -> Just(x)
+      case Choose(xs,k) -> {
+           fun loop(xs) {
+              switch(xs) {
+                case []      -> Nothing
+                case x :: xs ->
+                  switch (k(x)) {
+                    case Nothing -> loop(xs)
+                    case Just(x) -> Just(x)
+                  }
+              }
+           }
+           loop(xs)
+      }
+    }
+}
+
+fun findSolution(n)() {
+    var l = [1..n];
+
+    fun place(x, qs) {
+        if (x == n+1) qs
+        else {
+          var y = choose(available(x, qs, l));
+          place(x+1, (x,y) :: qs)
+        }
+    }
+
+    place(1, [])
+}
+
+fun main() {
+  var n = 8;
+  var showSolution = showMaybe(showList(showPair(intToString,intToString)));
+  var solution = showSolution(chooseHandler(findSolution(n)));
+  print(solution)
+}
+
+main()
