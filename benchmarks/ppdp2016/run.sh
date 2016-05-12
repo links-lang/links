@@ -35,6 +35,7 @@ function someprov {
 function loadDump {
     drop_tables
     psql -U postgres links < "$1.sql"
+    psql -v ON_ERROR_STOP=1 -q -U postgres -d links -f "indices.sql"
 }
 
 # Restore from dump
