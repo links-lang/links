@@ -648,14 +648,19 @@ op h -< m {
 # Examples using cheat detection
 #
 # Here's an example using our cheat detection mechanism:
-var ex12 = example(     cheatReport -<- randomResult
-                    -<- strategy(bobCheats) -<- checker -< game(7)
-		  );
+var ex12 = example( cheatReport(randomResult(strategy(bobCheats)(checker(game(7))))) );
+# var ex12 = example(     cheatReport -<- randomResult
+#                     -<- strategy(bobCheats) -<- checker -< game(7)
+# 		  );
 
 # Though, we have to be careful about the ordering of handlers:
-var ex13 = example(     cheatReport -<- randomResult
-                    -<- checker -<- strategy(bobCheats) -< game(7)
-		  );
+# var ex13 = example(     cheatReport -<- randomResult
+#                     -<- checker -<- strategy(bobCheats) -< game(7)
+# 		  );
+
+var ex13 = (cheatReport -<- randomResult -<- checker -<- strategy(bobCheats));
+
+
 #{END}
 
 #{BEGIN: scoreboard}

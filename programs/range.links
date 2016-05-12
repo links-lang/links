@@ -1,0 +1,9 @@
+fun intRange(m,n) {
+  fun intRangeAux(m,n,result) {
+    if (m > n) result
+    else intRangeAux(m, n-1, n::result)
+  }
+  intRangeAux(m,n,[])
+}
+
+[1..8]

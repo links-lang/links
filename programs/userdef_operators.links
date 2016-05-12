@@ -1,0 +1,43 @@
+fun run(m) { m() }
+
+fun example(m)() { run(m) }
+
+op f -<- g { fun(x) { f(g(x)) } }
+
+op f -< x { f(x) }
+
+fun id(x) { x }
+
+typename Comp(e::Row, a) = () ~e~> a;
+
+sig randomResult : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, a)
+fun randomResult(m)() {
+  handle(m) {
+    case Return(x) -> x
+    case Choose(k) -> k(random() > 0.5)
+  }
+}
+
+typename Zero = [||];
+sig cheatReport : (Comp({Cheat:(p) {}-> Zero|e},a)) -> Comp({Cheat{_}|e},a)
+handler cheatReport {
+  case Return(x)    -> x
+  case Cheat(p,_)   -> error(" was caught cheating!")
+}
+
+handler checker {
+  case Return(x)   -> x
+  case Move(p,n,k) ->
+    var m = do Move(p,n); 
+    if (false) k(m) # Everything's OK.
+    else switch (do Cheat(p)) { }              # Cheating detected!
+}
+
+handler perfect {
+  case Return(x) -> x
+  case Move(p,n,k) -> k(n)
+}
+
+fun foo(n)() { Alice }
+
+var ex1 = cheatReport -<- perfect -<- checker -< foo(7);

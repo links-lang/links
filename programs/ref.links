@@ -1,0 +1,31 @@
+# Simulating references
+
+typename Ref(a) = [|Ref:a|];
+
+sig ref : (a) {Ref:(a) {}-> Ref(a) |_}-> Ref(a)
+fun ref(v) { do Ref(v) }
+
+sig deref : (Ref(a)) {Read:(Ref(a)) {}-> a |_}-> a
+fun deref(r) { do Read(r) }
+
+sig := : (Ref(a), a) {Write:(Ref(a), a) {}-> () |_}-> ()
+op r := v { do Write(r, v) }
+
+typename Maybe(a) = [|Just:a|Nothing|];
+
+#sig find : forall a, b . ((a) ~e~> Maybe(b), [a]) ~e~> Maybe(b)
+fun find(f, xs) {
+    switch(xs) {
+      case [] -> Nothing
+      case x :: xs ->
+        switch (f(x)) {
+           case Nothing -> find(f,xs)
+           case s       -> s
+        }
+    }
+}
+
+sig polydiv : forall a :: Type . (a) { |_}~> a
+fun polydiv(x) { polydiv(x) }
+
+

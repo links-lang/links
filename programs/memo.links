@@ -1,0 +1,77 @@
+# Memoisation example
+
+sig cut : () {Cut:() |_}-> ()
+fun cut() { do Cut }
+
+sig get : () {Get:s |_}-> s
+fun get() { do Get }
+
+sig put : (s) {Put:(s) {}-> () |_}-> ()
+fun put(s) { do Put(s) }
+
+fun fromJust(m) {
+  switch (m) {
+    case Just(x) -> x
+    case _       -> error("Input is not tagged with Just.")
+  }
+}
+
+fun isJust(m) {
+  switch (m) {
+    case Just(x) -> true
+    case _       -> false
+  }
+}
+
+handler state(s) {
+     case Return(x) -> x
+     case Get(k)    -> k(s)(s)
+     case Put(s,k)  -> k(())(s)
+}
+
+fun cutHandler(m)() {
+  handle(m) {
+    case Return(x) -> x
+    case Cut(k) -> 
+       switch (get()) {
+          case Just((arg, _)) -> put(Just(arg, fun() { k(()) })); k(())
+          case Nothing -> error("Impossible")
+       }
+  }
+}
+
+fun memoize(f)(x) {
+  var cache = get();
+  if (isJust(cache)) {
+     var (arg, cont) = fromJust(cache);
+     if (arg == x) { cont() }
+     else {
+       var errMsg = "Memoized function was not cut";
+       put(Just((x, fun() { error(errMsg) })));
+       f(x)
+     }
+  } else {
+     var errMsg = "Memoized function was not cut";
+     put(Just((x, fun() { error(errMsg) })));
+     f(x)
+  }  
+}
+
+fun print_succ(x) {
+  var showX = intToString(x);
+  print("input change: " ^^ showX);
+  cut();
+  print("Succ of " ^^ showX ^^ " is " ^^ (intToString(x+1)))
+}
+
+var memoized_print_succ = memoize(print_succ);
+
+fun test() {
+  var _ = memoized_print_succ(0);
+  var _ = memoized_print_succ(0);
+  var _ = memoized_print_succ(0);
+  var _ = memoized_print_succ(1);
+  var _ = memoized_print_succ(1);
+  memoized_print_succ(1)
+}
+
