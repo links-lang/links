@@ -60,16 +60,18 @@ querymean("Q6")
 
 foo = function (q, n) {
     l <- df[df$prov == "allprov" & df$query == q & df$N == n,]
+    s <- df[df$prov == "someprov" & df$query == q & df$N == n,]
     n <- df[df$prov == "noprov" & df$query == q & df$N == n,]
-    bar <- df[df$prov == "someprov" & df$query == q & df$N == n,]
     ## print("all")
     ## print(l$medianms)
     ## print("no")
     ## print(n$medianms)
-    print(sprintf("%s & %s & %s & %s & %s \\", q, l$medianms, bar$medianms, n$medianms, round(querymean(q), 2)))
+    print(sprintf("%s & %s & %s & %s & %s \\", q, l$medianms, s$medianms, n$medianms, round(querymean(q), 2)))
+    ## print(sprintf("%s & %s & %s & %s \\", q, l$medianms, n$medianms, round(querymean(q), 2)))
 }
 
 foo("Q1", 512)
+
 foo("Q2", 4096)
 foo("Q3", 4096)
 foo("Q4", 4096)
