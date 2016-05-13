@@ -176,12 +176,28 @@ fun median(xs) {
   hd(drop(length(ys)/2,ys))
 }
 
+var n = query { length(for (d <-- departments) [d]) };
+
+fun exclude(q) {
+  switch (q) {
+    case "Q1" -> n > 512
+    case "Q5" -> n > 1024
+    case "Q6" -> n > 2048
+    case _ -> false
+  }
+}
+
 fun test(t) {
-  # print(t.msg);
-  var ts = repeat(t.iters, fun () { time(t.q) });
-  var time = median(ts);
-  # print("Time: " ^^ intToString(time));
-  (median = time, msg = t.msg, times = ts)
+  print(t.msg ^^ " " ^^ intToString(n));
+  if (exclude(t.msg)) {
+    # print("Excluding " ^^ t.msg ^^ " at size " ^^ intToString(n));
+    (median = -1, msg = t.msg, res = "", times = [])
+  } else {
+    var ts = repeat(t.iters, fun () { time(t.q) });
+    var time = median(ts);
+    # print("Time: " ^^ intToString(time));
+    (median = time, msg = t.msg, res = intToString(time), times = ts)
+  }
 }
 
 sig iter : ((a) ~e~> (), [a]) ~e~> ()
@@ -204,10 +220,9 @@ var tests =
    test((iters = iters, msg = "Q5", q = q5)),
    test((iters = iters, msg = "Q6", q = q6))];
 
-
 iter(fun (u) {
-  print("noprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median));
+  print("noprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ u.res);
   # iter(fun (t) {
-    # print("noprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median) ^^ ";" ^^ show(t))
+    # print("allprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median) ^^ ";" ^^ show(t))
   # }, u.times);
 }, tests)

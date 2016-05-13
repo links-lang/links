@@ -212,8 +212,8 @@ var n = query { length(for (d <-- departments) [d]) };
 
 fun exclude(q) {
   switch (q) {
-    case "Q1" -> n > 2048
-    case "Q5" -> false # n > 1024
+    case "Q1" -> n > 512
+    case "Q5" -> n > 1024
     case "Q6" -> n > 2048
     case _ -> false
   }
@@ -253,4 +253,7 @@ var tests =
 
 iter(fun (u) {
   print("someprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ u.res);
+  # iter(fun (t) {
+    # print("allprov;" ^^ intToString(n) ^^ ";" ^^ u.msg ^^ ";" ^^ intToString(u.median) ^^ ";" ^^ show(t))
+  # }, u.times);
 }, tests)
