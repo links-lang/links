@@ -43,6 +43,64 @@ let jsonize_location : Ir.location -> string = function
   | `Native  -> "native"
   | `Unknown -> "unknown"
 
+(* Presumably we need only send an event handler to the client if it
+   occurs in a value being sent to the client.
+
+   On the other hand, we might expect to send all newly spawned client
+   processes to the client whenever we visit the client.
+
+   Similarly, we might transmit all client messages to the client
+   whenever we visit the client.
+*)
+
+(** collect all of the pids and event handlers that occur in a value *)
+module PidsAndEventHandlers =
+struct
+  type t = IntSet.t * IntSet.t
+
+  let add_pid : int -> t -> t =
+    fun pid (ps, es) -> IntSet.add pid ps, es
+  let add_event_handler : int -> t -> t =
+    fun event_handler (ps, es) -> ps, IntSet.add event_handler es
+
+  let rec value : t -> Value.t -> t = fun env -> function
+    | `PrimitiveFunction _
+    | `Continuation _ -> assert false
+    | `FunctionPtr (f, None) -> env
+    | `FunctionPtr (f, Some fvs) -> value env fvs
+    | `ClientFunction _ -> env
+    | #Value.primitive_value as v -> primitive env v
+    | `Variant (_label, v) -> value env v
+    | `Record [] -> env
+    | `Record ((_, v)::fs) -> value (value env v) (`Record fs)
+    | `List vs -> values env vs
+    | `Pid (pid, `Client) -> add_pid pid env
+    | `Pid (_pid, _) -> assert false
+    | `Socket _ -> assert false
+
+  and values : t -> Value.t list -> t = fun env -> function
+    | []      -> env
+    | (v::vs) -> values (value env v) vs
+
+  and primitive : t -> Value.primitive_value -> t = fun env -> function
+    | `XML x -> xml env x
+    | _ -> env
+
+  and xml : t -> Value.xmlitem -> t = fun env -> function
+    | Value.Text _ -> env
+    | Value.Node (_tag, xs) ->
+      xmls env xs
+    | Value.Attr (label, v) ->
+      if label = "key" then
+        add_event_handler (int_of_string v) env
+      else
+        env
+
+  and xmls : t -> Value.xmlitem list -> t = fun env -> function
+    | []      -> env
+    | (x::xs) -> xmls (xml env x) xs
+end
+
 let rec jsonize_value : Value.t -> string = function
   | `PrimitiveFunction _
   | `Continuation _
@@ -71,7 +129,7 @@ let rec jsonize_value : Value.t -> string = function
   (* FIXME: we shouldn't copy the entire process every time it appears
      in a value! *)
   | `Pid (pid, `Client) ->
-    let process = Proc.Proc.get_client_process pid in
+    let Some process = Proc.Proc.lookup_client_process pid in
     let messages = Proc.Mailbox.pop_all_messages_for pid in
     "{\"pid\":" ^ string_of_int pid ^ "," ^
     " \"process\":" ^ jsonize_value process ^ "," ^
