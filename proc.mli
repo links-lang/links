@@ -10,7 +10,7 @@ sig
   val string_of_pid : pid -> string
   val get_current_pid : unit -> pid
 
-  val get_client_process : pid -> Value.t
+  val lookup_client_process : pid -> Value.t option
 
   val create_process : bool -> thread -> pid
   val create_client_process : Value.t -> pid

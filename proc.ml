@@ -5,7 +5,6 @@ open Lwt
 
 module Proc =
 struct
-
   (** The abstract type of process identifiers *)
   type pid = int
 
@@ -23,7 +22,7 @@ struct
 
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
-        client_processes : (pid, Value.t) Hashtbl.t;
+        client_processes : (pid, Value.t * bool) Hashtbl.t;
         angels : (pid, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
@@ -67,11 +66,19 @@ struct
   let string_of_pid = string_of_int
 
   (** retrieve the body of a client process (for transmission to the
-      client) *)
-  let get_client_process pid =
-    try Hashtbl.find state.client_processes pid with
-    | NotFound pid ->
-      failwith ("Missing client process: " ^ pid)
+      client if it hasn't already been) *)
+  let lookup_client_process pid =
+    let v, active =
+      try Hashtbl.find state.client_processes pid with
+      | NotFound pid ->
+        failwith ("Missing client process: " ^ pid) in
+    if active then
+      None
+    else
+      begin
+        Hashtbl.replace state.client_processes pid (v, true);
+        Some v
+      end
 
   (** Awaken (unblock) a process:
     Move it from the blocked state to the runnable queue ([suspended]).
@@ -149,7 +156,7 @@ struct
   (** Create a new client process and return its identifier *)
   let create_client_process func =
     let new_pid = fresh_pid () in
-    Hashtbl.add state.client_processes new_pid func;
+    Hashtbl.add state.client_processes new_pid (func, false);
     new_pid
 
   let finish r =

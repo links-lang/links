@@ -157,6 +157,8 @@ let perform_request cgi_args (valenv, nenv, tyenv) render_cont =
         (prerr_endline "Remaining procs on server after remote call!";
          assert(false));
       ("text/plain",
+       (* TODO: we should package up the result with event handlers,
+          client processes, and client messages *)
        Utility.base64encode (Json.jsonize_value result))
     | EvalMain (globals, (locals, main))->
         Debug.print("Doing EvalMain");
