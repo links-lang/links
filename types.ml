@@ -2204,12 +2204,26 @@ let string_of_tycon_spec ?(policy=Print.default_policy) (tycon : tycon_spec) =
       (policy, Vars.make_names (free_bound_tycon_type_vars ~include_aliases:true tycon))
       tycon
 
+(* TODO: we need a way of choosing consistent names for a collection
+   of types (and rows, type_args, etc.) in order to give adequate
+   feedback to the programmer.
 
-(* HACK:
+   Some options:
+
+     - update a global mapping on demand
+
+     - use a monad
+
+     - build a message data structure and traverse in one go to
+       generate a consistent set of names
+*)
+
+
+   (* HACK:
 
    Just use the default policy. At some point we might want to export
    the printing policy in types.mli.
-*)
+ *)
 let string_of_datatype t = string_of_datatype t
 let string_of_row r = string_of_row r
 let string_of_presence f = string_of_presence f
