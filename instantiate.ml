@@ -300,7 +300,7 @@ module SEnv = Env.String
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
   fun t tyargs ->
-(*    Debug.print ("t: " ^ Types.string_of_datatype t); *)
+    (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let t, vars =
       match concrete_type t with
         | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
@@ -308,30 +308,18 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
     let tenv, renv, penv =
       if (List.length vars <> List.length tyargs) then raise ArityMismatch;
       List.fold_right2
-        (fun var t (tenv, renv, penv) ->
-           match (var, t) with
+        (fun var tyarg (tenv, renv, penv) ->
+           match (var, tyarg) with
              | (var, _subkind, `Type _), `Type t ->
                  (IntMap.add var t tenv, renv, penv)
              | (var, _subkind, `Row _), `Row row ->
-                 (*
-                    QUESTION:
-
-                    What is the right way to put the row in the row_var environment?
-
-                    We can simply wrap it in a `Body tag, but then we need to be careful
-                    about which bits of the compiler are assuming that
-                    rows are already flattened. Maybe this is OK...
-                 *)
-                 begin
-                   match row with
-                     | fields, row_var, dual when StringMap.is_empty fields ->
-                         (tenv, IntMap.add var (StringMap.empty, row_var, dual) renv, penv)
-                     | _ ->
-                         (tenv, IntMap.add var row renv, penv)
-                 end
+                 (tenv, IntMap.add var row renv, penv)
              | (var, _, `Presence _), `Presence f ->
                  (tenv, renv, IntMap.add var f penv)
-             | _ -> assert false)
+             | _ ->
+               failwith("Kind mismatch in type application: " ^
+                        Types.string_of_datatype t ^ " applied to type arguments: " ^
+                        mapstrcat ", " Types.string_of_type_arg tyargs))
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
       instantiate_datatype (tenv, renv, penv) t
