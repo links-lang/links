@@ -13,19 +13,20 @@ op r := v { do Write(r, v) }
 
 typename Maybe(a) = [|Just:a|Nothing|];
 
-#sig find : forall a, b . ((a) ~e~> Maybe(b), [a]) ~e~> Maybe(b)
+#sig find : forall a :: Type, b :: Type, e :: Row . ((a) { |e}~> Maybe(b), [a]) { |e}~> Maybe(b)
 fun find(f, xs) {
     switch(xs) {
       case [] -> Nothing
-      case x :: xs ->
+      case x :: xs -> 
         switch (f(x)) {
-           case Nothing -> find(f,xs)
-           case s       -> s
+           case Nothing -> var s = find(f,xs); s
+           case Just(s) -> Just(s)
         }
     }
 }
 
-sig polydiv : forall a :: Type . (a) { |_}~> a
-fun polydiv(x) { polydiv(x) }
 
-
+sig foo : forall a, b, e :: Row . ((a) ~e~> Maybe(a), [a]) ~e~> a
+fun foo(f, xs) {
+    foo(f, xs)
+}
