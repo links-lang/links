@@ -1,0 +1,98 @@
+fun get() { do Get }
+fun put(s) { do Put(s) }
+
+fun fork(f) { do Fork(f) }
+
+fun yield() { do Yield }
+
+fun enqueue(k) {
+  put(get() ++ [k])
+}
+
+fun dequeue() {
+  switch (get()) {
+    case [] -> fun() { () }
+    case t :: ts -> put(ts); t
+  }
+}
+
+sig evalState : (s) -> (Comp({Get:s,Put:(s) {}-> () |e}, a)) -> Comp({Get{_},Put{_} |e}, a)
+handler evalState(s) {
+  case Return(x) -> x
+  case Get(k)    -> k(s)(s)
+  case Put(s,k)  -> k(())(s)
+}
+
+fun prun(main)() {
+  fun pspawn(task) {
+     handle(task) {
+       case Fork(f,k) ->
+          enqueue(fun() { k(()) });
+          pspawn(f)
+       case Yield(k)  -> 
+          enqueue(fun() { k(()) });
+          dequeue()()
+       case Return(x) ->
+          dequeue()()
+     }
+  }
+  pspawn(main)
+}
+
+handler scheduler {
+  case Fork(f,k) -> enqueue(fun() { k(()) }); scheduler(f)()
+  case Yield(k)  -> enqueue(fun() { k(()) }); dequeue()()
+  case Return(x) -> dequeue()()
+}
+
+fun plog(s) { print(s) }
+#
+# BUG: links> scheduler(f(0,3));
+# *** Error: File "unify.ml", line 134, characters 2-7: Pattern matching failed
+fun f(id, depth) {
+ fun() {
+  plog("Starting number " ^^ intToString(id));
+  var _ =
+  if (depth > 0) {
+    var fid1 = id * 2 + 1;
+    plog("Forking number " ^^ intToString(fid1));
+    var _ = fork(fun() { f(fid1, depth - 1) });
+
+    var fid2 = id * 2 + 2;
+    plog("Forking number " ^^ intToString(fid2));
+    fork(fun() { f(fid2, depth - 1) });
+  } else {
+    plog("Yielding in number " ^^ intToString(id));
+    yield();
+    plog("Resumed number " ^^ intToString(id))
+  };
+  plog("Finishing number " ^^ intToString(id))
+} }
+
+fun g() {
+  var _ = fork(fun() { print("Hello from me") });
+  yield();
+  var _ = fork(fun() { print("Hello to you too!") });
+  ()
+}
+
+
+fun t(id, depth)() {
+  var _ = plog("Starting number " ^^ intToString(id));
+  var _ =
+  if (depth > 0) {
+    var fid1 = id * 2 + 1;
+    plog("Forking number " ^^ intToString(fid1));
+    var _ = fork(fun() { t(fid1, depth - 1)() });
+
+    var fid2 = id * 2 + 2;
+    plog("Forking number " ^^ intToString(fid2));
+    var _ = fork(fun() { t(fid2, depth - 1)() });
+    ()
+  } else {
+    plog("Yielding in number " ^^ intToString(id));
+    yield();
+    plog("Resumed number " ^^ intToString(id))
+  };
+  plog("Finishing number " ^^ intToString(id))
+}
