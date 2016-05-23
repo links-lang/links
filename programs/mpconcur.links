@@ -1,0 +1,88 @@
+# Links' message passing model via handlers
+
+typename Proc(e::Row) = (Int, () { wild|e}-> ());
+
+sig pspawn : (a) {Spawn:(a) {}-> ()|_}-> ()
+fun pspawn(f) { do Spawn(f) }
+
+sig yield : () {Yield:() |_}-> ()
+fun yield() { do Yield }
+
+sig psend : (Int,a) {Send:(Int,a) {}-> () |_}-> ()
+fun psend(target, data) {
+  do Send(target, data)
+}
+
+
+#
+# BUG: switch (do Recv(sender)) { ...
+# *** Error: TypeUtils.TypeDestructionError("Attempt to deconstruct non-variant type (Int) {}-> Maybe (a)")
+#
+# Typing of the operation is wrong?
+#
+sig precv : (Int) {Recv:(Int) {}-> Maybe(a),Yield:() |_}~> a
+fun precv(me) {
+  var m = do Recv(me);
+  switch (m) {
+    case Just(x) -> x
+    case Nothing -> yield(); precv(me)
+  }
+}
+
+sig get : () {Get:s |_}-> s
+fun get() { do Get }
+
+sig put : (s) {Put:(s) {}-> () |_}-> ()
+fun put(s) { do Put(s) }
+
+
+handler evalState(s) {
+  case Return(x) -> x
+  case Put(s,k)  -> k(())(s)
+  case Get(k)    -> k(s)(s)
+}
+
+fun enqueue(k) {
+  put(get() ++ [k])
+}
+
+fun dequeue() {
+  switch(get()) {
+    case [] -> fun() { () }
+    case k :: ks -> put(ks); k
+  }
+}
+
+
+handler mp(pid) {
+  case Return(x)  -> dequeue()()
+  case Spawn(f,k) -> enqueue(fun() { k(())(pid+1) }); mp(pid+1)(f(pid))()
+  case Yield(k)   -> enqueue(fun() { k(())(pid) }); dequeue()()
+}
+
+handler mailbox {
+  case Return(x)  -> x
+  case Send(to,data,k) -> put(get() ++ [(to, data)]); k(())
+  case Recv(who,k) ->
+     var s = get();
+     var m = lookup(who, s);
+     # remove message
+     k(m)
+}
+
+fun helloWorld() {
+  var hello =
+     pspawn(fun(pid)() {
+        psend(pid+1, "PID " ^^ intToString(pid) ^^ ": Hello");
+        print(precv(pid))
+     });
+  var world =
+     pspawn(fun(pid)() {
+        print(precv(pid));
+        psend(pid-1, "PID " ^^ intToString(pid) ^^ ": World")
+     });
+  yield();
+  ()
+}
+
+
