@@ -2,15 +2,15 @@
 
 typename Proc(e::Row) = (Int, () { wild|e}-> ());
 
-sig pspawn : (a) {Spawn:(a) {}-> ()|_}-> ()
+sig pspawn : (a) {Spawn:(a) {}-> Int|_}-> Int
 fun pspawn(f) { do Spawn(f) }
 
 sig yield : () {Yield:() |_}-> ()
 fun yield() { do Yield }
 
-sig psend : (Int,a) {Send:(Int,a) {}-> () |_}-> ()
+sig psend : (Int,a) {Send:(Int,a) {}-> (),Yield:() |_}-> ()
 fun psend(target, data) {
-  do Send(target, data)
+  do Send(target, data); yield()
 }
 
 
@@ -53,36 +53,135 @@ fun dequeue() {
   }
 }
 
-
 handler mp(pid) {
   case Return(x)  -> dequeue()()
-  case Spawn(f,k) -> enqueue(fun() { k(())(pid+1) }); mp(pid+1)(f(pid))()
+  case Spawn(f,k) -> enqueue(fun() { k(pid)(pid+1) }); mp(pid+1)(f(pid))()
   case Yield(k)   -> enqueue(fun() { k(())(pid) }); dequeue()()
 }
 
+fun run(main)() {
+  fun start(main, pid) {
+    handle(main(pid)) {        
+      case Return(x)  -> dequeue()()
+      case Spawn(f,k) -> enqueue(fun() { k(pid+1) }); start(f, pid+1)
+      case Yield(k)   -> enqueue(fun() { k(()) }); dequeue()()
+    }
+  }
+
+  start(main, 0)
+}
+
+#
+# Lookups up 
+#
+fun lookup(i, ms) {
+  fun lookup_aux(i, ms, acc) {
+    switch (ms) {
+      case [] -> (Nothing, acc)
+      case (j, msg) :: ms ->
+         if (i == j) (Just(msg), reverse(acc) ++ ms)
+         else lookup_aux(i, ms, (j, msg) :: acc)
+    }
+  }
+  lookup_aux(i, ms, [])
+}
+
+#
+# Communication handler
+#
+
+fun showMsg(msg) {
+  switch(msg) {
+    case Stop -> "Stop"
+    case Candidate(i) -> "Candidate(" ^^ intToString(i) ^^ ")"
+  }
+}
 handler mailbox {
   case Return(x)  -> x
-  case Send(to,data,k) -> put(get() ++ [(to, data)]); k(())
+  case Send(to,data,k) ->
+    put((to, data) :: get()); k(())
   case Recv(who,k) ->
      var s = get();
-     var m = lookup(who, s);
-     # remove message
+     var (m,s) = lookup(who, s);
+     put(s);
      k(m)
 }
 
-fun helloWorld() {
+fun helloWorld(_)() {
   var hello =
-     pspawn(fun(pid)() {
-        psend(pid+1, "PID " ^^ intToString(pid) ^^ ": Hello");
-        print(precv(pid))
-     });
-  var world =
-     pspawn(fun(pid)() {
-        print(precv(pid));
-        psend(pid-1, "PID " ^^ intToString(pid) ^^ ": World")
+     pspawn(fun(hpid)() {
+        print("Hello: " ^^ intToString(hpid));
+          var world =
+            pspawn(fun(wpid)() {
+                    print("World: " ^^ intToString(wpid));      
+                    print(precv(wpid));
+                    psend(hpid, "PID " ^^ intToString(wpid) ^^ ": World")
+             });
+        psend(world, "PID " ^^ intToString(hpid) ^^ ": Hello");
+        print(precv(hpid))
      });
   yield();
   ()
 }
 
+fun stop(process) {
+  switch (process) {
+    case Nothing   -> ()
+    case Just(pid) -> psend(pid, Stop)
+  }
+}
 
+fun getPid(process) {
+  switch (process) {
+    case Just(pid) -> pid
+    case Nothing   -> pspawn(sieve)
+  }
+}
+
+fun sieve(mypid)() {
+  switch (precv(mypid)) {
+    case Stop -> ()
+    case Candidate(myprime) ->
+      print(intToString(myprime));
+      fun loop(neighbour) {
+        var msg = precv(mypid);
+        switch (msg) {
+          case Stop -> stop(neighbour)
+          case Candidate(prime) ->
+            if (prime `mod` myprime <> 0) {
+              var neighbour = getPid(neighbour);
+              psend(neighbour, Candidate(prime));
+              loop(Just(neighbour))
+            } else { loop(neighbour) }
+        }
+      }
+      loop(Nothing)
+    }
+    
+    # var candidate = precv(mypid);
+    # if (candidate == -1 || candidate `mod` myprime <> 0) {
+    #    var succPid =
+    #      switch (succ) {
+    #        case Nothing -> pspawn(sieve)
+    #        case Just(pid) -> pid
+    #      };       
+    #    if (candidate <> -1) pspawn(sieve) else ();
+    #    psend(mypid+1, candidate);
+    # } else ();
+    # if (candidate <> ) loop(true)
+    # else ()
+}
+
+fun foreach(xs, action) {
+  switch (xs) {
+    case [] -> ()
+    case x :: xs -> action(x); foreach(xs, action)
+  }
+}
+
+fun generator(_ : Int)() {
+  var n = 101;
+  var first = pspawn(sieve);
+  foreach([2..n], fun(p) { psend(first, Candidate(p)) });
+  psend(first, Stop)
+}
