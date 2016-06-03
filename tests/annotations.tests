@@ -23,6 +23,21 @@ Annotations inside functions [3]
 fun (x:a) { error("boo") } : (a) ~> b
 stdout : @.+
 
+
 Annotations inside functions [4]
 fun (g : ((a) -b-> a)) { g : ((a) -b-> a) } : ((a) -b-> a) -> ((a) -b-> a)
 stdout : @.+
+
+Inferred kind
+fun (x : a) {x : a :: Base}
+stdout : fun : (a::Base) -> a::Base
+
+Kind mismatch [1]
+sig f(x) : (a) ~a~> a fun f(x) {f(x)}
+stderr : @.+
+exit : 1
+
+Kind mismatch [2]
+fun (x : a :: Any) {x : a :: Base}
+stderr : @.+
+exit : 1
