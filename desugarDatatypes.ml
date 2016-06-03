@@ -22,27 +22,52 @@ object (self)
     | p -> super#phrasenode p
 end
 
-(* Find all 'unbound' type variables in a term *)
+let concrete_subkind =
+  function
+  | Some subkind -> subkind
+  | None         -> default_subkind
+
+(* Find all unbound type variables in a term *)
 let typevars =
 object (self)
   inherit SugarTraversals.fold as super
 
-  (* TODO:
+  val tyvar_list : name list = []
+  val tyvars : type_variable StringMap.t = StringMap.empty
 
-     check that duplicate type variables have the same kind
-  *)
+  (* fill in subkind with the default *)
+  val fill =
+    function
+    | (_, (_, Some _), _) as tv -> tv
+    | (name, (pk, None), rest) -> (name, (pk, Some default_subkind), rest)
 
-  val tyvars : type_variable list = []
-  val bound  : type_variable StringMap.t = StringMap.empty
+  method tyvar_list =
+    List.map (fun name -> fill (StringMap.find name tyvars)) (List.rev tyvar_list)
 
-  method tyvars = Utility.unduplicate (=) (List.rev tyvars)
+  method private add_name name = {< tyvar_list = name :: tyvar_list >}
+  method private register ((name, _, _) as tv) = {< tyvars = StringMap.add name tv tyvars >}
+  method private bind tv = self#register tv
 
-  method add ((name, _, _) as tv) =
-    if StringMap.mem name bound then self
+  method add ((name, (pk, sk), freedom) as tv) =
+    if StringMap.mem name tyvars then
+      let (_, (pk', sk'), freedom') = StringMap.find name tyvars in
+      (* monotonically increase subkinding information *)
+      let (sk, sk') =
+        match sk, sk' with
+        | Some sk, None  -> Some sk, Some sk
+        | None, Some sk' -> Some sk', Some sk'
+        | _, _           -> sk, sk' in
+      let tv = (name, (pk, sk), freedom) in
+      let tv' = (name, (pk', sk'), freedom') in
+      (* check that duplicate type variables have the same kind *)
+      if tv <> tv' then
+        failwith ("kind mismatch in type variable: " ^
+                  Sugartypes.Show_type_variable.show tv ^ " vs: " ^
+                  Sugartypes.Show_type_variable.show tv');
+      self#register tv
     else
-      {< tyvars = tv :: tyvars >}
+      (self#register tv)#add_name name
 
-  method bind ((name, _, _) as tv) = {< bound = StringMap.add name tv bound >}
 
   method bindingnode = function
     (* type declarations bind variables; exclude those from the
@@ -52,7 +77,7 @@ object (self)
 
   method datatype = function
     | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
-    | `Mu (v, t)       -> let o = self#bind (v, (`Type, (`Any, `Any)), `Rigid) in o#datatype t
+    | `Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
     | `Forall (qs, t)  ->
         let o =
           List.fold_left
@@ -67,7 +92,7 @@ object (self)
   method row_var = function
     | `Closed               -> self
     | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
-    | `Recursive (s, r)     -> let o = self#bind (s, (`Row, (`Any, `Any)), `Rigid) in o#row r
+    | `Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
 
   method fieldspec = function
     | `Absent -> self
@@ -101,7 +126,8 @@ struct
                        datatype var_env t)
         | `Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)) in
+            (* FIXME: shouldn't we support other subkinds for recursive types? *)
+            let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
@@ -110,18 +136,21 @@ struct
               fun (name, kind, freedom) ->
                 match kind with
                 | `Type, subkind ->
+                    let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Type point) in
                     let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
                       var_env, q::qs
                 | `Row, subkind ->
+                    let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Row point) in
                     let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
                       var_env, q::qs
                 | `Presence, subkind ->
+                    let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Presence point) in
@@ -203,7 +232,7 @@ struct
             end
         | `Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
-            let point = Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)) in
+            let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let renv = StringMap.add name point var_env.renv in
             let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
               (StringMap.empty, point, false) in
@@ -220,6 +249,7 @@ struct
       | `Row r -> `Row (row var_env alias_env r)
       | `Presence f -> `Presence (fieldspec var_env alias_env f)
             
+  (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
     let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv} in
     let addr x r envs = {envs with renv = StringMap.add x r envs.renv} in
@@ -230,13 +260,13 @@ struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (`Type, subkind), freedom ->
+             | (`Type, Some subkind), freedom ->
                let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Type t)::vars, addt x t envs
-             | (`Row, subkind), freedom ->
+             | (`Row, Some subkind), freedom ->
                let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Row r)::vars, addr x r envs
-             | (`Presence, subkind), freedom ->
+             | (`Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Presence f)::vars, addf x f envs)
         ([], empty_env)
@@ -259,14 +289,17 @@ struct
                   let var = Types.fresh_raw_variable () in
                     match q with
                       | (name, (`Type, subkind), _freedom) ->
+                          let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Type point))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
                       | (name, (`Row, subkind), _freedom) ->
+                          let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Row point))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
                       | (name, (`Presence, subkind), _freedom) ->
+                          let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Presence point))::args,
                              {tenv=tenv; renv=renv; penv=StringMap.add name point penv})) in
@@ -279,7 +312,7 @@ struct
      cannot use type variables from the context.  Any type variables
      found are implicitly universally quantified at this point. *)
   let foreign alias_env dt =
-    let tvars = (typevars#datatype' dt)#tyvars in
+    let tvars = (typevars#datatype' dt)#tyvar_list in
       datatype' (snd (generate_var_mapping tvars)) alias_env dt
         
 
@@ -410,11 +443,11 @@ object (self)
 end
 
 let phrase alias_env p =
-  let tvars = (typevars#phrase p)#tyvars in
+  let tvars = (typevars#phrase p)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
 
 let binding alias_env b =
-  let tvars = (typevars#binding b)#tyvars in
+  let tvars = (typevars#binding b)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
 
 let toplevel_bindings alias_env bs =
@@ -441,6 +474,6 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in
-  let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvars in
+  let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let () = List.iter Generalise.rigidify_quantifier vars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))
