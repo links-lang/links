@@ -81,13 +81,13 @@ let primop   : string -> Lambda.primitive option =
       else if is_relational_operation op then
         match op with
         | "==" -> Pintcomp Ceq
-        | "!=" -> Pintcomp Cneq
         | op -> let cmp =
                   match op with
                   | "<"  -> "caml_lessthan"
                   | ">"  -> "caml_greaterthan"
                   | "<=" -> "caml_lessequal"
                   | ">=" -> "caml_greaterequal"
+                  | "<>" -> "caml_notequal"
                   | _ -> raise Not_found
                 in
                 Pccall (LambdaDSL.prim_binary_op cmp)
@@ -188,6 +188,7 @@ let translate (op_map,name_map) module_name ir =
 		      let random = lookup "Random" "float" in
 		      lapply random [lfloat 1.0]
                    | "not" -> lprim Pnot args'
+                   | "negate" -> lprim Pnegint args'
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in

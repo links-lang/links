@@ -8,8 +8,38 @@ fun fold_left(f,acc,xs) {
   }
 }
 
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}
+
+fun intRange(m,n) {
+  fun intRangeAux(m,n,result) {
+    if (m > n) result
+    else intRangeAux(m, n-1, n::result)
+  }
+  intRangeAux(m,n,[])
+}
+
 fun replicate(n, x) {
-  fold_left(fun(acc,_) { x :: acc }, [], [1..n])
+  fold_left(fun(acc,_) { x :: acc }, [], intRange(1,n))
+}
+
+fun reverse(l) {
+  fun aux(l,o) {
+    switch (l) {
+      case [] -> o
+      case x::xs -> aux(xs, x::o)
+    }
+  }
+  aux(l, [])
+}
+
+sig abs : (Int) -> Int
+fun abs(i) {
+  if (i < 0) -i else i
 }
 
 sig filter : ((a) ~e~> Bool, [a]) ~e~> [a]
@@ -47,7 +77,7 @@ fun showMaybe(s)(m) {
    }
 }
 
-sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
+#sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
 fun showPair(showX,showY)((x,y)) {
     "(" ^^ showX(x) ^^ ", " ^^ showY(y) ^^ ")"
 }
@@ -81,7 +111,7 @@ fun chooseHandler(m) {
 }
 
 fun findSolution(n)() {
-    var l = [1..n];
+    var l = intRange(1,n);
 
     fun place(x, qs) {
         if (x == n+1) qs
