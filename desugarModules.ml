@@ -18,9 +18,9 @@
  *
  *  --->
  *
- * val Foo.bobsleigh = ...;
- * fun Foo.x() { ...}
- * fun Foo.Bar.y() { ... }
+ * val Foo:::bobsleigh = ...;
+ * fun Foo:::x() { ...}
+ * fun Foo:::Bar.y() { ... }
  * val x = ...;
  *
 *)
@@ -34,6 +34,8 @@ type reference_tree_node =
     ReferenceTreeNode of (name * stringset * (name, reference_tree_node) Hashtbl.t)
 
 let empty_tree name = `ReferenceTreeNode(name, StringSet.empty, Hashtbl.create 50)
+
+let module_sep = ":::"
 
 let rec print_tree = function
   | `ReferenceTreeNode(n, ss, ht) ->
@@ -146,13 +148,13 @@ let checkSubsts plain_var_name poss_substs pos =
  *
  * *)
 let getSubstFor module_name open_modules reference_tree var_name var_pos =
-  let splitPath path = Str.split (Str.regexp "\\.") path in
+  let splitPath path = Str.split (Str.regexp module_sep) path in
   (* Given a possibly-qualified variable, returns a tuple of list of module
    * names, and the plain variable.
    * As an example, splitVariable A.B.foo --> (["A", "B"], foo)
    *)
   let splitVariable var =
-    let splitList = Str.split (Str.regexp"\\.") var in
+    let splitList = Str.split (Str.regexp module_sep) var in
     let revSplitList = List.rev splitList in
     (List.hd revSplitList, List.rev (List.tl revSplitList))
   in
@@ -179,7 +181,7 @@ let getSubstFor module_name open_modules reference_tree var_name var_pos =
       (print_list (split_p @ qual_var_path)));
     *)
     isContainedIn reference_tree (split_p @ qual_var_path))
-      (fun p -> if p = "" then var_name else p ^ "." ^ var_name)
+      (fun p -> if p = "" then var_name else p ^ module_sep ^ var_name)
       (module_name::open_modules) in
   checkSubsts var_name substs var_pos
 
@@ -202,7 +204,7 @@ object(self)
     {< cur_seen_modules = StringSet.add x cur_seen_modules >}
 
   method prefixWith name =
-    if prefix = "" then name else prefix ^ "." ^ name
+    if prefix = "" then name else prefix ^ module_sep ^ name
 
   method phrase = function
     | (`Var old_name, pos) ->
@@ -217,7 +219,7 @@ object(self)
   method binder = function
     | (old_name, dt, pos) ->
         let new_name =
-          if prefix = "" then old_name else prefix ^ "." ^ old_name in
+          if prefix = "" then old_name else prefix ^ module_sep ^ old_name in
         (self, (new_name, dt, pos))
 
   method bindingnode = function

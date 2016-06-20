@@ -185,9 +185,8 @@ let datatype d = d, None
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONCOLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY 
-%token TABLEKEYS /* SAND */
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
 %token ESCAPE
@@ -832,8 +831,6 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
-/* QUALIFIEDVARIABLE is temp -- because if I spend any more time
-   * on the lexer / parser, I will probably go insane */
 links_open:
 | OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
 | OPEN QUALIFIEDMODULE                                         { `Import $2, pos () }
