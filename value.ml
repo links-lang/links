@@ -453,11 +453,12 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
 and string_of_cont : continuation -> string =
-  fun cont -> failwith "string_of_continuation not yet implemented!"
-(*    let frame (_scope, var, _env, body) =
+  fun cont -> (*failwith "string_of_continuation not yet implemented!"*)
+    let frame (_scope, var, _env, body) =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
-    "[" ^ mapstrcat ", " frame cont ^ "]"*)
+    let cont' = List.map (fun delim -> "[" ^ mapstrcat ", " frame delim ^ "]" ) cont in
+    "[" ^ String.concat ", " cont'  ^ "]"
 
 
 (* let string_of_cont : continuation -> string = *)
@@ -538,7 +539,7 @@ let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
   | _ -> failwith "Type error unboxing socket"
-
+    
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(

@@ -3188,8 +3188,8 @@ let yyact = [|
     let _1 = (Parsing.peek_val __caml_parser_env 0 : (Sugartypes.name * Sugartypes.position) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position) in
     Obj.repr(
 # 317 "parser_links.mly"
-                                                               ( let ((d,dpos),lin,p,l,pos) = _1
-                                                                 in `Fun ((d, None, dpos),lin,([],p),l,None), pos )
+                                                               ( let ((d,dpos),lin,p,l,pos) = _1 in
+                                                                 `Fun ((d, None, dpos),lin,([],p),l,None), pos )
 # 3194 "parser_links.ml"
                : 'fun_declaration))
 ; (fun __caml_parser_env ->

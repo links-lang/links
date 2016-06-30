@@ -65,7 +65,10 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
 
-BACKEND=comp/gather.ml comp/lambdaDSL.ml comp/irtolambda.ml comp/compileir.ml
+BACKEND=comp/builtins.mli comp/builtins.ml \
+	comp/fileInfo.mli comp/fileInfo.ml \
+	comp/compilationUnit.mli comp/compilationUnit.ml \
+	comp/gather.ml comp/lambdaDSL.ml comp/irtolambda.ml comp/compileir.ml
 
 SOURCE_FILES = $(OPC)                                \
           notfound.ml                           \

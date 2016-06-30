@@ -10,7 +10,8 @@ let ocaml_of_links_function f =
   let listlib = "List" in
   (* Links function, (module name, ocaml function) *)
   List.assoc f
-	     [   "print", ocaml_function stdlib "print_endline"
+    [   (*"print", ocaml_function stdlib "print_endline"*)
+      "print", ("Builtins", "print")
 	       ; "intToString", ocaml_function stdlib "string_of_int"
 	       ; "floatToString", ocaml_function stdlib "string_of_float"
                ; "Concat", ocaml_function stdlib "@"
@@ -19,6 +20,8 @@ let ocaml_of_links_function f =
 	       ; "hd", ocaml_function listlib "hd"
    	       ; "tl", ocaml_function listlib "tl"
                ; "length", ocaml_function listlib "length"
+               ; "explode", ("Builtins", "explode")
+               ; "implode", ("Builtins", "implode")
 	     ]
        
 let arith_ops =
@@ -121,6 +124,7 @@ let translate (op_map,name_map) module_name ir =
   let open Lambda in
   let open LambdaDSL in
   let open Ir in
+  let builtin _ fun_name = lookup "Builtins" fun_name in
   let op_map =
     snd
       (StringMap.fold
@@ -192,7 +196,9 @@ let translate (op_map,name_map) module_name ir =
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in
-			let f = lookup module_name fun_name in
+                        let _ = List.map (print_endline) !Clflags.include_dirs in
+                        (*let f = builtin module_name fun_name in*)
+                        let f = lookup module_name fun_name in
 			lapply f args'
 		      with
 		      | _ -> error ("Unsupported primitive function '" ^ fname ^ "'")
@@ -413,8 +419,8 @@ let translate (op_map,name_map) module_name ir =
     | v -> error ("Unknown, possibly primitive, node:\n " ^ (Show_value.show v))
   and program : program -> lambda =
     fun prog ->
-    Compmisc.init_path false;
-    Ident.reinit ();
+(*    Compmisc.init_path true;
+      Ident.reinit ();*)
     (** preamble: Declare operations **)
     let preamble =
       fun k ->

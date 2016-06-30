@@ -1,0 +1,1 @@
+print(implode(explode("EXPLOSION -- IMPLOSION")))

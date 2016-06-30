@@ -140,9 +140,11 @@ end
 
   let lookup : string -> string -> lambda =
     fun module_name fun_name ->
-    let lfun, _ = Env.lookup_value
-		    (Longident.(Ldot (Lident module_name, fun_name)))
-		    Env.empty
+      let env = Compmisc.initial_env () in
+      let lfun, _ = Env.lookup_value
+        (Longident.(Ldot (Lident module_name, fun_name)))
+        env
+    (*Env.empty*)
     in transl_path Env.empty lfun
 		    
   let pervasives : string -> lambda =

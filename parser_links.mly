@@ -314,8 +314,8 @@ fun_declarations:
 | fun_declaration                                              { [$1] }
 
 fun_declaration:
-| tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
-                                                                 in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
+| tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1 in
+                                                                 `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 | signature typed_handler_binding                              { annotate $1 (`Handler $2) }
 | typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in

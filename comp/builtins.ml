@@ -1,11 +1,23 @@
 (** Links builtin functions **)
 
 (** Types **)
-type 'a maybe = Just of 'a
-              | Nothing
+type 'a maybe = [ `Just of 'a
+                | `Nothing ]
 
+type 'a option = [ `Some of 'a
+                 | `None ]
+  
 let identity x = x
 
+(** Conversions **)
+let intToString   = string_of_int
+let stringToInt   = int_of_string
+let intToFloat    = float_of_int
+
+let floatToInt    = int_of_float
+let floatToString = string_of_float
+let stringToFloat = float_of_string  
+  
 (** comparison **)
 let less x y = compare x y = -1
   
@@ -29,22 +41,14 @@ let reduce op x = List.fold_left op x
 let max xs =
   let max2 x y = if less x y then y else x in
   match xs with
-  | []       -> None
-  | x :: xs  -> Some (reduce max2 x xs)
+  | []       -> `None
+  | x :: xs  -> `Some (reduce max2 x xs)
 
 let min xs =
   let min2 x y = if less x y then x else y in
   match xs with
-  | []      -> None
-  | x :: xs -> Some (reduce min2 x xs)
-
-(** Debug **)
-(* TODO *)
-
-let print = print_endline
-
-let error = failwith
-
+  | []      -> `None
+  | x :: xs -> `Some (reduce min2 x xs)
 
 (** Char functions **)
 let isAlpha  = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
@@ -56,8 +60,8 @@ let isDigit  = function '0'..'9' -> true | _ -> false
 let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
 let isBlank  = function ' '|'\t' -> true | _ -> false
 
-let toUpper  = Char.uppercase
-let toLower  = Char.lowercase
+let toUpper  = Char.uppercase_ascii
+let toLower  = Char.lowercase_ascii
 
 let ord      = Char.code
 let chr      = Char.chr
@@ -105,7 +109,7 @@ let explode s =
 let _ = Random.self_init ()
 let random () = Random.float 1.0
 
-(** Unix socket programming **)
+(*(** Unix socket programming **)
 type socket = {inc : in_channel ; outc : out_channel }
 
 let make_socket inchan outchan = {inc = inchan ; outc = outchan }
@@ -114,16 +118,19 @@ let inchan socket  = socket.inc
 let outchan socket = socket.outc
   
 let connectSocket server port =
-  let server_addr =
-    try Unix.inet_addr_of_string server
-    with Failure "inet_addr_of_string" -> (Unix.gethostbyname server).Unix.h_addr_list.(0)
-  in
-  let sockaddr = Unix.ADDR_INET (server_addr, port) in
-  let domain   = Unix.domain_of_sockaddr sockaddr in
-  let sock     = Unix.socket domain Unix.SOCK_STREAM 0 in
-  Unix.connect sock sockaddr;
-  Unix.set_nonblock sock;
-  Just ( make_socket (Unix.in_channel_of_descr sock) (Unix.out_channel_of_descr sock) )
+  try
+    let server_addr =
+      try Unix.inet_addr_of_string server
+      with Failure "inet_addr_of_string" -> (Unix.gethostbyname server).Unix.h_addr_list.(0)
+    in
+    let sockaddr = Unix.ADDR_INET (server_addr, port) in
+    let domain   = Unix.domain_of_sockaddr sockaddr in
+    let sock     = Unix.socket domain Unix.SOCK_STREAM 0 in
+    Unix.connect sock sockaddr;
+    Unix.set_nonblock sock;
+    `Just ( make_socket (Unix.in_channel_of_descr sock) (Unix.out_channel_of_descr sock) )
+  with
+  | exn -> `Nothing
 
 let writeToSocket message socket =
   let outc = outchan socket in
@@ -132,11 +139,17 @@ let writeToSocket message socket =
 
 let readFromSocket socket =
   let inc = inchan socket in
-  try Just (input_line inc) with
+  try `Just (input_line inc) with
   | Sys_blocked_io 
-  | End_of_file    -> Nothing
+  | End_of_file    -> `Nothing
 
 let closeSocket socket =
   let inc = inchan socket in
   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND
   
+(** Date **)
+  let serverTime () = int_of_float (Unix.time ())*)
+
+(** Misc **)     
+let print = print_endline
+let error = failwith
