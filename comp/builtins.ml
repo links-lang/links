@@ -109,7 +109,7 @@ let explode s =
 let _ = Random.self_init ()
 let random () = Random.float 1.0
 
-(*(** Unix socket programming **)
+(** Unix socket programming **)
 type socket = {inc : in_channel ; outc : out_channel }
 
 let make_socket inchan outchan = {inc = inchan ; outc = outchan }
@@ -148,7 +148,7 @@ let closeSocket socket =
   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND
   
 (** Date **)
-  let serverTime () = int_of_float (Unix.time ())*)
+  let serverTime () = int_of_float (Unix.time ())
 
 (** Misc **)     
 let print = print_endline

@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-COMPILER_LIBS=compiler-libs.bytecomp compiler-libs.optcomp
+COMPILER_LIBS=compiler-libs.bytecomp compiler-libs.optcomp findlib
 
 PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix oUnit quickcheck $(COMPILER_LIBS)
 export OCAMLFLAGS=-syntax camlp4o
