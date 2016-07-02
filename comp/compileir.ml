@@ -1,9 +1,6 @@
 (* Compiler driver *)
 open Irtolambda
 
-(*let builtins =
-  Env.read_signature "Builtins" "comp/builtins.cmi"*)
-   
 let hello_world : unit -> Lambda.lambda =
   fun () ->
   let env = Compmisc.initial_env () in
@@ -42,7 +39,22 @@ let hello_world : unit -> Lambda.lambda =
       (raise
         (makeblock 0 (global Match_failure/18g)
           [0: "/tmp/tmpvrgltaik/tmpmu0lu0s7.ml" 1 0])))
-	 *)
+*)
+
+let initialize_ocaml_backend () =
+  Clflags.native_code := true;
+  (*  Clflags.flambda_invariant_checks := true;*)
+  (*  Clflags.inlining_report := false;*)
+  Clflags.nopervasives := false;
+  Clflags.dump_lambda := Settings.get_value Basicsettings.show_lambda_ir;
+  Clflags.dump_cmm := false;
+  Clflags.keep_asm_file := false;
+  (* "/home/dhil/.opam/4.02.2+local-git-4.02.2+effects/lib/ocaml" *)
+  Clflags.include_dirs := "/home/dhil/projects/links/compiler/comp" :: (Findlib.package_directory "unix") :: !Clflags.include_dirs;
+  Compmisc.init_path true; (* true for native code compilation *)
+  Ident.reinit (); ()
+
+    
 let dump_lambda lam =
   if Settings.get_value Basicsettings.show_lambda_ir
   then Format.fprintf Format.err_formatter "%a@\n@." Printlambda.lambda lam
@@ -92,34 +104,16 @@ let nativecomp name lambda_program =
   Compilenv.save_unit_info cmxfile*)
   *)
 
-let remove_links_extension filename =
-  Filename.chop_suffix filename ".links"
+(*let remove_links_extension filename =
+  Filename.chop_suffix filename ".links"*)
 			   
-let printf_if cond printer arg =
-  if cond then Printf.printf "%a@" printer arg;
-  arg
-    
-
-let setup_options () =
-  Clflags.native_code := true;
-  (*  Clflags.flambda_invariant_checks := true;*)
-  Clflags.nopervasives := false;
-  Clflags.dump_lambda := Settings.get_value Basicsettings.show_lambda_ir;
-  Clflags.dump_cmm := false;
-  Clflags.keep_asm_file := false;
-  (* "/home/dhil/.opam/4.02.2+local-git-4.02.2+effects/lib/ocaml" *)
-  Clflags.include_dirs := "/home/dhil/projects/links/compiler/comp" :: (Findlib.package_directory "unix") :: !Clflags.include_dirs;
-  (*  Clflags.inlining_report := false;*)
-  (*  Compenv.(readenv Format.std_formatter (Before_compile "malfunction")); *)
-  let _ = Compmisc.init_path true in ()
-
+let print_if cond msg forward =
+  if cond then Printf.fprintf stdout "%s\n" msg; flush stdout;
+  forward
     
 let assemble_executable cmxs target =
+  print_if true ("linking executable " ^ target) ();
   Asmlink.link Format.std_formatter cmxs target
-  (*
-  let cmxfile = FileInfo.filename (CompilationUnit.cmx_file comp_unit) in
-  Sys.command
-    (Printf.sprintf "ocamlfind ocamlopt '%s' -o '%s'" cmxfile outputfile)*)
 
    
 (*let compile parse_and_desugar envs prelude filename =
@@ -144,34 +138,81 @@ let assemble_executable cmxs target =
 	then (print_endline "byte code compilation"; bytecomp module_name lam)
   else (print_endline "native code compilation"; nativecomp module_name lam))*)
 
-let clean_up compunit =
-  let _ = List.map Misc.remove_file (CompilationUnit.temporary_files compunit)
-  in ()
-  
-let nativecomp : CompilationUnit.comp_unit -> Lambda.lambda -> CompilationUnit.comp_unit
-    = fun comp_unit lambda ->
-  let open CompilationUnit in
+
+let lambda_of_links_ir envs ir source =
   let open FileInfo in
-  let srcfile = source_file comp_unit in
-  let cmxfile = cmx_file comp_unit in
-  let module_name = module_name comp_unit in
-  let comp_unit = ref comp_unit in
-  let ppf = Format.std_formatter in
-  try
-    let _ = print_endline ("Module name " ^ module_name) in
-    (*    let module_ident = Ident.create_persistent modulename in*)
-    let cmifile = with_extension "cmi" (cmx_file !comp_unit) in
-    comp_unit := with_cmi_file cmifile !comp_unit;
-    Env.set_unit_name module_name;
-    Compilenv.reset ?packname:!Clflags.for_package module_name;
-    let (_ : Types.signature) = Env.save_signature [] module_name (filename cmxfile) in
-    let srcfile_wo_ext = Misc.chop_extension_if_any (filename srcfile) in
-    let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (0, lambda) in
-    let _ = prerr_endline "compiled implementation" ; flush stderr  in
-    let _ = Compilenv.save_unit_info (filename cmxfile) in
-    let _ = prerr_endline ("saved unit info " ^ (filename cmxfile))  ; flush stderr in
-    !comp_unit
-  with exc -> clean_up !comp_unit; raise exc
+  let verbose = true in
+  let dump_lambda lam =
+    if !Clflags.dump_lambda 
+    then (Format.fprintf Format.std_formatter "Dumping lambda@\n%a@\n@." Printlambda.lambda lam; lam)
+    else lam
+  in
+  let dump_basic_unit bcu =
+    print_if verbose ("Basic compilation unit\n" ^ CompilationUnit.Basic_Compilation_Unit.string_of_basic_unit bcu ^ "\n") bcu
+  in
+  let srcfile = CompilationUnit.source_file source in
+  let module_name =
+    Compenv.module_of_filename (Format.std_formatter) (filename srcfile) (fileroot srcfile)
+  in
+  ir
+  |> lambda_of_ir envs module_name
+  |> dump_lambda
+  |> Simplif.simplify_lambda
+  |> (fun lam -> print_if verbose "simplified lambda" lam)
+  |> dump_lambda
+  |> CompilationUnit.make_basic_compilation_unit source module_name
+  |> dump_basic_unit
+
+module NC = CompilationUnit.Native_Compilation_Unit
+      
+let clean_up comp_unit =
+  let files = List.map FileInfo.filename (NC.temporary_files comp_unit) in
+  List.fold_left (fun _ f -> Misc.remove_file f) () files
+  
+let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native_comp_unit
+  = fun basic_comp_unit ->
+    let open FileInfo in
+    let open NC in
+    let verbose = true in
+    let ppf = Format.std_formatter in
+    let print_if cond = print_if cond in
+    let dump_comp_unit txt comp_unit = print_if verbose (txt ^ "\n" ^ (NC.string_of_native_unit comp_unit) ^ "\n") comp_unit in
+    let initialize_environment comp_unit =
+      let module_name = module_name comp_unit in
+      Env.set_unit_name module_name;
+      Compilenv.reset ?packname:!Clflags.for_package module_name;
+      comp_unit
+    in
+    let make_cmi_file comp_unit =
+      let cmxfile = cmx_file comp_unit in
+      let (_ : Types.signature) = Env.save_signature [] (module_name comp_unit) (filename cmxfile) in
+      let cmifile = with_extension "cmi" cmxfile in
+      with_cmi_file cmifile comp_unit
+    in
+    let asm_compile comp_unit =
+      let lambda = ir comp_unit in
+      let srcfile_wo_ext = Misc.chop_extension_if_any (source_file comp_unit |> filename) in
+      let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (0, lambda) in
+      comp_unit
+    in
+    let save_unit_info comp_unit =
+      let _ = Compilenv.save_unit_info (cmx_file comp_unit |> filename) in
+      comp_unit
+    in
+    let _ = print_if verbose "native code compilation" () in
+    let comp_unit = CompilationUnit.make_native_compilation_unit basic_comp_unit in
+    try
+      comp_unit
+  |> dump_comp_unit "+ Compilation unit"
+  (*    let module_ident = Ident.create_persistent modulename in*)
+  |> initialize_environment 
+  |> make_cmi_file
+  |> dump_comp_unit "+ Compilation unit after cmi generation"
+  |> asm_compile
+  |> (fun comp_unit -> print_if verbose "compiled implementation" comp_unit)
+  |> save_unit_info
+  |> (fun comp_unit -> print_if verbose ("saved unit info " ^ (cmx_file comp_unit |> filename) ^ "\n") comp_unit)
+    with exc -> clean_up comp_unit; raise exc
 
 let compile parse_and_desugar envs prelude filename =
   let ((bs,tc) as program, tenv) = parse_and_desugar envs filename in
@@ -185,26 +226,18 @@ let compile parse_and_desugar envs prelude filename =
     else
       (bs,tc)
   in
-  setup_options ();
-  Ident.reinit ();
+  initialize_ocaml_backend ();
   (*  hello_world ();*)
-  let comp_unit   = CompilationUnit.make_compilation_unit filename in
-  let module_name = CompilationUnit.module_name comp_unit in
-  (*  let module_name = remove_links_extension filename in*)
-  let lam = lambda_of_ir (envs,tenv) module_name program in
-  dump_lambda lam;
-  let impl = Simplif.simplify_lambda lam in
-  let ()  = prerr_endline "simplified lambda" ; flush stderr in
-  if Settings.get_value Basicsettings.dry_run
-  then ()
-  else
-    let _ = print_endline "native code compilation" in
-    let comp_unit = nativecomp comp_unit impl in
-    let target = None in
-    let target = match target with
-      | None     -> (Compenv.output_prefix "a") ^ ".out"
-      | Some out -> out
-    in
-    let cmxs = ["unix.cmxa" ; (Sys.getenv "HOME") ^ "/projects/links/compiler/comp/builtins.cmx" ; CompilationUnit.cmx_file comp_unit |> FileInfo.filename] in
-    let res  = assemble_executable cmxs target in
-    clean_up comp_unit
+  let target = None in
+  let target = match target with
+    | None     -> (Compenv.output_prefix "a") ^ ".out"
+    | Some out -> out
+  in
+  let comp_unit =
+    CompilationUnit.make_source_desc filename
+    |> lambda_of_links_ir (envs, tenv) program
+    |> nativecomp
+  in
+  let cmxs = ["unix.cmxa" ; (Sys.getenv "HOME") ^ "/projects/links/compiler/comp/builtins.cmx" ; NC.cmx_file comp_unit |> FileInfo.filename] in
+  let res  = assemble_executable cmxs target in
+  clean_up comp_unit

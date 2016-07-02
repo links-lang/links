@@ -5,6 +5,25 @@ type fileinfo =
   }
 
 
+let absolute_path filename = 
+  let open Filename in
+  let filename =
+    if is_relative filename
+    then concat (Sys.getcwd ()) filename
+    else filename
+  in
+  (* Simplify . and .. components *)
+  let rec simplify filename =
+    let base = basename filename in
+    let dir = dirname filename in
+    if dir = filename then dir
+    else if base = current_dir_name then simplify dir
+    else if base = parent_dir_name then dirname (simplify dir)
+    else concat (simplify dir) base
+  in
+  simplify filename
+    
+
 let normalize_extension ext =
   let extlen = String.length ext in
   if extlen > 1 && ext.[0] = '.'
@@ -30,7 +49,7 @@ let get_extension_if_any file =
   else None
     
 let make_fileinfo file =
-  { dirname  = Filename.dirname file
+  { dirname  = absolute_path (Filename.dirname file)
   ; fileroot = chop_extension_if_any (Filename.basename file)
   ; ext      = match get_extension_if_any file with
                | Some ext -> normalize_extension ext

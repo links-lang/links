@@ -196,7 +196,6 @@ let translate (op_map,name_map) module_name ir =
 		   | _ ->
 		      try
 			let (module_name, fun_name) = ocaml_of_links_function fname in
-                        let _ = List.map (print_endline) !Clflags.include_dirs in
                         (*let f = builtin module_name fun_name in*)
                         let f = lookup module_name fun_name in
 			lapply f args'
