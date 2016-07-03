@@ -1,0 +1,214 @@
+## Functions on booleans
+fun showBool(b) {
+  switch(b) {
+    case true  -> "true"
+    case false -> "false"
+  }
+}
+
+## Data type modelling the potential for failure
+typename Maybe(a) = [|Just:a|Nothing|];
+
+sig showMaybe : ((a) -e-> String) -> (Maybe(a)) -e-> String
+fun showMaybe(s)(m) {
+   switch (m) {
+      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
+      case Nothing -> "Nothing"
+   }
+}
+
+sig fromJust : (Maybe (a)) ~> a
+fun fromJust(x) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> error ("fromJust failed")
+  }
+}
+
+sig fromMaybe : (Maybe (a), a) -> a
+fun fromMaybe(x, y) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> y
+  }
+}
+
+## The empty type
+typename Zero = [||];
+
+## Data type modelling a thunk
+typename Comp(e::Row,a) = () ~e~> a;
+
+## Functions on Lists
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}
+
+fun filter(p, l) {
+  concatMap (fun (x) {if(p(x)) [x] else []}, l)
+}
+
+fun fold_left(p, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> fold_left(p, p(u, x), xs)
+  }
+}
+
+fun fold_left1(p, l) {
+  fold_left(p, hd(l), tl(l))
+}
+
+fun fold_right(f, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> f(x, fold_right(f,u,xs))
+  }
+}
+
+fun reverse(l) {
+  fun aux(l,o) {
+    switch (l) {
+      case [] -> o
+      case x::xs -> aux(xs, x::o)
+    }
+  }
+  aux(l, [])
+}
+
+sig empty : ([a]) -> Bool
+fun empty(l) {
+  switch (l) {
+    case [] -> true
+    case _ -> false
+  }
+}
+
+fun replicate(n, item) {
+  if (n == 0) []
+  else item :: replicate(n-1, item)
+}
+
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []    
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+# sig elemIndex : (a, [a]) ~> Maybe(Int)
+# fun elemIndex(x, xs) {
+#   var n = fold_left(fun(acc, y) {
+#     switch (acc) {
+#        case (n,Just(i)) -> (n,Just(i))
+#        case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+#     }
+#   }, (0,Nothing), xs);
+
+#   second(n)
+# }
+
+fun showList(showX)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(showX, xs)));
+  "[" ^^ xs ^^ "]"
+}
+
+
+fun intRange(m,n) {
+  fun intRangeAux(m,n,result) {
+    if (m > n) result
+    else intRangeAux(m, n-1, n::result)
+  }
+  intRangeAux(m,n,[])
+}
+
+# TBD: rename this 'sortOn' to follow Haskell usage?
+sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
+fun sortBy (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
+    }
+  }
+}
+
+# need to be careful to make sure this doesn't get
+# optimised away - it does if we eta reduce it
+sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
+fun sortByBase(f, l) {sortBy(f, l)}
+
+# Association lists
+sig memassoc : (a,[(a,b)]) ~> Bool
+fun memassoc(x,l) {
+  switch (l) {
+    case []    -> false
+    case (k,v)::xs -> k == x || memassoc(x, xs)
+  }
+}
+
+sig lookup : (a,[(a,b)]) ~> Maybe (b)
+fun lookup(x,l) {
+  switch (l) {
+    case [] -> Nothing
+    case (a,b)::xs -> if (a == x) Just(b)
+                      else lookup(x,xs)
+  }
+}
+
+sig assoc : (String,[(String,b)]) ~> b
+fun assoc(x,l) {
+  switch (l) {
+    case []    -> error("Not found " ^^ x)
+    case (k,v)::xs -> if (k == x) v
+                      else assoc(x, xs)
+  }
+}
+
+sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
+fun removeAssoc(x,l) {
+  switch (l) {
+    case [] -> []
+    case (k,v)::xs -> if(k == x) xs
+                      else (k,v)::removeAssoc(x, xs)
+  }
+}
+
+sig assocAll : (String,[(String,b)]) ~> [b]
+fun assocAll(x,l) {
+  switch (l) {
+    case []    -> []
+    case (k,v)::xs -> if (k == x)
+                        (v::assocAll(x,xs))
+                      else
+                        assocAll(x,xs)
+  }
+}
+
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+sig abs : (Int) -> Int
+fun abs(i) {
+  if (i < 0) -i else i
+}

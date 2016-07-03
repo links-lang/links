@@ -43,7 +43,7 @@ let prelude_file =
   in
   let prelude_src =
     if Settings.get_value compiling
-    then "prelude-compiler.links"
+    then "prelude_compiler.links"
     else "prelude.links"
   in
   Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
