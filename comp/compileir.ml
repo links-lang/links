@@ -50,7 +50,7 @@ let initialize_ocaml_backend () =
   Clflags.dump_cmm := false;
   Clflags.keep_asm_file := false;
   (* "/home/dhil/.opam/4.02.2+local-git-4.02.2+effects/lib/ocaml" *)
-  Clflags.include_dirs := "/home/dhil/projects/links/compiler/comp" :: (Findlib.package_directory "unix") :: !Clflags.include_dirs;
+  Clflags.include_dirs := "/home/dhil/projects/links/compiler/lib/ocaml" :: (Findlib.package_directory "unix") :: !Clflags.include_dirs;
   Compmisc.init_path true; (* true for native code compilation *)
   Ident.reinit (); ()
 
@@ -106,14 +106,19 @@ let nativecomp name lambda_program =
 
 (*let remove_links_extension filename =
   Filename.chop_suffix filename ".links"*)
-			   
+
+let run p arg =
+  let dry_run = Settings.get_value Basicsettings.dry_run in
+  if dry_run then arg
+  else p arg
+    
 let print_if cond msg forward =
   if cond then Printf.fprintf stdout "%s\n" msg; flush stdout;
   forward
     
 let assemble_executable cmxs target =
   print_if true ("linking executable " ^ target) ();
-  Asmlink.link Format.std_formatter cmxs target
+  run (fun _ -> Asmlink.link Format.std_formatter cmxs target) ()
 
    
 (*let compile parse_and_desugar envs prelude filename =
@@ -208,9 +213,9 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
   |> initialize_environment 
   |> make_cmi_file
   |> dump_comp_unit "+ Compilation unit after cmi generation"
-  |> asm_compile
+  |> run asm_compile
   |> (fun comp_unit -> print_if verbose "compiled implementation" comp_unit)
-  |> save_unit_info
+  |> run save_unit_info
   |> (fun comp_unit -> print_if verbose ("saved unit info " ^ (cmx_file comp_unit |> filename) ^ "\n") comp_unit)
     with exc -> clean_up comp_unit; raise exc
 
@@ -238,6 +243,6 @@ let compile parse_and_desugar envs prelude filename =
     |> lambda_of_links_ir (envs, tenv) program
     |> nativecomp
   in
-  let cmxs = ["unix.cmxa" ; (Sys.getenv "HOME") ^ "/projects/links/compiler/comp/builtins.cmx" ; NC.cmx_file comp_unit |> FileInfo.filename] in
+  let cmxs = ["unix.cmxa" ; (Sys.getenv "HOME") ^ "/projects/links/compiler/lib/ocaml/builtins.cmx" ; NC.cmx_file comp_unit |> FileInfo.filename] in
   let res  = assemble_executable cmxs target in
   clean_up comp_unit

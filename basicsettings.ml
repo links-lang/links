@@ -51,7 +51,7 @@ let prelude_file =
 (* FIXME: Have one prelude *)
 let prelude_file_compiler = 
   let prelude_dir = Filename.dirname Sys.executable_name in
-  let prelude_src = "prelude-compiler.links" in
+  let prelude_src = "prelude_compiler.links" in
   Settings.add_string ("prelude_compiler", Filename.concat prelude_dir prelude_src, `System)    
 
 (** The banner *)
