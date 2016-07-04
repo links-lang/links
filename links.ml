@@ -438,9 +438,11 @@ let options : opt list =
     (noshort, "dclambda",            set BS.show_clambda_ir true,      None);
     (noshort, "danf",                set BS.show_compiled_ir true,      None);
     (noshort, "dry-run",             set BS.dry_run true,              None);
-    ('c',     "compile",             set BS.compiling true,            None);
-    (noshort, "byte",                Some (fun () -> Settings.set_value BS.nativecomp false; Settings.set_value BS.bytecomp true),             None);
-    (noshort, "native",              Some (fun () -> Settings.set_value BS.bytecomp false; Settings.set_value BS.nativecomp true),             None);
+    ('c',     "compile",             set BS.compile_mode true,            None);
+    (noshort, "byte",                Some (fun () -> failwith "Byte code generator is not yet supported"),             None);
+    (noshort, "native",              set BS.codegenerator "native",             None);
+    ('o',   nolong,                  None, Some (fun filename -> Settings.set_value BS.output_file filename));
+    (noshort, "verbose",             set BS.verbose true, None);
     ]
     
 let file_list = ref []
@@ -579,8 +581,9 @@ let _ =
   (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
 
-  if Settings.get_value BS.compiling
+  if Settings.get_value BS.compile_mode
   then compile_main ()
   else if Settings.get_value BS.cache_whole_program
        then whole_program_caching_main ()
        else main()
+ 

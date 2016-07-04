@@ -9,11 +9,12 @@ let show_lambda_ir = Settings.add_bool("show_lambda_ir", false, `User)
 let show_clambda_ir = Settings.add_bool("show_clambda_ir", false, `User)
 let show_compiled_ir = Settings.add_bool("show_anf_ir", false, `User) (* FIXME: Duplicate of Sugartoir.show_compiled_ir.*)				       
 
-(* Compiling *)				       
-let compiling = Settings.add_bool("compile_mode", false, `System)
-let bytecomp  = Settings.add_bool("byte", true, `System)
-let nativecomp = Settings.add_bool("native", false, `System)
-let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)				  
+(* Compiling *)
+let compile_mode = Settings.add_bool("compile_mode", false, `System)
+let codegenerator = Settings.add_string("codegenerator", "native", `System)  
+let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)
+let output_file = Settings.add_string("output_file", "a.out", `System)
+let verbose     = Settings.add_bool("verbose", false, `System)
 
   
 (** [true] if we're in web mode *)
@@ -42,7 +43,7 @@ let prelude_file =
     | Some path -> path
   in
   let prelude_src =
-    if Settings.get_value compiling
+    if Settings.get_value compile_mode
     then "prelude_compiler.links"
     else "prelude.links"
   in

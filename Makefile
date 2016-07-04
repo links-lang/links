@@ -65,9 +65,9 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
 
-BUILTINS=lib/ocaml/builtins.mli lib/ocaml/builtins.ml
+SERVER_LIBS=lib/server/builtins.mli lib/server/builtins.ml
 
-BACKEND=$(BUILTINS) \
+BACKEND=$(SERVER_LIBS) \
 	comp/fileInfo.mli comp/fileInfo.ml \
 	comp/compilationUnit.mli comp/compilationUnit.ml \
 	comp/gather.ml comp/lambdaDSL.ml comp/irtolambda.ml comp/compileir.ml

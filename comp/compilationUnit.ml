@@ -1,5 +1,6 @@
 open FileInfo
 
+(* Source descriptor *)  
 type source_desc =
   { srcfile : fileinfo
   ; ifacefile : fileinfo option (* maybe useful in the future when Links gets a module system *)
@@ -12,14 +13,29 @@ let make_source_desc ?(interface_file=None) source_file =
     
 let source_file desc = desc.srcfile
 let interface_file desc = desc.ifacefile
+
+(* Compilation units *)  
+module type COMPILATION_UNIT =
+sig
+  type 'a t
+
+  val source_file : 'a t -> fileinfo
+  val module_name : 'a t -> string
+  val ir          : 'a t -> 'a
+end
+
+let obj_ext = "o"
+let compiled_byteobj_ext = "cmo"
+let compiled_bytemod_ext = "cma"
+let compiled_natobj_ext  = "cmx"
+let compiled_natmod_ext  = "cmxa"
   
 module type BASIC_COMPILATION_UNIT =
 sig
   type 'a t
+
+  include COMPILATION_UNIT with type 'a t := 'a t
     
-  val source_file : 'a t -> fileinfo
-  val module_name : 'a t -> string
-  val ir          : 'a t -> 'a
   val make        : source_desc -> string -> 'a -> 'a t
   val string_of_basic_unit : 'a t -> string
 end
@@ -56,11 +72,10 @@ module type NATIVE_COMPILATION_UNIT =
 sig
   type 'a t
 
+  include COMPILATION_UNIT with type 'a t := 'a t
+    
   val make : 'a basic_comp_unit -> 'a t
     
-  val source_file : 'a t -> fileinfo
-  val module_name : 'a t -> string
-  val ir          : 'a t -> 'a
   val object_file : 'a t -> fileinfo
   val cmx_file    : 'a t -> fileinfo
   val cmi_file    : 'a t -> fileinfo option
@@ -83,8 +98,8 @@ struct
   let make bcu =
     let src = BC.source_file bcu in
     { basic_unit = bcu
-    ; objfile    = with_extension "o" src
-    ; cmxfile    = with_extension "cmx" src
+    ; objfile    = with_extension obj_ext src
+    ; cmxfile    = with_extension compiled_natobj_ext src
     ; cmifile    = None
     }
 
@@ -116,55 +131,23 @@ type 'a native_comp_unit = 'a Native_Compilation_Unit.t
   
 let make_native_compilation_unit = Native_Compilation_Unit.make
 
-(*type native_compilation_unit =
-  { srcfile     : fileinfo
-  ; ifacefile   : fileinfo option (* maybe useful in the future when Links gets a module system *)
-  ; objfile     : fileinfo
-  ; cmxfile     : fileinfo
-  ; cmifile     : fileinfo option
-  ; modulename  : string
-  }
+(* For linking *)  
+module type LINKABLE_UNIT =
+sig
+  type t
 
-type comp_unit = native_compilation_unit
-    
-(* Getters *)
-let source_file cu = cu.srcfile
-let object_file cu = cu.objfile
-let cmx_file    cu = cu.cmxfile
-let cmi_file    cu = cu.cmifile
-let module_name cu = cu.modulename  
+  val make      : string -> t
+  val locate    : t -> string
+end
 
+module Linkable_Unit : LINKABLE_UNIT =
+struct
+  type t = fileinfo
+  let make f = FileInfo.make_fileinfo f
 
-let temporary_files cu =
-  let files =
-    (match cmi_file cu with
-    | Some cmi -> [cmi]
-    | None -> [])
-    @ [ object_file cu ; cmx_file cu ]
-  in
-  List.map FileInfo.filename files  
+  let locate = FileInfo.filename
+end
 
-(* Creation *)
-let make_compilation_unit srcfile =
-  let src = make_fileinfo srcfile in
-  let caml_module_name = Compenv.module_of_filename (Format.std_formatter) (filename src) (fileroot src) in
-  let caml_compatible_file = with_fileroot (String.uncapitalize_ascii caml_module_name) src in
-  { srcfile     = src
-  ; ifacefile   = None
-  ; objfile     = with_extension "o"   caml_compatible_file
-  ; cmxfile     = with_extension "cmx" caml_compatible_file
-  ; cmifile     = None
-  ; modulename  = caml_module_name
-  }
-    
-let with_cmi_file fi cu = { cu with cmifile = Some fi }    
+type linkable_unit = Linkable_Unit.t
 
-
-let string_of_compilation_unit cu =
-  let string_of_option f = function
-    | Some x -> f x
-    | None   -> "<None>"
-  in
-  Printf.sprintf
-    ("{ module name = %s\n, source      = %s\n, interface   = %s\n, object file = %s\n, cmx file    = %s\n, cmi file    = %s }")
-  (module_name cu) (source_file cu |> filename) (string_of_option filename None) (object_file cu |> filename) (cmx_file cu |> filename) (cmi_file cu |> string_of_option filename)*)
+let make_linkable_unit = Linkable_Unit.make

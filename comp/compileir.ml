@@ -41,18 +41,76 @@ let hello_world : unit -> Lambda.lambda =
           [0: "/tmp/tmpvrgltaik/tmpmu0lu0s7.ml" 1 0])))
 *)
 
+let run p arg =
+  let dry_run = Settings.get_value Basicsettings.dry_run in
+  if dry_run then arg
+  else p arg
+    
+let print_if : 'a. bool -> string -> 'a -> 'a
+  = fun cond msg forward ->
+    let chan = stdout in
+    let _ =
+      if cond
+      then (Printf.fprintf chan "%s\n" msg; flush chan)
+      else ()
+    in
+    forward
+
+let print_verbose : 'a. string -> 'a -> 'a =
+  fun msg forward ->
+    let verbose = Settings.get_value Basicsettings.verbose in
+    print_if verbose msg forward
+    
+let dependencies () =
+  let linkslib  = "LINKS_LIB" in
+  let serverlib_subdir = "server" in
+  let serverlib_dir =  
+  try Filename.concat (Sys.getenv linkslib) serverlib_subdir with
+  | Not_found ->
+     let guess = Filename.concat (Sys.getcwd ()) serverlib_subdir in
+     Printf.fprintf stderr "Warning: Cannot locate libraries because environment variable $%s is not set. Optimistically guessing '%s'." linkslib guess; guess
+  in
+  let _ = print_verbose ("server libraries directory: " ^ serverlib_dir) () in
+  let builtins_cmx =
+    let builtins_cmx = Filename.concat serverlib_dir "builtins.cmx" in
+    if not (Sys.file_exists builtins_cmx) then
+      failwith "Error: Cannot locate builtins module."
+    else
+      builtins_cmx
+  in
+  let unix_cmxa =
+    let err = "Error: Cannot locate unix module." in
+    try
+      let unix_cmxa = Filename.concat (Findlib.package_directory "unix") "unix.cmxa" in
+      if not (Sys.file_exists unix_cmxa) then
+        failwith err
+      else
+        unix_cmxa
+    with
+    | Not_found -> failwith err
+  in
+  let _ = print_verbose ("unix module: " ^ unix_cmxa) () in
+  List.map CompilationUnit.make_linkable_unit [unix_cmxa ; builtins_cmx]
+    
 let initialize_ocaml_backend () =
-  Clflags.native_code := true;
+  let dependencies = dependencies () in
+  let dep_include_dirs =
+    let dep_dirs = Utility.StringSet.from_list (List.map (fun d -> CompilationUnit.Linkable_Unit.locate d |> Filename.dirname) dependencies) in
+    Utility.StringSet.fold (fun s acc -> s :: acc) dep_dirs []
+  in
+  let verbose = Settings.get_value Basicsettings.verbose in
   (*  Clflags.flambda_invariant_checks := true;*)
   (*  Clflags.inlining_report := false;*)
   Clflags.nopervasives := false;
-  Clflags.dump_lambda := Settings.get_value Basicsettings.show_lambda_ir;
-  Clflags.dump_cmm := false;
+  Clflags.dump_lambda := Settings.get_value Basicsettings.show_lambda_ir || verbose;
+  Clflags.dump_clambda := Settings.get_value Basicsettings.show_clambda_ir || verbose;
+  Clflags.dump_cmm := false || verbose;
   Clflags.keep_asm_file := false;
-  (* "/home/dhil/.opam/4.02.2+local-git-4.02.2+effects/lib/ocaml" *)
-  Clflags.include_dirs := "/home/dhil/projects/links/compiler/lib/ocaml" :: (Findlib.package_directory "unix") :: !Clflags.include_dirs;
+  Clflags.include_dirs := dep_include_dirs @ !Clflags.include_dirs;
+  Clflags.native_code := true;
   Compmisc.init_path true; (* true for native code compilation *)
-  Ident.reinit (); ()
+  Ident.reinit ();
+  dependencies
 
     
 let dump_lambda lam =
@@ -106,19 +164,10 @@ let nativecomp name lambda_program =
 
 (*let remove_links_extension filename =
   Filename.chop_suffix filename ".links"*)
-
-let run p arg =
-  let dry_run = Settings.get_value Basicsettings.dry_run in
-  if dry_run then arg
-  else p arg
-    
-let print_if cond msg forward =
-  if cond then Printf.fprintf stdout "%s\n" msg; flush stdout;
-  forward
-    
-let assemble_executable cmxs target =
-  print_if true ("linking executable " ^ target) ();
-  run (fun _ -> Asmlink.link Format.std_formatter cmxs target) ()
+   
+let assemble_executable linkables target =
+  print_verbose ("assembling executable " ^ target) ();
+  run (fun _ -> Asmlink.link Format.std_formatter linkables target) ()
 
    
 (*let compile parse_and_desugar envs prelude filename =
@@ -146,14 +195,13 @@ let assemble_executable cmxs target =
 
 let lambda_of_links_ir envs ir source =
   let open FileInfo in
-  let verbose = true in
   let dump_lambda lam =
     if !Clflags.dump_lambda 
     then (Format.fprintf Format.std_formatter "Dumping lambda@\n%a@\n@." Printlambda.lambda lam; lam)
     else lam
   in
   let dump_basic_unit bcu =
-    print_if verbose ("Basic compilation unit\n" ^ CompilationUnit.Basic_Compilation_Unit.string_of_basic_unit bcu ^ "\n") bcu
+    print_verbose ("Basic compilation unit\n" ^ (CompilationUnit.Basic_Compilation_Unit.string_of_basic_unit bcu) ^ "\n") bcu
   in
   let srcfile = CompilationUnit.source_file source in
   let module_name =
@@ -163,7 +211,7 @@ let lambda_of_links_ir envs ir source =
   |> lambda_of_ir envs module_name
   |> dump_lambda
   |> Simplif.simplify_lambda
-  |> (fun lam -> print_if verbose "simplified lambda" lam)
+  |> (fun lam -> print_verbose "simplified lambda" lam)
   |> dump_lambda
   |> CompilationUnit.make_basic_compilation_unit source module_name
   |> dump_basic_unit
@@ -178,10 +226,8 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
   = fun basic_comp_unit ->
     let open FileInfo in
     let open NC in
-    let verbose = true in
     let ppf = Format.std_formatter in
-    let print_if cond = print_if cond in
-    let dump_comp_unit txt comp_unit = print_if verbose (txt ^ "\n" ^ (NC.string_of_native_unit comp_unit) ^ "\n") comp_unit in
+    let dump_comp_unit txt comp_unit = print_verbose (txt ^ "\n" ^ (NC.string_of_native_unit comp_unit) ^ "\n") comp_unit in
     let initialize_environment comp_unit =
       let module_name = module_name comp_unit in
       Env.set_unit_name module_name;
@@ -204,7 +250,7 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
       let _ = Compilenv.save_unit_info (cmx_file comp_unit |> filename) in
       comp_unit
     in
-    let _ = print_if verbose "native code compilation" () in
+    let _ = print_verbose "native code compilation" () in
     let comp_unit = CompilationUnit.make_native_compilation_unit basic_comp_unit in
     try
       comp_unit
@@ -214,11 +260,15 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
   |> make_cmi_file
   |> dump_comp_unit "+ Compilation unit after cmi generation"
   |> run asm_compile
-  |> (fun comp_unit -> print_if verbose "compiled implementation" comp_unit)
+  |> (fun comp_unit -> print_verbose "compiled implementation" comp_unit)
   |> run save_unit_info
-  |> (fun comp_unit -> print_if verbose ("saved unit info " ^ (cmx_file comp_unit |> filename) ^ "\n") comp_unit)
+  |> (fun comp_unit -> print_verbose ("saved unit info " ^ (cmx_file comp_unit |> filename) ^ "\n") comp_unit)
     with exc -> clean_up comp_unit; raise exc
 
+let modularize comp_unit =
+  let cmxfile = CompilationUnit.Native_Compilation_Unit.cmx_file comp_unit |> FileInfo.filename in
+  CompilationUnit.make_linkable_unit cmxfile
+      
 let compile parse_and_desugar envs prelude filename =
   let ((bs,tc) as program, tenv) = parse_and_desugar envs filename in
   let () = if Settings.get_value Basicsettings.show_compiled_ir
@@ -231,18 +281,16 @@ let compile parse_and_desugar envs prelude filename =
     else
       (bs,tc)
   in
-  initialize_ocaml_backend ();
+  let dependencies = initialize_ocaml_backend () in
   (*  hello_world ();*)
-  let target = None in
-  let target = match target with
-    | None     -> (Compenv.output_prefix "a") ^ ".out"
-    | Some out -> out
-  in
+  let target = Settings.get_value Basicsettings.output_file |> FileInfo.make_fileinfo |> FileInfo.filename in
   let comp_unit =
     CompilationUnit.make_source_desc filename
     |> lambda_of_links_ir (envs, tenv) program
     |> nativecomp
   in
-  let cmxs = ["unix.cmxa" ; (Sys.getenv "HOME") ^ "/projects/links/compiler/lib/ocaml/builtins.cmx" ; NC.cmx_file comp_unit |> FileInfo.filename] in
-  let res  = assemble_executable cmxs target in
+  let linkable_units =
+    List.map CompilationUnit.Linkable_Unit.locate (dependencies @ [modularize comp_unit])
+  in
+  let res  = assemble_executable linkable_units target in
   clean_up comp_unit
