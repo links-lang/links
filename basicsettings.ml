@@ -37,17 +37,21 @@ let concurrent_server = Settings.add_bool ("concurrent_server", true, `System)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (** Name of the file containing the prelude code. *)
-let prelude_file = 
-  let prelude_dir = match Utility.getenv "LINKS_LIB" with
-      None -> Filename.dirname Sys.executable_name
-    | Some path -> path
-  in
+let prelude_file =
   let prelude_src =
     if Settings.get_value compile_mode
     then "prelude_compiler.links"
     else "prelude.links"
   in
-  Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
+  let prelude_dir = match Utility.getenv "LINKS_LIB" with
+      None -> Filename.dirname Sys.executable_name 
+    | Some path ->
+       let prelude = Filename.concat path prelude_src in
+       if not (Sys.file_exists prelude)
+       then Filename.dirname Sys.executable_name
+       else path
+  in
+  Settings.add_string ("prelude", Filename.concat prelude_dir prelude_src, `System)
 
 (* FIXME: Have one prelude *)
 let prelude_file_compiler = 
