@@ -649,7 +649,8 @@ op h -< m {
 #
 # Here's an example using our cheat detection mechanism:
 var ex12 = example( cheatReport(randomResult(strategy(bobCheats)(checker(game(7))))) );
-# var ex12 = example(     cheatReport -<- randomResult
+# BUG HERE:
+# var ex12 = example(     cheatReport 
 #                     -<- strategy(bobCheats) -<- checker -< game(7)
 # 		  );
 

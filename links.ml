@@ -443,6 +443,7 @@ let options : opt list =
     (noshort, "native",              set BS.codegenerator "native",             None);
     ('o',   nolong,                  None, Some (fun filename -> Settings.set_value BS.output_file filename));
     (noshort, "verbose",             set BS.verbose true, None);
+    (noshort, "no-prelude",          set BS.load_prelude false, None);
     ]
     
 let file_list = ref []
@@ -485,7 +486,10 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
     let (program, _, tenv) = parse_and_desugar (nenv, tyenv) filename in
     (program, tenv)
   in
-  Compileir.compile parse envs prelude filename
+  if Settings.get_value BS.load_prelude then
+    Compileir.compile parse envs prelude filename
+  else
+    Compileir.compile parse envs [] filename
 
       (*((globals @ locals, main), t), envs*)
     (*let closure_conversion (valenv, nenv, tyenv) (program, t) =

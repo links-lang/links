@@ -74,12 +74,12 @@ let dependencies () =
   let builtins_cmx =
     let builtins_cmx = Filename.concat serverlib_dir "builtins.cmx" in
     if not (Sys.file_exists builtins_cmx) then
-      failwith "Error: Cannot locate builtins module."
+      failwith "Error: Cannot locate Builtins module."
     else
       builtins_cmx
   in
   let unix_cmxa =
-    let err = "Error: Cannot locate unix module." in
+    let err = "Error: Cannot locate Unix module." in
     try
       let unix_cmxa = Filename.concat (Findlib.package_directory "unix") "unix.cmxa" in
       if not (Sys.file_exists unix_cmxa) then
@@ -89,7 +89,7 @@ let dependencies () =
     with
     | Not_found -> failwith err
   in
-  let _ = print_verbose ("unix module: " ^ unix_cmxa) () in
+  let _ = print_verbose ("Unix module: " ^ unix_cmxa) () in
   List.map CompilationUnit.make_linkable_unit [unix_cmxa ; builtins_cmx]
     
 let initialize_ocaml_backend () =
@@ -205,7 +205,9 @@ let lambda_of_links_ir envs ir source =
   in
   let srcfile = CompilationUnit.source_file source in
   let module_name =
-    Compenv.module_of_filename (Format.std_formatter) (filename srcfile) (fileroot srcfile)
+    let caml_module_name = Compenv.module_of_filename (Format.std_formatter) (filename srcfile) (fileroot srcfile) in
+    Filename.concat "Links_" caml_module_name
+  (* FIXME: Prepend 'Links_' to module names to avoid clashes with OCaml modules, e.g. random.links gets the module name '_random' rather than 'random' which would clash with the OCaml random module. We should really come up with a better, more robust scheme for module naming. *)
   in
   ir
   |> lambda_of_ir envs module_name

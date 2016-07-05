@@ -124,7 +124,7 @@ let translate (op_map,name_map) module_name ir =
   let open Lambda in
   let open LambdaDSL in
   let open Ir in
-  let builtin _ fun_name = lookup "Builtins" fun_name in
+  let builtin fun_name = print_endline fun_name; lookup "Builtins" fun_name in
   let op_map =
     snd
       (StringMap.fold
@@ -188,16 +188,22 @@ let translate (op_map,name_map) module_name ir =
 		 begin
 		   match fname with
 		   | "Cons" -> lprim box args'
-		   | "random" ->
+                   | "Concat" -> let concat = pervasives "@" in
+                                 lapply concat args'
+                                                        
+(*		   | "random" ->
 		      let random = lookup "Random" "float" in
-		      lapply random [lfloat 1.0]
+		      lapply random [lfloat 1.0]*)
                    | "not" -> lprim Pnot args'
                    | "negate" -> lprim Pnegint args'
+                   | "negatef" -> lprim Pnegfloat args'
+(*                   | "^^"      -> let string_concat = pervasives "^" in
+                                  lapply string_concat args'*)
 		   | _ ->
 		      try
-			let (module_name, fun_name) = ocaml_of_links_function fname in
-                        (*let f = builtin module_name fun_name in*)
-                        let f = lookup module_name fun_name in
+			(*let (module_name, fun_name) = ocaml_of_links_function fname in*)
+                        let f = builtin fname in
+                        (*                        let f = lookup module_name fun_name in*)
 			lapply f args'
 		      with
 		      | _ -> error ("Unsupported primitive function '" ^ fname ^ "'")
@@ -345,8 +351,9 @@ let translate (op_map,name_map) module_name ir =
 	 match primitive_name var with
 	 | Some "Nil" -> lconst ff
 	 | Some prim ->
-	    let (module_name, fun_name) = ocaml_of_links_function prim in
-	    lookup module_name fun_name
+            (*	    let (module_name, fun_name) = ocaml_of_links_function prim in*)
+	 (*lookup module_name fun_name*)
+            builtin prim
          | Some name -> error ("Unknown primitive " ^ name)
          | None -> error ("Cannot find primitive name for var " ^ (string_of_int var))
        else
@@ -359,7 +366,7 @@ let translate (op_map,name_map) module_name ir =
     | `Project (label, row) ->
        lproject ((int_of_string label)-1) (value row) (* FIXME: Assuming tuples! *)
     | `Extend (map, row) ->
-       let vs = StringMap.to_list (fun _ v -> value v) map in
+       let vs = StringMap.to_list (fun k v -> value v) map in
        begin
        match row with
        | Some r -> error "Record extension not yet implemented."
@@ -380,8 +387,7 @@ let translate (op_map,name_map) module_name ir =
       in
       (lfun (List.map ident_of_binder params') (computation body))
     in
-    fun b ->
-    fun k ->
+    fun b k ->
     match b with
     | `Let (b, (_, tc)) ->
        llet
@@ -439,9 +445,9 @@ let translate (op_map,name_map) module_name ir =
 		
     in*)
     let random_init k =
-      let init = lookup "Random" "self_init" in
+      (*let init = lookup "Random" "self_init" in
       llet (ident ("_rand_init", Var.fresh_raw_var ()))
-	   (lapply init [lconst unit])
+	(lapply init [lconst unit])*)
 	   k
     in
     (** translate to lambda **)

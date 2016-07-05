@@ -1,49 +1,6 @@
 sig choose : ([a]) {Choose:([a]) {}-> a |_}-> a
 fun choose(xs) { do Choose(xs) }
 
-fun fold_left(f,acc,xs) {  
-  switch(xs) {
-    case x :: xs -> fold_left(f, f(acc,x), xs)
-    case []      -> acc
-  }
-}
-
-fun map(f, l) {
-  switch (l) {
-    case []     -> []
-    case x::xs -> f(x) :: map(f,xs)
-  }
-}
-
-fun intRange(m,n) {
-  fun intRangeAux(m,n,result) {
-    if (m > n) result
-    else intRangeAux(m, n-1, n::result)
-  }
-  intRangeAux(m,n,[])
-}
-
-fun reverse(l) {
-  fun aux(l,o) {
-    switch (l) {
-      case [] -> o
-      case x::xs -> aux(xs, x::o)
-    }
-  }
-  aux(l, [])
-}
-
-sig abs : (Int) -> Int
-fun abs(i) {
-  if (i < 0) -i else i
-}
-
-sig filter : ((a) ~e~> Bool, [a]) ~e~> [a]
-fun filter(p,xs) {
-  reverse(fold_left(fun(acc, x) { if (p(x)) x :: acc else acc }
-                   , [], xs))
-}
-
 fun for_all(p, xs) {
   switch (xs) {
     case [] -> true
@@ -51,29 +8,7 @@ fun for_all(p, xs) {
   }
 }
 
-fun intersperse(y, xs) {
-   switch (xs) {
-     case []      -> []    
-     case [x]     -> [x]
-     case x :: xs -> x :: y :: intersperse(y,xs)
-   }
-}
-
-fun showList(showX)(xs) {
-  var xs = fold_left(fun (acc, x) { acc ^^ x }
-                    , ""
-                    , intersperse(",", map(showX, xs)));
-  "[" ^^ xs ^^ "]"
-}
-
-fun showMaybe(s)(m) {
-   switch (m) {
-      case Just(x) -> "Just(" ^^ s(x) ^^ ")"
-      case Nothing -> "Nothing"
-   }
-}
-
-#sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
+sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
 fun showPair(showX,showY)((x,y)) {
     "(" ^^ showX(x) ^^ ", " ^^ showY(y) ^^ ")"
 }
@@ -120,8 +55,9 @@ fun findSolution(n)() {
     place(1, [])
 }
 
+
 fun main() {
-  var n = 8;
+  var n = 20;
   var showSolution = showMaybe(showList(showPair(intToString,intToString)));
   var solution = showSolution(chooseHandler(findSolution(n)));
   print(solution)

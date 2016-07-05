@@ -104,7 +104,8 @@ let explode s =
   in
   copy (strlen s - 1) []
 
-
+let (^^) = (^)
+    
 (** Randomness **)
 let _ = Random.self_init ()
 let random () = Random.float 1.0

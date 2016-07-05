@@ -57,7 +57,10 @@ let prelude_file =
 let prelude_file_compiler = 
   let prelude_dir = Filename.dirname Sys.executable_name in
   let prelude_src = "prelude_compiler.links" in
-  Settings.add_string ("prelude_compiler", Filename.concat prelude_dir prelude_src, `System)    
+  Settings.add_string ("prelude_compiler", Filename.concat prelude_dir prelude_src, `System)
+
+
+let load_prelude = Settings.add_bool ("load_prelude", true, `System)
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
