@@ -83,7 +83,7 @@ let primop   : string -> Lambda.primitive option =
 	| _ -> raise Not_found
       else if is_relational_operation op then
         match op with
-        | "==" -> Pintcomp Ceq
+        | "==" -> Pccall (LambdaDSL.prim_binary_op "caml_equal") (*Pintcomp Ceq*)
         | op -> let cmp =
                   match op with
                   | "<"  -> "caml_lessthan"
@@ -124,13 +124,13 @@ let translate (op_map,name_map) module_name ir =
   let open Lambda in
   let open LambdaDSL in
   let open Ir in
-  let builtin fun_name = print_endline fun_name; lookup "Builtins" fun_name in
+  let builtin fun_name = lookup "Builtins" fun_name in
   let op_map =
     snd
       (StringMap.fold
          (fun opname uid (pos,op_map) -> (pos+1,StringMap.add opname (uid,pos) op_map))
          op_map (0, StringMap.empty))
-  in
+  in    
   let lookup_op label =
     try
       Some (StringMap.find label op_map)
@@ -156,6 +156,42 @@ let translate (op_map,name_map) module_name ir =
   in
   let getglobal = lgetglobal (String.capitalize module_name) in
   let unit_binder = Var.fresh_binder (Types_links.unit_type, "_unit", `Local) in
+  let fresh_ident name = ident (name, Var.fresh_raw_var ()) in
+
+  let lproj_error =
+    let msg = lstring "Fatal error: Projection failed." in
+    let errfun = pervasives "failwith" in
+    lfun [ident_of_binder unit_binder] (lapply errfun [msg])
+  in
+  let make_record translate map default_clause =
+    let l' = fresh_ident "_lprime" in
+    let eq a b = lprim (Pintcomp Ceq) [a ; b] in
+    let switcher =
+      StringMap.fold
+        (fun l v clauses ->
+          let l = linteger (hash_label l) in
+          let v = translate v in
+          lif (eq l (lvar l'))
+            v
+            clauses)
+        map
+        (lapply default_clause [lvar l'])
+    in
+    lfun [l'] switcher
+  in
+  let make_record_from_list translate xs =
+    let map =
+      List.fold_left
+        (fun (i,map) x -> (i+1, StringMap.add (string_of_int i) x map))
+        (1, StringMap.empty)
+        xs
+    in
+    make_record translate (snd map) lproj_error
+  in
+  let project_from_record label row =
+    let label = hash_label label in
+    lapply row [linteger label]
+  in
   let rec computation : computation -> lambda =
     fun (bs,tc) ->
     bindings bs (tail_computation tc)
@@ -187,7 +223,7 @@ let translate (op_map,name_map) module_name ir =
 	      | _ -> 
 		 begin
 		   match fname with
-		   | "Cons" -> lprim box args'
+		   | "Cons" -> lcons (List.hd args') (List.tl args') (*lprim box args'*)
                    | "Concat" -> let concat = pervasives "@" in
                                  lapply concat args'
                                                         
@@ -216,19 +252,20 @@ let translate (op_map,name_map) module_name ir =
        let v = value v in
        let default =
 	 match default with
-	 | None -> lapply (pervasives "failwith") [lstring "Pattern-matching failed"]
+	 | None -> lapply (pervasives "failwith") [lstring "Fatal error: Pattern-matching failed"]
 	 | Some (b,c) -> llet (ident_of_binder b) v (computation c)
        in
        let v'' = ident ("_switch", Var.fresh_raw_var ()) in
        let switch_expr k =
-	 llet v'' (lproject 0 v) k (* FIXME: assuming we always match on a "box" *)
+         llet v'' (lproject 0 v) k
+       (*llet v'' (lproject 0 v) k (* FIXME: assuming we always match on a "box" *)*)
        in
        switch_expr
 	 (StringMap.fold
 	    (fun v' (b,c) matchfail ->	     
 	      lif (neq (lvar v'') (polyvariant v' None)) 
-		  matchfail
-		  (llet (ident_of_binder b) (lproject 1 v) (computation c))
+		matchfail
+            (llet (ident_of_binder b) (lproject 1 v) (computation c))
 	    ) clauses default
 	 )    
     | _ -> assert false
@@ -243,8 +280,9 @@ let translate (op_map,name_map) module_name ir =
        in
        let perform label args =	 
 	 lperform (lprim (field pos)
-			 [ getglobal ])
-		  [ lprim box args ]
+		     [ getglobal ])
+           [ make_record_from_list value args ]
+       (*		  [ lprim box args ]*)
        in
        let id =
 	 match get_op_uid label with
@@ -255,8 +293,9 @@ let translate (op_map,name_map) module_name ir =
 (*       Lambda.(lprim (Pperform)
 		     [ lprim (field 0)
 		      [lprim (Lambda.Pgetglobal (Ident.create_persistent (String.capitalize module_name))) []]
-                     ])*)
-       perform label (List.map value args)
+         ])*)
+       perform label args
+    (*       perform label (List.map value args)*)
     | `Handle (v, clauses, value_clause, _) ->
        let value_handler =
 	 let (b, comp) = value_clause in
@@ -349,7 +388,7 @@ let translate (op_map,name_map) module_name ir =
     | `Variable var ->
        if is_primitive var then
 	 match primitive_name var with
-	 | Some "Nil" -> lconst ff
+	 | Some "Nil" -> lnil
 	 | Some prim ->
             (*	    let (module_name, fun_name) = ocaml_of_links_function prim in*)
 	 (*lookup module_name fun_name*)
@@ -363,15 +402,47 @@ let translate (op_map,name_map) module_name ir =
     | `ApplyPure (f, args) -> tail_computation (`Apply (f, args))
     | `Inject (label, v, _) ->
        lpolyvariant label (Some [value v])
-    | `Project (label, row) ->
-       lproject ((int_of_string label)-1) (value row) (* FIXME: Assuming tuples! *)
+    | `Project (label, row) -> project_from_record label (value row)
+    (*lproject ((int_of_string label)-1) (value row) (* FIXME: Assuming tuples! *)*)
     | `Extend (map, row) ->
-       let vs = StringMap.to_list (fun k v -> value v) map in
+(*       let lerror =
+         let msg = lstring "Fatal error: Projection failed." in
+         let errfun = pervasives "failwith" in
+         lfun [ident_of_binder unit_binder] (lapply errfun [msg])
+       in
+       let l' = fresh_ident "_lprime" in
+       let eq a b = lprim (Pintcomp Ceq) [a ; b] in
+       let switcher default_clause =
+         StringMap.fold
+           (fun l v clauses ->
+             let l = linteger (hash_label l) in
+             let v = value v in
+             lif (eq l (lvar l'))
+               v
+               clauses)
+           map
+           default_clause
+         in*)
+       let record = make_record value map in
+       begin
+         match row with
+         | Some rho -> record (value rho)             
+         | None -> record lproj_error
+       end
+(*       begin
+         match row with
+         | Some pho ->
+            let rest_row = lapply (value pho) [lvar l'] in
+            lfun [l'] (switcher rest_row)
+         | None -> lfun [l'] (switcher lerror)
+         end*)
+               
+(*       let vs = StringMap.to_list (fun k v -> value v) map in
        begin
        match row with
        | Some r -> error "Record extension not yet implemented."
        | None -> lprim box vs
-       end
+         end*)
     | v -> error ("Unimplemented feature:\n" ^ (Ir.Show_value.show v))
   and bindings : binding list -> (lambda -> lambda) =
     function
@@ -415,6 +486,7 @@ let translate (op_map,name_map) module_name ir =
     | `String s   -> string s
     | `Bool true  -> tt
     | `Bool false -> ff
+    | `Char c     -> const_base char c
     | _ -> assert false
   and is_primitive_function : value -> int option =
     function

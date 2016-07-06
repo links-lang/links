@@ -40,6 +40,9 @@ end
     fun f ->
     Const_float (string_of_float f)
 
+  let char : char -> constant =
+    fun c -> Const_char c
+      
   let string : string -> structured_constant =
     fun s -> Const_immstring s
 
@@ -122,18 +125,28 @@ end
 
   let lgetglobal : string -> lambda =
     fun name ->
-    lprim (Pgetglobal (Ident.create_persistent name)) []
-						 
+      lprim (Pgetglobal (Ident.create_persistent name)) []
+
+  let lcons : ?elemtype:[< `Generic] -> lambda -> lambda list -> lambda =
+    fun ?(elemtype=`Generic) x xs ->
+      match elemtype with
+      | `Generic -> lprim box (x :: xs)
+
+  let lnil : lambda = (lconst ff)
+
+  let hash_label : string -> int =
+    fun label -> Btype.hash_variant label
+      
   let polyvariant : string -> lambda list option -> lambda =
     fun label args ->
-    let id = linteger (Btype.hash_variant label) in
+    let id = linteger (hash_label label) in
     match args with
     | Some args -> lprim box ([id; lprim box args])
     | None -> id
 
   let lpolyvariant : string -> lambda list option -> lambda =
     fun label args ->
-    let id = linteger (Btype.hash_variant label) in
+    let id = linteger (hash_label label) in
     match args with
     | Some args -> lprim box (id :: args)
     | None -> id		

@@ -48,9 +48,10 @@ let run p arg =
     
 let print_if : 'a. bool -> string -> 'a -> 'a
   = fun cond msg forward ->
+    let verbose = Settings.get_value Basicsettings.verbose in
     let chan = stdout in
     let _ =
-      if cond
+      if cond || verbose
       then (Printf.fprintf chan "%s\n" msg; flush chan)
       else ()
     in
@@ -213,7 +214,7 @@ let lambda_of_links_ir envs ir source =
   |> lambda_of_ir envs module_name
   |> dump_lambda
   |> Simplif.simplify_lambda
-  |> (fun lam -> print_verbose "simplified lambda" lam)
+  |> (fun lam -> print_if (!Clflags.dump_lambda) "simplified lambda" lam)
   |> dump_lambda
   |> CompilationUnit.make_basic_compilation_unit source module_name
   |> dump_basic_unit
