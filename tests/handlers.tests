@@ -51,27 +51,19 @@ stderr : @.
 exit : 1
 
 Shadowing handler parameter (1)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
 stdout : 2 : Int
 
 Shadowing handler parameter (2)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(p as s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(p as s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
 stdout : 2 : Int
 
 Shadowing handler parameter (3)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)  }
+{ handler state(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
 stdout : 2 : Int
-
-Signature for handler (deep, closed handler)
-sig h1 : (Comp({Op:(Int) {}-> Int},Int)) {}~> Int handler h1 { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
-stdout : () : ()
 
 Signature for handler (deep, open handler)
 sig h1 : (Comp({Op:(Int) {}-> Int|e}, Int)) -> Comp({Op{_}|e}, Int) open handler h1 { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
-stdout : () : ()
-
-Signature for handler (shallow, closed handler)
-sig h1 : (Comp({Op:(Int) {}-> Int}, Int)) ~> Int shallowhandler h1 { case Op(p,k) -> h1(fun() {k(p+1)}) case Return(x) -> 2 }
 stdout : () : ()
 
 Signature for handler (shallow, open handler)
@@ -143,42 +135,34 @@ Open handler composition (1)
 open handler h1 { case Op1(k) -> k(1) case Return(x) -> x } open handler h2 { case Op2(k) -> k(2) case Return(x) -> x } open handler h3 { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 
-Type annotation on continuation parameter (deep, closed handler)
-handler h1 { case Op(k : ((Int) {Op{_}}~> Int)) -> k(1) case Return(x) -> x }
-stdout : () : ()
-
 Type annotation on continuation parameter (deep, open handler)
 open handler h1 { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) case Return(x) -> x }
-stdout : () : ()
-
-Type annotation on continuation parameter (shallow, closed handler)
-shallowhandler h1 { case Op(k : ((Int) {Op:Int}~> Int)) -> h1(fun() { k(1) }) case Return(x) -> x }
 stdout : () : ()
 
 Type annotation on continuation parameter (shallow, open handler)
 open shallowhandler h1 { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
 stdout : () : ()
 
-Closed shallow handler (Addition, one handler)
-{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) }) case Return(x) -> x - 1} h1(fun() { do One + do One }) }
+Shallow handler (Addition, one handler)
+{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) })() case Return(x) -> x - 1} h1(fun() { do One + do One })() }
 stdout : 1 : Int
 
-Closed shallow handler (Addition, two handlers)
-{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) }) case Return(x) -> x} shallowhandler h2 { case One(k) -> h1(fun() { k(2) }) case Return(x) -> x} h2(fun() { do One + do One }) }
+Shallow handlers (Addition, two handlers)
+{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) })() case Return(x) -> x} shallowhandler h2 { case One(k) -> h1(fun() { k(2) })() case Return(x) -> x} h2(fun() { do One + do One })() }
 stdout : 3 : Int
 
 Open shallow handler composition
-{ open shallowhandler h1 { case Op1(k) -> h1(fun() { k(1) })() case Return(x) -> x } open shallowhandler h2 { case Op2(k) -> h2(fun() { k(2) })() case Return(x) -> x } h1(h2(fun() { do Op1 + do Op2 }))() }
+{ shallowhandler h1 { case Op1(k) -> h1(fun() { k(1) })() case Return(x) -> x } shallowhandler h2 { case Op2(k) -> h2(fun() { k(2) })() case Return(x) -> x } h1(h2(fun() { do Op1 + do Op2 }))() }
 stdout : 3 : Int
 
 Simple shallow state
-{ shallowhandler simpleState(s) { case Get(k) -> simpleState(s)(fun() { k(s) }) case Put(s,k) -> simpleState(s)(fun() { k(()) }) case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(10)(count) }
+{ shallowhandler simpleState(s) { case Get(k) -> simpleState(s)(fun() { k(s) })() case Put(s,k) -> simpleState(s)(fun() { k(()) })() case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(10)(count)() }
 stdout : 0 : Int
 
 Parameterised handlers (anonymous parameters) [1]
 { handler(_ : Int)(_ : Float)(_ : String) { case Op(p,k) -> k(p)(42)(3.14)("Foo") case Return(x) -> x } }
-stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(d) {}-> d}~> e) ~> e
+stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(d) {}-> d|e}~> f) -> () {Op{_}|e}~> f
 
 Parameterised handlers (anonymous parameters) [2]
 { handler(_ : Float,_ : String,_ : Int) { case Op(p,k) -> k(p)(3.14,"Bar",99) case Return(x) -> x } }
-stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b}~> c) ~> c
+stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b|c}~> d) -> () {Op{_}|c}~> d
