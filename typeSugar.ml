@@ -2753,7 +2753,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
 	   let make_operations_presence_polymorphic : Types.row -> Types.row
 	     = fun (signatures,row_var,dual) ->
-	       let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" == 0) signatures in
+	       let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" = 0) signatures in
 	       let signatures = StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures in
 	       let signatures = StringMap.map (fun _ -> Types.fresh_presence_variable (`Unl, `Any)) signatures in
 	       let row = (signatures, row_var, dual) in
@@ -2765,34 +2765,28 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let effects         = TypeUtils.extract_row pattern_type in
 	   (** First construct the effect row for the input computation m
              * It is important to construct the entire type for m before typing continuations, 
-             * as we need to known the return type of m to type continuations in shallow handlers *)
+             * as we need to know the return type of m to type continuations in shallow handlers *)
 	   let input_effect_row =
-	     match HandlerUtils.HandlerDescriptor.is_closed desc with
-	       true -> let row = Types.make_empty_closed_row () in
-		       Types.extend_row (fst3 effect_row) row
-	     | false -> let row = Types.make_empty_open_row (`Unl, `Any) in
-		       Types.extend_row (fst3 effect_row) row
+             let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
+	     Types.extend_row (fst3 effect_row) fresh_row <| allow_wild
 	   in
-	   let input_effect_row = allow_wild input_effect_row in
-	   let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)	   
+	   let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)
 	   let (_,_,p)  = SourceCode.resolve_pos pos in
 	   let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
 
 	   (** Next, construct the (output) effect row for the handler *)
 	   let output_effect_row =
 	     let wild_effect_row = allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-	     let () = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
+	     let _ = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
 	     context.effect_row
 	   in
 
 	   (** If the handler is open, then unify the input and output effect rows  *)
 	   let _ =
-	     match HandlerUtils.HandlerDescriptor.is_closed desc with
-	       false -> let effect_row = make_operations_presence_polymorphic input_effect_row in
-			unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record effect_row)) 
-	     | _ -> ()
+	     let poly_presence_effect_row = make_operations_presence_polymorphic input_effect_row in
+	     unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record poly_presence_effect_row))
 	   in
-
+           
 	   (** Next, type continuation effect rows *)
 	   let _ =
 	     (* Pair up continuations with their codomains *)
@@ -2812,10 +2806,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		   () ks
 	     | _ -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
 		let poly_presence_row = `Record (make_operations_presence_polymorphic input_effect_row) in
+
+                (** FIXME BUG:
+links> fun h1(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(1) }) case Return(x) -> x } };
+h1 = fun : (() {Op:Int|a}~> b) {Op{_}|a}~> b
+links> fun h2(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x } };
+<stdin>:1: Type error: The codomain of continuation `k' has type
+    `_'
+but a type compatible with
+    `_'
+was expected.
+In expression:  shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x }.
+
+links> fun h2(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x : Int } };
+h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
+
+**)
+                let t      = TypeUtils.return_type (typ m) in
+		let (p,_)  = pos_and_typ m in
 		List.fold_left
 		  (fun _ (k,ktail) ->		    
-		    let t      = TypeUtils.return_type (typ m) in
-		    let (p,_)  = pos_and_typ m in
 		    unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t));
 		    unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 		  )
