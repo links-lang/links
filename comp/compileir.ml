@@ -68,7 +68,7 @@ let dependencies () =
   let serverlib_dir =  
   try Filename.concat (Sys.getenv linkslib) serverlib_subdir with
   | Not_found ->
-     let guess = Filename.concat (Sys.getcwd ()) serverlib_subdir in
+     let guess = Filename.concat (Sys.getcwd ()) (Filename.concat "lib" serverlib_subdir) in
      Printf.fprintf stderr "Warning: Cannot locate libraries because environment variable $%s is not set. Optimistically guessing '%s'." linkslib guess; guess
   in
   let _ = print_verbose ("server libraries directory: " ^ serverlib_dir) () in
