@@ -9,6 +9,25 @@ type 'a option = [ `Some of 'a
   
 let identity x = x
 
+(** Arithmetics **)
+let pow base exponent =  
+  let rec pow_aux acc base = function
+    | 0 -> acc
+    | 1 -> base * acc
+    | n -> pow_aux (base * acc) base (n-1)
+  in
+  pow_aux 1 base exponent
+(*  let is_even n = n mod 2 = 0 in
+  let exponent = abs exponent in
+    let rec aux accumulator base = function
+      | 0 -> accumulator
+      | 1 -> base * accumulator
+      | e when is_even e -> aux accumulator (base * base) (e / 2)
+      | e -> aux (base * accumulator) (base * base) ((e - 1) / 2) in
+    aux 1 base exponent*)
+
+let (^.) base exponent = base ** exponent
+  
 (** Conversions **)
 let intToString   = string_of_int
 let stringToInt   = int_of_string

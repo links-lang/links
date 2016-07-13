@@ -29,13 +29,13 @@ let arith_ops =
   ; "-"
   ; "*"
   ; "/"
-  ; "^"
+(*  ; "^" *)
   ; "mod"
   ; "+."
   ; "-."
   ; "*."
   ; "/."
-  ; "^."
+  (*  ; "^." *)
   ]
 
 (*let string_ops =
@@ -226,6 +226,7 @@ let translate (op_map,name_map) module_name ir =
 		   | "Cons" -> lcons (List.hd args') (List.tl args') (*lprim box args'*)
                    | "Concat" -> let concat = pervasives "@" in
                                  lapply concat args'
+                   | "^" -> builtin "pow"
                                                         
 (*		   | "random" ->
 		      let random = lookup "Random" "float" in
