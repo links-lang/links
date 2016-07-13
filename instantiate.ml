@@ -205,7 +205,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
         let tys = List.rev tys in
         let qs = List.rev qs in
         let body = instantiate_datatype (tenv, renv, penv) t in
-          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype");
+          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " Types.string_of_type_arg tys);
             (* EXPERIMENTAL *)
 
             (* HACK: currently we appear to need to strip the quantifiers
@@ -299,10 +299,10 @@ let datatype = instantiate_datatype
 module SEnv = Env.String
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
-  fun t tyargs ->
+  fun pt tyargs ->
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let t, vars =
-      match concrete_type t with
+      match concrete_type pt with
         | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
         | t -> t, [] in
     let tenv, renv, penv =
@@ -318,7 +318,7 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
                  (tenv, renv, IntMap.add var f penv)
              | _ ->
                failwith("Kind mismatch in type application: " ^
-                        Types.string_of_datatype t ^ " applied to type arguments: " ^
+                        Types.string_of_datatype pt ^ " applied to type arguments: " ^
                         mapstrcat ", " Types.string_of_type_arg tyargs))
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
