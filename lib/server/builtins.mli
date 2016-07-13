@@ -8,8 +8,8 @@ type 'a option = [ `Some of 'a
                  | `None ]
 
 (** **)
-val pow  : int -> int -> int
-val (^.) : float -> float -> float
+(*val pow  : int -> int -> int
+  val (^.) : float -> float -> float*)
   
 (** Conversions **)
 val intToString   : int -> string

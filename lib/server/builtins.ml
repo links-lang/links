@@ -10,7 +10,7 @@ type 'a option = [ `Some of 'a
 let identity x = x
 
 (** Arithmetics **)
-let pow base exponent =  
+(*let pow base exponent =  
   let rec pow_aux acc base = function
     | 0 -> acc
     | 1 -> base * acc
@@ -26,7 +26,7 @@ let pow base exponent =
       | e -> aux (base * accumulator) (base * base) ((e - 1) / 2) in
     aux 1 base exponent*)
 
-let (^.) base exponent = base ** exponent
+  let (^.) base exponent = base ** exponent*)
   
 (** Conversions **)
 let intToString   = string_of_int

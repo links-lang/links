@@ -226,7 +226,7 @@ let translate (op_map,name_map) module_name ir =
 		   | "Cons" -> lcons (List.hd args') (List.tl args') (*lprim box args'*)
                    | "Concat" -> let concat = pervasives "@" in
                                  lapply concat args'
-                   | "^" -> builtin "pow"
+                   | "^" -> failwith "Exponentiation is not supported"
                                                         
 (*		   | "random" ->
 		      let random = lookup "Random" "float" in
