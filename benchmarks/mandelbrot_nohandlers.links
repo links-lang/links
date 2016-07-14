@@ -1,0 +1,100 @@
+# Mandelbrot set
+typename Complex = (re:Float,im:Float);
+
+sig complex : (Float,Float) -> Complex
+fun complex(a,b) { (re=a,im=b) }
+
+infixl 5 :+.;
+sig :+. : (Complex, Complex) -> Complex
+op (re=a,im=b) :+. (re=c,im=d) {  complex(a +. c, b +. d) }
+
+infixl 7 :*.;
+sig :*. : (Complex, Complex) -> Complex
+op (re=a,im=b) :*. (re=c,im=d) {
+  var ac = a *. c;
+  var bd = b *. d;
+  complex(ac -. bd, (a +. b) *. (c +. d) -. ac -. bd)
+}
+
+sig norm : (Complex) -> Float
+fun norm((re=a,im=b)) {
+    sqrt((a *. a) +. (b *. b))
+}
+
+var width = 100;
+var height = width;
+var xMin = negate(width / 2);
+var xMax = xMin + width;
+var yMin = negate(height / 2);
+var yMax = yMin + height;
+
+var max_iterations = 200;
+var bailout = 16.0;
+
+var cunit = complex(0.0, 0.0);
+
+fun mandelbrot_c(x, y) {
+  var c = complex(x -. 0.5, y);
+  var z = cunit;
+  var i = 0;
+  fun loop(z, i) {
+      var i = i + 1;
+      var z2 = z :*. z :+. c;
+      if (norm(z2) > bailout)  i
+      else if (i > max_iterations) 0
+      else loop(z2, i)
+  }
+  loop(z, i)
+}
+
+
+# fun mandelbrot(x, y) {
+#   var cr = y -. 0.5;
+#   var ci = x;
+#   var zi = 0.0;
+#   var zr = 0.0;
+#   var i = 0;
+#   fun loop(zr, zi, i) {
+#       var i = i + 1;
+#       var temp = zr *. zi;
+#       var zr2 = zr *. zr;
+#       var zi2 = zi *. zi;
+#       var zr = zr2 -. zi2 +. cr;
+#       var zi = temp +. temp +. ci;
+#       if (zi2 +. zr2 > bailout)  i
+#       else if (i > max_iterations) 0
+#       else loop(zr, zi, i)
+#   }
+#   loop(zr, zi, i)
+# }
+
+fun range(f, to) {
+  if (f >= to) []
+  else f :: range(f+1, to)
+}
+
+fun iterate() {
+  for (y <- range(yMin, yMax)) {
+#    ignore(
+    var x = (for (x <- range(xMin,xMax)) {
+                if (mandelbrot_c(intToFloat(x)/.40.0, intToFloat(y)/.40.0) == 0) ['#']
+                else ['.']
+             });
+     [x]
+#    }); []
+  }
+}
+
+
+
+fun transpose(xss) {
+  switch(xss) {
+     case []                 -> []
+     case [] :: xss          -> transpose(xss)
+     case (x :: xs) :: xss   -> (x :: map(hd, xss)) :: transpose (xs :: map(tl, xss))
+  }
+}
+
+# implode(concatMap(fun(x) { ['\n'] ++ x }, transpose(iterate())))
+#print(implode(concatMap(fun(x) { ['\n'] ++ x }, transpose(iterate()))))
+print(implode(concatMap(fun(x) { ['\n'] ++ x }, iterate())))

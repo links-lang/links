@@ -1,0 +1,21 @@
+# Microbenchmark pure counting
+
+fun count(n) {
+    if (n == 0) { n }
+    else { count(n-1) }
+}
+
+fun b(n) {
+    var x = count(n);
+    x
+}
+
+fun pow(b,e) {
+  fun pow_aux(b,e,acc) {
+    if (e == 0) acc
+    else pow_aux(b,e-1,acc*b)
+  }
+  pow_aux(b,e,1)
+}
+
+print(intToString(b(pow(10,7))))

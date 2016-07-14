@@ -1,0 +1,54 @@
+fun for_all(p, xs) {
+  switch (xs) {
+    case [] -> true
+    case x :: xs -> if (p(x)) for_all(p, xs) else false
+  }
+}
+
+sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
+fun showPair(showX,showY)((x,y)) {
+    "(" ^^ showX(x) ^^ ", " ^^ showY(y) ^^ ")"
+}
+
+fun noAttack((a,b))((c,d)) {
+  a <> c && b <> d && abs(a - c) <> abs(b - d)
+}
+
+fun available(a, qs, l) {
+  filter(fun(b) { for_all(noAttack((a,b)), qs) }
+        , l)
+}
+
+fun findSolution(n)() {
+    var l = intRange(1,n);
+
+    fun place(x, qs) {
+        if (x == n+1) Just(qs)
+        else {
+          #var y = choose(available(x, qs, l));
+          fun loop(ys) { 
+            switch (ys) {
+              case [] -> Nothing
+              case y :: ys ->
+                 switch (place(x+1, (x,y) :: qs)) {
+                    case Nothing -> loop(ys)
+                    case Just(x) -> Just(x)
+                 }
+             }
+          }
+          loop(available(x, qs, l))
+        }
+    }
+
+    place(1, [])
+}
+
+
+fun main() {
+  var n = 12;
+  var showSolution = showMaybe(showList(showPair(intToString,intToString)));
+  var solution = showSolution(findSolution(n)());
+  print(solution)
+}
+
+main()
