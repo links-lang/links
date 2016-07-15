@@ -38,8 +38,10 @@ let is_client_program : Ir.program -> bool =
          | _ -> false)
       bs
 
-let serialize_call_to_client (continuation, name, arg) =
-  Json.jsonize_call continuation name arg
+(* SL: dead code *)
+
+(* let serialize_call_to_client (continuation, name, arg) = *)
+(*   Json.jsonize_call continuation name arg *)
 
 let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   let fname = Utility.base64decode (assoc "__name" cgi_args) in
