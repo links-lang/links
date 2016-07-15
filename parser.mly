@@ -8,27 +8,27 @@ open Sugartypes
 
 let type_variable_counter = ref 0
 
-let fresh_type_variable : subkind -> datatype =
+let fresh_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_type_variable : subkind -> datatype =
+let fresh_rigid_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_row_variable : subkind -> row_var =
+let fresh_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_row_variable : subkind -> row_var =
+let fresh_rigid_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_presence_variable : subkind -> fieldspec =
+let fresh_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_presence_variable : subkind -> fieldspec =
+let fresh_rigid_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
@@ -80,12 +80,12 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  p, (l, r)
+  p, Some (l, r)
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  (l, r)
+  Some (l, r)
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
@@ -99,50 +99,50 @@ perhaps. *)
 let kind_of pos =
   function
   (* primary kind abbreviation  *)
-  | "Type" -> `Type, (`Unl, `Any)
-  | "Row" -> `Row, (`Unl, `Any)
-  | "Presence" -> `Presence, (`Unl, `Any)
+  | "Type" -> `Type, None
+  | "Row" -> `Row, None
+  | "Presence" -> `Presence, None
   (* subkind of type abbreviations *)
-  | "Any" -> `Type, (`Any, `Any)
-  | "Base" -> `Type, (`Unl, `Base)
-  | "Session" -> `Type, (`Any, `Session)
+  | "Any" -> `Type, Some (`Any, `Any)
+  | "Base" -> `Type, Some (`Unl, `Base)
+  | "Session" -> `Type, Some (`Any, `Session)
   | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos))
 
 let subkind_of pos =
   function
   (* subkind abbreviations *)
-  | "Any" -> (`Any, `Any)
-  | "Base" -> (`Unl, `Base)
-  | "Session" -> (`Any, `Session)
+  | "Any" -> Some (`Any, `Any)
+  | "Base" -> Some (`Unl, `Base)
+  | "Session" -> Some (`Any, `Session)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
 let attach_kind pos (t, k) = (t, k, `Rigid)
 
-let attach_subkind_helper update pos (l, r) = update l r
+let attach_subkind_helper update pos sk = update sk
 
 let attach_subkind pos (t, subkind) =
-  let update lin rest =
+  let update sk =
     match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, _, freedom) ->
+       `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
 
 let attach_session_subkind pos (t, subkind) =
-  let update lin rest =
+  let update sk =
     match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, _, freedom) ->
+       `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
 
 let attach_row_subkind pos (r, subkind) =
-  let update lin rest =
+  let update sk =
     match r with
-    | `Open (x, (_linearity, _restriction), freedom) ->
-       `Open (x, (lin, rest), freedom)
+    | `Open (x, _, freedom) ->
+       `Open (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -355,7 +355,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of (pos()) $2 }
 
 typearg:
-| VARIABLE                                                     { (($1, (`Type, (`Unl, `Any)), `Rigid), None) }
+| VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -902,9 +902,9 @@ straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { `Function ($1,
-                                                                               ([], fresh_rigid_row_variable (`Unl, `Any)),
+                                                                               ([], fresh_rigid_row_variable None),
                                                                                $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable None), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -924,11 +924,11 @@ squiggly_arrow:
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
                                                                                ([("wild", `Present `Unit)],
-                                                                                 fresh_rigid_row_variable (`Unl, `Any)),
+                                                                                 fresh_rigid_row_variable None),
                                                                                 $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
                                                                             ([("wild", `Present `Unit)],
-                                                                             fresh_rigid_row_variable (`Unl, `Any)),
+                                                                             fresh_rigid_row_variable None),
                                                                             $3) }
 
 mu_datatype:
@@ -979,10 +979,10 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
+| VARIABLE                                                     { `TypeVar ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable None }
+| PERCENT                                                      { fresh_type_variable None }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -1081,16 +1081,16 @@ fieldspec:
 | LBRACE COLON datatype RBRACE                                 { `Present $3 }
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `Var ($2, (`Unl, `Any), `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, (`Unl, `Any), `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable (`Unl, `Any) }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable (`Unl, `Any) }
+| LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable None }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `Open ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_row_variable (`Unl, `Any) }
+| VARIABLE                                                     { `Open ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable None }
+| PERCENT                                                      { fresh_row_variable None }
 
 /* FIXME:
  *

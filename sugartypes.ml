@@ -81,19 +81,22 @@ type linearity   = [ `Any | `Unl ]
 type subkind = linearity * restriction
     deriving (Eq, Show)
 
+let default_subkind = (`Unl, `Any)
+
 type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
 type primary_kind = [`Type | `Row | `Presence]
     deriving (Show)
 
-type kind = primary_kind * subkind
+type kind = primary_kind * subkind option
     deriving (Show)
 
 type type_variable = name * kind * freedom
     deriving (Show)
 
-type known_type_variable = name * subkind * freedom
+(* type variable of primary kind Type? *)
+type known_type_variable = name * subkind option * freedom
     deriving (Show)
 
 type quantifier = type_variable

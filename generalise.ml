@@ -223,15 +223,35 @@ let rigidify_quantifier : quantifier -> unit =
 *)
 let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
   fun kind env t ->
+    (* throw away any existing top-level quantifiers *)
+    let t = match Types.concrete_type t with
+      | `ForAll (_, t) -> t
+      | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = Types.quantifiers_of_type_args type_args in
     let () = List.iter rigidify_quantifier quantifiers in
     let quantified = Types.for_all (quantifiers, t) in
-      (* Make sure that any existing quantifiers are accounted for.
-         This can be necessary if we have type annotations involving
-         explicit quantifiers.
-      *)
+
+    (* The following code suffers from the problem that it may reorder
+       quantifiers: unbound type variables that can be generalised
+       come before any existing quantifiers regardless of the order in
+       which they appear in the body of the type.
+
+       Throwing away existing top-level quantifiers (as above) is an
+       easy fix.
+
+       Another alternative would be to disallow explicit
+       quantification that fails to quantify over all generalisable
+       type variables - GHC does something like this.
+    *)
+
+(*
+
+    (* Make sure that any existing quantifiers are accounted for.
+       This can be necessary if we have type annotations involving
+       explicit quantifiers.
+    *)
     let quantifiers, type_args =
       begin
         let qs =
@@ -244,8 +264,8 @@ let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type
             qs, (List.map Types.type_arg_of_quantifier qs)
           else
             quantifiers, type_args
-      end
-    in
+      end in
+*)
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
       ((quantifiers, type_args), quantified)
 

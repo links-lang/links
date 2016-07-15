@@ -137,7 +137,7 @@ object(self)
 
   method datatype : datatype -> datatype = function
     | `TypeApplication (tyAppName, argList) as tyApp ->
-        if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
+        if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
         else super#datatype tyApp
     | dt -> super#datatype dt
 end
