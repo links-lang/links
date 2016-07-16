@@ -1,0 +1,27 @@
+# Adaptive Quadrature
+
+var eps = 0.001;
+var f = fun(x) { cosh(x) *. cosh(x) *. cosh(x) *. cosh(x) };
+
+sig quad : ((Float) ~e~> Float, Float, Float, Float, Float) ~e~> Float
+fun quad(f, l, r, area, eps) {
+    var m = (l +. r) /. 2.0;
+    var [fl,fm,fr] = map(f, [l, m, r]);
+    var larea = (fl +. fm) *. (m -. l) /. 2.0;
+    var rarea = (fm +. fr) *. (r -. m) /. 2.0;
+    if ( fabs( (larea +. rarea) -. area ) > eps ) {
+       var larea = quad(f, l, m, larea, eps);
+       var rarea = quad(f, m, r, rarea, eps);
+       larea +. rarea
+    } else {
+       larea +. rarea
+    }
+}
+
+fun integrate(f, a, b) {
+    var area = (f(a) +. f(b)) *. (b -. a) /. 2.0;
+    quad(f, a, b, area, eps)
+}
+
+var area = integrate(f, 0.0, 5.0);
+print(floatToString(area))
