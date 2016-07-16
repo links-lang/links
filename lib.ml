@@ -1065,8 +1065,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "floor",   float_fn floor PURE;
   "ceiling", float_fn ceil PURE;
   "cos",     float_fn cos PURE;
+  "cosh",    float_fn cosh PURE;
   "sin",     float_fn sin PURE;
+  "sinh",    float_fn sinh PURE;
   "tan",     float_fn tan PURE;
+  "tanh",    float_fn tan PURE;
   "log",     float_fn log PURE;
   "sqrt",    float_fn sqrt PURE;
 
@@ -1491,7 +1494,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
                   `Record [])),
      datatype "(Socket) ~> ()",
-     IMPURE);      
+     IMPURE);
+
+    "fabs",
+  (`Server (p1 (fun f -> box_float (abs_float (unbox_float f)) )),
+   datatype "(Float) -> Float",
+   PURE);          
+  
 	      ]
   
   

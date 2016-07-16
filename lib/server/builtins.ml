@@ -10,7 +10,7 @@ type 'a option = [ `Some of 'a
 let identity x = x
 
 (** Arithmetics **)
-(*let pow base exponent =  
+let pow base exponent =  
   let rec pow_aux acc base = function
     | 0 -> acc
     | 1 -> base * acc
@@ -26,7 +26,9 @@ let identity x = x
       | e -> aux (base * accumulator) (base * base) ((e - 1) / 2) in
     aux 1 base exponent*)
 
-  let (^.) base exponent = base ** exponent*)
+let (^.) base exponent = base ** exponent
+
+let fabs = abs_float
   
 (** Conversions **)
 let intToString   = string_of_int
@@ -89,8 +91,11 @@ let chr      = Char.chr
 let floor   = floor
 let ceiling = ceil
 let cos     = cos
+let cosh    = cosh
 let sin     = sin
+let sinh    = sinh
 let tan     = tan
+let tanh    = tanh
 let log     = log
 let sqrt    = sqrt
 

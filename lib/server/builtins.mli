@@ -10,6 +10,8 @@ type 'a option = [ `Some of 'a
 (** **)
 (*val pow  : int -> int -> int
   val (^.) : float -> float -> float*)
+
+val fabs : float -> float
   
 (** Conversions **)
 val intToString   : int -> string
@@ -51,8 +53,11 @@ val chr      : int -> char
 val floor   : float -> float
 val ceiling : float -> float
 val cos     : float -> float
+val cosh    : float -> float
 val sin     : float -> float
+val sinh    : float -> float
 val tan     : float -> float
+val tanh    : float -> float
 val log     : float -> float
 val sqrt    : float -> float
 
