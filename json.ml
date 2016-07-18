@@ -262,6 +262,12 @@ let resolve_state : json_state -> string =
    connecting multiple clients to the same server.
 *)
 
+let jsonize_state value =
+  let _v, state = jsonize_value value in
+  let s = resolve_state state in
+  Debug.if_set show_json (fun () -> "json state: " ^ s);
+  s
+
 let jsonize_value_with_state value =
   let v, state = jsonize_value value in
   let p = resolve_state state in

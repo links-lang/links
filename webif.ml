@@ -173,7 +173,7 @@ let perform_request cgi_args (valenv, nenv, tyenv) render_cont =
                Irtojs.generate_real_client_page
                  ~cgi_env:cgi_args
                  (Lib.nenv, Lib.typing_env)
-                 globals
+                 (globals @ locals)
                  v
              end
            else
