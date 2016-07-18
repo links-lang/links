@@ -277,12 +277,13 @@ let chrlistlit = strlit
 let ext_script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
-let inline_script file = (* makes debugging with firebug easier *)
-  let file_in = open_in file in
-  let file_len = in_channel_length file_in in
-  let file_contents = String.make file_len '\000' in
-    really_input file_in file_contents 0 file_len;
-    "  <script type='text/javascript'>" ^file_contents^ "</script>"
+(* DEAD CODE *)
+(* let inline_script file = (\* makes debugging with firebug easier *\) *)
+(*   let file_in = open_in file in *)
+(*   let file_len = in_channel_length file_in in *)
+(*   let file_contents = String.make file_len '\000' in *)
+(*     really_input file_in file_contents 0 file_len; *)
+(*     "  <script type='text/javascript'>" ^file_contents^ "</script>" *)
 
 module Arithmetic :
 sig
@@ -838,8 +839,6 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
     script_tag("  var cgiEnv = {" ^
                mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
               "};\n  _makeCgiEnvironment();\n") in
-  (* There seems little point in including an out-of-date version comment *)
-  (* let version_comment = "<!-- $Id: js.ml 1367 2007-12-10 16:24:38Z sam $ -->" in *)
     in_tag "html" (in_tag "head"
                      (  extLibs
                       ^ debug_flag (Settings.get_value Debug.debugging_enabled)
@@ -848,7 +847,6 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
                       ^ env
                       ^ head
                       ^ script_tag (String.concat "\n" defs)
-                      (* ^ version_comment *)
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
@@ -945,6 +943,7 @@ and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) -
   (venv, GenStubs.bindings bs code)
 
 let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs v =
+  let json_state = Json.jsonize_state v in
   let printed_code =
     let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
     let _venv, code = generate_computation venv (defs, `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
@@ -955,6 +954,8 @@ let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs v 
     ~cgi_env:cgi_env
     ~body:printed_code
     ~html:(Value.string_of_value v)
+    ~head:(script_tag("  var _jsonState = " ^ json_state))
+    ~onload:"_startRealPage()"
     []
 
 (* SL: seems to be dead code *)
