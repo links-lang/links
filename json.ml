@@ -104,13 +104,25 @@ struct
     | (x::xs) -> xmls (xml env x) xs
 end
 
-type json_state = IntSet.t  (* set of client processes that need to be serialized *)
-let empty_state = IntSet.empty
-let add_pid : int -> json_state -> json_state = IntSet.add
-let pid_state : int -> json_state = IntSet.singleton
-let merge_states = IntSet.union
-let diff_state = IntSet.diff
-let pids_of_state : json_state -> int list = IntSet.elements
+(* sets of client processes and event handlers that need to be serialized *)
+type json_state = {processes: IntSet.t; handlers: IntSet.t}
+let empty_state = {processes = IntSet.empty; handlers = IntSet.empty}
+let add_pid : int -> json_state -> json_state =
+  fun pid state -> {state with processes = IntSet.add pid state.processes}
+let pid_state : int -> json_state =
+  fun pid -> add_pid pid empty_state
+let add_event_handler : int -> json_state -> json_state =
+  fun h state -> {state with handlers = IntSet.add h state.handlers}
+let merge_states s1 s2 = {processes = IntSet.union s1.processes s2.processes;
+                          handlers =  IntSet.union s1.handlers s2.handlers}
+let diff_state s1 s2 = {processes = IntSet.diff s1.processes s2.processes;
+                        handlers = IntSet.diff s1.handlers s2.handlers}
+
+
+type auxiliary = [`Process of int | `Handler of int]
+let auxiliaries_of_state : json_state -> auxiliary list =
+  fun state -> List.map (fun i -> `Handler i) (IntSet.elements state.handlers)
+             @ List.map (fun i -> `Process i) (IntSet.elements state.processes)
 
 let rec jsonize_value : Value.t -> string * json_state =
   function
@@ -126,7 +138,7 @@ let rec jsonize_value : Value.t -> string * json_state =
       | None     -> "", empty_state
       | Some fvs ->
         let s, state = jsonize_value fvs in
-        ", environment:" ^ s, state in
+        ", \"environment\":" ^ s, state in
     "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
     " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}", state
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}", empty_state
@@ -170,9 +182,8 @@ and json_of_xmlitem = function
               if label = "key" then
                 begin
                   let key = int_of_string value in
-                  let hs = EventHandlers.find key in
-                  let s, state' = jsonize_value hs in
-                  ("\"eventHandlers\": " ^ "\"" ^ js_dq_escape_string s ^ "\"") :: attrs, body, merge_states state state'
+                  let state' = add_event_handler key state in
+                  ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body, state'
                 end
               else
                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body, state
@@ -195,16 +206,17 @@ and jsonize_values : Value.t list -> string list * json_state =
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let rec resolve_processes : json_state -> int list -> string IntMap.t -> string IntMap.t =
-  fun state pids ss ->
+let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t * string IntMap.t) -> (string IntMap.t * string IntMap.t) =
+  fun state pids ((pmap, hmap) as maps) ->
     match pids with
-    | [] -> ss
-    | pid :: pids ->
+    | [] -> maps
+    | `Process pid :: auxs ->
       begin
         match Proc.Proc.lookup_client_process pid with
         | Some process ->
           let messages = Proc.Mailbox.pop_all_messages_for pid in
 
+          (* jsonizing these values may yield further state *)
           let ps, pstate = jsonize_value process in
           let ms, mstate = jsonize_value (`List messages) in
 
@@ -215,29 +227,44 @@ let rec resolve_processes : json_state -> int list -> string IntMap.t -> string 
 
           let new_state = merge_states pstate mstate in
 
-          resolve_processes
+          resolve_auxiliaries
             (merge_states state new_state)
-            (pids @ pids_of_state (diff_state state new_state))
-            (IntMap.add pid s ss)
+            (auxs @ auxiliaries_of_state (diff_state new_state state))
+            (IntMap.add pid s pmap, hmap)
         | None -> (* this process is already active on the client *)
-          resolve_processes state pids ss
+          resolve_auxiliaries state auxs maps
       end
+    | `Handler key :: auxs ->
+      let hs = EventHandlers.find key in
+      let hs_string, new_state = jsonize_value hs in
 
-(* FIXME: Currently we only send inactive client processes if they
-   appear in the serialised value. We should probably send *all*
-   inactive client processes even if they don't appear in the
-   serialised value. *)
+      let s = "{\"key\": " ^ string_of_int key ^ "," ^
+              " \"eventHandlers\":" ^ hs_string ^ "}" in
+
+      resolve_auxiliaries
+        (merge_states state new_state)
+        (auxs @ auxiliaries_of_state (diff_state new_state state))
+        (pmap, IntMap.add key s hmap)
 
 (* serialise the json_state as a string *)
-let resolve_processes : json_state -> string =
+let resolve_state : json_state -> string =
   fun state ->
-    "[" ^
-    String.concat ","
-      (IntMap.to_list (fun _ s -> s) (resolve_processes state (IntSet.elements state) IntMap.empty)) ^ "]"
+    let pmap, hmap = resolve_auxiliaries state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
+    "{\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
+     "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
+
+(* FIXME: Currently we only send inactive client processes if they
+   appear in the serialised value. We might consider sending *all*
+   inactive client processes even if they don't appear in the
+   serialised value.
+
+   However, the whole thing will become problematic if we start
+   connecting multiple clients to the same server.
+*)
 
 let jsonize_value_with_state value =
   let v, state = jsonize_value value in
-  let p = resolve_processes state in
+  let p = resolve_state state in
   "{\"value\":" ^ v ^ ",\"state\":" ^ p ^ "}"
 
 let jsonize_value value =
