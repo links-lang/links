@@ -409,6 +409,12 @@ struct
     List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
       wxyzs
       ([],[],[],[])
+
+  let rec filter_map pred f = function
+    | [] -> []
+    | x::xs ->
+        if pred x then (f x)::(filter_map pred f xs) else
+          (filter_map pred f xs)
 end
 include ListUtils
 

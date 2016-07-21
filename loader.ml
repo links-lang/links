@@ -1,5 +1,6 @@
 open Utility
 open Performance
+open Printf
 
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
@@ -43,6 +44,7 @@ let read_program filename : (envs * program) =
 let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
     Parse.parse_file Parse.program filename  in
+  (* printf "Parsed AST: \n%s \n\n" (Sugartypes.Show_program.show sugar); *)
   let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program

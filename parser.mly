@@ -185,7 +185,7 @@ let datatype d = d, None
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONCOLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
@@ -198,10 +198,11 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
-%token <string> LXML ENDTAG
+%token <string> QUALIFIEDVARIABLE VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token <string> QUALIFIEDMODULE LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG OPEN
+%token MODULE
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -247,7 +248,6 @@ let datatype d = d, None
 %%
 
 interactive:
-| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -280,7 +280,6 @@ var:
 | VARIABLE                                                     { $1, pos() }
 
 preamble:
-| preamble_declaration preamble                                { $1 :: $2 }
 | /* empty */                                                  { [] }
 
 declarations:
@@ -290,9 +289,6 @@ declarations:
 declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
-
-preamble_declaration:
-| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
@@ -304,6 +300,16 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
+
+
+links_module:
+| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, (`Block $3, name_pos)), name_pos }
+module_name:
+| CONSTRUCTOR                                                  { $1 , pos () }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -385,6 +391,7 @@ constant:
 
 atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
+| QUALIFIEDVARIABLE                                            { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
@@ -822,16 +829,26 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
+links_open:
+| OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
+| OPEN QUALIFIEDMODULE                                         { `Import $2, pos () }
+| OPEN CONSTRUCTOR                                             { `Import $2, pos () }
+
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
+
+moduleblock:
+| LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
