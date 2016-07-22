@@ -444,6 +444,7 @@ let translate (op_map,name_map) module_name ir =
        | Some r -> error "Record extension not yet implemented."
        | None -> lprim box vs
          end*)
+    | `Coerce (v,_) -> value v
     | v -> error ("Unimplemented feature:\n" ^ (Ir.Show_value.show v))
   and bindings : binding list -> (lambda -> lambda) =
     function
