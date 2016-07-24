@@ -2667,8 +2667,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          *)
                          make_ft_poly_curry lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any))
                      | Some (_, Some t) ->
+                         (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any)) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                         (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                            (* make sure the annotation has the right shape *)
                          let _, fti = Instantiate.typ ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in

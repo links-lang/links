@@ -167,14 +167,14 @@ let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
     | Some ldepth, Some rdepth when ldepth=rdepth -> true
     | _ -> false
 
-type unify_env = {tenv: unify_type_env; renv: unify_row_env; qs: quantifier_stack}
+type unify_env = {tenv: unify_type_env; renv: unify_row_env; qstack: quantifier_stack}
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
 let counter = ref 0 in
 fun rec_env ->
   let rec_types = rec_env.tenv in
   let rec_rows = rec_env.renv in
-  let qs = rec_env.qs in
+  let qstack = rec_env.qstack in
 
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t =
@@ -286,7 +286,7 @@ fun rec_env ->
                   concrete_point rpoint;
 
                   match (Unionfind.find lpoint, Unionfind.find rpoint) with
-                   | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind && compatible_quantifiers (lvar, rvar) qs ->
+                   | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind && compatible_quantifiers (lvar, rvar) qstack ->
                        Unionfind.union lpoint rpoint
                    | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
                        if l <> r then
@@ -596,32 +596,19 @@ fun rec_env ->
               let lstatus = List.map status ls in
               let rstatus = List.map status rs in
 
-              (* Sort the quantifiers, then check that:
-                 a) there are the same number of quantifiers on the left and the right
-                 b) the kinds of the quantifiers match up
-              *)
-              let rec unify_quantifiers (ls, rs) =
-                let compare q q' =
-                  Int.compare (Types.var_of_quantifier q) (Types.var_of_quantifier q')
-                in
-                  match List.sort compare ls, List.sort compare rs with
-                    | [], [] -> ()
-                    | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs)
-                    | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) in
-
-              let depth, lenv, renv = qs in
+              let depth, lenv, renv = qstack in
               let depth = depth+1 in
               let lenv = List.fold_right (fun q lenv -> IntMap.add (var_of_quantifier q) depth lenv) ls lenv in
               let renv = List.fold_right (fun q renv -> IntMap.add (var_of_quantifier q) depth renv) rs renv in
 
-              let () = unify' {rec_env with qs=(depth, lenv, renv)} (lbody, rbody) in
+              let () = unify' {rec_env with qstack=(depth, lenv, renv)} (lbody, rbody) in
 
               (* Here we need to extract instantiated quantifiers
                  e.g.:
 
                  if we unify
 
-                   forall ?a.(a) -> a
+                   forall %a.(a) -> a
 
                  with
 
@@ -635,7 +622,7 @@ fun rec_env ->
 
                    forall a,b.((a) -> b) -> ((a) -> b)
 
-                 by pulling out a and b from the ?a quantifier (which
+                 by pulling out a and b from the %a quantifier (which
                  was instantiated to (a) -> b).
 
                  Generalise.extract_quantifiers does this.
@@ -679,9 +666,29 @@ fun rec_env ->
                     qs
                     []
                 in
-                  cull rvars ls, cull lvars rs
-              in
-                unify_quantifiers (ls, rs);
+                  cull rvars ls, cull lvars rs in
+
+              (* Now we know that ls and rs contain the same quantifiers *)
+
+              (* unify_quantifiers just checks that the kinds of the
+                 quantifiers match up
+
+                 This seems unnecessary as we already know that the
+                 names of the quantifiers match up and it should not
+                 be possible to have distinct type variables with the
+                 same name.
+
+              *)
+              (* let rec unify_quantifiers (ls, rs) = *)
+              (*   let compare q q' = *)
+              (*     Int.compare (Types.var_of_quantifier q) (Types.var_of_quantifier q') *)
+              (*   in *)
+              (*     match List.sort compare ls, List.sort compare rs with *)
+              (*       | [], [] -> () *)
+              (*       | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs) *)
+              (*       | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) *)
+              (* in *)
+              (*   unify_quantifiers (ls, rs); *)
                 lsref := ls;
                 rsref := rs
           | `ForAll (qs, body), t ->
@@ -746,13 +753,13 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
             match Unionfind.find lpoint, Unionfind.find rpoint with
               | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)
               | _, `Body r -> unify_presence' rec_env (`Var lpoint, r)
-              | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qs ->
+              | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qstack ->
                   Unionfind.union lpoint rpoint
               | `Var (flexible_var, _, `Flexible), `Var (rigid_var, _, `Rigid)
-                  when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
+                  when compatible_quantifiers (rigid_var, flexible_var) rec_env.qstack ->
                   Unionfind.union lpoint rpoint
               | `Var (rigid_var, _, `Rigid), `Var (flexible_var, _, `Flexible)
-                  when compatible_quantifiers (rigid_var, flexible_var) rec_env.qs ->
+                  when compatible_quantifiers (rigid_var, flexible_var) rec_env.qstack ->
                   Unionfind.union rpoint lpoint
               | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
                   if l <> r then
@@ -999,7 +1006,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                   raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
                 Unionfind.change point' (`Var (var, (lin, rest), `Rigid))
             | `Var (var', _, `Rigid) when var=var' -> ()
-            | `Var (var', (_, rest'), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qs ->
+            | `Var (var', (_, rest'), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qstack ->
               Unionfind.union point point'
             | `Var (var', _, `Rigid) ->
                 raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
@@ -1152,7 +1159,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                     ^"\n could not be unified because they have different kinds")))
             | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when
                                                            (lvar=rvar ||
-                                                            compatible_quantifiers (lvar, rvar) rec_env.qs) ->
+                                                            compatible_quantifiers (lvar, rvar) rec_env.qstack) ->
               Unionfind.union lrow_var' rrow_var'; false
             | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) ->
               raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
@@ -1295,10 +1302,10 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
           raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
 
 let unify (t1, t2) =
-  unify' {tenv=IntMap.empty; renv=IntMap.empty; qs=(0, IntMap.empty, IntMap.empty)} (t1, t2)
+  unify' {tenv=IntMap.empty; renv=IntMap.empty; qstack=(0, IntMap.empty, IntMap.empty)} (t1, t2)
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
-  unify_rows' {tenv=IntMap.empty; renv=IntMap.empty; qs=(0, IntMap.empty, IntMap.empty)} (row1, row2)
+  unify_rows' {tenv=IntMap.empty; renv=IntMap.empty; qstack=(0, IntMap.empty, IntMap.empty)} (row1, row2)
 
 (* external interface *)
 let datatypes = unify
