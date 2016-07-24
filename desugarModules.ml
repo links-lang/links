@@ -39,8 +39,8 @@ let module_sep = ":::"
 
 let rec print_tree = function
   | `ReferenceTreeNode(n, ss, ht) ->
-      printf "Module Name: %s\n, variable names: %s\n"
-          n (StringSet.fold (fun x acc -> acc ^ " " ^ x) ss "");
+      (* printf "Module Name: %s\n, variable names: %s\n"
+          n (StringSet.fold (fun x acc -> acc ^ " " ^ x) ss ""); *)
       Hashtbl.iter(fun x y -> print_tree y) ht
 
 
@@ -62,6 +62,10 @@ object(self)
         List.fold_left (fun acc binding -> acc#binding binding) self bindings
     | (`Import _, _) -> self
     | (x, pos) -> self#add_binding (x, pos)
+
+  method program = function
+    | (bindings, _body) -> self#list (fun o -> o#binding) bindings
+
 end
 
 
@@ -279,7 +283,13 @@ let desugar_modules program =
   let renamedProgram = performRenaming program in
   let (renamedBindings, renamedBody) = renamedProgram in
   let flattenedProgram = performFlattening renamedProgram in
-  (* printf "%s\n" (Sugartypes.Show_program.show flattenedProgram); *)
+  (*
+  printf "\n=============================================================\n";
+  printf "\n=============================================================\n";
+  printf "Before: %s\n" (Sugartypes.Show_program.show program);
+  printf "\n=============================================================\n";
+  printf "After: %s\n" (Sugartypes.Show_program.show flattenedProgram);
+  *)
   flattenedProgram
 
 
