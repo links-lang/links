@@ -402,7 +402,7 @@ let escape =
 
 (** {1 Pretty-printing values} *)
 
-let string_of_cont = Show_continuation.show 
+let string_of_cont = Show_continuation.show
 
 exception Not_tuple
 
@@ -538,7 +538,7 @@ and unbox_list : t -> t list = function
 and box_record fields = `Record fields
 and unbox_record : t -> (string * t) list = function
   | `Record fields -> fields | _ -> failwith "Type error unboxing record"
-and box_unit : unit -> t 
+and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"
