@@ -267,8 +267,10 @@ typename Game = (activePiece: Maybe(Piece), queue: Piece, stack: Stack,
 # MAIN
 #
 fun main() {
+    # we can't call a client function at the top-level any more
+
 	# LIST STUFF
-	var lsNil = lsNilF();
+	#var lsNil = lsNilF();
 	
 	#
 	# CONSTANTS
