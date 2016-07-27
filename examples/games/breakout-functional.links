@@ -65,7 +65,7 @@ fun clear(ctx) {
 #
 # MAIN
 #
-fun main() client {
+fun main() {
 	#
 	# CONSTANTS
     #
@@ -390,13 +390,13 @@ fun main() client {
 
 		masterLoop(recv().1)
 	}
-	var masterProcId = spawn { masterProc() };
+	var masterProcId = spawnClient { masterProc() };
 
 	fun dummyProc(i) {
 		var i = i ++ [recv()];
 		()
 	}
-	var dummyProcId = spawn { dummyProc([]: [Input]) };
+	var dummyProcId = spawnClient { dummyProc([]: [Input]) };
 
     # logic, depends on masterProc
 	fun updateLogic(dt, st, i) {
@@ -441,7 +441,7 @@ fun main() client {
 		if (not(haveMail())) self() ! ([]: [Input]) else ();
 		updateState()
 	}
-	var updateProcId = spawn { updateState() };
+	var updateProcId = spawnClient { updateState() };
 
 	fun inputStateLoop(i) {
 		var r = recv();
@@ -454,7 +454,7 @@ fun main() client {
 		
 		inputStateLoop(i)
 	}
-	var inputProcId = spawn { inputStateLoop([]: [Input]) };
+	var inputProcId = spawnClient { inputStateLoop([]: [Input]) };
 
 	
 	fun onKeyDown(e) {
@@ -478,7 +478,7 @@ fun main() client {
 
 		updateProcId ! ([]: [Input])
 	}
-	var initializeProcId = spawn { initialize() };
+	var initializeProcId = spawnClient { initialize() };
 
 	#
 	# PAGE
