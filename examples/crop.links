@@ -81,8 +81,8 @@ fun frameMgr(offsetLeft, offsetTop, left, top, width, height) client {
   }
 }
 
-fun makeCroppingFrame(left, top, width, height) client{
-  var frameMgr = spawn {frameMgr(left, top, left, top, width, height)};
+fun makeCroppingFrame(left, top, width, height) {
+  var frameMgr = spawnClient {frameMgr(left, top, left, top, width, height)};
   <div id="cropping-frame"    # need a gensym of sorts here
     style="position: absolute;
            display: block;

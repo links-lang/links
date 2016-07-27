@@ -160,7 +160,7 @@ fun mesg(str) {
 
 fun main() {
 	var grid = start();
-	var gameProc = spawn { gameLoop(grid) };
+	var gameProc = spawnClient { gameLoop(grid) };
 
 	page
 		<html>

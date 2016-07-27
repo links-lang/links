@@ -200,6 +200,11 @@ and jsonize_values : Value.t list -> string list * json_state =
            s::ss, merge_states state state') ([], empty_state) vs in
     List.rev ss, state
 
+let jsonize_value_with : json_state -> Value.t -> string * json_state =
+  fun state v ->
+    let s, state' = jsonize_value v in
+    s, merge_states state state'
+
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
@@ -261,23 +266,18 @@ let resolve_state : json_state -> string =
 
 let jsonize_state value =
   let _v, state = jsonize_value value in
-  let s = resolve_state state in
-  Debug.if_set show_json (fun () -> "json state: " ^ s);
-  s
+  state
+
+  (* let s = resolve_state state in *)
+  (* Debug.if_set show_json (fun () -> "json state: " ^ s); *)
+  (* s *)
+
+let value_with_state v s =
+  "{\"value\":" ^ v ^ ",\"state\":" ^ s ^ "}"
 
 let jsonize_value_with_state value =
   let v, state = jsonize_value value in
-  let p = resolve_state state in
-  "{\"value\":" ^ v ^ ",\"state\":" ^ p ^ "}"
-
-let jsonize_value value =
-  Debug.if_set show_json
-    (fun () -> "jsonize_value => " ^ Value.string_of_value value);
-  let rv = jsonize_value_with_state value in
-    Debug.if_set show_json
-      (fun () -> "jsonize_value <= " ^ rv);
-    rv
-
+  value_with_state v (resolve_state state)
 
 (** [jsonize_call] creates the JSON object representing a client call,
     its server-side continuation, and the complete state of the
@@ -288,11 +288,20 @@ let jsonize_value value =
     type so we can't inspect it here. Consider changing this.
 *)
 let jsonize_call continuation name args =
-  Printf.sprintf
-    "{\"__continuation\":\"%s\",\"__name\":\"%s\",\"__args\":[%s]}"
-    (encode_continuation continuation)
-    name
-    (Utility.mapstrcat ", " jsonize_value args)
+  let vs, state = jsonize_values args in
+  let v =
+    "{\"__continuation\":\"" ^ (encode_continuation continuation) ^"\"," ^
+    "\"__name\":\"" ^ name ^ "\"," ^
+    "\"__args\":[" ^ String.concat ", " vs ^ "]}" in
+  value_with_state v (resolve_state state)
+
+let jsonize_value value =
+  Debug.if_set show_json
+    (fun () -> "jsonize_value => " ^ Value.string_of_value value);
+  let rv = jsonize_value_with_state value in
+    Debug.if_set show_json
+      (fun () -> "jsonize_value <= " ^ rv);
+    rv
 
 let parse_json str =
   Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)

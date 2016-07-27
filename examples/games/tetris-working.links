@@ -266,7 +266,7 @@ typename Game = (activePiece: Maybe(Piece), queue: Piece, stack: Stack,
 #
 # MAIN
 #
-fun main() client {
+fun main() {
 	# LIST STUFF
 	var lsNil = lsNilF();
 	
@@ -735,7 +735,7 @@ fun main() client {
 		if (not(haveMail())) self() ! CarryOn else (); # restart
 		updateState()
 	}
-	var updateProcId = spawn { updateState() };
+	var updateProcId = spawnClient { updateState() };
 
 	
 	fun onKeyDown(e) {
@@ -756,7 +756,7 @@ fun main() client {
 
 		updateProcId ! CarryOn
 	}
-	var initializeProcId = spawn { initialize() };
+	var initializeProcId = spawnClient { initialize() };
 
 	#
 	# PAGE

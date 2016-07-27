@@ -35,7 +35,7 @@ fun format(text) {
 fun draggableList(id, items)
 {
   var x = id;
-  var dragger = spawn { waiting(id) };
+  var dragger = spawnClient { waiting(id) };
    <ul id="{id}" style="width: 200px; 
         list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{dragger ! MouseUp}"

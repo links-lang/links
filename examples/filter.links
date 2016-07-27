@@ -330,7 +330,7 @@ fun fetchTypesAndRegions() server {
 }
 
 fun main() {
-  var p = spawn {manager([], [])};
+  var p = spawnClient {manager([], [])};
   var (wineTypes, regions) = fetchTypesAndRegions();
 
   page
