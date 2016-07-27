@@ -132,6 +132,7 @@ val intmap_of_record : t -> t Utility.intmap option
 val string_as_charlist : string -> t
 val charlist_as_string : t -> string
 val string_of_value : t -> string
+val string_of_xml : ?close_tags:bool -> xml -> string
 val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
 val string_of_cont : continuation -> string
@@ -147,3 +148,6 @@ val expr_to_contframe : env -> Ir.tail_computation ->
 
 val value_of_xml : xml -> t
 val value_of_xmlitem : xmlitem -> t
+
+val split_html : xml -> xml * xml
+

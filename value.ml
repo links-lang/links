@@ -151,22 +151,42 @@ let is_attr = function
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
 
-let rec string_of_xml xml : string
-    = String.concat "" (List.map string_of_item xml)
-and string_of_item : xmlitem -> string =
-  let format_attrs attrs = match String.concat " " (List.map string_of_item attrs) with
-    | "" -> ""
-    | a -> " " ^ a in
-  let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
+let rec string_of_xml : ?close_tags:bool -> xml -> string =
+  fun ?(close_tags=false) x -> String.concat "" (List.map (string_of_item ~close_tags:close_tags) x)
+and string_of_item : ?close_tags:bool -> xmlitem -> string =
+  fun ?(close_tags=false) ->
+    let format_attrs attrs = match String.concat " " (List.map (string_of_item ~close_tags:close_tags) attrs) with
+      | "" -> ""
+      | a -> " " ^ a in
+    let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
     function
-      | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
-      | Text s -> xml_escape s
-      | Node (tag, children) -> let attrs, nodes = attrs children, nodes children in
-          match nodes with
-            | [] -> "<" ^ tag ^ format_attrs attrs ^ "/>"
-            | _  -> ("<" ^ tag ^ format_attrs attrs ^ ">"
-                     ^ string_of_xml nodes
-                     ^ "</" ^ tag ^ ">")
+    | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
+    | Text s -> xml_escape s
+    | Node (tag, children) ->
+      begin
+        let attrs, nodes = attrs children, nodes children in
+        match nodes with
+        | [] when not close_tags ->
+          "<" ^ tag ^ format_attrs attrs ^ "/>"
+        | _  ->
+          "<" ^ tag ^ format_attrs attrs ^ ">" ^ string_of_xml ~close_tags:close_tags nodes ^ "</" ^ tag ^ ">"
+      end
+
+(* split top-level HTML into head and body components *)
+let split_html : xml -> xml * xml =
+  function
+  | [Node ("html", xs)] ->
+    List.fold_left
+      (fun (hs, bs) ->
+         function
+         | Node ("body", ys) ->
+           hs, bs @ ys
+         | Node ("head", ys) ->
+           hs @ ys, bs
+         | x -> hs, bs @ [x])
+      ([], []) xs
+  | [Node ("body", xs)] -> [], xs
+  | xs -> [], xs
 
 type table = (database * string) * string * string list list * Types.row
   deriving (Show)

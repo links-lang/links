@@ -96,7 +96,7 @@ fun addForm(manager) {
 }
 
 fun main() {
-  var manager = spawn {
+  var manager = spawnClient {
     fun receiver(s) {
       receive {
         case Suggest(s) -> suggest(s); receiver(s)

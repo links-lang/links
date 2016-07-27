@@ -285,7 +285,7 @@ fun main () {
       }
     }
 
-  var manager = spawn {
+  var manager = spawnClient {
     fun receiver(a, p, s) {
       receive {
         case Suggest(authorPrefix, paperPrefix) -> {

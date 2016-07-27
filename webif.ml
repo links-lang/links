@@ -169,12 +169,13 @@ let perform_request cgi_args (valenv, nenv, tyenv) render_cont =
            if Settings.get_value realpages then
              begin
                Debug.print "Running client program from server";
-               let _env, v = Evalir.run_program valenv (locals, main) in
+               let valenv, v = Evalir.run_program valenv (locals, main) in
+  (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
                Irtojs.generate_real_client_page
                  ~cgi_env:cgi_args
                  (Lib.nenv, Lib.typing_env)
                  (globals @ locals)
-                 v
+                 (valenv, v)
              end
            else
              let program = (globals @ locals, main) in

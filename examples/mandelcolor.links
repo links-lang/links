@@ -163,15 +163,15 @@ fun goMandelMadness(mini, minr, maxi, maxr, pixelWidth)
                 mini, minr, maxi, maxr)
 }
 
-fun main() client {
-  replaceDocument(
-  <html><body>
-    <div id="p0x0" />
-  </body></html>);
-  goMandelMadness(-.1.0 *. realUnit, -.1.0 *. realUnit, realUnit, realUnit, 512.0);
+# fun main() client {
+#   goMandelMadness(-.1.0 *. realUnit, -.1.0 *. realUnit, realUnit, realUnit, 512.0);
 
-  # insane hack
-  page <#/>
-}
+#   # insane hack
+#   page <#/>
+# }
 
-main()
+# main()
+
+var p = spawnClient {goMandelMadness(-.1.0 *. realUnit, -.1.0 *. realUnit, realUnit, realUnit, 512.0)};
+
+page <#/> # <div l:onload="{goMandelMadness(-.1.0 *. realUnit, -.1.0 *. realUnit, realUnit, realUnit, 512.0)}"/>

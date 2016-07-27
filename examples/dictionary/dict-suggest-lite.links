@@ -38,7 +38,7 @@ fun completions(pre) server {
 }
 
 fun main() {
-  var handler = spawn {
+  var handler = spawnClient {
    fun receiver() {
     receive { case Suggest(pre) -> suggest(pre); receiver() }
    }

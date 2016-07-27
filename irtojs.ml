@@ -737,7 +737,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let env' = VEnv.bind env (x, x_name) in
           (env',
            fun code ->
-             Seq (DeclareVar (x_name, Some (generate_value env v)), code))
+             Bind (x_name, generate_value env v, code))
     | `Let (b, (_, tc)) ->
         let (x, x_name) = name_binder b in
         let env' = VEnv.bind env (x, x_name) in
@@ -813,6 +813,47 @@ and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) -
   let (venv, code) = generate_computation env comp (Var "_start") in
   (venv, GenStubs.bindings bs code)
 
+
+let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.binding -> Json.json_state * venv * string option * (code -> code) =
+  fun valenv state varenv ->
+    function
+    | `Let (b, _) ->
+      let (x, x_name) = name_binder b in
+      (* Debug.print ("let_binding: " ^ x_name); *)
+      let varenv = VEnv.bind varenv (x, x_name) in
+      let s, state = Json.jsonize_value_with state (Value.find x valenv) in
+      (state,
+       varenv,
+       Some x_name,
+       fun code -> Bind (x_name, Lit s, code))
+    | `Fun ((fb, _, _zs, _location) as def) ->
+      let (f, f_name) = name_binder fb in
+      let varenv = VEnv.bind varenv (f, f_name) in
+      let (f_name, args, _, _) as def_header = generate_function varenv [] def in
+      (state,
+       varenv,
+       None,
+       fun code -> LetFun (def_header, code))
+    | `Rec defs ->
+      let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
+      let varenv = List.fold_left VEnv.bind varenv fs in
+      (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
+    | `Module _
+    | `Alien _ -> state, varenv, None, (fun code -> code)
+
+let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =
+  fun valenv state venv ->
+    function
+    | []      -> state, venv, [], identity
+    | b :: bs ->
+      let state, venv, x, f = generate_toplevel_binding valenv state venv b in
+      let state, venv, xs, g = generate_toplevel_bindings valenv state venv bs in
+      let xs =
+        match x with
+        | None -> xs
+        | Some x -> x :: xs in
+      state, venv, xs, f -<- g
+
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
@@ -852,7 +893,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
   _startTimer();" ^ body ^ ";
-  </script>" ^ html)
+  </script>" ^ html ^ "</body>")
 
 (* FIXME: this code should really be merged with the other
    stub-generation code and we should generate a numbered version of
@@ -943,19 +984,34 @@ and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) -
   let (venv, code) = generate_computation env comp (Fn ([], Nothing)) in
   (venv, GenStubs.bindings bs code)
 
-let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs v =
+(* generate code to resolve JSONized toplevel let-bound values *)
+let resolve_toplevel_values : string list -> string =
+  fun names ->
+    String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
+
+let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs (valenv, v) =
+  (* json state for the final value (event handlers and processes) *)
   let json_state = Json.jsonize_state v in
+
+  (* divide HTML into head and body secitions (as we need to augment the head) *)
+  let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
+  let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
+
+  let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
+  let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
+  let js = Json.resolve_state json_state in
+
   let printed_code =
-    let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
-    let _venv, code = generate_computation venv (defs, `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
+    let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
+    let code = f code in
     let code = GenStubs.bindings defs code in
     let code = wrap_with_server_lib_stubs code in
     show code in
   make_boiler_page
     ~cgi_env:cgi_env
     ~body:printed_code
-    ~html:(Value.string_of_value v)
-    ~head:(script_tag("  var _jsonState = " ^ json_state))
+    ~html:(Value.string_of_xml ~close_tags:true bs)
+    ~head:(script_tag("  var _jsonState = " ^ js ^ "\n" ^ init_vars) ^ Value.string_of_xml ~close_tags:true hs)
     ~onload:"_startRealPage()"
     []
 

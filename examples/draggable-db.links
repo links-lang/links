@@ -33,9 +33,9 @@ fun draw(id, items) {
  )
 }
 
-fun draggableList(id, items) client
+fun draggableList(id, items)
 {
-  var dragger = spawn { step(Waiting, id, items) };
+  var dragger = spawnClient { step(Waiting, id, items) };
 
   (<ul id="{id}" class="draggable_list"
        l:onmouseup   = "{dragger ! MouseUp}"
@@ -74,10 +74,10 @@ fun save(itemsList) server {
     itemsList))
 }
 
-fun main() client {
+fun main() {
   var (bears, read, write) = draggableList("bears", load());
 
-  var marshaller = spawn {
+  var marshaller = spawnClient {
     fun listen() {
       receive {
         case Load -> write(load())
