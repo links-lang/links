@@ -27,17 +27,7 @@
 open Utility
 open Sugartypes
 open Printf
-
-let module_sep = ":::"
-
-(* Renaming stack. We either have a variable binding or an "open" statement.
- * If we have a variable binding after an "open" statement, then this should
- * take priority over the variables contained within the opened module.
- * Stack frames persist for a single scope (i.e. `Block) *)
-type binding_stack_node = [
-  | `OpenStatement of string
-  | `LocalVarBinding of string
-]
+open ModuleUtils
 
 (* Only `Module and `Import don't preserve structure. We can just do a map on everything
  * else... *)
@@ -87,34 +77,8 @@ let performFlattening : program -> program =
       ((flatten_bindings ())#program programToFlatten)#get_bindings in
     (flattened_bindings, phrase)
 
-let print_list xs =
-  let rec print_list_inner = function
-      | [] -> ""
-      | e::[] -> e
-      | e::xs -> e ^ ", " ^ (print_list_inner xs) in
-  "[" ^ print_list_inner xs ^ "]"
-
-
-let print_stack_node = function
-  | `OpenStatement mn -> "module: " ^ mn
-  | `LocalVarBinding lvb -> "var: " ^ lvb
-
-let print_stack s = print_list (List.map print_stack_node s)
-let prefixWith name prefix = if prefix = "" then name else prefix ^ module_sep ^ name
-
 (* Given a plain module name, checks whether it is in scope according to the
  * current stack of open modules *)
-let rec moduleInScope seen_modules binding_stack module_name =
-  match binding_stack with
-    | [] ->
-        if StringSet.mem module_name seen_modules then Some(module_name) else None
-    | (`LocalVarBinding _)::xs -> moduleInScope seen_modules xs module_name
-    | (`OpenStatement x)::xs ->
-        let fully_qual = prefixWith module_name x in
-        if StringSet.mem fully_qual seen_modules then
-          Some(fully_qual)
-        else
-          moduleInScope seen_modules xs module_name
 
 (* Given a module stack, a reference tree, and a plain variable name, resolves
  * the fully-qualified name according to the priority of the stack.
@@ -139,8 +103,6 @@ let rec substituteVar seen_bindings binding_stack current_module_prefix var_name
           fully_qual
         else
           substituteVar seen_bindings xs current_module_prefix var_name
-
-
 
 (* Add module prefix to all internal binder names and variables *)
 let rec add_module_prefix prefix init_seen_modules init_seen_bindings init_binding_stack =
@@ -223,17 +185,17 @@ object(self)
         (o2, `Block (List.rev reversed_renamed_bindings, new_phrase))
     | p -> super#phrasenode p
 
+    (*
   method program = function
     | (bindings, body) ->
         let (o1, renamed_bindings) = self#list (fun o -> o#binding) bindings in
         let (o2, renamed_body) = o1#option (fun o -> o#phrase) body in
         (o2, (renamed_bindings, renamed_body))
-
+*)
 end
 
 let performRenaming prog =
   snd ((add_module_prefix "" (StringSet.empty) (StringSet.empty) [`OpenStatement ""])#program prog)
-
 
 let has_no_modules =
 object
@@ -254,6 +216,7 @@ let requires_desugar prog = (not ((has_no_modules#program prog)#satisfied))
  * 2) Peform a flattening pass to flatten modules to lists of bindings
  *)
 let desugar_modules program =
+  (* Chaser.print_external_deps program; *)
   if (requires_desugar program) then
     let renamedProgram = performRenaming program in
     let (renamedBindings, renamedBody) = renamedProgram in
@@ -261,9 +224,9 @@ let desugar_modules program =
     (*
     printf "\n=============================================================\n";
     printf "\n=============================================================\n";
-    printf "Before: %s\n" (Sugartypes.Show_program.show program);
+    printf "Before module desugar: %s\n" (Sugartypes.Show_program.show program);
     printf "\n=============================================================\n";
-    printf "After: %s\n" (Sugartypes.Show_program.show flattenedProgram);
+    printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattenedProgram);
     *)
     flattenedProgram
   else program
