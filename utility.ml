@@ -425,6 +425,14 @@ struct
     | x::xs ->
         if pred x then (f x)::(filter_map pred f xs) else
           (filter_map pred f xs)
+
+  let print_list xs =
+    let rec print_list_inner = function
+        | [] -> ""
+        | e::[] -> e
+        | e::xs -> e ^ ", " ^ (print_list_inner xs) in
+    "[" ^ print_list_inner xs ^ "]"
+
 end
 include ListUtils
 
