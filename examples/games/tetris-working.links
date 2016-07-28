@@ -267,11 +267,13 @@ typename Game = (activePiece: Maybe(Piece), queue: Piece, stack: Stack,
 # MAIN
 #
 fun main() {
-	# LIST STUFF
-	var lsNil = lsNilF();
+    # we can't call a client function at the top-level any more
 
-	#
-	# CONSTANTS
+    # LIST STUFF
+    #var lsNil = lsNilF();
+
+    #
+    # CONSTANTS
     #
 
     # CANVAS PARAMETERS
@@ -683,87 +685,87 @@ fun main() {
     }
 
     fun tryMove(f, gs) {
-		switch (gs.activePiece) {
-			case Nothing -> gs
-			case Just(piece) ->
-				if (blocked(f(piece), gs.stack)) gs
-				else (gs with activePiece = Just(f(piece)))
-		}
+        switch (gs.activePiece) {
+            case Nothing -> gs
+            case Just(piece) ->
+                if (blocked(f(piece), gs.stack)) gs
+                else (gs with activePiece = Just(f(piece)))
+        }
     }
 
-	#
-	# PROCESSES
-	#
-	fun updateLogic(dt, gameState, i) {
-		if (dt > step) {
-			var gameState = mainGameLogic(gameState, i);
+    #
+    # PROCESSES
+    #
+    fun updateLogic(dt, gameState, i) {
+        if (dt > step) {
+            var gameState = mainGameLogic(gameState, i);
 
-			updateLogic(dt -. step, gameState, [])
-		} else (gameState, dt)
-	}
+            updateLogic(dt -. step, gameState, [])
+        } else (gameState, dt)
+    }
 
-	fun updateState() {
-		fun mainLoop(gameState, dt, lastTime, fpsInfo, ii) {
-			var now = clientTime();
-			var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
+    fun updateState() {
+        fun mainLoop(gameState, dt, lastTime, fpsInfo, ii) {
+            var now = clientTime();
+            var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
 
-			fun aux(auxi: [Input]) {
-				if (haveMail()) {
-					aux(recv()::auxi)
-				} else auxi
-			}
+            fun aux(auxi: [Input]) {
+                if (haveMail()) {
+                    aux(recv()::auxi)
+                } else auxi
+            }
 
-			var i = aux(ii);
+            var i = aux(ii);
 
-			var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
+            var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
 
-			if (gameStatePrim.state == Restart) # objectEq doesn't work here -- why?
-				()
-			else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
-				mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
-			} else {
-				mainLoop((gameStatePrim with state = Run), # if state == Download, reset
-					dtPrim, now,
-					draw(gameStatePrim, lastTime, now, fpsInfo), # draw & get new fpsInfo
-					[]) # reset input
-			}
-		}
+            if (gameStatePrim.state == Restart) # objectEq doesn't work here -- why?
+                ()
+            else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
+                mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
+            } else {
+                mainLoop((gameStatePrim with state = Run), # if state == Download, reset
+                    dtPrim, now,
+                    draw(gameStatePrim, lastTime, now, fpsInfo), # draw & get new fpsInfo
+                    []) # reset input
+            }
+        }
 
-		var _ = recv(); # wait for initialize()
-		mainLoop(getInitialGameState(), 0.0, clientTime(), initialFpsInfo, []);
+        var _ = recv(); # wait for initialize()
+        mainLoop(getInitialGameState(), 0.0, clientTime(), initialFpsInfo, []);
 
-		if (not(haveMail())) self() ! CarryOn else (); # restart
-		updateState()
-	}
-	var updateProcId = spawnClient { updateState() };
+        if (not(haveMail())) self() ! CarryOn else (); # restart
+        updateState()
+    }
+    var updateProcId = spawnClient { updateState() };
 
 
-	fun onKeyDown(e) {
-		updateProcId ! (KeyDown(getCharCode(e)): Input);
-	}
+    fun onKeyDown(e) {
+        updateProcId ! (KeyDown(getCharCode(e)): Input);
+    }
 
-	fun onKeyUp(e) {
-		updateProcId ! (KeyUp(getCharCode(e)): Input);
-	}
+    fun onKeyUp(e) {
+        updateProcId ! (KeyUp(getCharCode(e)): Input);
+    }
 
-	fun initialize() {
-		var _ = recv();
+    fun initialize() {
+        var _ = recv();
 
-		jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
-		jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
+        jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
+        jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
 
-		var _ = domSetStyleAttrFromRef(getNodeById("info"), "display", "none");
+        var _ = domSetStyleAttrFromRef(getNodeById("info"), "display", "none");
 
-		updateProcId ! CarryOn
-	}
-	var initializeProcId = spawnClient { initialize() };
+        updateProcId ! CarryOn
+    }
+    var initializeProcId = spawnClient { initialize() };
 
-	#
-	# PAGE
-	#
-	page
-		<html>
-			<head>
+    #
+    # PAGE
+    #
+    page
+        <html>
+            <head>
             <style>
                 body {{
                     background-color: #111;

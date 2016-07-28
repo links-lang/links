@@ -159,8 +159,8 @@ fun mesg(str) {
 }
 
 fun main() {
-	var grid = start();
-	var gameProc = spawnClient { gameLoop(grid) };
+    var grid = start();
+    var gameProc = spawnClient { gameLoop(grid) };
 
     page
         <html>
