@@ -184,14 +184,6 @@ object(self)
         let o2 = {< seen_modules = o2#get_seen_modules; seen_bindings = o2#get_seen_bindings >} in
         (o2, `Block (List.rev reversed_renamed_bindings, new_phrase))
     | p -> super#phrasenode p
-
-    (*
-  method program = function
-    | (bindings, body) ->
-        let (o1, renamed_bindings) = self#list (fun o -> o#binding) bindings in
-        let (o2, renamed_body) = o1#option (fun o -> o#phrase) body in
-        (o2, (renamed_bindings, renamed_body))
-*)
 end
 
 let performRenaming prog =
