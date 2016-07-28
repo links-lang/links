@@ -25,6 +25,7 @@ struct
 
   let program =
     fun tyenv pos_context program ->
+      let program = Chaser.add_dependencies "" program in
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
