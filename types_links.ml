@@ -113,6 +113,13 @@ let socket = {
   arity = []
 }
 
+(** mpi stuff **)
+let communicator = {
+  Abstype.id = "Communicator";
+  name       = "Communicator";
+  arity      = []
+}
+
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't
     | `Output of 't * 't

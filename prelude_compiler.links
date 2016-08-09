@@ -1,3 +1,6 @@
+## Identity
+fun id(x) { x }
+
 ## Functions on booleans
 fun showBool(b) {
   switch(b) {

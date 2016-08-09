@@ -16,5 +16,7 @@ let alias_env : Types.tycon_environment =
       "DomNode" , `Abstract Types.dom_node;
       "AP"      , `Abstract Types.access_point;
       "EndBang" , `Alias ([], Types.make_endbang_type);
-      "Socket"  , `Abstract Types.socket
+      "Socket"  , `Abstract Types.socket ;
+      "Rank"    , `Alias ([], `Primitive `Int) ;
+      "Communicator", `Abstract Types.communicator
     ]
