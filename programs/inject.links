@@ -1,0 +1,9 @@
+var x = Foo;
+var y = Bar(42);
+var z = Baz(2.4, "hello");
+
+switch (z) {
+  case Foo(x) -> print("Foo")
+  case Bar(i) -> print("Bar")
+  case Baz(f,s) -> print("Baz " ^^ s)
+}
