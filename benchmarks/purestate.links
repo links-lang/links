@@ -10,12 +10,4 @@ fun b(n) {
     x
 }
 
-fun pow(b,e) {
-  fun pow_aux(b,e,acc) {
-    if (e == 0) acc
-    else pow_aux(b,e-1,acc*b)
-  }
-  pow_aux(b,e,1)
-}
-
-print(intToString(b(pow(10,7))))
+print(intToString(b(10000000)))
