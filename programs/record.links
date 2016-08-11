@@ -1,0 +1,12 @@
+var hello = (1="Hello");
+#
+fun world(r) {
+   (2="World" | r)
+}
+
+fun main() {
+    var r = world(hello);
+    print(r.1 ^^ " " ^^ r.2)
+}
+
+main()

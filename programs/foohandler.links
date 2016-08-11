@@ -1,0 +1,9 @@
+fun foo(m) {
+  handle(m) {
+     case Foo(p,k)  -> k(1)
+     case Return(x) -> x
+  }
+}
+
+
+do Foo(42,'a')

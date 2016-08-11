@@ -9,14 +9,11 @@ fun for_all(p, xs) {
 }
 
 sig showPair : forall a, b . ((a) -e-> String, (b) -e-> String) -> ((a,b)) -e-> String
-fun showPair(showX,showY)(p) {
-    var x = p.1; var y = p.2;
+fun showPair(showX,showY)((x,y)) {
     "(" ^^ showX(x) ^^ ", " ^^ showY(y) ^^ ")"
 }
 
-fun noAttack(p1)(p2) {
-  var a = p1.1; var b = p1.2;
-  var c = p2.1; var d = p2.2;
+fun noAttack((a,b))((c,d)) {
   a <> c && b <> d && abs(a - c) <> abs(b - d)
 }
 
@@ -60,7 +57,7 @@ fun findSolution(n)() {
 
 
 fun main() {
-  var n = 20;  
+  var n = 8;
   var showSolution = showMaybe(showList(showPair(intToString,intToString)));
   var solution = showSolution(chooseHandler(findSolution(n)));
   print(solution)

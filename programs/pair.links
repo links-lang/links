@@ -1,0 +1,8 @@
+fun foo(m) {
+  handle(m) {
+    case Foo(xs,k) -> var y = xs; k(42)
+    case Return(x) -> x
+  }
+}
+
+
