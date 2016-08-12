@@ -27,4 +27,6 @@ fun b(n) {
     x
 }
 
+fun id(x) { x }
+
 print(intToString(b(10000000)))
