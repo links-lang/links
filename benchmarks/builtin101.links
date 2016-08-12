@@ -1,0 +1,66 @@
+# A concurrency example using the built-in concurrency model of Links
+
+fun stop(process,root) {
+  switch (process) {
+    case Nothing    -> root ! Stop(root)
+    case Just(proc) -> proc ! Stop(root)
+  }
+}
+
+fun fromCandidate(msg) {
+  switch(msg) {
+    case Candidate(i) -> i
+    case _ -> error("Attempt to unwrap non-candidate.")
+  }
+}
+
+fun sieve() {
+  var myprime = fromCandidate(recv());
+  print(intToString(myprime));
+  fun loop(neighbour) {
+    switch (recv()) {
+       case Stop(root) -> stop(neighbour,root)
+       case Candidate(prime) ->
+       if (prime `mod` myprime <> 0) {
+          var neighbour =
+            switch (neighbour) {
+              case Just(pid) -> pid
+              case Nothing   -> spawnAngel { sieve() }
+            };
+          neighbour ! Candidate(prime);
+          loop(Just(neighbour))
+       } else { loop(neighbour) }
+#       case _ -> loop(neighbour)
+    }
+  }
+  loop(Nothing)
+}
+
+fun foreach(xs, action) {
+  switch (xs) {
+    case [] -> ()
+    case x :: xs -> action(x); foreach(xs, action)
+  }
+}
+
+fun generator(n) {
+  var first = spawnAngel { sieve() };
+  foreach([2..n], fun(p) { first ! Candidate(p) });
+  first ! Stop(self());
+   fun loop() {
+     switch (recv()) {
+       case Stop(_) -> ()
+       case _    -> loop()
+     }
+   }
+   loop()
+}
+
+fun runSieve(n) {
+  #print("#snippet:links_concur_model_example.output");
+  var _ = generator(n);
+  ()
+  #print("#end")
+}
+
+runSieve(101)
