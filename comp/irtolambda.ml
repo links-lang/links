@@ -315,9 +315,10 @@ let translate (op_map,name_map) module_name ir =
 	   let param = ident ("param", Var.fresh_raw_var ()) in
            let kid'  = ident ("_k'", Var.fresh_raw_var ()) in
 	   lfun [param]
-             (llet kid'
+(*             (llet kid'
                 (lapply (obj "clone") [lvar kid])
-		(lapply (pervasives "continue") [lvar kid' ; lvar param]))
+		(lapply (pervasives "continue") [lvar kid' ; lvar param]))*)
+                (lapply (pervasives "continue") [lvar kid ; lvar param ])
 	 in
 	 let bind_k scope =
 	   llet ~kind:Alias
