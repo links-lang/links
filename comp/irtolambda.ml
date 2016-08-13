@@ -83,7 +83,7 @@ let primop   : string -> Lambda.primitive option =
 	| _ -> raise Not_found
       else if is_relational_operation op then
         match op with
-        | "==" -> Pccall (LambdaDSL.prim_binary_op "caml_equal") (*Pintcomp Ceq*)
+        | "==" -> Pintcomp Ceq (*Pccall (LambdaDSL.prim_binary_op "caml_equal")*) (*Pintcomp Ceq*)
         | op -> let cmp =
                   match op with
                   | "<"  -> "caml_lessthan"
