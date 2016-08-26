@@ -180,24 +180,24 @@ module Eval = struct
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
-      computation env cont body
-    | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
-      let key = EventHandlers.register hs in
-      apply_cont cont env (`String (string_of_int key))
+      computation env cont hs body
+    | `PrimitiveFunction ("registerEventHandlers",_), [event_hs] ->
+      let key = EventHandlers.register event_hs in
+      apply_cont cont hs env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
-        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_SendWrapper" cont hs [pid; msg]
-        else
-          let (pid, location) = Value.unbox_pid pid in
-            (try
-               Mailbox.send_message msg pid;
-               Proc.awaken pid
-             with
-                 UnknownProcessID pid ->
-                   (* FIXME: printing out the message might be more useful. *)
-                   failwith("Couldn't deliver message because destination process has no mailbox."));
-            apply_cont cont hs env (`Record [])
+       if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+         client_call "_SendWrapper" cont hs [pid; msg]
+       else
+         (let (pid, location) = Value.unbox_pid pid in
+          try
+            Mailbox.send_message msg pid;
+            Proc.awaken pid
+          with
+            UnknownProcessID pid ->
+            (* FIXME: printing out the message might be more useful. *)
+            failwith("Couldn't deliver message because destination process has no mailbox."));
+       apply_cont cont hs env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont hs [func]
@@ -214,7 +214,7 @@ module Eval = struct
     | `PrimitiveFunction ("spawnClient",_), [func] ->
       let var = Var.dummy_var in
       let new_pid = Proc.create_client_process func in
-      apply_cont cont env (`Pid (new_pid, `Client))
+      apply_cont cont hs env (`Pid (new_pid, `Client))
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont hs [func]
@@ -351,7 +351,6 @@ module Eval = struct
         unblock out2;
         apply cont hs env (value env end_bang, [])
     (* end of session stuff *)
->>>>>>> origin/sessions
     | `PrimitiveFunction (n,None), args ->
         apply_cont cont hs env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
@@ -367,7 +366,8 @@ module Eval = struct
     | `Continuation _,       _    ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | (v,vs)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
-  and apply_cont cont hs env v =
+  and apply_cont : Value.continuation -> Value.handlers -> Value.env -> Value.t -> Proc.thread_result Lwt.t =
+    fun cont hs env v ->
     Proc.yield (fun () -> apply_cont' cont hs env v)
   and apply_cont' cont hs env v : Proc.thread_result Lwt.t =
     match cont, hs with

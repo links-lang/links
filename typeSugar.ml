@@ -1918,6 +1918,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	 in
 	 (`DoOperation (opname, Some (List.map erase args), Some optype), return_type, StringMap.empty)	     
     (* literals *)
+    (* literals *)
     | `Constant c as c' -> c', Constant.constant_type c, StringMap.empty
     | `TupleLit [p] ->
        let p = tc p in
@@ -2004,7 +2005,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
           `ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
        end
-    | `HandlerLit _ -> assert false (* Should already be desugared at this stage *)
     | `FunLit (_, lin, (pats, body), location) ->
        let vs = check_for_duplicate_names pos (List.flatten pats) in
        let pats = List.map (List.map tpc) pats in
@@ -2319,50 +2319,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
          Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
        `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
 
-    | `Receive (binders, _) ->
-       let mb_type = Types.fresh_type_variable (`Any, `Any) in
-       let effects =
-         Types.row_with ("wild", `Present Types.unit_type)
-                        (Types.make_singleton_open_row ("hear", `Present mb_type) (`Any, `Any)) in
-
-       let () = unify ~handle:Gripers.receive_mailbox
-                      (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
-
-       let binders, pattern_type, body_type = type_cases binders in
-       let () = unify ~handle:Gripers.receive_patterns
-                      (no_pos mb_type, no_pos pattern_type)
-       in
-       `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
-
-    (* mailbox-based concurrency *)
-    | `Spawn (`Wait, p, _) ->
-       (* (() -{b}-> d) -> d *)
-       let inner_effects = Types.make_empty_open_row (`Any, `Any) in
-       let pid_type = `Application (Types.process, [`Row inner_effects]) in
-       let () =
-         let outer_effects =
-           Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
-         in
-         unify ~handle:Gripers.spawn_wait_outer
-               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
-       let p = type_check (bind_effects context inner_effects) p in
-       let return_type = typ p in
-       `Spawn (`Wait, erase p, Some inner_effects), return_type, usages p
-    | `Spawn (k, p, _) ->
-       (* (() -e-> _) -> Process (e) *)
-       let inner_effects = Types.make_empty_open_row (`Any, `Any) in
-       let pid_type = `Application (Types.process, [`Row inner_effects]) in
-       let () =
-         let outer_effects =
-           Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
-         in
-         unify ~handle:Gripers.spawn_outer
-               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
-       let p = type_check (bind_effects context inner_effects) p in
-       if not (Types.type_can_be_unl (typ p)) then
-         Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-       `Spawn (k, erase p, Some inner_effects), pid_type, usages p
-                                                                 
     | `Receive (binders, _) ->
        let mb_type = Types.fresh_type_variable (`Any, `Any) in
        let effects =
