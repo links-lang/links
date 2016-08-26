@@ -96,9 +96,10 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map * handler_spec)
+  | `Handle of (value * clause name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`Effect of binder | `Exception | `Regular] * binder * computation                        
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -479,11 +480,19 @@ struct
 	| `Handle (v, bs, isclosed) ->
 	   let (v, _, o) = o#value v in
 	   let (bs, branch_types, o) =
-	     o#name_map (fun o (b, c) ->
-			 let (b, o) = o#binder b in
-			 let (c, t, o) = o#computation c in
-			 (b, c), t, o)
-			bs
+	     o#name_map
+               (fun o (cc, b, c) ->
+                 let (cc, o) =
+                   match cc with
+                   | `Effect b ->
+                      let (b, o) = o#binder b in
+                      `Effect b, o
+                   | _ -> (cc, o)
+                 in
+		 let (b, o) = o#binder b in
+		 let (c, t, o) = o#computation c in
+		 (cc, b, c), t, o)
+	       bs
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
 	   `Handle (v, bs, isclosed), t, o

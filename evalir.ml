@@ -538,12 +538,6 @@ module Eval = struct
       end
   (*****************)
   and handle env cont hs (opname, vs) =
-    (* box parameters and continuation as a single value *)
-    let box ps k =
-      match ps with 
-        []  -> k
-      | _   -> Value.box_op ps k
-    in
     (** handle operations, forwarding appropriately, where
         [cont'] and [hs'] are reversed stacks of
         delimited continuations and handlers
@@ -555,13 +549,18 @@ module Eval = struct
          let hs' = (henv, h, spec) :: hs' in
          begin
            match StringMap.lookup opname h with	    
-	   | Some ((var, _), comp) ->
+	   | Some (kb, (var, _), comp) ->
 	      let k = if HandlerUtils.IrHandler.is_shallow spec then
 		  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
 		else
 		  `DeepContinuation (List.rev cont', List.rev hs')
 	      in
-	      computation (Value.bind var (box vs k, `Local) henv) cont hs comp
+              let henv =
+                match kb with
+                | `Effect kb -> Value.bind (Var.var_of_binder kb) (k, `Local) henv
+                | _ -> henv
+              in
+	      computation (Value.bind var (Value.box vs, `Local) henv) cont hs comp
            | None ->
               if not (HandlerUtils.IrHandler.is_closed spec) then
                 begin
@@ -576,7 +575,7 @@ module Eval = struct
     handle' ([], []) (cont, hs)
   and invoke_return_clause cont hs env (henv, h, _) v =
     match StringMap.lookup "Return" h with
-    | Some ((var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp
+    | Some (_, (var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp
     | None -> eval_error "Pattern matching failed on Return"      
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =

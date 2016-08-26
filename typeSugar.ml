@@ -159,9 +159,13 @@ sig
   val handle_patterns' : pos:SourceCode.pos -> t1:(string * Types.datatype) -> 'a
   val handle_branches : griper			  
   val handle_computation : griper
-  val handle_continuations : griper
+  val continuation_codomains : griper
+  val input_output_effect_rows : griper                               
   val output_effect_row : griper
   val continuation_effect_rows : griper
+  val type_continuation : griper
+  val type_continuation_with_annotation : griper                                            
+  val should_not_go_wrong : griper                                            
   
   val operation_case_cont_param	: griper
   val do_operation : griper
@@ -389,15 +393,21 @@ tab() ^ code (show_type rt) ^ "."
 		       tab() ^ code (show_type rt))
 	
     let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
-      die pos ("The type of an input to a handler must be a computation, whose type signature matches the input type signature of the handler, but
-the expression " ^ nl () ^
+      die pos ("The inferred input type of the handler " ^ nl () ^
 		  tab() ^ code rexpr ^ nl() ^
-  		    "has type " ^ nl() ^
-		      tab() ^ code (show_type lt) ^ nl() ^
-		        "while the handler accepts only computations of type " ^ nl() ^
-		           tab() ^ code (show_type rt)
+  		    "is " ^ nl() ^
+		      tab() ^ code (show_type rt) ^ nl() ^
+		        "but it is annotated with type" ^ nl() ^
+		           tab() ^ code (show_type lt)
 	      )
 
+    let input_output_effect_rows ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      die pos ("The input effect row " ^ nl() ^
+		 tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
+		   "is not unifiable with output effect row" ^ nl() ^
+		     tab() ^ code (show_row (TypeUtils.extract_row rt))
+	      )	  
+          
     let output_effect_row ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
       die pos ("The current effect context " ^ nl() ^
 		 tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
@@ -405,7 +415,7 @@ the expression " ^ nl () ^
 		     tab() ^ code (show_row (TypeUtils.extract_row rt))
 	      )	  
 
-    let handle_continuations ~pos ~t1:(kexpr,kt) ~t2:(body_expr,body_type) ~error:_ =
+    let continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(body_expr,body_type) ~error:_ =
       die pos ("The codomain of continuation " ^ code kexpr ^ " has type" ^ nl() ^
 		     tab() ^ code (show_type kt) ^ nl() ^
 		       "but a type compatible with" ^ nl() ^
@@ -427,7 +437,25 @@ the expression " ^ nl () ^
 		     tab() ^ code (show_type rt) ^ nl() ^
 		       "which is not unifiable with" ^ nl()
 		       ^ tab() ^ code (show_type lt))	
-	  
+
+    let type_continuation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+      die pos ("Continuation typing error: the type " ^nl() ^
+                 tab () ^ code (show_type lt) ^ nl()^
+                   "is not unifiable with" ^ nl() ^
+                     tab() ^ code (show_type rt))
+          
+    let type_continuation_with_annotation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+      die pos ("\
+                The inferred type of the continuation" ^ nl() ^
+                 tab() ^ code lexpr ^ nl() ^
+                   "is" ^ nl() ^
+                     tab() ^ code (show_type lt) ^ nl() ^
+                       "but it is annotated with type" ^ nl() ^
+                         tab() ^ code (show_type rt))
+
+    let should_not_go_wrong ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+      die pos "Unification error: This is unexpected!"
+          
     let do_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
       let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
       let operation = dropDoPrefix (code rexpr) in      
@@ -1700,23 +1728,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       `Function (Types.make_tuple_type [domain], effrow, codomain)
     in
     let rec type_continuation tenv kt pat =
+      let (_,_,pat_pos) = SourceCode.resolve_pos (snd pat) in
       match fst pat with
       | `Any        -> ()           
       | `Variable b ->
          let (Some kt') = Env.find tenv (fst3 b) in
-         unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt)
+         unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt)
       | `As (b,pat') ->
          let (Some kt') = Env.find tenv (fst3 b) in
-         let _ = unify ~handle:Gripers.operation_case_cont_param (no_pos kt', no_pos kt) in
+         let _ = unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt) in
          type_continuation tenv kt pat'
       | `HasType (pat',t) ->
          let t = match t with
 	     _, Some t -> t
 	   | _ -> assert false
 	 in
-	 let _ = type_continuation tenv kt pat' in
-	 let (_,_,p) = SourceCode.resolve_pos (snd pat) in
-	 unify ~handle:Gripers.operation_case_cont_param ((p, t), no_pos kt) (* Unify with t *)
+	 let _ = unify ~handle:Gripers.type_continuation_with_annotation ((pat_pos, kt), (pat_pos, t)) in (* Unify with t *)
+	 type_continuation tenv kt pat'
       | _ -> Gripers.die (snd pat) "Improper pattern matching on continuation parameter."
     in
     let (pat,tenv,dt) as p' = tpo pat in
@@ -1728,11 +1756,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
          begin
            let kt = fresh_continuation_type () in          
            match fst pat' with
-           | `Tuple pat' ->
+           | `Tuple pat' when List.length pat' > 0 ->
               let k = List.hd (List.rev pat') in
               let _ = type_continuation tenv kt k in
               let k = tpo k in
-              let _ = unify ~handle:Gripers.operation_case_cont_param (no_pos kt, ppos_and_typ k) in
+              let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
               StringMap.add opname (k,kt) kenv
            | `Any
            | `As _
@@ -1740,9 +1768,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            | `Variable _ ->
               let _ = type_continuation tenv kt pat' in
               let k = tpo pat' in
-              let _ = unify ~handle:Gripers.operation_case_cont_param (no_pos kt, ppos_and_typ k) in
+              let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
               StringMap.add opname (k,kt) kenv
-           | _ -> Gripers.die (snd pat') "Improper operation pattern."
+           | _ -> Gripers.die (snd pat') (Printf.sprintf "Improper pattern matching on operation %s." opname)
          end
       | _ -> Gripers.die (snd pat) "Improper pattern matching."
     in
@@ -2821,6 +2849,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
        let m = tc m in (* Type-check the input computation m under current context *)
        let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
        let effects         = TypeUtils.extract_row pattern_type in
+       (** TODO get effect context; don't assume m is a thunk **)
        (** First construct the effect row for the input computation m
         * It is important to construct the entire type for m before typing continuations, 
         * as we need to know the return type of m to type continuations in shallow handlers *)
@@ -2830,7 +2859,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
        in
        let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)
        let (_,_,p)  = SourceCode.resolve_pos pos in
-       let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
+       let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *) 
 
        (** Next, construct the (output) effect row for the handler *)
        let output_effect_row =
@@ -2839,10 +2868,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	 context.effect_row
        in
 
-       (** If the handler is open, then unify the input and output effect rows  *)
+       (** Unify the input and output effect rows  *)
        let _ =
-	 let poly_presence_effect_row = make_operations_presence_polymorphic input_effect_row in
-	 unify ~handle:Gripers.handle_patterns (no_pos (`Record output_effect_row), no_pos (`Record poly_presence_effect_row))
+	 let input_effect_row = make_operations_presence_polymorphic input_effect_row in
+	 unify ~handle:Gripers.input_output_effect_rows (no_pos (`Record input_effect_row), no_pos (`Record output_effect_row))
        in
        
        (** Next, type continuation effect rows *)
@@ -2858,7 +2887,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	   let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
 	   List.fold_left
 	     (fun _ (k, ktail) ->
-	       unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), no_pos body_type);
+	       unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), no_pos body_type);
 	       unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 	     )
 	     () ks
@@ -2884,7 +2913,7 @@ h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
 	    let (p,_)  = pos_and_typ m in
 	    List.fold_left
 	      (fun _ (k,ktail) ->		    
-		unify ~handle:Gripers.handle_continuations ((ppos_and_typ ktail), (p,t));
+		unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), (p,t));
 		unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 	      )
 	      () ks
