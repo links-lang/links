@@ -311,9 +311,13 @@ struct
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
-      | `FunctionPtr (f, env) ->
+      | `FunctionPtr (f, fvs) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        let (_finfo, (xs, body), _z, _location) as def = Tables.find Tables.fun_defs f in
+        let (_finfo, (xs, body), z, _location) as def = Tables.find Tables.fun_defs f in
+        let env = 
+          match z, fvs with
+          | None, None       -> Value.empty_env
+          | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env in
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)

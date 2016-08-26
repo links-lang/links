@@ -229,7 +229,7 @@ class transform (env : Types.typing_environment) =
 	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
 	   let (o, effects) = o#row effects in
            (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
-      | `Spawn (`Wait, body, Some inner_effects) ->
+      | `Spawn (`Wait, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -237,8 +237,8 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, body, Some inner_effects), body_type)
-      | `Spawn (k, body, Some inner_effects) ->
+            (o, `Spawn (`Wait, location, body, Some inner_effects), body_type)
+      | `Spawn (k, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -247,7 +247,7 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, body, Some inner_effects)), process_type)
+            (o, (`Spawn (k, location, body, Some inner_effects)), process_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
          (o, (`Select (l, e)), TypeUtils.select_type l t)
@@ -707,7 +707,7 @@ class transform (env : Types.typing_environment) =
       | `Foreign (f, language, t) ->
           let (o, f) = o#binder f in
             (o, `Foreign (f, language, t))
-      | `Include _ ->
+      | `Import _ ->
           failwith "Includes aren't supported yet"
       | `Type (name, vars, (_, Some dt)) as e ->
           let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in

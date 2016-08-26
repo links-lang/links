@@ -246,7 +246,7 @@ let interact envs =
                                let v =
                                  match location with
                                  | `Server | `Unknown ->
-                                   `FunctionPtr (var, Value.empty_env)
+                                   `FunctionPtr (var, None)
                                  | `Client ->
                                    `ClientFunction (Js.var_name_binder (var, finfo)) in
                                let t = Var.info_type finfo in

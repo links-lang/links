@@ -27,15 +27,17 @@ let refine_bindings : binding list -> binding list =
       let group, groups =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
-           match binding with
-	   | `Handler _
-           | `Funs _ -> assert false
-           | `Exp _
-           | `Foreign _
-           | `Include _
-           | `Type _
-           | `Val _ ->
-              (* collapse the group we're collecting, then start a
+            match binding with
+            (* Modules and funs will have been eliminated by now *)
+            | `Module _ -> assert false
+            | `Handler _
+            | `Funs _ -> assert false
+            | `Exp _
+            | `Foreign _
+            | `Import _
+            | `Type _
+            | `Val _ ->
+                  (* collapse the group we're collecting, then start a
                      new empty group *)
               ([], add [bind] (add thisgroup othergroups))
            | `Fun _ ->
@@ -138,7 +140,7 @@ object(self)
 
   method datatype : datatype -> datatype = function
     | `TypeApplication (tyAppName, argList) as tyApp ->
-        if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
+        if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
         else super#datatype tyApp
     | dt -> super#datatype dt
 end
@@ -256,12 +258,13 @@ module RefineTypeBindings = struct
     fun bindings ->
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
-	  match binding with
-    	    `Handler _ -> assert false (* Desugared at this point *)
+          match binding with
+          | `Module _ -> assert false
+          | `Handler _ -> assert false (* Desugared at this point *)
           | `Funs _
           | `Fun _
           | `Foreign _
-          | `Include _
+          | `Import _
           | `Val _
           | `Exp _
           | `Infix ->

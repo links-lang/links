@@ -80,7 +80,7 @@ class map =
     method known_type_variable : known_type_variable -> known_type_variable =
       fun (_x, _x_i1, _x_i2) ->
         let _x = o#name _x in
-        let _x_i1 = o#subkind _x_i1 in
+        let _x_i1 = o#option (fun o -> o#subkind) _x_i1 in
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
     method row_var : row_var -> row_var =
@@ -160,7 +160,8 @@ class map =
 	 let spec = o#handler_spec spec in
 	 let hnlit = o#handlerlit hnlit in
 	 `HandlerLit (spec, hnlit)
-      | `Spawn (_x, _x_i1, _x_i2) -> let _x_i1 = o#phrase _x_i1 in `Spawn (_x, _x_i1, _x_i2)
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
+                                            let _x_i2 = o#phrase _x_i2 in `Spawn (_x, _x_i1, _x_i2, _x_i3)
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -603,7 +604,7 @@ class map =
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
-      | `Include _x -> let _x = o#string _x in `Include _x
+      | `Import _x -> let _x = o#string _x in `Import _x
       | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
@@ -616,6 +617,10 @@ class map =
           in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
       | `Infix -> `Infix
       | `Exp _x -> let _x = o#phrase _x in `Exp _x
+      | `Module (n, p) ->
+          let n = o#name n in
+          let p = o#phrase p in
+          `Module (n, p)
 
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
@@ -702,7 +707,7 @@ class fold =
     method known_type_variable : known_type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
         let o = o#name _x in
-        let o = o#subkind _x_i1 in
+        let o = o#option (fun o -> o#subkind) _x_i1 in
         let o = o#freedom _x_i2 in o
 
     method row_var : row_var -> 'self_type =
@@ -774,7 +779,7 @@ class fold =
 	 (*let o = o#option (fun o -> o#unknown) types in*)
 	 let o = o#handler_spec spec in
 	 let o = o#handlerlit hnlit in o
-      | `Spawn (_x, _x_i1, _x_i2) -> let o = o#phrase _x_i1 in o
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -1168,7 +1173,7 @@ class fold =
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
-      | `Include _x -> let o = o#string _x in o
+      | `Import _x -> let o = o#string _x in o
       | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
@@ -1181,6 +1186,10 @@ class fold =
           in let o = o#datatype' _x_i2 in o
       | `Infix -> o
       | `Exp _x -> let o = o#phrase _x in o
+      | `Module (n, p) ->
+          let o = o#name n in
+          let o = o#phrase p in
+          o
 
     method binding : binding -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1281,7 +1290,7 @@ class fold_map =
     method known_type_variable : known_type_variable -> ('self_type * known_type_variable) =
       fun (_x, _x_i1, _x_i2) ->
         let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#subkind _x_i1 in
+        let (o, _x_i1) = o#option (fun o -> o#subkind) _x_i1 in
         let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
     method row_var : row_var -> ('self_type * row_var) =
@@ -1365,7 +1374,8 @@ class fold_map =
 	 let (o, spec) = o#handler_spec spec in
 	 let (o, fnlit) = o#handlerlit hnlit in
 	 (o, `HandlerLit (spec, hnlit))
-      | `Spawn (_x, _x_i1, _x_i2) -> let (o, _x_i1) = o#phrase _x_i1 in (o, (`Spawn (_x, _x_i1, _x_i2)))
+      | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let (o, _x_i1) = o#location _x_i1 in
+                                            let (o, _x_i2) = o#phrase _x_i2 in (o, (`Spawn (_x, _x_i1, _x_i2, _x_i3)))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option
@@ -1866,7 +1876,7 @@ class fold_map =
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))
-      | `Include _x -> let (o, _x) = o#string _x in (o, (`Include _x))
+      | `Import _x -> let (o, _x) = o#string _x in (o, (`Import _x))
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
@@ -1880,6 +1890,10 @@ class fold_map =
           in (o, (`Type ((_x, _x_i1, _x_i2))))
       | `Infix -> (o, `Infix)
       | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
+      | `Module (n, p) ->
+          let (o, n) = o#string n in
+          let (o, p) = o#phrase p in
+          (o, (`Module (n, p)))
 
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->

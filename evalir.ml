@@ -35,7 +35,7 @@ module Eval = struct
           (* TODO: perhaps we should actually use env here - and make
              sure we only call this function when it is sufficiently
              small *)
-          Some (`FunctionPtr (f, Value.empty_env))
+          Some (`FunctionPtr (f, None))
         | `Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
       end
@@ -155,30 +155,41 @@ module Eval = struct
         | None -> failwith ("Closure without environment variable: " ^ Ir.Show_value.show (`Closure (f, v)));
         | Some z -> z
       in
-      begin
-        match location with
-        | `Server | `Unknown ->
-          let r = value env v in
-          let locals = Value.bind z (value env v, `Local) Value.empty_env in
-          `FunctionPtr (f, locals)
-        | `Client ->
-          `ClientFunction (Js.var_name_binder (f, finfo))
-      end
+      (* begin *)
+
+      (* TODO: consider getting rid of `ClientFunction *)
+      (* Currently, it's only necessary for built-in client
+         functions *)
+
+      (* match location with *)
+      (* | `Server | `Unknown | `Client -> *)
+      `FunctionPtr (f, Some (value env v))
+      (* | `Client -> *)
+      (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
+      (* end *)
     | `Coerce (v, t) -> value env v
 
   and apply cont hs env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
-    | `FunctionPtr (f, locals), ps ->
-      let (_finfo, (xs, body), _z, _location) as def = find_fun f in
-      let env = Value.shadow env ~by:locals in
+    | `FunctionPtr (f, fvs), ps ->
+      let (_finfo, (xs, body), z, _location) as def = find_fun f in
+      let env =
+        match z, fvs with
+        | None, None            -> env
+        | Some z, Some fvs -> Value.bind z (fvs, `Local) env in
+
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
-      computation env cont hs body
+      computation env cont body
+    | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
+      let key = EventHandlers.register hs in
+      apply_cont cont env (`String (string_of_int key))
+    (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont hs [pid; msg]
         else
-          let pid = Value.unbox_int pid in
+          let (pid, location) = Value.unbox_pid pid in
             (try
                Mailbox.send_message msg pid;
                Proc.awaken pid
@@ -197,8 +208,13 @@ module Eval = struct
                           ([], `Apply (`Variable var, [])))] in
 	    let cont' = Value.append_delim_cont delim Value.toplevel_cont in
             let new_pid = Proc.create_process false (fun () -> apply_cont cont' Value.toplevel_hs env func) in
-            apply_cont cont hs env (`Int new_pid)
+            let location = `Unknown in
+            apply_cont cont hs env (`Pid (new_pid, location))
           end
+    | `PrimitiveFunction ("spawnClient",_), [func] ->
+      let var = Var.dummy_var in
+      let new_pid = Proc.create_client_process func in
+      apply_cont cont env (`Pid (new_pid, `Client))
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont hs [func]
@@ -211,7 +227,8 @@ module Eval = struct
                           ([], `Apply (`Variable var, [])))] in
 	    let cont' = Value.append_delim_cont delim Value.toplevel_cont in
             let new_pid = Proc.create_process true (fun () -> apply_cont cont' Value.toplevel_hs env func) in
-            apply_cont cont hs env (`Int new_pid)
+            let location = `Unknown in
+            apply_cont cont hs env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -233,7 +250,8 @@ module Eval = struct
               in
               Proc.block (fun () -> apply_cont (Value.append_cont_frame recv_frame cont) hs env (`Record []))
         end
-    (* Session stuff *)
+    (* end of mailbox stuff *)
+    (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
         apply_cont cont hs env (`Int apid)
@@ -332,7 +350,8 @@ module Eval = struct
         unblock out1;
         unblock out2;
         apply cont hs env (value env end_bang, [])
-    (*****************)
+    (* end of session stuff *)
+>>>>>>> origin/sessions
     | `PrimitiveFunction (n,None), args ->
         apply_cont cont hs env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->

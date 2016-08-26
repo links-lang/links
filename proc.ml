@@ -23,11 +23,13 @@ struct
 
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
+        client_processes : (pid, Value.t) Hashtbl.t;
         angels : (pid, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
   let state = {
     blocked          = Hashtbl.create 10000;
+    client_processes = Hashtbl.create 10000;
     angels           = Hashtbl.create 10000;
     step_counter     = ref 0 }
 
@@ -63,6 +65,13 @@ struct
 
   (** Convert a PID into a string. *)
   let string_of_pid = string_of_int
+
+  (** retrieve the body of a client process (for transmission to the
+      client) *)
+  let get_client_process pid =
+    try Hashtbl.find state.client_processes pid with
+    | NotFound pid ->
+      failwith ("Missing client process: " ^ pid)
 
   (** Awaken (unblock) a process:
     Move it from the blocked state to the runnable queue ([suspended]).
@@ -137,6 +146,12 @@ struct
       async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
     new_pid
 
+  (** Create a new client process and return its identifier *)
+  let create_client_process func =
+    let new_pid = fresh_pid () in
+    Hashtbl.add state.client_processes new_pid func;
+    new_pid
+
   let finish r =
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
@@ -193,15 +208,12 @@ struct
   (** Given a PID, return its next queued message (under [Some]) or [None]. *)
   let pop_message_for pid =
     let mqueue =
-      try
-        Hashtbl.find message_queues pid
-      with
-        Notfound.NotFound _ ->
-        begin
-          let mqueue = Queue.create () in
-          let _ = Hashtbl.add message_queues pid mqueue in
-          mqueue
-        end in
+      match Hashtbl.lookup message_queues pid with
+      | Some mqueue -> mqueue
+      | None ->
+        let mqueue = Queue.create () in
+        let _ = Hashtbl.add message_queues pid mqueue in
+        mqueue in
     if not (Queue.is_empty mqueue) then
       Some (Queue.pop mqueue)
     else
@@ -210,17 +222,24 @@ struct
   (** Pop a message for the current process. *)
   let pop_message () = pop_message_for (Proc.get_current_pid ())
 
+  (** extract an entire message queue (used in transporting messages
+      to the client) *)
+  let pop_all_messages_for pid =
+    match Hashtbl.lookup message_queues pid with
+    | Some mqueue ->
+      Hashtbl.remove message_queues pid;
+      List.rev (Queue.fold (fun xs x -> x :: xs) [] mqueue)
+    | None        -> []
+
   (** Send a message to the identified process. Raises [UnknownProcessID pid]
     if the given [pid] does not exist (does not have a message queue). *)
   let send_message msg pid =
-    try
-      Queue.push msg (Hashtbl.find message_queues pid)
-    with Notfound.NotFound _ ->
-      begin
-        let mqueue = Queue.create () in
-        Queue.push msg mqueue;
-        Hashtbl.add message_queues pid mqueue
-      end
+    match Hashtbl.lookup message_queues pid with
+    | Some mqueue -> Queue.push msg mqueue
+    | None ->
+      let mqueue = Queue.create () in
+      Queue.push msg mqueue;
+      Hashtbl.add message_queues pid mqueue
 end
 
 module Session = struct

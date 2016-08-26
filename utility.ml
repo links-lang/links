@@ -412,6 +412,20 @@ struct
 
   let drop_nth xs n =
     (take n xs) @ (drop (n+1) xs)      
+
+  let rec filter_map pred f = function
+    | [] -> []
+    | x::xs ->
+        if pred x then (f x)::(filter_map pred f xs) else
+          (filter_map pred f xs)
+
+  let print_list xs =
+    let rec print_list_inner = function
+        | [] -> ""
+        | e::[] -> e
+        | e::xs -> e ^ ", " ^ (print_list_inner xs) in
+    "[" ^ print_list_inner xs ^ "]"
+
 end
 include ListUtils
 

@@ -91,9 +91,13 @@ SOURCE_FILES = $(OPC)                                \
           closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
+					moduleUtils.mli moduleUtils.ml \
+					chaser.mli chaser.ml \
+					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \
+          eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
           resolvePositions.mli resolvePositions.ml       \
@@ -116,13 +120,13 @@ SOURCE_FILES = $(OPC)                                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
+          proc.mli proc.ml                      \
           jsonparse.mly                         \
           jsonlex.mll                           \
           js.ml                                 \
           json.ml                               \
           database.mli database.ml              \
           linksregex.ml                         \
-          proc.mli proc.ml                      \
           lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \

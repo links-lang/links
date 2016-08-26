@@ -8,27 +8,27 @@ open Sugartypes
 
 let type_variable_counter = ref 0
 
-let fresh_type_variable : subkind -> datatype =
+let fresh_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_type_variable : subkind -> datatype =
+let fresh_rigid_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_row_variable : subkind -> row_var =
+let fresh_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_row_variable : subkind -> row_var =
+let fresh_rigid_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_presence_variable : subkind -> fieldspec =
+let fresh_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_presence_variable : subkind -> fieldspec =
+let fresh_rigid_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
@@ -83,12 +83,12 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  p, (l, r)
+  p, Some (l, r)
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  (l, r)
+  Some (l, r)
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
@@ -102,50 +102,50 @@ perhaps. *)
 let kind_of pos =
   function
   (* primary kind abbreviation  *)
-  | "Type" -> `Type, (`Unl, `Any)
-  | "Row" -> `Row, (`Unl, `Any)
-  | "Presence" -> `Presence, (`Unl, `Any)
+  | "Type" -> `Type, None
+  | "Row" -> `Row, None
+  | "Presence" -> `Presence, None
   (* subkind of type abbreviations *)
-  | "Any" -> `Type, (`Any, `Any)
-  | "Base" -> `Type, (`Unl, `Base)
-  | "Session" -> `Type, (`Any, `Session)
+  | "Any" -> `Type, Some (`Any, `Any)
+  | "Base" -> `Type, Some (`Unl, `Base)
+  | "Session" -> `Type, Some (`Any, `Session)
   | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos))
 
 let subkind_of pos =
   function
   (* subkind abbreviations *)
-  | "Any" -> (`Any, `Any)
-  | "Base" -> (`Unl, `Base)
-  | "Session" -> (`Any, `Session)
+  | "Any" -> Some (`Any, `Any)
+  | "Base" -> Some (`Unl, `Base)
+  | "Session" -> Some (`Any, `Session)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
 let attach_kind pos (t, k) = (t, k, `Rigid)
 
-let attach_subkind_helper update pos (l, r) = update l r
+let attach_subkind_helper update pos sk = update sk
 
 let attach_subkind pos (t, subkind) =
-  let update lin rest =
+  let update sk =
     match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, _, freedom) ->
+       `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
 
 let attach_session_subkind pos (t, subkind) =
-  let update lin rest =
+  let update sk =
     match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, _, freedom) ->
+       `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
 
 let attach_row_subkind pos (r, subkind) =
-  let update lin rest =
+  let update sk =
     match r with
-    | `Open (x, (_linearity, _restriction), freedom) ->
-       `Open (x, (lin, rest), freedom)
+    | `Open (x, _, freedom) ->
+       `Open (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -178,7 +178,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE SHALLOWHANDLE OPEN HANDLER SHALLOWHANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT HANDLE SHALLOWHANDLE OPEN HANDLER SHALLOWHANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -189,7 +189,7 @@ let datatype d = d, None
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONCOLONCOLON
 %token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
@@ -202,10 +202,11 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
-%token <string> LXML ENDTAG
+%token <string> QUALIFIEDVARIABLE VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token <string> QUALIFIEDMODULE LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG OPEN
+%token MODULE
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -251,7 +252,6 @@ let datatype d = d, None
 %%
 
 interactive:
-| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -284,7 +284,6 @@ var:
 | VARIABLE                                                     { $1, pos() }
 
 preamble:
-| preamble_declaration preamble                                { $1 :: $2 }
 | /* empty */                                                  { [] }
 
 declarations:
@@ -294,9 +293,6 @@ declarations:
 declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
-
-preamble_declaration:
-| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
@@ -308,6 +304,16 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
+
+
+links_module:
+| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, (`Block $3, name_pos)), name_pos }
+module_name:
+| CONSTRUCTOR                                                  { $1 , pos () }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -371,7 +377,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of (pos()) $2 }
 
 typearg:
-| VARIABLE                                                     { (($1, (`Type, (`Unl, `Any)), `Rigid), None) }
+| VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -401,6 +407,7 @@ constant:
 
 atomic_expression:
 | VARIABLE                                                     { `Var $1, pos() }
+| QUALIFIEDVARIABLE                                            { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
@@ -526,10 +533,11 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN block                                                  { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNANGEL block                                             { `Spawn (`Angel, (`Block $2, pos()), None), pos () }
-| SPAWNDEMON block                                             { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNWAIT block                                              { `Spawn (`Wait, (`Block $2, pos()), None), pos () }
+| SPAWN perhaps_location block                                 { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNCLIENT perhaps_location block                           { `Spawn (`Client, $2, (`Block $3, pos()), None), pos () }
+| SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
+| SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int 0), pos ())),
@@ -868,6 +876,11 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
+links_open:
+| OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
+| OPEN QUALIFIEDMODULE                                         { `Import $2, pos () }
+| OPEN CONSTRUCTOR                                             { `Import $2, pos () }
+
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
@@ -876,10 +889,15 @@ binding:
 | typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { let (m, spec, hnlit, pos) = $1 in
 								 `Handler (m, spec, hnlit, None), pos }
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
+
+moduleblock:
+| LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
@@ -950,9 +968,9 @@ straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { `Function ($1,
-                                                                               ([], fresh_rigid_row_variable (`Unl, `Any)),
+                                                                               ([], fresh_rigid_row_variable None),
                                                                                $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable None), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -972,11 +990,11 @@ squiggly_arrow:
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
                                                                                ([("wild", `Present `Unit)],
-                                                                                 fresh_rigid_row_variable (`Unl, `Any)),
+                                                                                 fresh_rigid_row_variable None),
                                                                                 $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
                                                                             ([("wild", `Present `Unit)],
-                                                                             fresh_rigid_row_variable (`Unl, `Any)),
+                                                                             fresh_rigid_row_variable None),
                                                                             $3) }
 
 mu_datatype:
@@ -1027,10 +1045,10 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
+| VARIABLE                                                     { `TypeVar ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable None }
+| PERCENT                                                      { fresh_type_variable None }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -1129,16 +1147,16 @@ fieldspec:
 | LBRACE COLON datatype RBRACE                                 { `Present $3 }
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `Var ($2, (`Unl, `Any), `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, (`Unl, `Any), `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable (`Unl, `Any) }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable (`Unl, `Any) }
+| LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable None }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `Open ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_row_variable (`Unl, `Any) }
+| VARIABLE                                                     { `Open ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable None }
+| PERCENT                                                      { fresh_row_variable None }
 
 /* FIXME:
  *

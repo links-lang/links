@@ -99,7 +99,7 @@ struct
     | `Funs _
     | `Infix
     | `Type _
-    | `Include _
+    | `Import _
     | `Foreign _ -> true
     | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
@@ -294,7 +294,6 @@ sig
   val cp_comp_left : griper
   val cp_fuse_session : griper
   val cp_fuse_dual : griper
-
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -1763,9 +1762,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
               StringMap.add opname (k,kt) kenv
            | `Any
-           | `As _
-           | `HasType _     
-           | `Variable _ ->
+             | `As _
+             | `HasType _     
+             | `Variable _ ->
               let _ = type_continuation tenv kt pat' in
               let k = tpo pat' in
               let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
@@ -1808,14 +1807,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	  let t  =
             match unPresent p with
 	    | `Variant (fields,_,_)
-            | `Record (fields,_,_) ->
+              | `Record (fields,_,_) ->
                let (_,fields) = StringMap.pop (string_of_int (StringMap.size fields)) fields in
 	       let ps = Types.make_tuple_type (List.rev (StringMap.fold (fun _ p ps -> (unPresent p) :: ps) fields [])) in
 	       let r  = List.hd (TypeUtils.arg_types kt) in
 	       `Function (ps, Types.make_empty_closed_row (), r)
-	   | _ -> r
-             in
-	     (opname,t)
+	    | _ -> r
+          in
+	  (opname,t)
 	) operations
     in
     let operations = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty operations in
@@ -2292,6 +2291,50 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
        let () = unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
        `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
     (* mailbox-based concurrency *)
+    | `Spawn (`Wait, location, p, _) ->
+       (* (() -{b}-> d) -> d *)
+       let inner_effects = Types.make_empty_open_row (`Any, `Any) in
+       let pid_type = `Application (Types.process, [`Row inner_effects]) in
+       let () =
+         let outer_effects =
+           Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
+         in
+         unify ~handle:Gripers.spawn_wait_outer
+               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+       let p = type_check (bind_effects context inner_effects) p in
+       let return_type = typ p in
+       `Spawn (`Wait, location, erase p, Some inner_effects), return_type, usages p
+    | `Spawn (k, location, p, _) ->
+       (* (() -e-> _) -> Process (e) *)
+       let inner_effects = Types.make_empty_open_row (`Any, `Any) in
+       let pid_type = `Application (Types.process, [`Row inner_effects]) in
+       let () =
+         let outer_effects =
+           Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any)
+         in
+         unify ~handle:Gripers.spawn_outer
+               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
+       let p = type_check (bind_effects context inner_effects) p in
+       if not (Types.type_can_be_unl (typ p)) then
+         Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
+       `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
+
+    | `Receive (binders, _) ->
+       let mb_type = Types.fresh_type_variable (`Any, `Any) in
+       let effects =
+         Types.row_with ("wild", `Present Types.unit_type)
+                        (Types.make_singleton_open_row ("hear", `Present mb_type) (`Any, `Any)) in
+
+       let () = unify ~handle:Gripers.receive_mailbox
+                      (no_pos (`Record context.effect_row), no_pos (`Record effects)) in
+
+       let binders, pattern_type, body_type = type_cases binders in
+       let () = unify ~handle:Gripers.receive_patterns
+                      (no_pos mb_type, no_pos pattern_type)
+       in
+       `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
+
+    (* mailbox-based concurrency *)
     | `Spawn (`Wait, p, _) ->
        (* (() -{b}-> d) -> d *)
        let inner_effects = Types.make_empty_open_row (`Any, `Any) in
@@ -2319,7 +2362,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
        if not (Types.type_can_be_unl (typ p)) then
          Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
        `Spawn (k, erase p, Some inner_effects), pid_type, usages p
-
+                                                                 
     | `Receive (binders, _) ->
        let mb_type = Types.fresh_type_variable (`Any, `Any) in
        let effects =
@@ -2960,7 +3003,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
   let empty_context = empty_context (context.Types.effect_row) in
 
   let typed, ctxt, usage = match def with
-    | `Include _ -> assert false
+    | `Import _ -> assert false
     | `Val (_, pat, body, location, datatype) ->
        let body = tc body in
        let pat = tpc pat in
@@ -3098,8 +3141,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    *)
                   make_ft_poly_curry lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any))
                | Some (_, Some t) ->
+                  (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   let shape = make_ft lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any)) in
                   let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                  (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                   (* make sure the annotation has the right shape *)
                   let _, fti = Instantiate.typ ft in
                   let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in

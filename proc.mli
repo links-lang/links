@@ -10,7 +10,10 @@ sig
   val string_of_pid : pid -> string
   val get_current_pid : unit -> pid
 
+  val get_client_process : pid -> Value.t
+
   val create_process : bool -> thread -> pid
+  val create_client_process : Value.t -> pid
   val awaken : pid -> unit
 
   val finish : thread_result -> thread_result Lwt.t
@@ -27,6 +30,7 @@ end
 module Mailbox :
 sig
   val pop_message_for : Proc.pid -> Value.t option
+  val pop_all_messages_for : Proc.pid -> Value.t list
   val pop_message : unit -> Value.t option
   val send_message : Value.t -> Proc.pid -> unit
 end

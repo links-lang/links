@@ -39,50 +39,19 @@ let is_client_program : Ir.program -> bool =
 let serialize_call_to_client (continuation, name, arg) =
   Json.jsonize_call continuation [] name arg (* TODO: Fix handler stack here *)
 
-let resolve_function f env = Evalir.eval_fun env f
-
 let parse_remote_call (valenv, nenv, tyenv) cgi_args =
   let fname = Utility.base64decode (assoc "__name" cgi_args) in
   let args = Utility.base64decode (assoc "__args" cgi_args) in
   (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
   let args = Value.untuple (Json.parse_json args) in
-  let r = Json.parse_json_b64 (assoc "__env" cgi_args) in
-  let local_env =
-    (* Unpack the record to an alist *)
-    match Value.intmap_of_record r with
-        Some x -> x
-      | None -> failwith "Decoding remote-call request, __env was not a record."
-  in
-  let local_env = IntMap.map (fun x -> (x, `Local)) local_env in
-  let env = Value.extend valenv local_env in
-  (* Debug.print ("env: " ^ Value.Show_env.show env); *)
-  Debug.print("Resolving server call to " ^ fname);
 
-  (* FIXME *)
-  (* ridiculousness: fname is sometimes an integer and sometimes a
-     real name! *)
+  let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
 
   let func =
-    let var =
-      try int_of_string fname with
-        _ ->
-        if not (Env.String.has nenv fname) then
-          failwith ("fname: " ^ fname ^ " isn't an integer and isn't in the nenv environment!")
-        else
-          Env.String.lookup nenv fname
-    in
-    try resolve_function var valenv with
-      _ ->
-      begin
-        match Value.lookup var valenv with
-        | Some v -> v
-        (* Try the primitives. *)
-        | None ->
-          Debug.print ("fname: " ^ fname ^ " not in value environment");
-          Lib.primitive_stub fname
-      end
-  in
-  RemoteCall(func, env, args)
+    match fvs with
+    | `Record [] -> `FunctionPtr (int_of_string fname, None)
+    | _          -> `FunctionPtr (int_of_string fname, Some fvs) in
+  RemoteCall(func, valenv, args)
 
 (** Boolean tests for cgi parameters *)
 

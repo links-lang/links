@@ -297,7 +297,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Int (Proc.get_current_pid())),
+  (`PFun (fun _ -> `Pid (Proc.get_current_pid(), `Unknown)),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
@@ -322,6 +322,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (* And now it is *)
+  (`PFun (fun _ -> assert false),
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   IMPURE);
+
+  "spawnClient",
   (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
@@ -738,8 +743,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
+  (* event handlers *)
+  (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
-  (`Client, datatype "([(String,(Event) -> ())]) ~> String",
+  (`PFun (fun _ -> assert false),
+  datatype "([(String, (Event) ~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)

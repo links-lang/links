@@ -188,12 +188,13 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
+| `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
@@ -254,7 +255,7 @@ and compressed_t = [
 | `List of compressed_t list
 | `Record of (string * compressed_t) list
 | `Variant of string * compressed_t
-| `FunctionPtr of (Ir.var * compressed_env)
+| `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation
@@ -300,11 +301,12 @@ and compress_t (v : t) : compressed_t =
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
-      | `FunctionPtr(x, env) ->
-        `FunctionPtr (x, compress_env env)
+      | `FunctionPtr(x, fvs) ->
+        `FunctionPtr (x, opt_map compress_t fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation (cont,_) -> `Continuation (compress_continuation cont) (* TODO: Compress handlers *)
+      | `Pid (pid, location) -> assert false
       | `Socket (inc, outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -352,7 +354,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `List vs -> `List (List.map uv vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
-      | `FunctionPtr (x, locals) -> `FunctionPtr (x, uncompress_env globals locals)
+      | `FunctionPtr (x, fvs) -> `FunctionPtr (x, opt_map uv fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont, []) (* TODO: Uncompress handlers *)
@@ -393,9 +395,9 @@ and charlist_as_string chlist =
 
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
-  | `FunctionPtr (x, env) ->
+  | `FunctionPtr (x, fvs) ->
     if Settings.get_value (Basicsettings.printing_functions) then
-      string_of_int x ^ string_of_environment env
+      string_of_int x ^ opt_app string_of_value "" fvs
     else
       "fun"
   | `PrimitiveFunction (name,_op) -> name
@@ -425,6 +427,7 @@ and string_of_value : t -> string = function
   | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
   | `DeepContinuation _ -> "\"DeepContinuation\""
   | `ShallowContinuation _ -> "\"ShallowContinuation\""     
+  | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -526,6 +529,10 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
+let box_pid (pid, location) = `Pid (pid, `Unknown)
+let unbox_pid = function
+  | `Pid (pid, location) -> (pid, location)
+  | _ -> failwith "Type error unboxing pid"
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p

@@ -1021,7 +1021,7 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `Include _ -> assert false
+                | `Import _ -> assert false
             end
 
   and evalv env e =

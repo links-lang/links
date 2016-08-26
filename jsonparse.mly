@@ -98,17 +98,13 @@ object_:
                                   end
                             | ["_closureTable", id] ->
                               `ClientFunction("_closureTable["^Value.string_of_value id^"]")
-                            | ["_serverFunc", id] ->
-                              `FunctionPtr(Value.unbox_int id, Value.empty_env)
-                            | ["_serverFunc", id; "_env", env]
-                            | ["_env", env; "_serverFunc", id] ->
-                              let env' =
-                                Value.extend Value.empty_env
-                                  (Utility.IntMap.map
-                                     (fun v -> (v, `Local))
-                                     (Utility.val_of (Value.intmap_of_record env)))
-                              in
-                              `FunctionPtr(Value.unbox_int id, env')
+                            | ["_serverFunc", id]
+                            | ["_serverFunc", id; "_env", `Record []]
+                            | ["_env", `Record []; "_serverFunc", id] ->
+                              `FunctionPtr(Value.unbox_int id, None)
+                            | ["_serverFunc", id; "_env", fvs]
+                            | ["_env", fvs; "_serverFunc", id] ->
+                              `FunctionPtr(Value.unbox_int id, Some fvs)
                             | _ -> `Record (List.rev $2)
                         }
 

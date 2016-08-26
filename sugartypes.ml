@@ -67,6 +67,11 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
+let string_of_location = function
+| `Client -> "client"
+| `Server -> "server"
+| `Native -> "native"
+| `Unknown -> "unknown"
 
 type restriction = [ `Any | `Base | `Session ]
     deriving (Eq, Show)
@@ -76,19 +81,22 @@ type linearity   = [ `Any | `Unl ]
 type subkind = linearity * restriction
     deriving (Eq, Show)
 
+let default_subkind = (`Unl, `Any)
+
 type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
 type primary_kind = [`Type | `Row | `Presence]
     deriving (Show)
 
-type kind = primary_kind * subkind
+type kind = primary_kind * subkind option
     deriving (Show)
 
 type type_variable = name * kind * freedom
     deriving (Show)
 
-type known_type_variable = name * subkind * freedom
+(* type variable of primary kind Type? *)
+type known_type_variable = name * subkind option * freedom
     deriving (Show)
 
 type quantifier = type_variable
@@ -159,7 +167,7 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [
@@ -195,7 +203,7 @@ and phrasenode = [
 | `Var              of name
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `HandlerLit       of handler_spec * handlerlit 
-| `Spawn            of spawn_kind * phrase * Types.row option
+| `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -256,10 +264,11 @@ and bindingnode = [
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handler_spec * handlerlit * datatype' option
 | `Foreign of binder * name * datatype'
-| `Include of string
+| `Import  of name
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
+| `Module  of name * phrase
 ]
 and binding = bindingnode * position
 and handler_spec    = handler_nature * handler_depth
@@ -346,7 +355,7 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (_, p, _)
+    | `Spawn (_, _, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)
@@ -443,7 +452,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Include _
+    | `Import _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
