@@ -63,11 +63,11 @@ Shadowing handler parameter (3)
 stdout : 2 : Int
 
 Signature for handler (deep, open handler)
-sig h1 : (Comp({Op:(Int) {}-> Int|e}, Int)) -> Comp({Op{_}|e}, Int) open handler h1 { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
+sig h1 : (Comp({Op:(Int) {}-> Int|e}, Int)) -> Comp({Op{_}|e}, Int) handler h1 { case Op(p,k) -> k(p+1) case Return(x) -> 2 }
 stdout : () : ()
 
 Signature for handler (shallow, open handler)
-sig h1 : (Comp({Op:(Int) {}-> Int|e},Int)) -> Comp({Op{_}|e}, Int) open shallowhandler h1 { case Op(p,k) -> h1(fun() {k(p+1)})() case Return(x) -> 2 }
+sig h1 : (Comp({Op:(Int) {}-> Int|e},Int)) -> Comp({Op{_}|e}, Int) shallowhandler h1 { case Op(p,k) -> h1(fun() {k(p+1)})() case Return(x) -> 2 }
 stdout : () : ()
 
 Operation parameter pattern-matching (hiding)
@@ -132,15 +132,15 @@ handler h1 { case Op1(k) -> 1 case Return((x,y)) -> 0 }
 stdout : () : ()
 
 Open handler composition (1)
-open handler h1 { case Op1(k) -> k(1) case Return(x) -> x } open handler h2 { case Op2(k) -> k(2) case Return(x) -> x } open handler h3 { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
+handler h1 { case Op1(k) -> k(1) case Return(x) -> x } handler h2 { case Op2(k) -> k(2) case Return(x) -> x } handler h3 { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 
 Type annotation on continuation parameter (deep, open handler)
-open handler h1 { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) case Return(x) -> x }
+handler h1 { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) case Return(x) -> x }
 stdout : () : ()
 
-Type annotation on continuation parameter (shallow, open handler)
-open shallowhandler h1 { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
+Type annotation on continuation parameter (shallow, open shandler)
+shallowhandler h1 { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
 stdout : () : ()
 
 Shallow handler (Addition, one handler)

@@ -180,9 +180,10 @@ and regex = [
 | `Splice    of phrase
 | `Replace   of regex * replace_rhs
 ]
+and clause = pattern * phrase
 and funlit = pattern list list * phrase
-and handlerlit = pattern * (pattern * phrase) list * pattern list list option (* computation arg, cases, parameters *)
-and handler    = phrase * (pattern * phrase) list * hdescriptor (* computation, cases, descriptor *)
+and handlerlit = pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
+and handler    = phrase  * clause list * hdescriptor (* computation, cases, descriptor *)
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase

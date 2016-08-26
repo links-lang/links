@@ -322,11 +322,11 @@ fun_declaration:
 								 `Handler (b, spec, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_specialization handled_computation var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
+| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
 			   						     let hnlit  = ($2, fst $4, snd $4) in
  									     (binder, $1, hnlit, pos()) }
 
-handled_computation:
+optional_computation_parameter:
 | /* empty */                                                 { (`Any, pos()) }
 | LBRACKET pattern RBRACKET                                   { $2 }
   
@@ -454,21 +454,17 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_specialization handled_computation handler_parameterization              {  let (body, args) = $3 in
+| handler_specialization optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
 										      let hnlit = ($2, body, args) in						  
 											`HandlerLit ($1, hnlit), pos() } 
     
 handler_specialization:
-| handler_nature handler_depth { ($1, $2) }
+| handler_depth { (`Open, $1) }
 
 handler_parameterization:
 | handler_body                         { ($1, None) }
-| arg_lists handler_body { ($2, Some $1) }
+| arg_lists handler_body               { ($2, Some $1) }
 
-handler_nature:
-| /* empty */                { `Open }
-| OPEN                       { `Open }
-    
 handler_depth:
 | HANDLER                    { `Deep }
 | SHALLOWHANDLER             { `Shallow }
@@ -762,7 +758,7 @@ case_expression:
                                                                  `Handle ($3, $6, descriptor), pos() }
 
 handle_specialisation:
-| handler_nature handle_depth                                  { ($1, $2) }
+| handle_depth                                                 { (`Open, $1) }
     
 handle_depth:
 | HANDLE                                                       { `Deep }
