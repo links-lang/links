@@ -562,13 +562,8 @@ module Eval = struct
               in
 	      computation (Value.bind var (Value.box vs, `Local) henv) cont hs comp
            | None ->
-              if not (HandlerUtils.IrHandler.is_closed spec) then
-                begin
-                  Debug.print ("Forwarding: " ^ opname);
-                  handle' (cont', hs') (cont, hs)
-                end
-              else
-                eval_error "Pattern matching failed %s" opname
+              Debug.print ("Forwarding: " ^ opname);
+              handle' (cont', hs') (cont, hs)              
          end
       | _, [] -> eval_error "Unhandled operation: %s" opname
     in
