@@ -178,7 +178,8 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE SHALLOWHANDLE OPEN HANDLER SHALLOWHANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT OPEN
+%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -459,15 +460,15 @@ primary_expression:
 											`HandlerLit ($1, hnlit), pos() } 
     
 handler_specialization:
-| handler_depth { (`Open, $1) }
+| handler_depth                        { $1 }
 
 handler_parameterization:
 | handler_body                         { ($1, None) }
 | arg_lists handler_body               { ($2, Some $1) }
 
 handler_depth:
-| HANDLER                    { `Deep }
-| SHALLOWHANDLER             { `Shallow }
+| HANDLER                    { `Deep, `Unrestricted }
+| SHALLOWHANDLER             { `Shallow, `Unrestricted }
 
 handler_body:	  
 | LBRACE cases RBRACE    	                               { $2 }
@@ -758,11 +759,12 @@ case_expression:
                                                                  `Handle ($3, $6, descriptor), pos() }
 
 handle_specialisation:
-| handle_depth                                                 { (`Open, $1) }
+| handle_depth                                                 { $1 }
     
 handle_depth:
-| HANDLE                                                       { `Deep }
-| SHALLOWHANDLE                                                { `Shallow }
+| LINEARHANDLE                                                 { (`Deep, `Linear) }              
+| HANDLE                                                       { (`Deep, `Unrestricted) }
+| SHALLOWHANDLE                                                { (`Shallow, `Unrestricted) }
     
 iteration_expression:
 | case_expression                                              { $1 }

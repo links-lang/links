@@ -2812,8 +2812,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		      (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
 		    ) continuations []
 	 in
-	 match HandlerUtils.HandlerDescriptor.is_shallow desc with
-	   false -> (* Deep handlers: Make continuation codomains and body type agree *)
+	 match HandlerUtils.SugarDescriptor.depth desc with
+	 | `Deep -> (* Deep handlers: Make continuation codomains and body type agree *)
 	   let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
 	   List.fold_left
 	     (fun _ (k, ktail) ->
@@ -2821,7 +2821,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 	     )
 	     () ks
-	 | _ -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
+	 | `Shallow -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
 	    let poly_presence_row = `Record (make_operations_presence_polymorphic input_effect_row) in
 
             (** FIXME BUG:
@@ -2848,7 +2848,7 @@ h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
 	      )
 	      () ks
        in
-       let desc = HandlerUtils.HandlerDescriptor.update_type_info desc (body_type, effects) in 
+       let desc = HandlerUtils.SugarDescriptor.update_type_info (body_type, effects) desc in 
        `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
     | `Switch (e, binders, _) ->
        let e = tc e in

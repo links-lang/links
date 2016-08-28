@@ -7,8 +7,7 @@ open Utility
 open PP
 
 (* Handlers *)
-type handler_spec   = handler_nature * handler_depth
-and handler_nature  = [ `Open | `Closed ]
+type handler_spec   = handler_depth * [`Linear | `Unrestricted]
 and handler_depth   = [ `Deep | `Shallow ]
   deriving (Show)
 

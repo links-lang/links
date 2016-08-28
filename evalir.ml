@@ -538,6 +538,7 @@ module Eval = struct
       end
   (*****************)
   and handle env cont hs (opname, vs) =
+    let depth = fst in    
     (** handle operations, forwarding appropriately, where
         [cont'] and [hs'] are reversed stacks of
         delimited continuations and handlers
@@ -550,10 +551,13 @@ module Eval = struct
          begin
            match StringMap.lookup opname h with	    
 	   | Some (kb, (var, _), comp) ->
-	      let k = if HandlerUtils.IrHandler.is_shallow spec then
-		  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
-		else
-		  `DeepContinuation (List.rev cont', List.rev hs')
+              let k =
+                match depth spec with
+                | `Deep ->
+                   `DeepContinuation (List.rev cont', List.rev hs')
+                | `Shallow ->
+                   `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
+                | _ -> assert false
 	      in
               let henv =
                 match kb with

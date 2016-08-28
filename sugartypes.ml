@@ -262,8 +262,7 @@ and bindingnode = [
 | `Exp     of phrase
 ]
 and binding = bindingnode * position
-and handler_spec    = handler_nature * handler_depth
-and handler_nature  = [ `Open | `Closed ]
+and handler_spec    = handler_depth * [`Linear | `Unrestricted]
 and handler_depth   = [ `Deep | `Shallow ]
 and hdescriptor     = handler_spec * (Types.datatype * Types.row) option (* handler specialisation, optional (output type and input effects) *)
 and directive = string * string list
