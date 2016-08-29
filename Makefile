@@ -65,7 +65,7 @@ OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
 
-SERVER_LIBS=mpi.cmxa lib/server/builtins.mli lib/server/builtins.ml
+SERVER_LIBS=lib/server/builtins.mli lib/server/builtins.ml
 
 BACKEND=$(SERVER_LIBS) \
 	comp/fileInfo.mli comp/fileInfo.ml \

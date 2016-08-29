@@ -1500,24 +1500,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Server (p1 (fun f -> box_float (abs_float (unbox_float f)) )),
    datatype "(Float) -> Float",
    PURE);          
-              (** mpi stuff **)
-    "mpiSend",
-  (`Server (`PFun (fun _ -> failwith "Not supported.")),
-   datatype "(a, Rank, Communicator) ~> ()",
-   IMPURE);
-    "mpiCommWorld",
-  (`Server (`PFun (fun _ -> failwith "Not supported.")),
-   datatype "() ~> Communicator",
-   IMPURE);
-    "mpiRecv",
-  (`Server (`PFun (fun _ -> failwith "Not supported.")),
-   datatype "(Rank, Communicator) ~> a",
-   IMPURE);
-    "mpiAnySource",
-  (`Server (`PFun (fun _ -> failwith "Not supported.")),
-   datatype "Rank",
-   PURE)
-	      ]
+]
   
   
 (* HACK
