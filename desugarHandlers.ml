@@ -162,11 +162,7 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
 	 let params = List.map (List.map phrase_of_pattern) params in
 	 apply_params handle params
     in
-    let fnparams : pattern list list =
-      if HandlerUtils.HandlerDescriptor.is_closed desc
-      then []
-      else [[]]
-    in
+    let fnparams : pattern list list = [[]] in
     let fnparams = 
       match params with
 	Some params -> params @ ([m] :: fnparams)

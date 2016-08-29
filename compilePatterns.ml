@@ -854,7 +854,7 @@ let compile_cases
 (* Handler cases compilation *)
 let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescriptor) -> Ir.computation =
   fun (nenv, tenv, eff) (var, raw_clauses, desc) ->
-    let Some (output_type, effects) = HandlerUtils.HandlerDescriptor.type_info desc in
+    let Some (output_type, effects) = snd desc in
     let clauses = List.map reduce_clause raw_clauses in
     (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
     (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
@@ -897,7 +897,7 @@ let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescr
       (cc, (bs',tc))
     in
     let compiled_handle =
-      let specialization = HandlerUtils.HandlerDescriptor.specialization desc in
+      let specialization = fst desc in
         match tc with
 	| `Case (_, clauses, _) ->
             let (return_clause, clauses) = StringMap.pop "Return" clauses in

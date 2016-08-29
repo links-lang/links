@@ -1648,76 +1648,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     | `Present x -> x
     | _ -> assert false
   in
-  let rec type_continuation_param : string -> pattern -> (Sugartypes.pattern * Types.environment * Types.datatype) =
-    fun opname (k,pos) ->
-    let fresh_continuation_type =
-      let domain = Types.fresh_type_variable (`Unl, `Any) in
-      let codomain = Types.fresh_type_variable (`Unl, `Any) in
-      let effrow = Types.make_empty_open_row (`Unl, `Any) in
-      `Function (Types.make_tuple_type [domain], effrow, codomain)
-    in
-    let k' = tpo (k,pos) in
-    match k with
-      `Any 		
-    | `Variable _
-      | `As _ -> let kt = fresh_continuation_type in
-		 let () = unify ~handle:Gripers.operation_case_cont_param (ppos_and_typ k', no_pos kt) in
-		 k'
-    | `HasType (p,t)      -> begin
-	let t = match t with
-	    _, Some t -> t
-	  | _ -> assert false
-	in
-	let k  = type_continuation_param opname p in
-	let (_,_,p) = SourceCode.resolve_pos pos in
-	let () = unify ~handle:Gripers.operation_case_cont_param ((p, t), ppos_and_typ k) in (* Unify with t *)
-	k
-      end			     
-    | _ -> Gripers.die pos ("Improper pattern matching on continuation parameter in " ^ opname ^ ".")
-  in
-  let type_operation_case : pattern -> ((pattern * Types.environment * Types.datatype)) * ((Sugartypes.pattern * Types.environment * Types.datatype) option) =
-    fun pat ->
-    let ((pat,pos),tenv,dt) as p = tpo pat in (* Type the variant pattern *)
-    let k = (* Next, extract and type the continuation parameter (k) if it exists *)
-      match pat with
-	`Variant ("Return", Some _) -> None
-      | `Variant ("Return", None) -> Gripers.die pos ("Return-cases must be parameterised")
-      | `Variant (opname, None) -> Gripers.die pos ("Improper pattern matching on " ^ opname)
-      | `Variant (opname, Some (p,pos)) ->
-	 begin
-	   match p with
-	     `Tuple ps -> if List.length ps > 0 then
-			    let k = List.hd (List.rev ps) in
-			    Some (type_continuation_param opname k)
-			  else
-			    Gripers.die pos ("Improper pattern matching on " ^ opname)
-	   | k -> Some (type_continuation_param opname (k,pos))
-	 end
-      | _ -> Gripers.handle_patterns' ~pos:pos ~t1:(ppos_and_typ p)
-    in
-    match k with
-      Some k' -> let (fields,row_var,dual) = TypeUtils.extract_row dt in
-		 let fields = StringMap.map
-		                (fmapPresent
-                                   (fun p ->
-                                     match p with
-                                       `Record _ -> let (fields, row_var,dual) = TypeUtils.extract_row p in
-					            let last_element = string_of_int (StringMap.size fields) in
-					            let (ktype,fields) = StringMap.pop last_element fields in
-					            let () = unify ~handle:Gripers.operation_case_cont_param (no_pos (unPresent ktype), ppos_and_typ k') in
-				                    (* Get the identifier for the last parameter (the continuation parameter) *)
-					            `Record (StringMap.add last_element (`Present (pattern_typ k')) fields, row_var, dual) (* Overwrite the continuation parameter type *)
-			             | `MetaTypeVar _ ->
-			                let () = unify ~handle:Gripers.operation_case_cont_param (no_pos p, ppos_and_typ k') in
-			                pattern_typ k'
-			             | _ -> assert false
-			           )
-                                ) fields
-		 in
-		 let dt = `Variant (fields,row_var,dual) in			       
-		 (((pat,pos),tenv,dt),k)
-    | None -> (((pat,pos),tenv,dt),k)
-  in
   let type_operation_pattern : pattern -> ((pattern * Types.environment * Types.datatype) * Types.datatype) StringMap.t -> ((pattern * Types.environment * Types.datatype)) * (((pattern * Types.environment * Types.datatype) * Types.datatype) StringMap.t) =
     fun pat kenv ->
     let fresh_continuation_type () =
@@ -2881,8 +2811,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		      (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
 		    ) continuations []
 	 in
-	 match HandlerUtils.HandlerDescriptor.is_shallow desc with
-	   false -> (* Deep handlers: Make continuation codomains and body type agree *)
+	 match HandlerUtils.SugarDescriptor.depth desc with
+	 | `Deep -> (* Deep handlers: Make continuation codomains and body type agree *)
 	   let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
 	   List.fold_left
 	     (fun _ (k, ktail) ->
@@ -2890,7 +2820,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 	     )
 	     () ks
-	 | _ -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
+	 | `Shallow -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
 	    let poly_presence_row = `Record (make_operations_presence_polymorphic input_effect_row) in
 
             (** FIXME BUG:
@@ -2917,7 +2847,7 @@ h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
 	      )
 	      () ks
        in
-       let desc = HandlerUtils.HandlerDescriptor.update_type_info desc (body_type, effects) in 
+       let desc = HandlerUtils.SugarDescriptor.update_type_info (body_type, effects) desc in 
        `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
     | `Switch (e, binders, _) ->
        let e = tc e in
