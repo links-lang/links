@@ -94,12 +94,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
             (translate expr)
             (translate body)
     | `Fun (args, body) ->
-       let args =
-         if List.length args > 0 then
-           List.map identifier args
-         else
-           [fresh_identifier "_unit"]
-       in
+       let args = List.map identifier args in
        lfun args (translate body)
     | `Rec (funs, body) ->
        let funs =

@@ -59,6 +59,7 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
   let open LLambda in
   let open Utility in
   let error msg = failwith (Printf.sprintf "Translation error: %s" msg) in
+  let fresh_identifier identname = {name = identname ; uid = (Var.fresh_raw_var ()) } in
   let ident_of_var var =
     try
       let vname = IntMap.find var nenv in
@@ -135,7 +136,12 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
        let default_clause = opt_map translate default_clause in
        `Case (value v, clauses, default_clause)
     | `Apply (f, args) ->
-       let args = List.map value args in
+       let args =
+         if List.length args > 0 then
+           List.map value args
+         else
+           [`Unit]
+       in
        begin
 	 match is_primitive_function f with
 	 | None     -> `Apply (value f, args)
@@ -160,7 +166,12 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
     | `Let (b, (_, tc)) -> `Let (ident_of_binder b, tail_computation tc, k)
     | `Fun (b, (_, bs, comp), _, _) ->
        let b = ident_of_binder b in
-       let bs = List.map ident_of_binder bs in
+       let bs =
+         if List.length bs > 0 then
+           List.map ident_of_binder bs
+         else
+           [fresh_identifier "_unit"]
+       in
        let comp = computation comp in
       `Let (b, `Fun (bs, comp), k)
     | `Rec funs ->
@@ -168,7 +179,12 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
          List.fold_right
            (fun (b, (_, bs, comp),_,_) funs ->
              let b = ident_of_binder b in
-             let bs = List.map ident_of_binder bs in
+             let bs =
+               if List.length bs > 0 then
+                 List.map ident_of_binder bs
+               else
+                 [fresh_identifier "_unit"]
+             in
              let comp = computation comp in
              (b, `Fun (bs, comp)) :: funs)
            funs []
@@ -196,7 +212,12 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
        `Let (b, tail_computation tc, set_global b)
     | `Fun (b, (_, bs, comp), _, _) ->
        let b = ident_of_binder b in
-       let bs = List.map ident_of_binder bs in
+       let bs =
+         if List.length bs > 0 then
+           List.map ident_of_binder bs
+         else
+           [fresh_identifier "_unit"]
+       in
        let comp = computation comp in
        let global = set_global b in
       `Let (b, `Fun (bs, comp), global)
@@ -205,7 +226,12 @@ let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLa
          List.fold_right
            (fun (b, (_, bs, comp),_,_) funs ->
              let b = ident_of_binder b in
-             let bs = List.map ident_of_binder bs in
+             let bs =
+               if List.length bs > 0 then
+                 List.map ident_of_binder bs
+               else
+                 [fresh_identifier "_unit"]
+             in
              let comp = computation comp in
              (b, `Fun (bs, comp)) :: funs)
            funs []
