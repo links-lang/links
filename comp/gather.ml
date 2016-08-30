@@ -86,7 +86,10 @@ module TraverseIr = struct
 		       
     method add_operation : string -> 'self_type =
       fun name ->
-      {< operations = StringSet.add name operations >}
+      if String.compare name "Return" = 0 then
+        {< operations = operations >}
+      else
+        {< operations = StringSet.add name operations >}
 
     method get_operation_env : int StringMap.t  =
       let operations = StringSet.fold (fun s acc -> (s, Var.fresh_raw_var ()) :: acc) operations [] in
@@ -162,7 +165,7 @@ module TraverseIr = struct
     method binder : Ir.binder -> 'self_type =
       fun b ->
         let uid = Var.var_of_binder b in
-        (*        let _ = print_endline ("Collected " ^ (string_of_int uid)) in*)
+        (*let _ = print_endline ("Collected " ^ (string_of_int uid)) in*)
         let name =
           match Var.name_of_binder b with
 	  | "" -> "_v"

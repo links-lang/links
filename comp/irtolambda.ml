@@ -560,13 +560,19 @@ end
 let lambda_of_ir module_name prog =
   let (openv, nenv, globals) =
     let gather = Gather.TraverseIr.gather prog in
-    gather#get_operation_env, gather#get_name_map, gather#get_globals
+    gather#get_operation_env, gather#get_name_map, gather#get_globals                                                     
   (*    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)*)
+  in
+  let nenv = StringMap.fold (fun k v nenv -> IntMap.add v k nenv) openv nenv in
+  let globals =
+    let size = IntMap.size globals in
+    let (_, globals) = StringMap.fold (fun _ v (pos,globals) -> (pos+1,IntMap.add v pos globals)) openv (size, globals) in
+    globals
   in
   (*  let _ = transform tenv prog in*)
   (*  translate maps module_name prog*)
   
 (*  let ir_translator = new translator (invert env) in
   ir_translator#program "Helloworld" prog*)
-  let llambda = Irtollambda.llambda_of_ir module_name globals nenv prog in
-  Llambdatolambda.lambda_of_llambda llambda
+  let llambda = Irtollambda.llambda_of_ir module_name globals nenv openv prog in
+  (1 + IntMap.size globals, Llambdatolambda.lambda_of_llambda module_name (globals,openv) llambda)

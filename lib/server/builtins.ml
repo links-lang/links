@@ -178,3 +178,7 @@ let closeSocket socket =
 (** Misc **)     
 let print = print_endline
 let error = failwith
+let rec project (l : int) = function
+  | (k,v) :: xs when k = l -> v
+  | _ :: xs                -> project l xs
+  | []                     -> failwith "Fatal error: Projection failed."

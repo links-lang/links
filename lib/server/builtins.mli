@@ -93,3 +93,4 @@ val serverTime : unit -> int
 (** Misc **)     
 val print : string -> unit
 val error : string -> 'a
+val project : int -> (int * 'a) list -> 'a

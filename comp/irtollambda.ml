@@ -16,7 +16,8 @@
   computation program*)
 
 type name_env = string Utility.intmap
-type globals  = int Utility.intmap                       
+type globals  = int Utility.intmap
+type effenv   = int Utility.stringmap                    
 
 let binop_of_string : string -> LLambda.binary_operation option =
   fun binop_name ->
@@ -53,8 +54,8 @@ let primitive_name : Var.var -> string option =
   with
   | Not_found -> None               
                    
-let llambda_of_ir : string -> globals -> name_env -> Ir.program -> LLambda.program =
-  fun module_name globals nenv prog ->
+let llambda_of_ir : string -> globals -> name_env -> effenv -> Ir.program -> LLambda.program =
+  fun module_name globals nenv effenv prog ->
   let open LLambda in
   let open Utility in
   let error msg = failwith (Printf.sprintf "Translation error: %s" msg) in
@@ -63,7 +64,7 @@ let llambda_of_ir : string -> globals -> name_env -> Ir.program -> LLambda.progr
       let vname = IntMap.find var nenv in
       { name = vname ; uid = var }
       with
-    | _ -> error ("Cannot find name for var " ^ (string_of_int var))
+      | Notfound.NotFound _ -> error ("Cannot find name for var " ^ (string_of_int var))
   in
   let ident_of_binder b =
     let var   = Var.var_of_binder b in
@@ -76,13 +77,14 @@ let llambda_of_ir : string -> globals -> name_env -> Ir.program -> LLambda.progr
     try
       let _ = IntMap.find ident.uid globals in
       true
-    with | _ -> false
+    with | Notfound.NotFound _ -> false         
   in
   let make_global ident get_set =
     try
       let num = IntMap.find ident.uid globals in
       `Primitive (`Global (ident, num, String.capitalize_ascii module_name, get_set))
-    with | _ -> error ("Cannot find global position for identifier " ^ (string_of_identifier ident))
+    with
+    | Not_found -> error ("Cannot find global position for identifier " ^ (string_of_identifier ident))
   in
   let get_global ident = make_global ident `Get in
   let set_global ident = make_global ident `Set in
@@ -221,11 +223,20 @@ let llambda_of_ir : string -> globals -> name_env -> Ir.program -> LLambda.progr
     | b -> error ("Unimplemented feature:\n" ^ (Ir.Show_binding.show b))
   and toplevel_bindings : Ir.binding list -> LLambda.program ->  LLambda.program =
     fun bs k ->
-    let k = `Sequence (k, `Unit) (* Ensure that the program ends in exit code 0 *)
+    let program_end = `Sequence (k, `Unit) in (* Ensure that the program ends in exit code 0 *)
+    let bind_effects = (* splice in effect labels *)
+      StringMap.fold
+        (fun _ uid program ->
+          let ident = ident_of_var uid in
+          let set_ooid = `Primitive (`SetOOId (module_name, ident.name)) in
+          let set_global = set_global ident in
+          let register_effect = `Let (ident, set_ooid, set_global) in
+          (fun k -> program (`Sequence (register_effect, k))))
+        effenv (fun k -> k)
     in
     match bs with
-    | []  -> k
-    | [b] -> `Sequence (toplevel_binding b, k)
+    | []  -> bind_effects k
+    | [b] -> `Sequence (bind_effects (toplevel_binding b), k)
     | b :: bs  ->
        let bs =
          List.fold_left
@@ -233,18 +244,22 @@ let llambda_of_ir : string -> globals -> name_env -> Ir.program -> LLambda.progr
              fun k -> program (`Sequence (toplevel_binding b, k)))
            (fun k -> `Sequence (toplevel_binding b, k)) bs
        in
-       bs k       
+       bind_effects (bs k)
   and special : Ir.special -> LLambda.program = function
-    | `DoOperation (label, args, _) -> `DoOperation (label, List.map value args)
+    | `DoOperation (label, args, _) ->
+       let uid = StringMap.find label effenv in
+       let get_global = get_global (ident_of_var uid) in
+       `DoOperation (get_global, List.map value args)
     | `Handle (v, clauses, spec) ->
        let v = value v in
        let clauses = StringMap.map
-                       (fun (cc,b,comp) ->
+                       (fun (cc,b,((bs,_) as comp)) ->
+                         let arity = List.length bs in
                          let cc =
                            match cc with
-                           | `Effect b  -> `Effect (ident_of_binder b)
-                           | `Exception -> `Exception
-                           | `Regular   -> `Regular
+                           | `Effect b  -> `Effect (ident_of_binder b, arity)
+                           | `Exception -> `Exception arity
+                           | `Regular   -> `Regular arity
                          in
                          let b = ident_of_binder b in
                          let comp = computation comp in

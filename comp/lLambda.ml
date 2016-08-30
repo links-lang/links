@@ -15,40 +15,6 @@ type name = Ir.name
 type 'a name_map = 'a Ir.name_map
    deriving (Show)
    
-(*type value =
-  [ `Constant  of Ir.constant
-  | `Variable  of identifier
-  | `Extend    of (value name_map * value option)
-  | `Project   of (name * value)
-  | `Inject    of (name * value * Types.datatype)
-  | `Coerce    of (value * Types.datatype)
-  | `Primitive of identifier * Types.datatype option
-  ]
-and tail_computation =
-  [ `Return  of value
-  | `Apply   of value * value list
-  | `Special of special
-  | `Case    of (value * (identifier * computation) name_map * (identifier * computation) option)
-  | `If      of value * computation * computation
-  ]    
-and fun_def = identifier * (identifier list * computation)
-and binding =
-  [ `Let of identifier * tail_computation
-  | `Fun of fun_def
-  | `Rec of fun_def list
-  ]
-and special =
-  [ `Wrong       of Types.datatype
-  | `Handle      of (value * clause name_map * Ir.handler_spec)
-  | `DoOperation of (name * value list * Types.datatype)
-  ]
-and computation = binding list * tail_computation
-and clause = [`Effect of identifier | `Exception | `Regular] * identifier * computation
-  deriving (Show)
-
-type program = computation
-                 deriving (Show)*)
-
 type constant = Ir.constant
    deriving (Show)
    
@@ -74,7 +40,7 @@ type llambda =
   (* specials *)
   | `Wrong
   | `Handle      of llambda * clause name_map * clause * Ir.handler_spec
-  | `DoOperation of name * llambda list
+  | `DoOperation of llambda * llambda list
   ]
 and primitive =
   [ `Nil
@@ -82,6 +48,7 @@ and primitive =
   | `FnApply    of name * llambda list
   | `BinOp      of binary_operation * llambda list
   | `Global     of identifier * int * name * [`Get | `Set]
+  | `SetOOId    of name * name
   ]
 and binary_operation =
   [ `Plus
@@ -98,7 +65,7 @@ and binary_operation =
   | `And
   | `Or
   ] * Types.primitive option
-and clause = [`Effect of identifier | `Exception | `Regular] * identifier * llambda
+and clause = [`Effect of identifier * int | `Exception of int | `Regular of int] * identifier * llambda
    deriving (Show)
 
 type program = llambda

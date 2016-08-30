@@ -25,14 +25,15 @@ sig
 
   include COMPILATION_UNIT with type 'a t := 'a t
     
-  val make        : source_desc -> string -> 'a -> 'a t
+  val make        : source_desc -> string -> int * 'a -> 'a t
   val string_of_basic_unit : 'a t -> string
+  val count_globals : 'a t -> int                                       
 end
 
 module Basic_Compilation_Unit : BASIC_COMPILATION_UNIT
 type 'a basic_comp_unit = 'a Basic_Compilation_Unit.t
   
-val make_basic_compilation_unit : source_desc -> string -> 'a -> 'a basic_comp_unit
+val make_basic_compilation_unit : source_desc -> string -> int * 'a -> 'a basic_comp_unit
 
 
 (* Native compilation unit -- during native compilation *)  

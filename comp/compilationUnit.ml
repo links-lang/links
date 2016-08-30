@@ -36,8 +36,9 @@ sig
 
   include COMPILATION_UNIT with type 'a t := 'a t
     
-  val make        : source_desc -> string -> 'a -> 'a t
+  val make        : source_desc -> string -> int * 'a -> 'a t
   val string_of_basic_unit : 'a t -> string
+  val count_globals : 'a t -> int                                       
 end
 
 module Basic_Compilation_Unit : BASIC_COMPILATION_UNIT =
@@ -46,18 +47,21 @@ struct
     { source      : source_desc    
     ; module_name : string
     ; ir          : 'a
+    ; globals_count : int
     }
 
-  let make source_desc caml_module_name ir' =
+  let make source_desc caml_module_name (num_globals,ir') =
     let srcfile = source_file source_desc in
     { source      = source_desc
     ; module_name = caml_module_name
     ; ir          = ir'
+    ; globals_count = num_globals
     }
 
   let source_file bcu = bcu.source.srcfile
   let module_name bcu = bcu.module_name
   let ir          bcu = bcu.ir
+  let count_globals bcu = bcu.globals_count                          
   let string_of_basic_unit bcu =
     Printf.sprintf
       ("{ source      = %s\n, module_name = %s\n, ir          = <abstr> }")

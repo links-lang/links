@@ -212,10 +212,10 @@ let lambda_of_links_ir ir source =
   in
   ir
   |> lambda_of_ir module_name
-  |> dump_lambda
-  |> Simplif.simplify_lambda
+  |> (fun ((globals,lam) as r) -> dump_lambda lam; r)
+  |> (fun (globals,lam)  -> let lam = Simplif.simplify_lambda lam in (globals,lam))
   |> (fun lam -> print_if (!Clflags.dump_lambda) "simplified lambda" lam)
-  |> dump_lambda
+  |> (fun ((globals,lam) as r) -> dump_lambda lam; r)
   |> CompilationUnit.make_basic_compilation_unit source module_name
   |> dump_basic_unit
 
@@ -231,6 +231,7 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
     let open NC in
     let ppf = Format.std_formatter in
     let dump_comp_unit txt comp_unit = print_verbose (txt ^ "\n" ^ (NC.string_of_native_unit comp_unit) ^ "\n") comp_unit in
+    let num_globals = CompilationUnit.Basic_Compilation_Unit.count_globals basic_comp_unit in
     let initialize_environment comp_unit =
       let module_name = module_name comp_unit in
       Env.set_unit_name module_name;
@@ -246,7 +247,7 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
     let asm_compile comp_unit =
       let lambda = ir comp_unit in
       let srcfile_wo_ext = Misc.chop_extension_if_any (source_file comp_unit |> filename) in
-      let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (1, lambda) in
+      let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (num_globals, lambda) in
       comp_unit
     in
     let save_unit_info comp_unit =
