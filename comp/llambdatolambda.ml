@@ -127,13 +127,18 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
          let eff     = fresh_identifier "_eff" in (* Pointer to the invoked operation *)
          let cont    = fresh_identifier "_cont" in (* Pointer to the captured continuation *)
          let k_ident = fresh_identifier "_k" in
-         let multi_shot_k =
+         let multi_shot_k k_ident =
 	   let param = fresh_identifier "_param" in
            let k_ident'  = fresh_identifier "_k'" in
 	   lfun [param]
                 (llet k_ident'
                       (lapply (obj "clone") [lvar k_ident])
 		      (lapply (pervasives "continue") [lvar k_ident' ; lvar param])) (* Multi-shot continuation *)
+         in
+         let one_shot_k k_ident =
+           let param = fresh_identifier "_param" in
+	   lfun [param]                      
+		(lapply (pervasives "continue") [lvar k_ident ; lvar param]) (* One-shot continuation *)
          in
          let bind_k scope =
            llet ~kind:Alias
@@ -155,7 +160,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
                       let k_ident'' = identifier k_ident'' in
                       (arity, fun body ->           (* Bind operation arguments and the continuation *)
                               (llet k_ident''
-                                    (multi_shot_k)
+                                    (multi_shot_k k_ident)
                                     body))
                    | `Exception arity
                    | `Regular arity -> (arity, fun x -> x)
