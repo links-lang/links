@@ -24,8 +24,15 @@ module TraverseIr = struct
     and special : (Ir.var * string) list -> Ir.special -> (Ir.var * string) list =
       fun map ->
       function
-      | `Handle (v, clauses, rclause, _) ->
-	 StringMap.fold (fun _ (b,kb,c) map -> binder b :: map @ (computation map c)) clauses map
+      | `Handle (v, clauses, _) ->
+	 StringMap.fold
+           (fun _ (cc,kb,c) map ->
+             let map =
+               match cc with
+               | `Effect kb -> binder kb :: map
+               | _ -> map
+             in
+             map @ (computation map c)) clauses map
       | _ -> map
     and bindings : (Ir.var * string) list -> Ir.binding list -> (Ir.var * string) list  =
       fun map -> 
@@ -59,6 +66,13 @@ module TraverseIr = struct
   class gatherer =
   object ((o : 'self_type))
 
+    val globals : int IntMap.t = IntMap.empty
+    method add_global : int -> 'self_type =
+      fun uid ->
+      let pos = IntMap.size globals in
+      {< globals = IntMap.add uid pos globals >}
+    method get_globals : int IntMap.t = globals    
+           
     val name_map : string IntMap.t = IntMap.empty
     method add_binder : int -> string -> 'self_type =
       fun uid name ->
@@ -99,17 +113,21 @@ module TraverseIr = struct
 
     method special : Ir.special -> 'self_type =
       function
-      | `Handle (v, clauses, (b,comp), _) ->
+      | `Handle (v, clauses, _) ->
 	 let o = o#value v in
 	 (* Collect binders *)
 	 let o = StringMap.fold
-           (fun opname (b,kb,c) o ->
+           (fun opname (cc,b,c) o ->
              let o = o#add_operation opname in
-             let o = (o#binder b)#computation c in
-             from_option o (opt_map o#binder kb)
+             let o =
+               match cc with
+               | `Effect kb -> o#binder kb
+               | _ -> o
+             in
+             (o#binder b)#computation c
            ) clauses o
          in
-         (o#binder b)#computation comp
+         o
       | `DoOperation (name, args, _) ->
 	 o#add_operation name
       | _ -> o
@@ -153,8 +171,27 @@ module TraverseIr = struct
         o#add_binder uid name
 
     method program : Ir.program -> 'self_type =
-      fun comp ->
-      o#computation comp     
+      fun ((bs,_) as comp) ->
+      let o = o#toplevel_bindings bs in
+      o#computation comp
+
+    method toplevel_binding : Ir.binding -> 'self_type = function
+      | `Let (b, (_, _)) -> o#toplevel_binder b
+      | `Alien (b,_) -> o#toplevel_binder b
+      | `Fun (b,_, _, _) -> o#toplevel_binder b
+      | `Rec ((b, _, _, _) :: rest) ->
+         let o = o#toplevel_binder b in
+	 List.fold_left (fun o (b, _, _, _) -> o#toplevel_binder b) o rest
+      | _ -> assert false
+
+    method toplevel_bindings : Ir.binding list -> 'self_type =  function
+      | b :: bs -> (o#toplevel_binding b)#toplevel_bindings bs
+      | [] -> o
+
+    method toplevel_binder : Ir.binder -> 'self_type =
+      fun b ->
+      let var = Var.var_of_binder b in
+      o#add_global var
   end
     
   let gather ir =

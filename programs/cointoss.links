@@ -86,7 +86,7 @@ fun toss() {
 ## Different interpretations of Choose
 sig randomResult : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, a)
 fun randomResult(m)() {
-  open handle(m) {
+  handle(m) {
      case Return(x) -> x      
      case Choose(k) -> k(random() > 0.5)
   }
@@ -94,7 +94,7 @@ fun randomResult(m)() {
 
 sig allResults : (Comp({Choose:Bool |e}, a)) -> Comp({Choose{_} |e}, [a])
 fun allResults(m)() {
-  open handle(m) {
+  handle(m) {
      case Return(x) -> [x]
      case Choose(k) -> k(true) ++ k(false)
   }
@@ -110,7 +110,7 @@ fun drunkToss() {
 ## Different interpretations of Fail
 sig maybeResult : (Comp({Fail:Zero |e}, a)) -> Comp({Fail{_} |e}, Maybe(a))
 fun maybeResult(m)() {
-  open handle(m) {
+  handle(m) {
     case Return(x) -> Just(x)
     case Fail(_)   -> Nothing
   }
@@ -118,7 +118,7 @@ fun maybeResult(m)() {
 
 sig persevere : (Comp({Fail:Zero|e}, a)) -> Comp({Fail{_} |e}, a)
 fun persevere(m)() {
-  open handle(m) {
+  handle(m) {
     case Return(x) -> x
     case Fail(k)   -> persevere(m)()
   }

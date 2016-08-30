@@ -297,9 +297,10 @@ let translate (op_map,name_map) module_name ir =
          ])*)
        perform label args
     (*       perform label (List.map value args)*)
-    | `Handle (v, clauses, value_clause, _) ->
+    | `Handle (v, (clauses : Ir.clause Ir.name_map), _) ->
+       let (value_clause,clauses) = StringMap.pop "Return" clauses in
        let value_handler =
-	 let (b, comp) = value_clause in
+	 let (_,b, comp) = value_clause in
 	 lfun [ident_of_binder b] (computation comp)
        in
        let exn_handler =
@@ -326,13 +327,13 @@ let translate (op_map,name_map) module_name ir =
 		(lprim (makeblock 0 Mutable) [lvar cont])
 		scope
 	 in
-	 let compile clauses =
+	 let compile (clauses : Ir.clause Ir.name_map) =
 	   StringMap.fold
-	     (fun label (b,kb,(bs,tc)) lam ->
+	     (fun label (cc,b,(bs,tc)) lam ->
 	       let kid =
-                 match kb with
-                 | Some kb -> Some (ident_of_binder kb)
-                 | None    -> None
+                 match cc with
+                 | `Effect kb -> Some (ident_of_binder kb)
+                 | _   -> None
                in
 	       let clause body =
 		 let bind_args_in body =
@@ -556,13 +557,16 @@ end
   transformer#program ir
 
     
-let lambda_of_ir ((_,nenv,_) as envs,tenv) module_name prog =
-  let maps =
+let lambda_of_ir module_name prog =
+  let (openv, nenv, globals) =
     let gather = Gather.TraverseIr.gather prog in
-    gather#get_operation_env, gather#get_name_map
+    gather#get_operation_env, gather#get_name_map, gather#get_globals
   (*    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)*)
   in
   (*  let _ = transform tenv prog in*)
-  translate maps module_name prog
+  (*  translate maps module_name prog*)
+  
 (*  let ir_translator = new translator (invert env) in
   ir_translator#program "Helloworld" prog*)
+  let llambda = Irtollambda.llambda_of_ir module_name globals nenv prog in
+  Llambdatolambda.lambda_of_llambda llambda

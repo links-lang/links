@@ -9,8 +9,7 @@ open Utility
 open PP
 
 (* Handlers *)
-type handler_spec   = handler_nature * handler_depth
-and handler_nature  = [ `Open | `Closed ]
+type handler_spec   = handler_depth * [`Linear | `Unrestricted]
 and handler_depth   = [ `Deep | `Shallow ]
   deriving (Show)
 
@@ -98,9 +97,10 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * (binder option) * computation) name_map * (binder * computation) * handler_spec)
+  | `Handle of (value * clause name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`Effect of binder | `Exception | `Regular] * binder * computation                        
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -478,27 +478,25 @@ struct
            `Choice (v, bs), t, o
 	(* Input arguments: (value, (binder, computation)) 
          * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
-	| `Handle (v, clauses, rclause, isclosed) ->
+	| `Handle (v, bs, spec) ->
 	   let (v, _, o) = o#value v in
-	   let (clauses, branch_types, o) =
-	     o#name_map (fun o (b, kb, c) ->
-	       let (b, o) = o#binder b in
-               let (kb, o) =
-                 match kb with
-                 | Some b -> let (b, o) = o#binder b in (Some b, o)
-                 | None   -> (None, o)
-               in
-	       let (c, t, o) = o#computation c in
-	       (b, kb, c), t, o
-             ) clauses
+	   let (bs, branch_types, o) =
+	     o#name_map
+               (fun o (cc, b, c) ->
+                 let (cc, o) =
+                   match cc with
+                   | `Effect b ->
+                      let (b, o) = o#binder b in
+                      `Effect b, o
+                   | _ -> (cc, o)
+                 in
+		 let (b, o) = o#binder b in
+		 let (c, t, o) = o#computation c in
+		 (cc, b, c), t, o)
+	       bs
 	   in
-           let (rclause, branch_type, o) =
-             let (b, o) = o#binder (fst rclause) in
-             let (comp, t, o) = o#computation (snd rclause) in
-             ((b,comp), t, o)
-           in
-    	   let t = (StringMap.to_alist ->- List.hd ->- snd) (StringMap.add "Return" branch_type branch_types) in
-	   `Handle (v, clauses, rclause, isclosed), t, o
+    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+	   `Handle (v, bs, spec), t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

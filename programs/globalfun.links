@@ -1,0 +1,5 @@
+fun foo(s) {
+  print("Called foo with " ^^ intToString(s))
+}
+
+foo(42)

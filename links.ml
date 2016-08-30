@@ -483,13 +483,13 @@ let compile prelude ((valenv,nenv,tyenv) as envs) filename =
       let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
       (program, t, tenv)
     in
-    let (program, _, tenv) = parse_and_desugar (nenv, tyenv) filename in
-    (program, tenv)
+    let ((bs,tc), _, tenv) = parse_and_desugar (nenv, tyenv) filename in
+    if Settings.get_value BS.load_prelude then
+      ((prelude @ bs, tc), tenv)
+    else
+      ((bs,tc), tenv)
   in
-  if Settings.get_value BS.load_prelude then
-    Compileir.compile parse envs prelude filename
-  else
-    Compileir.compile parse envs [] filename
+  Compileir.compile (parse envs) filename
 
       (*((globals @ locals, main), t), envs*)
     (*let closure_conversion (valenv, nenv, tyenv) (program, t) =

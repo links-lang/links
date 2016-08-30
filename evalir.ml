@@ -495,8 +495,8 @@ module Eval = struct
     | `CallCC f ->
        apply cont hs env (value env f, [`Continuation (cont, hs)])
     (* Handlers *)
-    | `Handle (v, clauses, return_clause, spec) ->
-       let hs = (env, clauses, return_clause, spec) :: hs in       
+    | `Handle (v, clauses, spec) ->
+       let hs = (env, clauses, spec) :: hs in       
        let cont = [] :: cont in
        let comp = value env v in
        apply cont hs env (comp, [])
@@ -541,49 +541,45 @@ module Eval = struct
       end
   (*****************)
   and handle env cont hs (opname, vs) =
-    (* box parameters and continuation as a single value *)
-    let box ps k =
-      match ps with 
-        []  -> k
-      | _   -> Value.box_op ps k
-    in
+    let depth = fst in    
     (** handle operations, forwarding appropriately, where
         [cont'] and [hs'] are reversed stacks of
         delimited continuations and handlers
         used for restoring the stacks when [k] is invoked  *)
     let rec handle' (cont', hs') =
       function
-      | delim :: cont, (henv, clauses, rclause, spec) :: hs ->
+      | delim :: cont, (henv, h, spec) :: hs ->
          let cont' = delim :: cont' in
-         let hs' = (henv, clauses, rclause, spec) :: hs' in
+         let hs' = (henv, h, spec) :: hs' in
          begin
-           match StringMap.lookup opname clauses with	    
-	   | Some ((var, _),kb,comp) ->
-	      let k = if HandlerUtils.IrHandler.is_shallow spec then
-		  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
-		else
-		  `DeepContinuation (List.rev cont', List.rev hs')
-	      in              
-              let env =
+           match StringMap.lookup opname h with	    
+	   | Some (kb, (var, _), comp) ->
+              let k =
+                match depth spec with
+                | `Deep ->
+                   `DeepContinuation (List.rev cont', List.rev hs')
+                | `Shallow ->
+                   `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
+                | _ -> assert false
+	      in
+              let henv =
                 match kb with
-                | Some kb -> Value.bind (Var.var_of_binder kb) (k, `Local) henv
+                | `Effect kb -> Value.bind (Var.var_of_binder kb) (k, `Local) henv
                 | _ -> henv
               in
-	      computation (Value.bind var (Value.box vs, `Local) env) cont hs comp
+	      computation (Value.bind var (Value.box vs, `Local) henv) cont hs comp
            | None ->
-              if not (HandlerUtils.IrHandler.is_closed spec) then
-                begin
-                  Debug.print ("Forwarding: " ^ opname);
-                  handle' (cont', hs') (cont, hs)
-                end
-              else
-                eval_error "Pattern matching failed %s" opname
+              Debug.print ("Forwarding: " ^ opname);
+              handle' (cont', hs') (cont, hs)              
          end
       | _, [] -> eval_error "Unhandled operation: %s" opname
     in
-      handle' ([], []) (cont, hs)
-  and invoke_return_clause cont hs env (henv, _, (b,comp), _) v =
-    computation (Value.bind (Var.var_of_binder b) (v, `Local) henv) cont hs comp
+    handle' ([], []) (cont, hs)
+  and invoke_return_clause cont hs env (henv, h, _) v =
+    match StringMap.lookup "Return" h with
+    | Some (_, (var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp
+    | None -> eval_error "Pattern matching failed on Return"      
+
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =
     fun env ->

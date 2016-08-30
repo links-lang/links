@@ -856,8 +856,8 @@ let compile_cases
 (* Handler cases compilation *)
 let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescriptor) -> Ir.computation =
   fun (nenv, tenv, eff) (var, raw_clauses, desc) ->
-    let Some (output_type, effects) = HandlerUtils.HandlerDescriptor.type_info desc in
-    let clauses = List.map reduce_clause raw_clauses in   
+    let Some (output_type, effects) = snd desc in
+    let clauses = List.map reduce_clause raw_clauses in
     (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
     (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
        Afterwards we transform the `Case to a `Handle construct. *)
@@ -899,17 +899,47 @@ let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescr
       in
       (kb, (bs',tc))
     in
+    (* Urgh *)
+    let arities =
+      List.fold_left
+        (fun xs ([(_, pattern)], _) ->
+          let (opname, arity) =
+            match pattern with
+            | `Variant (name, `Any)        -> (name, 0)
+            | `Variant (name, `Record (r,_))   -> (name, StringMap.size r)
+            | `Variant (name, _)           -> (name, 1)
+            | _ -> assert false
+          in
+          (opname, arity) :: xs)
+        [] clauses
+    in
+    let fix_continuation_param opname (bs,tc) =
+      let arity = List.assoc opname arities in
+      let (cc,bs') =
+        if arity > 0 then
+          let kb =
+            match List.nth bs (arity-1) with
+            | `Let (kb, _) -> kb
+            | _ -> assert false
+          in
+          `Effect kb, ListUtils.drop_nth bs (arity-1)
+        else
+          `Regular, bs
+      in
+      (cc, (bs',tc))
+    in
     let compiled_handle =
-      let specialization = HandlerUtils.HandlerDescriptor.specialization desc in
+      let specialization = fst desc in
         match tc with
-	| `Case (_, name_map, _) ->
-            let (return_clause, name_map') = StringMap.pop "Return" name_map in
-            let op_clauses = StringMap.fold
-              (fun opname (b,comp) op_map ->
-                let (kb,comp) = fix_continuation_param opname comp in
-                StringMap.add opname (b,kb,comp) op_map)
-              name_map' StringMap.empty
-            in ([], `Special (`Handle (`Variable var, op_clauses, return_clause, specialization)))
+	| `Case (_, clauses, _) ->
+            let (return_clause, clauses) = StringMap.pop "Return" clauses in
+            let clauses =
+              StringMap.fold
+                (fun opname (b,comp) clauses ->
+                  let (clause_class, comp) = fix_continuation_param opname comp in
+                  StringMap.add opname (clause_class,b,comp) clauses)
+                clauses (StringMap.add "Return" (`Regular, fst return_clause, snd return_clause) StringMap.empty)
+            in ([], `Special (`Handle (`Variable var, clauses, specialization)))
         | _ -> assert false
     in
     (* END OF THE BIG HACK *)    

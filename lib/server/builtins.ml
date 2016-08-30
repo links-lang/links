@@ -81,8 +81,8 @@ let isDigit  = function '0'..'9' -> true | _ -> false
 let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
 let isBlank  = function ' '|'\t' -> true | _ -> false
 
-let toUpper  = Char.uppercase_ascii
-let toLower  = Char.lowercase_ascii
+let toUpper  = Char.uppercase
+let toLower  = Char.lowercase
 
 let ord      = Char.code
 let chr      = Char.chr

@@ -1,7 +1,7 @@
 (* Compiler driver *)
 open Irtolambda
 
-let hello_world : unit -> Lambda.lambda =
+(*let hello_world : unit -> Lambda.lambda =
   fun () ->
   let env = Compmisc.initial_env () in
   Lambda.(
@@ -21,7 +21,7 @@ let hello_world : unit -> Lambda.lambda =
               no_apply_info)
     in
     Lsequence (body, Lprim (Pmakeblock(0, Asttypes.Immutable), []))
-  )
+  )*)
 
 
 (* (catch
@@ -194,7 +194,7 @@ let assemble_executable linkables target =
   else (print_endline "native code compilation"; nativecomp module_name lam))*)
 
 
-let lambda_of_links_ir envs ir source =
+let lambda_of_links_ir ir source =
   let open FileInfo in
   let dump_lambda lam =
     if !Clflags.dump_lambda 
@@ -211,7 +211,7 @@ let lambda_of_links_ir envs ir source =
   (* FIXME: Prepend 'Links_' to module names to avoid clashes with OCaml modules, e.g. random.links gets the module name '_random' rather than 'random' which would clash with the OCaml random module. We should really come up with a better, more robust scheme for module naming. *)
   in
   ir
-  |> lambda_of_ir envs module_name
+  |> lambda_of_ir module_name
   |> dump_lambda
   |> Simplif.simplify_lambda
   |> (fun lam -> print_if (!Clflags.dump_lambda) "simplified lambda" lam)
@@ -246,7 +246,7 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
     let asm_compile comp_unit =
       let lambda = ir comp_unit in
       let srcfile_wo_ext = Misc.chop_extension_if_any (source_file comp_unit |> filename) in
-      let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (0, lambda) in
+      let _ = Asmgen.compile_implementation srcfile_wo_ext ppf (1, lambda) in
       comp_unit
     in
     let save_unit_info comp_unit =
@@ -272,24 +272,18 @@ let modularize comp_unit =
   let cmxfile = CompilationUnit.Native_Compilation_Unit.cmx_file comp_unit |> FileInfo.filename in
   CompilationUnit.make_linkable_unit cmxfile
       
-let compile parse_and_desugar envs prelude filename =
-  let ((bs,tc) as program, tenv) = parse_and_desugar envs filename in
+let compile parse_and_desugar filename =
+  let ((bs,tc) as program, tenv) = parse_and_desugar filename in
   let () = if Settings.get_value Basicsettings.show_compiled_ir
 	   then print_endline (Ir.Show_program.show program)
 	   else ()
-  in
-  let program =
-    if true then
-      (prelude @ bs, tc)
-    else
-      (bs,tc)
   in
   let dependencies = initialize_ocaml_backend () in
   (*  hello_world ();*)
   let target = Settings.get_value Basicsettings.output_file |> FileInfo.make_fileinfo |> FileInfo.filename in
   let comp_unit =
     CompilationUnit.make_source_desc filename
-    |> lambda_of_links_ir (envs, tenv) program
+    |> lambda_of_links_ir program
     |> nativecomp
   in
   let linkable_units =

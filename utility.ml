@@ -410,19 +410,8 @@ struct
       wxyzs
       ([],[],[],[])
 
-  let rec take n xs =
-    if n <> 0
-    then List.hd xs :: take (n-1) (List.tl xs)
-    else []
-        
-  let rec drop n xs =
-    if n <> 0
-    then drop (n-1) (List.tl xs)
-    else xs
-
   let drop_nth xs n =
-    (take n xs) @ (drop (n+1) xs)
-      
+    (take n xs) @ (drop (n+1) xs)      
 end
 include ListUtils
 

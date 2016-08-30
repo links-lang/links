@@ -29,7 +29,13 @@ end
     fun ?(kind=Curried) params body -> Lfunction ({ kind   = kind
 						  ; params = params
 						  ; body   = body
-						 })
+})
+(* Multicore:  let lapply : lambda -> lambda list -> lambda =
+    fun f args ->
+    Lapply (f, args, Location.none)
+   
+  let lfunction : ?kind:function_kind -> Ident.t list -> lambda -> lambda =
+    fun ?(kind=Curried) params body -> Lfunction (kind, params, body) *)
 
   let lfun = lfunction
 	       
@@ -71,10 +77,10 @@ end
     fun prim args -> Lprim (prim, args)
 			       
   let field : int -> primitive =
-    fun i -> Pfield i
+    fun i -> Pfield i (* Multicore: Pfield (i, false, Immutable) *)
 
   let set_field_imm : int -> primitive =
-    fun i -> Psetfield (i, false)
+    fun i -> Psetfield (i, false) (* Multicore: Psetfield (i, false, Immutable) *)
 
   let box : primitive = makeblock 0 Immutable
 				  
@@ -114,6 +120,7 @@ end
   let ldelegate : Ident.t -> Ident.t -> lambda =
     fun eff cont ->
     lprim Pdelegate [lvar eff ; lvar cont]
+    (* Multicore: lprim Preperform [lvar eff ; lvar cont] *)
 
   let lproject : int -> lambda -> lambda =
     fun label row -> lprim (field label) [row]

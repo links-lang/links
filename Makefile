@@ -70,7 +70,10 @@ SERVER_LIBS=lib/server/builtins.mli lib/server/builtins.ml
 BACKEND=$(SERVER_LIBS) \
 	comp/fileInfo.mli comp/fileInfo.ml \
 	comp/compilationUnit.mli comp/compilationUnit.ml \
-	comp/gather.ml comp/lambdaDSL.ml comp/irtolambda.ml comp/compileir.ml
+	comp/gather.ml \
+	comp/lambdaDSL.ml \
+	comp/lLambda.ml comp/irtollambda.ml comp/llambdatolambda.ml \
+	comp/irtolambda.ml comp/compileir.ml
 
 SOURCE_FILES = $(OPC)                                \
           notfound.ml                           \
@@ -89,6 +92,7 @@ SOURCE_FILES = $(OPC)                                \
           parser_links.mly                            \
           lexer_links.mli lexer_links.mll                   \
           typeUtils.mli typeUtils.ml            \
+	  handlerUtils.ml                       \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
@@ -96,7 +100,6 @@ SOURCE_FILES = $(OPC)                                \
           unify.mli unify.ml                    \
           var.ml                                \
           ir.mli ir.ml                          \
-	  handlerUtils.ml                       \
           tables.ml                             \
           closures_links.ml                           \
           parse_links.mli parse_links.ml                    \

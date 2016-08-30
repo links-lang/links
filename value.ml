@@ -199,7 +199,7 @@ and t = [
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
-and handler  = env * (Ir.binder * Ir.binder option * Ir.computation) Ir.name_map * (Ir.binder * Ir.computation) * Ir.handler_spec (* Collection of cases *)
+and handler  = env * Ir.clause Ir.name_map * Ir.handler_spec (* Collection of cases *)
 and handlers = handler list
   deriving (Show)					    
   
@@ -523,14 +523,8 @@ let box_op : t list -> t -> t =
 	      let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
 	      `Record (List.rev box)
 
-let box : t list -> t =
-  fun ps ->
-    let box = List.fold_left
-      (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
-      (0, []) ps
-    in
-    `Record (List.rev (snd box))
-		
+let box : t list -> t = fun ps -> `Record (List.mapi (fun i p -> (string_of_int (i+1), p)) ps)
+               
 let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
