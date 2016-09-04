@@ -91,7 +91,6 @@ let optimise = Settings.add_bool("optimise", false, `User)
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 
-
 (* Inlining with-clauses *)
 let inline_with = Settings.add_bool("inline_with", true, `User)
 
@@ -113,3 +112,6 @@ let deforest_stitching = Settings.add_bool("deforest_stitching",true,`User)
 
 (* Generic flag for A/B testing *)
 let feature_test = Settings.add_bool("feature_test",false,`User)
+
+(* Paths to look for .links files in chasing pass *)
+let links_file_paths = Settings.add_string("links_file_paths", "", `User)
