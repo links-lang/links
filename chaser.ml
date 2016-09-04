@@ -5,11 +5,40 @@ open ModuleUtils
 
 type prog_map = program StringMap.t
 type filename = string
+(* Helper functions *)
 
+(* Given fully-qualified module name, gets root module name *)
 let module_file_name module_name =
   match (Str.split (Str.regexp module_sep) module_name) with
     | [] -> failwith "Internal error: empty list in module_file_name"
     | (x::_xs) -> x
+
+(* Helper function: given top-level module name, maps to expected filename *)
+let top_level_filename module_name =
+  (String.uncapitalize module_name) ^ ".links"
+
+let print_sorted_deps xs =
+  print_list (List.map print_list xs)
+
+(* Given a module name, try and locate / parse the module file *)
+let parse_module module_name =
+  let filename = top_level_filename module_name in
+  let (prog, _) = try_parse_file filename in
+  prog
+
+let assert_no_cycles = function
+  | [] -> ()
+  | [x]::ys -> ()
+  | (x::xs)::ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
+
+(*
+let print_external_deps prog =
+  let external_deps = find_external_refs prog in
+  printf "External dependencies:\n%s\n" (print_list external_deps)
+*)
+
+let unique_list xs =
+  StringSet.elements (StringSet.of_list xs)
 
 (* Traversal to find module import references in the current file *)
 let rec find_module_refs prefix init_seen_modules init_import_candidates init_binding_stack =
@@ -69,14 +98,6 @@ end
 let find_external_refs prog =
   StringSet.elements ((find_module_refs "" StringSet.empty StringSet.empty [])#program prog)#get_import_candidates
 
-let assert_no_cycles = function
-  | [] -> ()
-  | [x]::ys -> ()
-  | (x::xs)::ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
-
-let print_sorted_deps xs =
-  print_list (List.map print_list xs)
-
 let rec add_module_bindings deps dep_map =
   match deps with
     | [] -> []
@@ -91,17 +112,6 @@ let rec add_module_bindings deps dep_map =
         ), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
 
-let module_filename module_name =
-  (String.uncapitalize module_name) ^ ".links"
-
-let parse_file module_name =
-  let filename = module_filename module_name in
-  let (prog, _) = Parse.parse_file Parse.program filename in
-  prog
-
-let print_external_deps prog =
-  let external_deps = find_external_refs prog in
-  printf "External dependencies:\n%s\n" (print_list external_deps)
 
 let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   if StringSet.mem module_name visited then (visited, [], dep_map) else
@@ -113,14 +123,13 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
   List.fold_right (
     fun name (visited_acc, deps_acc, dep_map_acc) ->
-      let prog = parse_file name in
+      (* Given the top-level module name, try and parse wrt the paths *)
+      let prog = parse_module name in
       let (visited_acc', deps_acc', dep_map_acc') = add_dependencies_inner name prog visited_acc deps_acc dep_map_acc in
       (visited_acc', deps_acc @ deps_acc', dep_map_acc')
   ) ics (visited1, (module_name, ics) :: deps, dep_map1)
 
 
-let unique_list xs =
-  StringSet.elements (StringSet.of_list xs)
 
 (* Top-level function: given a module name + program, return a program with
  * all necessary files added to the binding list as top-level modules. *)

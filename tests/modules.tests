@@ -51,7 +51,7 @@ stderr : @.*
 exit : 1
 
 Module chasing
-./tests/modules/runmulti
-filemode : extern
-extern_args : moduleA.links
+./tests/modules/moduleA.links
+filemode : args
+args : --path="tests/modules"
 stdout : "hello from c!" : String

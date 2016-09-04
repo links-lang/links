@@ -12,4 +12,4 @@ val print_stack_node : binding_stack_node -> string
 val print_module_stack : binding_stack_node list -> string
 val moduleInScope : Utility.StringSet.t -> binding_stack_node list -> string -> string option
 val prefixWith : string -> string -> string
-
+val try_parse_file : string -> (Sugartypes.program * Parse.position_context)
