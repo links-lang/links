@@ -28,10 +28,12 @@ let refine_bindings : binding list -> binding list =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
             match binding with
+              (* Modules and funs will have been eliminated by now *)
+              | `Module _ -> assert false
               | `Funs _ -> assert false
               | `Exp _
               | `Foreign _
-              | `Include _
+              | `Import _
               | `Type _
               | `Val _ ->
                   (* collapse the group we're collecting, then start a
@@ -137,7 +139,7 @@ object(self)
 
   method datatype : datatype -> datatype = function
     | `TypeApplication (tyAppName, argList) as tyApp ->
-        if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
+        if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
         else super#datatype tyApp
     | dt -> super#datatype dt
 end
@@ -256,10 +258,11 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
           match binding with
+          | `Module _ -> assert false
           | `Funs _
           | `Fun _
           | `Foreign _
-          | `Include _
+          | `Import _
           | `Val _
           | `Exp _
           | `Infix ->

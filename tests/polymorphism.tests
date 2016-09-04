@@ -121,3 +121,15 @@ stdout : 2 : Int
 Recursive polymorphic type aliases
 typename Foo = forall a.Foo; sig bar : (Foo) {}-> () fun bar(m) {()} bar
 stdout : fun : (Foo) {}-> ()
+
+Extra quantifier with mixed kinds
+sig f : forall a, e::Row.(a) {}~> a fun f(x) {f(x)} f
+stdout : fun : (a) {}~> a
+
+Missing quantifier with mixed kinds (1)
+sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f
+stdout : fun : (a) ~> a
+
+Missing quantifier with mixed kinds (2)
+sig f : forall e::Row.(a) ~e~> a fun f(x) {f(x)} f
+stdout : fun : (a) ~> a

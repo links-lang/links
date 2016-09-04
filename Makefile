@@ -88,6 +88,9 @@ SOURCES = $(OPC)                                \
           closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
+					moduleUtils.mli moduleUtils.ml \
+					chaser.mli chaser.ml \
+					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \

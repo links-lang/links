@@ -81,19 +81,22 @@ type linearity   = [ `Any | `Unl ]
 type subkind = linearity * restriction
     deriving (Eq, Show)
 
+let default_subkind = (`Unl, `Any)
+
 type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
 type primary_kind = [`Type | `Row | `Presence]
     deriving (Show)
 
-type kind = primary_kind * subkind
+type kind = primary_kind * subkind option
     deriving (Show)
 
 type type_variable = name * kind * freedom
     deriving (Show)
 
-type known_type_variable = name * subkind * freedom
+(* type variable of primary kind Type? *)
+type known_type_variable = name * subkind option * freedom
     deriving (Show)
 
 type quantifier = type_variable
@@ -254,10 +257,11 @@ and bindingnode = [
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
-| `Include of string
+| `Import  of name
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
+| `Module  of name * phrase
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -433,7 +437,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Include _
+    | `Import _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p

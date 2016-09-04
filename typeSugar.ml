@@ -95,7 +95,7 @@ struct
     | `Funs _
     | `Infix
     | `Type _
-    | `Include _
+    | `Import _
     | `Foreign _ -> true
     | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
@@ -275,7 +275,6 @@ sig
   val cp_comp_left : griper
   val cp_fuse_session : griper
   val cp_fuse_dual : griper
-
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -2530,7 +2529,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Include _ -> assert false
+      | `Import _ -> assert false
       | `Val (_, pat, body, location, datatype) ->
           let body = tc body in
           let pat = tpc pat in
@@ -2668,8 +2667,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          *)
                          make_ft_poly_curry lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any))
                      | Some (_, Some t) ->
+                         (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_wild ()) (Types.fresh_type_variable (`Any, `Any)) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                         (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                            (* make sure the annotation has the right shape *)
                          let _, fti = Instantiate.typ ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in

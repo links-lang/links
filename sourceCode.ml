@@ -20,10 +20,9 @@ object (self)
 
   (* Return the portion of source code that falls between two positions *)
   method private extract_substring (start : Lexing.position) (finish : Lexing.position) =
-    if start == Lexing.dummy_pos || finish == Lexing.dummy_pos then
-      "*** DUMMY POSITION ****"
-    else
+    try
       Buffer.sub text start.Lexing.pos_cnum (finish.Lexing.pos_cnum - start.Lexing.pos_cnum)
+    with Invalid_argument _ -> "*** DUMMY POSITION ****"
 
   (* Return some lines of the source code *)
   method extract_line_range (startline : int) (finishline : int) =
