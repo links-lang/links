@@ -53,5 +53,5 @@ exit : 1
 Module chasing
 ./tests/modules/moduleA.links
 filemode : args
-args : --path="tests/modules"
+args : --path=tests/modules
 stdout : "hello from c!" : String
