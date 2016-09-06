@@ -43,8 +43,7 @@ let read_program filename : (envs * program) =
     the IR *)
 let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
-    Parse.parse_file Parse.program filename  in
-  (* printf "Parsed AST: \n%s \n\n" (Sugartypes.Show_program.show sugar); *)
+    ModuleUtils.try_parse_file filename in
   let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program
