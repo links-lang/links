@@ -429,6 +429,7 @@ let options : opt list =
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
+    (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
     ]
 
 let file_list = ref []

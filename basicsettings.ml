@@ -98,3 +98,6 @@ let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
+
+(* Paths to look for .links files in chasing pass *)
+let links_file_paths = Settings.add_string("links_file_paths", "", `User)

@@ -57,13 +57,13 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode='', extern_args='', ignore = None):
+def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode='', args='', ignore = None):
     if filemode.startswith('true') :
-        proc = Popen((links, code), stdout=PIPE, stderr=PIPE, env=env)
-    elif filemode.startswith('extern'):
-        proc = Popen((code, extern_args), stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen([links, code], stdout=PIPE, stderr=PIPE, env=env)
+    elif filemode.startswith('args'):
+        proc = Popen([links, args, code], stdout=PIPE, stderr=PIPE, env=env)
     else:
-        proc = Popen((links, flags, code), stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen([links, flags, code], stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
     for i in xrange(0, TIMEOUT*100):
