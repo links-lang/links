@@ -269,7 +269,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string)),
    datatype "(Float) -> Xml",
-  PURE);
+   PURE);
+
+  "sysexit",
+  (p1 (fun ret -> Pervasives.exit (unbox_int ret)),
+   datatype "(Int) ~> a",
+   IMPURE);
+
+  "show",
+  (p1 (fun v -> box_string (Value.string_of_value v)),
+   datatype "(a) ~> String",
+   PURE);
 
   "exit",
   (`Continuation Value.toplevel_cont,
