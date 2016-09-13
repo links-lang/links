@@ -37,8 +37,7 @@ type constant = Constant.constant
 type location = Sugartypes.location
   deriving (Show)
 
-type handler_spec  = handler_nature * handler_depth
-and handler_nature = [ `Open | `Closed ]
+type handler_spec  = handler_depth * [`Linear | `Unrestricted]
 and handler_depth  = [ `Deep | `Shallow ]
   deriving (Show)
   
@@ -88,9 +87,10 @@ and special =
   | `CallCC of value
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * (binder * computation) name_map * handler_spec)
+  | `Handle of (value * clause name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`Effect of binder | `Exception | `Regular] * binder * computation                                   
   deriving (Show)
 
 val binding_scope : binding -> scope

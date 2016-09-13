@@ -409,6 +409,9 @@ struct
     List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
       wxyzs
       ([],[],[],[])
+
+  let drop_nth xs n =
+    (take n xs) @ (drop (n+1) xs)      
 end
 include ListUtils
 

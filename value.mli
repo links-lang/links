@@ -74,7 +74,7 @@ type t = [
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
 and delim_continuation = frame list (* Delimited continuation *)
 and continuation = delim_continuation list (* (Generalised) continuation *)
-and handler  = env * (Ir.binder * Ir.computation) Ir.name_map * Ir.handler_spec
+and handler  = env * Ir.clause Ir.name_map * Ir.handler_spec
 and handlers = handler list				 
 and env
     deriving (Show)
@@ -127,7 +127,8 @@ val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
-val box_op : t list -> t -> t				       
+val box_op : t list -> t -> t
+val box    : t list -> t                              
 
 val intmap_of_record : t -> t Utility.intmap option
 

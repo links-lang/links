@@ -178,7 +178,8 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT HANDLE SHALLOWHANDLE OPEN HANDLER SHALLOWHANDLER
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT OPEN
+%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -322,11 +323,11 @@ fun_declaration:
 								 `Handler (b, spec, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_specialization handled_computation var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
+| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
 			   						     let hnlit  = ($2, fst $4, snd $4) in
  									     (binder, $1, hnlit, pos()) }
 
-handled_computation:
+optional_computation_parameter:
 | /* empty */                                                 { (`Any, pos()) }
 | LBRACKET pattern RBRACKET                                   { $2 }
   
@@ -454,24 +455,20 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_specialization handled_computation handler_parameterization              {  let (body, args) = $3 in
+| handler_specialization optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
 										      let hnlit = ($2, body, args) in						  
 											`HandlerLit ($1, hnlit), pos() } 
     
 handler_specialization:
-| handler_nature handler_depth { ($1, $2) }
+| handler_depth                        { $1 }
 
 handler_parameterization:
 | handler_body                         { ($1, None) }
-| arg_lists handler_body { ($2, Some $1) }
+| arg_lists handler_body               { ($2, Some $1) }
 
-handler_nature:
-| /* empty */                { `Open }
-| OPEN                       { `Open }
-    
 handler_depth:
-| HANDLER                    { `Deep }
-| SHALLOWHANDLER             { `Shallow }
+| HANDLER                    { `Deep, `Unrestricted }
+| SHALLOWHANDLER             { `Shallow, `Unrestricted }
 
 handler_body:	  
 | LBRACE cases RBRACE    	                               { $2 }
@@ -762,11 +759,12 @@ case_expression:
                                                                  `Handle ($3, $6, descriptor), pos() }
 
 handle_specialisation:
-| handler_nature handle_depth                                  { ($1, $2) }
+| handle_depth                                                 { $1 }
     
 handle_depth:
-| HANDLE                                                       { `Deep }
-| SHALLOWHANDLE                                                { `Shallow }
+| LINEARHANDLE                                                 { (`Deep, `Linear) }              
+| HANDLE                                                       { (`Deep, `Unrestricted) }
+| SHALLOWHANDLE                                                { (`Shallow, `Unrestricted) }
     
 iteration_expression:
 | case_expression                                              { $1 }
