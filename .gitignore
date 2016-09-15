@@ -22,3 +22,10 @@ xmlParser.mli
 ._ncdi
 ._bcdi
 *.links.cache
+
+# documentation
+quick-help.html
+doc/*.aux
+doc/*.log
+doc/*.pdf
+doc/*.toc

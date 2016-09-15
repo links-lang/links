@@ -10,7 +10,7 @@ grammar.ps: grammar.dvi
 	dvips grammar -o grammar.ps
 
 clean:
-	-rm -f grammar.aux grammar.log grammar.toc grammar.dvi grammar.pdf grammar.ps
+	-rm -f grammar.aux grammar.log grammar.toc grammar.dvi grammar.pdf grammar.ps quick-help.html
 
 quick-help.html: quick-help.pod
 	pod2html quick-help.pod > quick-help.html
