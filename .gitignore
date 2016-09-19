@@ -29,3 +29,8 @@ doc/*.aux
 doc/*.log
 doc/*.pdf
 doc/*.toc
+
+# ocamlbuild artefacts
+_build
+links.byte
+links.native
