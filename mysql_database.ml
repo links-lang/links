@@ -256,6 +256,12 @@ end
 let parse_args (args : string) : db =
   match Utility.split_string args ':' with 
     | (name::host::port::user::pass::others) ->
+       (* If "user" field was left empty then get the name of user running the
+          process.  This has to be done by acquiring UID, finding corresponding
+          entry in passwd table and reading user's login name. *)
+       let user = if user = ""
+                  then (Unix.getpwuid (Unix.getuid ())).pw_name
+                  else user in
         (try
           {
             dbname = Some name;
