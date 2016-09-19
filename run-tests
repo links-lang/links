@@ -21,7 +21,7 @@ fi
 
 if [[ $1 != "no-db" ]]; then
     for s in tests/database/*.sql; do
-        cmnd="psql -v ON_ERROR_STOP=1 -q -U postgres -d links -f $s"
+        cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
