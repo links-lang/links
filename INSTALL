@@ -98,11 +98,11 @@ Links easy to run from anywhere on your system, do the following:
 
       $ make install
 
-    If you want to install to a global directory such as /usr/local, you 
+    If you want to install to a global directory such as /usr/local, you
     need to have admin privileges when you do this.
 
-3.  Finally, add an environment variable binding to set LINKS_LIB to the 
-    appropriate value chosen above.  
+3.  Finally, add an environment variable binding to set LINKS_LIB to the
+    appropriate value chosen above.
 
       export LINKS_LIB=/usr/local/links/lib
 
@@ -149,7 +149,7 @@ In order to handle .links files you need to define an action:
 
   <Directory /web>
     # Pass .links files to linkshandler.cgi
-    Action text/links /web/bin/linkshandler.cgi 
+    Action text/links /web/bin/linkshandler.cgi
   </Directory>
 
 and provide an appropriate implementation of linkshandler.cgi:
@@ -193,7 +193,7 @@ add a suitable handler for .links files under examplessrc:
 
   <Directory /web/examplessrc>
     # Pass .links files to linkssrchandler.cgi
-    Action text/links /web/bin/linkssrchandler.cgi 
+    Action text/links /web/bin/linkssrchandler.cgi
   </Directory>
 
 and create a corresponding CGI script linkssrchandler.cgi that simply
@@ -229,10 +229,10 @@ To build Links with database support, follow these steps:
 
   2. If you need to link against the database libraries themselves,
      you can add these to the EXTRA_LIBDIRS line in Makefile.
-     
+
      For example, on MacOS X, this setting can be used to include the
      PostgreSQL libraries:
-     
+
        EXTRA_LIBDIRS=/usr/local/pgsql/lib
 
   3. Rebuild links with:
@@ -246,12 +246,13 @@ To build Links with database support, follow these steps:
 
        'postgresql', 'mysql' or 'sqlite'
 
-     The 'database_args' setting is only relevant for postgres and
-     mysql. It takes the form:
- 
+     The 'database_args' setting is only relevant for postgres, mysql and
+     MonetDB.  It takes the form:
+
        <host>:<port>:<user>:<password>
 
-     where the password may be blank.
+     where the password and user may be blank.  If the user name is left blank
+     it will be assumed to be the name of the user running the process.
 
 EMACS MODE
 
