@@ -87,6 +87,12 @@ let driver_name = "monetdb5"
 let get_m5_database_by_string args =
   match Utility.split_string args ':' with
     | (name::host::port::user::pass::_) ->
+       (* If "user" field was left empty then get the name of user running the
+          process.  This has to be done by acquiring UID, finding corresponding
+          entry in passwd table and reading user's login name. *)
+       let user = if user = ""
+                  then (Unix.getpwuid (Unix.getuid ())).pw_name
+                  else user in
 	(new m5_database host port name user pass,
 	 Value.reconstruct_db_string (driver_name, args))
     | _ ->
