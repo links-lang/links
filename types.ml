@@ -1926,40 +1926,11 @@ struct
           | `Dual s -> "~" ^ datatype bound_vars p s
           | `End -> "End"
           | `Table (r, w, n)   ->
-             (* TODO:
-
-                pretty-print this using constraints?
-             *)
+             (* TODO: pretty-print this using constraints? *)
              "TableHandle(" ^
                datatype bound_vars p r ^ "," ^
                datatype bound_vars p w ^ "," ^
                datatype bound_vars p n ^ ")"
-                (*
-                  QUESTION:
-
-                  How should we render the types [Char] and [XmlItem]?
-
-                  It isn't clear what the right thing to do here is.
-
-                  Option 1 - as lists
-                  Then
-                  ['a', 'b', 'c] : [Char]
-                  but
-                  "abc" ++ "def" : [Char]
-
-                  Option 2 - as typenames
-                  Then
-                  "abc" ++ "def" : String
-                  but
-                  ['a', 'b', 'c] : String
-
-                  What do GHCi and SML/NJ Do?
-                *)
-                (*
-                  | `Application ("List", [`Primitive `Char]) -> "String"
-                  | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
-                *)
-
           (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
           | `Alias ((s,[]), t) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
