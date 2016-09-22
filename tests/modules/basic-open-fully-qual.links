@@ -6,8 +6,8 @@ module A {
   }
 
   fun foo() {
-    B:::bar()
+    B.bar()
   }
 }
 
-A:::B:::bar()
+A.B.bar()
