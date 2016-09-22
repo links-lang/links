@@ -30,11 +30,13 @@ let parse_bool = function
   | "yes"
   | "oui"
   | "ja"
+  | "tak"
   | "on"  -> true
   | "false"
   | "no"
   | "non"
   | "nein"
+  | "nie"
   | "off" -> false
   | _ -> raise (Invalid_argument "parse_bool")
 
