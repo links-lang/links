@@ -11,4 +11,4 @@ module A {
   }
 }
 
-A:::B:::bar()
+A.B.bar()

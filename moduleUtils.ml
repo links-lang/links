@@ -1,6 +1,6 @@
 open Utility
 
-let module_sep = ":::"
+let module_sep = "."
 
 type binding_stack_node = [
   | `OpenStatement of string

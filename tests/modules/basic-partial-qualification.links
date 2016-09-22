@@ -6,9 +6,9 @@ module A {
   }
 
   fun foo() {
-    B:::bar()
+    B.bar()
   }
 }
 
 open A
-A:::foo()
+A.foo()

@@ -8,8 +8,9 @@ type filename = string
 (* Helper functions *)
 
 (* Given fully-qualified module name, gets root module name *)
+(* module_sep isn't used here, unfortunately, since it's a regex special char *)
 let module_file_name module_name =
-  match (Str.split (Str.regexp module_sep) module_name) with
+  match (Str.split (Str.regexp (Str.quote module_sep)) module_name) with
     | [] -> failwith "Internal error: empty list in module_file_name"
     | (x::_xs) -> x
 
