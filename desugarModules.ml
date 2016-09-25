@@ -84,13 +84,7 @@ let performFlattening : program -> program =
  * the fully-qualified name according to the priority of the stack.
  * If there are no matches, leave it as it is (either FQ already or erroneous) *)
 let rec substituteVar seen_bindings binding_stack current_module_prefix var_name =
-  (*
-  printf "Trying to substitute for %s in module %s. Seen: %s; Binding stack: %s\n"
-    var_name current_module_prefix (print_list (StringSet.elements seen_bindings)) (print_stack binding_stack);
- *)
-  (* printf "Trying to substitute for %s in module %s; Binding stack: %s\n"
-    var_name current_module_prefix (print_stack binding_stack); *)
-  match binding_stack with
+    match binding_stack with
     | [] -> var_name
     | (`LocalVarBinding x)::xs ->
         if x = var_name then
@@ -131,14 +125,6 @@ object(self)
 
   method set_stack s = {< binding_stack = s >}
 
-  method phrase = function
-    | (`Var old_name, pos) ->
-        (* Add prefix onto var name*)
-        let new_name = substituteVar seen_bindings binding_stack prefix old_name in
-        (self, (`Var new_name, pos))
-    | x -> super#phrase x
-
-
   method binder = function
     | (old_name, dt, pos) ->
         let new_name = prefixWith old_name prefix in
@@ -166,11 +152,13 @@ object(self)
             ((`OpenStatement new_prefix)::binding_stack))#phrase p in
         let o3 = {< seen_modules = o2#get_seen_modules; seen_bindings = o2#get_seen_bindings >} in
         (o3, `Module (new_prefix, renamed_phrase))
-        (* printf "Renamed bindings for module %s: %s\n" name (print_list
-         * (List.map (Sugartypes.Show_binding.show)  (List.rev reversed_renamed_bindings))); *)
     | x -> super#bindingnode x
 
   method phrasenode = function
+    | `Var old_name ->
+        (* Add prefix onto var name*)
+        let new_name = substituteVar seen_bindings binding_stack prefix old_name in
+        (self, `Var new_name)
     | `Block (bs, p) ->
         (* Recursively process bindings / phrase *)
         let (o1, reversed_renamed_bindings) =
