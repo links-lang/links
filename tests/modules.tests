@@ -55,3 +55,9 @@ Module chasing
 filemode : args
 args : --path=tests/modules
 stdout : "hello from c!" : String
+
+Module chasing via FQ variables
+./tests/modules/varRefA.links
+filemode : args
+args : --path=tests/modules
+stdout : "hello from b!" : String
