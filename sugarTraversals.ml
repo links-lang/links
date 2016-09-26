@@ -152,6 +152,8 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
+      | `QualifiedVar _xs ->
+          let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
@@ -447,6 +449,11 @@ class map =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
+      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+          let ns = o#list (fun o -> o#name) ns in
+          let sk_opt = o#option (fun o -> o#subkind) sk_opt in
+          let frdm = o#freedom frdm in
+          `QualifiedTypeVar (ns, sk_opt, frdm)
       | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -523,6 +530,10 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
+      | `Def (n, b) ->
+          let n = o#name n in
+          let b = o#bindingnode b in
+          `Def (n, b)
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x_i1 = o#pattern _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
@@ -552,6 +563,9 @@ class map =
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
       | `Import _x -> let _x = o#string _x in `Import _x
+      | `QualifiedImport _xs ->
+          let _xs = o#list (fun o -> o#name) _xs in
+          `QualifiedImport _xs
       | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
@@ -717,6 +731,8 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
+      | `QualifiedVar _xs ->
+          let o = o#list (fun o -> o#name) _xs in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
       | `Query (_x, _x_i1, _x_i2) ->
@@ -975,6 +991,10 @@ class fold =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
+      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+          let o = o#list (fun o -> o#name) ns in
+          let o = o#option (fun o -> o#subkind) sk_opt in
+          let o = o#freedom frdm in o
       | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1043,6 +1063,10 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
+      | `Def (n, b) ->
+          let o = o#name n in
+          let b = o#bindingnode b in
+          o
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#list (fun o -> o#tyvar) _x in
           let o = o#pattern _x_i1 in
@@ -1071,6 +1095,9 @@ class fold =
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
       | `Import _x -> let o = o#string _x in o
+      | `QualifiedImport _xs ->
+          let o = o#list (fun o -> o#name) _xs in
+          o
       | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
@@ -1258,6 +1285,9 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
+      | `QualifiedVar _xs ->
+          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
+          (o, (`QualifiedVar _xs))
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
@@ -1603,6 +1633,11 @@ class fold_map =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
+      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+          let (o, ns) = o#list (fun o -> o#name) ns in
+          let (o, sk_opt) = o#option (fun o -> o#subkind) sk_opt in
+          let (o, frdm) = o#freedom frdm in
+          (o, `QualifiedTypeVar (ns, sk_opt, frdm))
       | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
@@ -1686,6 +1721,10 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
+      | `Def (n, b) ->
+          let (o, n) = o#name n in
+          let (o, b) = o#bindingnode b in
+          (o, `Def (n, b))
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x_i1) = o#pattern _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in
@@ -1716,6 +1755,9 @@ class fold_map =
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))
       | `Import _x -> let (o, _x) = o#string _x in (o, (`Import _x))
+      | `QualifiedImport _xs ->
+          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
+          (o, `QualifiedImport _xs)
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =

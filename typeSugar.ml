@@ -37,6 +37,7 @@ struct
   and is_pure (p, _) = match p with
     | `Constant _
     | `Var _
+    | `QualifiedVar _
     | `FunLit _
     | `DatabaseLit _
     | `TableLit _
@@ -91,6 +92,8 @@ struct
     | `DBUpdate _ -> false
   and is_pure_binding (bind, _ : binding) = match bind with
       (* need to check that pattern matching cannot fail *)
+    | `Def _
+    | `QualifiedImport _
     | `Fun _
     | `Funs _
     | `Infix
@@ -2524,6 +2527,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
     let typed, ctxt, usage = match def with
       | `Import _ -> assert false
+      | `QualifiedImport _ -> assert false
+      | `Def _ -> assert false
       | `Val (_, pat, body, location, datatype) ->
           let body = tc body in
           let pat = tpc pat in

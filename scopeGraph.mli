@@ -9,11 +9,13 @@ type reference
 type import
 
 (* Functions on scopes and scope graphs *)
+(* might change these
 val get_scopes : scope_graph -> scope list
 val get_declarations : scope -> declaration list
 val get_references : scope -> reference list
-val get_imports : scope -> import_list
+val get_imports : scope -> import list
 val get_parent : scope -> scope option
+*)
 
 (* Scope graph construction *)
 val create_scope_graph : Sugartypes.program -> scope_graph

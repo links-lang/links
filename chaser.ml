@@ -2,6 +2,8 @@ open Utility
 open Sugartypes
 open Printf
 open ModuleUtils
+open Uniquify
+open ScopeGraph
 
 type prog_map = program StringMap.t
 type filename = string
