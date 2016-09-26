@@ -1,29 +1,30 @@
-(* Name of a scope *)
-type scope_name = string option
+open Utility
+(* open Sugartypes *)
 
-(* Top-level scope *)
-type scope_graph = scope intmap
-
-(* Position *)
-type position = int
-
-(* Declaration -- generally a binder. Contains name, position, and optional
- * named scope reference *)
-type declaration = (string * position * scope option)
-
-(* Name of a reference (function application, argument, etc.) *)
-type reference = (string * position)
-
-(* Name of an import (either in-module or out-of-module *)
-type import  = (string * position)
-
+type scope_id = int
 (* Lists of declarations, references, imports, and an optional parent scope *)
 type scope =
   { declarations : declaration list;
     references : reference list;
     imports : import list;
-    parent_scope : scope option
+    parent_scope : scope_id option
   }
+(* Declaration -- generally a binder. Contains name, position, and optional
+ * named scope reference *)
+and declaration = (string * scope_id option)
+
+(* Name of a reference (function application, argument, etc.) *)
+and reference = string
+
+(* Name of an import (either in-module or out-of-module *)
+and import  = string
+
+
+(* Name of a scope *)
+type scope_name = string option
+
+(* Top-level scope *)
+type scope_graph = scope intmap
 
 (* Gets a list of scopes from the scope graph *)
 let get_scopes sg = sg
@@ -87,13 +88,16 @@ object(self)
   method get_scope = scope
   method set_scope s = {< scope = s >}
 
+  val scope_id = scope_id
+  method get_scope_id = scope_id
+
   (* Overall scope graph *)
   val scope_graph = init_scope_graph
   method get_scope_graph = scope_graph
 
   method qn_add_references = function
     | [] -> failwith "Internal error: empty qualified name list"
-    | [x] -> set_scope (add_reference scope x)
+    | [x] -> self#set_scope (add_reference scope x)
     | x :: xs ->
         (* Add reference to current scope *)
         let scope1 = add_reference scope x in
@@ -106,7 +110,7 @@ object(self)
         let rec_scope = o_rec#get_scope in
         let rec_sg = o_rec#get_scope_graph in
         let new_sg = add_scope qn_scope_id rec_scope rec_sg in
-        {< scope = scope1, scope_graph = new_sg >}
+        {< scope = scope1; scope_graph = new_sg >}
 
   method phrasenode = function
     | `Var n ->
@@ -119,10 +123,10 @@ object(self)
   (* *should* be the same for types, but if not, we can distinguish
    * type declarations from term declarations *)
   method datatype = function
-    | `TypeVar n ->
+    | `TypeVar (n, _, _) ->
         (* Add to references for current scope *)
         {< scope = add_reference scope n >}
-    | `QualifiedVar ns ->
+    | `QualifiedTypeVar (ns, _, _) ->
         self#qn_add_references ns
     | dt -> super#datatype dt
 
@@ -133,17 +137,17 @@ object(self)
         let o_bindingnode = self#bindingnode b in
         (* Now, we want to update the SG, as well as adding a new declaration to this scope *)
         let new_sg = o_bindingnode#get_scope_graph in
-        {< scope_graph = new_sg, scope = new_decls >}
-    | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_phrase), _loc, _dtopt) ->
+        {< scope_graph = new_sg; scope = new_decls >}
+    | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_funlit), _loc, _dtopt) ->
         (* Generate a new scope *)
         let fn_scope_num = get_scope_num () in
         (* Functions are assumed to be recursive, so are added to the scope *)
         let fn_scope = add_declaration (new_scope (Some scope_id)) (plain_decl fn_name) in
         (* Now, perform an analysis on the function expression *)
-        let o_scope = construct_sg fn_scope scope_graph fn_scope_num in
+        let o_scope = (construct_sg fn_scope scope_graph fn_scope_num)#funlit fn_funlit in
         (* Finally, get the updated scope graph, and add the new scope. *)
         let (fn_sg, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope) in
-        let new_sg = add_scope fn_scope_num fn_scope fn_sg in
+        let new_sg = add_scope fn_scope_num fn_scope1 fn_sg in
         {< scope_graph = new_sg >}
     | `Funs _ ->
         (* This is kind of problematic: `Funs is introduced in refineBindings, but
@@ -155,14 +159,14 @@ object(self)
     | `Import n ->
         (* Unqualified import. Add to imports list and references list. *)
         let scope1 = add_reference scope n in
-        set_scope add_import scope1 n
+        self#set_scope (add_import scope1 n)
     | `QualifiedImport ns ->
         (* Next, we need to properly set up anonymous scopes *)
         (* Firstly, add all segments of the qualified name into the imports list. *)
         let o1 = self#qn_add_references ns in
         o1#list (fun o n ->
             let modified_scope = add_import o#get_scope n in
-            o#set_scope new_import) ns
+            o#set_scope modified_scope) ns
     | `Val (_tvs, pat, phr, _loc, _dtopt) ->
         (* (Deviating slightly from the algorithm in the paper here since our pattern
          * language is more complex).
@@ -180,27 +184,31 @@ object(self)
         (* Save this scope to SG, since it's done now. *)
         let new_sg = add_scope scope_id phr_scope pat_sg in
         (* Return new scope with old scope added to SG. *)
-        {< scope = pat_scope, scope_graph = new_sg >}
+        {< scope = pat_scope; scope_graph = new_sg >}
     | `Infix -> self
     | `Exp p -> self#phrase p
     | `Foreign ((bnd_name, _, _), _name, _dt) ->
         (* Not entirely sure how FFI works (if at all?) -- just add binder as a
          * decl *)
-        {< scope = add_decl scope (plain_decl bnd_name) >}
+        {< scope = add_declaration scope (plain_decl bnd_name) >}
     | `Module (n, bl) ->
         (* Create new scope, with current scope as parent *)
         let module_scope_id = get_scope_num () in
         let module_scope = new_scope (Some scope_id) in
         (* Add declaration, with annotation of new scope name *)
         let module_decl = annotated_decl n module_scope_id in
-        let our_scope = add_decl scope module_decl in
+        let our_scope = add_declaration scope module_decl in
         (* Proceed to process declarations using new scope *)
-        let o_module = module_scope scope_graph module_scope_id in
+        let o_module = (construct_sg module_scope scope_graph module_scope_id)#phrase bl in
+        let (o_scope, o_sg, o_scope_id) = (o_module#get_scope,
+          o_module#get_scope_graph, o_module#get_scope_id) in
+        (* Add final binding scope to scope graph *)
+        let o_sg1 = add_scope o_scope_id o_scope o_sg in
         (* Using returned scope graph, process remainder of declarations *)
-        {< scope = our_scope, scope_graph = o_module#get_scope_graph >}
+        {< scope = our_scope; scope_graph = o_sg1 >}
 end
 
 let create_scope_graph prog =
-  let o = (sg_global_bindings (new_scope None) (IntMap.singleton 0) 0)#program prog in
+  let o = (construct_sg (new_scope None) (IntMap.empty) 0)#program prog in
   o#get_scope_graph
 
