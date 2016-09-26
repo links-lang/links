@@ -29,6 +29,7 @@ object (self)
     (self#add_name name uniquified_name, uniquified_name)
 
   (* Some names in bindingnode need to be renamed, but aren't referred to using binders *)
+  (* TODO: QualifiedImport *)
   method bindingnode = function
     | `Import n ->
       let uniquified_name = make_unique_name n in
@@ -50,6 +51,7 @@ object (self)
       (o1, `Module (uniquified_name, p))
     | bn -> super#bindingnode bn
 
+  (* TODO: QualifiedVar *)
   method phrasenode = function
     | `Var name ->
         let uniquified_name = make_unique_name name in

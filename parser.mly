@@ -166,21 +166,6 @@ let parseRegexFlags f =
     List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
 
 let datatype d = d, None
-
-let module_sep = "."
-
-let join_qual_list = String.concat module_sep
-
-(* hack, brb *)
-(*
-let rec disambiguate_session xs =
-  match xs with
-    | [] -> failwith "empty qualified var when parsing session"
-    | [x] -> ([], `TypeVar (x, None, `Rigid))
-    | x :: xs ->
-        let (xs', end_ty_var) = loop xs in
-        (x :: xs', end_ty_var) in
-*)
 %}
 
 %token END
@@ -411,7 +396,7 @@ qualified_name_inner:
 | VARIABLE                                                     { [$1] }
 
 atomic_expression:
-| qualified_name                                               { `Var (join_qual_list $1), pos() }
+| qualified_name                                               { `QualifiedVar $1, pos() }
 | VARIABLE                                                     { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
@@ -851,7 +836,7 @@ record_labels:
 | record_label                                                 { [$1] }
 
 links_open:
-| OPEN qualified_name                                          { `Import (join_qual_list $2), pos () }
+| OPEN qualified_name                                          { `QualifiedImport $2, pos () }
 | OPEN CONSTRUCTOR                                             { `Import $2, pos () }
 
 binding:
@@ -996,7 +981,7 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_name RPAREN                                 { [`TypeVar (join_qual_list $2, None, `Rigid)] }
+| LPAREN qualified_name RPAREN                                 { [`QualifiedTypeVar ($2, None, `Rigid)] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:
