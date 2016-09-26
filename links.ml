@@ -435,6 +435,13 @@ let options : opt list =
 let file_list = ref []
 
 let main () =
+  for_each !file_list (fun filename ->
+    let sugar, pos_context =
+      ModuleUtils.try_parse_file filename in
+    let uniquified_sugar = Uniquify.get_ast (Uniquify.uniquify_ast sugar) in
+    ScopeGraph.make_and_print_scope_graph uniquified_sugar)
+
+(*
   let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
   for_each !to_evaluate (evaluate_string_in envs);
@@ -450,7 +457,7 @@ let main () =
       print_endline (Settings.get_value BS.welcome_note);
       interact envs
     end
-
+*)
 
 (* jcheney:
    Implementation of "cache_whole_program" setting.
