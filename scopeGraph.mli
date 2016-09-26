@@ -19,3 +19,4 @@ val get_parent : scope -> scope option
 
 (* Scope graph construction *)
 val create_scope_graph : Sugartypes.program -> scope_graph
+val make_and_print_scope_graph : Sugartypes.program -> unit

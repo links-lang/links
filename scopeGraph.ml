@@ -1,4 +1,6 @@
 open Utility
+open Printf
+
 (* open Sugartypes *)
 
 type scope_id = int
@@ -206,9 +208,46 @@ object(self)
         let o_sg1 = add_scope o_scope_id o_scope o_sg in
         (* Using returned scope graph, process remainder of declarations *)
         {< scope = our_scope; scope_graph = o_sg1 >}
+    | `Type (n, _, _) ->
+        (* I suppose it depends on whether we want types to behave like function or Var bindings.
+         * Let's treat them like defs (i.e. function bindings) for now *)
+        {< scope = add_declaration scope (plain_decl n) >}
 end
 
 let create_scope_graph prog =
   let o = (construct_sg (new_scope None) (IntMap.empty) 0)#program prog in
   o#get_scope_graph
+
+(* Print DOT file for scope graph *)
+let show_scope_graph sg =
+  let show_scope scope scope_id =
+    let rec show_decls = function
+      | [] -> ""
+      | (d, assoc_opt) :: xs ->
+          (sprintf "%d -> %s\n" scope_id d) ^
+          (match assoc_opt with
+             | None -> ""
+             | Some assoc_id -> (sprintf "%s -> %d[arrowhead=\"empty\"]\n" d assoc_id)) ^
+          (show_decls xs) in
+    let rec show_references = function
+      | [] -> ""
+      | r::rs ->
+          (sprintf "%s -> %d\n" r scope_id) ^ (show_references rs) in
+    let rec show_imports = function
+      | [] -> ""
+      | i::is ->
+          (sprintf "%d -> %s[arrowhead=\"empty\"]\n" scope_id i) ^ (show_imports is) in
+    let show_parent = function
+      | None -> ""
+      | Some p -> sprintf "%d -> %d\n" scope_id p in
+    (show_decls scope.declarations) ^ (show_references scope.references) ^
+    (show_imports scope.imports) ^ (show_parent scope.parent_scope) in
+  "digraph G {\n" ^
+    String.concat ""
+      (List.map (fun (s_id, s) -> show_scope s s_id) (IntMap.bindings sg))
+      ^ "}"
+
+let make_and_print_scope_graph prog =
+  let sg = create_scope_graph prog in
+  printf "%s\n" (show_scope_graph sg)
 
