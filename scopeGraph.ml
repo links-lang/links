@@ -160,9 +160,12 @@ object(self)
         (* Next, we need to properly set up anonymous scopes *)
         (* Firstly, add all segments of the qualified name into the imports list. *)
         let o1 = self#qn_add_references ns in
-        o1#list (fun o n ->
+        let (sc, sc_id, sg) = (o1#get_scope, o1#get_scope_id, o1#get_scope_graph) in
+        let sg1 = add_scope sc_id sc sg in
+        let o2 = self#list (fun o n ->
             let modified_scope = add_import o#get_scope n in
-            o#set_scope modified_scope) ns
+            o#set_scope modified_scope) ns in
+        {< scope_graph = sg1; scope = o2#get_scope >}
     | `Val (_tvs, pat, phr, _loc, _dtopt) ->
         (* (Deviating slightly from the algorithm in the paper here since our pattern
          * language is more complex).
@@ -176,11 +179,12 @@ object(self)
         let following_scope_id = get_scope_num () in
         let following_scope = new_scope (Some scope_id) in
         let o_pattern = (construct_sg following_scope phr_sg following_scope_id)#pattern pat in
-        let (pat_scope, pat_sg) = (o_pattern#get_scope, o_pattern#get_scope_graph) in
+        let (pat_scope, pat_scope_id, pat_sg) =
+          (o_pattern#get_scope, o_pattern#get_scope_id, o_pattern#get_scope_graph) in
         (* Save this scope to SG, since it's done now. *)
         let new_sg = add_scope scope_id phr_scope pat_sg in
         (* Return new scope with old scope added to SG. *)
-        {< scope = pat_scope; scope_graph = new_sg >}
+        {< scope = pat_scope; scope_id = pat_scope_id; scope_graph = new_sg >}
     | `Infix -> self
     | `Exp p -> self#phrase p
     | `Foreign ((bnd_name, _, _), _name, _dt) ->
@@ -206,6 +210,9 @@ object(self)
         (* I suppose it depends on whether we want types to behave like function or Var bindings.
          * Let's treat them like defs (i.e. function bindings) for now *)
         {< scope = add_declaration scope (plain_decl n) >}
+
+    method binder (n, _, _) =
+      {< scope = add_declaration scope (plain_decl n) >}
 
     method program = function
       | (bindings, phr_opt) ->
