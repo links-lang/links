@@ -255,9 +255,6 @@ and bindingnode = [
      which corresponds to
        let p=/\X.e in ...
 *)
-(* Needed for name resolution -- unordered binding. Needed to disambiguate
- * binding occurrence of a function from declaration which can be used recursively *)
-| `Def     of name * bindingnode
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list

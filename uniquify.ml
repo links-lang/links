@@ -54,13 +54,6 @@ object (self)
     | `Type (n, xs, dt) ->
       let uniquified_name = make_unique_name n in
       (self#add_name n uniquified_name, `Type (uniquified_name, xs, dt))
-    (* For the algorithm to work in the presence of functions whose order doesn't matter,
-     * we need to disambiguate between the occurrence as a binding, and the
-     * occurrence to be used *within* the function for recursion. Wart, but eh. *)
-    | `Fun (((n, dtopt1, pos), _, _, _, _) as fn_body)  ->
-        let uniquified_name = make_unique_name n in
-        let (o, fn_body1) = super#bindingnode (`Fun fn_body) in
-        (o#add_name n uniquified_name, `Def (uniquified_name, fn_body1))
     | `Module (n, p) ->
       let uniquified_name = make_unique_name n in
       let o = self#add_name n uniquified_name in
