@@ -530,10 +530,6 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
-      | `Def (n, b) ->
-          let n = o#name n in
-          let b = o#bindingnode b in
-          `Def (n, b)
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x_i1 = o#pattern _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
@@ -1063,10 +1059,6 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
-      | `Def (n, b) ->
-          let o = o#name n in
-          let b = o#bindingnode b in
-          o
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#list (fun o -> o#tyvar) _x in
           let o = o#pattern _x_i1 in
@@ -1721,10 +1713,6 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Def (n, b) ->
-          let (o, n) = o#name n in
-          let (o, b) = o#bindingnode b in
-          (o, `Def (n, b))
       | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x_i1) = o#pattern _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in

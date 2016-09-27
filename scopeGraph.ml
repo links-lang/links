@@ -133,24 +133,18 @@ object(self)
     | dt -> super#datatype dt
 
   method bindingnode = function
-    | `Def (name, b) ->
-        (* Add binding to declaration list. *)
-        let new_decls = add_declaration scope (plain_decl name) in
-        let o_bindingnode = self#bindingnode b in
-        (* Now, we want to update the SG, as well as adding a new declaration to this scope *)
-        let new_sg = o_bindingnode#get_scope_graph in
-        {< scope_graph = new_sg; scope = new_decls >}
     | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_funlit), _loc, _dtopt) ->
-        (* Generate a new scope *)
+        (* Firstly, add the declaration to the current scope *)
+        let scope1 = add_declaration scope (plain_decl fn_name) in
+        (* Next, generate a new scope *)
         let fn_scope_num = get_scope_num () in
-        (* Functions are assumed to be recursive, so are added to the scope *)
-        let fn_scope = add_declaration (new_scope (Some scope_id)) (plain_decl fn_name) in
+        let fn_scope = new_scope (Some scope_id) in
         (* Now, perform an analysis on the function expression *)
-        let o_scope = (construct_sg fn_scope scope_graph fn_scope_num)#funlit fn_funlit in
+        let o_scope = ((construct_sg fn_scope scope_graph fn_scope_num)#funlit fn_funlit) in
         (* Finally, get the updated scope graph, and add the new scope. *)
         let (fn_sg, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope) in
         let new_sg = add_scope fn_scope_num fn_scope1 fn_sg in
-        {< scope_graph = new_sg >}
+        {< scope = scope1; scope_graph = new_sg >}
     | `Funs _ ->
         (* This is kind of problematic: `Funs is introduced in refineBindings, but
          * this will mean that mutually-recursive functions can't share names at
@@ -212,6 +206,21 @@ object(self)
         (* I suppose it depends on whether we want types to behave like function or Var bindings.
          * Let's treat them like defs (i.e. function bindings) for now *)
         {< scope = add_declaration scope (plain_decl n) >}
+
+    method program = function
+      | (bindings, phr_opt) ->
+          let o = self#list (fun o -> o#binding) bindings in
+          let (sc, sc_id, sg) = (o#get_scope, o#get_scope_id, o#get_scope_graph) in
+          (* No *idea* why o#option wasn't working. *)
+          let o_scope =
+            (match phr_opt with
+               | Some phr ->(construct_sg sc sg sc_id)#phrase phr
+               | None -> o) in
+          let (sc1, sc_id1, sg1) = (o_scope#get_scope, o_scope#get_scope_id, o_scope#get_scope_graph) in
+          (* Add final scope to the SG and we're away *)
+          let sg2 = add_scope sc_id1 sc1 sg in
+          {< scope = sc1; scope_id = sc_id1; scope_graph = sg2 >}
+
 end
 
 let create_scope_graph prog =
