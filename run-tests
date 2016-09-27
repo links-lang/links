@@ -42,7 +42,7 @@ if [[ $1 != "no-db" ]]; then
         fi
     done
 
-    for s in tests/shredding*.sql; do
+    for s in tests/shredding/*.sql; do
         cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
