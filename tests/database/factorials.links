@@ -12,7 +12,7 @@ fun lookupFactorials(n) server {
 
 fun test() {
   assertEq(lookupFactorials(1), [(f=1,i=1)]);
-  assertEq(lookupFactorials(8), [(f=1,i=1), (f=2,i=2), (f=6,i=3), (f=24,i=4), (f=120,i=5), (f=720,i=6), (f=5040,i=7), (f=40320,i=8)]);
+  assertEq(lookupFactorials(8), [(f=40320,i=8), (f=5040,i=7), (f=720,i=6), (f=120,i=5), (f=24,i=4), (f=6,i=3), (f=2,i=2), (f=1,i=1)]);
 }
 
 test()

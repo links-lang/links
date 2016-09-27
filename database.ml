@@ -65,62 +65,189 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
   in
     run qs
 
-let execute_select
-    (field_types:(string * Types.datatype) list) (query:string) (db : database)
-    : Value.t =
 
-  let result_signature result =
+let is_null name = (name = "null");;
+
+let result_signature field_types result =
     let n = result#nfields in
     let rec rs i =
       if i >= n then
-        []
+        [],true
       else
         let name = result#fname i in
           if start_of ~is:"order_" name then
             (* ignore ordering fields *)
             rs (i+1)
           else if List.mem_assoc name field_types then
-            (name, (List.assoc name field_types, i)) :: rs (i+1)
+            let fields,null_query = rs (i+1) in 
+	    (name, (List.assoc name field_types, i)) :: fields, 
+	    null_query && is_null(name)
           else
             failwith("Column " ^ name ^
                         " had no type info in query's type spec: " ^
                         mapstrcat ", " (fun (name, t) -> name ^ ":" ^
                           Types.string_of_datatype t)
                         field_types)
-    in
-      rs 0 in
+    in let rs, null_query = rs 0
+    in if null_query then [] else rs
+;;
+
+
+(* builds record given a row field accessor function *)
+ let build_record (rs: (string * (Types.datatype * int)) list) (row:int -> string) = 
+    let rec build rs l = 
+      match rs with
+      | [] -> l
+      | (name,(t,i))::rs' -> 
+	  build rs' ((name,value_of_db_string (row i) t)::l)
+      | _ -> assert false
+    in build rs []
+;;
+
+(*experimental *)
+ let build_record_array (rs: (string * (Types.datatype * int)) list) (row:string array) = 
+    let rec build rs l = 
+      match rs with
+      | [] -> l
+      | (name,(t,i))::rs' -> 
+	  build rs' ((name,value_of_db_string (Array.get row i) t)::l)
+      | _ -> assert false
+    in build rs []
+;;
+
+
+
+(*
+Old version, retained in case of regression *)
+(*
+
+let execute_select_old
+    (field_types:(string * Types.datatype) list) (query:string) (db : database)
+    : Value.t =
+
+ (* BUG: Lists can be too big for List.map; need to be careful about recursion *)
 
   let result = db#exec query in
+
     match result#status with
       | `QueryError msg -> 
         raise(Runtime_error("An error occurred executing the query " ^ query ^
                                ": " ^ msg))
       | `QueryOk -> 
-        match field_types with
+          Debug.debug_time "QueryOK" (fun () -> 
+	    match field_types with
           | [] ->
                 (* Ignore any dummy fields introduced to work around
                    SQL's inability to handle empty column lists *)
                 `List (map (fun _ -> `Record []) result#get_all_lst)
             | _ ->
-                let fields = result_signature result in
+               
+		let fields = result_signature field_types result in
 
                 let is_null (name, _) =
                   if name = "null" then true
                   else if mem_assoc name fields then false
                   else assert false in
-                let null_query = exists is_null fields in
+                let null_query =  exists is_null fields in
+
                   if null_query then
                     `List (map (fun _ -> `Record []) result#get_all_lst)
                   else
                     `List (map
                              (fun row ->
                                `Record (
-                                 List.fold_right
+                                List.fold_right
                                    (fun (name, (t, i)) fields ->
                                      (name, value_of_db_string (List.nth row i) t)::fields)
                                    fields
-                                   []))
-                      result#get_all_lst)
+                                   []
+			       ))
+                      	(Debug.debug_time "get_all_lst" (fun () -> result#get_all_lst))
+		      )
+)
+
+*)
+
+(* BUG: Lists can be too big for List.map; need to be careful about recursion *)
+
+let execute_select_result
+    (field_types:(string * Types.datatype) list) (query:string) (db: database)  =
+  let result = (db#exec query) in
+    (match result#status with
+       | `QueryOk -> 
+           result,
+	   result_signature field_types result
+       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+
+(* Experimental code to build result using getvalue *)
+let build_result_deforest ((result:Value.dbvalue),rs) = 
+  let max = result#ntuples in
+  let rec do_map n acc = 
+    let rec build rs l = 
+      match rs with
+      | [] -> l
+      | (name,(t,i))::rs' -> 
+	  build rs' ((name,value_of_db_string (result#getvalue n i) t)::l)
+      | _ -> assert false in
+    if n < max
+    then do_map (n+1) (`Record(build rs [])::acc)
+    else `List (acc)
+  in do_map 0 []  
+    ;;
+    
+let build_result_fun ((result:Value.dbvalue),rs) = 
+  `List (result#map (fun row ->
+                     `Record (build_record rs row))
+	   )
+    ;;
+
+(* experimental *)
+let build_result_array ((result:Value.dbvalue),rs) = 
+  `List (result#map_array (fun row ->
+                     `Record (build_record_array rs row))
+	   )
+    ;;
+
+let build_result (result,rs) = build_result_fun (result,rs)
+;;
+
+let execute_select_old
+    (field_types:(string * Types.datatype) list) (query:string) (db : database)
+    : Value.t =
+  let result = db#exec query in
+  
+  match result#status with
+  | `QueryError msg -> 
+      raise(Runtime_error("An error occurred executing the query " ^ query ^
+                          ": " ^ msg))
+  | `QueryOk -> 
+      Debug.debug_time "QueryOK" (fun () -> 
+	let rs = result_signature field_types result in
+	`List (result#map
+                 (fun row ->
+                   `Record (build_record rs row)
+		     )
+		 )
+	  )
+	
+    
+	
+
+
+let execute_select_new
+    (field_types:(string * Types.datatype) list) (query:string) (db : database)
+    : Value.t =
+  let result,rs = execute_select_result field_types query db in 
+  build_result (result,rs)
+;;
+    
+
+let execute_select  
+  (field_types:(string * Types.datatype) list) (query:string) (db : database)
+    : Value.t =
+  if Settings.get_value Basicsettings.fast_execute_select 
+  then execute_select_new field_types query db
+  else execute_select_old field_types query db
 
 let execute_untyped_select (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
@@ -128,3 +255,7 @@ let execute_untyped_select (query:string) (db: database) : Value.t =
        | `QueryOk -> 
            `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+
+
+
+

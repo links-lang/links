@@ -417,13 +417,19 @@ module Eval = struct
   and special env cont : Ir.special -> Proc.thread_result Lwt.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Table (db, name, (readtype, _, _)) ->
+    | `Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
-        match value env db, value env name, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, `Record row ->
-            apply_cont cont env (`Table ((db, params), Value.unbox_string name, row))
+        match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
+          | `Database (db, params), name, keys, `Record row ->
+	      let unboxed_keys = 
+		List.map 
+		  (fun key -> 
+		    List.map Value.unbox_string (Value.unbox_list key))
+		  (Value.unbox_list keys)
+	      in
+              apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -432,49 +438,84 @@ module Eval = struct
          | None -> None
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
-       begin
-         match Query.compile env (range, e) with
-         | None -> computation env cont e
-         | Some (db, q, t) ->
-            let (fieldMap, _, _), _ =
-              Types.unwrap_row(TypeUtils.extract_row t) in
-            let fields =
-              StringMap.fold
-                (fun name t fields ->
-                 match t with
-                 | `Present t -> (name, t)::fields
-                 | `Absent -> assert false
-                 | `Var _ -> assert false)
-                fieldMap
-                []
-            in
-            apply_cont cont env (Database.execute_select fields q db)
-       end
-      (* TODO: Is this refactoring valid?
-      let result =
-        match Query.compile env (range, e) with
-          | None -> computation env cont e
-          | Some (db, q, t) ->
-            let (fieldMap, _, _), _ =
-              Types.unwrap_row(TypeUtils.extract_row t) in
-            let fields =
-              StringMap.fold
-                (fun name t fields ->
-                  match t with
-                    | `Present t -> (name, t)::fields
-                    | `Absent -> assert false
-                    | `Var _ -> assert false)
-                fieldMap
-                []
-            in
-              Database.execute_select fields q db
-      in
-        apply_cont cont env result
-       *)
+       if Settings.get_value Basicsettings.Shredding.shredding then
+         (* Not sure this correct, it compiles though *)
+         begin
+           match Query.compile_shredded env (range, e) with
+           | None -> computation env cont e
+           | Some (db, p) ->
+              let get_fields t =
+                match t with
+                | `Record fields ->
+                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                | _ -> assert false
+              in
+              if Settings.get_value Basicsettings.deforest_stitching
+              then
+                begin
+                  let execute_shredded_raw (q, t) =
+		    Debug.print ("Generated query: "^q);
+		    Debug.debug_time "query execution" (fun () -> 
+		                                        (Database.execute_select_result (get_fields t) q db, t))
+		  in 
+		  let raw_results = 
+		    Debug.debug_time "execute_shredded_raw" 
+		                     (fun () -> Query.Shred.pmap execute_shredded_raw p) 
+	          in
+		  let mapped_results = 
+		    Debug.debug_time "mapped_results" (fun () ->
+		                                       Query.Shred.pmap Query.FastStitching.build_stitch_map raw_results)
+		  in
+                  apply_cont cont env
+		             (Debug.debug_time "stitch_query" 
+		                               (fun () -> Query.Shred.stitch_mapped_query mapped_results))
+                end
+              else
+                begin
+                  let execute_shredded (q, t) =
+                    Debug.print ("Generated query: "^q);
+                    Debug.debug_time "query execution" (fun () -> 
+		                                        (Database.execute_select (get_fields t) q db, t))
+                  in
+                  let flat_results =
+                    Debug.debug_time "execute_shredded"
+                                     (fun () -> Query.Shred.pmap execute_shredded p) in
+                      let unflattened_results =               
+                        Debug.debug_time "unflatten_list" 
+		                         (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
+                      in
+                      apply_cont cont env
+                                 (Debug.debug_time "stitch_query" 
+	                                           (fun () -> Query.Shred.stitch_query unflattened_results))
+                end
+         end
+       else (* shredding disabled *)
+         begin
+           match Query.compile env (range, e) with
+           | None -> computation env cont e
+           | Some (db, q, t) ->
+              let (fieldMap, _, _), _ = 
+                Types.unwrap_row(TypeUtils.extract_row (TypeUtils.element_type t)) in
+              let fields =
+                StringMap.fold
+                  (fun name t fields ->
+                   match t with
+                   | `Present t -> (name, t)::fields
+                   | `Absent -> assert false
+                   | `Var _ -> assert false)
+                  fieldMap
+                  []
+              in
+              apply_cont cont env
+                         (let (raw_result,rs) =  Debug.debug_time "query execution"
+                                                                  (fun () -> Database.execute_select_result fields q db) in
+	                  Debug.debug_time "build_result"
+                                           (fun () -> Database.build_result (raw_result,rs)))
+         end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _, _)) ->
+          | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)
@@ -486,7 +527,7 @@ module Eval = struct
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
         match value env source with
-          | `Table ((db, _), table, (fields, _, _)) ->
+          | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
                                         | _ -> assert false) fields)
