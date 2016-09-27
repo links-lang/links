@@ -173,18 +173,20 @@ object(self)
          * for the remainder of the binding list (and associated phrase), with
          * declarations of the pattern variables, and return this. *)
         let o = (construct_sg scope scope_graph scope_id)#phrase phr in
-        (* Get the scope and new scope graph froim the processed phrase *)
+        (* Get the scope and new scope graph from the processed phrase *)
         let (phr_scope, phr_sg) = (o#get_scope, o#get_scope_graph) in
-        (* Create a new scope which contains the variable bindings introduced by the patterns *)
+        let phr_sg1 = add_scope scope_id phr_scope phr_sg in
+        (* This scope declares the new patterns *)
+        let o_pattern = (construct_sg phr_scope phr_sg1 scope_id)#pattern pat in
+        let (pat_scope, pat_sg) =
+          (o_pattern#get_scope, o_pattern#get_scope_graph) in
+        (* Save this scope to SG, since it's done now. *)
+        let new_sg = add_scope scope_id pat_scope pat_sg in
+        (* Add a fresh scope *)
         let following_scope_id = get_scope_num () in
         let following_scope = new_scope (Some scope_id) in
-        let o_pattern = (construct_sg following_scope phr_sg following_scope_id)#pattern pat in
-        let (pat_scope, pat_scope_id, pat_sg) =
-          (o_pattern#get_scope, o_pattern#get_scope_id, o_pattern#get_scope_graph) in
-        (* Save this scope to SG, since it's done now. *)
-        let new_sg = add_scope scope_id phr_scope pat_sg in
         (* Return new scope with old scope added to SG. *)
-        {< scope = pat_scope; scope_id = pat_scope_id; scope_graph = new_sg >}
+        {< scope = following_scope; scope_id = following_scope_id; scope_graph = new_sg >}
     | `Infix -> self
     | `Exp p -> self#phrase p
     | `Foreign ((bnd_name, _, _), _name, _dt) ->
