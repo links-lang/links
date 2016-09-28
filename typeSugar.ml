@@ -138,6 +138,30 @@ struct
   let is_generalisable = is_pure
 end
 
+(*
+
+Note [Variable names in error messages]
+=======================================
+
+When generating error message with a griper we take care to generate type
+variable names that are consistent across a single error message.  This is
+achieved with a hash table that maintains a list of variables appearing in types
+in a given error message.  This hash table is shared between subsequent
+invocations of show_type within a single griper.
+
+To ensure that variable names are generated correctly each griper that generates
+type variable names must call build_tyvar_names helper function, passing in a
+list of types for which we want to generate names.  This resets the hash table
+that stores the type variables, making sure that generated names will start from
+initial letters of the alphabet.  In case of some grippers we must also generate
+names for row variables - add_rowvar_names takes care of that.  Note that there
+are several helper functions like but, but2things, or fixed_type, that are
+called by grippers.  These must NOT call build_tyvar_names or add_rowvar_names.
+
+See also Note [Refreshing type variable names] and #43
+
+ *)
+
 module Gripers :
 sig
   type griper =
@@ -291,43 +315,60 @@ end
     let wm () = Settings.get_value Basicsettings.web_mode
 
     let code s =
-      if wm() then
+      if wm () then
         "<code>" ^ s ^ "</code>"
       else
         "`"^ s ^ "'"
 
     let nl () =
-      if wm() then
+      if wm () then
         "<br />\n"
       else
         "\n"
 
     let tab () =
-      if wm() then
+      if wm () then
         "&nbsp;&nbsp;&nbsp;&nbsp;"
       else
         "    "
 
-    let show_type = Types.string_of_datatype
-    let show_row = Types.string_of_row
+    (* New line with indentation *)
+    let nli () = nl () ^ tab ()
+
+    (* Do not automatically refresh type variable names when pretty-printing
+       types in error messages.  This will be done manually by calling
+       build_tyvar_names in the gripers.
+       See Notes [Variable names in error messages] and [Refreshing type variable names] *)
+    let show_type   = Types.string_of_datatype ~refresh_tyvar_names:false
+    let show_row    = Types.string_of_row      ~refresh_tyvar_names:false
+
+    (* Wrappers for generating type variable names *)
+    let build_tyvar_names =
+      Types.build_tyvar_names (Types.free_bound_type_vars ~include_aliases:true)
+    let add_rowvar_names =
+      Types.add_tyvar_names (Types.free_bound_row_type_vars ~include_aliases:true)
 
     let die pos msg = raise (Errors.Type_error (pos, msg))
 
+    (* See Note [Variable names in error messages] *)
     let but (expr, t) =
-", but the expression" ^ nl() ^
-tab() ^ code expr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type t) ^ "."
+      let ppr_t = show_type t in
+      ", but the expression" ^ nli () ^
+       code expr             ^ nl  () ^
+      "has type"             ^ nli () ^
+       code ppr_t
 
     let but2things (lthing, (lexpr, lt)) (rthing, (rexpr, rt)) =
-", but the " ^ lthing ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the " ^ rthing ^ nl() ^
-tab() ^ code rexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type rt) ^ "."
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      ", but the " ^ lthing ^ nli () ^
+       code lexpr           ^ nl  () ^
+      "has type"            ^ nli () ^
+       code ppr_lt          ^ nl  () ^
+      "while the " ^ rthing ^ nli () ^
+       code rexpr           ^ nl  () ^
+      "has type"            ^ nli () ^
+       code ppr_rt
 
     let but2 l r = but2things ("expression", l) ("expression", r)
 
@@ -341,487 +382,624 @@ tab() ^ code (show_type rt) ^ "."
       die pos (s ^ but2things l r)
 
     let fixed_type pos thing t l =
-      with_but pos (thing ^ " must have type " ^ code (show_type t)) l
+      let ppr_t = show_type t in
+      with_but pos (thing ^ " must have type " ^ code ppr_t) l
 
     let if_condition ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      fixed_type pos ("The condition of an " ^ code "if (...) ... else ..." ^ " expression") t l
+      fixed_type pos ("The condition of an " ^ code "if (...) ... else ..." ^
+                      " expression") t l
 
     let if_branches ~pos ~t1:l ~t2:r ~error:_ =
       with_but2 pos ("Both branches of an " ^ code "if (...) ... else ..." ^
-                       " expression should have the same type") l r
+                     " expression should have the same type") l r
 
     let switch_pattern ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The type of an input to a switch should match the type of its patterns, but
-the expression" ^ nl () ^
-tab () ^ code lexpr ^ nl () ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the patterns have type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The type of an input to a switch should match the type of " ^
+               "its patterns, but the expression" ^ nli () ^
+                code lexpr                        ^ nl  () ^
+               "has type"                         ^ nli () ^
+                code ppr_lt                       ^ nl  () ^
+               "while the patterns have type"     ^ nli () ^
+                code ppr_rt)
 
     let switch_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-All the cases of a switch should have compatible patterns, but
-the pattern" ^ nl () ^
-tab () ^ code lexpr ^ nl () ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the subsequent patterns have type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("All the cases of a switch should have compatible patterns, " ^
+               "but the pattern"                         ^ nli () ^
+                code lexpr                               ^ nl  () ^
+               "has type"                                ^ nli () ^
+                code ppr_lt                              ^ nl  () ^
+               "while the subsequent patterns have type" ^ nli () ^
+                code ppr_rt)
 
     let switch_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-All the cases of a switch should have the same type, but
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the subsequent expressions have type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("All the cases of a switch should have the same type, but " ^
+               "the expression"                             ^ nli () ^
+                code lexpr                                  ^ nl  () ^
+               "has type"                                   ^ nli () ^
+                code ppr_lt                                 ^ nl  () ^
+               "while the subsequent expressions have type" ^ nli () ^
+                code ppr_rt)
 
     (* BUG: This griper is a bit rubbish because it doesn't distinguish
     between two different errors. *)
     let extend_record ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      die pos ("\
-Only a record can be extended, and it must be extended with different fields, but
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the extension fields have type" ^ code (show_type t) ^ ".")
+      build_tyvar_names [lt;t];
+      let ppr_lt = show_type lt in
+      let ppr_t  = show_type  t in
+      die pos ("Only a record can be extended, and it must be extended with " ^
+               "different fields, but the expression" ^ nli () ^
+                code lexpr                            ^ nl  () ^
+               "has type"                             ^ nli () ^
+                code ppr_lt                           ^ nl  () ^
+               "while the extension fields have type" ^ nli () ^
+                code ppr_t)
 
     let record_with ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      die pos ("\
-A record can only be updated with compatible fields, but
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the update fields have type" ^ code (show_type t) ^ ".")
+      build_tyvar_names [lt;t];
+      let ppr_lt = show_type lt in
+      let ppr_t  = show_type  t in
+      die pos ("A record can only be updated with compatible fields, " ^
+               "but the expression"                ^ nli () ^
+                code lexpr                         ^ nl  () ^
+               "has type"                          ^ nli () ^
+                code ppr_lt                        ^ nl  () ^
+               "while the update fields have type" ^ nli () ^
+                code ppr_t)
 
     let list_lit ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
       with_but2 pos "All elements of a list literal must have the same type" l r
 
     let table_name ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Table names" t l
 
     let table_db ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Databases" t l
 
     let table_keys ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Database keys" t l
 
     let delete_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Tables" t l
 
     let delete_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Where clauses" t l
 
     let delete_pattern ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The binder must match the table in a delete generator, \
-but the pattern" ^ nl() ^
-tab () ^ code lexpr ^ nl () ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the read row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The binder must match the table in a delete generator, " ^
+               "but the pattern"             ^ nli () ^
+                code lexpr                   ^ nl  () ^
+               "has type"                    ^ nli () ^
+                code ppr_lt                  ^ nl  () ^
+               "while the read row has type" ^ nli () ^
+                code ppr_rt)
 
     let delete_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Database deletes are wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Database deletes are wild"             ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let insert_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Tables" t l
 
     let insert_values ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The values must match the table in an insert expression,
-but the values" ^ nl () ^
-tab () ^ code lexpr ^ nl () ^
-"have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the write row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The values must match the table in an insert expression, " ^
+               "but the values"               ^ nli () ^
+                code lexpr                    ^ nl  () ^
+               "have type"                    ^ nli () ^
+                code ppr_lt                   ^ nl  () ^
+               "while the write row has type" ^ nli () ^
+                code ppr_rt)
 
     let insert_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an insert expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the read row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The fields must match the table in an insert expression, " ^
+               "but the fields have type"    ^ nli () ^
+                code ppr_lt                  ^ nl  () ^
+               "while the read row has type" ^ nli () ^
+                code ppr_rt)
 
     let insert_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an insert expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the write row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The fields must match the table in an insert expression, " ^
+               "but the fields have type"     ^ nli () ^
+                code ppr_lt                   ^ nl  () ^
+               "while the write row has type" ^ nli () ^
+                code ppr_rt)
 
     let insert_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an insert expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the needed row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The fields must match the table in an insert expression, " ^
+               "but the fields have type"      ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "while the needed row has type" ^ nli () ^
+                code ppr_rt)
 
     let insert_id ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Identity variables" t l
 
     let insert_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Database inserts are wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Database inserts are wild"             ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let update_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Tables" t l
 
     let update_pattern ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
       with_but2things pos
-        "The binding must match the table in an update expression" ("pattern", l) ("row", r)
+        "The binding must match the table in an update expression"
+        ("pattern", l) ("row", r)
 
     let update_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an update expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the read row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The fields must match the table in an update expression, " ^
+               "but the fields have type"    ^ nli () ^
+                code ppr_lt                  ^ nl  () ^
+               "while the read row has type" ^ nli () ^
+                code ppr_rt)
 
     let update_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an update expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the write row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = code (show_type lt) in
+      let ppr_rt = code (show_type rt) in
+      die pos ("The fields must match the table in an update expression, " ^
+               "but the fields have type"     ^ nli () ^
+                code ppr_lt                   ^ nl  () ^
+               "while the write row has type" ^ nli () ^
+                ppr_rt)
 
     let update_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The fields must match the table in an update expression,
-but the fields have type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the needed row has type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The fields must match the table in an update expression, " ^
+               "but the fields have type"      ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "while the needed row has type" ^ nli () ^
+                code ppr_rt)
 
     let update_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Where clauses" t l
 
     let update_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Database updates are wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Database updates are wild"             ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let range_bound ~pos ~t1:l ~t2:(_,t) ~error:_ =
       die pos "Range bounds must be integers."
 
     let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Spawn blocks are wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Spawn blocks are wild"                 ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let spawn_wait_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Spawn wait blocks are wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Spawn wait blocks are wild"            ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The query block has effects" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("The query block has effects"           ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
-    let query_base_row ~pos ~t1:(lexpr, lt) ~t2:(_, _rt) ~error:_ =
+    let query_base_row ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ =
+      build_tyvar_names [lt];
       with_but pos ("Query blocks must have LOROB type") (lexpr, lt)
 
     let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The current mailbox must always have a mailbox type" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("The current mailbox must always have a mailbox type" ^ nli () ^
+                code ppr_rt                                          ^ nl  () ^
+               "but the currently allowed effects are"               ^ nli () ^
+                code ppr_lt)
 
     let receive_patterns ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The current mailbox type should match the type of the patterns in a receive, but
-the current mailbox takes messages of type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the patterns have type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The current mailbox type should match the type of the " ^
+               "patterns in a receive, but the current mailbox takes "  ^
+               "messages of type"             ^ nli () ^
+                code ppr_lt                   ^ nl  () ^
+               "while the patterns have type" ^ nli () ^
+                code ppr_rt)
 
     let unary_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The unary operator" ^ nl() ^
-tab () ^ code lexpr ^ nl() ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the argument passed to it has type" ^ nl() ^
-tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
-"and the currently allowed effects are" ^ nl() ^
-tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
+      let arg_hd = List.hd (TypeUtils.arg_types rt) in
+      let eff    = TypeUtils.effect_row rt in
+      build_tyvar_names [lt; arg_hd];
+      add_rowvar_names  [eff];
+      let ppr_type   = show_type lt in
+      let ppr_arg_hd = show_type arg_hd in
+      let ppr_eff    = show_row eff in
+      die pos ("The unary operator"                       ^ nli () ^
+                code lexpr                                ^ nl  () ^
+               "has type"                                 ^ nli () ^
+                code ppr_type                             ^ nl  () ^
+               "while the argument passed to it has type" ^ nli () ^
+                code ppr_arg_hd                           ^ nl  () ^
+               "and the currently allowed effects are"    ^ nli () ^
+                code ppr_eff)
 
     let infix_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The infix operator" ^ nl() ^
-tab () ^ code lexpr ^ nl() ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the arguments passed to it have types" ^ nl() ^
-tab () ^ code (show_type (List.hd (TypeUtils.arg_types rt))) ^ nl() ^
-"and" ^ nl() ^
-tab () ^ code (show_type (List.hd (List.tl (TypeUtils.arg_types rt)))) ^ nl() ^
-"and the currently allowed effects are" ^ nl() ^
-tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
+      let arg_hd = List.hd (TypeUtils.arg_types rt) in
+      let arg_tl = List.hd (List.tl (TypeUtils.arg_types rt)) in
+      let eff    = TypeUtils.effect_row rt in
+      build_tyvar_names [lt; arg_hd; arg_tl];
+      add_rowvar_names  [eff];
+      let ppr_type   = show_type lt in
+      let ppr_arg_hd = show_type arg_hd in
+      let ppr_arg_tl = show_type arg_tl in
+      let ppr_eff    = show_row eff in
+      die pos ("The infix operator"                          ^ nli () ^
+                code lexpr                                   ^ nl  () ^
+               "has type"                                    ^ nli () ^
+                code ppr_type                                ^ nl  () ^
+               "while the arguments passed to it have types" ^ nli () ^
+                code ppr_arg_hd                              ^ nl  () ^
+               "and"                                         ^ nli () ^
+                code ppr_arg_tl                              ^ nl  () ^
+               "and the currently allowed effects are"       ^ nli () ^
+                code ppr_eff)
 
     let fun_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The function" ^ nl() ^
-tab () ^ code lexpr ^ nl () ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the arguments passed to it have types" ^ nl() ^
-String.concat
-(nl() ^ "and" ^ nl())
-(List.map (fun t ->
-             tab() ^ code (show_type t)) (TypeUtils.arg_types rt)) ^ nl() ^
-"and the currently allowed effects are" ^ nl() ^
-tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
+      let tys = TypeUtils.arg_types rt in
+      let eff = TypeUtils.effect_row rt in
+      build_tyvar_names (lt :: tys);
+      add_rowvar_names  [eff];
+      let ppr_type  = show_type lt in
+      let ppr_types = List.map (fun t -> tab() ^ code (show_type t)) tys in
+      let ppr_eff   = show_row eff in
+      die pos ("The function"                                 ^ nli () ^
+                code lexpr                                    ^ nl  () ^
+               "has type"                                     ^ nli () ^
+                code ppr_type                                 ^ nl  () ^
+               "while the arguments passed to it have types"  ^ nl  () ^
+                String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  () ^
+               "and the currently allowed effects are"        ^ nli () ^
+                code ppr_eff)
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "XML attributes" t l
 
     let xml_attributes ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "A list of XML attributes" t l
 
     let xml_child ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "XML child nodes" t l
 
     let formlet_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Formlet bodies" t l
 
     let page_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Page bodies" t l
 
     let render_formlet ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Formlets" t l
 
     let render_handler ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
       with_but2 pos
         "The formlet must match its handler in a formlet placement" l r
 
     let render_attributes ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "A list of XML attributes" t l
 
     let page_placement ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Page antiquotes" t l
 
     let form_binding_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Formlets" t l
 
     let form_binding_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
+      build_tyvar_names [snd l; rt];
         with_but2things pos
-          ("The binding must match the formlet in a formlet binding") ("pattern", l) ("expression", (rexpr, rt))
+          ("The binding must match the formlet in a formlet binding")
+          ("pattern", l) ("expression", (rexpr, rt))
 
     let iteration_list_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "The body of a list generator" t l
 
     let iteration_list_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
+      build_tyvar_names [snd l; rt];
       let rt = Types.make_list_type rt in
         with_but2things pos
-          ("The binding must match the list in a list generator") ("pattern", l) ("expression", (rexpr, rt))
+          ("The binding must match the list in a list generator")
+          ("pattern", l) ("expression", (rexpr, rt))
 
     let iteration_table_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "The body of a table generator" t l
 
     let iteration_table_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
-      let rt = Types.make_table_type (rt, Types.fresh_type_variable (`Any, `Any), Types.fresh_type_variable (`Any, `Any)) in
+      build_tyvar_names [snd l; rt];
+      let rt = Types.make_table_type
+                 (rt, Types.fresh_type_variable (`Any, `Any)
+                    , Types.fresh_type_variable (`Any, `Any)) in
         with_but2things pos
-          ("The binding must match the table in a table generator") ("pattern", l) ("expression", (rexpr, rt))
+          ("The binding must match the table in a table generator")
+          ("pattern", l) ("expression", (rexpr, rt))
 
     let iteration_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "The body of a for comprehension" t l
 
     let iteration_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Where clauses" t l
 
     let iteration_base_order ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
+      build_tyvar_names [t];
       with_but pos
         ("An orderby clause must return a list of records of base type")
         (expr, t)
 
     let iteration_base_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
+      build_tyvar_names [t];
       with_but pos
         ("A database comprehension must return a list of records of base type")
         (expr, t)
 
     let escape ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "The argument to escape" t l
 
     let escape_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Escape is wild" ^ nl() ^
-code (show_type rt) ^ nl() ^
-"but the currently allowed effects are" ^ nl() ^
-code (show_type lt) ^ ".")
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Escape is wild"                        ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let projection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      die pos ("\
-Only a field that is present in a record can be projected, but \
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the projection has type" ^ code (show_type t) ^ ".")
+      build_tyvar_names [lt; t];
+      let ppr_lt = show_type lt in
+      let ppr_t  = show_type t  in
+      die pos ("Only a field that is present in a record can be projected, " ^
+               "but the expression"            ^ nli () ^
+                code lexpr                     ^ nl  () ^
+               "has type"                      ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "while the projection has type" ^ nli () ^
+                code ppr_t)
 
     let upcast_source ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      die pos ("\
-The source expression must match the source type of an upcast, but\
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the source type is" ^ code (show_type t) ^ ".")
+      build_tyvar_names [lt; t];
+      let ppr_lt = show_type lt in
+      let ppr_t  = show_type t  in
+      die pos ("The source expression must match the source type of " ^
+               "an upcast, but the expression" ^ nli () ^
+                code lexpr                     ^ nl  () ^
+               "has type"                      ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "while the source type is"      ^ nli () ^
+                code ppr_t)
 
     let upcast_subtype pos t1 t2 =
-      die pos ("\
-An upcast must be of the form" ^ code ("e : t2 <- t1") ^
-"where " ^ code "t1" ^ " is a subtype of" ^ code "t2" ^ nl() ^
-"but" ^ nl() ^
-code (show_type t1) ^ nl() ^
-"is not a subtype of" ^ nl() ^
-code (show_type t2) ^ ".")
+      build_tyvar_names [t1; t2];
+      let ppr_t1 = show_type t1 in
+      let ppr_t2 = show_type t2 in
+      die pos ("An upcast must be of the form" ^ code ("e : t2 <- t1") ^
+               "where " ^ code "t1" ^ " is a subtype of" ^ code "t2" ^ nl  () ^
+               "but"                                                 ^ nli () ^
+                code ppr_t1                                          ^ nl  () ^
+               "is not a subtype of"                                 ^ nli () ^
+                code ppr_t2)
 
     let value_restriction pos t =
-      die pos (
-"Because of the value restriction there can be no" ^ nl() ^
-"free rigid type variables at an ungeneralisable binding site," ^ nl() ^
-"but the type " ^ code (show_type t) ^ " has free rigid type variables.")
+      build_tyvar_names [t];
+      let ppr_t  = show_type t in
+      die pos ("Because of the value restriction there can be no"              ^ nl () ^
+               "free rigid type variables at an ungeneralisable binding site," ^ nl () ^
+               "but the type " ^ code ppr_t ^ " has free rigid type variables.")
 
     let toplevel_purity_restriction pos b =
-      die pos (
-"Side effects are not allowed outside of" ^ nl() ^
-"function definitions. This binding may have a side effect.")
+      die pos ("Side effects are not allowed outside of" ^ nl() ^
+               "function definitions. This binding may have a side effect.")
 
     let duplicate_names_in_pattern pos =
       die pos ("Duplicate names are not allowed in patterns.")
 
     let type_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The inferred type of the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"is" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but it is annotated with type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The inferred type of the expression" ^ nli () ^
+                code lexpr                           ^ nl  () ^
+               "is"                                  ^ nli () ^
+                code ppr_lt                          ^ nl  () ^
+               "but it is annotated with type"       ^ nli () ^
+                code ppr_rt)
 
     let bind_val ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
       with_but2things pos
-        ("The binder must match the type of the body in a value binding") ("pattern", l) ("expression", r)
+        ("The binder must match the type of the body in a value binding")
+        ("pattern", l) ("expression", r)
 
     let bind_val_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The value has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but it is annotated with type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The value has type"            ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "but it is annotated with type" ^ nli () ^
+                code ppr_rt)
 
     let bind_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The non-recursive function definition has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but it is annotated with type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The non-recursive function definition has type" ^ nli () ^
+                code ppr_lt                                     ^ nl  () ^
+               "but it is annotated with type"                  ^ nli () ^
+                code ppr_rt)
 
     let bind_fun_return ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The non-recursive function definition has return type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but its annotation has return type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The non-recursive function definition has return type"^ nli () ^
+                code ppr_lt                                           ^ nl  () ^
+               "but its annotation has return type"                   ^ nli () ^
+                code ppr_rt)
 
     let bind_rec_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The recursive function definition has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but it is annotated with type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The recursive function definition has type" ^ nli () ^
+                code ppr_lt                                 ^ nl  () ^
+               "but it is annotated with type"              ^ nli () ^
+                code ppr_rt)
 
     let bind_rec_rec ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The recursive function definition has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but its previously inferred type is" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The recursive function definition has type" ^ nli () ^
+                code ppr_lt                                 ^ nl  () ^
+               "but its previously inferred type is"        ^ nli () ^
+                code ppr_rt)
 
     let bind_exp ~pos ~t1:l ~t2:(_,t) ~error:_ =
+      build_tyvar_names [snd l; t];
       fixed_type pos "Side-effect expressions" t l
 
     (* patterns *)
     let list_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
-      die pos ("\
-All elements in a list pattern must have the same type, but the pattern" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the pattern" ^ nl() ^
-tab() ^ code rexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("All elements in a list pattern must have the same type, " ^
+               "but the pattern"   ^ nli () ^
+                code lexpr         ^ nl  () ^
+               "has type"          ^ nli () ^
+                code ppr_lt        ^ nl  () ^
+               "while the pattern" ^ nli () ^
+                code rexpr         ^ nl  () ^
+               "has type"          ^ nli () ^
+                code ppr_rt)
 
     let cons_pattern ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
-      die pos ("\
-The two subpatterns of a cons pattern " ^ code "p1::p2" ^ " must have compatible types:\
-if " ^ code "p1" ^ " has type " ^ code "t'" ^ " then " ^ code "p2" ^ " must have type " ^ code "[t]" ^ ".\
-However, the pattern" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type (TypeUtils.element_type lt)) ^ nl() ^
-"whereas the pattern" ^ nl() ^
-tab() ^ code rexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type rt))
+      let lt = TypeUtils.element_type lt in
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The two subpatterns of a cons pattern " ^ code "p1::p2 "    ^
+               "must have compatible types: if " ^ code "p1" ^ " has type " ^
+                code "t'" ^ " then " ^ code "p2" ^ " must have type "       ^
+                code "[t]" ^ ". However, the pattern"              ^ nli () ^
+                code lexpr                                         ^ nl  () ^
+               "has type"                                          ^ nli () ^
+                code ppr_lt                                        ^ nl  () ^
+               "whereas the pattern"                               ^ nli () ^
+                code rexpr                                         ^ nl  () ^
+               "has type"                                          ^ nli () ^
+                code ppr_rt)
 
     let record_pattern ~pos:pos ~t1:(_lexpr,_lt) ~t2:(_rexpr,_rt) ~error =
       match error with
         | `PresentAbsentClash (label, _, _) ->
             let (_, _, expr) = SourceCode.resolve_pos pos in
             (* NB: is it certain that this is what's happened? *)
-          die pos ("\
-Duplicate labels are not allowed in record patterns.  However, the pattern" ^ nl() ^
-tab() ^ code expr ^ nl() ^
-"contains more than one binding for the label " ^ nl() ^
-tab() ^ code label)
+            die pos ("Duplicate labels are not allowed in record patterns. "  ^
+                     "However, the pattern"                          ^ nli () ^
+                      code expr                                      ^ nl  () ^
+                     "contains more than one binding for the label " ^ nli () ^
+                      code label)
       | `Msg msg -> raise (Errors.Type_error (pos, msg))
 
     let pattern_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The inferred type of the pattern" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"is" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"but it is annotated with type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The inferred type of the pattern" ^ nli () ^
+                code lexpr                        ^ nl  () ^
+               "is"                               ^ nli () ^
+                code ppr_lt                       ^ nl  () ^
+               "but it is annotated with type"    ^ nli () ^
+                code ppr_rt)
 
     let splice_exp ~pos:pos ~t1:(_,lt) ~t2:_ ~error:_ =
-      die pos ("\
-An expression enclosed in {} in a regex pattern must have type String,
-but the expression here has type " ^ (show_type lt))
+      build_tyvar_names [lt];
+      let ppr_lt = show_type lt in
+      die pos ("An expression enclosed in {} in a regex pattern must have " ^
+               "type String, but the expression here has type " ^ code ppr_lt)
 
 
 (* session stuff *)
@@ -847,100 +1025,131 @@ but the expression here has type " ^ (show_type lt))
 (* tab() ^ code (show_type rt)) *)
 
     let selection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      die pos ("\
-Only a label that is present in a session selection can be selected, but \
-the expression" ^ nl() ^
-tab() ^ code lexpr ^ nl() ^
-"has type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"while the selection has type" ^ code (show_type t) ^ ".")
+      build_tyvar_names [lt; t];
+      let ppr_lt = show_type lt in
+      let ppr_t  = show_type  t in
+      die pos ("Only a label that is present in a session selection can be " ^
+               "selected, but the expression"                       ^ nli () ^
+                code lexpr                                          ^ nl  () ^
+               "has type"                                           ^ nli () ^
+                code ppr_lt                                         ^ nl  () ^
+               "while the selection has type"                       ^ nli () ^
+                code ppr_t)
 
-    let offer_variant ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The cases of an offer should have choice type, but
-the type " ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"is not a choice type")
+    let offer_variant ~pos ~t1:(_,lt) ~t2:(_,_) ~error:_ =
+      build_tyvar_names [lt];
+      let ppr_lt = show_type lt in
+      die pos ("The cases of an offer should have choice type, " ^
+               "but the type "                          ^ nli () ^
+                code ppr_lt                             ^ nl  () ^
+               "is not a choice type")
 
     let offer_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      die pos ("\
-The cases of an offer should match the type of its patterns, but
-the pattern" ^ nl () ^
-tab () ^ code lexpr ^ nl () ^
-"has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"while the subsequent patterns have type" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The cases of an offer should match the type of its patterns, " ^
+               "but the pattern"                                      ^ nli () ^
+                code lexpr                                            ^ nl  () ^
+               "has type"                                             ^ nli () ^
+                code ppr_lt                                           ^ nl  () ^
+               "while the subsequent patterns have type"              ^ nli () ^
+                code ppr_rt)
 
-    let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Spliced expression should have
-EndBang type, but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
+    let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, _) ~error:_ =
+      build_tyvar_names [lt];
+      let ppr_lt = show_type lt in
+      die pos ("Spliced expression should have EndBang type, " ^
+               "but has type"                         ^ nli () ^
+                code ppr_lt                           ^ nl  () ^
+               "instead.")
 
     let cp_grab channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      die pos ("\
-Channel " ^ channel ^ " was expected to have input type, " ^ nl () ^
-"but has type" ^ nl () ^
-tab () ^ code (show_type actual) ^ nl () ^
-"instead.")
+      build_tyvar_names [actual; expected];
+      let ppr_actual   = show_type actual   in
+      let ppr_expected = show_type expected in
+      die pos ("Channel " ^ channel ^ " " ^
+               "was expected to have input type" ^ nli () ^
+                code ppr_expected                ^ nl  () ^
+               "but has type"                    ^ nli () ^
+                code ppr_actual                  ^ nl  () ^
+               "instead.")
 
     let cp_give channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      die pos ("\
-Channel " ^ channel ^ " was expected to have output type," ^ nl () ^
-"but has type" ^ nl () ^
-tab () ^ code (show_type actual) ^ nl () ^
-"instead.")
+      build_tyvar_names [actual; expected];
+      let ppr_actual   = show_type actual   in
+      let ppr_expected = show_type expected in
+      die pos ("Channel " ^ channel ^ " " ^
+               "was expected to have output type" ^ nli () ^
+                code ppr_expected                 ^ nl  () ^
+               "but has type"                     ^ nli () ^
+                code ppr_actual                   ^ nl  () ^
+               "instead.")
 
-    let cp_select channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Channel " ^ channel ^ " was expected to have selection type," ^ nl () ^
-"but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
+    let cp_select channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
+      build_tyvar_names [actual; expected];
+      let ppr_actual   = show_type actual   in
+      let ppr_expected = show_type expected in
+      die pos ("Channel " ^ channel ^ " " ^
+               "was expected to have selection type" ^ nli () ^
+                code ppr_expected                    ^ nl  () ^
+               "but has type"                        ^ nli () ^
+                code ppr_actual                      ^ nl  () ^
+               "instead.")
 
-    let cp_offer_choice channel ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Channel " ^ channel ^ " was expected to have choice type," ^ nl () ^
-"but has type" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"instead.")
+    let cp_offer_choice channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
+      build_tyvar_names [actual; expected];
+      let ppr_actual   = show_type actual   in
+      let ppr_expected = show_type expected in
+      die pos ("Channel " ^ channel ^ " " ^
+               "was expected to have choice type" ^ nli () ^
+                code ppr_expected                 ^ nl  () ^
+               "but has type"                     ^ nli () ^
+                code ppr_expected                 ^ nl  () ^
+               "instead.")
 
     let cp_offer_branches ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The branches of an offer expression have divergent types:" ^ nl () ^
-tab () ^ code (show_type lt) ^ nl () ^
-"and" ^ nl () ^
-tab () ^ code (show_type rt))
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The branches of an offer expression have " ^
+               "divergent types:"                 ^ nli () ^
+                code ppr_lt                       ^ nl  () ^
+               "and"                              ^ nli () ^
+                code ppr_rt)
 
     let cp_fuse_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
-      die pos ("\
-Only session types can be fused, but \
-the type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"is not a session type")
+      build_tyvar_names [lt];
+      let ppr_lt = show_type lt in
+      die pos ("Only session types can be fused, " ^
+               "but the type"             ^ nli () ^
+                code ppr_lt               ^ nl  () ^
+               "is not a session type")
 
     let cp_fuse_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-Only dual session types can be fused, but \
-the type" ^ nl() ^
-tab() ^ code (show_type lt) ^ nl() ^
-"is not the dual of the type" ^ nl() ^
-tab() ^ code (show_type rt))
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("Only dual session types can be fused, " ^
+               "but the type"                  ^ nli () ^
+                code ppr_lt                    ^ nl  () ^
+               "is not the dual of the type"   ^ nli () ^
+                code ppr_rt)
 
-    let cp_comp_left ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      die pos ("\
-The left-hand computation in a composition must have
-EndBang type, but has type" ^ nl () ^
-tab () ^ code (show_type rt) ^ nl () ^
-"instead.")
+    let cp_comp_left ~pos ~t1:_ ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [rt];
+      let ppr_rt = show_type rt in
+      die pos ("The left-hand computation in a composition must have" ^
+               "EndBang type, but has type"                  ^ nli () ^
+                code ppr_rt                                  ^ nl  () ^
+               "instead.")
 
     let non_linearity pos uses v t =
-      die pos ("\
-Variable " ^ v ^ " has linear type " ^ nl () ^
-tab () ^ code (show_type t) ^ nl () ^
-"but is used " ^ string_of_int uses ^ " times.")
+      build_tyvar_names [t];
+      let ppr_t = show_type t in
+      die pos ("Variable " ^ v ^ " has linear type " ^ nli () ^
+                code ppr_t                           ^ nl  () ^
+               "but is used " ^ string_of_int uses ^ " times.")
 end
 
 type context = Types.typing_environment = {

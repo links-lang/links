@@ -25,6 +25,7 @@ xmlParser.mli
 
 # Emacs temporary and backup files
 \#*
+.#*
 
 # documentation
 quick-help.html
