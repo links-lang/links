@@ -23,6 +23,9 @@ xmlParser.mli
 ._bcdi
 *.links.cache
 
+# Emacs temporary and backup files
+\#*
+
 # documentation
 quick-help.html
 doc/*.aux
