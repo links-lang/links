@@ -293,10 +293,7 @@ end
       if wm() then
         "<code>" ^ s ^ "</code>"
       else
-        match getenv "TERM" with
-(*           | Some ("rxvt"|"aterm"|"gnome-terminal"|"xterm") -> *)
-(*               "`\x1b[1;31m" ^ s ^ "\x1b[0m'" *)
-          | _ -> ("`"^ s ^ "'" )
+        "`"^ s ^ "'"
 
     let nl () =
       if wm() then
@@ -637,7 +634,6 @@ tab() ^ code (show_row (TypeUtils.effect_row rt)) ^ ".")
       fixed_type pos "Formlets" t l
 
     let form_binding_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
-(*      let rt = Types.make_formlet_type rt in*)
         with_but2things pos
           ("The binding must match the formlet in a formlet binding") ("pattern", l) ("expression", (rexpr, rt))
 
@@ -1135,13 +1131,9 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             if are_open pats then
               begin
                 let row = (fields, row_var, false) in
-                  (* NOTE: type annotations can lead to a closed type even though the patterns are open *)
-(*
-                  if Types.is_closed_row row then
-                    failwith ("Open row pattern with closed type: "^Types.string_of_row row)
-                  else
-*)
-                    `Variant row
+                (* NOTE: type annotations can lead to a closed type even though
+                   the patterns are open *)
+                `Variant row
               end
             else
               begin
@@ -2090,8 +2082,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               begin
                 match Types.concrete_type (typ f) with
                   | `ForAll (qs, `Function (fps, fe, rettyp)) as t ->
-                      (*                       Debug.print ("f: " ^ Show.show show_phrase (erase f));                      *)
-                      (*                       Debug.print ("t: " ^ Types.string_of_datatype t); *)
 
                       (* the free type variables in the arguments (and effects) *)
                       let arg_vars =
@@ -2128,7 +2118,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             | `Function (fps, fe, rettyp) ->
                                 let rettyp = Types.for_all (rqs, rettyp) in
                                 let ft = `Function (fps, fe, rettyp) in
-                                  (*                                   Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                                 let fn, fpos = erase f in
                                 let e = tabstr (rqs, `FnAppl ((tappl (fn, tyargs), fpos), List.map erase ps)) in
                                   unify ~handle:Gripers.fun_apply
@@ -2139,7 +2128,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             | `Lolli (fps, fe, rettype) ->
                                 let rettyp = Types.for_all (rqs, rettyp) in
                                 let ft = `Function (fps, fe, rettyp) in
-                                  (*                                   Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                                 let fn, fpos = erase f in
                                 let e = tabstr (rqs, `FnAppl ((tappl (fn, tyargs), fpos), List.map erase ps)) in
                                   unify ~handle:Gripers.fun_apply
@@ -2341,7 +2329,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let t = Types.fresh_type_variable (`Any, `Any) in
 
             let eff = Types.make_singleton_open_row ("wild", `Present Types.unit_type) (`Any, `Any) in
-              (*            let eff = Types.make_empty_open_row `Any in*)
 
             let cont_type = `Function (Types.make_tuple_type [f], eff, t) in
             let context' = {context

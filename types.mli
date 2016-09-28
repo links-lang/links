@@ -204,9 +204,6 @@ val primary_kind_of_type_arg : type_arg -> primary_kind
 
 val quantifiers_of_type_args : type_arg list -> quantifier list
 
-(* val free_bound_type_vars : ?include_aliases:bool -> datatype -> TypeVarSet.t *)
-(* val free_bound_row_type_vars : ?include_aliases:bool -> row -> TypeVarSet.t *)
-
 val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
 (** Fresh type variables *)
@@ -271,8 +268,6 @@ val closed_row_var : row_var
 
 val field_env_union : (field_spec_map * field_spec_map) -> field_spec_map
 
-(* val contains_present_fields : field_spec_map -> bool *)
-
 val is_canonical_row_var : row_var -> bool
 val is_rigid_row : row -> bool
 
@@ -335,14 +330,11 @@ val show_mailbox_annotations : bool Settings.setting
 
 (** pretty printing *)
 val string_of_datatype : datatype -> string
-(*val string_of_datatype_raw : datatype -> string*)
 val string_of_row : row -> string
 val string_of_presence : field_spec -> string
 val string_of_type_arg : type_arg -> string
-(* val string_of_session_type : datatype -> string *)
 val string_of_row_var : row_var -> string
 val string_of_environment : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 val string_of_tycon_spec : tycon_spec -> string
-

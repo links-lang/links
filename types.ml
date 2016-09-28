@@ -881,14 +881,6 @@ let field_env_union : (field_spec_map * field_spec_map) -> field_spec_map =
     FieldEnv.fold (fun label field_spec env' ->
                      FieldEnv.add label field_spec env') env1 env2
 
-(* let contains_present_fields field_env = *)
-(*   FieldEnv.fold *)
-(*     (fun _ field_spec present -> *)
-(*        match field_spec with *)
-(*          | `Present, _ -> true *)
-(*          | `Absent, _ -> present *)
-(*     ) field_env false *)
-
 let is_canonical_row_var row_var =
   match Unionfind.find row_var with
     | `Closed
@@ -1077,13 +1069,6 @@ and subst_dual_type_arg : var_map -> type_arg -> type_arg =
     | `Row row -> `Row (subst_dual_row rec_points row)
     | `Presence f -> `Presence (subst_dual_field_spec rec_points f)
 
-(*
- convert a row to the form (field_env, row_var)
- where Unionfind.find row_var is of the form:
-    `Closed
-  | `Var var
-  | `Recursive (var, body)
- *)
 and flatten_row : row -> row = fun (field_env, row_var, dual) ->
   let dual_if r = if dual then dual_row TypeVarMap.empty r else r in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
@@ -1265,52 +1250,6 @@ let is_rigid_quantifier q =
       | _, _, `Row      point -> rigid point
       | _, _, `Presence point -> rigid point
 
-let is_instantiated_quantifier q =
-  let is_concrete_type t =
-    match concrete_type t with
-      | `MetaTypeVar point ->
-          begin
-            match Unionfind.find point with
-              | `Recursive _ -> true
-              | _ -> false
-          end
-      | _ -> true in
-
-  let is_concrete_row row =
-    let (field_env, row_var, _) = flatten_row row in
-      FieldEnv.is_empty field_env &&
-        match Unionfind.find row_var with
-          | `Recursive _
-          | `Closed -> true
-          | _ -> false in
-
-  let is_concrete_field_spec f =
-    match concrete_field_spec f with
-      | `Var _ -> false
-      | _ -> true
-  in
-    match q with
-      | _, _, `Type point ->
-          begin
-            match Unionfind.find point with
-              | `Recursive _ -> true
-              | `Body t -> is_concrete_type t
-              | _ -> false
-          end
-      | _, _, `Row point ->
-          begin
-            match Unionfind.find point with
-              | `Recursive _ -> true
-              | `Body row -> is_concrete_row row
-              | _ -> false
-          end
-      | _, _, `Presence point ->
-          begin
-            match Unionfind.find point with
-              | `Body f -> is_concrete_field_spec f
-              | _ -> false
-          end
-
 (* update a quantifier with any changes to its point *)
 let normalise_quantifier = fun q ->
   match q with
@@ -1359,7 +1298,6 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
 
 (* useful types *)
 let unit_type = `Record (make_empty_closed_row ())
-(* let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)]))) *)
 let string_type = `Primitive `String
 let keys_type = `Application (list, [`Type (`Application (list, [`Type (string_type)]))])
 let char_type = `Primitive `Char
@@ -1418,20 +1356,6 @@ struct
   type spec = flavour * kind * int
 
   type vars_list = (int * (flavour * kind * scope)) list
-
-(*   let add var spec vars = *)
-(*     match V.lookup var vars with *)
-(*       | None -> V.add var spec vars *)
-(*       | Some (flavour, kind, count) -> *)
-(*           begin *)
-(*             let (flavour', kind', count') = spec in *)
-(* (\*              assert (flavour = flavour'); *)
-(*               assert (kind = kind'); *)
-(* *\)              V.add var (flavour, kind, count+count') vars *)
-(*           end *)
-
-(*   let union vars vars' = V.fold add vars' vars *)
-(*   let union_all varss = List.fold_right union varss V.empty *)
 
   let varspec_of_tyvar q =
     let flavour = if is_rigid_quantifier q then
@@ -1538,11 +1462,6 @@ struct
           in
             (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
       | `Abstract _ -> []
-
-
-
-(*   let varset_of_vars vars = *)
-(*     V.fold (fun var _ varset -> TypeVarSet.add var varset) vars TypeVarSet.empty *)
 
   let init (var, (flavour, kind, scope)) name =
     match scope with
@@ -1931,7 +1850,6 @@ struct
                datatype bound_vars p r ^ "," ^
                datatype bound_vars p w ^ "," ^
                datatype bound_vars p n ^ ")"
-          (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
           | `Alias ((s,[]), t) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
           | `Application (l, [elems]) when Abstype.Eq_t.eq l list ->  "["^ (type_arg bound_vars p) elems ^"]"
@@ -2175,23 +2093,7 @@ let string_of_tycon_spec ?(policy=Print.default_policy) (tycon : tycon_spec) =
       (policy, Vars.make_names (free_bound_tycon_type_vars ~include_aliases:true tycon))
       tycon
 
-(* TODO: we need a way of choosing consistent names for a collection
-   of types (and rows, type_args, etc.) in order to give adequate
-   feedback to the programmer.
-
-   Some options:
-
-     - update a global mapping on demand
-
-     - use a monad
-
-     - build a message data structure and traverse in one go to
-       generate a consistent set of names
-*)
-
-
-   (* HACK:
-
+(* HACK:
    Just use the default policy. At some point we might want to export
    the printing policy in types.mli.
  *)
@@ -2342,39 +2244,6 @@ let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Ut
 (* subtyping *)
 let is_sub_type, is_sub_row =
   let module S = TypeVarSet in
-(*   let rec is_sub_eff (eff, eff') = *)
-(* (\*     Debug.print ("mbt: "^string_of_datatype t); *\) *)
-(* (\*     Debug.print ("mbt': "^string_of_datatype t'); *\) *)
-(*     match eff, eff' with *)
-(* (\*       | `MetaTypeVar point, `MetaTypeVar point' -> *\) *)
-(* (\*           begin *\) *)
-(* (\*             match Unionfind.find point, Unionfind.find point' with *\) *)
-(* (\*               | `Rigid var, `Rigid var' *\) *)
-(* (\*               | `Flexible var, `Flexible var' -> var=var' *\) *)
-(* (\*               | `Body t, _ -> is_sub_mb (t, t') *\) *)
-(* (\*               | _, `Body t -> is_sub_mb (t, t') *\) *)
-(* (\*               | _, _ -> false *\) *)
-(* (\*           end *\) *)
-(* (\*       | `MetaTypeVar point, _ -> *\) *)
-(* (\*           begin *\) *)
-(* (\*             match Unionfind.find point with *\) *)
-(* (\*               | `Rigid _ *\) *)
-(* (\*               | `Flexible _ *\) *)
-(* (\*               | `Recursive _ -> false *\) *)
-(* (\*               | `Body t -> is_sub_mb (t, t') *\) *)
-(* (\*           end *\) *)
-(* (\*       | `Application (mb, [_ (\\*`Alias (("O", _), _)*\\)]), _ *\) *)
-(* (\*           when mb.Abstype.id = mailbox.Abstype.id *\) *)
-(* (\*           -> true (\\* HACK *\\) *\) *)
-(* (\*       | _, `MetaTypeVar point -> *\) *)
-(* (\*           begin *\) *)
-(* (\*             match Unionfind.find point with *\) *)
-(* (\*               | `Rigid _ *\) *)
-(* (\*               | `Flexible _ *\) *)
-(* (\*               | `Recursive _ -> false *\) *)
-(* (\*               | `Body t' -> is_sub_mb (t, t') *\) *)
-(* (\*           end *\) *)
-(*       | _, _ -> false in *)
   let rec is_sub_type = fun rec_vars (t, t') ->
     match t, t' with
       | `Not_typed, `Not_typed -> true
@@ -2398,7 +2267,6 @@ let is_sub_type, is_sub_row =
           *)
           (* TODO: implement variance annotations *)
           labs = rabs && assert false (* TODO: is_sub_type_tyarg *)
-(*              List.for_all2 (fun t t' -> is_sub_type rec_vars (t, t')) lts rts*)
       | `MetaTypeVar point, `MetaTypeVar point' ->
           begin
             match Unionfind.find point, Unionfind.find point' with
