@@ -129,6 +129,7 @@ SOURCES = $(OPC)                                \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
           query.ml                              \
+          queryshredding.ml                     \
           evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \

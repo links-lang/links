@@ -439,9 +439,8 @@ module Eval = struct
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
-         (* Not sure this correct, it compiles though *)
          begin
-           match Query.compile_shredded env (range, e) with
+           match Queryshredding.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
               let get_fields t =
@@ -455,38 +454,33 @@ module Eval = struct
                 begin
                   let execute_shredded_raw (q, t) =
 		    Debug.print ("Generated query: "^q);
-		    Debug.debug_time "query execution" (fun () -> 
-		                                        (Database.execute_select_result (get_fields t) q db, t))
-		  in 
-		  let raw_results = 
-		    Debug.debug_time "execute_shredded_raw" 
-		                     (fun () -> Query.Shred.pmap execute_shredded_raw p) 
-	          in
-		  let mapped_results = 
+		    Debug.debug_time "query execution" (fun () ->
+		      (Database.execute_select_result (get_fields t) q db, t)) in
+		  let raw_results =
+		    Debug.debug_time "execute_shredded_raw" (fun () ->
+		      Queryshredding.Shred.pmap execute_shredded_raw p) in
+		  let mapped_results =
 		    Debug.debug_time "mapped_results" (fun () ->
-		                                       Query.Shred.pmap Query.FastStitching.build_stitch_map raw_results)
-		  in
+		      Queryshredding.Shred.pmap Queryshredding.FastStitching.build_stitch_map raw_results) in
                   apply_cont cont env
-		             (Debug.debug_time "stitch_query" 
-		                               (fun () -> Query.Shred.stitch_mapped_query mapped_results))
+		    (Debug.debug_time "stitch_query" (fun () ->
+		      Queryshredding.Shred.stitch_mapped_query mapped_results))
                 end
               else
                 begin
                   let execute_shredded (q, t) =
                     Debug.print ("Generated query: "^q);
                     Debug.debug_time "query execution" (fun () -> 
-		                                        (Database.execute_select (get_fields t) q db, t))
-                  in
+		      (Database.execute_select (get_fields t) q db, t)) in
                   let flat_results =
-                    Debug.debug_time "execute_shredded"
-                                     (fun () -> Query.Shred.pmap execute_shredded p) in
-                      let unflattened_results =               
-                        Debug.debug_time "unflatten_list" 
-		                         (fun () -> Query.Shred.pmap Query.FlattenRecords.unflatten_list flat_results)
-                      in
-                      apply_cont cont env
-                                 (Debug.debug_time "stitch_query" 
-	                                           (fun () -> Query.Shred.stitch_query unflattened_results))
+                    Debug.debug_time "execute_shredded" (fun () ->
+		      Queryshredding.Shred.pmap execute_shredded p) in
+                  let unflattened_results =
+                    Debug.debug_time "unflatten_list" (fun () ->
+		      Queryshredding.Shred.pmap Queryshredding.FlattenRecords.unflatten_list flat_results) in
+                  apply_cont cont env
+                    (Debug.debug_time "stitch_query" 
+	               (fun () -> Queryshredding.Shred.stitch_query unflattened_results))
                 end
          end
        else (* shredding disabled *)
