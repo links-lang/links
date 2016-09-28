@@ -93,7 +93,7 @@ module Int = struct
   type t = int
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
-  let compare i j = i-j 
+  let compare i j = i-j
   module Show_t = Deriving_Show.Show_int
 end
 
@@ -134,9 +134,9 @@ struct
     exception Not_disjoint of key * string
     module S = Deriving_Show.Show_map(Ord)(Ord.Show_t)
 
-    let find elem map = 
-      try find elem map 
-      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^ 
+    let find elem map =
+      try find elem map
+      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^
                                   " (in Map.find)"))
     let filterv f map =
       filter (fun _ -> f) map
@@ -168,8 +168,8 @@ struct
 
     let union_disjoint a b =
       fold
-        (fun k v r -> 
-           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
+        (fun k v r ->
+           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k))
            else
              add k v r) b a
 
@@ -191,7 +191,7 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    module Show_t (V : Deriving_Show.Show) = 
+    module Show_t (V : Deriving_Show.Show) =
       Deriving_Show.Show_map(Ord)(Ord.Show_t)(V)
   end
 end
@@ -244,7 +244,7 @@ type stringset = StringSet.t
     deriving (Show)
 
 module Typeable_stringset : Deriving_Typeable.Typeable
-  with type a = stringset = 
+  with type a = stringset =
   Deriving_Typeable.Primitive_typeable(struct
     type t = stringset
     let magic = "stringset"
@@ -881,7 +881,7 @@ exception NotFound = Notfound.NotFound
 let rec pow a = function
   | 0 -> 1
   | 1 -> a
-  | n -> 
+  | n ->
     let b = pow a (n / 2) in
     b * b * (if n mod 2 = 0 then 1 else a)
 

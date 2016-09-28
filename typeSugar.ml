@@ -1141,7 +1141,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                   | `Var _ -> `Variant (fields, Unionfind.fresh `Closed, false)
                   | `Recursive _ | `Body _ | `Closed -> assert false
               end
-      | `Application (l, [`Type t]) 
+      | `Application (l, [`Type t])
           when Types.Abstype.Eq_t.eq l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with

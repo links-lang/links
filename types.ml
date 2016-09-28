@@ -954,7 +954,7 @@ let normalise_field_spec = concrete_field_spec
 let normalise_fields =
   FieldEnv.map normalise_field_spec
 
-type var_map = (bool * meta_type_var) TypeVarMap.t 
+type var_map = (bool * meta_type_var) TypeVarMap.t
 
 let rec dual_type : var_map -> datatype -> datatype =
   fun rec_points ->
