@@ -586,8 +586,6 @@ let fresh_raw_variable : unit -> int =
   function () ->
     incr type_variable_counter; !type_variable_counter
 
-let bump_variable_counter i = type_variable_counter := !type_variable_counter+i
-
 (* type ops stuff *)
   let empty_field_env = FieldEnv.empty
   let closed_row_var = Unionfind.fresh `Closed
@@ -1339,8 +1337,6 @@ let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", tru
 let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
 
 
-
-
 module Vars =
 struct
   type flavour = [`Rigid | `Flexible | `Recursive]
@@ -1349,6 +1345,15 @@ struct
   type spec    = flavour * kind * int
 
   type vars_list = (int * (flavour * kind * scope)) list
+
+  (* See Note [Variable names in error messages] *)
+  (* We don't really care much about size of the hash table.  20 should be a
+     reasonable default since error message is unlikely to have more type
+     variables.  And even if it does we don't care about performance penalty
+     because we're printing the error message and thus stopping the compilation
+     anyway. *)
+  let tyvar_name_map = Hashtbl.create 20
+  let tyvar_name_counter = ref 0
 
   let varspec_of_tyvar q =
     let flavour = if is_rigid_quantifier q then
@@ -1461,49 +1466,60 @@ struct
       | `Free  -> (name, (flavour, kind, 1))
       | `Bound -> (name, (flavour, kind, 0))
 
-  let combine (name, (flavour, kind, count)) (_flavour', _kind', scope) =
-(*     assert (flavour = _flavour'); *)
-(*     assert (kind = _kind'); *)
+  let combine (name, (flavour, kind, count)) (flavour', kind', scope) =
+    assert (flavour = flavour');
+    assert (kind    = kind'   );
     match scope with
       | `Free  -> (name, (flavour, kind, count+1))
       | `Bound -> (name, (flavour, kind, count))
 
-  let make_names vars =
+  (* Generates next letter to use as a type variable name.  Uses side effects to
+     increment variable counter.  This ensures that the next call generates next
+     letter of the alphabet. *)
+  let next_letter : unit -> string = function _ ->
+    let first_letter      = int_of_char 'a' in
+    let last_letter       = int_of_char 'z' in
+    let num_letters       = last_letter - first_letter + 1 in
+    let string_of_ascii n = Char.escaped (char_of_int n) in
+    let letter n = string_of_ascii (first_letter + (n mod num_letters)) in
+    let rec num_to_letters n =
+      letter n ^ (if n >= num_letters
+                  then (num_to_letters (n / num_letters))
+                  else "") in
+    let n = !tyvar_name_counter in
+    begin
+      incr tyvar_name_counter;
+      num_to_letters n
+    end
+
+  (* Assigns names to type variables and adds them to a hash table storing type
+     variables.  Both folds work by side-effecting on the hash table, which is
+     then returned to be used freely outside of this module. *)
+  let make_names (vars:vars_list) =
     if Settings.get_value show_raw_type_vars then
-      List.fold_left
-        (fun name_map (var, spec) ->
-           match IntMap.lookup var name_map with
-             | None -> IntMap.add var (init spec (string_of_int var)) name_map
-             | Some (name, spec') -> IntMap.add var (combine (name, spec') spec) name_map)
-        IntMap.empty vars
+      let _ = List.fold_left
+        (fun _ (var, spec) ->
+           match Hashtbl.lookup tyvar_name_map var with
+             | None ->
+                Hashtbl.add tyvar_name_map var (init spec (string_of_int var))
+             | Some (name, spec') ->
+                Hashtbl.add tyvar_name_map var (combine (name, spec') spec))
+        () vars
+        in tyvar_name_map
     else
       begin
-        let first_letter = int_of_char 'a' in
-        let last_letter = int_of_char 'z' in
-        let num_letters = last_letter - first_letter + 1 in
-
-        let string_of_ascii n = Char.escaped (char_of_int n) in
-
-        let rec num_to_letters n =
-          let letter = string_of_ascii (first_letter + (n mod num_letters)) in
-            letter ^
-              (if n >= num_letters then (num_to_letters (n / num_letters))
-               else "") in
-
-        let (_, name_map) =
-          List.fold_left
-            (fun (n, name_map) (var, spec) ->
-               match IntMap.lookup var name_map with
-                 | None -> (n+1, IntMap.add var (init spec (num_to_letters n)) name_map)
-                 | Some (name, spec') -> (n, IntMap.add var (combine (name, spec') spec) name_map))
-            (0, IntMap.empty) vars
-        in
-          name_map
+        let _ = List.fold_left
+          (fun _ (var, spec) ->
+            match Hashtbl.lookup tyvar_name_map var with
+            | None -> Hashtbl.add tyvar_name_map var (init spec (next_letter ()))
+            | Some (name, spec') ->
+               Hashtbl.add tyvar_name_map var (combine (name, spec') spec))
+          () vars
+        in tyvar_name_map
       end
 
-  let find var = fst -<- (IntMap.find var)
-
-  let find_spec = IntMap.find
+  let find      var tbl = fst (Hashtbl.find tbl var)
+  let find_spec var tbl =      Hashtbl.find tbl var
 end
 
 (** Type printers *)
@@ -1519,7 +1535,7 @@ struct
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
   type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
-  type names = (string * Vars.spec) IntMap.t
+  type names =  (int, string * Vars.spec) Hashtbl.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
@@ -1620,7 +1636,7 @@ struct
         let ss = List.rev (IntMap.fold (fun _ t ss -> (sd t) :: ss) tuple_env []) in
           "(" ^ String.concat ", " ss ^  ")" in
 
-      (* If fresh type variables are hidden return a generic name n1.
+      (* If type variable names are hidden return a generic name n1.
          Otherwise pass name of type variable to n2 so that it can construct a
          name. *)
       let name_of_type var n1 n2 =
@@ -1643,7 +1659,8 @@ struct
          `ah` argument stands for "arrow head", either ">" (for normal function
               space) or "@" (for linear types' space). *)
       let ppr_function_type args effects t ah ht =
-       let (fields, row_var, false) = unwrap effects in
+       let (fields, row_var, dual) = unwrap effects in
+       assert (not dual);
 
        (* Checks that field environment contains exactly the values passed in in
           a list *)
@@ -1676,7 +1693,13 @@ struct
              "{" ^ row "," bound_vars p effects ^ "}-" ^ ah
          in begin match concrete_type args with
             | `Record row when is_tuple ~allow_onetuples:true row ->
-               string_of_tuple row ^ " " ^ppr_arrow () ^ " " ^ sd t
+               (* Let bindings are needed here to ensure left-to-right
+                  generation of type variable names.
+                  See Note [Variable names in error messages] *)
+               let row_str   = string_of_tuple row in
+               let arrow_str = ppr_arrow () in
+               let sd_str    = sd t in
+               row_str ^ " " ^ arrow_str ^ " " ^ sd_str
             | _ -> assert false
             end
 
@@ -1939,60 +1962,96 @@ let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_va
 
 let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
 
+(** Generates new variable names for things in the list, adding them to already
+    existing pool of type variable names.
+ *)
+let add_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
+  List.map (fun t -> Vars.make_names (f t)) tys;
+  Vars.tyvar_name_map;
+  ()
+
+(** Builds a fresh set of type variable names for a given list of things.  This
+    function is called:
+
+    * when pretty-printing a type.  It then builds type variable names for a
+      single thing that is being printed.
+
+    * when printing error messages.  It then builds a consistent set of variable
+      names for several different types appearing in the error message.
+ *)
+let build_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
+  Vars.tyvar_name_counter := 0;
+  Hashtbl.reset Vars.tyvar_name_map;
+  add_tyvar_names f tys
+
+(*
+
+Note [Refreshing type variable names]
+=====================================
+
+Optional argument refresh_tyvar_names passed to string_of_* pretty-printing
+functions determines whether the set of variable names should be refreshed
+(default) or re-used.  The latter is used for printing error messages, where we
+want consistent type variable names across several calls to pretty-printing
+functions.
+
+See Note [Variable names in error messages].
+
+ *)
+
 (* string conversions *)
-let string_of_datatype ?(policy=Print.default_policy) (t : datatype) =
+let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+                       (t : datatype) =
   let policy = policy () in
-  let t =
-    if policy.Print.quantifiers then t
-    else Print.strip_quantifiers t
-  in
-    Print.datatype
-      TypeVarSet.empty
-      (policy, Vars.make_names (free_bound_type_vars ~include_aliases:true t))
-      t
+  let t = if policy.Print.quantifiers then t
+          else Print.strip_quantifiers t in
+  if refresh_tyvar_names then build_tyvar_names free_bound_type_vars [t];
+  Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
 
-let string_of_row ?(policy=Print.default_policy) row =
-  Print.row "," TypeVarSet.empty
-    (policy (), Vars.make_names (free_bound_row_type_vars ~include_aliases:true row))
-    row
+let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
+  if refresh_tyvar_names then build_tyvar_names free_bound_row_type_vars [row];
+  Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
 
-let string_of_presence ?(policy=Print.default_policy) (f : field_spec) =
-  Print.presence
-    TypeVarSet.empty
-    (policy (), Vars.make_names (free_bound_field_spec_type_vars ~include_aliases:true f))
-    f
+let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+                       (f : field_spec) =
+  if refresh_tyvar_names then
+    build_tyvar_names free_bound_field_spec_type_vars [f];
+  Print.presence TypeVarSet.empty (policy (), Vars.tyvar_name_map) f
 
-let string_of_type_arg ?(policy=Print.default_policy) (arg : type_arg) =
-  Print.type_arg
-    TypeVarSet.empty
-    (policy (), Vars.make_names (free_bound_type_arg_type_vars ~include_aliases:true arg))
-    arg
+let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+                       (arg : type_arg) =
+  if refresh_tyvar_names then
+    build_tyvar_names free_bound_type_arg_type_vars [arg];
+  Print.type_arg TypeVarSet.empty (policy (), Vars.tyvar_name_map) arg
 
-let string_of_row_var ?(policy=Print.default_policy) row_var =
-  match
-    Print.row_var "," TypeVarSet.empty
-      (policy (), Vars.make_names (free_bound_row_var_vars ~include_aliases:true row_var))
-      row_var
-  with
-      | None -> ""
-      | Some s -> s
+let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
+  if refresh_tyvar_names then
+    build_tyvar_names free_bound_row_var_vars [row_var];
+  match Print.row_var "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row_var
+  with | None -> ""
+       | Some s -> s
 
-let string_of_tycon_spec ?(policy=Print.default_policy) (tycon : tycon_spec) =
-  Print.tycon_spec
-    TypeVarSet.empty
-    (policy (), Vars.make_names (free_bound_tycon_type_vars ~include_aliases:true tycon))
-    tycon
+let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
+  if refresh_tyvar_names then
+    build_tyvar_names free_bound_tycon_type_vars [tycon];
+  Print.tycon_spec TypeVarSet.empty (policy (), Vars.tyvar_name_map) tycon
 
 (* HACK:
    Just use the default policy. At some point we might want to export
    the printing policy in types.mli.
  *)
-let string_of_datatype t = string_of_datatype t
-let string_of_row r = string_of_row r
-let string_of_presence f = string_of_presence f
-let string_of_type_arg arg = string_of_type_arg arg
-let string_of_row_var r = string_of_row_var r
-let string_of_tycon_spec s = string_of_tycon_spec s
+let string_of_datatype ?(refresh_tyvar_names=true) t
+  = string_of_datatype ~refresh_tyvar_names t
+let string_of_row ?(refresh_tyvar_names=true) r
+  = string_of_row ~refresh_tyvar_names r
+let string_of_presence ?(refresh_tyvar_names=true) f
+  = string_of_presence ~refresh_tyvar_names f
+let string_of_type_arg ?(refresh_tyvar_names=true) arg
+  = string_of_type_arg ~refresh_tyvar_names arg
+let string_of_row_var ?(refresh_tyvar_names=true) r
+  = string_of_row_var ~refresh_tyvar_names r
+let string_of_tycon_spec ?(refresh_tyvar_names=true) s
+  = string_of_tycon_spec ~refresh_tyvar_names s
 
 module Show_datatype =
   Deriving_Show.Defaults
@@ -2194,7 +2253,9 @@ let is_sub_type, is_sub_row =
      associated with input).
   *)
   and is_sub_eff =
-    fun rec_vars ((lfield_env, lrow_var, false as lrow), (rfield_env, rrow_var, false as rrow)) ->
+    fun rec_vars ((lfield_env, lrow_var, ldual as lrow), (rfield_env, rrow_var, rdual as rrow)) ->
+      assert (not ldual);
+      assert (not rdual);
       let sub_fields =
         FieldEnv.fold (fun name f _ ->
                          match f with
