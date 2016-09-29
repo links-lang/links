@@ -57,7 +57,7 @@ object (self)
     | `Module (n, p) ->
       let uniquified_name = make_unique_name n in
       let o = self#add_name n uniquified_name in
-      let (o1, p1) = self#phrase p in
+      let (o1, p1) = o#phrase p in
       (o1, `Module (uniquified_name, p1))
     | bn -> super#bindingnode bn
 
