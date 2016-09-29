@@ -8,15 +8,19 @@ type declaration
 type reference
 type import
 
-(* Functions on scopes and scope graphs *)
-(* might change these
-val get_scopes : scope_graph -> scope list
-val get_declarations : scope -> declaration list
-val get_references : scope -> reference list
-val get_imports : scope -> import list
-val get_parent : scope -> scope option
-*)
-
 (* Scope graph construction *)
 val create_scope_graph : Sugartypes.program -> scope_graph
 val make_and_print_scope_graph : Sugartypes.program -> unit
+
+(* Name resolution *)
+type name = Sugartypes.name
+type fq_name = Sugartypes.name
+type unique_name = Sugartypes.name
+
+(* Given a unique declaration name and a scope graph, returns the
+ * fully-qualified name of the declaration (or None if it doesn't exist) *)
+(* val get_fq_decl_name : unique_name -> scope_graph -> fq_name option *)
+
+(* Given a unique reference name and a scope graph, returns a list of possible
+ * fully-qualified (plain) names *)
+(* val resolve_fq_name : unique_name -> scope_graph -> fq_name list *)

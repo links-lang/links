@@ -2,31 +2,66 @@ open Utility
 open Printf
 
 (* open Sugartypes *)
+type name = Sugartypes.name
+type fq_name = Sugartypes.name
+type unique_name = Sugartypes.name
 
 type scope_id = int
-(* Lists of declarations, references, imports, and an optional parent scope *)
-type scope =
-  { declarations : declaration list;
-    references : reference list;
-    imports : import list;
-    parent_scope : scope_id option
-  }
+
 (* Declaration -- generally a binder. Contains name, position, and optional
  * named scope reference *)
-and declaration = (string * scope_id option)
+type declaration = (string * scope_id option)
 
 (* Name of a reference (function application, argument, etc.) *)
-and reference = string
+type reference = string
 
 (* Name of an import (either in-module or out-of-module *)
-and import  = string
+type import  = string
 
+module Decl = struct
+  type t = declaration
+  (* Deriving makes it nigh-on impossible to use Pervasives.compare. Great.
+   * This is an ungodly awful hack. *)
+  let compare = Pervasives.compare
+  (*
+    let opt_as_str opt =
+      (match opt with
+         | Some sc1_id -> string_of_int sc1_id
+         | None -> "NONE") in
+    let opt1_str = opt_as_str opt1 in
+    let opt2_str = opt_as_str opt2 in
+    String.compare (s1 ^ opt1_str) (s2 ^ opt2_str)
+  *)
+  module Show_t = Deriving_Show.Show_unprintable (struct type a = t end)
+end
+
+module DeclSet = Set.Make(Decl)
+type declset = DeclSet.t
+
+module AnnotatedDecl = struct
+  type t = (declaration * string)
+  let compare = Pervasives.compare
+  module Show_t = Deriving_Show.Show_unprintable (struct type a = t end)
+end
+
+module AnnotatedDeclSet = Set.Make(AnnotatedDecl)
+type annotated_decl_set = AnnotatedDeclSet.t
+
+(* Lists of declarations, references, imports, and an optional parent scope *)
+type scope =
+  { declarations : declset;
+    references : StringSet.t;
+    imports : StringSet.t;
+    parent_scope : scope_id option
+  }
 
 (* Name of a scope *)
 type scope_name = string option
 
-(* Top-level scope *)
-type scope_graph = scope intmap
+(* Top-level scope: Mapping from scope IDs to scopes, and references to scope IDs.*)
+type scope_graph = (scope intmap * scope_id stringmap)
+
+let lookup_containing_scope ref (_, ref_map) = StringMap.find ref ref_map
 
 (* Gets a list of scopes from the scope graph *)
 let get_scopes sg = sg
@@ -40,6 +75,8 @@ let get_references scope = scope.references
 let get_imports scope = scope.imports
 
 let get_parent scope = scope.parent_scope
+
+let lookup_scope scope_id (scope_map, _) = IntMap.find scope_id scope_map
 
 (* Scope graph construction *)
 
@@ -66,21 +103,26 @@ let plain_decl d = (d, None)
 let annotated_decl d s = (d, Some s)
 
 let add_declaration scope decl =
-  { scope with declarations = decl :: scope.declarations }
+  { scope with declarations = DeclSet.add decl scope.declarations }
 
 let add_reference scope reference =
-  { scope with references = reference :: scope.references }
+  { scope with references = StringSet.add reference scope.references }
 
 let add_import scope import =
-  { scope with imports = import :: scope.imports }
+  { scope with imports = StringSet.add import scope.imports }
+
+let add_ref_scope_mapping : reference -> scope_id -> scope_graph -> scope_graph =
+  fun ref scope_id (scope_map, ref_map) ->
+    (scope_map, StringMap.add ref scope_id ref_map)
 
 let new_scope parent =
-  { declarations = [];
-    references = [];
-    imports = [];
+  { declarations = DeclSet.empty;
+    references = StringSet.empty;
+    imports = StringSet.empty;
     parent_scope = parent }
 
-let add_scope scope_id scope scope_graph = IntMap.add scope_id scope scope_graph
+let add_scope scope_id scope (scope_map, ref_map) =
+  (IntMap.add scope_id scope scope_map, ref_map)
 
 let rec construct_sg init_scope init_scope_graph scope_id =
 object(self)
@@ -112,12 +154,14 @@ object(self)
         let rec_scope = o_rec#get_scope in
         let rec_sg = o_rec#get_scope_graph in
         let new_sg = add_scope qn_scope_id rec_scope rec_sg in
-        {< scope = scope1; scope_graph = new_sg >}
+        let new_sg1 = add_ref_scope_mapping x scope_id new_sg in
+        {< scope = scope1; scope_graph = new_sg1 >}
 
   method phrasenode = function
     | `Var n ->
         (* Add to references for current scope *)
-        {< scope = add_reference scope n >}
+        {< scope = add_reference scope n;
+           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
     | `QualifiedVar ns ->
         self#qn_add_references ns
     | pn -> super#phrasenode pn
@@ -127,7 +171,8 @@ object(self)
   method datatype = function
     | `TypeVar (n, _, _) ->
         (* Add to references for current scope *)
-        {< scope = add_reference scope n >}
+        {< scope = add_reference scope n;
+           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
     | `QualifiedTypeVar (ns, _, _) ->
         self#qn_add_references ns
     | dt -> super#datatype dt
@@ -155,7 +200,8 @@ object(self)
     | `Import n ->
         (* Unqualified import. Add to imports list and references list. *)
         let scope1 = add_reference scope n in
-        self#set_scope (add_import scope1 n)
+        let sg1 = add_ref_scope_mapping n scope_id scope_graph in
+        {< scope = (add_import scope1 n); scope_graph = sg1 >}
     | `QualifiedImport ns ->
         (* Next, we need to properly set up anonymous scopes *)
         (* Firstly, add all segments of the qualified name into the imports list. *)
@@ -233,11 +279,11 @@ object(self)
 end
 
 let create_scope_graph prog =
-  let o = (construct_sg (new_scope None) (IntMap.empty) 0)#program prog in
+  let o = (construct_sg (new_scope None) (IntMap.empty, StringMap.empty) 0)#program prog in
   o#get_scope_graph
 
 (* Print DOT file for scope graph *)
-let show_scope_graph sg =
+let show_scope_graph (sg, _) =
   let show_scope scope scope_id =
     let rec show_decls = function
       | [] -> ""
@@ -258,8 +304,10 @@ let show_scope_graph sg =
     let show_parent = function
       | None -> ""
       | Some p -> sprintf "%d -> %d\n" scope_id p in
-    (show_decls scope.declarations) ^ (show_references scope.references) ^
-    (show_imports scope.imports) ^ (show_parent scope.parent_scope) in
+    (show_decls (DeclSet.elements scope.declarations)) ^
+    (show_references (StringSet.elements scope.references)) ^
+    (show_imports (StringSet.elements scope.imports)) ^
+    (show_parent scope.parent_scope) in
   "digraph G {\n" ^
     String.concat ""
       (List.map (fun (s_id, s) -> show_scope s s_id) (IntMap.bindings sg))
@@ -268,4 +316,99 @@ let show_scope_graph sg =
 let make_and_print_scope_graph prog =
   let sg = create_scope_graph prog in
   printf "%s\n" (show_scope_graph sg)
+
+let string_set_map f =
+  StringSet.fold (fun s -> StringSet.add (f s)) StringSet.empty
+
+let decl_set_map f =
+  DeclSet.fold (fun s -> DeclSet.add (f s)) DeclSet.empty
+
+(* Shadowing Operator *)
+let shadow : DeclSet.t -> DeclSet.t -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
+  = fun e1 e2 sg unique_ast ->
+  (* Next, make a list of pairs of (unique, non-unique) names for e1 and e2 *)
+  let annotate_decl_set ds = DeclSet.fold
+    (fun x -> AnnotatedDeclSet.add (x, Uniquify.lookup_var (fst x) unique_ast)) ds AnnotatedDeclSet.empty in
+  let combined_e1 = annotate_decl_set e1 in
+  let combined_e2 = annotate_decl_set e2 in
+
+  (* Use sets of the plain names to compute the overlapping set via intersection *)
+  let get_plain_names ds =
+    AnnotatedDeclSet.fold (fun ((n, _), _) s -> StringSet.add n s) ds StringSet.empty in
+  let set_plain_e1 = get_plain_names combined_e1 in
+  let set_plain_e2 = get_plain_names combined_e2 in
+  let overlapping_bindings = StringSet.inter set_plain_e1 set_plain_e2 in
+
+  (* Result is the union of sets where the plain var isn't in the overlapping set *)
+  let filtered_annotated_decl_set = AnnotatedDeclSet.filter
+      (fun (_, x_plain) -> not (StringSet.mem x_plain overlapping_bindings)) combined_e2 in
+
+  let filtered_decl_set =
+    AnnotatedDeclSet.fold (fun n acc -> DeclSet.add (fst n) acc)
+      filtered_annotated_decl_set DeclSet.empty in
+  DeclSet.union e1 filtered_decl_set
+
+(* Name resolution *)
+let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
+  = fun ref sg u_ast ->
+  let find_scope scope_id = lookup_scope scope_id sg in
+  (* Aaaaaand here we go *)
+  let rec resolve_name_inner ref_name seen_imports =
+    let containing_scope_id = lookup_containing_scope ref_name sg in
+    let containing_scope = find_scope containing_scope_id in
+    visible_decls  (StringSet.add ref_name seen_imports) IntSet.empty containing_scope_id
+
+  (* EnvV *)
+  and visible_decls : stringset -> intset -> int -> DeclSet.t =
+    fun seen_imports seen_scopes scope_id ->
+    let envl_s = local_decls seen_imports seen_scopes scope_id in
+    let envp_s = parent_decls seen_imports seen_scopes scope_id in
+    shadow envl_s envp_s sg u_ast
+
+  (* EnvL *)
+  and local_decls seen_imports seen_scopes scope_id =
+    let envd_s = scope_decls seen_imports seen_scopes scope_id in
+    let envi_s = imported_decls seen_imports seen_scopes scope_id in
+    shadow envd_s envi_s sg u_ast
+
+  (* EnvD *)
+  and scope_decls seen_imports seen_scopes scope_id =
+    if IntSet.mem scope_id seen_scopes then DeclSet.empty
+    else (find_scope scope_id).declarations
+
+  (* EnvI *)
+  and imported_decls seen_imports seen_scopes scope_id =
+    if IntSet.mem scope_id seen_scopes then DeclSet.empty else
+    let scope = find_scope scope_id in
+    let unseen_imports = StringSet.diff scope.imports seen_imports in
+    (* Next up: get the associated set IDs for all import declarations *)
+    let import_scope_ids =
+      StringSet.fold (fun i acc ->
+        let resolved_import_set = resolve_name_inner i seen_imports in
+        (* For each resolved import declaration, add the associated scope ID to the set *)
+        let scope_ids = DeclSet.fold (fun i_decl ->
+          match i_decl with
+            | (_decl_name, Some (scope_id)) -> IntSet.add scope_id
+            | (_decl_name, None) ->
+                failwith "Error in name resolution: import
+                  reference resolved to non-module declaration") resolved_import_set IntSet.empty in
+        (* Union with the accumulator *)
+        IntSet.union acc scope_ids) scope.imports IntSet.empty in
+    (* Finally, union the local environments, and we're done. *)
+    let new_seen_scopes = IntSet.add scope_id seen_scopes in
+    IntSet.fold (fun i_scope acc ->
+      let i_decls = local_decls seen_imports new_seen_scopes i_scope in
+      DeclSet.union i_decls acc
+    ) import_scope_ids DeclSet.empty
+
+  (* EnvP *)
+  and parent_decls seen_imports seen_scopes scope_id =
+    if IntSet.mem scope_id seen_scopes then DeclSet.empty
+    else
+      match (find_scope scope_id).parent_scope with
+        | None -> DeclSet.empty
+        | Some parent_scope_id ->
+            visible_decls seen_imports (IntSet.add scope_id seen_scopes) parent_scope_id in
+  resolve_name_inner ref StringSet.empty
+
 
