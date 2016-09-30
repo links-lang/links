@@ -107,11 +107,5 @@ let fast_stitch = Settings.add_bool("fast_stitch", true, `User)
 (* experimental: faster version of execute_select *)
 let fast_execute_select = Settings.add_bool("fast_execute_select", true, `User)
 
-(* experimental: alternative, two-pass stitching code *)
-let deforest_stitching = Settings.add_bool("deforest_stitching",true,`User)
-
-(* Generic flag for A/B testing *)
-let feature_test = Settings.add_bool("feature_test",false,`User)
-
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths = Settings.add_string("links_file_paths", "", `User)

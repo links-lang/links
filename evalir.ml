@@ -443,64 +443,41 @@ module Eval = struct
            match Queryshredding.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
-              let get_fields t =
-                match t with
-                | `Record fields ->
-                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                | _ -> assert false
-              in
-              if Settings.get_value Basicsettings.deforest_stitching
-              then
-                begin
-                  let execute_shredded_raw (q, t) =
-		    Debug.print ("Generated query: "^q);
-		    Debug.debug_time "query execution" (fun () ->
-		      (Database.execute_select_result (get_fields t) q db, t)) in
-		  let raw_results =
-		    Debug.debug_time "execute_shredded_raw" (fun () ->
-		      Queryshredding.Shred.pmap execute_shredded_raw p) in
-		  let mapped_results =
-		    Debug.debug_time "mapped_results" (fun () ->
-		      Queryshredding.Shred.pmap Queryshredding.FastStitching.build_stitch_map raw_results) in
-                  apply_cont cont env
-		    (Debug.debug_time "stitch_query" (fun () ->
-		      Queryshredding.Shred.stitch_mapped_query mapped_results))
-                end
-              else
-                begin
-                  let execute_shredded (q, t) =
-                    Debug.print ("Generated query: "^q);
-                    Debug.debug_time "query execution" (fun () -> 
-		      (Database.execute_select (get_fields t) q db, t)) in
-                  let flat_results =
-                    Debug.debug_time "execute_shredded" (fun () ->
-		      Queryshredding.Shred.pmap execute_shredded p) in
-                  let unflattened_results =
-                    Debug.debug_time "unflatten_list" (fun () ->
-		      Queryshredding.Shred.pmap Queryshredding.FlattenRecords.unflatten_list flat_results) in
-                  apply_cont cont env
-                    (Debug.debug_time "stitch_query" 
-	               (fun () -> Queryshredding.Shred.stitch_query unflattened_results))
-                end
-         end
+               begin
+		 let get_fields t =
+                   match t with
+                   | `Record fields ->
+                       StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                   | _ -> assert false
+		 in
+                 let execute_shredded_raw (q, t) =
+		   Database.execute_select_result (get_fields t) q db, t in
+		 let raw_results =
+		   Queryshredding.Shred.pmap execute_shredded_raw p in
+		 let mapped_results =
+		   Queryshredding.Shred.pmap Queryshredding.FastStitching.build_stitch_map raw_results in
+                 apply_cont cont env
+		   (Queryshredding.Shred.stitch_mapped_query mapped_results)
+               end
+	 end
        else (* shredding disabled *)
          begin
-         match Query.compile env (range, e) with
-         | None -> computation env cont e
-         | Some (db, q, t) ->
-            let (fieldMap, _, _), _ =
-              Types.unwrap_row(TypeUtils.extract_row t) in
-            let fields =
-              StringMap.fold
-                (fun name t fields ->
-                 match t with
-                 | `Present t -> (name, t)::fields
-                 | `Absent -> assert false
-                 | `Var _ -> assert false)
-                fieldMap
-                []
-            in
-            apply_cont cont env (Database.execute_select fields q db)
+           match Query.compile env (range, e) with
+           | None -> computation env cont e
+           | Some (db, q, t) ->
+               let (fieldMap, _, _), _ =
+		 Types.unwrap_row(TypeUtils.extract_row t) in
+               let fields =
+		 StringMap.fold
+                   (fun name t fields ->
+                     match t with
+                     | `Present t -> (name, t)::fields
+                     | `Absent -> assert false
+                     | `Var _ -> assert false)
+                   fieldMap
+                   []
+               in
+               apply_cont cont env (Database.execute_select fields q db)
 	 end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
