@@ -94,10 +94,6 @@ let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
 
-
-(* experimental: faster unflattening code *)
-let fast_unflatten = Settings.add_bool("fast_unflatten", true, `User)
-
 (* experimental: faster stitching code *)
 let fast_stitch = Settings.add_bool("fast_stitch", true, `User)
 

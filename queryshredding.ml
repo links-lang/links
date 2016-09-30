@@ -1632,11 +1632,7 @@ Plan:
         | _ -> assert false    
 
   let unflatten_list vt = 
-    if Settings.get_value Basicsettings.fast_unflatten
-    then unflatten_list_new vt
-    else unflatten_list_old vt
-
-
+    unflatten_list_new vt
 
 end
 
@@ -2538,7 +2534,7 @@ struct
     let typed_query_package = Shred.pzip query_package query_type_package in
       typed_query_package
 
-  let update db ((x, table), where, body) =
+  let _update db ((x, table), where, body) =
     reset_dummy_counter ();
     let base = base db [] ->- (string_of_base db true) in
     let where =
@@ -2557,7 +2553,7 @@ struct
     in
       "update "^table^" set "^fields^where
 
-  let delete db ((x, table), where) =
+  let _delete db ((x, table), where) =
     reset_dummy_counter ();
     let base = base db [] ->- (string_of_base db true) in
     let where =
