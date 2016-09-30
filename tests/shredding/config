@@ -1,5 +1,5 @@
 database_driver=postgresql
-database_args=localhost:5432:postgres:links
+database_args=localhost:5432::links
 show_pre_sugar_typing=off
 make_cache=off
 use_cache=off

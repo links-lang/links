@@ -485,27 +485,23 @@ module Eval = struct
          end
        else (* shredding disabled *)
          begin
-           match Query.compile env (range, e) with
-           | None -> computation env cont e
-           | Some (db, q, t) ->
-              let (fieldMap, _, _), _ = 
-                Types.unwrap_row(TypeUtils.extract_row (TypeUtils.element_type t)) in
-              let fields =
-                StringMap.fold
-                  (fun name t fields ->
-                   match t with
-                   | `Present t -> (name, t)::fields
-                   | `Absent -> assert false
-                   | `Var _ -> assert false)
-                  fieldMap
-                  []
-              in
-              apply_cont cont env
-                         (let (raw_result,rs) =  Debug.debug_time "query execution"
-                                                                  (fun () -> Database.execute_select_result fields q db) in
-	                  Debug.debug_time "build_result"
-                                           (fun () -> Database.build_result (raw_result,rs)))
-         end
+         match Query.compile env (range, e) with
+         | None -> computation env cont e
+         | Some (db, q, t) ->
+            let (fieldMap, _, _), _ =
+              Types.unwrap_row(TypeUtils.extract_row t) in
+            let fields =
+              StringMap.fold
+                (fun name t fields ->
+                 match t with
+                 | `Present t -> (name, t)::fields
+                 | `Absent -> assert false
+                 | `Var _ -> assert false)
+                fieldMap
+                []
+            in
+            apply_cont cont env (Database.execute_select fields q db)
+	 end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
