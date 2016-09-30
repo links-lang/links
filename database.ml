@@ -105,7 +105,7 @@ let result_signature field_types result =
 ;;
 
 (*experimental *)
- let build_record_array (rs: (string * (Types.datatype * int)) list) (row:string array) = 
+ let _build_record_array (rs: (string * (Types.datatype * int)) list) (row:string array) = 
     let rec build rs l = 
       match rs with
       | [] -> l
@@ -180,7 +180,7 @@ let execute_select_result
        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
 (* Experimental code to build result using getvalue *)
-let build_result_deforest ((result:Value.dbvalue),rs) = 
+let _build_result_deforest ((result:Value.dbvalue),rs) = 
   let max = result#ntuples in
   let rec do_map n acc = 
     let rec build rs l = 
@@ -195,23 +195,20 @@ let build_result_deforest ((result:Value.dbvalue),rs) =
   in do_map 0 []  
     ;;
     
-let build_result_fun ((result:Value.dbvalue),rs) = 
+let build_result ((result:Value.dbvalue),rs) = 
   `List (result#map (fun row ->
                      `Record (build_record rs row))
 	   )
     ;;
 
 (* experimental *)
-let build_result_array ((result:Value.dbvalue),rs) = 
+let _build_result_array ((result:Value.dbvalue),rs) = 
   `List (result#map_array (fun row ->
-                     `Record (build_record_array rs row))
+                     `Record (_build_record_array rs row))
 	   )
     ;;
 
-let build_result (result,rs) = build_result_fun (result,rs)
-;;
-
-let execute_select_old
+let _execute_select_old
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
   let result = db#exec query in
@@ -234,20 +231,13 @@ let execute_select_old
 	
 
 
-let execute_select_new
+let execute_select
     (field_types:(string * Types.datatype) list) (query:string) (db : database)
     : Value.t =
   let result,rs = execute_select_result field_types query db in 
   build_result (result,rs)
 ;;
     
-
-let execute_select  
-  (field_types:(string * Types.datatype) list) (query:string) (db : database)
-    : Value.t =
-  if Settings.get_value Basicsettings.fast_execute_select 
-  then execute_select_new field_types query db
-  else execute_select_old field_types query db
 
 let execute_untyped_select (query:string) (db: database) : Value.t =
   let result = (db#exec query) in

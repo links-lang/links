@@ -367,10 +367,8 @@ struct
     fun p -> stitch_mapped_query (stitch_map p)
 
   let stitch_query vp =  
-    if Settings.get_value Basicsettings.fast_stitch
-    then stitch_query_new vp
-    else stitch_query_old vp
-
+    stitch_query_new vp
+    
 end
 
 

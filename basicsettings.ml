@@ -94,11 +94,5 @@ let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
 
-(* experimental: faster stitching code *)
-let fast_stitch = Settings.add_bool("fast_stitch", true, `User)
-
-(* experimental: faster version of execute_select *)
-let fast_execute_select = Settings.add_bool("fast_execute_select", true, `User)
-
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths = Settings.add_string("links_file_paths", "", `User)
