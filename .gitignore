@@ -33,7 +33,17 @@ doc/*.log
 doc/*.pdf
 doc/*.toc
 
+# files generated automatically by oasis from _oasis file
+_tags
+myocamlbuild.ml.bak
+#setup.ml
+
 # ocamlbuild artefacts
 _build
 links.byte
 links.native
+META
+setup.data
+setup.log
+*.mllib
+*.mldylib
