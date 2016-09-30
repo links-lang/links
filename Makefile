@@ -128,7 +128,7 @@ SOURCES = $(OPC)                                \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
-          query.ml                              \
+          query.mli query.ml                              \
           queryshredding.ml                     \
           evalir.ml                             \
           buildTables.ml                        \
