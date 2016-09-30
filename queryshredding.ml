@@ -2236,25 +2236,14 @@ struct
             in
               "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
         | `With (x, q, z, q') ->
-	    if Settings.get_value Basicsettings.inline_with
-	    then 
-              let q' =
-            (* Inline the query *)
-		match q' with
-		| `Select (fields, tables, condition, os) ->
-                    `Select (fields, ("(" ^ sq q ^ ")", z) :: tables, condition, os)
-		| _ -> assert false
-	      in 
-	      sq q'
-	    else
-              let q' =
-            (* HACK: pretend that the subquery name x is a table name *)
-		match q' with
-		| `Select (fields, tables, condition, os) ->
-                    `Select (fields, (string_of_subquery_var x, z) :: tables, condition, os)
-		| _ -> assert false
-              in
-              "with " ^ string_of_subquery_var x ^ " as (" ^ sq q ^ ") " ^ sq q'
+            let q' =
+              (* Inline the query *)
+	      match q' with
+	      | `Select (fields, tables, condition, os) ->
+                  `Select (fields, ("(" ^ sq q ^ ")", z) :: tables, condition, os)
+	      | _ -> assert false
+	    in 
+	    sq q'
 
           
   and string_of_base db one_table b =
@@ -2592,7 +2581,7 @@ let compile_shredded : Value.env -> (int * int) option * Ir.computation
           let p = ShreddedSql.unordered_query_package db range t v in
             Some (db, p)
 
-let compile : Value.env -> (int * int) option * Ir.computation
+let _compile : Value.env -> (int * int) option * Ir.computation
               -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.Show_computation.show e); *)
@@ -2606,7 +2595,7 @@ let compile : Value.env -> (int * int) option * Ir.computation
               Debug.print ("Generated query: "^q);
               Some (db, q, t)
 
-let compile_update : Value.database -> Value.env ->
+let _compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
   fun db env ((x, table, field_types), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
@@ -2618,7 +2607,7 @@ let compile_update : Value.database -> Value.env ->
       Debug.print ("Generated update query: "^q);
       q
 
-let compile_delete : Value.database -> Value.env ->
+let _compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
   fun db env ((x, table, field_types), where) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in

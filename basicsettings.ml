@@ -91,9 +91,6 @@ let optimise = Settings.add_bool("optimise", false, `User)
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 
-(* Inlining with-clauses *)
-let inline_with = Settings.add_bool("inline_with", true, `User)
-
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
 
