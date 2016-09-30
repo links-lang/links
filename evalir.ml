@@ -455,9 +455,9 @@ module Eval = struct
 		 let raw_results =
 		   Queryshredding.Shred.pmap execute_shredded_raw p in
 		 let mapped_results =
-		   Queryshredding.Shred.pmap Queryshredding.FastStitching.build_stitch_map raw_results in
+		   Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
                  apply_cont cont env
-		   (Queryshredding.Shred.stitch_mapped_query mapped_results)
+		   (Queryshredding.Stitch.stitch_mapped_query mapped_results)
                end
 	 end
        else (* shredding disabled *)

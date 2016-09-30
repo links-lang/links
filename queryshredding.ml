@@ -1,35 +1,6 @@
 (*pp deriving *)
 open Utility
 
-module NormalForms =
-struct
-  (*
-     This module gives the datatype of normal forms for query
-     expressions.
-
-     Instead of using normal forms we use a single datatype t as it
-     makes the implementation considerably simpler.
-
-     At some point it might be interesting to try to target the normal
-     form directly.
-  *)
-
-  type base =
-      [ `If of base * base * base
-      | `Project of (Var.var * StringSet.t) * string | `Erase of (Var.var * StringSet.t) * string
-      | `Apply of string * base list
-      | `Constant of Constant.constant ]
-
-  type tail =
-      [ `Where of base * tail
-      | `SingletonRecord of base StringMap.t ]
-
-  type generator = Var.var * Value.table
-  type comprehension = generator list * base list * tail
-  type query = comprehension list
-end
-
-      
 type tag = int
      deriving (Show)
 
@@ -50,7 +21,9 @@ and env = Value.env * t Env.Int.t
     deriving (Show)
 
 (* takes a normal form expression and returns true iff it has list type *)
-let is_list =
+let is_list = Query.is_list
+;;
+(*
   function
     | `For _
     | `Table _
@@ -58,7 +31,7 @@ let is_list =
     | `Concat _
     | `If (_, _, `Concat []) -> true
     | _ -> false    
-
+*)
 
 (* generate a unique tag for each comprehension in
    a normalised query
@@ -288,122 +261,19 @@ struct
   let shred_query_type : nested_type -> shredded_type package =
     fun t -> package (shred_outer_type t) t               
 
-(* This is very very slow. *)
-(* The problem is we re-traverse `List vs once per a,d pair. *)
-  let rec stitch_old : Value.t -> Value.t package -> Value.t =
-    fun v t ->
-      match v, t with
-        | c, `Primitive t -> c
-        | `Record fs, `Record fts ->
-          `Record
-            (List.map (fun (l, v) -> (l, stitch_old v (StringMap.find l fts))) fs)
-        | `Record [("1", `Int a); ("2", `Int d)], `List (t, `List vs) ->
-          `List
-            (List.fold_right
-               (function
-                 | `Record [("1", (`Record [("1", `Int a'); ("2", `Int d')])); ("2", w)] ->
-                   fun ws ->
-                     if a = a' && d = d' then
-                       (stitch_old w t) :: ws
-                     else
-                       ws
-                 | _ -> assert false)
-               vs
-               [])
-        | _, _ -> assert false
 
-  let stitch_query_old : Value.t package -> Value.t =
-    fun p ->
-      stitch_old (`Record [("1", `Int top); ("2", `Int 1)]) p
 
-(* Alternative stitching: bottom up. *)
-(* First, we traverse Value.t package from bottom up and convert lists to value maps indexed by a,d pairs. *)
-  
-(* Used in FastStitching also. *)
-
-  let lookup (a,d) m = 
-    if IntPairMap.mem(a,d) m 
-    then IntPairMap.find (a,d) m 
-    else []
-
-  let insert (a,d) w m = 
-    IntPairMap.add (a,d) (w::lookup(a,d) m) m
-	  
-  let empty = IntPairMap.empty
-
-  let build_stitch_map (x) = 
-    match x with 
-    | `List vs -> 
-	List.fold_right (fun v m -> 
-	  match v with 
-	  | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
-		      ("2", w)] ->
-			insert (a, d) w m
-	  | _ -> assert false) vs empty
-    | _ -> assert false
-
-  let stitch_map : Value.t package -> Value.t list IntPairMap.t package = 
-    pmap build_stitch_map 
-    
- let rec stitch_new : Value.t -> Value.t list IntPairMap.t package -> Value.t =
-    fun v t ->
-      match v, t with
-        | c, `Primitive t -> c
-        | `Record fs, `Record fts ->
-          `Record
-            (List.map (fun (l, v) -> (l, stitch_new v (StringMap.find l fts))) fs)
-        | `Record [("1", `Int a); ("2", `Int d)], `List (t, m) ->
-          (*`List (List.map (fun w -> stitch_new w t) 
-		   (lookup (a, d) m))*)
-          `List (List.fold_left (fun l w -> stitch_new w t::l) [] 
-		   (lookup (a, d) m))       
-        | _, _ -> assert false
-
-  let stitch_mapped_query : Value.t list IntPairMap.t package -> Value.t = 
-      stitch_new (`Record [("1", `Int top); ("2", `Int 1)]) 
-	
-
-  let stitch_query_new : Value.t package -> Value.t =
-    fun p -> stitch_mapped_query (stitch_map p)
-
-  let stitch_query vp =  
-    stitch_query_new vp
-    
 end
 
 
 
 
-let unbox_xml =
-  function
-    | `XML xmlitem -> xmlitem
-    | _ -> failwith ("failed to unbox XML")
+(* Borrowed from Query.ml *)
 
-let unbox_pair =
-  function
-    | `Record fields ->
-        let x = StringMap.find "1" fields in
-        let y = StringMap.find "2" fields in
-          x, y
-    | _ -> failwith ("failed to unbox pair")
-
-let rec unbox_list =
-  function
-    | `Concat vs -> concat_map unbox_list vs
-    | `Singleton v -> [v]
-    | _ -> failwith ("failed to unbox list")
-
-let unbox_string =
-  function
-    | `Constant (`String s) -> s
-    | (`Concat _ | `Singleton _) as v ->
-        implode
-          (List.map
-             (function
-                | `Constant (`Char c) -> c
-                | _ -> failwith ("failed to unbox string"))
-             (unbox_list v))
-    | _ -> failwith ("failed to unbox string")
+let unbox_xml = Query.unbox_xml
+let unbox_pair = Query.unbox_pair
+let unbox_list = Query.unbox_list
+let unbox_string = Query.unbox_string
 
 (** Returns which database was used if any.
 
@@ -502,6 +372,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Singleton t -> Types.make_list_type (te t)
       | `Record fields -> record fields
       | `If (_, t, _) -> te t
+	    (* jcheney: This looks fishy *)
       | `Table (_, _, _, row) -> `Record row
       | `Constant (`Bool b) -> Types.bool_type
       | `Constant (`Int i) -> Types.int_type
@@ -513,37 +384,9 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
-let default_of_base_type : Types.primitive -> t =
-  function
-    | `Bool   -> `Constant (`Bool false)
-    | `Int    -> `Constant (`Int 42)
-    | `Char   -> `Constant (`Char '?')
-    | `Float  -> `Constant (`Float 0.0)
-    | `String -> `Constant (`String "")
-    | _       -> assert false
-
-let rec value_of_expression : t -> Value.t = fun v ->
-  let ve = value_of_expression in
-  let value_of_singleton = fun s ->
-    match s with
-      | `Singleton v -> ve v
-      | _ -> assert false
-  in
-    match v with
-      | `Constant (`Bool b) -> `Bool b
-      | `Constant (`Int i) -> `Int i
-      | `Constant (`Char c) -> `Char c
-      | `Constant (`Float f) -> `Float f
-      | `Constant (`String s) -> Value.box_string s
-      | `Table t -> `Table t
-      | `Concat vs -> `List (List.map value_of_singleton vs)
-      | `Variant (name, v) -> `Variant (name, ve v)
-      | `XML xmlitem -> `XML xmlitem
-      | `Record fields ->
-          `Record (List.rev (StringMap.fold (fun name v fields ->
-                                               (name, ve v)::fields)
-                               fields []))
-      | _ -> assert false
+let default_of_base_type = Query.default_of_base_type
+    
+let rec value_of_expression = Query.value_of_expression;;
 
 let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
   fun env v ->
@@ -582,24 +425,17 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
         end
       | `Constant c -> `Constant c
 
-let labels_of_field_types field_types =
-  StringMap.fold
-    (fun name _ labels' ->
-      StringSet.add name labels')
-    field_types
-    StringSet.empty
 
-let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-  let (field_spec_map, _, _) = TypeUtils.extract_row t in
-  StringMap.map (function
-                  | `Present t -> t
-                  | _ -> assert false) field_spec_map
-  
-let table_field_types (_, _, _, (fields, _, _)) =
-  StringMap.map (function
-                  | `Present t -> t
-                  | _ -> assert false) fields
+(* More borrowing from Query. *)
 
+let labels_of_field_types field_types = Query.labels_of_field_types field_types
+
+let record_field_types = Query.record_field_types
+    
+let table_field_types = Query.table_field_types
+
+    (* Cannot be borrowed because of call to type_of_expression. *)
+    
 let rec field_types_of_list =
   function
     | `Concat (v::vs) -> field_types_of_list v
@@ -607,6 +443,7 @@ let rec field_types_of_list =
     | `Table table -> table_field_types table
     | _ -> assert false
 
+	  (* TODO: Clean up and unify with Query.Eval *)
 module Eval =
 struct
   exception DbEvaluationError of string
@@ -1548,37 +1385,14 @@ struct
              fields
              StringMap.empty)
 
-  let rec unflatten_record : shredded_value StringMap.t -> shredded_type -> (string * Value.t) list -> Value.t =
-    let rec listify_records : shredded_value -> Value.t =
-      function
-        | `Record fields -> `Record (StringMap.to_alist (StringMap.map listify_records fields))
-        | `Primitive v -> v
-    in
-      fun output_fields t ->
-        function
-          | [] -> listify_records (fill t (`Record output_fields))
-          | [("_", v)] -> v            
-          | (name, v) :: fields ->
-            let names = split_string name '_' in
-              unflatten_record (unflatten_field names v output_fields) t fields
-
-
-  let unflatten_list_old : (Value.t * flat_type) -> Value.t =
-    fun (v, t) ->
-      match v with
-        | `List vs ->
-          let t' = unflatten_type t in
-	  `List (List.map (unflatten_record StringMap.empty t' -<- Value.unbox_record) vs)
-        | _ -> assert false    
-
-(* Above appears slow.  Possibly because of repeated construction/discarding of string maps that relate the flattened and unflattened records. 
-Plan: 
+(* 
+Fast unflattening.
 1. Following definition of unflatten_type, build a record template that shows how to construct each unflattened record by copying fields from flattened record.  (This can bake-in the "fill" operation too.)
 2. Define a function that takes a flattened record and template and constructs the corresponding unflattened record.
 3. Map across the list of records.
 *)
 
-(* code used in fast version of unflatten_list and FastStitching *)
+(* code used in fast version of unflatten_list and Stitch *)
   type 'a template = 
     [ `Primitive of 'a
     | `Record of (string * 'a template) list
@@ -1620,7 +1434,7 @@ Plan:
 		
 	in build template
 
-  let unflatten_list_new : (Value.t * flat_type) -> Value.t =
+  let unflatten_list : (Value.t * flat_type) -> Value.t =
     fun (v, t) ->
       match v with
         | `List vs ->
@@ -1629,15 +1443,44 @@ Plan:
 	  `List (List.map (build_unflattened_record tmpl) vs)
         | _ -> assert false    
 
-  let unflatten_list vt = 
-    unflatten_list_new vt
-
 end
 
-module FastStitching = 
+
+    (* TODO: Untangle dependency on FlattenRecords.template *)
+module Stitch = 
 struct
 
-(* Experimental stuff *) 
+  (* Stitching *)
+(* First, we traverse Value.t package from bottom up and convert lists to value maps indexed by a,d pairs. *)
+  
+  let lookup (a,d) m = 
+    if IntPairMap.mem(a,d) m 
+    then IntPairMap.find (a,d) m 
+    else []
+
+  let insert (a,d) w m = 
+    IntPairMap.add (a,d) (w::lookup(a,d) m) m
+	  
+  let empty = IntPairMap.empty
+
+  let rec stitch : Value.t -> Value.t list IntPairMap.t Shred.package -> Value.t =
+    fun v t ->
+      match v, t with
+        | c, `Primitive t -> c
+        | `Record fs, `Record fts ->
+          `Record
+            (List.map (fun (l, v) -> (l, stitch v (StringMap.find l fts))) fs)
+        | `Record [("1", `Int a); ("2", `Int d)], `List (t, m) ->
+          (*`List (List.map (fun w -> stitch w t) 
+		   (lookup (a, d) m))*)
+          `List (List.fold_left (fun l w -> stitch w t::l) [] 
+		   (lookup (a, d) m))       
+        | _, _ -> assert false
+
+
+
+	      
+
 (* Builds maps from int.  This can be fed into the fast version of shredding above.  It may be possible to do better by having the incoming tables sorted in the database and building the maps by partitioning the tables in one pass.
 Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usually small into a single integer, would also be a good optimization but would make things less uniform.  *)
 
@@ -1651,18 +1494,6 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
 	    
     in build template
 
-(* keeing this version around since it seems slightly faster in some cases, should try to find out why*)
-  let build_stitch_map_old (((vs:Value.dbvalue),rs),t) = 
-    let st = FlattenRecords.unflatten_type t in
-    let tmpl = FlattenRecords.make_template st in
-    let tmpl' = FlattenRecords.template_map (fun x -> List.assoc x rs) tmpl in 
-    vs#fold_array (fun row (m) -> 
-      let rcd = build_unflattened_record_from_array tmpl' row in
-      match rcd with 
-      | `Record [("1", (`Record [("1", `Int a); ("2", `Int d)])); 
-		  ("2", w)] ->
-		    Shred.insert (a, d) w m
-      | _ -> assert false) IntPairMap.empty
 
   let build_stitch_map (((vs:Value.dbvalue),rs),t) = 
     let st = FlattenRecords.unflatten_type t in
@@ -1678,408 +1509,16 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
       let w = build_unflattened_record_from_array w_tmpl row in
       let a = int_of_string(Array.get row a_idx) in 
       let d = int_of_string(Array.get row d_idx) in
-      Shred.insert (a,d) w m
+      insert (a,d) w m
     in vs#fold_array add_row_to_map IntPairMap.empty
 
+  let stitch_mapped_query : Value.t list IntPairMap.t Shred.package -> Value.t = 
+      stitch (`Record [("1", `Int Shred.top); ("2", `Int 1)]) 
+	
 
 end
 
-module Sql =
-struct
-  type query =
-    [ `UnionAll of query list * int
-    | `Select of (base * string) list * (string * Var.var) list * base * base list ]
-  and base =
-    [ `Case of (base * base * base)
-    | `Constant of Constant.constant
-    | `Project of Var.var * string
-    | `Apply of string * base list
-    | `Empty of query
-    | `Length of query ]
-      deriving (Show)
-
-  (* Table variables that are actually used are always bound in a for
-     comprehension. In this case the IR variable from the for
-     comprehension is used to generate the table variable.
-
-     e.g. if the IR variable is 1485 then the table variable is t1485
-  *)
-  let fresh_table_var : unit -> Var.var = Var.fresh_raw_var
-  let string_of_table_var var = "t" ^ string_of_int var
-
-  (* Because of limitations of SQL we sometimes need to generate dummy
-     table variables. These have the prefix "dummy" and have their own
-     name source. *)
-  let dummy_counter = ref 0
-  let reset_dummy_counter () = dummy_counter := 0
-  let fresh_dummy_var () =
-    incr dummy_counter;
-    "dummy" ^ string_of_int (!dummy_counter)
-
-  let string_of_label label =
-    if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier;
-                                 works in MySQL and PostgreSQL *)
-    else
-      label
-
-  module Arithmetic :
-  sig
-    val is : string -> bool
-    val gen : (string * string * string) -> string
-  end =
-  struct
-    let builtin_ops =
-      StringMap.from_alist
-        [ "+",   Some "+"  ;
-          "+.",  Some "+"  ;
-          "-",   Some "-"  ;
-          "-.",  Some "-"  ;
-          "*",   Some "*"  ;
-          "*.",  Some "*"  ;
-          "/",   None      ;
-          "^",   None      ;
-          "^.",  None      ;
-          "/.",  Some "/"  ;
-          "mod", Some "%"  ;
-	  (* FIXME: The SQL99 || operator is supported in PostgreSQL and
-	     SQLite but not in MySQL, where it denotes the logical or
-	     operator *)
-	  "^^",  Some "||" ]
-
-    let is x = StringMap.mem x builtin_ops
-    let sql_name op = val_of (StringMap.find op builtin_ops)
-    let gen (l, op, r) =
-      match op with
-        | "/" -> "floor("^l^"/"^r^")"
-        | "^" -> "floor(pow("^l^","^r^"))"
-        | "^." -> "pow("^l^","^r^")"
-        | _ -> "("^l^sql_name op^r^")"
-  end
-
-  module SqlFuns :
-  sig
-    val is : string -> bool
-    val name : string -> string
-  end =
-  struct
-    let funs =
-      StringMap.from_alist
-        [ "toUpper",  "upper";
-          "toLower",  "lower";
-          "ord",      "ord";
-          "chr",      "char";
-          "random",   "rand" ]
-
-    let is f = StringMap.mem f funs
-    let name f = StringMap.find f funs
-  end
-
-  let order_by_clause n =
-    if n == 0 then
-      ""
-    else
-      let rec order i n =
-        if i > n then
-          []
-        else
-          ("order_" ^ string_of_int i) :: order (i+1) n
-      in
-        " order by " ^ String.concat "," (order 1 n)
-
-  (* For `Empty and `Length we don't care about the actual data
-     returned. This allows these operators to take lists that have any
-     element type at all. *)
-
-  let rec string_of_query db ignore_fields q =
-    let sq = string_of_query db ignore_fields in
-    let sb = string_of_base db false in
-    let string_of_fields fields =
-      if ignore_fields then
-        "0 as dummy" (* SQL doesn't support empty records! *)
-      else
-        match fields with
-          | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
-          | fields ->
-            mapstrcat ","
-              (fun (b, l) ->
-                "(" ^ sb b ^ ") as "^ db#quote_field l) (* string_of_label l) *)
-              fields
-    in
-      match q with
-        | `UnionAll ([], _) -> assert false
-        | `UnionAll ([q], n) -> sq q ^ order_by_clause n
-        | `UnionAll (qs, n) ->
-          mapstrcat " union all " (fun q -> "(" ^ sq q ^ ")") qs ^ order_by_clause n
-        | `Select (fields, [], `Constant (`Bool true), _os) ->
-            let fields = string_of_fields fields in
-              "select " ^ fields
-        | `Select (fields, [], condition, _os) ->
-            let fields = string_of_fields fields in
-              "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
-        | `Select (fields, tables, condition, os) ->
-            let tables = mapstrcat "," (fun (t, x) -> t ^ " as " ^ (string_of_table_var x)) tables in
-            let fields = string_of_fields fields in
-            let orderby =
-              match os with
-                | [] -> ""
-                | _ -> " order by " ^ mapstrcat "," sb os in
-            let where =
-              match condition with
-                | `Constant (`Bool true) -> ""
-                | _ ->  " where " ^ sb condition
-            in
-              "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
-  and string_of_base db one_table b =
-    let sb = string_of_base db one_table in
-      match b with
-        | `Case (c, t, e) ->
-            "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
-        | `Constant c -> Constant.string_of_constant c
-        | `Project (var, label) ->
-            if one_table then
-              db#quote_field label
-            else
-              string_of_table_var var ^ "." ^ (db#quote_field label)
-        | `Apply (op, [l; r]) when Arithmetic.is op
-            -> Arithmetic.gen (sb l, op, sb r)
-        | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
-                  | "stringToFloat"), [v]) -> sb v
-        | `Apply ("floatToInt", [v]) -> "floor("^sb v^")"
-
-        (* optimisation *)
-        | `Apply ("not", [`Empty q]) -> "exists (" ^ string_of_query db true q ^ ")"
-
-        | `Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
-        | `Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
-        | `Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
-        | `Apply ("||", [v; w]) -> "(" ^ sb v ^ ")" ^ " or " ^ "(" ^ sb w ^ ")"
-        | `Apply ("==", [v; w]) -> "(" ^ sb v ^ ")" ^ " = " ^ "(" ^ sb w ^ ")"
-        | `Apply ("<>", [v; w]) -> "(" ^ sb v ^ ")" ^ " <> " ^ "(" ^ sb w ^ ")"
-        | `Apply ("<", [v; w]) -> "(" ^ sb v ^ ")" ^ " < " ^ "(" ^ sb w ^ ")"
-        | `Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
-        | `Apply ("<=", [v; w]) -> "(" ^ sb v ^ ")" ^ " <= " ^ "(" ^ sb w ^ ")"
-        | `Apply (">=", [v; w]) -> "(" ^ sb v ^ ")" ^ " >= " ^ "(" ^ sb w ^ ")"
-        | `Apply ("RLIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
-        | `Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
-        | `Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-        | `Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-        | `Empty q -> "not exists (" ^ string_of_query db true q ^ ")"
-        | `Length q -> "select count(*) from (" ^ string_of_query db true q ^ ") as " ^ fresh_dummy_var ()
-
-  let string_of_query db range q =
-    let range =
-      match range with
-        | None -> ""
-        | Some (limit, offset) -> " limit " ^ string_of_int limit^" offset "^ string_of_int offset
-    in
-      string_of_query db false q ^ range
-
-  let prepare_clauses : t -> t list =
-    function
-      | `Concat vs -> vs
-      | v -> [v]
-
-  let rec clause : Value.database -> t -> query = fun db v ->
-   (* Debug.print ("clause: "^string_of_t v); *)
-    match v with
-      | `Concat _ -> assert false
-      | `For (_, [], _, body) ->
-          clause db body
-      | `For (_, (x, `Table (_db, table, _keys, _row))::gs, os, body) ->
-          let body = clause db (`For (None, gs, [], body)) in
-          let os = List.map (base db) os in
-            begin
-              match body with
-                | `Select (fields, tables, condition, []) ->
-                    `Select (fields, (table, x)::tables, condition, os)
-                | _ -> assert false
-            end
-      | `If (c, body, `Concat []) ->
-        (* Turn conditionals into where clauses. We might want to do
-           this earlier on.  *)
-        let c = base db c in
-        let body = clause db body in
-          begin
-            match body with
-              | `Select (fields, tables, c', os) ->
-                let c =
-                  match c, c' with
-                    (* optimisations *)
-                    | `Constant (`Bool true), c
-                    | c, `Constant (`Bool true) -> c
-                    | `Constant (`Bool false), _
-                    | _, `Constant (`Bool false) -> `Constant (`Bool false)
-                    (* default case *)
-                    | c, c' -> `Apply ("&&", [c; c'])
-                in
-                  `Select (fields, tables, c, os)
-              | _ -> assert false
-          end
-      | `Table (_db, table, _, (fields, _, _)) ->
-        (* eta expand tables. We might want to do this earlier on.  *)
-        (* In fact this should never be necessary as it is impossible
-           to produce non-eta expanded tables. *)
-        let var = fresh_table_var () in
-        let fields =
-          List.rev
-            (StringMap.fold
-               (fun name _ fields ->
-                 (`Project (var, name), name)::fields)
-               fields
-               [])
-        in
-          `Select (fields, [(table, var)], `Constant (`Bool true), [])
-      | `Singleton (`Record fields) ->
-        let fields =
-          List.rev
-            (StringMap.fold
-               (fun name v fields ->
-                 (base db v, name)::fields)
-               fields
-               [])
-        in
-          `Select (fields, [], `Constant (`Bool true), [])
-
-      | `Singleton _ ->
-        (* If we're inside an `Empty or a `Length it's safe to
-           ignore any fields here. Otherwise this line should be
-           unreachable. *)
-        `Select ([], [], `Constant (`Bool true), [])
-      | _ -> assert false
-  and base : Value.database -> t -> base = fun db ->
-    function
-      | `If (c, t, e) ->
-        `Case (base db c, base db t, base db e)
-      | `Apply ("tilde", [s; r]) ->
-        begin
-          match likeify r with
-            | Some r ->
-              `Apply ("LIKE", [base db s; `Constant (`String r)])
-            | None ->
-              let r =
-                    (* HACK:
-
-                       this only works if the regexp doesn't include any variables bound by the query
-                    *)
-                    `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
-                  in
-                    `Apply ("RLIKE", [base db s; r])
-          end
-      | `Apply ("Empty", [v]) ->
-          `Empty (outer_query db v)
-      | `Apply ("length", [v]) ->
-          `Length (outer_query db v)
-      | `Apply (f, vs) ->
-          `Apply (f, List.map (base db) vs)
-      | `Project (`Var (x, _field_types), name) ->
-          `Project (x, name)
-      | `Constant c -> `Constant c
-      | _ -> assert false
-
-  (* convert a regexp to a like if possible *)
-  and likeify v =
-    let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
-      match v with
-        | `Variant ("Repeat", pair) ->
-            begin
-              match unbox_pair pair with
-                | `Variant ("Star", _), `Variant ("Any", _) -> Some ("%")
-                | _ -> None
-            end
-        | `Variant ("Simply", `Constant (`String s)) -> Some (quote s)
-        | `Variant ("Quote", `Variant ("Simply", v)) ->
-            (* TODO:
-
-               detect variables and convert to a concatenation operation
-               (this needs to happen in RLIKE compilation as well)
-            *)
-           let rec string =
-              function
-                | `Constant (`String s) -> Some s
-                | `Singleton (`Constant (`Char c)) -> Some (string_of_char c)
-                | `Concat vs ->
-                    let rec concat =
-                      function
-                        | [] -> Some ""
-                        | v::vs ->
-                            begin
-                              match string v with
-                                | None -> None
-                                | Some s ->
-                                    begin
-                                      match concat vs with
-                                        | None -> None
-                                        | Some s' -> Some (s ^ s')
-                                    end
-                            end
-                    in
-                      concat vs
-                | _ -> None
-            in
-              opt_map quote (string v)
-        | `Variant ("Seq", rs) ->
-            let rec seq =
-              function
-                | [] -> Some ""
-                | r::rs ->
-                    begin
-                      match likeify r with
-                        | None -> None
-                        | Some s ->
-                            begin
-                              match seq rs with
-                                | None -> None
-                                | Some s' -> Some (s^s')
-                            end
-                    end
-            in
-              seq (unbox_list rs)
-        | `Variant ("StartAnchor", _) -> Some ""
-        | `Variant ("EndAnchor", _) -> Some ""
-        | _ -> assert false
-  and outer_query db v =
-    `UnionAll (List.map (clause db) (prepare_clauses v), 0)
-
-  let unordered_query db range v =
-    (* Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    let vs = Split.query v in
-    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
-    let q = `UnionAll (List.map (clause db) vs, 0) in
-      string_of_query db range q
-
-  let update db ((x, table), where, body) =
-    reset_dummy_counter ();
-    let base = (base db) ->- (string_of_base db true) in
-    let where =
-      match where with
-        | None -> ""
-        | Some where ->
-            " where (" ^ base where ^ ")" in
-    let fields =
-      match body with
-        | `Record fields ->
-            String.concat ","
-              (List.map
-                 (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
-                 (StringMap.to_alist fields))
-        | _ -> assert false
-    in
-      "update "^table^" set "^fields^where
-
-  let delete db ((x, table), where) =
-    reset_dummy_counter ();
-    let base = base db ->- (string_of_base db true) in
-    let where =
-      match where with
-        | None -> ""
-        | Some where ->
-            " where (" ^ base where ^ ")"
-    in
-      "delete from "^table^where
-end
-
+(* TODO: Unify / subsume Query.Sql *)
 module ShreddedSql =
 struct
   type query =
@@ -2532,35 +1971,7 @@ struct
     let typed_query_package = Shred.pzip query_package query_type_package in
       typed_query_package
 
-  let _update db ((x, table), where, body) =
-    reset_dummy_counter ();
-    let base = base db [] ->- (string_of_base db true) in
-    let where =
-      match where with
-        | None -> ""
-        | Some where ->
-            " where (" ^ base where ^ ")" in
-    let fields =
-      match body with
-        | `Record fields ->
-            String.concat ","
-              (List.map
-                 (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
-                 (StringMap.to_alist fields))
-        | _ -> assert false
-    in
-      "update "^table^" set "^fields^where
 
-  let _delete db ((x, table), where) =
-    reset_dummy_counter ();
-    let base = base db [] ->- (string_of_base db true) in
-    let where =
-      match where with
-        | None -> ""
-        | Some where ->
-            " where (" ^ base where ^ ")"
-    in
-      "delete from "^table^where
 end
    
 
@@ -2575,37 +1986,3 @@ let compile_shredded : Value.env -> (int * int) option * Ir.computation
           let p = ShreddedSql.unordered_query_package db range t v in
             Some (db, p)
 
-let _compile : Value.env -> (int * int) option * Ir.computation
-              -> (Value.database * string * Types.datatype) option =
-  fun env (range, e) ->
-    (* Debug.print ("e: "^Ir.Show_computation.show e); *)
-    let v = Eval.eval env e in
-      (* Debug.print ("v: "^string_of_t v); *)
-      match used_database v with
-        | None -> None
-        | Some db ->
-            let t = type_of_expression v in
-            let q = Sql.unordered_query db range v in
-              Debug.print ("Generated query: "^q);
-              Some (db, q, t)
-
-let _compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
-  fun db env ((x, table, field_types), where, body) ->
-    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
-    let where = opt_map (Eval.computation env) where in
-(*       Debug.print ("body: "^Ir.Show_computation.show body); *)
-    let body = Eval.computation env body in
-    let q = Sql.update db ((x, table), where, body) in
-      Debug.print ("Generated update query: "^q);
-      q
-
-let _compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
-  fun db env ((x, table, field_types), where) ->
-    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-    let where = opt_map (Eval.computation env) where in
-    let q = Sql.delete db ((x, table), where) in
-      Debug.print ("Generated update query: "^q);
-      q

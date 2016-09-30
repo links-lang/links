@@ -182,7 +182,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
-let default_of_base_type : Types.primitive -> t =
+let default_of_base_type =
   function
     | `Bool   -> `Constant (`Bool false)
     | `Int    -> `Constant (`Int 42)
@@ -191,7 +191,7 @@ let default_of_base_type : Types.primitive -> t =
     | `String -> `Constant (`String "")
     | _       -> assert false
 
-let rec value_of_expression : t -> Value.t = fun v ->
+let rec value_of_expression = fun v ->
   let ve = value_of_expression in
   let value_of_singleton = fun s ->
     match s with
@@ -275,21 +275,26 @@ let rec field_types_of_list =
     | `Table table -> table_field_types table
     | _ -> assert false
 
+	  (* takes a normal form expression and returns true iff it has list type *)
+let is_list =
+  function
+    | `For _
+    | `Table _
+    | `Singleton _
+    | `Concat _
+    | `If (_, _, `Concat []) -> true
+    | _ -> false
+	  
+
+	  (* TODO: Clean up and unify with Queryshredding.Eval *)
+	  
 module Eval =
 struct
   exception DbEvaluationError of string
 
   let nil = `Concat []
 
-  (* takes a normal form expression and returns true iff it has list type *)
-  let is_list =
-    function
-      | `For _
-      | `Table _
-      | `Singleton _
-      | `Concat _
-      | `If (_, _, `Concat []) -> true
-      | _ -> false
+
 
   let eval_error fmt =
     let error msg = raise (DbEvaluationError msg) in
@@ -1176,6 +1181,8 @@ struct
 end
 
 
+    (* TODO: Unify this with Queryshredding.ShreddedSql *)
+    
 module Sql =
 struct
   type query =
