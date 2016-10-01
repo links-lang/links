@@ -154,20 +154,18 @@ Library links
                 XmlLexer,
                 XmlParser
 
-Library links-postgres
-  FindLibName   : postgres
-  FindLibParent : links
-  Path          : lib
+BetaFeatures: section_object
+
+Object links-postgres
+  Path          : lib/postgres
   Build        $: flag(postgres)
   Install       : false
   BuildTools    : ocamlbuild
   BuildDepends  : links, postgresql
   Modules       : Pg_database
 
-Library links-mysql
-  FindLibName   : mysql
-  FindLibParent : links
-  Path          : lib
+Object links-mysql
+  Path          : lib/mysql
   Build        $: flag(mysql)
   Install       : false
   BuildTools    : ocamlbuild
@@ -175,30 +173,24 @@ Library links-mysql
   Modules       : Mysql_database
 
 # JSTOLAREK : I think there might be some extra C dependencies not ported from the Makefile
-Library links-sqlite
-  FindLibName   : sqlite
-  FindLibParent : links
-  Path          : lib
+Object links-sqlite
+  Path          : lib/lite
   Build        $: flag(sqlite)
   Install       : false
   BuildTools    : ocamlbuild
   BuildDepends  : links, sqlite
   Modules       : Lite_database
 
-Library links-sqlite3
-  FindLibName   : sqlite3
-  FindLibParent : links
-  Path          : lib
+Object links-sqlite3
+  Path          : lib/lite3
   Build        $: flag(sqlite3)
   Install       : false
   BuildTools    : ocamlbuild
   BuildDepends  : links, sqlite3
   Modules       : Lite3_database
 
-Library links-monetdb
-  FindLibName   : monetdb
-  FindLibParent : links
-  Path          : lib
+Object links-monetdb
+  Path          : lib/monetdb
   Build        $: flag(monetdb)
   Install       : false
   BuildTools    : ocamlbuild
