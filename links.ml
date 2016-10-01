@@ -101,6 +101,12 @@ let rec directives
           iter (Printf.fprintf stderr " %s\n") (Settings.print_settings ())),
      "print available settings");
 
+    "drivers",
+    (ignore_envs
+       (fun _ ->
+          iter (Printf.fprintf stderr " %s\n") (Value.print_drivers ())),
+     "print available database drivers");
+
     "set",
     (ignore_envs
        (function (name::value::_) -> Settings.parse_and_set_user (name, value)

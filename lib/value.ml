@@ -64,6 +64,8 @@ type db_constructor = string -> (database * string)
 
 let database_drivers = ref ([] : (string * db_constructor) list)
 
+let print_drivers () = List.map fst !database_drivers
+
 (** [register_driver (name, driver)] registers a DB [driver] under the
     name [name]. *[driver] is a function taking the database params (a
     string with db-specific colon-separated fields) to a pair of
