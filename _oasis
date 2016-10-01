@@ -63,7 +63,7 @@ Flag monetdb
   Default     : false
 
 Library links
-  Path        : .
+  Path        : lib
   Build       : true
   Install     : false
   BuildTools  : ocamlbuild
@@ -157,7 +157,7 @@ Library links
 Library links-postgres
   FindLibName   : postgres
   FindLibParent : links
-  Path          : .
+  Path          : lib
   Build        $: flag(postgres)
   Install       : false
   BuildTools    : ocamlbuild
@@ -167,7 +167,7 @@ Library links-postgres
 Library links-mysql
   FindLibName   : mysql
   FindLibParent : links
-  Path          : .
+  Path          : lib
   Build        $: flag(mysql)
   Install       : false
   BuildTools    : ocamlbuild
@@ -178,7 +178,7 @@ Library links-mysql
 Library links-sqlite
   FindLibName   : sqlite
   FindLibParent : links
-  Path          : .
+  Path          : lib
   Build        $: flag(sqlite)
   Install       : false
   BuildTools    : ocamlbuild
@@ -188,7 +188,7 @@ Library links-sqlite
 Library links-sqlite3
   FindLibName   : sqlite3
   FindLibParent : links
-  Path          : .
+  Path          : lib
   Build        $: flag(sqlite3)
   Install       : false
   BuildTools    : ocamlbuild
@@ -198,7 +198,7 @@ Library links-sqlite3
 Library links-monetdb
   FindLibName   : monetdb
   FindLibParent : links
-  Path          : .
+  Path          : lib
   Build        $: flag(monetdb)
   Install       : false
   BuildTools    : ocamlbuild
