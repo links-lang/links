@@ -1,3 +1,6 @@
+# Squeeze a bit of parallelism out of ocamlbuild
+BUILDFLAGS=-j 0
+
 # OASIS_START
 # DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
 
