@@ -31,7 +31,7 @@ Description : Links eases building interactive web applications with significant
 Authors      : The Links Team
 License      : GPL-2
 LicenseFile  : LICENSE
-Plugins      : META (0.4), DevFiles (0.4)
+Plugins      : DevFiles (0.4)
 BuildType    : ocamlbuild (0.4)
 Homepage     : http://www.links-lang.org/
 BugReports   : https://github.com/links-lang/links/issues
