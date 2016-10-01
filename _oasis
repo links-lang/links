@@ -44,7 +44,7 @@ SourceRepository github
   Branch      : sessions
   Browser     : https://github.com/links-lang/links
 
-Flag postgres
+Flag postgresql
   Description : Enable PostgreSQL database backend
   Default     : false
 
@@ -158,9 +158,9 @@ Library links
 
 BetaFeatures: section_object
 
-Object links-postgres
+Object links-postgresql
   Path          : lib/postgres
-  Build        $: flag(postgres)
+  Build        $: flag(postgresql)
   Install       : false
   BuildTools    : ocamlbuild
   BuildDepends  : links, postgresql
