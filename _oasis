@@ -36,6 +36,8 @@ BuildType    : ocamlbuild (0.4)
 Homepage     : http://www.links-lang.org/
 BugReports   : https://github.com/links-lang/links/issues
 
+OCamlVersion: >= 4.00
+
 SourceRepository github
   Type        : git
   Location    : https://github.com/links-lang/links.git
