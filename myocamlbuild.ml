@@ -60,8 +60,6 @@ let () = dispatch (fun hook ->
     (* Run the normal build process *)
     dispatch_default hook ;
 
-    let env_filename = Pathname.basename BaseEnvLight.default_filename in
-    let env = BaseEnvLight.load ~filename:env_filename ~allow_empty:true () in
-
+    let env = BaseEnvLight.load () in
     List.iter (link_conditionally env) flags ;
   )
