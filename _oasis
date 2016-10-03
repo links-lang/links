@@ -31,12 +31,12 @@ Description : Links eases building interactive web applications with significant
 Authors      : The Links Team
 License      : GPL-2
 LicenseFile  : LICENSE
+OCamlVersion : >= 4.02
 Plugins      : DevFiles (0.4)
 BuildType    : ocamlbuild (0.4)
 Homepage     : http://www.links-lang.org/
 BugReports   : https://github.com/links-lang/links/issues
 
-OCamlVersion: >= 4.00
 
 SourceRepository github
   Type        : git

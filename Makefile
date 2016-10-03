@@ -1,5 +1,10 @@
-# Squeeze a bit of parallelism out of ocamlbuild
-BUILDFLAGS=-j 0
+# Squeeze a bit of parallelism out of ocamlbuild.
+# User can override THREADS on the command line
+ifndef THREADS
+   THREADS=0
+endif
+
+BUILDFLAGS=-j $(THREADS)
 
 # OASIS_START
 # DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
