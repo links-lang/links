@@ -38,7 +38,6 @@ BuildType       : ocamlbuild (0.4)
 Homepage        : http://www.links-lang.org/
 BugReports      : https://github.com/links-lang/links/issues
 
-
 SourceRepository github
   Type          : git
   Location      : https://github.com/links-lang/links.git
@@ -209,3 +208,21 @@ Executable linksi
   DataFiles     : prelude.links
   CompiledObject: native
   BuildDepends  : links
+
+Test tests
+  Command          : ./run-tests
+  WorkingDirectory : .
+
+Document quick-help
+  Title         : User's Guide
+  Type          : custom (0.4)
+  Build         : true
+  XCustom       : cd doc && make
+  XCustomClean  : cd doc && make clean
+
+Document grammar
+  Title         : Grammar
+  Type          : custom (0.4)
+  Build         : true
+  XCustom       : cd doc && make grammar.pdf
+  XCustomClean  : cd doc && make clean

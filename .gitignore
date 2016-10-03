@@ -36,7 +36,7 @@ doc/*.toc
 # files generated automatically by oasis from _oasis file
 _tags
 myocamlbuild.ml.bak
-#setup.ml
+myocamlbuild.ml.ba0
 
 # ocamlbuild artefacts
 _build
@@ -47,3 +47,6 @@ setup.data
 setup.log
 *.mllib
 *.mldylib
+
+# profiling data
+gmon.out

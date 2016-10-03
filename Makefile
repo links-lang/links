@@ -47,3 +47,8 @@ configure:
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
 # OASIS_STOP
+
+.PHONY: fixmes
+
+fixmes:
+	@grep FIXME *.ml *.mli *.mly *.mll
