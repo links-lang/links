@@ -48,11 +48,11 @@ let link_conditionally env (flag, file) =
 (** The list of flag that have associated libraries
     that we want conditionally linked. *)
 let flags = [
-  "postgresql", "lib/postgres/pg_database" ;
-  "mysql", "lib/mysql/mysql_database" ;
-  "sqlite", "lib/lite/lite_database" ;
-  "sqlite3", "lib/lite3/lite3_database" ;
-  "monetdb", "lib/monetdb/m5_database" ;
+  "postgresql", "lib/postgresql/pg_database" ;
+  "mysql"     , "lib/mysql/mysql_database"   ;
+  "sqlite"    , "lib/lite/lite_database"     ;
+  "sqlite3"   , "lib/lite3/lite3_database"   ;
+  "monetdb"   , "lib/monetdb/m5_database"    ;
 ]
 
 let () = dispatch (fun hook ->

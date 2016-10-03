@@ -159,7 +159,7 @@ Library links
 BetaFeatures: section_object
 
 Object links-postgresql
-  Path          : lib/postgres
+  Path          : lib/postgresql
   Build        $: flag(postgresql)
   Install       : false
   BuildTools    : ocamlbuild
