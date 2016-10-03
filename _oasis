@@ -65,7 +65,7 @@ Flag monetdb
   Default     : false
 
 Library links
-  Path        : lib
+  Path        : .
   Build       : true
   Install     : false
   BuildTools  : ocamlbuild
