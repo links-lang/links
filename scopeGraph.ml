@@ -11,28 +11,19 @@ type scope_id = int
 
 (* Declaration -- generally a binder. Contains name, position, and optional
  * named scope reference *)
-type declaration = (string * scope_id option)
+type declaration = (name * scope_id option)
 
 (* Name of a reference (function application, argument, etc.) *)
-type reference = string
+type reference = name
 
 (* Name of an import (either in-module or out-of-module *)
-type import  = string
+type import  = name
 
 module Decl = struct
   type t = declaration
   (* Deriving makes it nigh-on impossible to use Pervasives.compare. Great.
    * This is an ungodly awful hack. *)
   let compare = Pervasives.compare
-  (*
-    let opt_as_str opt =
-      (match opt with
-         | Some sc1_id -> string_of_int sc1_id
-         | None -> "NONE") in
-    let opt1_str = opt_as_str opt1 in
-    let opt2_str = opt_as_str opt2 in
-    String.compare (s1 ^ opt1_str) (s2 ^ opt2_str)
-  *)
   module Show_t = Deriving_Show.Show_unprintable (struct type a = t end)
 end
 
@@ -70,6 +61,12 @@ type scope_graph =
     (* Maps declarations to their fully-qualified paths *)
     path_map : path stringmap
   }
+
+type resolution_result = [
+  | `AmbiguousResolution of name list
+  | `SuccessfulResolution of name
+  | `UnsuccessfulResolution
+]
 
 let lookup_containing_scope ref sg =
   try
@@ -208,6 +205,14 @@ object(self)
            scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
     | `QualifiedVar ns ->
         self#qn_add_references ns
+    | `Block (bs, p) ->
+          let o = self#list (fun o -> o#binding) bs in
+          let (sc, sc_id, sg) = (o#get_scope, o#get_scope_id, o#get_scope_graph) in
+          let o_scope = (construct_sg sc sg sc_id [])#phrase p in
+          let (sc1, sc_id1, sg1) = (o_scope#get_scope, o_scope#get_scope_id, o_scope#get_scope_graph) in
+          (* Add phrase scope to the SG and we're away *)
+          let sg2 = add_scope sc_id1 sc1 sg1 in
+          {< scope_graph = sg2 >}
     | pn -> super#phrasenode pn
 
   (* Don't touch types on this pass *)
@@ -224,8 +229,8 @@ object(self)
         let o_scope = ((construct_sg fn_scope scope_graph fn_scope_num
           current_path_rev)#funlit fn_funlit) in
         (* Finally, get the updated scope graph, and add the new scope and declaration path. *)
-        let (fn_sg, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope) in
-        let new_sg = add_scope fn_scope_num fn_scope1 fn_sg in
+        let (fn_sg, fn_scope_id, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope_id, o_scope#get_scope) in
+        let new_sg = add_scope fn_scope_id fn_scope1 fn_sg in
         let final_sg = add_decl_path fn_name (List.rev current_path_rev) new_sg in
         {< scope = scope1; scope_graph = final_sg >}
     | `Funs _ ->
@@ -242,7 +247,7 @@ object(self)
         let next_scope_id = get_scope_num () in
         let next_scope = (add_import (add_reference (new_scope (Some scope_id)) n) n) in
         let sg2 = add_ref_scope_mapping n next_scope_id sg1 in
-        printf "Import: scope ID %d, next scope ID: %d\n" scope_id next_scope_id;
+        (* printf "Import: scope ID %d, next scope ID: %d\n" scope_id next_scope_id; *)
         (* Unqualified import. Add to imports list and references list. *)
         {< scope = next_scope; scope_id = next_scope_id; scope_graph = sg2 >}
     | `QualifiedImport ns ->
@@ -255,13 +260,12 @@ object(self)
         (* Firstly, add all segments of the qualified name into the imports list. *)
         let o1 = {< scope = next_scope; scope_id = next_scope_id; scope_graph = sg1 >} in
         let o2 = o1#qn_add_references ns in
-        let (sc, sc_id, sg) = (o2#get_scope, o2#get_scope_id, o2#get_scope_graph) in
-        let sg2 = add_scope sc_id sc sg1 in
+        let (sc, sc_id, sg2) = (o2#get_scope, o2#get_scope_id, o2#get_scope_graph) in
+        let sg3 = add_scope sc_id sc sg2 in
         let o3 = o1#list (fun o n ->
-            (* TODO: Does this need to add to the reference list? Or is this already taken care of? *)
             let modified_scope = add_import o#get_scope n in
             o#set_scope modified_scope) ns in
-        {< scope_graph = sg2; scope = o3#get_scope; scope_id = o3#get_scope_id >}
+        {< scope_graph = sg3; scope = o3#get_scope; scope_id = o3#get_scope_id >}
     | `Val (_tvs, pat, phr, _loc, _dtopt) ->
         (* (Deviating slightly from the algorithm in the paper here since our pattern
          * language is more complex).
@@ -326,7 +330,6 @@ object(self)
           (* Add final scope to the SG and we're away *)
           let sg2 = add_scope sc_id1 sc1 sg1 in
           {< scope = sc1; scope_id = sc_id1; scope_graph = sg2 >}
-
 end
 
 let create_scope_graph prog =
@@ -387,11 +390,6 @@ let shadow : DeclSet.t -> DeclSet.t -> scope_graph -> Uniquify.unique_ast -> Dec
   let set_plain_e2 = get_plain_names combined_e2 in
   let annotated_decl_list =
     (AnnotatedDeclSet.elements combined_e1) @ (AnnotatedDeclSet.elements combined_e2) in
- (*
-  let string_list =
-     List.map (fun ((d, _), plain_d) ->
-       "decl name: " ^ d ^ ", plain decl name: " ^ plain_d) annotated_decl_list in
-  printf "ANNOTATED DECL LIST: \n%s\n" (String.concat "\n" string_list); *)
   let overlapping_bindings = StringSet.inter set_plain_e1 set_plain_e2 in
 
   (* Result is the union of sets where the plain var isn't in the overlapping set *)
@@ -411,7 +409,7 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
   let rec resolve_name_inner ref_name seen_imports =
     let containing_scope_id = lookup_containing_scope ref_name sg in
     let plain_name = Uniquify.lookup_var ref_name u_ast in
-    printf "Resolving %s. Plain name: %s. Containing scope: %d\n" ref_name plain_name containing_scope_id;
+    (* printf "Resolving %s. Plain name: %s. Containing scope: %d\n" ref_name plain_name containing_scope_id; *)
     let vis_decls = visible_decls  (StringSet.add ref_name seen_imports) IntSet.empty containing_scope_id in
     (* Finally filter out irrelevant ones *)
     DeclSet.filter (fun (n, _d) -> (Uniquify.lookup_var n u_ast) = plain_name) vis_decls
@@ -486,7 +484,6 @@ let show_resolved_names sg unique_ast =
     (* Now, print the result. *)
     let formatted_resolution_list = List.map print_single_resolution_result resolution_results in
     sprintf "%s ----> %s\n" ref_name (print_list formatted_resolution_list) in
-
   let name_list = List.map fst (StringMap.bindings sg.reference_map) in
   printf "Reference list: %s\n" (print_list name_list);
   String.concat "" (List.map show_resolved_name name_list)
@@ -499,4 +496,10 @@ let make_and_print_scope_graph unique_ast =
   printf "====== RESOLUTIONS ======\n";
   printf "%s\n" (show_resolved_names sg unique_ast)
 
+let resolve_reference ref sg u_ast =
+  let resolution_results = DeclSet.elements (resolve_name ref sg u_ast) in
+  match resolution_results with
+    | [] -> `UnsuccessfulResolution
+    | [(x, _)] -> `SuccessfulResolution x
+    | x::xs -> `AmbiguousResolution (List.map fst (x::xs))
 

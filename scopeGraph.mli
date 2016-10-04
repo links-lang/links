@@ -17,10 +17,20 @@ type name = Sugartypes.name
 type fq_name = Sugartypes.name
 type unique_name = Sugartypes.name
 
-(* Given a unique declaration name and a scope graph, returns the
- * fully-qualified name of the declaration (or None if it doesn't exist) *)
-(* val get_fq_decl_name : unique_name -> scope_graph -> fq_name option *)
 
-(* Given a unique reference name and a scope graph, returns a list of possible
- * fully-qualified (plain) names *)
-(* val resolve_fq_name : unique_name -> scope_graph -> fq_name list *)
+type resolution_result = [
+  | `AmbiguousResolution of name list
+  | `SuccessfulResolution of name
+  | `UnsuccessfulResolution
+]
+
+(* Resolves a unique *declaration* name to a fully-qualified plain name *)
+val make_resolved_plain_name: unique_name -> scope_graph -> Uniquify.unique_ast -> name
+
+(* Resolves a unique *reference* name to a resolution_result, which will either
+ * be a successful resolution containing a single unique *declaration* name,
+ * a list of possible ambiguous resolutions (containing declaration names), or
+ * an unsuccessful resolution *)
+val resolve_reference: unique_name -> scope_graph -> Uniquify.unique_ast -> resolution_result
+
+val show_scope_graph : scope_graph -> string
