@@ -25,11 +25,15 @@ struct
 
   let program =
     fun tyenv pos_context program ->
-      let program = Chaser.add_dependencies "" program in
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
+      (* Module-y things *)
+      (* let program = Chaser.add_dependencies "" program in *)
+      let unique_ast = Uniquify.uniquify_ast program in
+      let scope_graph = ScopeGraph.create_scope_graph (Uniquify.get_ast unique_ast) in
+      (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
+      let program = DesugarModules.desugarModules scope_graph unique_ast in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
-        ->- DesugarModules.desugar_modules
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv
