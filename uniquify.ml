@@ -29,7 +29,9 @@ object (self)
     let uniquified_name = make_unique_name name in
     (self#add_name name uniquified_name, (uniquified_name, dt, pos))
 
-  method datatype = function
+  method datatype dt = (self, dt)
+  (* Jettisoned for now until we get the type SG going
+  function
     | `TypeVar (n, sk_opt, frdm) ->
         let uniquified_name = make_unique_name n in
         (self#add_name n uniquified_name, `TypeVar (uniquified_name, sk_opt, frdm))
@@ -40,6 +42,7 @@ object (self)
             (o#add_name n uniquified_name, uniquified_name)) ns in
         (o1, `QualifiedTypeVar (ns1, sk_opt, frdm))
     | dt -> super#datatype dt
+  *)
 
   (* Some names in bindingnode need to be renamed, but aren't referred to using binders *)
   method bindingnode = function
@@ -51,9 +54,10 @@ object (self)
     | `Import n ->
       let uniquified_name = make_unique_name n in
       (self#add_name n uniquified_name, `Import uniquified_name)
-    | `Type (n, xs, dt) ->
+    | `Type (n, xs, dt) -> (self, `Type (n, xs, dt))
+        (*
       let uniquified_name = make_unique_name n in
-      (self#add_name n uniquified_name, `Type (uniquified_name, xs, dt))
+      (self#add_name n uniquified_name, `Type (uniquified_name, xs, dt)) *)
     | `Module (n, p) ->
       let uniquified_name = make_unique_name n in
       let o = self#add_name n uniquified_name in

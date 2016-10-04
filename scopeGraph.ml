@@ -1,5 +1,6 @@
 open Utility
 open Printf
+open ModuleUtils
 
 (* open Sugartypes *)
 type name = Sugartypes.name
@@ -67,18 +68,18 @@ type scope_graph =
     (* Maps references to the scopes which contain them *)
     reference_map : scope_id stringmap;
     (* Maps declarations to their fully-qualified paths *)
-    path_map : scope_name stringmap
+    path_map : path stringmap
   }
 
-let lookup_containing_scope ref (_, ref_map) =
+let lookup_containing_scope ref sg =
   try
-    StringMap.find ref ref_map
+    StringMap.find ref sg.reference_map
   with Notfound.NotFound _ ->
     failwith (sprintf "Internal error in lookup_containing_scope: %s not found\n" ref)
 
-let lookup_scope scope_id (scope_map, _) =
+let lookup_scope scope_id sg =
   try
-    IntMap.find scope_id scope_map
+    IntMap.find scope_id sg.scope_map
   with Notfound.NotFound _ ->
     failwith (sprintf "Internal error in lookup_scope: %d not found\n" scope_id)
 
@@ -116,8 +117,8 @@ let add_import scope import =
   { scope with imports = StringSet.add import scope.imports }
 
 let add_ref_scope_mapping : reference -> scope_id -> scope_graph -> scope_graph =
-  fun ref scope_id (scope_map, ref_map) ->
-    (scope_map, StringMap.add ref scope_id ref_map)
+  fun ref scope_id sg ->
+    { sg with reference_map = StringMap.add ref scope_id sg.reference_map }
 
 let new_scope parent =
   { declarations = DeclSet.empty;
@@ -125,22 +126,45 @@ let new_scope parent =
     imports = StringSet.empty;
     parent_scope = parent }
 
-let add_scope scope_id scope (scope_map, ref_map) =
-  (IntMap.add scope_id scope scope_map, ref_map)
+let add_scope scope_id scope sg =
+  { sg with scope_map = IntMap.add scope_id scope sg.scope_map }
 
-(* Given a scope and scope graph:
-  * 1) adds the reference to the scope
-  * 2) adds the ref |-> scope mapping
-  * 3) adds the ref |-> path mapping.
-  *
-  * Takes:
-  *  - Scope
-  *  - Scope ID
-  *  - Reference name
-  *  - Reference path *)
-(* let add_ref_to_sg *)
+let add_decl_path decl_name path sg =
+  { sg with path_map = StringMap.add decl_name path sg.path_map }
 
-let rec construct_sg init_scope init_scope_graph scope_id current_path =
+let get_decl_path decl_name sg =
+  StringMap.find decl_name sg.path_map
+
+(* Given a declaration name and a path, creates a string of plain names.
+ * For example, make_resolved_plain_name "x_1"  sg u_ast would result in
+ *  A.B.C.x, assuming a mapping from x_1 |-> [A_2, B_3, C_4] in the sg's path map,
+ *  and maps from x_1 |-> x, A_2 |-> A etc. in the u_ast *)
+let make_resolved_plain_name decl_name sg u_ast =
+  let decl_path = get_decl_path decl_name sg in
+  let plain_decl_name = Uniquify.lookup_var decl_name u_ast in
+  let plain_paths = List.map (fun p -> Uniquify.lookup_var p u_ast) decl_path in
+  String.concat module_sep (plain_paths @ [plain_decl_name])
+
+(* Jettisoned (for now) type stuff. This will need to be in a separate graph.
+    | `Type (n, _, _) ->
+        (* I suppose it depends on whether we want types to behave like function or Var bindings.
+         * Let's treat them like defs (i.e. function bindings) for now *)
+        {< scope = add_declaration scope (plain_decl n) >}
+  (* *should* be the same for types, but if not, we can distinguish
+   * type declarations from term declarations *)
+  method datatype = function
+    | `TypeVar (n, _, _) ->
+        (* Add to references for current scope *)
+        {< scope = add_reference scope n;
+           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
+    | `QualifiedTypeVar (ns, _, _) ->
+        self#qn_add_references ns
+    | dt -> super#datatype dt
+*)
+
+(* Constructs a scope graph given an initial scope, initial scope graph, initial
+ * scope ID, and a reversed list of (unique) parent scope names *)
+let rec construct_sg init_scope init_scope_graph scope_id current_path_rev =
 object(self)
   inherit SugarTraversals.fold as super
   (* Current scope *)
@@ -169,7 +193,8 @@ object(self)
         let qn_scope_id = get_scope_num () in
         let qn_scope1 = add_import qn_scope x in
         (* Recurse using new scope on remainder of list *)
-        let o_rec = (construct_sg qn_scope1 scope_graph qn_scope_id)#qn_add_references xs in
+        let o_rec = (construct_sg qn_scope1 scope_graph qn_scope_id
+          (x :: current_path_rev))#qn_add_references xs in
         let rec_scope = o_rec#get_scope in
         let rec_sg = o_rec#get_scope_graph in
         let new_sg = add_scope qn_scope_id rec_scope rec_sg in
@@ -185,16 +210,8 @@ object(self)
         self#qn_add_references ns
     | pn -> super#phrasenode pn
 
-  (* *should* be the same for types, but if not, we can distinguish
-   * type declarations from term declarations *)
-  method datatype = function
-    | `TypeVar (n, _, _) ->
-        (* Add to references for current scope *)
-        {< scope = add_reference scope n;
-           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
-    | `QualifiedTypeVar (ns, _, _) ->
-        self#qn_add_references ns
-    | dt -> super#datatype dt
+  (* Don't touch types on this pass *)
+  method datatype _ = self
 
   method bindingnode = function
     | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_funlit), _loc, _dtopt) ->
@@ -204,11 +221,13 @@ object(self)
         let fn_scope_num = get_scope_num () in
         let fn_scope = new_scope (Some scope_id) in
         (* Now, perform an analysis on the function expression *)
-        let o_scope = ((construct_sg fn_scope scope_graph fn_scope_num)#funlit fn_funlit) in
-        (* Finally, get the updated scope graph, and add the new scope. *)
+        let o_scope = ((construct_sg fn_scope scope_graph fn_scope_num
+          current_path_rev)#funlit fn_funlit) in
+        (* Finally, get the updated scope graph, and add the new scope and declaration path. *)
         let (fn_sg, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope) in
         let new_sg = add_scope fn_scope_num fn_scope1 fn_sg in
-        {< scope = scope1; scope_graph = new_sg >}
+        let final_sg = add_decl_path fn_name (List.rev current_path_rev) new_sg in
+        {< scope = scope1; scope_graph = final_sg >}
     | `Funs _ ->
         (* This is kind of problematic: `Funs is introduced in refineBindings, but
          * this will mean that mutually-recursive functions can't share names at
@@ -249,12 +268,12 @@ object(self)
          * Process the phrase using the current scope. Then, create a new scope
          * for the remainder of the binding list (and associated phrase), with
          * declarations of the pattern variables, and return this. *)
-        let o = (construct_sg scope scope_graph scope_id)#phrase phr in
+        let o = (construct_sg scope scope_graph scope_id current_path_rev)#phrase phr in
         (* Get the scope and new scope graph from the processed phrase *)
         let (phr_scope, phr_sg) = (o#get_scope, o#get_scope_graph) in
         let phr_sg1 = add_scope scope_id phr_scope phr_sg in
         (* This scope declares the new patterns *)
-        let o_pattern = (construct_sg phr_scope phr_sg1 scope_id)#pattern pat in
+        let o_pattern = (construct_sg phr_scope phr_sg1 scope_id current_path_rev)#pattern pat in
         let (pat_scope, pat_sg) =
           (o_pattern#get_scope, o_pattern#get_scope_graph) in
         (* Save this scope to SG, since it's done now. *)
@@ -278,20 +297,21 @@ object(self)
         let module_decl = annotated_decl n module_scope_id in
         let our_scope = add_declaration scope module_decl in
         (* Proceed to process declarations using new scope *)
-        let o_module = (construct_sg module_scope scope_graph module_scope_id)#phrase bl in
-        let (o_scope, o_sg, o_scope_id) = (o_module#get_scope,
-          o_module#get_scope_graph, o_module#get_scope_id) in
+        let o_module = (construct_sg module_scope scope_graph module_scope_id
+          (n::current_path_rev))#phrase bl in
+        let (o_scope, o_sg, o_scope_id) =
+          (o_module#get_scope, o_module#get_scope_graph, o_module#get_scope_id) in
         (* Add final binding scope to scope graph *)
         let o_sg1 = add_scope o_scope_id o_scope o_sg in
+        let final_sg = add_decl_path n current_path_rev o_sg1 in
         (* Using returned scope graph, process remainder of declarations *)
-        {< scope = our_scope; scope_graph = o_sg1 >}
-    | `Type (n, _, _) ->
-        (* I suppose it depends on whether we want types to behave like function or Var bindings.
-         * Let's treat them like defs (i.e. function bindings) for now *)
-        {< scope = add_declaration scope (plain_decl n) >}
+        {< scope = our_scope; scope_graph = final_sg >}
+    | bn -> super#bindingnode bn
 
     method binder (n, _, _) =
-      {< scope = add_declaration scope (plain_decl n) >}
+      let scope1 = add_declaration scope (plain_decl n) in
+      let sg1 = add_decl_path n current_path_rev scope_graph in
+      {< scope = scope1; scope_graph = sg1 >}
 
     method program = function
       | (bindings, phr_opt) ->
@@ -300,7 +320,7 @@ object(self)
           (* No *idea* why o#option wasn't working. *)
           let o_scope =
             (match phr_opt with
-               | Some phr ->(construct_sg sc sg sc_id)#phrase phr
+               | Some phr ->(construct_sg sc sg sc_id [])#phrase phr
                | None -> o) in
           let (sc1, sc_id1, sg1) = (o_scope#get_scope, o_scope#get_scope_id, o_scope#get_scope_graph) in
           (* Add final scope to the SG and we're away *)
@@ -315,11 +335,11 @@ let create_scope_graph prog =
       reference_map = StringMap.empty;
       path_map = StringMap.empty
     } in
-  let o = (construct_sg (new_scope None) fresh_sg 0)#program prog in
+  let o = (construct_sg (new_scope None) fresh_sg 0 [])#program prog in
   o#get_scope_graph
 
 (* Print DOT file for scope graph *)
-let show_scope_graph (sg, _) =
+let show_scope_graph sg =
   let show_scope scope scope_id =
     let rec show_decls = function
       | [] -> ""
@@ -346,7 +366,7 @@ let show_scope_graph (sg, _) =
     (show_parent scope.parent_scope) in
   "digraph G {\n" ^
     String.concat ""
-      (List.map (fun (s_id, s) -> show_scope s s_id) (IntMap.bindings sg))
+      (List.map (fun (s_id, s) -> show_scope s s_id) (IntMap.bindings sg.scope_map))
       ^ "}"
 
 (* Shadowing Operator *)
@@ -367,12 +387,11 @@ let shadow : DeclSet.t -> DeclSet.t -> scope_graph -> Uniquify.unique_ast -> Dec
   let set_plain_e2 = get_plain_names combined_e2 in
   let annotated_decl_list =
     (AnnotatedDeclSet.elements combined_e1) @ (AnnotatedDeclSet.elements combined_e2) in
+ (*
   let string_list =
      List.map (fun ((d, _), plain_d) ->
        "decl name: " ^ d ^ ", plain decl name: " ^ plain_d) annotated_decl_list in
-  printf "ANNOTATED DECL LIST: \n%s\n" (String.concat "\n" string_list);
-
-
+  printf "ANNOTATED DECL LIST: \n%s\n" (String.concat "\n" string_list); *)
   let overlapping_bindings = StringSet.inter set_plain_e1 set_plain_e2 in
 
   (* Result is the union of sets where the plain var isn't in the overlapping set *)
@@ -454,11 +473,21 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
 
 
 let show_resolved_names sg unique_ast =
-  let show_resolved_name name =
-    let resolution_result = resolve_name name sg unique_ast in
-    sprintf "%s ----> %s\n" name (print_list (List.map fst (DeclSet.elements resolution_result))) in
-  let (_scope_map, ref_map) = sg in
-  let name_list = List.map fst (StringMap.bindings ref_map) in
+  let show_resolved_name ref_name =
+    (* Firstly, get the resolution result, which will get us a list of
+     * declarations that this reference could map to. *)
+    let resolution_results = DeclSet.elements (resolve_name ref_name sg unique_ast) in
+    (* Next up, define a function to print each of these names in a list. *)
+    let print_single_resolution_result (decl_name, _) =
+      (* Firstly, grab the plain name from the SG and UAST *)
+      let plain_fqn = make_resolved_plain_name decl_name sg unique_ast in
+      (* Next, format it *)
+      sprintf "(%s, FQ: %s)" decl_name plain_fqn in
+    (* Now, print the result. *)
+    let formatted_resolution_list = List.map print_single_resolution_result resolution_results in
+    sprintf "%s ----> %s\n" ref_name (print_list formatted_resolution_list) in
+
+  let name_list = List.map fst (StringMap.bindings sg.reference_map) in
   printf "Reference list: %s\n" (print_list name_list);
   String.concat "" (List.map show_resolved_name name_list)
 
