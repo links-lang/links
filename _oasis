@@ -231,3 +231,12 @@ Document grammar
   Build         : true
   XCustom       : cd doc && make grammar.pdf
   XCustomClean  : cd doc && make clean
+
+Document links-api
+  Title         : Links API documentation
+  Type          : ocamlbuild (0.3)
+  Build         : true
+  BuildTools    : ocamldoc, ocamlbuild
+  Install       : false
+  XOCamlbuildPath      : ./
+  XOCamlbuildLibraries : links

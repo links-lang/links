@@ -32,6 +32,7 @@ doc/*.aux
 doc/*.log
 doc/*.pdf
 doc/*.toc
+links-api.docdir
 
 # ocamlbuild artefacts
 _build
