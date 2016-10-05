@@ -33,11 +33,6 @@ doc/*.log
 doc/*.pdf
 doc/*.toc
 
-# files generated automatically by oasis from _oasis file
-_tags
-myocamlbuild.ml.bak
-myocamlbuild.ml.ba0
-
 # ocamlbuild artefacts
 _build
 links.byte
