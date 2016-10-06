@@ -30,8 +30,7 @@ struct
       (* let program = Chaser.add_dependencies "" program in *)
       let program =
         if ModuleUtils.contains_modules program then
-        let unique_ast = Uniquify.uniquify_ast program in
-        let scope_graph = ScopeGraph.create_scope_graph (Uniquify.get_ast unique_ast) in
+        let (scope_graph, unique_ast) = Chaser.add_dependencies "" program in
         (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
         DesugarModules.desugarModules scope_graph unique_ast
       else program in

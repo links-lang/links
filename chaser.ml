@@ -1,8 +1,3 @@
-type filename = string
-
-let add_dependencies _ _ = failwith "out of order for now"
-let add_module_bindings _ _ = failwith "out of order for now"
-(*
 open Utility
 open Sugartypes
 open Printf
@@ -14,23 +9,6 @@ type prog_map = program StringMap.t
 type filename = string
 (* Helper functions *)
 
-let split_fqn = Str.split (Str.regexp (Str.quote module_sep))
-
-(* Given fully-qualified module name, gets root module name *)
-let module_file_name module_name =
-  match split_fqn module_name with
-    | [] -> failwith "Internal error: empty list in module_file_name"
-    | (x::_xs) -> x
-
-(* Given a fully-qualified name, gets the module prefix *)
-let module_prefix name =
-  let rec module_prefix_inner = function
-    | [] -> ""
-    | [x] -> ""
-    | x :: y :: [] -> x
-    | x :: xs -> x ^ module_sep ^ module_prefix_inner xs
-  in module_prefix_inner (split_fqn name)
-
 (* Helper function: given top-level module name, maps to expected filename *)
 let top_level_filename module_name =
   (String.uncapitalize module_name) ^ ".links"
@@ -38,14 +16,9 @@ let top_level_filename module_name =
 let print_sorted_deps xs =
   print_list (List.map print_list xs)
 
-let is_qualified str =
-  try Str.search_forward (Str.regexp (Str.quote ".")) str 0 > 0
-  with Notfound.NotFound _ -> false
-
-(* Given a module name, try and locate / parse the module file *)
+(* Given a module name and unique AST, try and locate / parse the module file *)
 let parse_module module_name =
-  let filename = top_level_filename module_name in
-  let (prog, _) = try_parse_file filename in
+  let (prog, _) = try_parse_file module_name in
   prog
 
 let assert_no_cycles = function
@@ -56,93 +29,57 @@ let assert_no_cycles = function
 let unique_list xs =
   StringSet.elements (StringSet.of_list xs)
 
-let rec var_can_be_resolved seen_bindings binding_stack current_module_prefix name =
-  match binding_stack with
-    | [] -> false
-    | (`LocalVarBinding x)::xs ->
-        if x = name then true
-        else var_can_be_resolved seen_bindings xs current_module_prefix name
-    | (`OpenStatement x)::xs ->
-        let fully_qual = prefixWith name x in
-        if StringSet.mem fully_qual seen_bindings then true else
-          var_can_be_resolved seen_bindings xs current_module_prefix name
+
+let can_resolve_name name sg u_ast =
+  match ScopeGraph.resolve_reference name sg u_ast with
+    | `SuccessfulResolution _ -> true
+    | `AmbiguousResolution _ -> true
+    | `UnsuccessfulResolution -> false
+
+(* Given a fully-qualified variable or import, tries to resolve the first segment.
+ * For example, given [A_1, B_2, x_3], tries to resolve A_1. If successful, it's
+ * internally resolvable and we're OK. If not, then we'll need to try and import it.
+ *)
+let rec can_resolve_qual_name qual_name sg u_ast =
+  match qual_name with
+    | [] -> failwith "INTERNAL ERROR: Empty qualified name; this should never happen"
+    | x::xs ->
+        (* The head will be the module we'll want to try and resolve. *)
+        can_resolve_name x sg u_ast
 
 (* Traversal to find module import references in the current file *)
-let rec find_module_refs prefix init_seen_modules init_import_candidates init_binding_stack init_seen_bindings =
+let rec find_module_refs sg u_ast init_import_candidates =
 object(self)
   inherit SugarTraversals.fold as super
-  (* Module definitions we've seen in the file *)
-  val seen_modules = init_seen_modules
-  val seen_bindings = init_seen_bindings
-  val binding_stack = init_binding_stack
-  method add_seen_module x = {< seen_modules = StringSet.add x seen_modules >}
-  method add_seen_binding x = {< seen_bindings = StringSet.add x seen_bindings >}
-  method get_seen_modules = seen_modules
-  method get_seen_bindings = seen_bindings
-
-  method push_module name =
-    {< binding_stack = (`OpenStatement name) :: binding_stack >}
-
-  method push_var_binding name =
-    {< binding_stack = (`LocalVarBinding name) :: binding_stack >}
-
   (* Imports that are not resolvable in the current file *)
   val import_candidates = init_import_candidates
   method add_import_candidate x =
     {< import_candidates = StringSet.add x import_candidates >}
   method get_import_candidates = import_candidates
 
-  method binder = function
-    | (name, _, _) ->
-        let o1 = self#push_var_binding name in
-        o1#add_seen_binding (prefixWith name prefix)
-
   method bindingnode = function
-    | `Module (module_name, block) ->
-        let new_prefix = prefixWith module_name prefix in
-        (* Add fully-qualified module to seen module list *)
-        (* Add fully-qualified module to module stack *)
-        let o = self#add_seen_module new_prefix in
-        let o1 =
-          (find_module_refs new_prefix o#get_seen_modules o#get_import_candidates
-            ((`OpenStatement new_prefix)::binding_stack) o#get_seen_bindings)#phrase block in
-        {< seen_modules = o1#get_seen_modules; import_candidates = o1#get_import_candidates >}
-    | `Import name ->
-        let scope_res = moduleInScope seen_modules binding_stack name in
-        (match scope_res with
-          | Some(fully_qual) ->
-              self#push_module fully_qual
-          | None ->
-              (* If we can't resolve it internally, assume that it
-               * is an external dependency *)
-              self#add_import_candidate (module_file_name name))
-    | b -> super#bindingnode b
+    | `Import n ->
+        if can_resolve_name n sg u_ast then self else
+          let to_add = Uniquify.lookup_var n u_ast in
+           self#add_import_candidate to_add
+    | `QualifiedImport ns ->
+        if can_resolve_qual_name ns sg u_ast then self else
+          let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
+          self#add_import_candidate to_add
+    | bn -> super#bindingnode bn
 
   method phrasenode = function
-    | `Var name when is_qualified name ->
-        let module_fn = module_file_name name in
-        printf "name: %s, stack: %s\n" name (print_module_stack binding_stack);
-        printf "module_fn: %s, seen_modules: %s\n" module_fn (Utility.print_list (StringSet.elements self#get_seen_modules));
-        if var_can_be_resolved seen_bindings binding_stack prefix name
-           || StringSet.mem (module_prefix name) self#get_seen_modules then
-          self
-        else
-          self#add_import_candidate (module_file_name name)
-    | `Block (bs, p) ->
-        (* Recursively process bindings / phrase *)
-        let o1 =
-          List.fold_left (fun o_acc binding ->
-            o_acc#binding binding) self bs in
-        (* Restore the previous binding stack by making a copy of this object w/ new
-         * seen modules / bindings *)
-        let o2 = o1#phrase p in
-        {< seen_modules = o2#get_seen_modules; import_candidates = o2#get_import_candidates >}
+    | `QualifiedVar ns ->
+        if can_resolve_qual_name ns sg u_ast then self else
+          let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
+           self#add_import_candidate to_add
     | p -> super#phrasenode p
 end
 
 
-let find_external_refs prog =
-  StringSet.elements ((find_module_refs "" StringSet.empty StringSet.empty [] StringSet.empty)#program prog)#get_import_candidates
+let find_external_refs sg u_ast =
+  let prog = Uniquify.get_ast u_ast in
+  StringSet.elements ((find_module_refs sg u_ast StringSet.empty)#program prog)#get_import_candidates
 
 let rec add_module_bindings deps dep_map =
   match deps with
@@ -150,12 +87,15 @@ let rec add_module_bindings deps dep_map =
     (* Don't re-inline bindings of base module *)
     | [""]::ys -> add_module_bindings ys dep_map
     | [module_name]::ys ->
-      let (bindings, _) = StringMap.find module_name dep_map in
-      (* TODO: Fix dummy position to be more meaningful, if necessary *)
-      (`Module (module_name,
-        (`Block (bindings, (`RecordLit ([], None), Sugartypes.dummy_position)),
-        Sugartypes.dummy_position)
-        ), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
+      try
+        let (bindings, _) = StringMap.find module_name dep_map in
+        (* TODO: Fix dummy position to be more meaningful, if necessary *)
+        (`Module (module_name,
+          (`Block (bindings, (`RecordLit ([], None), Sugartypes.dummy_position)),
+          Sugartypes.dummy_position)
+          ), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
+      with Notfound.NotFound _ ->
+        failwith "Trying to find %s in dep map containing keys: %s\n" module_name (print_list (List.map fst (StringMap.bindings dep_map)));
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
 
 
@@ -164,17 +104,22 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   let visited1 = StringSet.add module_name visited in
   let dep_map1 = StringMap.add module_name module_prog dep_map in
 
-  (* Fistly, get import candidates *)
-  let ics = find_external_refs module_prog in
+  (* Unique AST and scope graph for plain program*)
+  let u_ast = Uniquify.uniquify_ast module_prog in
+  let sg = ScopeGraph.create_scope_graph (Uniquify.get_ast u_ast) in
+
+  (* With this, get import candidates *)
+  let ics = find_external_refs sg u_ast in
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
   List.fold_right (
     fun name (visited_acc, deps_acc, dep_map_acc) ->
       (* Given the top-level module name, try and parse wrt the paths *)
-      let prog = parse_module name in
-      let (visited_acc', deps_acc', dep_map_acc') = add_dependencies_inner name prog visited_acc deps_acc dep_map_acc in
+      let filename = top_level_filename name in
+      let prog = parse_module filename in
+      let (visited_acc', deps_acc', dep_map_acc') =
+        add_dependencies_inner name prog visited_acc deps_acc dep_map_acc in
       (visited_acc', deps_acc @ deps_acc', dep_map_acc')
   ) ics (visited1, (module_name, ics) :: deps, dep_map1)
-
 
 
 (* Top-level function: given a module name + program, return a program with
@@ -194,8 +139,7 @@ let add_dependencies module_name module_prog =
    * the position data type to keep track of the module filename we're importing from. *)
   let module_bindings = add_module_bindings sorted_deps dep_binding_map in
   let transformed_prog = (module_bindings @ bindings, phrase) in
-  (* printf "After chaser transformation: \n%s\n" (Sugartypes.Show_program.show transformed_prog); *)
-  (* Finally, add this to the start of the original list of bindings *)
-  transformed_prog
-
-*)
+  (* Now, finally create a new SG and unique AST for the program with all inlined modules *)
+  let u_ast = Uniquify.uniquify_ast transformed_prog in
+  let sg = ScopeGraph.create_scope_graph (Uniquify.get_ast u_ast) in
+  (sg, u_ast)
