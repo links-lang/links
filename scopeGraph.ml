@@ -62,6 +62,12 @@ type scope_graph =
     path_map : path stringmap
   }
 
+let new_scope_graph = {
+  scope_map = IntMap.empty;
+  reference_map = StringMap.empty;
+  path_map = StringMap.empty
+}
+
 type resolution_result = [
   | `AmbiguousResolution of name list
   | `SuccessfulResolution of name
@@ -159,187 +165,159 @@ let make_resolved_plain_name decl_name sg u_ast =
     | dt -> super#datatype dt
 *)
 
-(* Constructs a scope graph given an initial scope, initial scope graph, initial
- * scope ID, and a reversed list of (unique) parent scope names *)
-let rec construct_sg init_scope init_scope_graph scope_id current_path_rev =
-object(self)
-  inherit SugarTraversals.fold as super
-  (* Current scope *)
-  val scope = init_scope
-  method get_scope = scope
-  method set_scope s = {< scope = s >}
+let rec get_last_list_element = function
+  | [] -> failwith "empty list in get_last_list_element"
+  | [x] -> x
+  | _ :: xs -> get_last_list_element xs
 
-  val scope_id = scope_id
-  method get_scope_id = scope_id
+let construct_sg_imp prog =
+  (* Scope update stuff *)
+  let sg = ref new_scope_graph in
+  let create_scope parent_opt =
+    let sg_inst = !sg in
+    let created_scope_id = get_scope_num () in
+    let created_scope = new_scope parent_opt in
+    let sg_inst = add_scope created_scope_id created_scope sg_inst in
+    sg := sg_inst;
+    created_scope_id in
 
-  (* Overall scope graph *)
-  val scope_graph = init_scope_graph
-  method get_scope_graph = scope_graph
+  let add_ref_to_scope ref_name scope_id =
+    (* Dereference and get scope *)
+    let sg_inst = !sg in
+    let scope = lookup_scope scope_id sg_inst in
+    (* Add reference to scope, and add mapping to containing scope *)
+    let scope = add_reference scope ref_name in
+    let sg_inst = add_ref_scope_mapping ref_name scope_id sg_inst in
+    let sg_inst = add_scope scope_id scope sg_inst in
+    sg := sg_inst in
 
-  method qn_add_references = function
-    | [] -> failwith "Internal error: empty qualified name list"
-    | [x] ->
-        let new_sg = add_ref_scope_mapping x scope_id scope_graph in
-        let new_scope = add_reference scope x in
-        {< scope = new_scope; scope_graph = new_sg >}
-    | x :: xs ->
-        (* Add reference to current scope *)
-        let scope1 = add_reference scope x in
-        (* Create new, top-level scope and add *import* *)
-        let qn_scope = new_scope None in
-        let qn_scope_id = get_scope_num () in
-        let qn_scope1 = add_import qn_scope x in
-        (* Recurse using new scope on remainder of list *)
-        let o_rec = (construct_sg qn_scope1 scope_graph qn_scope_id
-          (x :: current_path_rev))#qn_add_references xs in
-        let rec_scope = o_rec#get_scope in
-        let rec_sg = o_rec#get_scope_graph in
-        let new_sg = add_scope qn_scope_id rec_scope rec_sg in
-        let new_sg1 = add_ref_scope_mapping x scope_id new_sg in
-        {< scope = scope1; scope_graph = new_sg1 >}
+  let add_decl_to_scope decl path scope_id =
+    let sg_inst = !sg in
+    let scope = lookup_scope scope_id sg_inst in
+    let scope = add_declaration scope decl in
+    let sg_inst = add_scope scope_id scope sg_inst in
+    let sg_inst = add_decl_path (fst decl) path sg_inst in
+    sg := sg_inst in
 
-  method phrasenode = function
-    | `Var n ->
-        (* Add to references for current scope *)
-        {< scope = add_reference scope n;
-           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
-    | `QualifiedVar ns ->
-        self#qn_add_references ns
-    | `Block (bs, p) ->
-          let o = self#list (fun o -> o#binding) bs in
-          let (sc, sc_id, sg) = (o#get_scope, o#get_scope_id, o#get_scope_graph) in
-          let o_scope = (construct_sg sc sg sc_id [])#phrase p in
-          let (sc1, sc_id1, sg1) = (o_scope#get_scope, o_scope#get_scope_id, o_scope#get_scope_graph) in
-          (* Add phrase scope to the SG and we're away *)
-          let sg2 = add_scope sc_id1 sc1 sg1 in
-          {< scope_graph = sg2 >}
-    | pn -> super#phrasenode pn
+  let add_import_to_scope import scope_id =
+    let sg_inst = !sg in
+    let scope = lookup_scope scope_id sg_inst in
+    let scope = add_import scope import in
+    let sg_inst = add_scope scope_id scope sg_inst in
+    sg := sg_inst in
 
-  (* Don't touch types on this pass *)
-  method datatype _ = self
+  let sg_fold_traversal init_scope_id init_path =
+    object(self)
+      inherit SugarTraversals.fold as super
+      (* Current Scope ID properties *)
+      val scope_id = init_scope_id
+      method get_scope_id = scope_id
+      method set_scope_id sid = {< scope_id = sid >}
+      (* Current path properties *)
+      val path = init_path
+      method get_path = path
+      method set_path new_path = {< path = new_path >}
 
-  method bindingnode = function
-    | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_funlit), _loc, _dtopt) ->
-        (* Firstly, add the declaration to the current scope *)
-        let scope1 = add_declaration scope (plain_decl fn_name) in
-        (* Next, generate a new scope *)
-        let fn_scope_num = get_scope_num () in
-        let fn_scope = new_scope (Some scope_id) in
-        (* Now, perform an analysis on the function expression *)
-        let o_scope = ((construct_sg fn_scope scope_graph fn_scope_num
-          current_path_rev)#funlit fn_funlit) in
-        (* Finally, get the updated scope graph, and add the new scope and declaration path. *)
-        let (fn_sg, fn_scope_id, fn_scope1) = (o_scope#get_scope_graph, o_scope#get_scope_id, o_scope#get_scope) in
-        let new_sg = add_scope fn_scope_id fn_scope1 fn_sg in
-        let final_sg = add_decl_path fn_name (List.rev current_path_rev) new_sg in
-        {< scope = scope1; scope_graph = final_sg >}
-    | `Funs _ ->
-        (* This is kind of problematic: `Funs is introduced in refineBindings, but
-         * this will mean that mutually-recursive functions can't share names at
-         * the top-level. Perhaps it could make sense to do two passes: one before (in order
-         * to introduce `Funs) and one after (after module desugaring)
-         * For now, let it be -- the old one had a similar issue, I think. *)
-        assert false
-    | `Import n ->
-        (* Save the previous scope *)
-        let sg1 = add_scope scope_id scope scope_graph in
-        (* Imports create a new scope. *)
-        let next_scope_id = get_scope_num () in
-        let next_scope = (add_import (add_reference (new_scope (Some scope_id)) n) n) in
-        let sg2 = add_ref_scope_mapping n next_scope_id sg1 in
-        (* printf "Import: scope ID %d, next scope ID: %d\n" scope_id next_scope_id; *)
-        (* Unqualified import. Add to imports list and references list. *)
-        {< scope = next_scope; scope_id = next_scope_id; scope_graph = sg2 >}
-    | `QualifiedImport ns ->
-        (* Again, imports create a new scope. *)
-        let next_scope_id = get_scope_num () in
-        let next_scope = new_scope (Some scope_id) in
-        (* And save the previous scope *)
-        let sg1 = add_scope scope_id scope scope_graph in
-        (* Next, we need to properly set up anonymous scopes *)
-        (* Firstly, add all segments of the qualified name into the imports list. *)
-        let o1 = {< scope = next_scope; scope_id = next_scope_id; scope_graph = sg1 >} in
-        let o2 = o1#qn_add_references ns in
-        let (sc, sc_id, sg2) = (o2#get_scope, o2#get_scope_id, o2#get_scope_graph) in
-        let sg3 = add_scope sc_id sc sg2 in
-        let o3 = o1#list (fun o n ->
-            let modified_scope = add_import o#get_scope n in
-            o#set_scope modified_scope) ns in
-        {< scope_graph = sg3; scope = o3#get_scope; scope_id = o3#get_scope_id >}
-    | `Val (_tvs, pat, phr, _loc, _dtopt) ->
-        (* (Deviating slightly from the algorithm in the paper here since our pattern
-         * language is more complex).
-         * Process the phrase using the current scope. Then, create a new scope
-         * for the remainder of the binding list (and associated phrase), with
-         * declarations of the pattern variables, and return this. *)
-        let o = (construct_sg scope scope_graph scope_id current_path_rev)#phrase phr in
-        (* Get the scope and new scope graph from the processed phrase *)
-        let (phr_scope, phr_sg) = (o#get_scope, o#get_scope_graph) in
-        let phr_sg1 = add_scope scope_id phr_scope phr_sg in
-        (* This scope declares the new patterns *)
-        let o_pattern = (construct_sg phr_scope phr_sg1 scope_id current_path_rev)#pattern pat in
-        let (pat_scope, pat_sg) =
-          (o_pattern#get_scope, o_pattern#get_scope_graph) in
-        (* Save this scope to SG, since it's done now. *)
-        let new_sg = add_scope scope_id pat_scope pat_sg in
-        (* Add a fresh scope *)
-        let following_scope_id = get_scope_num () in
-        let following_scope = new_scope (Some scope_id) in
-        (* Return new scope with old scope added to SG. *)
-        {< scope = following_scope; scope_id = following_scope_id; scope_graph = new_sg >}
-    | `Infix -> self
-    | `Exp p -> self#phrase p
-    | `Foreign ((bnd_name, _, _), _name, _dt) ->
-        (* Not entirely sure how FFI works (if at all?) -- just add binder as a
-         * decl *)
-        {< scope = add_declaration scope (plain_decl bnd_name) >}
-    | `Module (n, bl) ->
-        (* Create new scope, with current scope as parent *)
-        let module_scope_id = get_scope_num () in
-        let module_scope = new_scope (Some scope_id) in
-        (* Add declaration, with annotation of new scope name *)
-        let module_decl = annotated_decl n module_scope_id in
-        let our_scope = add_declaration scope module_decl in
-        (* Proceed to process declarations using new scope *)
-        let o_module = (construct_sg module_scope scope_graph module_scope_id
-          (n::current_path_rev))#phrase bl in
-        let (o_scope, o_sg, o_scope_id) =
-          (o_module#get_scope, o_module#get_scope_graph, o_module#get_scope_id) in
-        (* Add final binding scope to scope graph *)
-        let o_sg1 = add_scope o_scope_id o_scope o_sg in
-        let final_sg = add_decl_path n current_path_rev o_sg1 in
-        (* Using returned scope graph, process remainder of declarations *)
-        {< scope = our_scope; scope_graph = final_sg >}
-    | bn -> super#bindingnode bn
+      method qualified_name = function
+        | [] -> self
+        | [x] -> add_ref_to_scope x scope_id; self
+        | x :: xs ->
+            add_ref_to_scope x scope_id;
+            let anon_scope_id = create_scope None in
+            (* CHECK: Does this also need to modify the path? *)
+            add_import_to_scope x anon_scope_id;
+            {< scope_id = anon_scope_id >}#qualified_name xs
+
+      (* Right, now let's try this nonsense again... *)
+      method phrasenode = function
+        | `Var n -> add_ref_to_scope n scope_id; self
+        | `QualifiedVar ns -> self#qualified_name ns
+        | `Switch (phr, cases, _dtopt) ->
+            let _ = self#phrase phr in
+            self#list (fun _ (pat, phr) ->
+              let pat_scope_id = create_scope (Some scope_id) in
+              let o = {< scope_id = pat_scope_id >} in
+              let o = o#pattern pat in
+              let _ = o#phrase phr in
+              self) cases
+        | `Block (bs, p) ->
+            let block_scope_id = create_scope (Some scope_id) in
+            let o = {< scope_id = block_scope_id >} in
+            let o = o#list (fun o -> o#binding) bs in
+            let _ = o#phrase p in
+            self
+        | pn -> super#phrasenode pn
+
+      method bindingnode = function
+        | `Fun ((fn_name, _, _), _lin, (_tyvars, fn_funlit), _loc, _dtopt) ->
+            add_decl_to_scope (plain_decl fn_name) path scope_id;
+            let new_scope_id = create_scope (Some scope_id) in
+            let _ = {< scope_id = new_scope_id >}#funlit fn_funlit in
+            self
+        | `Funs _ -> assert false
+        | `Val (_tvs, pat, phr, _loc, _dtopt) ->
+            (* Process phrase in this scope *)
+            let _ = self#phrase phr in
+            (* Create new scope for pattern bindings *)
+            let new_scope_id = create_scope (Some scope_id) in
+            let new_o = {< scope_id = new_scope_id >} in
+            new_o#pattern pat
+        | `Infix -> self
+        | `Exp p -> self#phrase p
+        | `Foreign ((bnd_name, _, _), _name, _dt) ->
+            add_decl_to_scope (plain_decl bnd_name) path scope_id;
+            self
+        | `Module (n, ((`Block (bs, _), _))) ->
+            (* Create new scope for module *)
+            let new_scope_id = create_scope (Some scope_id) in
+            (* Add new declaration *)
+            add_decl_to_scope (annotated_decl n new_scope_id) path scope_id;
+            (* Process inner block with new parameters *)
+            let o_module_inner = {< scope_id = new_scope_id; path = n :: path >} in
+            let _ = o_module_inner#list (fun o -> o#binding) bs in
+            (* Back to our parameters *)
+            self
+        | `Import n ->
+            let after_import_scope_id = create_scope (Some scope_id) in
+            add_ref_to_scope n after_import_scope_id;
+            add_import_to_scope n after_import_scope_id;
+            {< scope_id = after_import_scope_id >}
+        | `QualifiedImport ns ->
+            let after_import_scope_id = create_scope (Some scope_id) in
+            let o = {< scope_id = after_import_scope_id >} in
+            let _ = self#qualified_name ns in
+            add_import_to_scope (get_last_list_element ns) after_import_scope_id;
+            o
+        | bn -> super#bindingnode bn
 
     method binder (n, _, _) =
-      let scope1 = add_declaration scope (plain_decl n) in
-      let sg1 = add_decl_path n current_path_rev scope_graph in
-      {< scope = scope1; scope_graph = sg1 >}
+      add_decl_to_scope (plain_decl n) path scope_id;
+      self
+
+    method funlit (pat_list_list, phr) =
+      (* Create a new scope for the phrase, and add the bindings to it *)
+      (* I assume the list list thing is for curried arguments. Lets say that
+       * each pattern list gets its own scope. *)
+      let o_plist_list = self#list (fun o plist ->
+        let plist_scope_id = create_scope (Some o#get_scope_id) in
+        let o_plist = {< scope_id = plist_scope_id >} in
+        o_plist#list (fun o -> o#pattern) plist) pat_list_list in
+      let _ = o_plist_list#phrase phr in
+      self
 
     method program = function
       | (bindings, phr_opt) ->
           let o = self#list (fun o -> o#binding) bindings in
-          let (sc, sc_id, sg) = (o#get_scope, o#get_scope_id, o#get_scope_graph) in
-          (* No *idea* why o#option wasn't working. *)
-          let o_scope =
-            (match phr_opt with
-               | Some phr ->(construct_sg sc sg sc_id [])#phrase phr
-               | None -> o) in
-          let (sc1, sc_id1, sg1) = (o_scope#get_scope, o_scope#get_scope_id, o_scope#get_scope_graph) in
-          (* Add final scope to the SG and we're away *)
-          let sg2 = add_scope sc_id1 sc1 sg1 in
-          {< scope = sc1; scope_id = sc_id1; scope_graph = sg2 >}
-end
+          o#option (fun o -> o#phrase) phr_opt
+    end in
 
-let create_scope_graph prog =
-  let fresh_sg =
-    { scope_map = IntMap.empty;
-      reference_map = StringMap.empty;
-      path_map = StringMap.empty
-    } in
-  let o = (construct_sg (new_scope None) fresh_sg 0 [])#program prog in
-  o#get_scope_graph
+    (* Create scope graph, add initial scope, and we're away *)
+    let root_scope_id = create_scope None in
+    let o = sg_fold_traversal root_scope_id [] in
+    let _ = o#program prog in
+    !sg
+
+let create_scope_graph = construct_sg_imp
 
 (* Print DOT file for scope graph *)
 let show_scope_graph sg =

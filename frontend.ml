@@ -28,10 +28,13 @@ struct
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
       (* Module-y things *)
       (* let program = Chaser.add_dependencies "" program in *)
-      let unique_ast = Uniquify.uniquify_ast program in
-      let scope_graph = ScopeGraph.create_scope_graph (Uniquify.get_ast unique_ast) in
-      (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
-      let program = DesugarModules.desugarModules scope_graph unique_ast in
+      let program =
+        if ModuleUtils.contains_modules program then
+        let unique_ast = Uniquify.uniquify_ast program in
+        let scope_graph = ScopeGraph.create_scope_graph (Uniquify.get_ast unique_ast) in
+        (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
+        DesugarModules.desugarModules scope_graph unique_ast
+      else program in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
         ->- RefineBindings.refine_bindings#program
