@@ -1,3 +1,8 @@
+type filename = string
+
+let add_dependencies _ _ = failwith "out of order for now"
+let add_module_bindings _ _ = failwith "out of order for now"
+(*
 open Utility
 open Sugartypes
 open Printf
@@ -193,4 +198,4 @@ let add_dependencies module_name module_prog =
   (* Finally, add this to the start of the original list of bindings *)
   transformed_prog
 
-
+*)

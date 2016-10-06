@@ -43,6 +43,7 @@ let get_fq_resolved_decl decl_name sg u_ast =
 let resolve name sg u_ast =
   match ScopeGraph.resolve_reference name sg u_ast with
     | `UnsuccessfulResolution ->
+        (* failwith ("Lookup of " ^ name ^ " was unsuccessful") *)
         Uniquify.lookup_var name u_ast
     | `SuccessfulResolution decl_name ->
         (* printf "Successful resolution of name %s: %s\n" name decl_name; *)
@@ -115,7 +116,7 @@ object(self)
         (* Resolve name. If it's ambiguous, throw an error.
          * If it's not found, just put the plain one back in and the error will
          * be picked up later.*)
-        printf "Attempting to resolve Var %s\n" name;
+        (* printf "Attempting to resolve Var %s\n" name; *)
         `Var (resolve name scope_graph unique_ast)
     | `QualifiedVar names ->
         (* Only need to look at the final name here *)
@@ -130,13 +131,13 @@ let desugarModules scope_graph unique_ast =
   let unique_prog = Uniquify.get_ast unique_ast in
   (*
   printf "Before module desugar: %s\n" (Sugartypes.Show_program.show unique_prog);
-  printf "\n=============================================================\n";
-  *)
+  printf "\n=============================================================\n"; *)
   let plain_prog =
     (perform_renaming scope_graph unique_ast)#program unique_prog in
   let o = (flatten_bindings ())#program plain_prog in
   let flattened_bindings = o#get_bindings in
   let flattened_prog = (flattened_bindings, snd plain_prog) in
   (* Debug *)
-  (* printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
+  (*
+  printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
   flattened_prog

@@ -435,7 +435,6 @@ let options : opt list =
 let file_list = ref []
 
 let main () =
-  for_each !file_list (fun filename ->
   let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
 
   for_each !to_evaluate (evaluate_string_in envs);
@@ -450,7 +449,7 @@ let main () =
     begin
       print_endline (Settings.get_value BS.welcome_note);
       interact envs
-    end)
+    end
 
 (* jcheney:
    Implementation of "cache_whole_program" setting.
