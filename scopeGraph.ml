@@ -278,16 +278,14 @@ let construct_sg_imp prog =
             (* Back to our parameters *)
             self
         | `Import n ->
-            let after_import_scope_id = create_scope (Some scope_id) in
-            add_ref_to_scope n after_import_scope_id;
-            add_import_to_scope n after_import_scope_id;
-            {< scope_id = after_import_scope_id >}
+            let next_scope_id = create_scope (Some scope_id) in
+            add_ref_to_scope n next_scope_id;
+            add_import_to_scope n next_scope_id;
+            {< scope_id = next_scope_id >}
         | `QualifiedImport ns ->
-            let after_import_scope_id = create_scope (Some scope_id) in
-            let o = {< scope_id = after_import_scope_id >} in
             let _ = self#qualified_name ns in
-            add_import_to_scope (get_last_list_element ns) after_import_scope_id;
-            o
+            add_import_to_scope (get_last_list_element ns) scope_id;
+            self
         | bn -> super#bindingnode bn
 
     method binder (n, _, _) =
