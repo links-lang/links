@@ -51,18 +51,15 @@ object (self)
           let uniquified_name = make_unique_name n in
           (o#add_name n uniquified_name, uniquified_name)) ns in
         (o, `QualifiedImport ns1)
-    | `Import n ->
-      let uniquified_name = make_unique_name n in
-      (self#add_name n uniquified_name, `Import uniquified_name)
     | `Type (n, xs, dt) -> (self, `Type (n, xs, dt))
         (*
       let uniquified_name = make_unique_name n in
       (self#add_name n uniquified_name, `Type (uniquified_name, xs, dt)) *)
-    | `Module (n, p) ->
+    | `Module (n, bs) ->
       let uniquified_name = make_unique_name n in
       let o = self#add_name n uniquified_name in
-      let (o1, p1) = o#phrase p in
-      (o1, `Module (uniquified_name, p1))
+      let (o1, bs1) = o#list (fun o -> o#binding) bs in
+      (o1, `Module (uniquified_name, bs1))
     | bn -> super#bindingnode bn
 
   method phrasenode = function

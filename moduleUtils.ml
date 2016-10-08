@@ -39,7 +39,7 @@ object
   method satisfied = has_no_modules
 
   method bindingnode = function
-    | `Import _
+    | `QualifiedImport _
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
 end

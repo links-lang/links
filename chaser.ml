@@ -58,10 +58,6 @@ object(self)
   method get_import_candidates = import_candidates
 
   method bindingnode = function
-    | `Import n ->
-        if can_resolve_name n sg u_ast then self else
-          let to_add = Uniquify.lookup_var n u_ast in
-           self#add_import_candidate to_add
     | `QualifiedImport ns ->
         if can_resolve_qual_name ns sg u_ast then self else
           let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
@@ -90,10 +86,7 @@ let rec add_module_bindings deps dep_map =
       try
         let (bindings, _) = StringMap.find module_name dep_map in
         (* TODO: Fix dummy position to be more meaningful, if necessary *)
-        (`Module (module_name,
-          (`Block (bindings, (`RecordLit ([], None), Sugartypes.dummy_position)),
-          Sugartypes.dummy_position)
-          ), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
+        (`Module (module_name, bindings), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         failwith "Trying to find %s in dep map containing keys: %s\n" module_name (print_list (List.map fst (StringMap.bindings dep_map)));
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
