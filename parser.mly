@@ -306,7 +306,7 @@ nofun_declaration:
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, (`Block $3, name_pos)), name_pos }
+                                                                 `Module (mod_name, $3), name_pos }
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 
@@ -839,7 +839,7 @@ record_labels:
 
 links_open:
 | OPEN qualified_name                                          { `QualifiedImport $2, pos () }
-| OPEN CONSTRUCTOR                                             { `Import $2, pos () }
+| OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
@@ -855,7 +855,7 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
-| LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
+| LBRACE bindings RBRACE                                       { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }

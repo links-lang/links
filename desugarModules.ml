@@ -90,9 +90,8 @@ object(self)
   method get_bindings = List.rev bindings
 
   method binding = function
-    | (`Module (_, (`Block (bindings, _), _)), _) ->
-        List.fold_left (fun acc binding -> acc#binding binding) self bindings
-    | (`Import _, _) -> self
+    | (`Module (_, bindings), _) ->
+        self#list (fun o -> o#binding) bindings
     | (`QualifiedImport _, _) -> self
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
@@ -132,8 +131,7 @@ let desugarModules scope_graph unique_ast =
   (*
   printf "Scope graph: %s\n" (ScopeGraph.show_scope_graph scope_graph);
   printf "Before module desugar: %s\n" (Sugartypes.Show_program.show unique_prog);
-  printf "\n=============================================================\n";
-  *)
+  printf "\n=============================================================\n"; *)
   let plain_prog =
     (perform_renaming scope_graph unique_ast)#program unique_prog in
   let o = (flatten_bindings ())#program plain_prog in
