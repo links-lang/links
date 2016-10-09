@@ -48,7 +48,7 @@ let rec can_resolve_qual_name qual_name sg u_ast =
         can_resolve_name x sg u_ast
 
 (* Traversal to find module import references in the current file *)
-let rec find_module_refs sg u_ast init_import_candidates =
+let rec find_module_refs sg ty_sg u_ast init_import_candidates =
 object(self)
   inherit SugarTraversals.fold as super
   (* Imports that are not resolvable in the current file *)
@@ -68,14 +68,20 @@ object(self)
     | `QualifiedVar ns ->
         if can_resolve_qual_name ns sg u_ast then self else
           let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
-           self#add_import_candidate to_add
+          self#add_import_candidate to_add
     | p -> super#phrasenode p
+  method datatype = function
+    | `QualifiedTypeApplication (ns, _) ->
+      if can_resolve_qual_name ns ty_sg u_ast then self else
+        let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
+        self#add_import_candidate to_add
+    | dt -> super#datatype dt
 end
 
 
-let find_external_refs sg u_ast =
+let find_external_refs sg ty_sg u_ast =
   let prog = Uniquify.get_ast u_ast in
-  StringSet.elements ((find_module_refs sg u_ast StringSet.empty)#program prog)#get_import_candidates
+  StringSet.elements ((find_module_refs sg ty_sg u_ast StringSet.empty)#program prog)#get_import_candidates
 
 let rec add_module_bindings deps dep_map =
   match deps with
@@ -100,9 +106,9 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   (* Unique AST and scope graph for plain program*)
   let u_ast = Uniquify.uniquify_ast module_prog in
   let sg = ScopeGraph.create_scope_graph (Uniquify.get_ast u_ast) in
-
+  let ty_sg = ScopeGraph.create_type_scope_graph (Uniquify.get_ast u_ast) in
   (* With this, get import candidates *)
-  let ics = find_external_refs sg u_ast in
+  let ics = find_external_refs sg ty_sg u_ast in
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
   List.fold_right (
     fun name (visited_acc, deps_acc, dep_map_acc) ->
@@ -134,5 +140,8 @@ let add_dependencies module_name module_prog =
   let transformed_prog = (module_bindings @ bindings, phrase) in
   (* Now, finally create a new SG and unique AST for the program with all inlined modules *)
   let u_ast = Uniquify.uniquify_ast transformed_prog in
-  let sg = ScopeGraph.create_scope_graph (Uniquify.get_ast u_ast) in
-  (sg, u_ast)
+  let u_prog = Uniquify.get_ast u_ast in
+  let sg = ScopeGraph.create_scope_graph u_prog in
+  let ty_sg = ScopeGraph.create_type_scope_graph u_prog in
+
+  (sg, ty_sg, u_ast)

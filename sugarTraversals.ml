@@ -448,11 +448,10 @@ class map =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
-      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+      | `QualifiedTypeApplication (ns, args) ->
           let ns = o#list (fun o -> o#name) ns in
-          let sk_opt = o#option (fun o -> o#subkind) sk_opt in
-          let frdm = o#freedom frdm in
-          `QualifiedTypeVar (ns, sk_opt, frdm)
+          let args = o#list (fun o -> o#type_arg) args in
+          `QualifiedTypeApplication (ns, args)
       | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -983,10 +982,10 @@ class fold =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+      | `QualifiedTypeApplication (ns, args) ->
           let o = o#list (fun o -> o#name) ns in
-          let o = o#option (fun o -> o#subkind) sk_opt in
-          let o = o#freedom frdm in o
+          let o = o#list (fun o -> o#type_arg) args in
+          o
       | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1619,11 +1618,10 @@ class fold_map =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `QualifiedTypeVar (ns, sk_opt, frdm) ->
+      | `QualifiedTypeApplication (ns, args) ->
           let (o, ns) = o#list (fun o -> o#name) ns in
-          let (o, sk_opt) = o#option (fun o -> o#subkind) sk_opt in
-          let (o, frdm) = o#freedom frdm in
-          (o, `QualifiedTypeVar (ns, sk_opt, frdm))
+          let (o, args) = o#list (fun o -> o#type_arg) args in
+          (o, `QualifiedTypeApplication (ns, args))
       | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in

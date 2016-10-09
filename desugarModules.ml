@@ -43,7 +43,7 @@ let get_fq_resolved_decl decl_name sg u_ast =
 let resolve name sg u_ast =
   match ScopeGraph.resolve_reference name sg u_ast with
     | `UnsuccessfulResolution ->
-        (* failwith ("Resolution of " ^ name ^ " was unsuccessful") *)
+        (* failwith ("Resolution of " ^ name ^ " was unsuccessful"); *)
         Uniquify.lookup_var name u_ast
     | `SuccessfulResolution decl_name ->
         (* printf "Successful resolution of name %s: %s\n" name decl_name; *)
@@ -99,6 +99,28 @@ object(self)
     | (bindings, _body) -> self#list (fun o -> o#binding) bindings
 end
 
+
+let perform_type_renaming type_scope_graph unique_ast =
+  object(self)
+    inherit SugarTraversals.map as super
+
+    method bindingnode = function
+      | `Type (n, tvs, dt) ->
+        let plain_name =
+          ScopeGraph.make_resolved_plain_name n type_scope_graph unique_ast in
+        let dt = self#datatype' dt in
+        `Type (plain_name, tvs, dt)
+      | bn -> super#bindingnode bn
+
+    method datatype = function
+      | `TypeApplication (n, args) ->
+          `TypeApplication (resolve n type_scope_graph unique_ast, args)
+      | `QualifiedTypeApplication (names, args) ->
+          let name = get_last_list_value names in
+          `TypeApplication ((resolve name type_scope_graph unique_ast), args)
+      | dt -> super#datatype dt
+  end
+
 let perform_renaming scope_graph unique_ast =
 object(self)
   inherit SugarTraversals.map as super
@@ -123,20 +145,33 @@ object(self)
         (* printf "Attempting to resolve (qualified) Var %s\n" name; *)
         `Var (resolve name scope_graph unique_ast)
     | pn -> super#phrasenode pn
+
+  method datatype dt = dt
 end
 
 
-let desugarModules scope_graph unique_ast =
+let desugarModules scope_graph ty_scope_graph unique_ast =
   let unique_prog = Uniquify.get_ast unique_ast in
   (*
+  printf "Type Scope graph: %s\n" (ScopeGraph.show_scope_graph ty_scope_graph);
   printf "Scope graph: %s\n" (ScopeGraph.show_scope_graph scope_graph);
   printf "Before module desugar: %s\n" (Sugartypes.Show_program.show unique_prog);
-  printf "\n=============================================================\n"; *)
-  let plain_prog =
+  printf "\n=============================================================\n";
+  *)
+  let desugared_terms_prog =
     (perform_renaming scope_graph unique_ast)#program unique_prog in
+  (*
+  printf "After term desugar: %s\n" (Sugartypes.Show_program.show desugared_terms_prog);
+  printf "\n=============================================================\n";
+  *)
+  let plain_prog =
+    (perform_type_renaming ty_scope_graph unique_ast)#program desugared_terms_prog in
+
   let o = (flatten_bindings ())#program plain_prog in
   let flattened_bindings = o#get_bindings in
   let flattened_prog = (flattened_bindings, snd plain_prog) in
   (* Debug *)
-  (* printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
+  (*
+  printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattened_prog);
+  *)
   flattened_prog
