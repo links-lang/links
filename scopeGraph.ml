@@ -30,15 +30,6 @@ end
 module DeclSet = Set.Make(Decl)
 type declset = DeclSet.t
 
-module AnnotatedDecl = struct
-  type t = (declaration * string)
-  let compare = Pervasives.compare
-  module Show_t = Deriving_Show.Show_unprintable (struct type a = t end)
-end
-
-module AnnotatedDeclSet = Set.Make(AnnotatedDecl)
-type annotated_decl_set = AnnotatedDeclSet.t
-
 (* Lists of declarations, references, imports, and an optional parent scope *)
 type scope =
   { declarations : declset;
@@ -229,18 +220,26 @@ class sg_term_fold init_sg_ref init_scope_id init_path =
   object(self)
     inherit sg_fold init_sg_ref init_scope_id init_path as super
 
+    method cases xs =
+      self#list (fun _ (pat, phr) ->
+        let pat_scope_id = self#create_scope (Some scope_id) in
+        let o = {< scope_id = pat_scope_id >} in
+        let o = o#pattern pat in
+        let _ = o#phrase phr in
+        self) xs
+
     (* Phrases are handled the same in either binding or definition mode. *)
     method phrasenode = function
       | `Var n -> self#add_ref_to_scope n scope_id; self
       | `QualifiedVar ns -> self#qualified_name ns
       | `Switch (phr, cases, _dtopt) ->
           let _ = self#phrase phr in
-          self#list (fun _ (pat, phr) ->
-            let pat_scope_id = self#create_scope (Some scope_id) in
-            let o = {< scope_id = pat_scope_id >} in
-            let o = o#pattern pat in
-            let _ = o#phrase phr in
-            self) cases
+          self#cases cases
+      | `Offer (phr, cases, _dtopt) ->
+          let _ = self#phrase phr in
+          self#cases cases
+      | `Receive (cases, _dtopt) ->
+          self#cases cases
       | pn -> super#phrasenode pn
 
     method funlit (pat_list_list, phr) =
@@ -443,34 +442,20 @@ let show_scope_graph sg =
       (List.map (fun (s_id, s) -> show_scope s s_id) (IntMap.bindings sg.scope_map))
       ^ "}"
 
+type decl_env = (DeclSet.t * StringSet.t)
+
 (* Shadowing Operator *)
-let shadow : DeclSet.t -> DeclSet.t -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
-  = fun e1 e2 sg unique_ast ->
-  (* Next, make a list of pairs of (unique, non-unique) names for e1 and e2 *)
-  let annotate_decl_set ds = DeclSet.fold
-    (fun x ->
-      AnnotatedDeclSet.add (x, Uniquify.lookup_var (fst x) unique_ast))
-        ds AnnotatedDeclSet.empty in
-  let combined_e1 = annotate_decl_set e1 in
-  let combined_e2 = annotate_decl_set e2 in
-
-  (* Use sets of the plain names to compute the overlapping set via intersection *)
-  let get_plain_names ds =
-    AnnotatedDeclSet.fold (fun ((_, _), n) s -> StringSet.add n s) ds StringSet.empty in
-  let set_plain_e1 = get_plain_names combined_e1 in
-  let set_plain_e2 = get_plain_names combined_e2 in
-  let annotated_decl_list =
-    (AnnotatedDeclSet.elements combined_e1) @ (AnnotatedDeclSet.elements combined_e2) in
-  let overlapping_bindings = StringSet.inter set_plain_e1 set_plain_e2 in
-
-  (* Result is the union of sets where the plain var isn't in the overlapping set *)
-  let filtered_annotated_decl_set = AnnotatedDeclSet.filter
-      (fun (_, x_plain) -> not (StringSet.mem x_plain overlapping_bindings)) combined_e2 in
-
-  let filtered_decl_set =
-    AnnotatedDeclSet.fold (fun n acc -> DeclSet.add (fst n) acc)
-      filtered_annotated_decl_set DeclSet.empty in
-  DeclSet.union e1 filtered_decl_set
+let shadow : decl_env -> decl_env -> scope_graph -> Uniquify.unique_ast -> decl_env
+  = fun e1_decl_env (e2_decls, _) sg unique_ast ->
+  let (e1_decls, e1_plain_names) = e1_decl_env in
+  DeclSet.fold (fun e2_decl (acc_decl_set, acc_plain_set) ->
+    (* Check if the plain name is in the plain names set of e1 *)
+    let (e2_decl_name, _) = e2_decl in
+    let e2_decl_plain = Uniquify.lookup_var e2_decl_name unique_ast in
+    (* If not, add to the decl set and plain names set *)
+    if not (StringSet.mem e2_decl_plain e1_plain_names) then
+      (DeclSet.add e2_decl acc_decl_set, StringSet.add e2_decl_plain acc_plain_set)
+    else (acc_decl_set, acc_plain_set)) e2_decls e1_decl_env
 
 (* Name resolution *)
 let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
@@ -480,12 +465,15 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
   let rec resolve_name_inner ref_name seen_imports =
     let containing_scope_id = lookup_containing_scope ref_name sg in
     let plain_name = Uniquify.lookup_var ref_name u_ast in
-    let vis_decls = visible_decls  (StringSet.add ref_name seen_imports) IntSet.empty containing_scope_id in
+    let (vis_decls, _) =
+      visible_decls  (StringSet.add ref_name seen_imports) IntSet.empty containing_scope_id in
     (* Finally filter out irrelevant ones *)
-    DeclSet.filter (fun (n, _d) -> (Uniquify.lookup_var n u_ast) = plain_name) vis_decls
+    let relevant_vis_decls =
+      DeclSet.filter (fun (n, _d) -> (Uniquify.lookup_var n u_ast) = plain_name) vis_decls in
+    (relevant_vis_decls, StringSet.singleton plain_name)
 
   (* EnvV *)
-  and visible_decls : stringset -> intset -> int -> DeclSet.t =
+  and visible_decls : stringset -> intset -> int -> decl_env =
     fun seen_imports seen_scopes scope_id ->
     let envl_s = local_decls seen_imports seen_scopes scope_id in
     let envp_s = parent_decls seen_imports seen_scopes scope_id in
@@ -499,19 +487,23 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
 
   (* EnvD *)
   and scope_decls _seen_imports seen_scopes scope_id =
-    if IntSet.mem scope_id seen_scopes then DeclSet.empty
-    else (find_scope scope_id).declarations
+    if IntSet.mem scope_id seen_scopes then (DeclSet.empty, StringSet.empty)
+    else
+      let decl_set = (find_scope scope_id).declarations in
+      let plain_set = DeclSet.fold (fun (decl_name, _) acc ->
+        StringSet.add (Uniquify.lookup_var decl_name u_ast) acc) decl_set StringSet.empty in
+      (decl_set, plain_set)
 
   (* EnvI *)
   and imported_decls seen_imports seen_scopes scope_id =
-    if IntSet.mem scope_id seen_scopes then DeclSet.empty else
+    if IntSet.mem scope_id seen_scopes then (DeclSet.empty, StringSet.empty) else
     let scope = find_scope scope_id in
     let unseen_imports = StringSet.diff scope.imports seen_imports in
     (* Next up: get the associated set IDs for all import declarations *)
     let import_scope_ids =
       StringSet.fold (fun i acc ->
         (* Given an import, resolve it, returning a set of possible resolutions *)
-        let resolved_import_set = resolve_name_inner i seen_imports in
+        let (resolved_import_set, _resolved_plain_set) = resolve_name_inner i seen_imports in
         (* For each resolved import declaration, add the associated scope ID to the set *)
         let scope_ids = DeclSet.fold (fun i_decl ->
           match i_decl with
@@ -523,21 +515,21 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
         IntSet.union acc scope_ids) unseen_imports IntSet.empty in
     (* Finally, union the local environments, and we're done. *)
     let new_seen_scopes = IntSet.add scope_id seen_scopes in
-    IntSet.fold (fun i_scope acc ->
-      let i_decls = local_decls seen_imports new_seen_scopes i_scope in
-      DeclSet.union i_decls acc
-    ) import_scope_ids DeclSet.empty
+    IntSet.fold (fun i_scope (decls_acc, plains_acc) ->
+      let (i_decls, i_plains) = local_decls seen_imports new_seen_scopes i_scope in
+      (DeclSet.union i_decls decls_acc, StringSet.union i_plains plains_acc)
+    ) import_scope_ids (DeclSet.empty, StringSet.empty)
 
   (* EnvP *)
   and parent_decls seen_imports seen_scopes scope_id =
-    if IntSet.mem scope_id seen_scopes then DeclSet.empty
+    if IntSet.mem scope_id seen_scopes then (DeclSet.empty, StringSet.empty)
     else
       match (find_scope scope_id).parent_scope with
-        | None -> DeclSet.empty
+        | None -> (DeclSet.empty, StringSet.empty)
         | Some parent_scope_id ->
             visible_decls seen_imports (IntSet.add scope_id seen_scopes) parent_scope_id in
   (* Top-level *)
-  resolve_name_inner ref_name_outer StringSet.empty
+  fst (resolve_name_inner ref_name_outer StringSet.empty)
 
 
 let show_resolved_names sg unique_ast =
