@@ -29,20 +29,17 @@ object (self)
     let uniquified_name = make_unique_name name in
     (self#add_name name uniquified_name, (uniquified_name, dt, pos))
 
-  method datatype dt = (self, dt)
-  (* Jettisoned for now until we get the type SG going
-  function
-    | `TypeVar (n, sk_opt, frdm) ->
-        let uniquified_name = make_unique_name n in
-        (self#add_name n uniquified_name, `TypeVar (uniquified_name, sk_opt, frdm))
-    | `QualifiedTypeVar (ns, sk_opt, frdm) ->
-        let (o1, ns1) =
-          self#list (fun o n ->
-            let uniquified_name = make_unique_name n in
-            (o#add_name n uniquified_name, uniquified_name)) ns in
-        (o1, `QualifiedTypeVar (ns1, sk_opt, frdm))
-    | dt -> super#datatype dt
-  *)
+  method datatype = function
+      | `TypeApplication (n, args) ->
+          let uniquified_name = make_unique_name n in
+          (self#add_name n uniquified_name, `TypeApplication (uniquified_name, args))
+      | `QualifiedTypeApplication (ns, args) ->
+          let (o1, ns1) =
+            self#list (fun o n ->
+              let uniquified_name = make_unique_name n in
+              (o#add_name n uniquified_name, uniquified_name)) ns in
+          (o1, `QualifiedTypeApplication (ns1, args))
+      | dt -> super#datatype dt
 
   (* Some names in bindingnode need to be renamed, but aren't referred to using binders *)
   method bindingnode = function
@@ -51,10 +48,10 @@ object (self)
           let uniquified_name = make_unique_name n in
           (o#add_name n uniquified_name, uniquified_name)) ns in
         (o, `QualifiedImport ns1)
-    | `Type (n, xs, dt) -> (self, `Type (n, xs, dt))
-        (*
+    | `Type (n, xs, dt) ->
       let uniquified_name = make_unique_name n in
-      (self#add_name n uniquified_name, `Type (uniquified_name, xs, dt)) *)
+      let (o, dt1) = self#datatype' dt in
+      (o#add_name n uniquified_name, `Type (uniquified_name, xs, dt1))
     | `Module (n, bs) ->
       let uniquified_name = make_unique_name n in
       let o = self#add_name n uniquified_name in

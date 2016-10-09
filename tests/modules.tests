@@ -61,3 +61,15 @@ Module chasing via FQ variables
 filemode : args
 args : --path=tests/modules
 stdout : "hello from b!" : String
+
+Basic types in modules
+./tests/modules/type-sig.links
+filemode : args
+args : --path=tests/modules
+stdout : 5 : A.AInt
+
+Basic type in session type
+./tests/modules/session-type.links
+filemode : args
+args : --path=tests/modules
+stdout : () : ()

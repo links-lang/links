@@ -10,6 +10,7 @@ type import
 
 (* Scope graph construction *)
 val create_scope_graph : Sugartypes.program -> scope_graph
+val create_type_scope_graph : Sugartypes.program -> scope_graph
 val make_and_print_scope_graph : Uniquify.unique_ast -> unit
 
 (* Name resolution *)

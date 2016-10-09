@@ -395,6 +395,15 @@ qualified_name_inner:
 | CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
 | VARIABLE                                                     { [$1] }
 
+qualified_type_name:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+
+qualified_type_name_inner:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+| CONSTRUCTOR                                                  { [$1] }
+
+
+
 atomic_expression:
 | qualified_name                                               { `QualifiedVar $1, pos() }
 | VARIABLE                                                     { `Var $1, pos() }
@@ -983,7 +992,7 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_name RPAREN                                 { [`QualifiedTypeVar ($2, None, `Rigid)] }
+| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, [])] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:

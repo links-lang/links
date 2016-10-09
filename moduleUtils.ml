@@ -44,4 +44,4 @@ object
     | b -> super#bindingnode b
 end
 
-let contains_modules prog = (not ((has_no_modules#program prog)#satisfied))
+let contains_modules prog = true (* (not ((has_no_modules#program prog)#satisfied)) *)

@@ -146,23 +146,9 @@ let make_resolved_plain_name decl_name sg u_ast =
   let decl_path = get_decl_path decl_name sg in
   let plain_decl_name = Uniquify.lookup_var decl_name u_ast in
   let plain_paths = List.map (fun p -> Uniquify.lookup_var p u_ast) decl_path in
-  String.concat module_sep (plain_paths @ [plain_decl_name])
+  String.concat module_sep ((List.rev plain_paths) @ [plain_decl_name])
 
 (* Jettisoned (for now) type stuff. This will need to be in a separate graph.
-    | `Type (n, _, _) ->
-        (* I suppose it depends on whether we want types to behave like function or Var bindings.
-         * Let's treat them like defs (i.e. function bindings) for now *)
-        {< scope = add_declaration scope (plain_decl n) >}
-  (* *should* be the same for types, but if not, we can distinguish
-   * type declarations from term declarations *)
-  method datatype = function
-    | `TypeVar (n, _, _) ->
-        (* Add to references for current scope *)
-        {< scope = add_reference scope n;
-           scope_graph = add_ref_scope_mapping n scope_id scope_graph>}
-    | `QualifiedTypeVar (ns, _, _) ->
-        self#qn_add_references ns
-    | dt -> super#datatype dt
 *)
 
 let rec get_last_list_element = function
@@ -171,7 +157,8 @@ let rec get_last_list_element = function
   | _ :: xs -> get_last_list_element xs
 
 (* Superclass to handle SG mutations, references, and that sorta jazz *)
-class sg_fold init_sg_ref init_scope_id init_path =
+
+class sg_fold init_sg_ref init_scope_id (init_path : string list) =
   object(self)
     inherit SugarTraversals.fold as super
     val sg = init_sg_ref
@@ -234,6 +221,13 @@ class sg_fold init_sg_ref init_scope_id init_path =
           (* CHECK: Does this also need to modify the path? *)
           self#add_import_to_scope x anon_scope_id;
           {< scope_id = anon_scope_id >}#qualified_name xs
+  end
+
+
+
+class sg_term_fold init_sg_ref init_scope_id init_path =
+  object(self)
+    inherit sg_fold init_sg_ref init_scope_id init_path as super
 
     (* Phrases are handled the same in either binding or definition mode. *)
     method phrasenode = function
@@ -276,6 +270,8 @@ class sg_fold init_sg_ref init_scope_id init_path =
           self#add_decl_to_scope (plain_decl bnd_name) path scope_id;
           self
       | bn -> super#bindingnode bn
+
+    method datatype _ = self
   end
 
   (* Binding policies for inside blocks (inside functions, for example)
@@ -284,11 +280,11 @@ class sg_fold init_sg_ref init_scope_id init_path =
   (* At the top-level (and within modules), bindings are unordered sets. *)
 let rec binding_sg_fold init_sg_ref init_scope_id init_path =
   object (self)
-    inherit sg_fold init_sg_ref init_scope_id init_path as super
+    inherit sg_term_fold init_sg_ref init_scope_id init_path as super
     method phrasenode = function
       | `Block (bs, p) ->
           let block_scope_id = self#create_scope (Some scope_id) in
-          let o = phrase_sg_fold sg block_scope_id path in
+          let o = phrase_sg_fold sg block_scope_id self#get_path in
           let o = List.fold_left (fun o b -> (o#binding b)) o bs in
           let _ = o#phrase p in
           self
@@ -319,7 +315,7 @@ let rec binding_sg_fold init_sg_ref init_scope_id init_path =
 
 and phrase_sg_fold init_sg_ref init_scope_id init_path =
     object(self)
-      inherit sg_fold init_sg_ref init_scope_id init_path as super
+      inherit sg_term_fold init_sg_ref init_scope_id init_path as super
 
       method phrasenode = function
         | `Block (bs, p) ->
@@ -357,16 +353,64 @@ and phrase_sg_fold init_sg_ref init_scope_id init_path =
         | bn -> super#bindingnode bn
     end
 
+let fresh_sg_ref () =
+  let sg = new_scope_graph in
+  let init_scope_id = get_scope_num () in
+  let init_scope = new_scope None in
+  let sg = add_scope init_scope_id init_scope sg in
+  (ref sg, init_scope_id)
+
 let construct_sg_imp prog =
-    let sg = new_scope_graph in
-    let init_scope_id = get_scope_num () in
-    let init_scope = new_scope None in
-    let sg = add_scope init_scope_id init_scope sg in
-    let sg_ref = ref sg in
+    let (sg_ref, init_scope_id) = fresh_sg_ref () in
     let o = (phrase_sg_fold sg_ref init_scope_id [])#program prog in
     o#get_sg
 
 let create_scope_graph = construct_sg_imp
+
+let construct_type_sg_imp prog =
+  let (sg_ref, init_scope_id) = fresh_sg_ref () in
+
+  let rec ty_sg_fold scope_id path =
+    object(self)
+      inherit sg_fold sg_ref scope_id path as super
+
+      method bindingnode = function
+        | `Type (n, _, dt) ->
+            (* I suppose it depends on whether we want types to behave like function or Var bindings.
+             * Let's treat them like defs (i.e. function bindings) for now *)
+            super#add_decl_to_scope (plain_decl n) self#get_path self#get_scope_id;
+            self#datatype' dt
+        | `QualifiedImport ns ->
+            let _ = self#qualified_name ns in
+            super#add_import_to_scope (get_last_list_element ns) (self#get_scope_id);
+            self
+        | `Module (n, bs) ->
+          (* Create new scope for module *)
+          let new_scope_id = self#create_scope (Some scope_id) in
+          (* Add new declaration *)
+          self#add_decl_to_scope (annotated_decl n new_scope_id) path scope_id;
+          (* Process inner block with new parameters *)
+          let o_module_inner = ty_sg_fold new_scope_id (n :: self#get_path) in
+          let _ = List.fold_left (fun o -> o#binding) o_module_inner bs in
+          (* Back to our parameters *)
+          self
+        | bn -> super#bindingnode bn
+
+      method datatype = function
+        | `TypeApplication (n, _) ->
+            (* Add to references for current scope *)
+            self#add_ref_to_scope n scope_id; self
+        | `QualifiedTypeApplication (ns, _) ->
+            super#qualified_name ns
+        | dt -> super#datatype dt
+
+    end in
+
+  let o = (ty_sg_fold init_scope_id [])#program prog in
+  o#get_sg
+
+let create_type_scope_graph = construct_type_sg_imp
+
 
 (* Print DOT file for scope graph *)
 let show_scope_graph sg =
@@ -436,7 +480,6 @@ let resolve_name : string -> scope_graph -> Uniquify.unique_ast -> DeclSet.t
   let rec resolve_name_inner ref_name seen_imports =
     let containing_scope_id = lookup_containing_scope ref_name sg in
     let plain_name = Uniquify.lookup_var ref_name u_ast in
-    (* printf "Resolving %s. Plain name: %s. Containing scope: %d\n" ref_name plain_name containing_scope_id; *)
     let vis_decls = visible_decls  (StringSet.add ref_name seen_imports) IntSet.empty containing_scope_id in
     (* Finally filter out irrelevant ones *)
     DeclSet.filter (fun (n, _d) -> (Uniquify.lookup_var n u_ast) = plain_name) vis_decls

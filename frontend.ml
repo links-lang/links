@@ -30,9 +30,9 @@ struct
       (* let program = Chaser.add_dependencies "" program in *)
       let program =
         if ModuleUtils.contains_modules program then
-        let (scope_graph, unique_ast) = Chaser.add_dependencies "" program in
+        let (scope_graph, ty_scope_graph, unique_ast) = Chaser.add_dependencies "" program in
         (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
-        DesugarModules.desugarModules scope_graph unique_ast
+        DesugarModules.desugarModules scope_graph ty_scope_graph unique_ast
       else program in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
