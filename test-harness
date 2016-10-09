@@ -61,7 +61,9 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
     if filemode.startswith('true') :
         proc = Popen([links, code], stdout=PIPE, stderr=PIPE, env=env)
     elif filemode.startswith('args'):
-        proc = Popen([links, args, code], stdout=PIPE, stderr=PIPE, env=env)
+        arg_array = str.split(args, ' ')
+        popen_list = [links] + arg_array + [code]
+        proc = Popen(popen_list, stdout=PIPE, stderr=PIPE, env=env)
     else:
         proc = Popen([links, flags, code], stdout=PIPE, stderr=PIPE, env=env)
     passed = True

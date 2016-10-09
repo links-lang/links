@@ -422,6 +422,7 @@ let options : opt list =
     (noshort, "measure-performance", set measuring true,               None);
     ('n',     "no-types",            set BS.printing_types false,         None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
+    ('m',     "modules",             set BS.modules true,              None);
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
      Some(fun filename -> Loader.print_cache filename;

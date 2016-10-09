@@ -1,75 +1,84 @@
 Modules hide inner definitions
 ./tests/modules/basic-hide.links
-filemode : true
+filemode : args
 stderr : @.*
 exit : 1
 
 Basic qualified binding resolution
 ./tests/modules/basic-qual-resolution.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hello" : String
 
 Inner module qualified binding resolution
 ./tests/modules/basic-inner-qual-resolution.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hi" : String
 
 Open allows basic unqualified binding access
 ./tests/modules/basic-open.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hello!" : String
 
 Module nesting allows partially-qualified names to be used for resolution
 ./tests/modules/basic-partial-qualification.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hello" : String
 
 Open allows partially-qualified names to be used for resolution
 ./tests/modules/basic-partial-qualification-open.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hello" : String
 
 Open still allows fully-qualified names to be used
 ./tests/modules/basic-open-fully-qual.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hello" : String
 
 Opened module does not shadow bindings after opening
 ./tests/modules/basic-open-shadow.links
-filemode : true
+filemode : args
+args : -m
 stdout : "hi" : String
 
 Opened module shadows previous bindings after opening
 ./tests/modules/basic-open-no-shadow.links
-filemode : true
+filemode : args
 stdout : "greetings" : String
+args : -m
 
 Cyclic dependencies outlawed
 ./tests/modules/runmulti cyclicA.links
-filemode : true
+filemode : args
+args : -m
 stderr : @.*
 exit : 1
 
 Module chasing
 ./tests/modules/moduleA.links
 filemode : args
-args : --path=tests/modules
+args : -m --path=tests/modules
 stdout : "hello from c!" : String
 
 Module chasing via FQ variables
 ./tests/modules/varRefA.links
 filemode : args
-args : --path=tests/modules
+args : -m --path=tests/modules
 stdout : "hello from b!" : String
 
 Basic types in modules
 ./tests/modules/type-sig.links
 filemode : args
-args : --path=tests/modules
+args : -m --path=tests/modules
 stdout : 5 : A.AInt
 
 Basic type in session type
 ./tests/modules/session-type.links
 filemode : args
-args : --path=tests/modules
+args : -m --path=tests/modules
 stdout : () : ()
