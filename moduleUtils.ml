@@ -42,6 +42,14 @@ object
     | `QualifiedImport _
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
+
+  method datatype = function
+    | `QualifiedTypeApplication _ -> {< has_no_modules = false >}
+    | dt -> super#datatype dt
+
+  method phrasenode = function
+    | `QualifiedVar _ -> {< has_no_modules = false >}
+    | pn -> super#phrasenode pn
 end
 
 let contains_modules prog = not ((has_no_modules#program prog)#satisfied)
