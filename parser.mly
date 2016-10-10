@@ -845,7 +845,7 @@ record_labels:
 | record_label                                                 { [$1] }
 
 links_open:
-| OPEN qualified_name                                          { `QualifiedImport $2, pos () }
+| OPEN qualified_type_name                                     { `QualifiedImport $2, pos () }
 | OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
 
 binding:
