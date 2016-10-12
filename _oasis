@@ -29,7 +29,8 @@ Description     : Links eases building interactive web applications with
                   proposals from PLT Scheme, and distributed-computing support
                   from Erlang. On top of this, it adds some new web-centric
                   features of its own.
-Authors         : The Links Team
+Authors         : The Links Team <links-dev@inf.ed.ac.uk>
+Maintainers     : Jan Stolarek <jan.stolarek@ed.ac.uk>
 License         : GPL-2
 LicenseFile     : LICENSE
 OCamlVersion    : >= 4.02
