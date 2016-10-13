@@ -32,8 +32,17 @@ doc/*.aux
 doc/*.log
 doc/*.pdf
 doc/*.toc
+links-api.docdir
 
 # ocamlbuild artefacts
 _build
 links.byte
 links.native
+META
+setup.data
+setup.log
+*.mllib
+*.mldylib
+
+# profiling data
+gmon.out

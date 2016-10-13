@@ -1,0 +1,243 @@
+OASISFormat     : 0.4
+Name            : Links
+Version         : 0.1
+Synopsis        : Links is a functional programming language designed to make web
+                  programming easier.
+Description     : Links eases building interactive web applications with
+                  significant client- and server-side components.
+
+                  A typical, modern web program involves many "tiers": part of
+                  the program runs in the web browser, part runs on a web
+                  server, and part runs in back-end systems such as a relational
+                  database. To create such a program, the programmer must master
+                  a myriad of languages: the logic is written in a mixture of
+                  Java, Python, and Perl; the presentation in HTML; the GUI
+                  behavior in Javascript; and the queries are written in SQL or
+                  XQuery. There is no easy way to link these, for example, to be
+                  sure that an HTML form or an SQL query produces the type of
+                  data that the Java code expects. This problem is called the
+                  impedance mismatch problem.
+
+                  Links eases the impedance mismatch problem by providing a
+                  single language for all three tiers. The system generates code
+                  for each tier; for instance, translating some code into
+                  Javascript for the browser, some into a bytecode for the
+                  server, and some into SQL for the database.
+
+                  Links incorporates proven ideas from other programming
+                  languages: database-query support from Kleisli, web-interaction
+                  proposals from PLT Scheme, and distributed-computing support
+                  from Erlang. On top of this, it adds some new web-centric
+                  features of its own.
+Authors         : The Links Team <links-dev@inf.ed.ac.uk>
+Maintainers     : Jan Stolarek <jan.stolarek@ed.ac.uk>
+License         : GPL-2
+LicenseFile     : LICENSE
+OCamlVersion    : >= 4.02
+Plugins         : DevFiles (0.4)
+BuildType       : ocamlbuild (0.4)
+Homepage        : http://www.links-lang.org/
+BugReports      : https://github.com/links-lang/links/issues
+
+PostBuildCommand: cp prelude.links _build
+
+SourceRepository github
+  Type          : git
+  Location      : https://github.com/links-lang/links.git
+  Branch        : sessions
+  Browser       : https://github.com/links-lang/links
+
+Flag postgresql
+  Description   : Enable PostgreSQL database backend
+  Default       : false
+
+Flag mysql
+  Description   : Enable MySQL database backend
+  Default       : false
+
+Flag sqlite
+  Description   : Enable SQLite database backend
+  Default       : false
+
+Flag sqlite3
+  Description   : Enable SQLite3 database backend
+  Default       : false
+
+Flag monetdb
+  Description   : Enable MonetDB database backend
+  Default       : false
+
+Library links
+  Path          : .
+  Build         : true
+  Install       : false
+  BuildTools    : ocamlbuild
+  CompiledObject: native
+  BuildDepends  : bigarray,
+                  deriving.syntax,
+                  deriving.syntax.classes,
+                  deriving.runtime,
+                  lwt,
+                  lwt.syntax,
+                  lwt.unix,
+                  num,
+                  str,
+                  threads
+  Modules       : Basicsettings,
+                  BuildTables,
+                  Cgi,
+                  Chaser,
+                  CheckXmlQuasiquotes,
+                  Closures,
+                  CompilePatterns,
+                  Constant,
+                  Database,
+                  Debug,
+                  DefaultAliases,
+                  DesugarCP,
+                  DesugarDatatypes,
+                  DesugarDbs,
+                  DesugarFormlets,
+                  DesugarFors,
+                  DesugarFuns,
+                  DesugarInners,
+                  DesugarLAttributes,
+                  DesugarModules,
+                  DesugarPages,
+                  DesugarProcesses,
+                  DesugarRegexes,
+                  DumpTypes,
+                  Env,
+                  Errors,
+                  Evalir,
+                  EventHandlers,
+                  FixTypeAbstractions,
+                  Frontend,
+                  Generalise,
+                  Getopt,
+                  Graph,
+                  Instantiate,
+                  Ir,
+                  Irtojs,
+                  Js,
+                  Json,
+                  Jsonlex,
+                  Jsonparse,
+                  Lexer,
+                  Lib,
+                  Linksregex,
+                  Loader,
+                  ModuleUtils,
+                  Netencoding,
+                  Notfound,
+                  Parse,
+                  ParseXml,
+                  Parser,
+                  Performance,
+                  PP,
+                  Proc,
+                  Query,
+                  RefineBindings,
+                  Regex,
+                  ResolvePositions,
+                  Settings,
+                  SourceCode,
+                  SugarTraversals,
+                  Sugartoir,
+                  Sugartypes,
+                  Tables,
+                  TransformSugar,
+                  TypeSugar,
+                  TypeUtils,
+                  Types,
+                  Typevarcheck,
+                  Unify,
+                  Unionfind,
+                  Utility,
+                  Value,
+                  Var,
+                  Webif,
+                  XmlLexer,
+                  XmlParser
+
+BetaFeatures    : section_object
+
+Object links-postgresql
+  Path          : lib/postgresql
+  Build        $: flag(postgresql)
+  Install       : false
+  BuildTools    : ocamlbuild
+  BuildDepends  : links, postgresql
+  Modules       : Pg_database
+
+Object links-mysql
+  Path          : lib/mysql
+  Build        $: flag(mysql)
+  Install       : false
+  BuildTools    : ocamlbuild
+  BuildDepends  : links, mysql
+  Modules       : Mysql_database
+
+Object links-sqlite
+  Path          : lib/lite
+  Build        $: flag(sqlite)
+  Install       : false
+  BuildTools    : ocamlbuild
+  BuildDepends  : links, sqlite
+  Modules       : Lite_database
+
+Object links-sqlite3
+  Path          : lib/lite3
+  Build        $: flag(sqlite3)
+  Install       : false
+  BuildTools    : ocamlbuild
+  BuildDepends  : links, sqlite3
+  Modules       : Lite3_database
+
+Object links-monetdb
+  Path          : lib/monetdb
+  Build        $: flag(monetdb)
+  Install       : false
+  BuildTools    : ocamlbuild
+  BuildDepends  : links, mapi
+  Modules       : M5_database
+
+Executable linksi
+  Path          : .
+  Build         : true
+  Install       : true
+  BuildTools    : ocamlbuild
+  MainIs        : links.ml
+  DataFiles     : prelude.links
+  CompiledObject: native
+  BuildDepends  : links
+
+Test tests
+  Command          : ./run-tests
+  WorkingDirectory : .
+
+# FIXME: documentation settings need fine-tuning before making a release.
+# We need to specify where to install documentation
+
+Document quick-help
+  Title         : User's Guide
+  Type          : custom (0.4)
+  Build         : true
+  XCustom       : cd doc && make
+  XCustomClean  : cd doc && make clean
+
+Document grammar
+  Title         : Grammar
+  Type          : custom (0.4)
+  Build         : true
+  XCustom       : cd doc && make grammar.pdf
+  XCustomClean  : cd doc && make clean
+
+Document links-api
+  Title         : Links API documentation
+  Type          : ocamlbuild (0.3)
+  Build         : true
+  BuildTools    : ocamldoc, ocamlbuild
+  Install       : false
+  XOCamlbuildPath      : ./
+  XOCamlbuildLibraries : links

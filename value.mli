@@ -32,6 +32,7 @@ module Show_database : Deriving_Show.Show with type a = database
 type db_constructor = string -> database * string
 
 val register_driver : string * db_constructor -> unit
+val print_drivers : unit -> string list
 val db_connect : string -> string -> database * string
 val parse_db_string : string -> string * string
 val reconstruct_db_string : string * string -> string
