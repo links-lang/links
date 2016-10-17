@@ -1361,6 +1361,7 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
 let unit_type = `Record (make_empty_closed_row ())
 (* let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)]))) *)
 let string_type = `Primitive `String
+let keys_type = `Application (list, [`Type (`Application (list, [`Type (string_type)]))])
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
@@ -2521,3 +2522,6 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+
+
+

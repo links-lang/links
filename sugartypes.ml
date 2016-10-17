@@ -226,7 +226,8 @@ and phrasenode = [
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
+(* | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase *)
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
@@ -382,8 +383,8 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2)
-    | `Xml (_, attrs, attrexp, children) ->
+    | `TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2) 
+    | `Xml (_, attrs, attrexp, children) -> 
         union_all
           [union_map (snd ->- union_map phrase) attrs;
            option_map phrase attrexp;

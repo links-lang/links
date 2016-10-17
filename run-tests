@@ -41,6 +41,28 @@ if [[ $1 != "no-db" ]]; then
             ret=1
         fi
     done
+
+    for s in tests/shredding/*.sql; do
+        cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            echo "FAILED DATABASE PREPARATION $s"
+            ret=1
+        fi
+    done
+
+    for t in tests/shredding/*.links; do
+        cmnd="./links --config=tests/shredding/config $t"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            echo "FAILED TEST $t"
+            ret=1
+        fi
+    done
 fi
 
 exit $ret

@@ -87,8 +87,31 @@ class pg_dbresult (pgresult:Postgresql.result) = object
     | Fatal_error     -> `QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
 
   method nfields : int = original#nfields
+  method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
+  method getvalue : int -> int -> string = pgresult#getvalue
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = pgresult#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then do_map (n+1) (f (pgresult#getvalue n)::acc)
+	else acc
+      in do_map 0 []
+  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
+      let max = pgresult#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then do_map (n+1) (f (pgresult#get_tuple n)::acc)
+	else acc
+      in do_map 0 []
+  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
+      let max = pgresult#ntuples in
+      let rec do_fold n acc = 
+	if n < max
+	then do_fold (n+1) (f (pgresult#get_tuple n) acc)
+	else acc
+      in do_fold 0 x
   method error : string = original#error
 end
 
@@ -104,12 +127,14 @@ class pg_database host port dbname user password = object(self)
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method driver_name () = "postgresql"
   method exec : string -> Value.dbvalue = fun query ->
-    try
-      let raw_result = connection#exec query in
-        new pg_dbresult raw_result
+    Debug.debug_time "db#exec" (fun () ->
+      try
+      let raw_result = connection#exec query in 
+	new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
+	    )
   method escape_string s =
     connection#escape_string s
   method quote_field f =
