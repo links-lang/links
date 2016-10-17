@@ -40,3 +40,6 @@ links.native
 
 # database configuration
 tests/database/config
+
+# shredding configuration
+tests/shredding/config
