@@ -1,7 +1,7 @@
 open Postgresql
 open Utility
 
-(* Pg_database 
+(* Pg_database
    Implements the Value.database interface
    for Postgresql back ends *)
 
@@ -74,21 +74,44 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   inherit Value.dbvalue
   val original = pgresult
   method status : Value.db_status = match original#status with
-      Command_ok 
+      Command_ok
     | Tuples_ok -> `QueryOk
-        
-    | Empty_query     -> `QueryError ("String sent to the backend was empty"); 
-    | Command_ok      -> `QueryError ("Successful completion of a command returning no data"); 
+
+    | Empty_query     -> `QueryError ("String sent to the backend was empty");
+    | Command_ok      -> `QueryError ("Successful completion of a command returning no data");
     | Tuples_ok       -> `QueryError ("The query successfully executed")
     | Copy_out        -> `QueryError ("Copy Out (from server) data transfer started")
     | Copy_in         -> `QueryError ("Copy In (to server) data transfer started")
     | Bad_response    -> `QueryError ("Bad_response : The server's response was not understood")
     | Nonfatal_error  -> `QueryError ("Nonfatal_error : The server's response was not understood")
     | Fatal_error     -> `QueryError ("Fatal_error : The server's response was not understood (" ^ original#error ^ ")")
-        
+
   method nfields : int = original#nfields
+  method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
+  method getvalue : int -> int -> string = pgresult#getvalue
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = pgresult#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then do_map (n+1) (f (pgresult#getvalue n)::acc)
+	else acc
+      in do_map 0 []
+  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
+      let max = pgresult#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then do_map (n+1) (f (pgresult#get_tuple n)::acc)
+	else acc
+      in do_map 0 []
+  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
+      let max = pgresult#ntuples in
+      let rec do_fold n acc = 
+	if n < max
+	then do_fold (n+1) (f (pgresult#get_tuple n) acc)
+	else acc
+      in do_fold 0 x
   method error : string = original#error
 end
 
@@ -104,12 +127,14 @@ class pg_database host port dbname user password = object(self)
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
   method driver_name () = "postgresql"
   method exec : string -> Value.dbvalue = fun query ->
-    try
-      let raw_result = connection#exec query in
-        new pg_dbresult raw_result
+    Debug.debug_time "db#exec" (fun () ->
+      try
+      let raw_result = connection#exec query in 
+	new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
+	    )
   method escape_string s =
     connection#escape_string s
   method quote_field f =
@@ -124,7 +149,7 @@ class pg_database host port dbname user password = object(self)
       match field_names, vss with
         | [],    [_] ->
             (* HACK:
-               
+
                PostgreSQL doesn't allow an empty tuple of columns to
                be specified for an insert. *)
             " default values"
@@ -139,27 +164,27 @@ class pg_database host port dbname user password = object(self)
             *)
             failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
         | _::_,  _ ->
-            (* HACK:               
+            (* HACK:
                This translation is compatible with PostgreSQL versions
                prior to 8.2, but perhaps we should now switch to the
                more idiomatic multi-row insert supported by version
                8.2 and later. *)
             "(" ^ String.concat "," quoted_field_names ^") "^
-              String.concat " union all " (List.map (fun vs -> "select " ^ 
+              String.concat " union all " (List.map (fun vs -> "select " ^
                                                        String.concat "," vs) vss)
     in
       "insert into " ^ table_name ^ body
-  (* 
+  (*
      TODO:
      implement make_insert_returning for versions of postgres prior to 8.2
-  *) 
-  (* jcheney: Added implementation of make_insert_returning 
+  *)
+  (* jcheney: Added implementation of make_insert_returning
      based on MySQL one, using lastval()
      Also added explicit code to assign the SERIES field being returned.
-     This is fragile in that it depends on details of PostgreSQL 
+     This is fragile in that it depends on details of PostgreSQL
      that may change between versions; it works for version9.0
   *)
-  method make_insert_returning_query 
+  method make_insert_returning_query
       : (string * string list * string list list * string) -> string list =
     fun (table_name, field_names, vss, returning) ->
       [self#make_insert_query(table_name,
@@ -172,7 +197,13 @@ let driver_name = "postgresql"
 let get_pg_database_by_string args =
   match Utility.split_string args ':' with
     | (name::host::port::user::pass::_) ->
-        (new pg_database host port name user pass, 
+       (* If "user" field was left empty then get the name of user running the
+          process.  This has to be done by acquiring UID, finding corresponding
+          entry in passwd table and reading user's login name. *)
+       let user = if user = ""
+                  then (Unix.getpwuid (Unix.getuid ())).pw_name
+                  else user in
+        (new pg_database host port name user pass,
          Value.reconstruct_db_string (driver_name, args))
     | _ ->
         failwith "Insufficient arguments when establishing postgresql connection"

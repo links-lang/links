@@ -226,7 +226,8 @@ and phrasenode = [
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
+(* | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase *)
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
@@ -257,10 +258,11 @@ and bindingnode = [
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
-| `Include of string
+| `Import  of name
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
+| `Module  of name * phrase
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -381,8 +383,8 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2)
-    | `Xml (_, attrs, attrexp, children) ->
+    | `TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2) 
+    | `Xml (_, attrs, attrexp, children) -> 
         union_all
           [union_map (snd ->- union_map phrase) attrs;
            option_map phrase attrexp;
@@ -436,7 +438,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Include _
+    | `Import _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p

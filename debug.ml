@@ -25,3 +25,14 @@ let if_set setting message =
    [message] is a lazy expression *)
 let if_set_l setting message =
   (if Settings.get_value(setting) then print (Lazy.force message))
+
+
+(* Print [message] with time taken by evaluating f *)
+let debug_time msg f = 
+  if Settings.get_value(debugging_enabled) 
+  then 
+    let start_time = Utility.time_milliseconds() in
+    let raw_result = f () in
+    print (msg ^" time: " ^ string_of_int (Utility.time_milliseconds() - start_time));
+    raw_result
+  else f ();;

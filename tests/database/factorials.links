@@ -1,0 +1,18 @@
+fun lookupFactorials(n) server {
+  var db = database "links";
+  var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+  query {
+    for (row <-- factorials)
+    where (row.i <= n)
+    orderby (row.i)
+      [(i=row.i, f=row.f)]
+  }
+}
+
+fun test() {
+  assertEq(lookupFactorials(1), [(f=1,i=1)]);
+  assertEq(lookupFactorials(8), [(f=40320,i=8), (f=5040,i=7), (f=720,i=6), (f=120,i=5), (f=24,i=4), (f=6,i=3), (f=2,i=2), (f=1,i=1)]);
+}
+
+test()

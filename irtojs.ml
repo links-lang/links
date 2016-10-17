@@ -661,11 +661,12 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           callk_yielding kappa (Dict [])
       | `Database v ->
           callk_yielding kappa (Dict [("_db", gv v)])
-      | `Table (db, table_name, (readtype, _writetype, _needtype)) ->
+      | `Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
           callk_yielding kappa
             (Dict [("_table",
                     Dict [("db", gv db);
                           ("name", gv table_name);
+                          ("keys", gv keys);
                           ("row",
                            strlit (Types.string_of_datatype (readtype)))])])
       | `Query _ -> Die "Attempt to run a query on the client"

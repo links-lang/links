@@ -97,7 +97,15 @@ module Int = struct
   module Show_t = Deriving_Show.Show_int
 end
 
-module Char =
+module IntPair = struct
+  type t = int * int
+	deriving (Show)
+  (*let compare = Pervasives.compare*)
+  (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
+  let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
+end
+
+module Char = 
 struct
   include Char
   module Show_t = Deriving_Show.Show_char
@@ -221,6 +229,8 @@ end
 module type INTSET = Set with type elt = int
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
+
+module IntPairMap = Map.Make(IntPair)
 
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
@@ -409,6 +419,20 @@ struct
     List.fold_right(fun (w, x, y, z)(ws, xs, ys, zs)-> w::ws,x::xs,y::ys,z::zs)
       wxyzs
       ([],[],[],[])
+
+  let rec filter_map pred f = function
+    | [] -> []
+    | x::xs ->
+        if pred x then (f x)::(filter_map pred f xs) else
+          (filter_map pred f xs)
+
+  let print_list xs =
+    let rec print_list_inner = function
+        | [] -> ""
+        | e::[] -> e
+        | e::xs -> e ^ ", " ^ (print_list_inner xs) in
+    "[" ^ print_list_inner xs ^ "]"
+
 end
 include ListUtils
 
@@ -869,3 +893,6 @@ let string_of_float' : float -> string =
       s ^ "0"
     else
       s
+
+let time_seconds() = int_of_float (Unix.time())
+let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)

@@ -1028,7 +1028,8 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                 raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                               ^string_of_row extension_row)))
             | `Var (var, (lin, rest), `Flexible) ->
-              if TypeVarSet.mem var (free_row_type_vars extension_row) then
+               if not (StringMap.is_empty extension_field_env) &&
+                    TypeVarSet.mem var (free_row_type_vars extension_row) then
                 begin
                   if rest = `Base then
                     raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^

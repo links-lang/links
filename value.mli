@@ -12,6 +12,11 @@ class virtual dbvalue :
     method virtual fname : int -> string
     method virtual get_all_lst : string list list
     method virtual nfields : int
+    method virtual ntuples : int
+    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+    method virtual map_array : 'a. (string array -> 'a) -> 'a list
+    method virtual fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
+    method virtual getvalue : int -> int -> string
     method virtual status : db_status
   end
 
@@ -42,7 +47,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   deriving (Show)
 
-type table = (database * string) * string * Types.row
+type table = (database * string) * string * string list list * Types.row
   deriving (Show)
 
 type primitive_value = [
@@ -110,7 +115,9 @@ val box_string : string -> t
 val unbox_string : t -> string
 val box_list : t list -> t
 val unbox_list : t -> t list
-val box_unit : unit -> t
+val box_record : (string * t) list -> t
+val unbox_record : t -> (string * t) list
+val box_unit : unit -> t 
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)

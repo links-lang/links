@@ -92,7 +92,7 @@ let used_database v : Value.database option =
   and used =
     function
       | `For (gs, os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
+      | `Table ((db, _), _, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -171,7 +171,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `For (gens, _os, body) -> te body
       | `Singleton (`Record fields) -> record fields
       | `If (_, t, _) -> te t
-      | `Table (_, _, row) -> `Record row
+      | `Table (_, _, _, row) -> `Record row
       | `Constant (`Bool b) -> Types.bool_type
       | `Constant (`Int i) -> Types.int_type
       | `Constant (`Char c) -> Types.char_type
@@ -182,7 +182,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
-let default_of_base_type : Types.primitive -> t =
+let default_of_base_type =
   function
     | `Bool   -> `Constant (`Bool false)
     | `Int    -> `Constant (`Int 42)
@@ -191,7 +191,7 @@ let default_of_base_type : Types.primitive -> t =
     | `String -> `Constant (`String "")
     | _       -> assert false
 
-let rec value_of_expression : t -> Value.t = fun v ->
+let rec value_of_expression = fun v ->
   let ve = value_of_expression in
   let value_of_singleton = fun s ->
     match s with
@@ -249,7 +249,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
           | Some y -> `Var (y, ts)
         end
       | `Constant c -> `Constant c
-
+	    
 let labels_of_field_types field_types =
   StringMap.fold
     (fun name _ labels' ->
@@ -257,7 +257,13 @@ let labels_of_field_types field_types =
     field_types
     StringSet.empty
 
-let table_field_types (_, _, (fields, _, _)) =
+let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+  let (field_spec_map, _, _) = TypeUtils.extract_row t in
+  StringMap.map (function
+                  | `Present t -> t
+                  | _ -> assert false) field_spec_map
+  
+let table_field_types (_, _, _, (fields, _, _)) =
   StringMap.map (function
                   | `Present t -> t
                   | _ -> assert false) fields
@@ -269,21 +275,26 @@ let rec field_types_of_list =
     | `Table table -> table_field_types table
     | _ -> assert false
 
+	  (* takes a normal form expression and returns true iff it has list type *)
+let is_list =
+  function
+    | `For _
+    | `Table _
+    | `Singleton _
+    | `Concat _
+    | `If (_, _, `Concat []) -> true
+    | _ -> false
+	  
+
+	  (* TODO: Clean up and unify with Queryshredding.Eval *)
+	  
 module Eval =
 struct
   exception DbEvaluationError of string
 
   let nil = `Concat []
 
-  (* takes a normal form expression and returns true iff it has list type *)
-  let is_list =
-    function
-      | `For _
-      | `Table _
-      | `Singleton _
-      | `Concat _
-      | `If (_, _, `Concat []) -> true
-      | _ -> false
+
 
   let eval_error fmt =
     let error msg = raise (DbEvaluationError msg) in
@@ -1170,6 +1181,8 @@ struct
 end
 
 
+    (* TODO: Unify this with Queryshredding.ShreddedSql *)
+    
 module Sql =
 struct
   type query =
@@ -1372,7 +1385,7 @@ struct
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           clause db body
-      | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
+      | `For ((x, `Table (_db, table, _, _row))::gs, os, body) ->
           let body = clause db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -1402,7 +1415,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (_db, table, (fields, _, _)) ->
+      | `Table (_db, table, _keys, (fields, _, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)

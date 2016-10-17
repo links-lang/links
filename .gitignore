@@ -22,3 +22,18 @@ xmlParser.mli
 ._ncdi
 ._bcdi
 *.links.cache
+
+# Emacs temporary and backup files
+\#*
+
+# documentation
+quick-help.html
+doc/*.aux
+doc/*.log
+doc/*.pdf
+doc/*.toc
+
+# ocamlbuild artefacts
+_build
+links.byte
+links.native

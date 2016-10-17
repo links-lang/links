@@ -32,26 +32,12 @@ let prelude_file =
 
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note", 
-"  _     _ __   _ _  __  ___\n\
+" _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links with session types", `System)
-
-(* (* Alternative banner designs *)
-"  _     _ __    _ _  __  ___
- / |   | |  \\  |   |/ / / ._\\
- | |   | | , \\ | |   /  \\  \\
- | |___| | |\\ \\  | |\\ \\__\\  \\
- |_____._._| \\___|_| \\______/",
-"                                         _
-  _     _ __    _ _  _ ___        <>    |_>
- / |   | |  \\  | | |'// ._\\      //     |  
- | |   | | , \\ | |  / \\  \\      //      |
- | |___| | |\\ \\  | | \\_\\  \\  ,-//      _|_
- |_____._._| \\___|_|\\_____/  \\_/      <_|_>"
-*)
+Welcome to Links with session types and shredding", `System)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
@@ -67,6 +53,12 @@ struct
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
 end
+
+module Shredding = struct
+  let relax_query_type_constraint = Settings.add_bool("relax_query_type_constraint", false, `User)
+  let shredding = Settings.add_bool("shredding", false, `User)
+end
+
 
 (** Caveat: don't [Open basicsettings] because the above module
    conflicts with the Js module from js.ml*)
@@ -98,3 +90,9 @@ let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Compile & cache whole program, closures, and HTML *)
 let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
+
+(* Use keys in shredding *)
+let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
+
+(* Paths to look for .links files in chasing pass *)
+let links_file_paths = Settings.add_string("links_file_paths", "", `User)

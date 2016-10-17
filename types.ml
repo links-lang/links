@@ -1361,6 +1361,7 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
 let unit_type = `Record (make_empty_closed_row ())
 (* let string_type = `Alias (("String", []), (`Application (list, [`Type (`Primitive `Char)]))) *)
 let string_type = `Primitive `String
+let keys_type = `Application (list, [`Type (`Application (list, [`Type (string_type)]))])
 let char_type = `Primitive `Char
 let bool_type = `Primitive `Bool
 let int_type = `Primitive `Int
@@ -1925,40 +1926,11 @@ struct
           | `Dual s -> "~" ^ datatype bound_vars p s
           | `End -> "End"
           | `Table (r, w, n)   ->
-             (* TODO:
-
-                pretty-print this using constraints?
-             *)
+             (* TODO: pretty-print this using constraints? *)
              "TableHandle(" ^
                datatype bound_vars p r ^ "," ^
                datatype bound_vars p w ^ "," ^
                datatype bound_vars p n ^ ")"
-                (*
-                  QUESTION:
-
-                  How should we render the types [Char] and [XmlItem]?
-
-                  It isn't clear what the right thing to do here is.
-
-                  Option 1 - as lists
-                  Then
-                  ['a', 'b', 'c] : [Char]
-                  but
-                  "abc" ++ "def" : [Char]
-
-                  Option 2 - as typenames
-                  Then
-                  "abc" ++ "def" : String
-                  but
-                  ['a', 'b', 'c] : String
-
-                  What do GHCi and SML/NJ Do?
-                *)
-                (*
-                  | `Application ("List", [`Primitive `Char]) -> "String"
-                  | `Application ("List", [`Primitive `XmlItem]) -> "Xml"
-                *)
-
           (*        | `Alias ((s,[]), t) ->  "{"^s^"}"^ sd t*)
           | `Alias ((s,[]), t) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
@@ -2550,3 +2522,6 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+
+
+

@@ -269,7 +269,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string)),
    datatype "(Float) -> Xml",
-  PURE);
+   PURE);
+
+  "sysexit",
+  (p1 (fun ret -> Pervasives.exit (unbox_int ret)),
+   datatype "(Int) ~> a",
+   IMPURE);
+
+  "show",
+  (p1 (fun v -> box_string (Value.string_of_value v)),
+   datatype "(a) ~> String",
+   PURE);
 
   "exit",
   (`Continuation Value.toplevel_cont,
@@ -910,6 +920,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+  "serverTimeMilliseconds",
+  (`Server
+     (`PFun (fun _ ->
+               box_int(time_milliseconds()))),
+   datatype "() ~> Int",
+   IMPURE);
+
   "dateToInt",
   (p1 (fun r ->
          match r with
@@ -958,10 +975,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (p2 (fun table rows ->
             match table, rows with
               | `Table _, `List [] -> `Record []
-              | `Table ((db, params), table_name, _), _ ->
+              | `Table ((db, params), table_name, _, _), _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
-                    prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
+                    Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                     (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s]) ~> ()",
@@ -983,12 +1000,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             match table, rows, returning with
               | `Table _, `List [], _ ->
                   failwith "InsertReturning: undefined for empty list of rows"
-              | `Table ((db, params), table_name, _), _, _ ->
+              | `Table ((db, params), table_name, _, _), _, _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
 
                   let returning = unbox_string returning in
-                    prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                    Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                     (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
@@ -1422,6 +1439,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	(* END OF EQUALITY FUNCTIONS *)
 
+        "gensym",
+        (let idx = ref 0 in
+         `PFun (fun _ -> let i = !idx in idx := i+1; (box_int i)),
+         datatype "() -> Int",
+         IMPURE);
 
     "dumpTypes",
   (`Server (p1 (fun code ->

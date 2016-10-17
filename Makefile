@@ -88,6 +88,9 @@ SOURCES = $(OPC)                                \
           closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
+					moduleUtils.mli moduleUtils.ml \
+					chaser.mli chaser.ml \
+					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           value.mli value.ml                    \
@@ -125,7 +128,8 @@ SOURCES = $(OPC)                                \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
-          query.ml                              \
+          query.mli query.ml                              \
+          queryshredding.ml                     \
           evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \
@@ -147,13 +151,9 @@ LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
 
 include $(OCAMLMAKEFILE)
 
-test-raw:
-	for i in tests/*.tests; do echo $$i 1>&2; ./test-harness $$i; done
-
-tests:
-test: $(RESULT)
+.PHONY: tests
+tests: $(RESULT)
 	@./run-tests
-	@perl -MTest::Harness -e 'Test::Harness::runtests("tests/web-tests.pl")'
 
 fixmes:
 	@grep FIXME *.ml *.mli *.mly *.mll

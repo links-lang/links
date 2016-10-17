@@ -22,8 +22,13 @@ type db_status = [ `QueryOk | `QueryError of string ]
 class virtual dbvalue = object
   method virtual status : db_status
   method virtual nfields : int
+  method virtual ntuples : int
   method virtual fname : int -> string
   method virtual get_all_lst : string list list
+  method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+  method virtual map_array : 'a. (string array -> 'a) -> 'a list
+  method virtual fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
+  method virtual getvalue : int -> int -> string
   method virtual error : string
 end
 
@@ -158,7 +163,7 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * Types.row
+type table = (database * string) * string * string list list * Types.row
   deriving (Show)
 
 (* type number = num *)
@@ -246,7 +251,7 @@ let globals (env, genv) = (genv, genv)
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
 | primitive_value_basis
-| `Table of string * string * string
+| `Table of string * string * string list list * string
 | `Database of string
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
@@ -267,8 +272,8 @@ and compressed_env = (Ir.var * compressed_t) list
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
     | #primitive_value_basis as v -> v
-    | `Table ((_database, db), table, row) ->
-        `Table (db, table, Types.string_of_datatype (`Record row))
+    | `Table ((_database, db), table, keys, row) ->
+        `Table (db, table, keys, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
 let localise env var =
@@ -321,14 +326,14 @@ and compress_env env : compressed_env =
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
     | #primitive_value_basis as v -> v
-    | `Table (db_name, table_name, t) ->
+    | `Table (db_name, table_name, keys, t) ->
         let row =
           match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
             | `Record row -> row
             | _ -> assert false in
         let driver, params = parse_db_string db_name in
         let database = db_connect driver params in
-          `Table (database, table_name, row)
+          `Table (database, table_name, keys, row)
     | `Database s ->
         let driver, params = parse_db_string s in
         let database = db_connect driver params in
@@ -431,7 +436,7 @@ and string_of_primitive : primitive_value -> string = function
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
-  | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
+  | `Table (_, table_name, _, _) -> "(table " ^ table_name ^")"
   | `String s -> "\"" ^ s ^ "\""
 
 and string_of_tuple (fields : (string * t) list) : string =
@@ -505,7 +510,10 @@ and unbox_string : t -> string = function
 and box_list l = `List l
 and unbox_list : t -> t list = function
   | `List l -> l | _ -> failwith "Type error unboxing list"
-and box_unit : unit -> t
+and box_record fields = `Record fields
+and unbox_record : t -> (string * t) list = function
+  | `Record fields -> fields | _ -> failwith "Type error unboxing record"
+and box_unit : unit -> t 
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"

@@ -176,13 +176,14 @@ let keywords = [
  "formlet"  , FORMLET;
  "if"       , IF;
  "in"       , IN;
- "include"  , INCLUDE;
+ "open"     , OPEN;
  "yields"   , YIELDS;
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
+ "module"   , MODULE;
  "mu"       , MU;
  "native"   , NATIVE;
  "nu"       , NU;
@@ -211,16 +212,20 @@ let keywords = [
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "values"   , VALUES;
- "var"      , VAR;
- "where"    , WHERE;
- "with"     , WITH;
+ "var"      , VAR; 
+ "where"    , WHERE; 
+ "with"     , WITH; 
+(* SAND *)
+ "tablekeys"     , TABLEKEYS;
 ]
 
 exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
-let def_kind = ['A'-'Z'] def_id*
+let module_name = (['A'-'Z'] (['A'-'Z' 'a'-'z'])*)
+let qualified_module = (module_name ((":::" module_name)*))
+let qualified_var = (qualified_module (":::" def_id))
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)
@@ -294,6 +299,7 @@ rule lex ctxt nl = parse
   | '.'                                 { DOT }
   | ".."                                { DOTDOT }
   | "::"                                { COLONCOLON }
+  | ":::"                               { COLONCOLONCOLON }
   | ':'                                 { COLON }
   | '!'                                 { BANG }
   | '?'                                 { QUESTION }
@@ -314,10 +320,12 @@ rule lex ctxt nl = parse
   | "infixr"                            { INFIXR ctxt#setprec }
   | "prefix"                            { PREFIX ctxt#setprec }
   | "postfix"                           { POSTFIX ctxt#setprec }
+  (* | qualified_module as modd            { QUALIFIEDMODULE modd } *)
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
+  | qualified_var as var                { QUALIFIEDVARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse
