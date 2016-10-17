@@ -1,4 +1,4 @@
-fun request(s) client {
+fun request(s) {
   <html>
    <body>
     <h1>Please type a number</h1>
