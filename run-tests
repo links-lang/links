@@ -26,14 +26,22 @@ fi
 if [[ $1 != "no-db" ]]; then
     if [[ ! -e tests/database/config ]]; then
       echo -en "$STARTCOLOR"
-      echo -e  "Creating default configuration from config.sample file."
-      echo -e  "Please customize it to match your local database setup."
+      echo -e  "Creating default database configuration tests/database/config"
+      echo -e  "from tests/database/config.sample"
+      echo -e  "Please customize to match your local database setup."
       echo -en "$ENDCOLOR"
       cp tests/database/config.sample tests/database/config
     fi
 
+    user_string=""
+    user=`grep database_args tests/database/config \
+          | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
+    if [ $user != "" ]; then
+        user_string="-U $user"
+    fi
+
     for s in tests/database/*.sql; do
-        cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
+        cmnd="psql -v $user_string ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
@@ -53,9 +61,27 @@ if [[ $1 != "no-db" ]]; then
             ret=1
         fi
     done
+fi
+
+if [ $1 == "shredding" -o $2 == "shredding" ]; then
+    if [[ ! -e tests/database/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default shredding configuration tests/shredding/config"
+      echo -e  "from tests/shredding/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp tests/database/shredding.sample tests/shredding/config
+    fi
+
+    user_string=""
+    user=`grep database_args tests/shredding/config \
+          | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
+    if [ $user != "" ]; then
+        user_string="-U $user"
+    fi
 
     for s in tests/shredding/*.sql; do
-        cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
+        cmnd="psql -v $user_string ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
