@@ -5,6 +5,10 @@
 #
 # https://github.com/links-lang/links/wiki/Running-the-test-suite
 
+# Control sequences used to display text in red
+STARTCOLOR="\e[31m";
+ENDCOLOR="\e[0m";
+
 ret=0
 
 if [[ $1 != "db-only" ]]; then
@@ -20,13 +24,21 @@ if [[ $1 != "db-only" ]]; then
 fi
 
 if [[ $1 != "no-db" ]]; then
+    if [[ ! -e tests/database/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default configuration from config.sample file."
+      echo -e  "Please customize it to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp tests/database/config.sample tests/database/config
+    fi
+
     for s in tests/database/*.sql; do
         cmnd="psql -v ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
         if [ $ret_code != 0 ]; then
-            echo "FAILED DATABASE PREPARATION $s"
+            echo -e "$STARTCOLOR\rFAILED DATABASE PREPARATION $s$ENDCOLOR"
             ret=1
         fi
     done
@@ -37,7 +49,7 @@ if [[ $1 != "no-db" ]]; then
         eval $cmnd
         ret_code=$?
         if [ $ret_code != 0 ]; then
-            echo "FAILED TEST $t"
+            echo -e "$STARTCOLOR\rFAILED TEST $t$ENDCOLOR"
             ret=1
         fi
     done

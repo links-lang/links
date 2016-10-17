@@ -37,3 +37,6 @@ doc/*.toc
 _build
 links.byte
 links.native
+
+# database configuration
+tests/database/config
