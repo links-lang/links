@@ -36,7 +36,7 @@ if [[ $1 != "no-db" ]]; then
     user_string=""
     user=`grep database_args tests/database/config \
           | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
-    if [ $user != "" ]; then
+    if [ "$user" != "" ]; then
         user_string="-U $user"
     fi
 
@@ -63,7 +63,7 @@ if [[ $1 != "no-db" ]]; then
     done
 fi
 
-if [ $1 == "shredding" -o $2 == "shredding" ]; then
+if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
     if [[ ! -e tests/database/config ]]; then
       echo -en "$STARTCOLOR"
       echo -e  "Creating default shredding configuration tests/shredding/config"
@@ -76,7 +76,7 @@ if [ $1 == "shredding" -o $2 == "shredding" ]; then
     user_string=""
     user=`grep database_args tests/shredding/config \
           | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
-    if [ $user != "" ]; then
+    if [ "$user" != "" ]; then
         user_string="-U $user"
     fi
 
