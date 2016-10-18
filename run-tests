@@ -64,13 +64,13 @@ if [[ $1 != "no-db" ]]; then
 fi
 
 if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
-    if [[ ! -e tests/database/config ]]; then
+    if [[ ! -e tests/shredding/config ]]; then
       echo -en "$STARTCOLOR"
       echo -e  "Creating default shredding configuration tests/shredding/config"
       echo -e  "from tests/shredding/config.sample"
       echo -e  "Please customize to match your local database setup."
       echo -en "$ENDCOLOR"
-      cp tests/database/shredding.sample tests/shredding/config
+      cp tests/shredding/config.sample tests/shredding/config
     fi
 
     user_string=""
