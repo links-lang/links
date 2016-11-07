@@ -35,7 +35,7 @@ val primitive_location : string -> Sugartypes.location
 val primitive_arity : string -> int option
 val cgi_parameters : (string * string) list ref
 
-val cohttp_server_response : (string * string) list -> string -> (Cohttp_lwt_unix.Server.Response.t * Cohttp_lwt_body.t) Lwt.t
+val cohttp_server_response : (string * string) list -> string -> (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
 val print_http_response : (string * string) list -> string -> unit
 
 val primitive_names : string list
