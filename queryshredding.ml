@@ -1254,7 +1254,7 @@ struct
       | `Project (`Var x, l) -> `Project (`Var x, l)
       | `Project (`Project (`Project (`Var z, "1"), i), l) ->
         (* HACK: this keeps z annotated with its original unflattened type *)
-        `Project (`Var z, "1"^"_"^i^"_"^l)
+        `Project (`Var z, "1"^"@"^i^"@"^l)
       | `Record fields ->
         (* concatenate labels of nested records *)
         `Record
@@ -1264,7 +1264,7 @@ struct
                  | `Record inner_fields ->
                    StringMap.fold
                      (fun name' body fields ->
-                       StringMap.add (name ^ "_" ^ name') body fields)
+                       StringMap.add (name ^ "@" ^ name') body fields)
                      inner_fields
                      fields
                  | body ->
@@ -1288,7 +1288,7 @@ struct
           (* lift base expressions to records *)
           match flatten_inner e with
             | `Record fields -> `Record fields
-            | p -> `Record (StringMap.add "_" p StringMap.empty)
+            | p -> `Record (StringMap.add "@" p StringMap.empty)
         in
           `Singleton e'
       (* HACK: not sure if `Concat is supposed to appear here...
@@ -1323,7 +1323,7 @@ struct
                  | `Record inner_fields ->
                    StringMap.fold
                      (fun name' t fields ->
-                       StringMap.add (name ^ "_" ^ name') t fields)
+                       StringMap.add (name ^ "@" ^ name') t fields)
                      inner_fields
                      fields
                  | `Primitive p ->
@@ -1380,7 +1380,7 @@ struct
         `Record
           (StringMap.fold
              (fun name p fields ->
-               let names = split_string name '_' in
+               let names = split_string name '@' in
                  unflatten_field names p fields)
              fields
              StringMap.empty)
@@ -1410,7 +1410,7 @@ Fast unflattening.
       `Primitive _ -> `Primitive name
     | `Record rcd -> 
 	`Record (List.map (fun (nm,t') -> 
-	  (nm,make_tmpl_inner (name ^"_"^nm) t')) 
+	  (nm,make_tmpl_inner (name ^"@"^nm) t'))
 		   (StringMap.to_alist rcd))
     and make_tmpl_outer name t = 
       match t with 
