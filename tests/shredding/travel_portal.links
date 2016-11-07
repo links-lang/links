@@ -59,6 +59,14 @@ fun q_lineage() {
   }
 }
 
+fun issue27() {
+  query {
+    for (a <-- agencies)
+      [(name = a.name,
+        based_in = a.based_in)]
+  }
+}
+
 fun test() {
   assertEq(q(), [(name = "BayTours", phone = "415-1200"),
                  (name = "BayTours", phone = "415-1200"),
@@ -72,7 +80,10 @@ fun test() {
                                   (row = 6, "table" = "externaltours")]),
                          (data = (name = "HarborCruz", phone = "831-3000"),
                           prov = [(row = 2, "table" = "agencies"),
-                                  (row = 7, "table" = "externaltours")])])
+                                  (row = 7, "table" = "externaltours")])]);
+  # https://github.com/links-lang/links/issues/27
+  assertEq(issue27(), [(name = "BayTours", based_in = "San Francisco"),
+                       (name = "HarborCruz", based_in = "Santa Cruz")])
 }
 
 test()
