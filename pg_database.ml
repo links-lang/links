@@ -174,10 +174,7 @@ class pg_database host port dbname user password = object(self)
                                                        String.concat "," vs) vss)
     in
       "insert into " ^ table_name ^ body
-  (*
-     TODO:
-     implement make_insert_returning for versions of postgres prior to 8.2
-  *)
+
   (* jcheney: Added implementation of make_insert_returning
      based on MySQL one, using lastval()
      Also added explicit code to assign the SERIES field being returned.
