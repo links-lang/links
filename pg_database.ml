@@ -175,12 +175,6 @@ class pg_database host port dbname user password = object(self)
     in
       "insert into " ^ table_name ^ body
 
-  (* jcheney: Added implementation of make_insert_returning
-     based on MySQL one, using lastval()
-     Also added explicit code to assign the SERIES field being returned.
-     This is fragile in that it depends on details of PostgreSQL
-     that may change between versions; it works for version9.0
-  *)
   method make_insert_returning_query
       : (string * string list * string list list * string) -> string list =
     fun (table_name, field_names, vss, returning) ->
