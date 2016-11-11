@@ -188,7 +188,7 @@ let get_pg_database_by_string args =
           process.  This has to be done by acquiring UID, finding corresponding
           entry in passwd table and reading user's login name. *)
        let user = if user = ""
-                  then let open Unix in (Unix.getpwuid (Unix.getuid ())).pw_name
+                  then let open Unix in (getpwuid (getuid ())).pw_name
                   else user in
         (new pg_database host port name user pass,
          Value.reconstruct_db_string (driver_name, args))
