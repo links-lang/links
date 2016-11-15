@@ -78,7 +78,7 @@
     "select"
     "forward"
     "handle"
-    "open"
+    "shallowhandle"
     "handler"
     "shallowhandler"
     "do"
