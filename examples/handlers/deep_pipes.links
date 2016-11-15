@@ -1,0 +1,84 @@
+# Deep encoding of pipes
+# Adapted from Kammar et al. (2013)
+
+typename Comp(e::Row,a) = () ~e~> a;
+
+typename Producer(e::Row) = () ~e~> (Consumer(e)) ~e~> ();
+typename Consumer(e::Row) = (Int) ~e~> (Producer(e)) ~e~> ();
+
+sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
+fun yield(s) { do Yield(s) }
+
+sig await : () {Await:a |_}-> a
+fun await() { do Await }
+
+sig up : (Comp( {Yield:(Int) {}-> () |e}, ()))
+                {Yield{yp}           |e}~>
+	  Comp( {Yield{yp}           |e}, (Consumer({Yield{yp} |e})) {Yield{yp} |e}~> ())
+fun up(m)() {
+  handle(m) {
+    case Return(x)   -> fun(_) { x }
+    case Yield(s, k) ->
+      fun(cons : Consumer({Yield{yp} |e})) {
+          cons(s)(fun() { k(()) })
+      }
+  }
+}
+
+var up = fun(cons)(m) { up(m)()(cons) };
+
+sig down : (Comp( {Await:Int |e}, ()))
+                  {Await{ap} |e}~>
+            Comp( {Await{ap} |e}, (Producer({Await{ap} |e})) {Await{ap} |e}~> ())
+fun down(m)() {
+  handle(m) {
+    case Return(x) -> fun(_) { x }
+    case Await(k)  ->
+     fun(prod : Producer({Await{ap} |e})) {
+         prod()(fun(s) { k(s) })
+     }
+  }
+}
+
+var down = fun(prod)(m) { down(m)()(prod) };
+
+sig <+< : (Comp({Await:Int, Yield{yp}          |e}, ())     # in: down
+          ,Comp({Await{ap}, Yield:(Int) {}-> ()|e}, ())) -> # in: up
+	   Comp({Await{ap}, Yield{yp}          |e}, ())     # out: pipe
+op d <+< u {
+  fun() { down(fun()(cons) { up(cons)(u) })(d) }
+}
+
+# Some producers and consumers
+# Produces an infinite stream of integers starting from [n] *)
+sig produceFrom : (Int) -> Comp({Yield:(Int) {}-> () |_}, ())
+fun produceFrom(n)() {
+    yield(n);
+    produceFrom(n+1)()
+}
+
+# Accumulates elements from an integer stream until [n], and produces a singleton integer stream
+sig sumTo : (Int) -> Comp({Await:Int, Yield:(Int) {}-> () |_}, ())
+fun sumTo(n)() {
+  fun sumTo_aux(acc, lim) {
+    if (acc >= lim) {
+      yield(acc)
+    } else {
+      var x = await();
+      sumTo_aux(acc+x, lim)
+    }
+  }
+  sumTo_aux(0, n)
+}
+
+# Prints a stream of integers
+sig printer : Comp({Await:Int |_}, ())
+fun printer() {
+    var n = await();
+    print(intToString(n));
+    printer()
+}
+
+fun example() {
+  (printer <+< sumTo(100) <+< produceFrom(0))()
+}
