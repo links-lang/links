@@ -1,5 +1,16 @@
 # Shallow pipes in Links
 
+# SL (30/10/2016): Currently this avoids the syntactic sugar because
+# there appear to be bugs in desugaring of both handler and
+# shallowhandler:
+#
+#   * Sometimes the wild effect appears more than once in a row
+#   
+#   * Sometimes the guardedness check fails when an attempt is made to
+#   unify a row variable with a boxed version of itself
+#
+# TODO: chase down these bugs
+
 #
 # Type aliases
 #
@@ -36,28 +47,36 @@ op consumer <+< producer {
 #
 sig down : (Consumer({Yield{c} |e}, s, a)) ->
            (Up      ({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
-open shallowhandler down(m)(producer) {
-  case Return(x) -> x
-  case Await(k)  -> up(fun() { producer(()) })(k)()
+fun down(m)(producer)() {
+  shallowhandle(m) {
+    case Return(x) -> x
+    case Await(k)  -> up(fun() { producer(()) })(k)()
+  }
 }
 
 sig up : (Producer({Await{b} |e}, s, a)) ->
          (Down    ({Yield{c} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
-open shallowhandler up(m)(consumer) {
-  case Return(x)  -> x
-  case Yield(s,k) -> down(fun() { consumer(s) })(k)()
+fun up(m)(consumer)() {
+  shallowhandle(m) {
+    case Return(x)  -> x
+    case Yield(s,k) -> down(fun() { consumer(s) })(k)()
+  }
 }
 
-sig printHandler : (Comp({PutString:(String) {}-> ()}, a)) ~> a
-shallowhandler printHandler(m) {
-  case Return(x)         -> x
-  case PutString(str,k)  -> { print(str); printHandler(fun() { k(()) }) }
+sig printHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |e}~> a
+fun printHandler(m) {
+  shallowhandle(m) {
+    case Return(x)         -> x
+    case PutString(str,k)  -> { print(str); printHandler(fun() { k(()) }) }
+  }
 }
 
-sig printDeepHandler : (Comp({PutString:(String) {}-> ()}, a)) ~> a
-handler printDeepHandler(m) {
-  case Return(x)         -> x
-  case PutString(str,k)  -> { print(str); k(()) }
+sig printDeepHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |e}~> a
+fun printDeepHandler(m) {
+  handle(m) {
+    case Return(x)         -> x
+    case PutString(str,k)  -> { print(str); k(()) }
+  }
 }
 
 #
