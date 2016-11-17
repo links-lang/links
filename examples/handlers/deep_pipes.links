@@ -6,9 +6,9 @@ typename Comp(e::Row,a) = () ~e~> a;
 typename Producer(e::Row, a) = (()) ~e~> (Consumer(e, a)) ~e~> ();
 typename Consumer(e::Row, a) = (a)  ~e~> (Producer(e, a)) ~e~> ();
 
-typename Pump(e::Row,o)     = forall ap::Presence . Comp({Yield:(o) {}-> () |e}, ());
-typename Sink(e::Row,i)     = forall yp::Presence . Comp({Await:i           |e}, ());
-typename Pipe(e::Row,i,o)   = forall ap::Presence, yp::Presence . Comp({Await{ap}, Yield{yp} |e}, ()); 
+typename Pump(e::Row,o)     = Comp({Yield:(o) {}-> () |e}, ());
+typename Sink(e::Row,i)     = Comp({Await:i           |e}, ());
+typename Pipe(e::Row,i,o)   = Comp({ |e}, ()); 
 
 # Yield an element
 sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
@@ -59,7 +59,7 @@ var down = fun(prod)(m) { down(m)()(prod) };
 # sig <+< : ( Comp({Await:s  , Yield{yp}          |e}, ())      # in: down
 #           , Comp({Await{ap}, Yield:(s) {}-> ()  |e}, ()) ) -> # in: up
 # 	      Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
-sig <+< : (Sink({ Yield{yp} |e}, s), Pump({ Await{ap} |e}, s)) -> Pipe({ |e}, s, s)
+sig <+< : (Sink({ Yield{yp} |e}, s), Pump({ Await{ap} |e}, s)) -> Pipe({ Await{ap}, Yield{yp} |e}, s, s)
 op d <+< u {
   fun() { down(fun(())(cons) { up(cons)(u) })(d) }
 }
@@ -67,7 +67,7 @@ op d <+< u {
 # sig >+> : ( Comp({Await{ap}, Yield:(s) {}-> ()  |e}, ())      # in: up
 #           , Comp({Await:s  , Yield{yp}          |e}, ()) ) -> # in: down
 # 	      Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
-sig >+> : ( Pump({ Await{ap} |e}, s), Sink({ Yield{yp} |e}, s)) -> Pipe({ |e}, s, s)
+sig >+> : ( Pump({ Await{ap} |e}, s), Sink({ Yield{yp} |e}, s)) -> Pipe({ Await{ap}, Yield{yp} |e}, s, s)
 op u >+> d {
   d <+< u
 }
@@ -81,9 +81,9 @@ fun produceFrom(n)() {
     produceFrom(n+1)()
 }
 
-# Accumulates [n] elements from an integer stream
+# Accumulates elements from an integer stream until the sum is greater than or equal to [n]
 #sig sumTo : (Int) -> Comp({Await:Int, Yield:(Int) {}-> () |_}, ())
-sig sumTo : (Int) -> Pipe({ |_}, Int, Int)
+sig sumTo : (Int) -> Pipe({ Await:Int, Yield:(Int) {}-> () |_}, Int, Int)
 fun sumTo(n)() {
   fun sumTo_aux(acc, lim) {
     if (acc >= lim) {
@@ -98,7 +98,7 @@ fun sumTo(n)() {
 
 # Skips [n] elements from an arbitrary stream
 #sig skip : (Int) -> Comp({Await:s, Yield:(s) {}-> () |_}, ())
-sig skip : (Int) -> Pipe({ |_}, s, s)
+sig skip : (Int) -> Pipe({ Await:s, Yield:(s) {}-> () |_}, s, s)
 fun skip(n)() {
    if (n <= 0) { yield(await()); skip(0)() }
    else {
@@ -109,7 +109,7 @@ fun skip(n)() {
 
 # Turns a stream of as into a stream of bs
 #sig converter : ((a) {Await:a, Yield:(b) {}-> () |e}~> b) -> Comp({Await:a,Yield:(b) {}-> () |e}, ())
-sig converter : ((a) {Await:a, Yield:(b) {}-> () |e}~> b) -> Pipe({ |e}, a, b)
+sig converter : ((a) {Await:a, Yield:(b) {}-> () |e}~> b) -> Pipe({ Await:a, Yield:(b) {}-> () |e}, a, b)
 fun converter(conv)() {
     var b = conv(await());
     yield(b);
