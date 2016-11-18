@@ -36,7 +36,7 @@ let error_as_string = function
 | Rc.UNKNOWN e -> "unknown: "^ string_of_int (Rc.int_of_unknown e)
 
 let data_to_string data =
-  match data with 
+  match data with
     Data.NONE -> ""
   | Data.NULL -> ""
   | Data.INT i -> Int64.to_string i
@@ -44,25 +44,25 @@ let data_to_string data =
   | Data.TEXT s | Data.BLOB s -> s
 ;;
 
-class lite3_result (stmt: stmt) = object
+class lite3_result (stmt: stmt) = object (self)
   inherit Value.dbvalue
   val result_list_and_status =
-    let rec get_results (results,status) = 
+    let rec get_results (results,status) =
       match status with
         `QueryOk -> (
           match step stmt with
-            Rc.OK|Rc.ROW -> 
-            let data = Array.to_list (row_data stmt) in 
-            let row = List.map data_to_string data in 
+            Rc.OK|Rc.ROW ->
+            let data = Array.to_list (row_data stmt) in
+            let row = List.map data_to_string data in
             get_results (row::results,`QueryOk )
-          | Rc.DONE -> 
-            results,`QueryOk 
+          | Rc.DONE ->
+            results,`QueryOk
           | e -> results, `QueryError (error_as_string e)
         )
       | _ -> (results,status)
-    in 
+    in
     get_results ([],`QueryOk)
-  
+
   method status : Value.db_status = snd(result_list_and_status)
   method nfields : int =  column_count stmt
   method ntuples : int = List.length (fst result_list_and_status)
@@ -72,7 +72,7 @@ class lite3_result (stmt: stmt) = object
     List.nth(List.nth (fst(result_list_and_status)) n) i
   method gettuple : int -> string array = fun n ->
     Array.of_list(List.nth (fst(result_list_and_status)) n)
-  method error : string = 
+  method error : string =
     match snd(result_list_and_status) with
       `QueryError(msg) -> msg
     | `QueryOk -> "OK"
@@ -92,7 +92,7 @@ class lite3_database file = object(self)
 end
 
 let driver_name = "sqlite3"
-let _ = Value.register_driver (driver_name, 
-			       fun args -> 
-			         new lite3_database args, 
+let _ = Value.register_driver (driver_name,
+			       fun args ->
+			         new lite3_database args,
 			         Value.reconstruct_db_string (driver_name, args))

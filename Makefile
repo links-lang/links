@@ -7,13 +7,6 @@ export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
 
-ifdef SQLITE_LIBDIR
-   DB_CODE    += lite_database.ml
-   DB_AUXLIBS += $(SQLITE_LIBDIR)
-   DB_CLIBS   += sqlite_stubs sqlite
-   DB_LIBS    += sqlite
-endif
-
 ifdef SQLITE3_LIBDIR
    DB_CODE    += lite3_database.ml
    DB_AUXLIBS += $(SQLITE3_LIBDIR)
@@ -32,13 +25,6 @@ ifdef POSTGRESQL_LIBDIR
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
    THREADS = yes
-endif
-
-ifdef MONETDB5_LIBDIR
-	DB_CODE    += m5_database.ml
-	DB_AUXLIBS += $(MONETDB5_LIBDIR)
-	DB_LIBS    += mapi
-	THREADS = yes
 endif
 
 AUXLIB_DIRS = $(DB_AUXLIBS)
