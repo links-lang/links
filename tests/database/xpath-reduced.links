@@ -1,0 +1,46 @@
+# Links port of the XPath code from
+#
+#   A Practical Theory of Language-Integrated Query
+#   James Cheney, Sam Lindley, Philip Wadler
+#   at ICFP'13
+
+var db = database "links";
+
+var xml = table ("xml") with
+    (id : Int,
+     parent : Int,
+     name : String,
+     pre : Int,
+     post : Int) from db;
+
+
+
+fun xpath1() {
+  query {
+    for (x <-- xml)
+    where ( empty(for (t <-- xml)
+                  where (x.id == t.parent)
+                   [()]))
+      [(name=x.name)]
+  }
+}
+
+fun xpath2() {
+  var p = fun (s) {
+        empty(for (t <-- xml)
+                  where (s.id == t.parent)
+                   [()])
+		   };
+  query {
+    for (x <-- xml)
+    where ( p(x))
+      [(name=x.name)]
+  }
+}
+
+fun test() {
+  assertEq(xpath1(), [(name="f"), (name="e"), (name="c")]);
+  assertEq(xpath1(), xpath2());
+}
+
+test()
