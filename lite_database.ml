@@ -34,18 +34,18 @@ class lite_result (vm: vm) = object
        column_names, column_types, etc. will fail *)
     let rec collect_results results =
       try
-        collect_results (Array.to_list (step_simple vm) :: results) 
+        collect_results (Array.to_list (step_simple vm) :: results)
       with Sqlite_done -> results
     in List.rev (collect_results [])
-  method status : Value.db_status = 
+  method status : Value.db_status =
     match vm_rc vm with
       | RC_ok -> `QueryOk
       | e     -> `QueryError (error_as_string e)
-  method nfields : int = 
-    match result_list with 
+  method nfields : int =
+    match result_list with
       | [] -> -1
       | _  -> List.length (List.hd result_list)
-  method fname  n : string = 
+  method fname  n : string =
     Array.get (column_names vm) n
   method get_all_lst : string list list =
     result_list

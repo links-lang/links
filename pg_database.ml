@@ -72,7 +72,7 @@ object (_self)
     | JSONB -> "jsonb"
 end
 
-class pg_dbresult (pgresult:Postgresql.result) = object
+class pg_dbresult (pgresult:Postgresql.result) = object (self)
   inherit Value.dbvalue
   val original = pgresult
   method status : Value.db_status = match original#status with
@@ -92,28 +92,28 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
   method getvalue : int -> int -> string = pgresult#getvalue
-  method get_tuple : int -> string array = pgresult#gettuple
-  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-      let max = pgresult#ntuples in
+  method gettuple : int -> string array = pgresult#get_tuple
+(*  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
       let rec do_map n acc = 
 	if n < max
-	then do_map (n+1) (f (pgresult#getvalue n)::acc)
+	then do_map (n+1) (f (self#getvalue n)::acc)
 	else acc
       in do_map 0 []
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
       let max = pgresult#ntuples in
       let rec do_map n acc = 
 	if n < max
-	then do_map (n+1) (f (pgresult#get_tuple n)::acc)
+	then do_map (n+1) (f (self#gettuple n)::acc)
 	else acc
       in do_map 0 []
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = pgresult#ntuples in
       let rec do_fold n acc = 
 	if n < max
-	then do_fold (n+1) (f (pgresult#get_tuple n) acc)
+	then do_fold (n+1) (f (self#gettuple n) acc)
 	else acc
-      in do_fold 0 x
+      in do_fold 0 x *)
   method error : string = original#error
 end
 

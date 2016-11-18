@@ -13,9 +13,9 @@ class virtual dbvalue :
     method virtual get_all_lst : string list list
     method virtual nfields : int
     method virtual ntuples : int
-    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
-    method virtual map_array : 'a. (string array -> 'a) -> 'a list
-    method virtual fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
+    method map : 'a. ((int -> string) -> 'a) -> 'a list
+    method map_array : 'a. (string array -> 'a) -> 'a list
+    method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
     method virtual getvalue : int -> int -> string
     method virtual gettuple : int -> string array
     method virtual status : db_status
