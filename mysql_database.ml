@@ -209,7 +209,7 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   in
     List.rev (obtain [])
 
-class mysql_result (result : result) db = object
+class mysql_result (result : result) db = object (self)
   inherit Value.dbvalue
   val rows = ref None
   method status : Value.db_status =
@@ -218,6 +218,8 @@ class mysql_result (result : result) db = object
       | StatusError c          -> `QueryError (string_of_error_code c)
   method nfields : int =
     fields result
+  method ntuples : int =
+    Int64.to_int(size result)
   method fname  n : string =
     (Utility.val_of (fetch_field_dir result n)).name
   method get_all_lst : string list list =
@@ -230,6 +232,45 @@ class mysql_result (result : result) db = object
             rows := Some r;
             r
       | Some r -> r
+  method getvalue : int -> int -> string = fun n f ->
+    to_row result (Int64.of_int n);
+    match (fetch result) with
+      Some arr -> (match arr.(n) with
+	Some s -> s
+      | None -> assert(false))
+    | None -> assert(false)
+  method gettuple : int -> string array = fun n ->
+    to_row result (Int64.of_int n);
+    match (fetch result) with
+      Some arr -> Array.map (function Some x -> x) arr
+    | None -> assert(false)
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then (
+	  do_map (n+1) (f (self#getvalue n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc = 
+	if n < max
+	then (
+	  do_map (n+1) (f (self#gettuple n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
+      let max = self#ntuples in
+      let rec do_fold n acc = 
+	if n < max
+	then (
+	  do_fold (n+1) (f (self#gettuple n) acc)
+	 )
+	else acc
+      in do_fold 0 x	    
   method error : string =
     Utility.val_of (errmsg db)
 end
