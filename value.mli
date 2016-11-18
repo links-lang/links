@@ -17,6 +17,7 @@ class virtual dbvalue :
     method virtual map_array : 'a. (string array -> 'a) -> 'a list
     method virtual fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
     method virtual getvalue : int -> int -> string
+    method virtual gettuple : int -> string array
     method virtual status : db_status
   end
 

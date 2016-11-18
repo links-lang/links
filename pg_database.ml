@@ -92,6 +92,7 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
   method getvalue : int -> int -> string = pgresult#getvalue
+  method get_tuple : int -> string array = pgresult#gettuple
   method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
       let max = pgresult#ntuples in
       let rec do_map n acc = 
