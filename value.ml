@@ -19,15 +19,39 @@ module Show_otherfield =
 type db_status = [ `QueryOk | `QueryError of string ]
   deriving (Show)
 
-class virtual dbvalue = object
+class virtual dbvalue = object (self)
   method virtual status : db_status
   method virtual nfields : int
   method virtual ntuples : int
   method virtual fname : int -> string
   method virtual get_all_lst : string list list
-  method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
-  method virtual map_array : 'a. (string array -> 'a) -> 'a list
-  method virtual fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc =
+	if n < max
+	then (
+	  do_map (n+1) (f (self#getvalue n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc =
+	if n < max
+	then (
+	  do_map (n+1) (f (self#gettuple n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
+      let max = self#ntuples in
+      let rec do_fold n acc =
+	if n < max
+	then (
+	  do_fold (n+1) (f (self#gettuple n) acc)
+	 )
+	else acc
+      in do_fold 0 x	    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
   method virtual getvalue : int -> int -> string
   method virtual gettuple : int -> string array
   method virtual error : string

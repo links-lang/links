@@ -244,9 +244,9 @@ class mysql_result (result : result) db = object (self)
     match (fetch result) with
       Some arr -> Array.map (function Some x -> x) arr
     | None -> assert(false)
-  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+(*  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
-      let rec do_map n acc = 
+      let rec do_map n acc =
 	if n < max
 	then (
 	  do_map (n+1) (f (self#getvalue n)::acc)
@@ -255,7 +255,7 @@ class mysql_result (result : result) db = object (self)
       in do_map 0 []
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
-      let rec do_map n acc = 
+      let rec do_map n acc =
 	if n < max
 	then (
 	  do_map (n+1) (f (self#gettuple n)::acc)
@@ -264,14 +264,14 @@ class mysql_result (result : result) db = object (self)
       in do_map 0 []
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = self#ntuples in
-      let rec do_fold n acc = 
+      let rec do_fold n acc =
 	if n < max
 	then (
 	  do_fold (n+1) (f (self#gettuple n) acc)
 	 )
 	else acc
-      in do_fold 0 x	    
-  method error : string =
+      in do_fold 0 x *)
+method error : string =
     Utility.val_of (errmsg db)
 end
 

@@ -65,8 +65,13 @@ class lite3_result (stmt: stmt) = object
   
   method status : Value.db_status = snd(result_list_and_status)
   method nfields : int =  column_count stmt
+  method ntuples : int = List.length (fst result_list_and_status)
   method fname n : string = column_name stmt n
   method get_all_lst : string list list = fst(result_list_and_status)
+  method getvalue : int -> int -> string = fun n i ->
+    List.nth(List.nth (fst(result_list_and_status)) n) i
+  method gettuple : int -> string array = fun n ->
+    Array.of_list(List.nth (fst(result_list_and_status)) n)
   method error : string = 
     match snd(result_list_and_status) with
       `QueryError(msg) -> msg
