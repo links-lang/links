@@ -44,7 +44,7 @@ let data_to_string data =
   | Data.TEXT s | Data.BLOB s -> s
 ;;
 
-class lite3_result (stmt: stmt) = object (self)
+class lite3_result (stmt: stmt) = object
   inherit Value.dbvalue
   val result_list_and_status =
     let rec get_results (results,status) =

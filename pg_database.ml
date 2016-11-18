@@ -72,7 +72,7 @@ object (_self)
     | JSONB -> "jsonb"
 end
 
-class pg_dbresult (pgresult:Postgresql.result) = object (self)
+class pg_dbresult (pgresult:Postgresql.result) = object
   inherit Value.dbvalue
   val original = pgresult
   method status : Value.db_status = match original#status with
@@ -93,27 +93,6 @@ class pg_dbresult (pgresult:Postgresql.result) = object (self)
   method get_all_lst : string list list = pgresult#get_all_lst
   method getvalue : int -> int -> string = pgresult#getvalue
   method gettuple : int -> string array = pgresult#get_tuple
-(*  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-      let max = self#ntuples in
-      let rec do_map n acc = 
-	if n < max
-	then do_map (n+1) (f (self#getvalue n)::acc)
-	else acc
-      in do_map 0 []
-  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
-      let max = pgresult#ntuples in
-      let rec do_map n acc = 
-	if n < max
-	then do_map (n+1) (f (self#gettuple n)::acc)
-	else acc
-      in do_map 0 []
-  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
-      let max = pgresult#ntuples in
-      let rec do_fold n acc = 
-	if n < max
-	then do_fold (n+1) (f (self#gettuple n) acc)
-	else acc
-      in do_fold 0 x *)
   method error : string = original#error
 end
 
@@ -131,7 +110,7 @@ class pg_database host port dbname user password = object(self)
   method exec : string -> Value.dbvalue = fun query ->
     Debug.debug_time "db#exec" (fun () ->
       try
-      let raw_result = connection#exec query in 
+      let raw_result = connection#exec query in
 	new pg_dbresult raw_result
     with
         Postgresql.Error msg ->
@@ -197,3 +176,4 @@ let get_pg_database_by_string args =
         failwith "Insufficient arguments when establishing postgresql connection"
 
 let _ = Value.register_driver (driver_name, get_pg_database_by_string)
+

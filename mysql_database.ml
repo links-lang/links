@@ -209,7 +209,7 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   in
     List.rev (obtain [])
 
-class mysql_result (result : result) db = object (self)
+class mysql_result (result : result) db = object
   inherit Value.dbvalue
   val rows = ref None
   method status : Value.db_status =
@@ -234,44 +234,11 @@ class mysql_result (result : result) db = object (self)
       | Some r -> r
   method getvalue : int -> int -> string = fun n f ->
     to_row result (Int64.of_int n);
-    match (fetch result) with
-      Some arr -> (match arr.(n) with
-	Some s -> s
-      | None -> assert(false))
-    | None -> assert(false)
+    Utility.val_of ((Utility.val_of (fetch result)).(f))
   method gettuple : int -> string array = fun n ->
     to_row result (Int64.of_int n);
-    match (fetch result) with
-      Some arr -> Array.map (function Some x -> x) arr
-    | None -> assert(false)
-(*  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-      let max = self#ntuples in
-      let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#getvalue n)::acc)
-	 )
-	else acc
-      in do_map 0 []
-  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
-      let max = self#ntuples in
-      let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#gettuple n)::acc)
-	 )
-	else acc
-      in do_map 0 []
-  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
-      let max = self#ntuples in
-      let rec do_fold n acc =
-	if n < max
-	then (
-	  do_fold (n+1) (f (self#gettuple n) acc)
-	 )
-	else acc
-      in do_fold 0 x *)
-method error : string =
+    Array.map Utility.val_of (Utility.val_of(fetch result))
+  method error : string =
     Utility.val_of (errmsg db)
 end
 
@@ -288,21 +255,21 @@ class mysql_database spec = object(self)
   method escape_string = Mysql.escape
   method quote_field f =
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
-  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun (table_name, field_names, vss, returning) ->
+  method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun (table_name, field_names, vss, _returning) ->
       [self#make_insert_query(table_name, field_names, vss);
        "select last_insert_id()"]
 end
 
 let parse_args (args : string) : db =
   match Utility.split_string args ':' with
-    | (name::host::port::user::pass::others) ->
+    | (name::host::port::user::pass::_) ->
        (* If "user" field was left empty then get the name of user running the
           process.  This has to be done by acquiring UID, finding corresponding
           entry in passwd table and reading user's login name. *)
-       let user = if user = ""
-                  then (Unix.getpwuid (Unix.getuid ())).pw_name
-                  else user in
+	let user = if user = ""
+                   then let open Unix in (getpwuid (getuid ())).pw_name
+                   else user in
         (try
           {
             dbname = Some name;
@@ -312,8 +279,8 @@ let parse_args (args : string) : db =
             dbpwd  = Some pass;
             dbsocket = None;
           }
-         with Failure "int_of_string" ->
-           failwith ("Couldn't parse mysql port number : " ^ port))
+         with Failure msg ->
+           failwith ("[" ^ msg ^ "] Couldn't parse mysql port number : " ^ port))
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
 let driver_name = "mysql"
