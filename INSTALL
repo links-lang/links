@@ -9,35 +9,20 @@ If you want to use a database, you should have the database as well as
 the OCaml bindings for it. Database systems currently supported by
 Links are PostgreSQL, MySQL, and SQLite.
 
-SYSTEM REQUIREMENTS
 
-If you can run OCaml, you should be able to compile and run Links. It
-is known to build from source with OCaml version 4.01.0 on Linux,
-Cygwin, and MacOS X.
+INSTALLING OCAML AND LINKS
 
-INSTALLING OCAML
+Links is written in OCaml and requires you to have an OCaml compiler installed
+on your system.  The easiest way to install OCaml and Links is using OCaml's
+package manager called OPAM.  Visit https://opam.ocaml.org/doc/Install.html and
+follow instructions there to install OCaml.  Once you have OCaml compiler run:
 
-Visit http://caml.inria.fr/ and look for a "Download" link. Download
-the latest OCaml package and follow the instructions provided with the
-OCaml for installing it on your platform. Typically something like:
+  $ opam install links
 
-  $ ./configure
-  $ make world.opt
-  $ make install
+This will install Links with all the required dependencies.
 
-does the trick, with appropriate modifications according to whether or
-not you have root access, or want to install OCaml in a non-standard
-location.
 
-DERIVING
-
-The Links source code depends on Jeremy Yallop's deriving library, now
-maintained by the Ocsigen project. The easiest way to install it is
-through the OCaml package manager OPAM. Having installed OPAM, do:
-
-  opam install deriving
-
-BUILDING LINKS
+BUILDING LINKS FROM SOURCE
 
 To build, move to the Links source directory (wherever this INSTALL
 file is) and run the following:
@@ -46,6 +31,7 @@ file is) and run the following:
 
 Now you should have an executable in the current directory called
 `links'.
+
 
 RUNNING LINKS
 
@@ -71,16 +57,18 @@ useful to invoke links in conjunction with rlwrap:
 
 To run Links web applications, see RUNNING WEB APPLICATIONS, below.
 
+
 RUNNING THE TESTS
 
 To check whether Links is working under your platform, try running the
 automated tests as follows:
 
-  $ make test-raw
+  $ make tests
 
 This should give you a lot of output.
 
-INSTALLING LINKS
+
+INSTALLING LINKS FROM SOURCE
 
 By default, Links looks for "prelude.links" in the current directory,
 or at a location specified in the Links config file (which in turn
@@ -254,6 +242,7 @@ To build Links with database support, follow these steps:
      where the password and user may be blank.  If the user name is left blank
      it will be assumed to be the name of the user running the process.
 
+
 EMACS MODE
 
 There is a pretty minimal emacs mode in links-mode.el
@@ -270,6 +259,7 @@ You might want to change the latter to suit your needs. From my emacs config:
 
 (custom-set-variables
   '(links-cli-arguments "--config=config"))
+
 
 QUESTIONS
 
