@@ -1,0 +1,32 @@
+opam-version: "1.2"
+name: "links"
+version: "0.6"
+maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
+authors: "The Links Team <links-dev@inf.ed.ac.uk>"
+homepage: "http://www.links-lang.org"
+dev-repo: "https://github.com/links-lang/links"
+bug-reports: "https://github.com/links-lang/links/issues"
+license: "GPL-2"
+build: [
+  [ make "nc" ]
+]
+install: [
+  [ "cp" "links" "%{prefix}%/bin/"                              ]
+  [ "mkdir" "-p" "%{prefix}%/lib/links"                         ]
+  [ "cp" "prelude.links" "%{prefix}%/lib/links"                 ]
+  [ "%{prefix}%/bin/links" "%{prefix}%/lib/links/prelude.links" ]
+]
+remove: [
+  [ "rm" "-rf" "%{prefix}%/bin/links" ]
+  [ "rm" "-rf" "%{prefix}%/lib/links" ]
+]
+depends: [
+  "ocamlfind" {build}
+  "deriving" {build}
+  "lwt"
+]
+depopts: [
+  "mysql"
+  "postgresql"
+  "sqlite3"
+]

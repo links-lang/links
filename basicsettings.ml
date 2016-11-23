@@ -24,14 +24,35 @@ let concurrent_server = Settings.add_bool ("concurrent_server", true, `System)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (** Name of the file containing the prelude code. *)
-let prelude_file = 
+let prelude_file =
   let prelude_dir = match Utility.getenv "LINKS_LIB" with
-      None -> Filename.dirname Sys.executable_name
+    (* If user defined LINKS_LIB then it takes the highest priority *)
     | Some path -> path
+    | None ->
+        (* If LINKS_LIB is not defined then we search in current directory *)
+        let current_dir = Filename.dirname Sys.executable_name in
+        if Sys.file_exists (Filename.concat current_dir "prelude.links") then
+          current_dir
+        else
+          try
+            (* If all else failed we search for OPAM installation of Links and
+               use a prelude that it provides *)
+            let opam_lib_dir =
+              input_line (Unix.open_process_in "opam config var lib 2>/dev/null") in
+            let opam_links_lib = Filename.concat opam_lib_dir "links" in
+            if Sys.file_exists (Filename.concat opam_links_lib "prelude.links") then
+              opam_links_lib
+            else
+              (* But if no OPAM installation exists we fall back to current
+                 directory so that user gets a reasonable error message *)
+              current_dir
+          with End_of_file ->
+            (* User probably does not have OPAM, so fall back to current directory *)
+            current_dir
   in Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
 
 (** The banner *)
-let welcome_note = Settings.add_string ("welcome_note", 
+let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
