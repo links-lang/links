@@ -13,7 +13,6 @@ before_install:
 install:
   - opam install -y deriving lwt postgresql
 script:
-  - cp Makefile.config.postgres Makefile.config
   - make -j2 nc
   - make tests
   - ./run-tests db-only shredding
