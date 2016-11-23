@@ -2,25 +2,29 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
 
-ifdef SQLITE3_LIBDIR
+POSTGRESQL_LIBDIR=$(shell ocamlfind query postgresql)
+SQLITE3_LIBDIR=$(shell ocamlfind query sqlite3)
+MYSQL_LIBDIR=$(shell ocamlfind query mysql)
+
+ifneq ($(SQLITE3_LIBDIR),)
    DB_CODE    += lite3_database.ml
    DB_AUXLIBS += $(SQLITE3_LIBDIR)
    DB_CLIBS   += sqlite3
    DB_LIBS    += sqlite3
 endif
 
-ifdef MYSQL_LIBDIR
+ifneq ($(MYSQL_LIBDIR),)
    DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
 
-ifdef POSTGRESQL_LIBDIR
+ifneq ($(POSTGRESQL_LIBDIR),)
    DB_CODE    += pg_database.ml
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
