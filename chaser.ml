@@ -63,19 +63,6 @@ object(self)
           let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
           self#add_import_candidate to_add
     | bn -> super#bindingnode bn
-
-  method phrasenode = function
-    | `QualifiedVar ns ->
-        if can_resolve_qual_name ns sg u_ast then self else
-          let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
-          self#add_import_candidate to_add
-    | p -> super#phrasenode p
-  method datatype = function
-    | `QualifiedTypeApplication (ns, _) ->
-      if can_resolve_qual_name ns ty_sg u_ast then self else
-        let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
-        self#add_import_candidate to_add
-    | dt -> super#datatype dt
 end
 
 

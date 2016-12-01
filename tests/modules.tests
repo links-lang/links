@@ -65,12 +65,6 @@ filemode : args
 args : -m --path=tests/modules
 stdout : "hello from c!" : String
 
-Module chasing via FQ variables
-./tests/modules/varRefA.links
-filemode : args
-args : -m --path=tests/modules
-stdout : "hello from b!" : String
-
 Basic types in modules
 ./tests/modules/type-sig.links
 filemode : args
