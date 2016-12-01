@@ -109,6 +109,7 @@ type fieldconstraint = [ `Readonly | `Default ]
 
 type datatype =
   [ `TypeVar         of known_type_variable
+  | `QualifiedTypeApplication of (name list * type_arg list)
   | `Function        of datatype list * row * datatype
   | `Lolli           of datatype list * row * datatype
   | `Mu              of name * datatype
@@ -198,6 +199,7 @@ and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
+| `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
@@ -258,11 +260,11 @@ and bindingnode = [
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Foreign of binder * name * datatype'
-| `Import  of name
+| `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
-| `Module  of name * phrase
+| `Module  of name * binding list
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -438,7 +440,7 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Import _
+    | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p

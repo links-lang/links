@@ -28,12 +28,13 @@ let refine_bindings : binding list -> binding list =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
             match binding with
-              (* Modules and funs will have been eliminated by now *)
+              (* Modules & qualified imports will have been eliminated by now. Funs
+               * aren't introduced yet. *)
               | `Module _ -> assert false
+              | `QualifiedImport _ -> assert false
               | `Funs _ -> assert false
               | `Exp _
               | `Foreign _
-              | `Import _
               | `Type _
               | `Val _ ->
                   (* collapse the group we're collecting, then start a
@@ -259,10 +260,10 @@ module RefineTypeBindings = struct
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
           match binding with
           | `Module _ -> assert false
+          | `QualifiedImport _ -> assert false
           | `Funs _
           | `Fun _
           | `Foreign _
-          | `Import _
           | `Val _
           | `Exp _
           | `Infix ->

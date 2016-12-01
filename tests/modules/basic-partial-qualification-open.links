@@ -11,4 +11,4 @@ module A {
 }
 
 open A
-B:::bar()
+B.bar()

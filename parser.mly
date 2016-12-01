@@ -166,7 +166,6 @@ let parseRegexFlags f =
     List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
 
 let datatype d = d, None
-
 %}
 
 %token END
@@ -185,8 +184,8 @@ let datatype d = d, None
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON COLONCOLONCOLON
-%token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY 
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
 %token ESCAPE
@@ -198,8 +197,8 @@ let datatype d = d, None
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> QUALIFIEDVARIABLE VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
-%token <string> QUALIFIEDMODULE LXML ENDTAG
+%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
 %token MODULE
@@ -307,7 +306,7 @@ nofun_declaration:
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, (`Block $3, name_pos)), name_pos }
+                                                                 `Module (mod_name, $3), name_pos }
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 
@@ -389,9 +388,25 @@ constant:
 | FALSE                                                        { `Bool false, pos() }
 | CHAR                                                         { `Char $1   , pos() }
 
+qualified_name:
+| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+
+qualified_name_inner:
+| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| VARIABLE                                                     { [$1] }
+
+qualified_type_name:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+
+qualified_type_name_inner:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+| CONSTRUCTOR                                                  { [$1] }
+
+
+
 atomic_expression:
+| qualified_name                                               { `QualifiedVar $1, pos() }
 | VARIABLE                                                     { `Var $1, pos() }
-| QUALIFIEDVARIABLE                                            { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
@@ -832,9 +847,8 @@ record_labels:
 | record_label                                                 { [$1] }
 
 links_open:
-| OPEN QUALIFIEDVARIABLE                                       { `Import $2, pos () }
-| OPEN QUALIFIEDMODULE                                         { `Import $2, pos () }
-| OPEN CONSTRUCTOR                                             { `Import $2, pos () }
+| OPEN qualified_type_name                                     { `QualifiedImport $2, pos () }
+| OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
@@ -850,7 +864,7 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
-| LBRACE bindings RBRACE                                       { ($2, (`RecordLit ([], None), pos())) }
+| LBRACE bindings RBRACE                                       { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
@@ -958,6 +972,15 @@ forall_datatype:
 | FORALL varlist DOT datatype                                  { `Forall (List.map fst $2, $4) }
 | session_datatype                                             { $1 }
 
+/* Parenthesised dts disambiguate between sending qualified types and recursion variables.
+   e.g:
+
+     S = !ModuleA.ModuleB.Type.S
+     should be written
+     S = !(ModuleA.ModuleB.Type).S
+
+     Parenthesised versions take priority over non-parenthesised versions.
+*/
 session_datatype:
 | BANG datatype DOT datatype                                   { `Output ($2, $4) }
 | QUESTION datatype DOT datatype                               { `Input ($2, $4) }
@@ -969,6 +992,7 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
+| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, [])] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:

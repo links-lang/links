@@ -152,6 +152,8 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
+      | `QualifiedVar _xs ->
+          let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let _x_i1 = o#location _x_i1 in
@@ -447,6 +449,10 @@ class map =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
+      | `QualifiedTypeApplication (ns, args) ->
+          let ns = o#list (fun o -> o#name) ns in
+          let args = o#list (fun o -> o#type_arg) args in
+          `QualifiedTypeApplication (ns, args)
       | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -551,7 +557,9 @@ class map =
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
-      | `Import _x -> let _x = o#string _x in `Import _x
+      | `QualifiedImport _xs ->
+          let _xs = o#list (fun o -> o#name) _xs in
+          `QualifiedImport _xs
       | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
@@ -564,10 +572,10 @@ class map =
           in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
       | `Infix -> `Infix
       | `Exp _x -> let _x = o#phrase _x in `Exp _x
-      | `Module (n, p) ->
+      | `Module (n, bs) ->
           let n = o#name n in
-          let p = o#phrase p in
-          `Module (n, p)
+          let bs = o#list (fun o -> o#binding) bs in
+          `Module (n, bs)
 
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
@@ -717,6 +725,8 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
+      | `QualifiedVar _xs ->
+          let o = o#list (fun o -> o#name) _xs in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | `Spawn (_x, _x_i1, _x_i2, _x_i3) -> let o = o#location _x_i1 in let o = o#phrase _x_i2 in o
       | `Query (_x, _x_i1, _x_i2) ->
@@ -975,6 +985,10 @@ class fold =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
+      | `QualifiedTypeApplication (ns, args) ->
+          let o = o#list (fun o -> o#name) ns in
+          let o = o#list (fun o -> o#type_arg) args in
+          o
       | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1070,7 +1084,9 @@ class fold =
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
-      | `Import _x -> let o = o#string _x in o
+      | `QualifiedImport _xs ->
+          let o = o#list (fun o -> o#name) _xs in
+          o
       | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
@@ -1083,9 +1099,9 @@ class fold =
           in let o = o#datatype' _x_i2 in o
       | `Infix -> o
       | `Exp _x -> let o = o#phrase _x in o
-      | `Module (n, p) ->
+      | `Module (n, bs) ->
           let o = o#name n in
-          let o = o#phrase p in
+          let o = o#list (fun o -> o#binding) bs in
           o
 
     method binding : binding -> 'self_type =
@@ -1258,6 +1274,9 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
+      | `QualifiedVar _xs ->
+          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
+          (o, (`QualifiedVar _xs))
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
@@ -1603,6 +1622,10 @@ class fold_map =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
+      | `QualifiedTypeApplication (ns, args) ->
+          let (o, ns) = o#list (fun o -> o#name) ns in
+          let (o, args) = o#list (fun o -> o#type_arg) args in
+          (o, `QualifiedTypeApplication (ns, args))
       | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
@@ -1715,7 +1738,9 @@ class fold_map =
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (`Foreign ((_x, _x_i1, _x_i2))))
-      | `Import _x -> let (o, _x) = o#string _x in (o, (`Import _x))
+      | `QualifiedImport _xs ->
+          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
+          (o, `QualifiedImport _xs)
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
@@ -1729,10 +1754,10 @@ class fold_map =
           in (o, (`Type ((_x, _x_i1, _x_i2))))
       | `Infix -> (o, `Infix)
       | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
-      | `Module (n, p) ->
+      | `Module (n, bs) ->
           let (o, n) = o#string n in
-          let (o, p) = o#phrase p in
-          (o, (`Module (n, p)))
+          let (o, bs) = o#list (fun o -> o#binding) bs in
+          (o, (`Module (n, bs)))
 
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->

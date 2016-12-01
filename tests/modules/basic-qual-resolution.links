@@ -4,4 +4,4 @@ module A {
   }
 }
 
-A:::foo()
+A.foo()

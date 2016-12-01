@@ -25,11 +25,20 @@ struct
 
   let program =
     fun tyenv pos_context program ->
-      let program = Chaser.add_dependencies "" program in
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
+      (* Module-y things *)
+      let program =
+        if ModuleUtils.contains_modules program then
+          if Settings.get_value Basicsettings.modules then
+            let (scope_graph, ty_scope_graph, unique_ast) = Chaser.add_dependencies "" program in
+            (* Printf.printf "%s\n" (ScopeGraph.show_scope_graph scope_graph); *)
+            DesugarModules.desugarModules scope_graph ty_scope_graph unique_ast
+          else
+            failwith ("File contains modules, but modules not enabled. Please set " ^
+              "modules flag to true, or run with -m.")
+      else program in
         CheckXmlQuasiquotes.checker#program program;
         (   DesugarLAttributes.desugar_lattributes#program
-        ->- DesugarModules.desugar_modules
         ->- RefineBindings.refine_bindings#program
         ->- DesugarDatatypes.program tyenv.Types.tycon_env
         ->- TypeSugar.Check.program tyenv

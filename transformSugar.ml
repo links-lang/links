@@ -658,8 +658,6 @@ class transform (env : Types.typing_environment) =
       | `Foreign (f, language, t) ->
           let (o, f) = o#binder f in
             (o, `Foreign (f, language, t))
-      | `Import _ ->
-          failwith "Includes aren't supported yet"
       | `Type (name, vars, (_, Some dt)) as e ->
           let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
             {< tycon_env=tycon_env >}, e
