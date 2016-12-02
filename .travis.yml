@@ -11,7 +11,7 @@ before_install:
   - eval `opam config env`
   - psql -c 'create database links;' -U postgres
 install:
-  - opam install -y deriving lwt postgresql
+  - opam install -y deriving lwt postgresql sqlite3 mysql
 script:
   - make -j2 nc
   - make tests
