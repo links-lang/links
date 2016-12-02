@@ -2036,23 +2036,6 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
     build_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec TypeVarSet.empty (policy (), Vars.tyvar_name_map) tycon
 
-(* HACK:
-   Just use the default policy. At some point we might want to export
-   the printing policy in types.mli.
- *)
-let string_of_datatype ?(refresh_tyvar_names=true) t
-  = string_of_datatype ~refresh_tyvar_names t
-let string_of_row ?(refresh_tyvar_names=true) r
-  = string_of_row ~refresh_tyvar_names r
-let string_of_presence ?(refresh_tyvar_names=true) f
-  = string_of_presence ~refresh_tyvar_names f
-let string_of_type_arg ?(refresh_tyvar_names=true) arg
-  = string_of_type_arg ~refresh_tyvar_names arg
-let string_of_row_var ?(refresh_tyvar_names=true) r
-  = string_of_row_var ~refresh_tyvar_names r
-let string_of_tycon_spec ?(refresh_tyvar_names=true) s
-  = string_of_tycon_spec ~refresh_tyvar_names s
-
 module Show_datatype =
   Deriving_Show.Defaults
     (struct

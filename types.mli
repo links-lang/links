@@ -65,6 +65,13 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
+module Print : sig
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
+
+  val default_policy : unit -> policy
+end
+
+
 val process      : Abstype.t
 val list         : Abstype.t
 val event        : Abstype.t
@@ -337,12 +344,18 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 val show_mailbox_annotations : bool Settings.setting
 
 (** pretty printing *)
-val string_of_datatype   : ?refresh_tyvar_names:bool -> datatype   -> string
-val string_of_row        : ?refresh_tyvar_names:bool -> row        -> string
-val string_of_presence   : ?refresh_tyvar_names:bool -> field_spec -> string
-val string_of_type_arg   : ?refresh_tyvar_names:bool -> type_arg   -> string
-val string_of_row_var    : ?refresh_tyvar_names:bool -> row_var    -> string
-val string_of_tycon_spec : ?refresh_tyvar_names:bool -> tycon_spec -> string
+val string_of_datatype   : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> datatype   -> string
+val string_of_row        : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> row        -> string
+val string_of_presence   : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> field_spec -> string
+val string_of_type_arg   : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> type_arg   -> string
+val string_of_row_var    : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> row_var    -> string
+val string_of_tycon_spec : ?policy:(unit -> Print.policy)
+                        -> ?refresh_tyvar_names:bool -> tycon_spec -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 

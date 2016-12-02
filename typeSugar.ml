@@ -335,12 +335,15 @@ end
     (* New line with indentation *)
     let nli () = nl () ^ tab ()
 
+    (* Always display fresh variables when printing error messages *)
+    let error_policy () = { (Types.Print.default_policy ()) with hide_fresh = false }
+
     (* Do not automatically refresh type variable names when pretty-printing
        types in error messages.  This will be done manually by calling
        build_tyvar_names in the gripers.
        See Notes [Variable names in error messages] and [Refreshing type variable names] *)
-    let show_type   = Types.string_of_datatype ~refresh_tyvar_names:false
-    let show_row    = Types.string_of_row      ~refresh_tyvar_names:false
+    let show_type   = Types.string_of_datatype ~policy:error_policy ~refresh_tyvar_names:false
+    let show_row    = Types.string_of_row      ~policy:error_policy ~refresh_tyvar_names:false
 
     (* Wrappers for generating type variable names *)
     let build_tyvar_names =
