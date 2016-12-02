@@ -1526,16 +1526,16 @@ end
 
 module Print =
 struct
-  let show_quantifiers = Settings.add_bool ("show_quantifiers", false, `User)
-  let show_flavours = Settings.add_bool ("show_flavours", false, `User)
-  let show_kinds = Settings.add_string ("show_kinds", "default", `User)
-  let hide_fresh_type_vars = Settings.add_bool ("hide_fresh_type_vars", true, `User)
+  let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
+  let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)
+  let show_kinds           = Settings.add_string ("show_kinds"          , "default", `User)
+  let hide_fresh_type_vars = Settings.add_bool   ("hide_fresh_type_vars", true     , `User)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
   type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
-  type names =  (int, string * Vars.spec) Hashtbl.t
+  type names  = (int, string * Vars.spec) Hashtbl.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
