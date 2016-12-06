@@ -244,8 +244,14 @@ let lst_to_path = String.concat module_sep
 
 (* Given a *plain* name and a name shadowing table, looks up the FQN *)
 let resolve name ht =
-  let xs = StringMap.find name ht in
-  List.hd xs
+  try
+    let xs = StringMap.find name ht in
+    List.hd xs
+  with _ ->
+    (* For now, don't rename, and let this be picked up later.
+     * It'd be better to change this at some point, when we get the prelude
+     * better integrated with the module system. *)
+    name
 
 let rec perform_term_renaming module_table path ht =
   object(self)
