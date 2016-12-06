@@ -310,8 +310,8 @@ links_modules:
 | links_module                                                 { [$1] }
 
 links_module:
-| MODULE module_name perhaps_modules moduleblock               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, $3 @ $4), name_pos }
+| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, $3), name_pos }
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 
@@ -868,7 +868,7 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
-| LBRACE perhaps_modules bindings RBRACE                       { $2 }
+| LBRACE perhaps_modules bindings RBRACE                       { $2 @ $3 }
 
 
 block:
