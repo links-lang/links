@@ -227,7 +227,7 @@ let datatype d = d, None
 %start interactive
 %start file
 
-%type <Sugartypes.binding list * Sugartypes.phrase option> file
+%type <Sugartypes.binding list  * Sugartypes.phrase option> file
 %type <Sugartypes.datatype> datatype
 %type <Sugartypes.datatype> just_datatype
 %type <Sugartypes.sentence> interactive
@@ -279,7 +279,7 @@ var:
 | VARIABLE                                                     { $1, pos() }
 
 preamble:
-| /* empty */                                                  { [] }
+| perhaps_modules                                              { $1 }
 
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
@@ -299,14 +299,19 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
-
-| links_module                                                 { $1 }
 | links_open                                                   { $1 }
 
+perhaps_modules:
+| /* empty */                                                  { [] }
+| links_modules                                                { $1 }
+
+links_modules:
+| links_modules links_module                                   { $1 @ [$2] }
+| links_module                                                 { [$1] }
 
 links_module:
-| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, $3), name_pos }
+| MODULE module_name perhaps_modules moduleblock               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, $3 @ $4), name_pos }
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 
@@ -856,7 +861,6 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
-| links_module                                                 { $1 }
 | links_open                                                   { $1 }
 
 bindings:
@@ -864,7 +868,8 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
-| LBRACE bindings RBRACE                                       { $2 }
+| LBRACE perhaps_modules bindings RBRACE                       { $2 }
+
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }

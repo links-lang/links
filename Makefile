@@ -75,9 +75,6 @@ SOURCES = $(OPC)                                \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
 					moduleUtils.mli moduleUtils.ml \
-					uniquify.mli uniquify.ml \
-					scopeGraph.mli scopeGraph.ml \
-					chaser.mli chaser.ml \
 					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \

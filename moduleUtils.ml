@@ -52,4 +52,12 @@ object
     | pn -> super#phrasenode pn
 end
 
+let rec separate_modules = function
+  | [] -> ([], [])
+  | (`Module bs, pos) :: xs ->
+      let (mods', remainder) = separate_modules xs in
+      ((`Module bs, pos) :: mods', remainder)
+  | xs -> ([], xs)
+
+
 let contains_modules prog = not ((has_no_modules#program prog)#satisfied)
