@@ -58,13 +58,19 @@ struct
       let path = Uri.path (Request.uri req) in
 
       let rec run_page (dir, s, handler) () = run_page (dir, s, handler) () in
+
       let rec render_cont () = render_cont () in
 
       let rec route = function
-        | [] -> Server.respond_string ~status:`Not_found ~body:"<h1>Nope</h1>" ()
+        | [] ->
+           Debug.print "No cases matched!\n";
+           Server.respond_string ~status:`Not_found ~body:"<h1>Nope</h1>" ()
         | ((dir, s, handler) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
+             Debug.print (Printf.sprintf "Matched case %s\n" s);
              Webif.do_request !env cgi_args (run_page (dir, s, handler)) (render_cont ()) Lib.cohttp_server_response
-        | (_ :: rest) -> route rest in
+        | ((_, s, _) :: rest) ->
+           Debug.print (Printf.sprintf "Skipping case for %s\n" s);
+           route rest in
 
       route rt in
 

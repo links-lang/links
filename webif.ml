@@ -4,16 +4,16 @@ open Notfound
 open List
 open Proc
 
-open Appserver_types
+open Webserver_types
 open Performance
 open Utility
 
 let realpages = Settings.add_bool ("realpages", false, `System)
 
-module WebIf = functor (Apps : APPSERVER) ->
+module WebIf = functor (Webs : WEBSERVER) ->
 struct
 
-  module Eval = Evalir.Eval(Apps)
+  module Eval = Evalir.Eval(Webs)
 
   type web_request =
     | ServerCont of

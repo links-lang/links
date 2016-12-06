@@ -1,11 +1,11 @@
 (** Web interface *)
 
-open Appserver_types
+open Webserver_types
 open Ir
 open Proc
 open Value
 
-module WebIf : functor (Apps : APPSERVER) ->
+module WebIf : functor (Webs : WEBSERVER) ->
 sig
 
   val do_request :

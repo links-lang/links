@@ -1,4 +1,4 @@
-open Appserver_types
+open Webserver_types
 open Ir
 open List
 open Lwt
@@ -9,7 +9,7 @@ open Proc
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-module Eval = functor (Apps : APPSERVER) ->
+module Eval = functor (Webs : WEBSERVER) ->
 struct
 
   exception EvaluationError of string
@@ -365,13 +365,13 @@ struct
 
          match pathv with
          | `String path ->
-            Apps.add_route (path.[String.length path - 1] = '/') path handler';
+            Webs.add_route (path.[String.length path - 1] = '/') path handler';
             apply_cont cont env (`Record [])
          | _ -> assert false
        end
     | `PrimitiveFunction ("startServer", _), [] ->
        begin
-         Apps.start (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
+         Webs.start (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
                               apply_cont cont env (`Record [])
        end
     (*****************)
