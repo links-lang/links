@@ -110,17 +110,18 @@ let rec perform_term_renaming module_table path ht =
           (o, `Val (tvs, pat', phr', loc, dt_opt))
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
-          let (_, fnlit') = self#funlit fnlit in
+          let (_, fnlit') = o#funlit fnlit in
           (o, `Fun (bnd', lin, (tvs, fnlit'), loc, dt_opt))
       | `QualifiedImport ns ->
           (* Try to resolve head of PQN. This will either resolve to itself, or
            * to a prefix. Once we have the prefix, we can construct the FQN. *)
           (* Qualified names must (by parser construction) be of at least length 1. *)
           let hd :: tl = ns in
+          let final = List.hd (List.rev ns) in
           let prefix = resolve hd shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
           (* We return the QI unmodified here -- it'll be removed on the flattening pass *)
-          (self#bind_open hd fqn, `QualifiedImport ns)
+          (self#bind_open final fqn, `QualifiedImport ns)
       | `Module (n, bs) ->
           let new_path = path @ [n] in
           let fqn = lst_to_path new_path in
@@ -190,9 +191,10 @@ let rec perform_type_renaming module_table path ht =
        * is seeming to make it worse *)
       | `QualifiedImport ns ->
           let hd :: tl = ns in
+          let final = List.hd (List.rev ns) in
           let prefix = resolve hd shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
-          (self#bind_open hd fqn, `QualifiedImport ns)
+          (self#bind_open final fqn, `QualifiedImport ns)
       | `Module (n, bs) ->
           let new_path = path @ [n] in
           let fqn = lst_to_path new_path in
@@ -226,4 +228,6 @@ let rename_prog mt prog =
 let desugarModules prog =
   let module_map = create_module_info_map prog in
   let renamed_prog = rename_prog module_map prog in
-  flatten_prog renamed_prog
+  let flattened_prog = flatten_prog renamed_prog in
+  (* printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
+  flattened_prog

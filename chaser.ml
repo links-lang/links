@@ -114,9 +114,10 @@ let add_dependencies module_prog =
   let (_, deps, dep_binding_map) =
     add_dependencies_inner "" module_prog (StringSet.empty) [] (StringMap.empty) in
   (* Next, do a topological sort to get the dependency graph and identify cyclic dependencies *)
-  let sorted_deps = List.rev (Graph.topo_sort_sccs deps) in
+  let sorted_deps = Graph.topo_sort_sccs deps in
   (* Each entry should be *precisely* one element (otherwise we have cycles) *)
   assert_no_cycles sorted_deps;
+  (* Printf.printf "Sorted deps: %s\n" (print_list (List.map List.hd sorted_deps)); *)
   (* Now, build up binding list where each opened dependency is mapped to a `Module containing
    * its list of inner bindings. *)
   (* FIXME: This isn't reassigning positions! What we'll want is to retain the positions, but modify

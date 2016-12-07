@@ -195,20 +195,22 @@ let shadow_binding : string -> string -> (string list) stringmap -> (string list
  *)
 let shadow_open module_plain module_fqn module_table ht is_shadow_terms =
   (* print_mt module_table; *)
-  let mod_info = StringMap.find module_fqn module_table in
-  (* Firstly, shadow either bindings (if shadow_bindings is true), or types (if SB is false) *)
-  let shadowed_binding_ht =
-    let name_list = if is_shadow_terms then mod_info.decl_names else mod_info.type_names in
-      List.fold_left (fun acc plain_binding_name ->
-      let fq_binding_name = String.concat module_sep (module_fqn :: [plain_binding_name]) in
-      shadow_binding plain_binding_name fq_binding_name acc) ht name_list in
-  (* Next, do the modules *)
-  let shadowed_module_ht = List.fold_left (fun acc plain_module_name ->
-    let fq_module_name = String.concat module_sep (module_fqn :: [plain_module_name]) in
-    shadow_binding plain_module_name fq_module_name acc) shadowed_binding_ht mod_info.inner_modules in
-  (* Finally, need to add this module of course! *)
-  let shadowed_ht = shadow_binding module_plain module_fqn shadowed_module_ht in
-  shadowed_ht
+  try
+    let mod_info = StringMap.find module_fqn module_table in
+    (* Firstly, shadow either bindings (if shadow_bindings is true), or types (if SB is false) *)
+    let shadowed_binding_ht =
+      let name_list = if is_shadow_terms then mod_info.decl_names else mod_info.type_names in
+        List.fold_left (fun acc plain_binding_name ->
+        let fq_binding_name = String.concat module_sep (module_fqn :: [plain_binding_name]) in
+        shadow_binding plain_binding_name fq_binding_name acc) ht name_list in
+    (* Next, do the modules *)
+    let shadowed_module_ht = List.fold_left (fun acc plain_module_name ->
+      let fq_module_name = String.concat module_sep (module_fqn :: [plain_module_name]) in
+      shadow_binding plain_module_name fq_module_name acc) shadowed_binding_ht mod_info.inner_modules in
+    (* Finally, need to add this module of course! *)
+    let shadowed_ht = shadow_binding module_plain module_fqn shadowed_module_ht in
+    shadowed_ht
+  with Notfound.NotFound _ -> failwith ("Error: Trying to import nonexistent module " ^ module_plain)
 
 let shadow_open_types module_plain module_fqn module_table ht =
   shadow_open module_plain module_fqn module_table ht false
