@@ -123,7 +123,6 @@ SOURCES = $(OPC)                                \
           query.mli query.ml                              \
           queryshredding.ml                     \
           webserver_types.mli webserver_types.ml \
-	  valuetoir.ml                          \
           webserver.mli                         \
 	  evalir.ml                             \
           buildTables.ml                        \

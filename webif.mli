@@ -11,10 +11,10 @@ sig
   val do_request :
     (Value.env * Ir.var Env.String.t * Types.typing_environment) ->
     (string * string) list ->
-    (unit -> string * string) ->
+    (unit -> (string * string) Lwt.t) ->
     Value.continuation ->
-    ((string * string) list -> string -> 'b) ->
-    'b
+    ((string * string) list -> string -> 'b Lwt.t) ->
+    'b Lwt.t
 
   val serve_request :
     (Value.env * Ir.var Env.String.t * Types.typing_environment) ->

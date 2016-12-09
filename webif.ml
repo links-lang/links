@@ -145,14 +145,14 @@ struct
       | ServerCont t ->
         Debug.print("Doing ServerCont");
         let v = Eval.apply_with_cont render_cont valenv (t, []) in
-        ("text/html",
-         Value.string_of_value v)
+        Lwt.return ("text/html",
+                    Value.string_of_value v)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn ");
         let result = Eval.apply_cont_toplevel cont valenv arg in
         let result_json = Json.jsonize_value result in
-        ("text/plain",
-         Utility.base64encode result_json)
+        Lwt.return ("text/plain",
+                    Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
@@ -162,10 +162,10 @@ struct
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
-        ("text/plain",
-         (* TODO: we should package up the result with event handlers,
-            client processes, and client messages *)
-         Utility.base64encode (Json.jsonize_value result))
+        Lwt.return ("text/plain",
+                    (* TODO: we should package up the result with event handlers,
+                       client processes, and client messages *)
+                    Utility.base64encode (Json.jsonize_value result))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -201,9 +201,8 @@ struct
   let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
     try
       let request = parse_request env cgi_args in
-      let (content_type, content) =
-        perform_request cgi_args valenv run render_cont request
-      in
+      let (>>=) f g = Lwt.bind f g in
+      perform_request cgi_args valenv run render_cont request >>= fun (content_type, content) ->
       response_printer [("Content-type", content_type)] content
     with
         (* FIXME: errors need to be handled differently between
@@ -217,7 +216,10 @@ struct
 
 
   let serve_request_program ((valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
-    do_request env cgi_args (run_main env (globals, (locals, main)) cgi_args) render_cont response_printer
+    Lwt_main.run (do_request env cgi_args
+                             (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
+                             render_cont
+                             (fun headers body -> Lwt.return (response_printer headers body)))
 
   (* does the preprocessing to turn prelude+filename into a program *)
   (* result can be cached *)

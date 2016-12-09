@@ -14,7 +14,7 @@ struct
   module Eval = Evalir.Eval(Webserver)
   module Webif = Webif.WebIf(Webserver)
 
-  type routing_table = (bool * string * (string -> Ir.computation Lwt.t)) list
+  type routing_table = (bool * string * (Value.env * Value.t)) list
   type renderer = (Ir.var * Value.t) list -> Ir.computation -> Proc.thread_result Lwt.t
   (* The fake environment part seems super dodgy to me *)
 
@@ -57,7 +57,16 @@ struct
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
-      let rec run_page (dir, s, handler) () = run_page (dir, s, handler) () in
+      let run_page (dir, s, (valenv, v)) () =
+        Eval.apply Value.toplevel_cont valenv (v, [`String s]) >>= fun (valenv, v) ->
+        let globals = assert false in
+        let page = Irtojs.generate_real_client_page
+                     ~cgi_env:cgi_args
+                     (Lib.nenv, Lib.typing_env)
+                     globals          (* hypothesis: local definitions shouldn't matter, they should all end up in valenv... *)
+                     (valenv, v)
+        in
+        Lwt.return ("text/html", page) in
 
       let rec render_cont () = render_cont () in
 

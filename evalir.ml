@@ -360,12 +360,9 @@ struct
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
        begin
-         let handler' s =
-           apply Value.toplevel_cont env (handler, [`String s]) >>= fun v -> Lwt.return (Valuetoir.value_to_ir (snd v)) in
-
          match pathv with
          | `String path ->
-            Webs.add_route (path.[String.length path - 1] = '/') path handler';
+            Webs.add_route (path.[String.length path - 1] = '/') path (env, handler);
             apply_cont cont env (`Record [])
          | _ -> assert false
        end

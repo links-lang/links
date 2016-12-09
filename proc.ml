@@ -192,8 +192,6 @@ struct
     reset_step_counter ();
     run' pfun
 
-  (* Pretty sure that Lwt.run does what we want here---at least, the document reasons not to nest
-  calls to Lwt.run match the desired behavior of atomically. :) *)
   let atomically pfun =
     let previously_atomic = !atomic in
     atomic := true;
