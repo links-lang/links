@@ -74,11 +74,6 @@ struct
          Lib.print_http_response ["Content-type", "text/plain"] call_package;
          exit 0
 
-   (* Argh: this type is disgusting, because the details of this value are disgusting.  It captures
-      a bunch of the results of compiling the source to IR in such a way that they can be used in
-      rendering pages. *)
-   let render_cont : (Value.env -> Ir.scope * Ir.var * Value.env * Ir.computation) ref = ref (fun _ -> assert false)
-
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
     | `Constant `Bool b -> `Bool b
@@ -366,10 +361,14 @@ struct
             apply_cont cont env (`Record [])
          | _ -> assert false
        end
-    | `PrimitiveFunction ("startServer", _), [] ->
+    | `PrimitiveFunction ("servePages", _), [] ->
        begin
-         Webs.start (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
+         Webs.start () >>= fun () ->
+         apply_cont cont env (`Record [])
+(*
+                    (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
                               apply_cont cont env (`Record [])
+ *)
        end
     (*****************)
     | `PrimitiveFunction (n,None), args ->

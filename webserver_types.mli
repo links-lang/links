@@ -3,9 +3,8 @@ open Proc
 
 module type WEBSERVER =
 sig
-  type renderer = (Ir.var * Value.t) list -> Ir.computation -> Proc.thread_result Lwt.t (* eh ... *)
-
-  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> unit
+  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> unit
+  val set_prelude : Ir.binding list -> unit
   val add_route : bool -> string -> (Value.env * Value.t) -> unit
-  val start : renderer -> unit Lwt.t
+  val start : unit -> unit Lwt.t
 end

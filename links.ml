@@ -59,7 +59,8 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let program = Closures.program tenv Lib.primitive_vars program in
   Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
   BuildTables.program tenv Lib.primitive_vars program;
-  Webserver.init (valenv, nenv, tyenv);
+  let (globals, _) = program in
+  Webserver.init (valenv, nenv, tyenv) globals;
 
   let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
   lazy (printer t v) <|measure_as|> "print";
@@ -315,6 +316,7 @@ let invert_env env =
 
 let run_file prelude envs filename =
   Settings.set_value BS.interacting false;
+  Webserver.set_prelude prelude;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename

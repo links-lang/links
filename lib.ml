@@ -1512,7 +1512,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (`PFun (fun _ -> assert false),
      datatype "(String,(String) ~> a) ~> ()",
      IMPURE);
-    "startServer",
+    "servePages",
     (`PFun (fun _ -> assert false),
      datatype "() ~> ()",
      IMPURE)

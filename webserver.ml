@@ -15,16 +15,19 @@ struct
   module Webif = Webif.WebIf(Webserver)
 
   type routing_table = (bool * string * (Value.env * Value.t)) list
-  type renderer = (Ir.var * Value.t) list -> Ir.computation -> Proc.thread_result Lwt.t
-  (* The fake environment part seems super dodgy to me *)
-
   type t = routing_table * Ir.binding list * Value.env
 
   let rt : routing_table ref = ref []
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref = ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
+  let prelude : Ir.binding list ref = ref []
+  let globals : Ir.binding list ref = ref []
 
-  let init some_env =
+  let set_prelude bs =
+    prelude := bs
+
+  let init some_env some_globals =
     env := some_env;
+    globals := some_globals;
     ()
 
   let add_route is_directory path thread_starter =
@@ -32,7 +35,7 @@ struct
 
   let rec parse_request valenv params = parse_request valenv params
 
-  let rec start renderer =
+  let rec start () =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
 
     let parse_post_body s =
@@ -46,7 +49,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt conn req body =
+    let callback rt render_cont conn req body =
       let query_args = List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req)) in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
       let body_args = parse_post_body body_string in
@@ -58,17 +61,14 @@ struct
       let path = Uri.path (Request.uri req) in
 
       let run_page (dir, s, (valenv, v)) () =
-        Eval.apply Value.toplevel_cont valenv (v, [`String s]) >>= fun (valenv, v) ->
-        let globals = assert false in
+        Eval.apply (render_cont ()) valenv (v, [`String s]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
-                     globals          (* hypothesis: local definitions shouldn't matter, they should all end up in valenv... *)
+                     (!prelude @ !globals)          (* hypothesis: local definitions shouldn't matter, they should all end up in valenv... *)
                      (valenv, v)
         in
         Lwt.return ("text/html", page) in
-
-      let rec render_cont () = render_cont () in
 
       let rec route = function
         | [] ->
@@ -84,10 +84,20 @@ struct
       route rt in
 
     let start_server host port rt =
+
+      let render_cont () =
+        let (_, nenv, {Types.tycon_env = tycon_env}) = !env in
+        let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
+        let render_page = Env.String.lookup nenv "renderPage" in
+        let tail = `Apply (`Variable render_page, [`Variable x]) in
+        [(`Global, x, Value.empty_env, ([], tail))] in
+
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix_net.init ~ctx () in
-      Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt) ()) in
+      Debug.print ("Starting server (2)?\n");
+      Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt render_cont) ()) in
 
+    Debug.print ("Starting server?\n");
     Settings.set_value Basicsettings.web_mode true;
     start_server (Settings.get_value Basicsettings.host_name) (Settings.get_value Basicsettings.port) !rt
 end
