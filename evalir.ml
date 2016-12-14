@@ -61,7 +61,7 @@ struct
    let serialize_call_to_client (continuation, name, arg) =
      Json.jsonize_call continuation name arg
 
-   let client_call : string -> Value.continuation -> Value.t list -> 'a =
+   let client_call : string -> Value.continuation -> Value.t list -> Proc.thread_result Lwt.t =
      fun name cont args ->
        if not(Settings.get_value Basicsettings.web_mode) then
          failwith "Can't make client call outside web mode.";
@@ -71,8 +71,7 @@ struct
 (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
        let call_package = Utility.base64encode
                             (serialize_call_to_client (cont, name, args)) in
-         Lib.print_http_response ["Content-type", "text/plain"] call_package;
-         exit 0
+       Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
@@ -588,35 +587,28 @@ struct
 
   let run_defs : Value.env -> Ir.binding list -> Value.env =
     fun env bs ->
-      let env, _value =
-        run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
-        env
+    let (env, _value) = run_program env (bs, `Return(`Extend(StringMap.empty, None))) in env
 
   (** [apply_cont_toplevel cont env v] applies a continuation to a value
       and returns the result. Finishing the main thread normally comes
       here immediately. *)
   let apply_cont_toplevel cont env v =
-    try snd (Proc.run (fun () -> apply_cont cont env v))
-    with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                  " while interpreting.")
-  let apply_with_cont cont env (f, vs) =
-    try snd (Proc.run (fun () -> apply cont env (f, vs)))
-    with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                  " while interpreting.")
+    try snd (Proc.run (fun () -> apply_cont cont env v)) with
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                " while interpreting.")
 
-  let apply_toplevel env (f, vs) =
-    try snd (Proc.run (fun () -> apply [] env (f, vs)))
-    with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                  " while interpreting.")
+  let apply_with_cont cont env (f, vs) =
+    try snd (Proc.run (fun () -> apply cont env (f, vs))) with
+    |  NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                 " while interpreting.")
+
+
+  let apply_toplevel env (f, vs) = apply_with_cont [] env (f, vs)
 
   let eval_toplevel env program =
-    try snd (Proc.run (fun () -> eval env program))
-    with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                  " while interpreting.")
+    try snd (Proc.run (fun () -> eval env program)) with
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                " while interpreting.")
 
   let eval_fun env f =
     find_fun_def env f

@@ -9,6 +9,7 @@ open Performance
 open Utility
 
 let realpages = Settings.add_bool ("realpages", false, `System)
+let ( >>= ) = Lwt.bind
 
 module WebIf = functor (Webs : WEBSERVER) ->
 struct
@@ -144,12 +145,11 @@ struct
     function
       | ServerCont t ->
         Debug.print("Doing ServerCont");
-        let v = Eval.apply_with_cont render_cont valenv (t, []) in
-        Lwt.return ("text/html",
-                    Value.string_of_value v)
+        Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
+        Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn ");
-        let result = Eval.apply_cont_toplevel cont valenv arg in
+        Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let result_json = Json.jsonize_value result in
         Lwt.return ("text/plain",
                     Utility.base64encode result_json)
@@ -158,14 +158,16 @@ struct
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
         let result = Eval.apply_toplevel env (func, args) in
+        Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
+
         Lwt.return ("text/plain",
                     (* TODO: we should package up the result with event handlers,
                        client processes, and client messages *)
-                    Utility.base64encode (Json.jsonize_value result))
+                    Utility.base64encode (Json.jsonize_value r))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -176,7 +178,7 @@ struct
        if Settings.get_value realpages then
          begin
            Debug.print "Running client program from server";
-           let valenv, v = Eval.run_program valenv (locals, main) in
+           let (valenv, v) = Eval.run_program valenv (locals, main) in
            (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
            Irtojs.generate_real_client_page
              ~cgi_env:cgi_args
@@ -195,25 +197,22 @@ struct
      else
        let program = locals, main in
        Debug.print "Running server program";
-       let _env, v = Eval.run_program valenv program in
+       let (_env, v) = Eval.run_program valenv program in
        Value.string_of_value v)
 
   let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
-    try
-      let request = parse_request env cgi_args in
-      let (>>=) f g = Lwt.bind f g in
-      perform_request cgi_args valenv run render_cont request >>= fun (content_type, content) ->
-      response_printer [("Content-type", content_type)] content
-    with
-        (* FIXME: errors need to be handled differently between
-           user-facing (text/html) and remote-call (text/plain) modes. *)
-      Failure msg as e ->
-      prerr_endline msg;
-      response_printer [("Content-type", "text/html; charset=utf-8")]
-        (error_page (Errors.format_exception_html e))
-    | exc -> response_printer [("Content-type","text/html; charset=utf-8")]
-                              (error_page (Errors.format_exception_html exc))
-
+    let request = parse_request env cgi_args in
+    let (>>=) f g = Lwt.bind f g in
+    Lwt.catch
+      (fun () -> perform_request cgi_args valenv run render_cont request)
+      (function
+       | Aborted r -> Lwt.return r
+       | Failure msg as e ->
+          prerr_endline msg;
+          Lwt.return ("text/html; charset=utf-8", error_page (Errors.format_exception_html e))
+       | exc -> Lwt.return ("text/html; charset=utf-8", error_page (Errors.format_exception_html exc)))
+    >>= fun (content_type, content) ->
+    response_printer [("Content-type", content_type)] content
 
   let serve_request_program ((valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
     Lwt_main.run (do_request env cgi_args

@@ -5,6 +5,8 @@ open Ir
 open Proc
 open Value
 
+val realpages : bool Settings.setting
+
 module WebIf : functor (Webs : WEBSERVER) ->
 sig
 
@@ -18,7 +20,7 @@ sig
 
   val serve_request :
     (Value.env * Ir.var Env.String.t * Types.typing_environment) ->
-    (Ir.binding list) ->
+    Ir.binding list ->
     string ->
     unit
 

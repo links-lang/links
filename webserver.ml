@@ -73,7 +73,7 @@ struct
       let rec route = function
         | [] ->
            Debug.print "No cases matched!\n";
-           Server.respond_string ~status:`Not_found ~body:"<h1>Nope</h1>" ()
+           Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
         | ((dir, s, handler) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
              Debug.print (Printf.sprintf "Matched case %s\n" s);
              Webif.do_request !env cgi_args (run_page (dir, s, handler)) (render_cont ()) Lib.cohttp_server_response
@@ -81,7 +81,20 @@ struct
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
            route rest in
 
-      route rt in
+      if is_prefix_of ("/" ^ Settings.get_value Basicsettings.Js.lib_url) path then
+        begin
+          let linkslib = match Utility.getenv "LINKS_LIB" with
+            | None -> Filename.dirname Sys.executable_name
+            | Some path -> path in
+          let ( / ) = Filename.concat in
+          let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
+          let uri = (String.sub path (liburl_length + 1) (String.length path - liburl_length - 1)) in
+          let fname = linkslib / "lib" / "js" / uri in
+          Debug.print (Printf.sprintf "Responding to lib request;\n    Requested: %s\n    Providing: %s\n" path fname);
+          Server.respond_file ~fname ()
+        end
+      else
+        route rt in
 
     let start_server host port rt =
 
@@ -99,5 +112,6 @@ struct
 
     Debug.print ("Starting server?\n");
     Settings.set_value Basicsettings.web_mode true;
+    Settings.set_value webs_running true;
     start_server (Settings.get_value Basicsettings.host_name) (Settings.get_value Basicsettings.port) !rt
 end
