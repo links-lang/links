@@ -1,7 +1,5 @@
 (* JavaScript code generation *)
 
-val premarshal : Value.env -> Ir.binding list
-
 val generate_program_defs :
   (Var.var Env.String.t * Types.typing_environment) ->
   Ir.binding list -> string list
