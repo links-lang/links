@@ -10,8 +10,6 @@ let web_mode = Settings.add_bool ("web_mode", false, `System)
 (** If [true], then wait for all child processes to finish before
     terminating *)
 let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
-let host_name = Settings.add_string ("host", "0.0.0.0", `User)
-let port = Settings.add_int ("port", 8080, `User)
 
 
 (** If [true], then enable concurrency on the server:
