@@ -8,6 +8,8 @@ open Proc
 open Utility
 open Webif
 
+let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
+
 module rec Webserver : WEBSERVER =
 struct
 
@@ -83,13 +85,18 @@ struct
 
       if is_prefix_of ("/" ^ Settings.get_value Basicsettings.Js.lib_url) path then
         begin
-          let linkslib = match Utility.getenv "LINKS_LIB" with
-            | None -> Filename.dirname Sys.executable_name
-            | Some path -> path in
           let ( / ) = Filename.concat in
           let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
           let uri = (String.sub path (liburl_length + 1) (String.length path - liburl_length - 1)) in
-          let fname = linkslib / "lib" / "js" / uri in
+          let linkslib = match Settings.get_value jslibdir with
+            | "" ->
+               begin
+                 (match Utility.getenv "LINKS_LIB" with
+                  | None -> Filename.dirname Sys.executable_name
+                  | Some path -> path) / "lib" / "js"
+               end
+            | s -> s in
+          let fname = linkslib / uri in
           Debug.print (Printf.sprintf "Responding to lib request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~fname ()
         end
