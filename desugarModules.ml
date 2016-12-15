@@ -1,4 +1,4 @@
-(* New implementation of desugarModules making use of the scope graph. *)
+(* Implementation of desugarModules, simplified *)
 (*
  * Desugars modules into plain binders.
  * Bindingnode -> [Bindingnode]
@@ -27,38 +27,6 @@ open Utility
 open Sugartypes
 open Printf
 open ModuleUtils
-open ScopeGraph
-
-let get_fq_resolved_decl decl_name sg u_ast =
-  ScopeGraph.make_resolved_plain_name decl_name sg u_ast
-
-(* Wrapper function taking a unique reference, scope graph, and
- * unique AST, and providing a single output reference name.
- *
- * If the resolution is unsuccessful, will simply return the plain name,
- * which will be picked up as an error later.
- *
- * If the resolution is ambiguous, then the function will raise an error.
- * *)
-let resolve name sg u_ast =
-  match ScopeGraph.resolve_reference name sg u_ast with
-    | `UnsuccessfulResolution ->
-        (* failwith ("Resolution of " ^ name ^ " was unsuccessful"); *)
-        Uniquify.lookup_var name u_ast
-    | `SuccessfulResolution decl_name ->
-        (* printf "Successful resolution of name %s: %s\n" name decl_name; *)
-        get_fq_resolved_decl decl_name sg u_ast
-    | `AmbiguousResolution decl_names ->
-        let plain_names = List.map (fun n -> get_fq_resolved_decl n sg u_ast) decl_names in
-        failwith ("Error: ambiguous resolution for " ^ name ^ ":" ^ (print_list decl_names))
-
-
-let rec get_last_list_value = function
-  | [] -> failwith "INTERNAL ERROR: Empty list in get_last_list_value. This can only be caused by an" ^
-            "empty qualified name and so should be outlawed by the grammar"
-  | [x] -> x
-  | x::xs -> get_last_list_value xs
-
 
 (* After renaming, we can simply discard modules and imports. *)
 let rec flatten_simple = fun () ->
@@ -99,79 +67,167 @@ object(self)
     | (bindings, _body) -> self#list (fun o -> o#binding) bindings
 end
 
+let flatten_prog prog =
+  let (_, phr) = prog in
+  let o = (flatten_bindings ())#program prog in
+  (o#get_bindings, phr)
 
-let perform_type_renaming type_scope_graph unique_ast =
+type env_map = string list stringmap
+
+
+(* Given a *plain* name and a name shadowing table, looks up the FQN *)
+let resolve name ht =
+  try
+    let xs = StringMap.find name ht in
+    List.hd xs
+  with _ ->
+    (* For now, don't rename, and let this be picked up later.
+     * It'd be better to change this at some point, when we get the prelude
+     * better integrated with the module system. *)
+    name
+
+let rec perform_term_renaming module_table path ht =
   object(self)
-    inherit SugarTraversals.map as super
+    inherit SugarTraversals.fold_map as super
+
+    val shadow_table = ht
+    method get_shadow_table = shadow_table
+    method bind_shadow name fqn = {< shadow_table = shadow_binding name fqn shadow_table >}
+    method bind_open name fqn = {< shadow_table = shadow_open_terms name fqn module_table shadow_table >}
+
+    method binder = function
+      | (n, dt_opt, pos) ->
+          let fqn = make_path_string path n in
+          let o = self#bind_shadow n fqn in
+          (o, (fqn, dt_opt, pos))
+
+    method bindingnode = function
+      | `Val (tvs, pat, phr, loc, dt_opt) ->
+          (* First off, process the phrase. The returned map won't be needed. *)
+          let (_, phr') = self#phrase phr in
+          (* Next, add the variable to the shadowing table, and proceed *)
+          let (o, pat') = self#pattern pat in
+          (o, `Val (tvs, pat', phr', loc, dt_opt))
+      | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
+          let (o, bnd') = self#binder bnd in
+          let (_, fnlit') = o#funlit fnlit in
+          (o, `Fun (bnd', lin, (tvs, fnlit'), loc, dt_opt))
+      | `QualifiedImport ns ->
+          (* Try to resolve head of PQN. This will either resolve to itself, or
+           * to a prefix. Once we have the prefix, we can construct the FQN. *)
+          (* Qualified names must (by parser construction) be of at least length 1. *)
+          let hd :: tl = ns in
+          let final = List.hd (List.rev ns) in
+          let prefix = resolve hd shadow_table in
+          let fqn = String.concat module_sep (prefix :: tl) in
+          (* We return the QI unmodified here -- it'll be removed on the flattening pass *)
+          (self#bind_open final fqn, `QualifiedImport ns)
+      | `Module (n, bs) ->
+          let new_path = path @ [n] in
+          let fqn = lst_to_path new_path in
+          (* New FQN for module must shadow n *)
+          let o = self#bind_shadow n fqn in
+          let o_ht = o#get_shadow_table in
+          (* Recursively perform the renaming (with new path) to get the renamed bindings.
+           * Ignore the resulting object, as it pertains to the inner scope. *)
+          let inner_o = (perform_term_renaming module_table new_path o_ht) in
+          (* Builtin o#list didn't want to play ball, for some reason?? *)
+          let (_, bs') =
+            List.fold_left (fun (o, bs_acc) b ->
+              let (o', b') = o#binding b in (o', b' :: bs_acc)) (inner_o, []) bs in
+          let bs' = List.rev bs' in
+          (* Finally, return `Module with updated bindings. The module itself
+           * will be flattened out on the flattening pass. *)
+          (* Now, this has the same effect as opening the module *)
+          (self#bind_open n fqn, `Module (n, bs'))
+      | bnd -> super#bindingnode bnd
+
+    method phrasenode = function
+      | `Block (bs, phr) ->
+          (* Bindings should be processed one-by-one, then phrase should be processed,
+           * then original scope should be restored *)
+          let (o, bs') = self#list (fun o b -> o#binding b) bs in
+          let (_, phr') = o#phrase phr in
+          (self, `Block (bs', phr'))
+      | `Var n -> (self, `Var (resolve n shadow_table))
+      | `QualifiedVar ns ->
+          (* Hm, pretty sure this is similar to qualified imports... *)
+          let hd :: tl = ns in
+          let prefix = resolve hd shadow_table in
+          let fqn = String.concat module_sep (prefix :: tl) in
+          (self, `Var fqn)
+      | phr -> super#phrasenode phr
+
+    method datatype dt = (self, dt)
+    method datatype' dt' = (self, dt')
+
+    (* Standard worry that this is catching too many names, but eh, we'll see *)
+    (* method name s = (self, resolve s shadow_table) *)
+
+    method program (bindings, phr_opt) =
+      let (o, bs') = self#list (fun o b -> o#binding b) bindings in
+      let (o, phr_opt') = o#option (fun o p -> o#phrase p) phr_opt in
+      (o, (bs', phr_opt'))
+  end
+
+
+let rec perform_type_renaming module_table path ht =
+  object(self)
+    inherit SugarTraversals.fold_map as super
+
+    val shadow_table = ht
+    method get_shadow_table = shadow_table
+    method bind_shadow name fqn = {< shadow_table = shadow_binding name fqn shadow_table >}
+    method bind_open name fqn = {< shadow_table = shadow_open_types name fqn module_table shadow_table >}
 
     method bindingnode = function
       | `Type (n, tvs, dt) ->
-        let plain_name =
-          ScopeGraph.make_resolved_plain_name n type_scope_graph unique_ast in
-        let dt = self#datatype' dt in
-        `Type (plain_name, tvs, dt)
+          (* Add type binding *)
+          let fqn = make_path_string path n in
+          let o = self#bind_shadow n fqn in
+          let (o, dt') = o#datatype' dt in
+          (o#bind_shadow n fqn, `Type (fqn, tvs, dt'))
+      (* I'm not happy *at all* with this repetition, but refactoring it to a separate superclass
+       * is seeming to make it worse *)
+      | `QualifiedImport ns ->
+          let hd :: tl = ns in
+          let final = List.hd (List.rev ns) in
+          let prefix = resolve hd shadow_table in
+          let fqn = String.concat module_sep (prefix :: tl) in
+          (self#bind_open final fqn, `QualifiedImport ns)
+      | `Module (n, bs) ->
+          let new_path = path @ [n] in
+          let fqn = lst_to_path new_path in
+          let o = self#bind_shadow n fqn in
+          let o_ht = o#get_shadow_table in
+          let inner_o = (perform_type_renaming module_table new_path o_ht) in
+          let (_, bs') =
+            List.fold_left (fun (o, bs_acc) b ->
+              let (o', b') = o#binding b in (o', b' :: bs_acc)) (inner_o, []) bs in
+          let bs' = List.rev bs' in
+          (self#bind_open n fqn, `Module (n, bs'))
       | bn -> super#bindingnode bn
 
     method datatype = function
       | `TypeApplication (n, args) ->
-          `TypeApplication (resolve n type_scope_graph unique_ast, args)
-      | `QualifiedTypeApplication (names, args) ->
-          let name = get_last_list_value names in
-          `TypeApplication ((resolve name type_scope_graph unique_ast), args)
+          let fqn = resolve n shadow_table in
+          (self, `TypeApplication (fqn, args))
+      | `QualifiedTypeApplication (ns, args) ->
+          let hd :: tl = ns in
+          let prefix = resolve hd shadow_table in
+          let fqn = String.concat module_sep (prefix :: tl) in
+          (self, `TypeApplication (fqn, args))
       | dt -> super#datatype dt
   end
 
-let perform_renaming scope_graph unique_ast =
-object(self)
-  inherit SugarTraversals.map as super
+let rename_prog mt prog =
+  let (_, prog') = (perform_term_renaming mt [] (StringMap.empty))#program prog in
+  let (_, prog') = (perform_type_renaming mt [] (StringMap.empty))#program prog' in
+  prog'
 
-  method binder = function
-    | (unique_name, dt, pos) ->
-        (* Binders should just be resolved to their unique FQ name *)
-        let plain_name =
-          ScopeGraph.make_resolved_plain_name unique_name scope_graph unique_ast in
-        (plain_name, dt, pos)
-
-  method phrasenode = function
-    | `Var name ->
-        (* Resolve name. If it's ambiguous, throw an error.
-         * If it's not found, just put the plain one back in and the error will
-         * be picked up later.*)
-        (* printf "Attempting to resolve Var %s\n" name; *)
-        `Var (resolve name scope_graph unique_ast)
-    | `QualifiedVar names ->
-        (* Only need to look at the final name here *)
-        let name = get_last_list_value names in
-        (* printf "Attempting to resolve (qualified) Var %s\n" name; *)
-        `Var (resolve name scope_graph unique_ast)
-    | pn -> super#phrasenode pn
-
-  method datatype dt = dt
-end
-
-
-let desugarModules scope_graph ty_scope_graph unique_ast =
-  let unique_prog = Uniquify.get_ast unique_ast in
-  (*
-  printf "Type Scope graph: %s\n" (ScopeGraph.show_scope_graph ty_scope_graph);
-  printf "Scope graph: %s\n" (ScopeGraph.show_scope_graph scope_graph);
-  printf "Before module desugar: %s\n" (Sugartypes.Show_program.show unique_prog);
-  printf "\n=============================================================\n";
-  *)
-  let desugared_terms_prog =
-    (perform_renaming scope_graph unique_ast)#program unique_prog in
-  (*
-  printf "After term desugar: %s\n" (Sugartypes.Show_program.show desugared_terms_prog);
-  printf "\n=============================================================\n";
-  *)
-  let plain_prog =
-    (perform_type_renaming ty_scope_graph unique_ast)#program desugared_terms_prog in
-
-  let o = (flatten_bindings ())#program plain_prog in
-  let flattened_bindings = o#get_bindings in
-  let flattened_prog = (flattened_bindings, snd plain_prog) in
-  (* Debug *)
-  (*
-  printf "After module desugar: %s\n" (Sugartypes.Show_program.show flattened_prog);
-  *)
+let desugarModules prog =
+  let module_map = create_module_info_map prog in
+  let renamed_prog = rename_prog module_map prog in
+  let flattened_prog = flatten_prog renamed_prog in
+  (* printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
   flattened_prog

@@ -284,7 +284,6 @@ and cp_phrasenode = [
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
 
-
 type program = binding list * phrase option
   deriving (Show)
 
