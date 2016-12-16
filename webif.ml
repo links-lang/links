@@ -215,10 +215,10 @@ struct
     response_printer [("Content-type", content_type)] content
 
   let serve_request_program ((valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
-    Lwt_main.run (do_request env cgi_args
-                             (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
-                             render_cont
-                             (fun headers body -> Lwt.return (response_printer headers body)))
+    Proc.run (fun () -> do_request env cgi_args
+                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
+                                   render_cont
+                                   (fun headers body -> Lwt.return (response_printer headers body)))
 
   (* does the preprocessing to turn prelude+filename into a program *)
   (* result can be cached *)

@@ -29,7 +29,7 @@ sig
 
   val singlethreaded : unit -> bool (* Exposed to prevent client calls from killing server-side threads... *)
 
-  val run : thread -> thread_result
+  val run : (unit -> 'a Lwt.t) -> 'a
 end
 
 module Mailbox :
