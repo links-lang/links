@@ -1,7 +1,8 @@
+var one = 1;
 fun compute(count, total) server {
  if (count < total) {
   showProgress(count, total);
-  compute(count+1, total)
+  compute(count+one, total)
  } else "done counting to " ^^ intToString(total)
 }
 
