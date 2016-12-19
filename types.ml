@@ -2059,6 +2059,8 @@ and typing_environment = { var_env    : environment
                          ; effect_row : row }
     deriving (Show)
 
+let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
+
 let normalise_typing_environment env =
   { env with
       var_env = Env.map normalise_datatype env.var_env;

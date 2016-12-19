@@ -1,3 +1,4 @@
+open Webserver
 open Notfound
 
 open Performance
@@ -6,6 +7,8 @@ open Utility
 open List
 
 module BS = Basicsettings
+module Eval = Evalir.Eval(Webserver)
+module Webif = Webif.WebIf(Webserver)
 
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
@@ -56,8 +59,10 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let program = Closures.program tenv Lib.primitive_vars program in
   Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
   BuildTables.program tenv Lib.primitive_vars program;
+  let (globals, _) = program in
+  Webserver.init (valenv, nenv, tyenv) globals;
 
-  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
+  let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
   lazy (printer t v) <|measure_as|> "print";
   valenv, v
 
@@ -311,6 +316,7 @@ let invert_env env =
 
 let run_file prelude envs filename =
   Settings.set_value BS.interacting false;
+  Webserver.set_prelude prelude;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
@@ -356,7 +362,7 @@ let load_prelude () =
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   BuildTables.bindings tenv Lib.primitive_vars globals;
 
-  let valenv = Evalir.run_defs Value.empty_env globals in
+  let valenv = Eval.run_defs Value.empty_env globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
@@ -380,7 +386,7 @@ let cache_load_prelude () =
   Loader.wpcache "prelude.closures" (fun () ->
     (* TODO: either scrap whole program caching or add closure
        conversion code here *)
-    let valenv = Evalir.run_defs Value.empty_env globals in
+    let valenv = Eval.run_defs Value.empty_env globals in
     let envs =
       (valenv,
        Env.String.extend Lib.nenv nenv,

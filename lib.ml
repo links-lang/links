@@ -22,6 +22,7 @@ let alias_env : Types.tycon_environment =
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 let cgi_parameters = ref []
+let cookies = ref []
 (** http_response_headers: this is state for the webif interface. I hope we can
     find a better way for library functions to communicate with the web
     interface. *)
@@ -839,22 +840,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun name ->
          let name = unbox_string name in
          let value =
-           match getenv "HTTP_COOKIE" with
-             | Some header ->
-                 let cookies = Str.split (Str.regexp "[ \t]*;[ \t]*") header in
-                 let cookies =
-                   concat_map
-                     (fun str ->
-                        match Str.split (Str.regexp "[ \t]*=[ \t]*") str with
-                          | [nm; vl] -> [nm, vl]
-                          | _ -> Debug.print ("Warning: ill-formed cookie: "^str); [])
-                     cookies
-                 in
-                   if List.mem_assoc name cookies then
-                     List.assoc name cookies
-                   else
-                     ""
-             | None -> ""
+           if List.mem_assoc name !cookies then
+             List.assoc name !cookies
+           else
+             ""
          in
            box_string value),
    datatype "(String) ~> String",
@@ -1518,6 +1507,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
                   `Record [])),
      datatype "(Socket) ~> ()",
+     IMPURE);
+    "unsafeAddRoute",
+    (`PFun (fun _ -> assert false),
+     datatype "(String,(String) ~> a) ~> ()",
+     IMPURE);
+    "servePages",
+    (`PFun (fun _ -> assert false),
+     datatype "() ~> ()",
      IMPURE)
 ]
 
@@ -1650,8 +1647,6 @@ let apply_pfun name args =
     | Some var -> apply_pfun_by_code var args
     | None -> assert false
 
-
-
 let is_primitive name = List.mem_assoc name env
 
 let is_pure_primitive name =
@@ -1666,6 +1661,15 @@ let is_pure_primitive name =
     arguments [args]. *)
 let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
                                   args)
+
+let cohttp_server_response headers body =
+  Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body);
+  let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ !http_response_headers) in
+  Cohttp_lwt_unix.Server.respond_string
+    ?headers:(Some h)
+    ?status:(Cohttp.Code.status_of_code !http_response_code)
+    ?body:body
+    ()
 
 (** Output the headers and content to stdout *)
 let print_http_response headers body =

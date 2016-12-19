@@ -3,6 +3,9 @@ open Notfound
 open Utility
 open Lwt
 
+type abort_type = string * string
+exception Aborted of abort_type
+
 module Proc =
 struct
   (** The abstract type of process identifiers *)
@@ -17,7 +20,7 @@ struct
   type proc_state = Value.continuation * Value.t
   *)
 
-  type thread_result = Value.env * Value.t
+  type thread_result = (Value.env * Value.t)
   type thread = unit -> thread_result Lwt.t (* Thunked to avoid changing evalir.  Because I'm laaaaaaaaaaaaazy. *)
 
   type scheduler_state =
@@ -80,6 +83,15 @@ struct
         Some v
       end
 
+  let current_pid_key = Lwt.new_key ()
+  let angel_done = Lwt.new_key ()
+
+  (** Return the identifier of the running process. *)
+  let get_current_pid () =
+    match Lwt.get current_pid_key with
+    | None -> assert false
+    | Some pid -> pid
+
   (** Awaken (unblock) a process:
     Move it from the blocked state to the runnable queue ([suspended]).
     Ignores if the process does not exist.
@@ -100,13 +112,6 @@ struct
   (** Reset (set to 0) the scheduler's step counter. *)
   let reset_step_counter() = state.step_counter := 0
   let result : (Value.env * Value.t) option ref = ref None
-  let current_pid_key = Lwt.new_key ()
-
-  (** Return the identifier of the running process. *)
-  let get_current_pid () =
-    match Lwt.get current_pid_key with
-    | None -> assert false
-    | Some pid -> pid
 
   let switch_granularity = 100
 
@@ -136,8 +141,6 @@ struct
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
-
-  let angel_done = Lwt.new_key ()
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =
@@ -176,6 +179,23 @@ struct
       end;
     Lwt.return r
 
+  let abort v =
+    let pid = get_current_pid () in
+    (* This process is only actually finished if we're not executing atomically *)
+    if not (!atomic) then
+      Debug.print ("Finishing process " ^ string_of_int pid);
+    if pid == main_process_pid then
+      main_running := false
+    else if Hashtbl.mem state.angels pid then
+      begin
+        let w = match Lwt.get angel_done with
+          | None -> assert false
+          | Some w -> w in
+        Lwt.wakeup w ();
+        Hashtbl.remove state.angels pid
+      end;
+    Lwt.fail (Aborted v)
+
   let is_main pid = pid == main_process_pid
   (** Is the current process is the main process? *)
   let current_is_main() = get_current_pid () == main_process_pid
@@ -192,15 +212,12 @@ struct
     reset_step_counter ();
     run' pfun
 
-  (* Pretty sure that Lwt.run does what we want here---at least, the document reasons not to nest
-  calls to Lwt.run match the desired behavior of atomically. :) *)
   let atomically pfun =
     let previously_atomic = !atomic in
     atomic := true;
-    let v = snd (run' pfun) in
+    let v = run' pfun in
     atomic := previously_atomic;
-    v
-
+    snd v
 end
 
 exception UnknownProcessID of Proc.pid (* This wouldn't be necessary if pid's were properly abstract.. *)

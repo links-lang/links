@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cohttp cohttp.lwt
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -113,16 +113,19 @@ SOURCES = $(OPC)                                \
           json.ml                               \
           database.mli database.ml              \
           linksregex.ml                         \
-          lib.mli lib.ml                        \
+	  lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
           query.mli query.ml                              \
           queryshredding.ml                     \
-          evalir.ml                             \
+          webserver_types.mli webserver_types.ml \
+          webserver.mli                         \
+	  evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \
+	  webserver.ml                          \
           links.ml                              \
 
 # TODO: get these working again

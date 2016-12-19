@@ -1,0 +1,15 @@
+fun mainPage(_) {
+  page
+   <html>
+    <body>
+     {intToXml(gensym())}
+    </body>
+   </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

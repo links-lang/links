@@ -81,7 +81,7 @@ fun minimum(l) {
     fun minimumHelper(l, currentMinimum) {
         switch (l) {
             case [] -> currentMinimum
-            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum) 
+            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum)
         }
     }
     minimumHelper(tl(l), hd(l))
@@ -169,7 +169,7 @@ fun intMapUpdateWithKey(f, i, im) {
                 }
         }
     }
-    
+
     h(f, i, im, [])
 }
 
@@ -186,14 +186,14 @@ fun intMapInsert(i, v, im) {
                 else h(i, v, xs, t ++ [x])
         }
     }
-    
+
     h(i, v, im, [])
 }
 
 fun intMapFilter(p, im) {
     switch (im) {
         case [] -> []
-        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs) 
+        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs)
     }
 }
 
@@ -271,7 +271,7 @@ fun main() {
 
     # LIST STUFF
     #var lsNil = lsNilF();
-    
+
     #
     # CONSTANTS
     #
@@ -305,7 +305,7 @@ fun main() {
     var stackWidth = 10;
 
     fun makePiece(coords, (r, g, b)) {
-        (pos = (4 - minimum(map(first, coords)), 0), pts = coords, color = (r, g, b, 1.0)) 
+        (pos = (4 - minimum(map(first, coords)), 0), pts = coords, color = (r, g, b, 1.0))
     }
     var pieces = [
         makePiece([(0,2),  (0,1),  (0,0),  (1,0)], (0.3, 0.6, 1.0)),
@@ -315,7 +315,7 @@ fun main() {
         makePiece([(-1,0), (0,0),  (0,1),  (1,1)], (0.6, 1.0, 0.3)),
         makePiece([(1,0),  (0,0),  (0,1), (-1,1)], (0.3, 1.0, 0.6)),
         makePiece([(-1,0), (0,0),  (1,0),  (0,1)], (0.3, 1.0, 1.0))]: [Piece];
-    
+
     fun getRandomPiece() {
         pieces !! floatToInt((random() *. intToFloat(length(pieces))) -. 1.0)
     }
@@ -328,7 +328,7 @@ fun main() {
     fun calculateLevel(n) {
         1 + n / 500
     }
-    
+
     fun calculateSpeed(n) {
         var t = 26 - calculateLevel(n);
         if (2 > t) 2 else t
@@ -355,7 +355,7 @@ fun main() {
     fun rect(x, y, w, h) {
         fun (ctx) { jsFillRect(ctx, x, y, w, h) }
     }
-    
+
     fun tile((x, y)) {
         rect(1.0 +. intToFloat(x), 1.0 +. intToFloat(y), 0.9, 0.9)
     }
@@ -377,7 +377,7 @@ fun main() {
         fun modulate((r, g, b, a), (rp, gp, bp, ap)) {
             ((r*.rp), (g*.gp), (b*.bp), (a*.ap))
         }
-        
+
         fun darken(x) {
             modulate((0.5, 0.5, 0.5, 1.0), x)
         }
@@ -389,14 +389,14 @@ fun main() {
             maybe(mempty, pieceImg, gs.activePiece)(ctx);
             jsRestore(ctx)
         }
-        
+
         fun renderBoard(ctx) {
             jsSave(ctx);
             jsTranslate(ctx, 10.0, 0.0);
             mappend(renderStack(gs.stack), emptyBoard)(ctx);
             jsRestore(ctx)
         }
-        
+
         fun renderExtra(ctx) {
             tint((0.9, 0.9, 0.9, 1.0),
             mconcat([if (stackFull(gs)) renderGameover else mempty,
@@ -411,15 +411,15 @@ fun main() {
                     #jsScale(ctx, 10.0, 10.0);
                     pieceImg(gs.queue)(ctx);
                     jsRestore(ctx)
-                } 
+                }
             ]))(ctx)
         }
-        
+
         fun renderGameover(ctx) {
             tint(holeColor, rect(1.0, 13.0, 9.0, 2.0))(ctx);
             tint((0.75, 0.25, 0.25, 1.0), write("GAME OVER", 13.0, 120.0))(ctx)
         }
-        
+
         fun renderStack(stack: Stack) {
             fun (ctx) {
                 ignore(map(
@@ -436,18 +436,18 @@ fun main() {
                 stack))
             }
         }
-        
+
         fun renderBlink(ctx) {
             var y = gs.clearing;
             var x = [0..stackMaxX - 1];
             var c = if (odd(gs.countdown / 2)) (1.0, 1.0, 1.0, 0.8) else (0.0, 0.0, 0.0, 0.8);
-            
+
             jsSave(ctx);
             jsTranslate(ctx, 10.0, 0.0);
             ignore(map(fun (yy) { map(fun (xx) { tint(c, tile((xx, yy)))(ctx) }, x) }, y));
             jsRestore(ctx)
         }
-        
+
         fun write(str, x, y) {
             fun (ctx) {
                 jsSave(ctx);
@@ -459,7 +459,7 @@ fun main() {
         }
 
         var img = mconcat([renderBlink, renderExtra, renderPiece, renderBoard]);
-        
+
         img(ctx);
         jsRestore(ctx)
     }
@@ -488,7 +488,7 @@ fun main() {
             var downloadNode = getNodeById("download");
             var imageName = "links-tetris-" ^^ intToString(clientTime()) ^^ ".png";
             var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
-            replaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode); 
+            replaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
             jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png")
         }
         else ();
@@ -502,7 +502,7 @@ fun main() {
 
         jsSetFillColor(ctx, "#000");
         jsFillText(ctx, "FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
-        
+
         var fpsInfo = if (fpsInfo.loFps > dFps) {
             (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
         }
@@ -513,7 +513,7 @@ fun main() {
         else fpsInfo;
 
         var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
-        
+
         var aFpsFrames = 100;
         var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
             (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
@@ -529,14 +529,14 @@ fun main() {
             jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
         else
             jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
-        
+
         fpsInfo
     }
 
     fun swapBuffers(mainCanvas, dispCanvas) {
         var ctx = jsGetContext2D(getNodeById(dispCanvas));
         jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
-        
+
         var _ = domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block");
         var _ = domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none");
         clear(ctx)
@@ -559,11 +559,11 @@ fun main() {
     fun clearing(gs) {
         gs.clearing
     }
-    
+
     fun activePiece(gs) {
         gs.activePiece
     }
-    
+
     fun decCountdown(gs) {
         (gs with countdown = gs.countdown - 1)
     }
@@ -572,11 +572,11 @@ fun main() {
         if (gs.countdown <= 0 && p(gs)) f(gs)
         else gs
     }
-    
+
     fun clearLines(gs) {
         updateIfReady(compose(not, compose(isNull, clearing)), removeLines, gs) # so much function composition and calling
     }
-    
+
     fun removeLines(gs) {
         var intact = intMapElems(fold_right(intMapDelete, gs.stack, gs.clearing));
         var newRows = replica(length(gs.clearing), emptyRow);
@@ -585,16 +585,16 @@ fun main() {
         (gs with stack = renumbered, score = gs.score + length(gs.clearing) * 100,
             clearing = [], countdown = calculateSpeed(gs.score))
     }
-    
+
     fun checkLines(gs: Game) {
         var filled = intMapFilter(fun (x) { all(isJust, intMapElems(x)) }, gs.stack);
         (gs with clearing = intMapKeys(filled), countdown = 20)
     }
-    
+
     fun stackFull(gameState: Game) {
         any(isJust, intMapElems(intMapAt(gameState.stack, 0)))
     }
-    
+
     fun dropPiece(gs) {
         updateIfReady(compose(isJust, activePiece), pieceFall, gs)
     }
@@ -607,7 +607,7 @@ fun main() {
                 (gs with score = gs.score + 1, countdown = calculateSpeed(gs.score))
             }
         }
-    
+
         switch (gs.activePiece) {
             case Nothing -> gs
             case Just(piece) ->
@@ -618,34 +618,34 @@ fun main() {
                 else auxUpdate(gsPrim)
         }
     }
-    
+
     fun settle(piece: Piece, gs: Game) {
         var tPts = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
         fun addTile(stk, (x, y)) {
             intMapAdjust(fun (xx) { intMapInsert(x, Just(piece.color), xx) }, y, stk)
         }
-        
+
         var gsPrim = (gs with activePiece = Nothing, stack = fold_left(addTile, gs.stack, tPts));
         checkLines(gsPrim)
     }
-    
+
     fun newPiece(gs) {
         if (isNothing(gs.activePiece) && gs.countdown <= 0) {
             (gs with countdown = calculateSpeed(gs.score), dropped = false,
                 activePiece = Just(gs.queue), queue = getRandomPiece())
         } else gs
     }
-    
+
     fun blocked(piece: Piece, stack) {
         var ptsPrim = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
         fun obs((x, y)) { var t = intMapLookup(y, stack); switch (t) { case Nothing -> Nothing case Just(u) -> intMapLookup(x, u) }  }
         any(fun (x) { maybe(true, isJust, obs(x)) }, ptsPrim)
     }
-    
+
     fun movePiece(xy, piece) {
         (piece with pos = vectorAddI(xy, piece.pos))
     }
-    
+
     fun rotatePiece(piece: Piece) {
         (piece with pts = map(fun ((x, y)) { (y, -x) }, piece.pts))
     }
@@ -657,7 +657,7 @@ fun main() {
         if (length(i) > 0) fold_right(handleKey, gs, i)
         else gs
     }
-    
+
     fun handleKey(k, gs) {
         # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
         if (objectEq(k, KeyDown(restartKeyCode)))
@@ -699,7 +699,7 @@ fun main() {
     fun updateLogic(dt, gameState, i) {
         if (dt > step) {
             var gameState = mainGameLogic(gameState, i);
-            
+
             updateLogic(dt -. step, gameState, [])
         } else (gameState, dt)
     }
@@ -722,7 +722,7 @@ fun main() {
             if (gameStatePrim.state == Restart) # objectEq doesn't work here -- why?
                 ()
             else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
-                mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i) 
+                mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
             } else {
                 mainLoop((gameStatePrim with state = Run), # if state == Download, reset
                     dtPrim, now,
@@ -739,9 +739,9 @@ fun main() {
     }
     var updateProcId = spawnClient { updateState() };
 
-    
+
     fun onKeyDown(e) {
-        updateProcId ! (KeyDown(getCharCode(e)): Input); 
+        updateProcId ! (KeyDown(getCharCode(e)): Input);
     }
 
     fun onKeyUp(e) {
@@ -750,7 +750,7 @@ fun main() {
 
     fun initialize() {
         var _ = recv();
-        
+
         jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
         jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
 
