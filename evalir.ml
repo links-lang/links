@@ -465,6 +465,8 @@ struct
            | None -> computation env cont e
            | Some (db, p) ->
                begin
+		 if db#driver_name() <> "postgresql"
+		 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
 		 let get_fields t =
                    match t with
                    | `Record fields ->
