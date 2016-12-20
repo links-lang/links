@@ -65,7 +65,7 @@ struct
       let path = Uri.path (Request.uri req) in
 
       let run_page (dir, s, (valenv, v)) () =
-        Eval.apply (render_cont ()) valenv (v, [`String s]) >>= fun (valenv, v) ->
+        Eval.apply (render_cont ()) valenv (v, [`String path]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
