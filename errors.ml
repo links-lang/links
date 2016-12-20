@@ -145,7 +145,7 @@ let display_fatal ?(stream=stderr) f a =
 		      raise e
 		    else
 		      exit 1
-		   ) ~stream:stream (lazy (f a)) 
+		   ) ~stream:stream (lazy (f a))
 
 let display_fatal_l ?(stream=stderr) e =
   display ~default:(fun _ -> exit 1) ~stream:stream e

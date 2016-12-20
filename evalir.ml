@@ -1,3 +1,7 @@
+open Webserver_types
+open Ir
+open List
+open Lwt
 open Notfound
 open Utility
 open Proc
@@ -5,15 +9,15 @@ open Proc
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-module Eval = struct
-  open Ir
+module Eval = functor (Webs : WEBSERVER) ->
+struct
 
   exception EvaluationError of string
   exception Wrong
 
   let eval_error fmt : 'a =
     let error msg = raise (EvaluationError msg) in
-      Printf.kprintf error fmt
+    Printf.kprintf error fmt
 
   let db_connect : Value.t -> Value.database * string = fun db ->
     let driver = Value.unbox_string (Value.project "driver" db)
@@ -57,7 +61,7 @@ module Eval = struct
    let serialize_call_to_client (continuation, name, arg) =
      Json.jsonize_call continuation name arg
 
-   let client_call : string -> Value.continuation -> Value.t list -> 'a =
+   let client_call : string -> Value.continuation -> Value.t list -> Proc.thread_result Lwt.t =
      fun name cont args ->
        if not(Settings.get_value Basicsettings.web_mode) then
          failwith "Can't make client call outside web mode.";
@@ -67,8 +71,7 @@ module Eval = struct
 (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
        let call_package = Utility.base64encode
                             (serialize_call_to_client (cont, name, args)) in
-         Lib.print_http_response ["Content-type", "text/plain"] call_package;
-         exit 0
+       Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
@@ -349,6 +352,24 @@ module Eval = struct
         unblock out2;
         apply cont env (value env end_bang, [])
     (* end of session stuff *)
+    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
+       begin
+         match pathv with
+         | `String path ->
+            Webs.add_route (path.[String.length path - 1] = '/') path (env, handler);
+            apply_cont cont env (`Record [])
+         | _ -> assert false
+       end
+    | `PrimitiveFunction ("servePages", _), [] ->
+       begin
+         Webs.start () >>= fun () ->
+         apply_cont cont env (`Record [])
+(*
+                    (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
+                              apply_cont cont env (`Record [])
+ *)
+       end
+    (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args)
     | `PrimitiveFunction (n,Some code), args ->
@@ -423,9 +444,9 @@ module Eval = struct
            already been applied here *)
         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
-	      let unboxed_keys = 
-		List.map 
-		  (fun key -> 
+	      let unboxed_keys =
+		List.map
+		  (fun key ->
 		    List.map Value.unbox_string (Value.unbox_list key))
 		  (Value.unbox_list keys)
 	      in
@@ -444,6 +465,8 @@ module Eval = struct
            | None -> computation env cont e
            | Some (db, p) ->
                begin
+		 if db#driver_name() <> "postgresql"
+		 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
 		 let get_fields t =
                    match t with
                    | `Record fields ->
@@ -544,57 +567,52 @@ module Eval = struct
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =
     fun env -> computation env Value.toplevel_cont
+
+
+  let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
+    (Value.env * Value.t) =
+    fun cont env program ->
+      try (
+        Proc.run (fun () -> computation env cont program)
+      ) with
+        | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                     " while interpreting.")
+
+  let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
+    fun env program ->
+      try (
+        Proc.run (fun () -> eval env program)
+      ) with
+        | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                     " while interpreting.")
+        | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
+
+  let run_defs : Value.env -> Ir.binding list -> Value.env =
+    fun env bs ->
+    let (env, _value) = run_program env (bs, `Return(`Extend(StringMap.empty, None))) in env
+
+  (** [apply_cont_toplevel cont env v] applies a continuation to a value
+      and returns the result. Finishing the main thread normally comes
+      here immediately. *)
+  let apply_cont_toplevel cont env v =
+    try snd (Proc.run (fun () -> apply_cont cont env v)) with
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                " while interpreting.")
+
+  let apply_with_cont cont env (f, vs) =
+    try snd (Proc.run (fun () -> apply cont env (f, vs))) with
+    |  NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                 " while interpreting.")
+
+
+  let apply_toplevel env (f, vs) = apply_with_cont [] env (f, vs)
+
+  let eval_toplevel env program =
+    try snd (Proc.run (fun () -> eval env program)) with
+    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
+                                " while interpreting.")
+
+  let eval_fun env f =
+    find_fun_def env f
+
 end
-
-let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-  (Value.env * Value.t) =
-  fun cont env program ->
-    try (
-      Proc.run (fun () -> Eval.computation env cont program)
-    ) with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                   " while interpreting.")
-
-let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
-  fun env program ->
-    try (
-      Proc.run (fun () -> Eval.eval env program)
-    ) with
-      | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                   " while interpreting.")
-      | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
-
-let run_defs : Value.env -> Ir.binding list -> Value.env =
-  fun env bs ->
-    let env, _value =
-      run_program env (bs, `Return(`Extend(StringMap.empty, None))) in
-      env
-
-(** [apply_cont_toplevel cont env v] applies a continuation to a value
-    and returns the result. Finishing the main thread normally comes
-    here immediately. *)
-let apply_cont_toplevel cont env v =
-  try snd (Proc.run (fun () -> Eval.apply_cont cont env v))
-  with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
-let apply_with_cont cont env (f, vs) =
-  try snd (Proc.run (fun () -> Eval.apply cont env (f, vs)))
-  with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
-
-let apply_toplevel env (f, vs) =
-  try snd (Proc.run (fun () -> Eval.apply [] env (f, vs)))
-  with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
-
-let eval_toplevel env program =
-  try snd (Proc.run (fun () -> Eval.eval env program))
-  with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
-
-let eval_fun env f =
-  Eval.find_fun_def env f

@@ -2,25 +2,29 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=bigarray num str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cohttp cohttp.lwt
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
 
-ifdef SQLITE3_LIBDIR
+POSTGRESQL_LIBDIR=$(shell ocamlfind query postgresql)
+SQLITE3_LIBDIR=$(shell ocamlfind query sqlite3)
+MYSQL_LIBDIR=$(shell ocamlfind query mysql)
+
+ifneq ($(SQLITE3_LIBDIR),)
    DB_CODE    += lite3_database.ml
    DB_AUXLIBS += $(SQLITE3_LIBDIR)
    DB_CLIBS   += sqlite3
    DB_LIBS    += sqlite3
 endif
 
-ifdef MYSQL_LIBDIR
+ifneq ($(MYSQL_LIBDIR),)
    DB_CODE    += mysql_database.ml
    DB_AUXLIBS += $(MYSQL_LIBDIR)
    DB_LIBS    += mysql
 endif
 
-ifdef POSTGRESQL_LIBDIR
+ifneq ($(POSTGRESQL_LIBDIR),)
    DB_CODE    += pg_database.ml
    DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
    DB_LIBS    += postgresql
@@ -43,7 +47,7 @@ OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
+OPC = cgi.ml unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
 SOURCES = $(OPC)                                \
@@ -75,8 +79,6 @@ SOURCES = $(OPC)                                \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
 					moduleUtils.mli moduleUtils.ml \
-					uniquify.mli uniquify.ml \
-					scopeGraph.mli scopeGraph.ml \
 					chaser.mli chaser.ml \
 					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
@@ -111,16 +113,19 @@ SOURCES = $(OPC)                                \
           json.ml                               \
           database.mli database.ml              \
           linksregex.ml                         \
-          lib.mli lib.ml                        \
+	  lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
           query.mli query.ml                              \
           queryshredding.ml                     \
-          evalir.ml                             \
+          webserver_types.mli webserver_types.ml \
+          webserver.mli                         \
+	  evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \
+	  webserver.ml                          \
           links.ml                              \
 
 # TODO: get these working again

@@ -11,6 +11,7 @@ let web_mode = Settings.add_bool ("web_mode", false, `System)
     terminating *)
 let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
 
+
 (** If [true], then enable concurrency on the server:
 
     - Child processes are abandoned if the main process ends.
@@ -24,14 +25,34 @@ let concurrent_server = Settings.add_bool ("concurrent_server", true, `System)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
 (** Name of the file containing the prelude code. *)
-let prelude_file = 
+let prelude_file =
   let prelude_dir = match Utility.getenv "LINKS_LIB" with
-      None -> Filename.dirname Sys.executable_name
+    (* If user defined LINKS_LIB then it takes the highest priority *)
     | Some path -> path
+    | None ->
+        (* If LINKS_LIB is not defined then we search in current directory *)
+        let executable_dir = Filename.dirname Sys.executable_name in
+        if Sys.file_exists (Filename.concat executable_dir "prelude.links") then
+          executable_dir
+        else
+          try
+            (* If all else failed we search for OPAM installation of Links and
+               use a prelude that it provides *)
+            let opam_links_lib =
+              input_line (Unix.open_process_in "opam config var links:lib 2>/dev/null") in
+            if Sys.file_exists (Filename.concat opam_links_lib "prelude.links") then
+              opam_links_lib
+            else
+              (* But if no OPAM installation exists we fall back to current
+                 directory so that user gets a reasonable error message *)
+              executable_dir
+          with End_of_file ->
+            (* User probably does not have OPAM, so fall back to current directory *)
+            executable_dir
   in Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
 
 (** The banner *)
-let welcome_note = Settings.add_string ("welcome_note", 
+let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
@@ -75,7 +96,7 @@ let database_args = Settings.add_string("database_args", "", `User)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
 (** Caching *)
-let cache_directory = 
+let cache_directory =
   Settings.add_string ("cache_directory", "", `User)
 let use_cache = Settings.add_bool("use_cache", true, `System)
 let make_cache = Settings.add_bool("make_cache", true, `System)

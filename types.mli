@@ -173,6 +173,8 @@ type environment        = datatype Env.String.t
                             effect_row : row }
     deriving (Show)
 
+val empty_typing_environment : typing_environment
+
 val concrete_type : datatype -> datatype
 val concrete_field_spec : field_spec -> field_spec
 

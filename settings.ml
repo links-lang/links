@@ -10,7 +10,7 @@ type 'a setting = {mutable value: 'a; name: string; mode: mode}
 (*
 [SUGGESTION]
   add an optional function to each setting
-  that is called whenever the setting is updated 
+  that is called whenever the setting is updated
 *)
 (* ('a * 'a -> unit) option*)
 
@@ -31,13 +31,19 @@ let parse_bool = function
   | "oui"
   | "ja"
   | "tak"
-  | "on"  -> true
+  | "on"
+  | "sure"
+  | "yep"
+  | "totally" -> true
   | "false"
   | "no"
   | "non"
   | "nein"
   | "nie"
-  | "off" -> false
+  | "off"
+  | "nope"
+  | "negative"
+  | "uncool" -> false
   | _ -> raise (Invalid_argument "parse_bool")
 
 let is_user = function
@@ -131,7 +137,7 @@ let format_universal formatter : universal -> string = fun universal_setting ->
     | `String setting ->
 	formatter setting.name setting.value
 
-let print_settings () = 
+let print_settings () =
   let get_settings mode =
     List.rev
       (SettingsMap.fold (fun _ setting p ->
@@ -151,28 +157,28 @@ let print_settings () =
 let from_argv : string array -> string list =
   let set name value =
     parse_and_set_user (name, value)
-  and is_opt = start_of ~is:"--" 
+  and is_opt = start_of ~is:"--"
   and de_opt s = StringLabels.sub ~pos:2 ~len:(String.length s - 2) s in
   let rec process nonopts = function
     | [] -> nonopts
-    | option::rest when is_opt option && String.contains option '=' -> 
+    | option::rest when is_opt option && String.contains option '=' ->
         let idx = String.index option '=' in
           set
             (de_opt (StringLabels.sub ~pos:0 ~len:idx option))
             (StringLabels.sub ~pos:idx ~len:(String.length option - idx) option);
         process nonopts rest
-    | option::value::rest when is_opt option -> 
+    | option::value::rest when is_opt option ->
         set (de_opt option) value ;
         process nonopts rest
     | nonopt::rest -> process (nonopt::nonopts) rest
-  in 
-    process [] -<- Array.to_list 
+  in
+    process [] -<- Array.to_list
 
 
 let load_file filename =
   let file = open_in filename in
 
-  let strip_comment s = 
+  let strip_comment s =
     if String.contains s '#' then
       let i = String.index s '#' in
 	String.sub s 0 i
@@ -198,7 +204,7 @@ let load_file filename =
 	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
 			"Configuration options must be of the form <name>=<value>")
 	end in
-    
+
   let rec parse_lines n =
     try
       parse_line n (input_line file);

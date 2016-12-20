@@ -21,7 +21,7 @@ var leftKeyCode = 37;
 var rightKeyCode = 39;
 var upKeyCode = 38;
 var downKeyCode = 40;
- 
+
 fun start() {
     var gridprim = addTile(replica(4, [0, 0, 0, 0]));
     addTile(gridprim)
@@ -61,7 +61,7 @@ fun getZeroes(grid) {
     fun singleRow(n) {
         zip(replica(4, n), [0..3])
     }
- 
+
     var coordinates = concatMap(singleRow, [0..3]);
     filter(fun ((row, col)) { ((grid !! row) !! col) == 0 }, coordinates)
 }
@@ -129,7 +129,7 @@ fun newGrid(grid, msg) {
 
 fun gameLoop(grid) {
     printGrid(grid);
-    
+
     if (isMoveLeft(grid)) {
         if (check2048(grid)) {
             replaceNode(<div id="win" class="win-lose">You win!</div>, getNodeById("win"));
@@ -176,7 +176,7 @@ fun main() {
 
                 #grid {{
                 }}
-            
+
                 .tile {{
                     font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
                     display: inline-block;
@@ -275,7 +275,7 @@ fun main() {
                     z-index: 1001;
                     font-size: 96px;
                 }}
-                
+
                 #lose {{
                     z-index: 1000;
                     font-size: 90px;
@@ -308,7 +308,7 @@ fun main() {
                     <h1>2048 in Links</h1>
                     <div id="msg">Click on the board to play.</div>
                     <div>The board must be focused for the input to work.</div>
-                    
+
                     <div id="supercontainer">
                         <div id="n" />
                         <div id="container">

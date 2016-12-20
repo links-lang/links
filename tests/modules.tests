@@ -76,3 +76,22 @@ Basic type in session type
 filemode : args
 args : -m --path=tests/modules
 stdout : () : ()
+
+Mutually-recursive functions (1)
+./tests/modules/mutualfn.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!Hello!" : String
+
+Mutually-recursive functions (2)
+./tests/modules/mutualfn2.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!" : String
+
+Mutually-recursive functions (3)
+./tests/modules/mutualfn3.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!" : String
+

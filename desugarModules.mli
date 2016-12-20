@@ -1,1 +1,1 @@
-val desugarModules : ScopeGraph.scope_graph -> ScopeGraph.scope_graph -> Uniquify.unique_ast -> Sugartypes.program
+val desugarModules : Sugartypes.program -> Sugartypes.program

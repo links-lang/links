@@ -1,9 +1,6 @@
 open Utility
 open Sugartypes
-open Printf
 open ModuleUtils
-open Uniquify
-open ScopeGraph
 
 type prog_map = program StringMap.t
 type filename = string
@@ -26,49 +23,52 @@ let assert_no_cycles = function
   | [x]::ys -> ()
   | (x::xs)::ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
 
-let unique_list xs =
-  StringSet.elements (StringSet.of_list xs)
-
-
-let can_resolve_name name sg u_ast =
-  match ScopeGraph.resolve_reference name sg u_ast with
-    | `SuccessfulResolution _ -> true
-    | `AmbiguousResolution _ -> true
-    | `UnsuccessfulResolution -> false
-
-(* Given a fully-qualified variable or import, tries to resolve the first segment.
- * For example, given [A_1, B_2, x_3], tries to resolve A_1. If successful, it's
- * internally resolvable and we're OK. If not, then we'll need to try and import it.
- *)
-let rec can_resolve_qual_name qual_name sg u_ast =
-  match qual_name with
-    | [] -> failwith "INTERNAL ERROR: Empty qualified name; this should never happen"
-    | x::xs ->
-        (* The head will be the module we'll want to try and resolve. *)
-        can_resolve_name x sg u_ast
-
 (* Traversal to find module import references in the current file *)
-let rec find_module_refs sg ty_sg u_ast init_import_candidates =
+let rec find_module_refs mt path ht =
 object(self)
   inherit SugarTraversals.fold as super
   (* Imports that are not resolvable in the current file *)
-  val import_candidates = init_import_candidates
+  val import_candidates = StringSet.empty
   method add_import_candidate x =
     {< import_candidates = StringSet.add x import_candidates >}
+  method add_import_candidates ic_set =
+    {< import_candidates = StringSet.union ic_set import_candidates >}
   method get_import_candidates = import_candidates
+
+  val shadow_table = ht
+  method get_shadow_table = shadow_table
+  method bind_shadow name fqn =
+    {< shadow_table = shadow_binding name fqn shadow_table >}
+
+  method bind_open name fqn =
+    {< shadow_table = shadow_open_terms name fqn mt shadow_table >}
 
   method bindingnode = function
     | `QualifiedImport ns ->
-        if can_resolve_qual_name ns sg u_ast then self else
-          let to_add = Uniquify.lookup_var (List.hd ns) u_ast in
-          self#add_import_candidate to_add
+        (* Try to resolve the import; if not, add to ICs list *)
+        let lookup_ref = List.hd ns in
+        (try
+           let _ = StringMap.find lookup_ref shadow_table in
+           self
+         with
+           _ -> self#add_import_candidate lookup_ref)
+    | `Module (n, bs) ->
+        let new_path = path @ [n] in
+        let fqn = lst_to_path new_path in
+        let o = self#bind_shadow n fqn in
+        let shadow_ht = o#get_shadow_table in
+        (* Now, recursively check the module, with this one in scope *)
+        let o_bindings =
+          List.fold_left (fun o b -> o#binding b) (find_module_refs mt new_path shadow_ht) bs in
+        let ics = o_bindings#get_import_candidates in
+        (o#bind_open n fqn)#add_import_candidates ics
     | bn -> super#bindingnode bn
 end
 
 
-let find_external_refs sg ty_sg u_ast =
-  let prog = Uniquify.get_ast u_ast in
-  StringSet.elements ((find_module_refs sg ty_sg u_ast StringSet.empty)#program prog)#get_import_candidates
+let find_external_refs prog module_table =
+  StringSet.elements
+    ((find_module_refs module_table [] StringMap.empty)#program prog)#get_import_candidates
 
 let rec add_module_bindings deps dep_map =
   match deps with
@@ -81,7 +81,8 @@ let rec add_module_bindings deps dep_map =
         (* TODO: Fix dummy position to be more meaningful, if necessary *)
         (`Module (module_name, bindings), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
-        failwith "Trying to find %s in dep map containing keys: %s\n" module_name (print_list (List.map fst (StringMap.bindings dep_map)));
+        failwith "Trying to find %s in dep map containing keys: %s\n"
+          module_name (print_list (List.map fst (StringMap.bindings dep_map)));
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
 
 
@@ -90,12 +91,9 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   let visited1 = StringSet.add module_name visited in
   let dep_map1 = StringMap.add module_name module_prog dep_map in
 
-  (* Unique AST and scope graph for plain program*)
-  let u_ast = Uniquify.uniquify_ast module_prog in
-  let sg = ScopeGraph.create_scope_graph (Uniquify.get_ast u_ast) in
-  let ty_sg = ScopeGraph.create_type_scope_graph (Uniquify.get_ast u_ast) in
   (* With this, get import candidates *)
-  let ics = find_external_refs sg ty_sg u_ast in
+  let mt = create_module_info_map module_prog in
+  let ics = find_external_refs module_prog mt in
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
   List.fold_right (
     fun name (visited_acc, deps_acc, dep_map_acc) ->
@@ -110,25 +108,19 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
 
 (* Top-level function: given a module name + program, return a program with
  * all necessary files added to the binding list as top-level modules. *)
-let add_dependencies module_name module_prog =
+let add_dependencies module_prog =
   let (bindings, phrase) = module_prog in
   (* Firstly, get the dependency graph *)
   let (_, deps, dep_binding_map) =
-    add_dependencies_inner module_name module_prog (StringSet.empty) [] (StringMap.empty) in
+    add_dependencies_inner "" module_prog (StringSet.empty) [] (StringMap.empty) in
   (* Next, do a topological sort to get the dependency graph and identify cyclic dependencies *)
   let sorted_deps = Graph.topo_sort_sccs deps in
   (* Each entry should be *precisely* one element (otherwise we have cycles) *)
   assert_no_cycles sorted_deps;
+  (* Printf.printf "Sorted deps: %s\n" (print_list (List.map List.hd sorted_deps)); *)
   (* Now, build up binding list where each opened dependency is mapped to a `Module containing
    * its list of inner bindings. *)
   (* FIXME: This isn't reassigning positions! What we'll want is to retain the positions, but modify
    * the position data type to keep track of the module filename we're importing from. *)
   let module_bindings = add_module_bindings sorted_deps dep_binding_map in
-  let transformed_prog = (module_bindings @ bindings, phrase) in
-  (* Now, finally create a new SG and unique AST for the program with all inlined modules *)
-  let u_ast = Uniquify.uniquify_ast transformed_prog in
-  let u_prog = Uniquify.get_ast u_ast in
-  let sg = ScopeGraph.create_scope_graph u_prog in
-  let ty_sg = ScopeGraph.create_type_scope_graph u_prog in
-
-  (sg, ty_sg, u_ast)
+  (module_bindings @ bindings, phrase)
