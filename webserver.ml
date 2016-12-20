@@ -86,11 +86,11 @@ struct
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
            route rest in
 
-      if is_prefix_of ("/" ^ Settings.get_value Basicsettings.Js.lib_url) path then
+      if is_prefix_of (Settings.get_value Basicsettings.Js.lib_url) path then
         begin
           let ( / ) = Filename.concat in
           let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
-          let uri = (String.sub path (liburl_length + 1) (String.length path - liburl_length - 1)) in
+          let uri = (String.sub path liburl_length (String.length path - liburl_length)) in
           let linkslib = match Settings.get_value jslibdir with
             | "" ->
                begin
