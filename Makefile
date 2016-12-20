@@ -47,7 +47,7 @@ OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml netencoding.ml netencoding.mli unionfind.ml unionfind.mli \
+OPC = cgi.ml unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml unix.cma
 
 SOURCES = $(OPC)                                \

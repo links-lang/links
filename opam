@@ -24,6 +24,7 @@ depends: [
   "ocamlfind" {build}
   "deriving" {build}
   "lwt"
+  "base64"
   "cohttp"
 ]
 depopts: [
