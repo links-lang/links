@@ -1663,7 +1663,7 @@ let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
                                   args)
 
 let cohttp_server_response headers body =
-  Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body);
+  (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
   let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ !http_response_headers) in
   Cohttp_lwt_unix.Server.respond_string
     ?headers:(Some h)
