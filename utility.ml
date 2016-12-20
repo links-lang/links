@@ -803,18 +803,6 @@ let base64decode s =
 
 let base64encode = Netencoding.Base64.encode
 
-(** (0 Ocaml Version Comparison) ***)
-let ocaml_version_number = (List.map int_of_string
-                              (split_string Sys.ocaml_version '.'))
-
-(* Ocaml team says string comparison would work here. Do we believe them? *)
-let rec version_atleast a b =
-  match a, b with
-      _, [] -> true
-    | [], _ -> false
-    | (ah::at), (bh::bt) -> ah > bh || (ah = bh && version_atleast at bt)
-let ocaml_version_atleast min_vsn = version_atleast ocaml_version_number min_vsn
-
 let gensym_counter = ref 0
 
 (** Any two calls to [gensym] return distinct strings.  The optional
