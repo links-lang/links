@@ -109,8 +109,8 @@ struct
       "\n  </body></html>\n"
 
   let is_multipart () =
-    ((Cgi.safe_getenv "REQUEST_METHOD") = "POST" &&
-        Cgi.string_starts_with (Cgi.safe_getenv "CONTENT_TYPE") "multipart/form-data")
+    ((safe_getenv "REQUEST_METHOD") = "POST" &&
+        string_starts_with (safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
   let get_cgi_args() =
     if is_multipart() then

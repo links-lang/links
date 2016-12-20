@@ -529,6 +529,25 @@ struct
 
   let mapstrcat glue f list = String.concat glue (List.map f list)
 
+  let split separator text =
+    let len = String.length text in
+    let rec loop pos =
+      if pos < len then
+        try
+                let last = String.index_from text pos separator in
+        let str = String.sub text pos (last-pos) in
+          str::(loop (succ last))
+        with Not_found ->
+        if pos < len then [String.sub text pos (len-pos)]
+        else []
+      else []
+    in
+    loop 0
+
+  let string_starts_with s pref =
+    String.length s >= String.length pref &&
+    String.sub s 0 (String.length pref) = pref
+
   let start_of ~is s =
     Str.string_match (Str.regexp_string is) s 0
 
@@ -844,6 +863,13 @@ let getenv : string -> string option =
   fun name ->
     try Some (Sys.getenv name)
     with NotFound _ -> None
+
+(** Get an environment variable, return its value if it is defined, or
+    raise an exception if it is not in the environment. *)
+let safe_getenv s =
+  try Sys.getenv s
+  with Not_found ->
+    failwith ("The environment variable " ^ s ^ " is not set")
 
 (** Initialise the random number generator *)
 let _ = Random.self_init()
