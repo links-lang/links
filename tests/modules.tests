@@ -100,5 +100,3 @@ Infix operators
 filemode : args
 args : -m --path=tests/modules
 stdout : 150 : Int
-
-
