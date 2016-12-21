@@ -43,7 +43,7 @@ struct
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
 
     let parse_post_body s =
-      let assocs = Cgi.split '&' s in
+      let assocs = split '&' s in
       let one_assoc s =
         try
           let i = String.index s '=' in

@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cohttp cohttp.lwt
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -47,8 +47,8 @@ OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
 TRASH=*.tmp *.output *.cache
 
 # Other people's code.
-OPC = cgi.ml unionfind.ml unionfind.mli \
-      getopt.ml getopt.mli PP.ml unix.cma
+OPC = unionfind.ml unionfind.mli \
+      getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                                \
           notfound.ml                           \
