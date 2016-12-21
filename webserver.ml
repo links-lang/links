@@ -18,7 +18,7 @@ struct
   module Eval = Evalir.Eval(Webserver)
   module Webif = Webif.WebIf(Webserver)
 
-  type routing_table = (bool * string * (Value.env * Value.t)) list
+  type routing_table = (bool * string * (string, Value.env * Value.t) either) list
   type t = routing_table * Ir.binding list * Value.env
 
   let rt : routing_table ref = ref []
@@ -39,6 +39,7 @@ struct
 
   let rec start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
+    let ( / ) = Filename.concat in
 
     let parse_post_body s =
       let assocs = split '&' s in
@@ -72,35 +73,39 @@ struct
         in
         Lwt.return ("text/html", page) in
 
+      let serve_static base uri_path =
+          let fname = base / uri_path in
+          Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
+          Server.respond_file ~fname () in
+
       let rec route = function
         | [] ->
            Debug.print "No cases matched!\n";
            Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
-        | ((dir, s, (valenv, v)) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
-             Debug.print (Printf.sprintf "Matched case %s\n" s);
-             let (_, nenv, tyenv) = !env in
-             Webif.do_request (Value.shadow tl_valenv ~by:valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
+        | ((_, s, Left file_path) :: rest) when is_prefix_of s path ->
+           Debug.print (Printf.sprintf "Matched static case %s\n" s);
+           let uri_path = String.sub path (String.length s) (String.length path - String.length s) in
+           serve_static file_path uri_path
+        | ((dir, s, Right (valenv, v)) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
+           Debug.print (Printf.sprintf "Matched case %s\n" s);
+           let (_, nenv, tyenv) = !env in
+           Webif.do_request (Value.shadow tl_valenv ~by:valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
         | ((_, s, _) :: rest) ->
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
            route rest in
 
       if is_prefix_of (Settings.get_value Basicsettings.Js.lib_url) path then
-        begin
-          let ( / ) = Filename.concat in
-          let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
-          let uri = (String.sub path liburl_length (String.length path - liburl_length)) in
-          let linkslib = match Settings.get_value jslibdir with
-            | "" ->
-               begin
-                 (match Utility.getenv "LINKS_LIB" with
-                  | None -> Filename.dirname Sys.executable_name
-                  | Some path -> path) / "lib" / "js"
-               end
-            | s -> s in
-          let fname = linkslib / uri in
-          Debug.print (Printf.sprintf "Responding to lib request;\n    Requested: %s\n    Providing: %s\n" path fname);
-          Server.respond_file ~fname ()
-        end
+        let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
+        let uri_path = (String.sub path liburl_length (String.length path - liburl_length)) in
+        let linkslib = match Settings.get_value jslibdir with
+          | "" ->
+             begin
+               (match Utility.getenv "LINKS_LIB" with
+                | None -> Filename.dirname Sys.executable_name
+                | Some path -> path) / "lib" / "js"
+             end
+          | s -> s in
+        serve_static linkslib uri_path
       else
         route rt in
 

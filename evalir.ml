@@ -356,18 +356,22 @@ struct
        begin
          match pathv with
          | `String path ->
-            Webs.add_route (path.[String.length path - 1] = '/') path (env, handler);
+            Webs.add_route (path.[String.length path - 1] = '/') path (Right (env, handler));
             apply_cont cont env (`Record [])
          | _ -> assert false
+       end
+    | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv] ->
+       begin
+         match uriv, pathv with
+         | `String uri, `String path ->
+           Webs.add_route true uri (Left path);
+           apply_cont cont env (`Record [])
+         | _ ->  assert false
        end
     | `PrimitiveFunction ("servePages", _), [] ->
        begin
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
-(*
-                    (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->
-                              apply_cont cont env (`Record [])
- *)
        end
     (*****************)
     | `PrimitiveFunction (n,None), args ->

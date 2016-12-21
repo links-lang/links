@@ -1508,6 +1508,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   `Record [])),
      datatype "(Socket) ~> ()",
      IMPURE);
+    "addStaticRoute",
+    (`PFun (fun _ -> assert false),
+     datatype "(String, String) ~> ()",
+     IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
      datatype "(String,(String) ~> a) ~> ()",
