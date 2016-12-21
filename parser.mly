@@ -864,7 +864,7 @@ bindings:
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
-| LBRACE bindings RBRACE                                       { $2 }
+| LBRACE declarations RBRACE                                   { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }

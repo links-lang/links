@@ -95,6 +95,13 @@ filemode : args
 args : -m --path=tests/modules
 stdout : "Hello!" : String
 
+
+Type signatures in inner modules
+./tests/modules/typesigInner.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 11 : A.B.Foo
+
 Infix operators
 ./tests/modules/infix.links
 filemode : args
