@@ -99,7 +99,7 @@ let group_bindings : binding list -> binding list list = fun bindings ->
         group_bindings_inner [] ([b] :: (List.rev acc) :: ret) bs in
   group_bindings_inner [] [] bindings
 
-(* Come across binding list: 
+(* Come across binding list:
   * - Group bindings into list of lists
   * - Get shadow table for the binding list
   * - Perform renaming
@@ -175,6 +175,14 @@ and perform_term_renaming module_table path ht =
           let (_, fnlit') = self#funlit fnlit in
           (self, `Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt))
       | b -> super#bindingnode b
+
+    method binop = function
+      | `Name n -> (self, `Name (resolve n shadow_table))
+      | bo -> super#binop bo
+
+    method unary_op = function
+      | `Name n -> (self, `Name (resolve n shadow_table))
+      | uo -> super#unary_op uo
 
     method phrasenode = function
       | `Block (bs, phr) ->
@@ -262,7 +270,7 @@ let rec perform_type_renaming module_table path ht =
           (self, `TypeApplication (fqn, args))
       | dt -> super#datatype dt
   end
-  
+
 let rename_terms mt (bindings, phr_opt) =
   let (ht, bindings') = process_binding_list bindings mt [] StringMap.empty in
   let (_, phr') = (perform_term_renaming mt [] ht)#option (fun o -> o#phrase ) phr_opt in

@@ -95,3 +95,8 @@ filemode : args
 args : -m --path=tests/modules
 stdout : "Hello!" : String
 
+Infix operators
+./tests/modules/infix.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 150 : Int
