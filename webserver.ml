@@ -59,6 +59,7 @@ struct
       let cgi_args = body_args @ query_args @ Header.to_list (Request.headers req) in
       Lib.cgi_parameters := cgi_args;
       Lib.cookies := Cohttp.Cookie.Cookie_hdr.extract (Request.headers req);
+      Lib.http_response_code := 200;
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
