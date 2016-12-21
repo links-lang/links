@@ -362,7 +362,7 @@ struct
        end
     | `PrimitiveFunction ("servePages", _), [] ->
        begin
-         Webs.start () >>= fun () ->
+         Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
 (*
                     (fun _ -> computation env (!render_cont env :: cont)) >>= fun () ->

@@ -37,9 +37,7 @@ struct
   let add_route is_directory path thread_starter =
     rt := (is_directory, path, thread_starter) :: !rt
 
-  let rec parse_request valenv params = parse_request valenv params
-
-  let rec start () =
+  let rec start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
 
     let parse_post_body s =
@@ -65,7 +63,7 @@ struct
       let path = Uri.path (Request.uri req) in
 
       let run_page (dir, s, (valenv, v)) () =
-        Eval.apply (render_cont ()) valenv (v, [`String path]) >>= fun (valenv, v) ->
+        Eval.apply (render_cont ()) (Value.shadow tl_valenv valenv) (v, [`String path]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
@@ -81,7 +79,7 @@ struct
         | ((dir, s, (valenv, v)) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
              Debug.print (Printf.sprintf "Matched case %s\n" s);
              let (_, nenv, tyenv) = !env in
-             Webif.do_request (valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
+             Webif.do_request (Value.shadow tl_valenv ~by:valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
         | ((_, s, _) :: rest) ->
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
            route rest in
