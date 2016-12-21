@@ -46,5 +46,9 @@ fun lookupFactorials(n) server {
  }
 }
 
-page
-  <#>{request("")}</#>
+fun main() {
+  page
+    <#>{request("")}</#>
+}
+
+main()

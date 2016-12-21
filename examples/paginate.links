@@ -46,14 +46,18 @@ fun showPage(n, c) {
   </html>
 }
 
-page
- <html>
-  <head><title>Dictionary browser</title></head>
-  <body>
-   <h1>Dictionary browser</h1>
-    <ul>
-     {for (c <- explode("abcdefghijklmnopqrstuvwxyz"))
-     <li><a l:href="{showPage(1, implode([c]))}">Words beginning with {stringToXml(implode([c]))}</a></li>}
-    </ul>
-  </body>
- </html>
+fun main() {
+ page
+  <html>
+   <head><title>Dictionary browser</title></head>
+   <body>
+    <h1>Dictionary browser</h1>
+     <ul>
+      {for (c <- explode("abcdefghijklmnopqrstuvwxyz"))
+      <li><a l:href="{showPage(1, implode([c]))}">Words beginning with {stringToXml(implode([c]))}</a></li>}
+     </ul>
+   </body>
+  </html>
+}
+
+main()

@@ -31,5 +31,9 @@ fun todo(items) {
    </html>
 }
 
-page
- <#>{todo(["add items to todo list"])}</#>
+fun main() {
+  page
+   <#>{todo(["add items to todo list"])}</#>
+}
+
+main()

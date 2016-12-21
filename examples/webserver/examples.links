@@ -1,0 +1,64 @@
+# dict-suggest-update.links
+open Draggable
+open Progress
+
+open Factorial
+# dict-suggest.links
+# dict-suggest-lite.links
+# open Draggable-db # doesn't parse!
+
+open Buttons
+# forms-test.links
+# broken because type resolution doesn't work for modules (#110)
+#open Validate
+
+open Paginate
+open Mandelbrot
+open Mandelcolor
+open Todo
+# todo-db.links
+open Crop
+open Wine
+open Filter
+open Citations
+
+#open Twentyfortyeight
+#open Breakout
+#open Tetris
+#open Pacman
+
+fun main() {
+  # dict-suggest-update
+  addRoute("/draggable", fun (_) {Draggable.main()});
+  addRoute("/progress", fun (_) {Progress.main()});
+
+  addRoute("/factorial", fun (_) {Factorial.main()});
+  # dict-suggest
+  # dict-suggest-lite
+  # addRoute("/draggable-db", fun (_) {Draggable-db.main()});
+
+  addRoute("/buttons", fun (_) {Buttons.main()});
+
+#  addRoute("/validate", fun (_) {Validate.main()});
+
+  # login-flow
+  addRoute("/paginate", fun (_) {Paginate.main()});
+  addRoute("/mandelbrot", fun (_) {Mandelbrot.main()});
+  addRoute("/mandelcolor", fun (_) {Mandelcolor.main()});
+  addRoute("/todo", fun (_) {Todo.main()});
+  # todo-db
+  addRoute("/crop", fun (_) {Crop.main()});
+  addRoute("/wine", fun (_) {Wine.main()});
+  addRoute("/filter", fun (_) {Filter.main()});
+  addRoute("/citations", fun (_) {Citations.main()});
+
+  # games
+#  addRoute("/2048", fun (_) {Twentyfortyeight.main()});
+#  addRoute("/breakout", fun (_) {Breakout.main()});
+#  addRoute("/tetris", fun (_) {Tetris.main()});
+#  addRoute("/pillman", fun (_) {Pacman.main()});
+
+  servePages()
+}
+
+main()

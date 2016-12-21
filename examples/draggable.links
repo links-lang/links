@@ -49,16 +49,20 @@ fun draggableList(id, items)
 
 }
 
-page
- <html>
- <body>
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
- {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
- {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
- {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
-                         "Sus scrofa cristatus","Sus scrofa taiwanus"])}
- </body>
- </html>
+fun main() {
+  page
+   <html>
+   <body>
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+   {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+   {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+   {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                           "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+   </body>
+   </html>
+}
+
+main()
 

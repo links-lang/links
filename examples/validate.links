@@ -60,8 +60,12 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-page
- <html>
-  <h1>Date:</h1>
-  { checkedForm => showBookingInformation }
- </html>
+fun main() {
+  page
+   <html>
+    <h1>Date:</h1>
+    { checkedForm => showBookingInformation }
+   </html>
+}
+
+main()

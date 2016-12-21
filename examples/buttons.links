@@ -13,21 +13,26 @@ var f =
      {submitButton("+") -> plus}
      {submitButton("*") -> times}
    </#>
-  yields (action=firstButton(plus,times), l=l,r=r);
+  yields (action=firstButton(plus,times), l=l, r=r);
 
 fun run ((action=action, l=l, r=r)) {
   page
    <html>
     <body>
-     {intToXml(l `action` r)}
+     {# binary infix variables are currently broken in file modules
+      # intToXml(l `action` r)
+      intToXml(action(l, r))}
     </body>
    </html>
 }
 
-page
- <html>
-  <body>
-   {f => run}
-  </body>
- </html>
+fun main() {
+ page
+  <html>
+   <body>
+    {f => run}
+   </body>
+  </html>
+}
 
+main()
