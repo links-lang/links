@@ -106,3 +106,9 @@ Infix operators
 filemode : args
 args : -m --path=tests/modules
 stdout : 150 : Int
+
+Type resolution renaming in presence of type application (#110)
+./tests/modules/type-res110/foo.links
+filemode : args
+args : -m --path=tests/modules/type-res110
+stdout : () : ()
