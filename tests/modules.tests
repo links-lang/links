@@ -107,6 +107,12 @@ filemode : args
 args : -m --path=tests/modules
 stdout : 150 : Int
 
+Lots of modules
+./tests/modules/overflow-test/test.links
+filemode : args
+args : -m --path=tests/modules/overflow-test
+stdout : () : ()
+
 Type resolution renaming in presence of type application (#110)
 ./tests/modules/type-res110/foo.links
 filemode : args
