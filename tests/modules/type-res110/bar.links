@@ -1,0 +1,7 @@
+typename T = Int;
+typename F(a) = a;
+
+sig f : (F(T)) -> F(T)
+fun f(y) {y}
+
+()
