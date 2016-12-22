@@ -1,8 +1,6 @@
 open Utility
 open Types
 
-module Env = Env.String
-
 (** type destructors *)
 exception TypeDestructionError of string
 
@@ -127,7 +125,7 @@ let rec erase_type names t =
         StringSet.fold
           (fun name field_env ->
             match StringMap.lookup name field_env with
-            | Some (`Present t) ->
+            | Some (`Present _) ->
               if closed then
                 StringMap.remove name field_env
               else

@@ -1,27 +1,21 @@
 open Utility
-open Sugartypes
 open ModuleUtils
 
-type prog_map = program StringMap.t
-type filename = string
 (* Helper functions *)
-
 (* Helper function: given top-level module name, maps to expected filename *)
 let top_level_filename module_name =
-  (String.uncapitalize module_name) ^ ".links"
-
-let print_sorted_deps xs =
-  print_list (List.map print_list xs)
+  (String.uncapitalize_ascii module_name) ^ ".links"
 
 (* Given a module name and unique AST, try and locate / parse the module file *)
 let parse_module module_name =
   let (prog, _) = try_parse_file module_name in
   prog
 
-let assert_no_cycles = function
+let rec assert_no_cycles = function
   | [] -> ()
-  | [x]::ys -> ()
-  | (x::xs)::ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
+  | [] :: ys -> assert_no_cycles ys
+  | [_x]:: ys -> assert_no_cycles ys
+  | (x :: xs) :: _ -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
 
 (* Traversal to find module import references in the current file *)
 let rec find_module_refs mt path ht =
@@ -43,7 +37,7 @@ object(self)
   method bind_open name fqn =
     {< shadow_table = shadow_open_terms name fqn mt shadow_table >}
 
-  method bindingnode = function
+  method! bindingnode = function
     | `QualifiedImport ns ->
         (* Try to resolve the import; if not, add to ICs list *)
         let lookup_ref = List.hd ns in
@@ -76,13 +70,13 @@ let rec add_module_bindings deps dep_map =
     (* Don't re-inline bindings of base module *)
     | [""]::ys -> add_module_bindings ys dep_map
     | [module_name]::ys ->
-      try
+      (try
         let (bindings, _) = StringMap.find module_name dep_map in
         (* TODO: Fix dummy position to be more meaningful, if necessary *)
         (`Module (module_name, bindings), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
-      with Notfound.NotFound _ ->
-        failwith "Trying to find %s in dep map containing keys: %s\n"
-          module_name (print_list (List.map fst (StringMap.bindings dep_map)));
+       with Notfound.NotFound _ ->
+         failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
+           module_name (print_list (List.map fst (StringMap.bindings dep_map)))))
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
 
 

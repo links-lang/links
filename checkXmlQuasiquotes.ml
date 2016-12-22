@@ -12,7 +12,7 @@ let check mode pos e =
 
       method get_error = error
 
-      method phrase = fun ((e, pos) as phrase) ->
+      method! phrase = fun ((e, pos) as phrase) ->
         match e with
         | `Xml (_, _, _, children) ->
           o#list (fun o -> o#phrase) children
@@ -31,7 +31,7 @@ let check mode pos e =
             {< error = Some (`PagePlacement, pos) >}
           else
             super#phrase phrase
-        | e -> o
+        | _ -> o
     end
   in
   let o = checker#phrase (e, pos) in
@@ -64,11 +64,11 @@ object (o)
   (* initially we're in expression mode *)
   val mode : [ `Exp | `Quasi ] = `Exp
 
-  method private set_mode new_mode = {< mode = new_mode >}
+  method set_mode new_mode = {< mode = new_mode >}
   method private phrase_with new_mode phrase =
     ((o#set_mode new_mode)#phrase phrase)#set_mode mode
 
-  method phrase = fun ((e, pos) as phrase) ->
+  method! phrase = fun ((e, pos) as phrase) ->
     match e with
     | `Xml _ when mode = `Quasi ->
       super#phrase phrase
@@ -88,4 +88,5 @@ object (o)
       o#phrase_with `Exp phrase
     | _ when mode = `Exp ->
       super#phrase phrase
+    | _ -> assert false
 end

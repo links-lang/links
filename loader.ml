@@ -1,6 +1,5 @@
 open Utility
 open Performance
-open Printf
 
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
@@ -65,8 +64,6 @@ let cachefile_path_tag filename tag =
                                  path_hash ^ suffix in
             Filename.concat cachedir cache_filename
 
-let cachefile_path filename = cachefile_path_tag filename ""
-
 exception No_cache
 
 let cache : string -> string -> (unit -> 'a) -> 'a =
@@ -96,7 +93,7 @@ let cache : string -> string -> (unit -> 'a) -> 'a =
 	    try  (* to write to the cache *)
 	      Debug.print("Caching "^cachename);
 	      write_a cachename x
-	    with exn -> (Debug.print("Caching failed"))
+	    with _ -> (Debug.print("Caching failed"))
 		(* Ignore errors writing the cache file *)
 	in x
 ;;

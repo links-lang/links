@@ -3,8 +3,6 @@
    list.
 *)
 
-open Notfound
-
 open Utility
 open List
 

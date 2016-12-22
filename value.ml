@@ -131,7 +131,7 @@ class null_database =
 object
   inherit database
   method driver_name () = "null"
-  method exec query : dbvalue = assert false
+  method exec _query : dbvalue = assert false
   method escape_string = assert false
   method quote_field = assert false
 end
@@ -271,7 +271,7 @@ let shadow env ~by:(by, _globals') =
     IntMap.fold (fun name v env -> bind name v env) by env
 
 let fold f (env, _globals) a = IntMap.fold f env a
-let globals (env, genv) = (genv, genv)
+let globals (_env, genv) = (genv, genv)
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
@@ -332,8 +332,8 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-      | `Pid (pid, location) -> assert false
-      | `Socket (inc, outc) -> assert false (* wheeee! *)
+      | `Pid (_pid, _location) -> assert false
+      | `Socket (_inc, _outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
     (fold
@@ -397,12 +397,12 @@ and uncompress_env globals env : env =
 let string_as_charlist s : t =
   `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
 
-let escape =
+let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
 
 (** {1 Pretty-printing values} *)
 
-let string_of_cont = Show_continuation.show
+(* let string_of_cont = Show_continuation.show *)
 
 exception Not_tuple
 
@@ -476,7 +476,7 @@ and string_of_tuple (fields : (string * t) list) : string =
 
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
-and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
+and _string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
 and string_of_cont : continuation -> string =
   fun cont ->
@@ -517,7 +517,7 @@ and unbox_bool : t -> bool   = function
 and box_int i = `Int i
 and unbox_int  : t -> int    = function
   | `Int i   -> i
-  | other -> failwith("Type error unboxing int")
+  | _other -> failwith("Type error unboxing int")
 and box_float f = `Float f
 and unbox_float : t -> float = function
   | `Float f -> f | _ -> failwith "Type error unboxing float"
@@ -546,7 +546,7 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
-let box_pid (pid, location) = `Pid (pid, `Unknown)
+let box_pid (pid, _location) = `Pid (pid, `Unknown)
 let unbox_pid = function
   | `Pid (pid, location) -> (pid, location)
   | _ -> failwith "Type error unboxing pid"
@@ -611,7 +611,7 @@ let value_serialiser : unit -> compressed_t serialiser =
 
 let marshal_continuation (c : continuation) : string =
   let cs = compress_continuation c in
-  let { save = save } = continuation_serialiser () in
+  let save = (continuation_serialiser ()).save in
   let pickle = save cs in
     if String.length pickle > 4096 then
       prerr_endline "Marshalled continuation larger than 4K:";
@@ -619,17 +619,17 @@ let marshal_continuation (c : continuation) : string =
 
 let marshal_value : t -> string =
   fun v ->
-    let { save = save } = value_serialiser () in
+    let save = (value_serialiser ()).save in
     (* Debug.print ("marshalling: "^Show_t.show v); *)
       base64encode (save (compress_t v))
 
 let unmarshal_continuation env : string -> continuation =
-    let { load = load } = continuation_serialiser () in
+    let load = (continuation_serialiser ()).load in
     base64decode ->- load ->- uncompress_continuation (globals env)
 
 let unmarshal_value env : string -> t =
   fun s ->
-    let { load = load } = value_serialiser () in
+    let load = (value_serialiser ()).load in
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
     (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)

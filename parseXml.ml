@@ -76,7 +76,7 @@ let xml : (Value.xmlitem) grammar = XmlParser.xml
 (* We parse in a "context", which is an environment with
    respect to which any parse-time resolution takes place.
 *)
-type context = XmlLexer.lexer_context
+(* type context = XmlLexer.lexer_context *)
 let fresh_context = XmlLexer.fresh_context
 
 let normalize_context = function

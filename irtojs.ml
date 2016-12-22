@@ -2,8 +2,6 @@
 
 (** JavaScript generation *)
 
-open Notfound
-
 open Utility
 
 let js_lib_url = Basicsettings.Js.lib_url
@@ -35,13 +33,11 @@ type code = | Var    of string
             | Case   of (string * (string * code) stringmap * (string * code) option)
             | Dict   of ((string * code) list)
             | Arr    of (code list)
-            | Lst    of (code list)
 
             | Bind   of (string * code * code)
             | Seq    of (code * code)
 
             | Die    of (string)
-            | Ret    of code
             | Nothing
   deriving (Show)
 
@@ -86,8 +82,11 @@ sig
 end =
 struct
   let rec show code =
-    let show_func name (Fn (vars, body)) =
-      "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }"
+    let show_func name fn =
+      match fn with
+      | Fn (vars, body) ->
+         "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }"
+      | _ -> assert false
     and arglist args = String.concat ", " (List.map show args)
     and paren = function
       | Var _
@@ -95,7 +94,6 @@ struct
       | Call _
       | Dict _
       | Arr _
-      | Lst _
       | Seq _
       | Bind _
       | Die _
@@ -120,7 +118,7 @@ struct
         | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^ show rest
         | LetRec (defs, rest) ->
-            String.concat ";\n" (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs) ^ show rest
+            String.concat ";\n" (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs) ^ show rest
         | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
         | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
         | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
@@ -134,7 +132,6 @@ struct
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Arr elems -> "[" ^ arglist elems ^ "]"
-        | Lst elems -> show (Call (Var "_lsFromArray", [Arr elems]))
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Seq (l, r) -> show l ^"; "^ show r
         | Nothing -> ""
@@ -151,10 +148,13 @@ struct
 
   (** Pretty-print a Code value as a JavaScript string. *)
   let rec show c : PP.doc =
-    let show_func name (Fn (vars, body)) =
-      PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
-                ^+^  (braces
-                        (break ^^ group(nest 2 (show body)) ^^ break))) in
+    let show_func name fn =
+      match fn with
+      | (Fn (vars, body)) ->
+         PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
+                   ^+^  (braces
+                           (break ^^ group(nest 2 (show body)) ^^ break)))
+      | _ -> assert false in
     let show_case v l (x, e) =
       PP.text "case" ^+^ PP.text("'"^l^"'") ^^
         PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
@@ -174,7 +174,6 @@ struct
       | Call _
       | Dict _
       | Arr _
-      | Lst _
       | Seq _
       | Bind _
       | Die _
@@ -194,7 +193,7 @@ struct
         | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^^ break ^^ show rest
         | LetRec (defs, rest) ->
-            PP.vsep (punctuate " " (List.map (fun (name, vars, body, location) -> show_func name (Fn (vars, body))) defs)) ^^
+            PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
               break ^^ show rest
 
         | Fn _ as f -> show_func "" f
@@ -228,12 +227,10 @@ struct
                                                 PP.text "':" ^^ show value))
                                   elems)))
         | Arr elems -> brackets(hsep(punctuate "," (List.map show elems)))
-        | Lst elems -> show (Call (Var "_lsFromArray", [Arr elems]))
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
         | Seq (l, r) -> vsep [(show l ^^ PP.text ";"); show r]
-        | Ret e -> PP.text("return ") ^| parens(show e)
 
   let show = show ->- PP.pretty 144
 end
@@ -338,17 +335,6 @@ sig
   val gen : (code * string * code) -> code
 end =
 struct
-  (* these binops could be used for primitive types: Int, Bool, Char,
-     String *)
-  let binops =
-    StringMap.from_alist
-      [ "==", "==" ;
-        "<>", "!=" ;
-        "<",  "<"  ;
-        ">",  ">"  ;
-        "<=", "<=" ;
-        ">=", ">=" ]
-
   (* these names should be used for non-primitive types *)
   let funs =
     StringMap.from_alist
@@ -546,7 +532,7 @@ struct
     fun ((fb, (_, xsb, _), zb, location) : Ir.fun_def) code ->
       let f_var, _ = fb in
       let bs = List.map name_binder xsb in
-      let xs, xs_names = List.split bs in
+      let _, xs_names = List.split bs in
 
       let xs_names', env =
         match zb with
@@ -746,7 +732,7 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
     | `Fun ((fb, _, _zs, _location) as def) ->
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
-        let (f_name, args, _, _) as def_header = generate_function env [] def in
+        let def_header = generate_function env [] def in
           (env', fun code ->
              LetFun (def_header, code))
     | `Rec defs ->
@@ -760,9 +746,9 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
 (* SL: seems to be dead code *)
 and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
   function
-    | `Let (b, (_, `Return v)) as binding ->
+    | `Let (_, (_, `Return _)) as binding ->
         generate_binding env binding
-    | `Let (b, (_, tc)) ->
+    | `Let (b, _) ->
         if not(Settings.get_value (Basicsettings.allow_impure_defs)) then
           failwith "Top-level definitions must be values"
         else
@@ -779,7 +765,7 @@ and generate_definition env
   function
     | `Let (_, (_, `Return _)) -> (fun code -> code)
     | `Let (b, (_, tc)) ->
-        let (x, x_name) = name_binder b in
+        let (_, x_name) = name_binder b in
           (fun code ->
              generate_tail_computation env tc
                (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
@@ -829,7 +815,7 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
     | `Fun ((fb, _, _zs, _location) as def) ->
       let (f, f_name) = name_binder fb in
       let varenv = VEnv.bind varenv (f, f_name) in
-      let (f_name, args, _, _) as def_header = generate_function varenv [] def in
+      let def_header = generate_function varenv [] def in
       (state,
        varenv,
        None,
@@ -967,9 +953,9 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
+let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program  =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
-    let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
+    let _, venv, _ = initialise_envs (nenv, tyenv) in
     let _, code = generate_program venv program in
     let code = wrap_with_server_lib_stubs code in
     show code)
@@ -980,16 +966,12 @@ let generate_program_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) program  =
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
 
-and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
-  let (venv, code) = generate_computation env comp (Fn ([], Nothing)) in
-  (venv, GenStubs.bindings bs code)
-
 (* generate code to resolve JSONized toplevel let-bound values *)
 let resolve_toplevel_values : string list -> string =
   fun names ->
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
-let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs (valenv, v) =
+let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
   (* json state for the final value (event handlers and processes) *)
   let json_state = Json.jsonize_state v in
 
@@ -1017,6 +999,6 @@ let generate_real_client_page ?(cgi_env=[]) ?(onload = "") (nenv, tyenv) defs (v
 
 (* SL: seems to be dead code *)
 let generate_program_defs (nenv, tyenv) bs =
-  let nenv, venv, tenv = initialise_envs (nenv, tyenv) in
+  let _, venv, _ = initialise_envs (nenv, tyenv) in
   let _, code = generate_defs venv bs in
     [show (code Nothing)]

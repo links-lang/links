@@ -1,7 +1,6 @@
 %{
 
 open Utility
-open List
 open Sugartypes
 
 (* Generation of fresh type variables *)
@@ -116,20 +115,11 @@ let subkind_of pos =
   | "Session" -> Some (`Any, `Session)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
-let attach_kind pos (t, k) = (t, k, `Rigid)
+let attach_kind _pos (t, k) = (t, k, `Rigid)
 
-let attach_subkind_helper update pos sk = update sk
+let attach_subkind_helper update _pos sk = update sk
 
 let attach_subkind pos (t, subkind) =
-  let update sk =
-    match t with
-    | `TypeVar (x, _, freedom) ->
-       `TypeVar (x, sk, freedom)
-    | _ -> assert false
-  in
-    attach_subkind_helper update pos subkind
-
-let attach_session_subkind pos (t, subkind) =
   let update sk =
     match t with
     | `TypeVar (x, _, freedom) ->
@@ -163,7 +153,11 @@ let parseRegexFlags f =
       List.rev l
     else
       asList f (i+1) ((String.get f i)::l) in
-    List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
+    List.map (function
+                'l' -> `RegexList
+              | 'n' -> `RegexNative
+              | 'g' -> `RegexGlobal
+              | _ -> assert false) (asList f 0 [])
 
 let datatype d = d, None
 %}

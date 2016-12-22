@@ -1,5 +1,4 @@
 open Webserver
-open Notfound
 
 open Performance
 open Getopt
@@ -131,7 +130,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, _, {Types.var_env = typeenv; Types.tycon_env = tycon_env}) as envs) _ ->
+    ((fun ((_, _, { Types.var_env = typeenv; _ }) as envs) _ ->
         StringSet.iter
           (fun k ->
              let t = Env.String.lookup typeenv k in
@@ -143,7 +142,7 @@ let rec directives
      "display the current type environment");
 
     "tyconenv",
-    ((fun ((_, _, {Types.tycon_env = tycon_env}) as envs) _ ->
+    ((fun ((_, _, {Types.tycon_env = tycon_env; _ }) as envs) _ ->
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
@@ -178,7 +177,7 @@ let rec directives
      "load in a Links source file, extending the current environment");
 
     "withtype",
-    ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases} as envs) args ->
+    ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases; _} as envs) args ->
         match args with
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
@@ -217,7 +216,7 @@ let interact envs =
         flush stdout in
   let rec interact envs =
     let evaluate_replitem parse envs input =
-      let valenv, nenv, tyenv = envs in
+      let _, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
           (lazy
              (match parse input with
@@ -253,9 +252,11 @@ let interact envs =
                                  | `Server | `Unknown ->
                                    `FunctionPtr (var, None)
                                  | `Client ->
-                                   `ClientFunction (Js.var_name_binder (var, finfo)) in
-                               let t = Var.info_type finfo in
-                               v, t in
+                                   `ClientFunction (Js.var_name_binder (var, finfo))
+                                 | `Native -> assert false in
+                               let t = Var.info_type finfo in v, t
+                             | _ -> assert false
+                           in
                            prerr_endline(name
                                          ^" = "^Value.string_of_value v
                                          ^" : "^Types.string_of_datatype t))
@@ -394,12 +395,6 @@ let cache_load_prelude () =
     in
     globals, envs)
 
-
-let run_tests tests () =
-  begin
-(*    Test.run tests;*)
-    exit 0
-  end
 
 let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []

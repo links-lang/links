@@ -53,7 +53,7 @@ object(self)
     
   val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
 
-  method phrase (p, pos) = match p with
+  method! phrase (p, pos) = match p with
     | `InfixAppl ((tyargs, `RegexMatch flags), e1, (`Regex((`Replace(_,_) as r)), _)) -> 
         let libfn = 
           if List.exists ((=)`RegexNative) flags
@@ -80,6 +80,6 @@ object
 
   val no_regexes = true
   method satisfied = no_regexes
-  method regex _ = {< no_regexes = false >}
+  method! regex _ = {< no_regexes = false >}
 end
 

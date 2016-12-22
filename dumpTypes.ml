@@ -6,16 +6,16 @@
   Technically the dumper is incorrect because the current environment
   does not necessarily respect lexical scope. However, it should work
   anyway as the type checker ensures the program is well-typed and in
-  particular that there are no free variables. 
+  particular that there are no free variables.
 *)
 let program =
-  fun ({Types.var_env=env; Types.tycon_env=_} as tyenv) code ->
+  fun ({Types.var_env=env; Types.tycon_env=_; effect_row=_} as tyenv) code ->
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 
       val env = env
       val vars = []
-        
+
       method get_vars () = List.rev vars
 
       method bind (x, t, pos) =
@@ -29,13 +29,13 @@ let program =
       method lookup x =
         Env.String.lookup env x
 
-      method binder =
+      method! binder =
         fun (x, t, pos) ->
           o#option
             (fun o t -> o#bind (x, t, pos))
             t
 
-      method phrase =
+      method! phrase =
         function
           | `Var x, pos when o#bound x ->
               o#use (x, o#lookup x, pos)
@@ -46,4 +46,4 @@ let program =
       let program, _, _ = Frontend.Pipeline.program tyenv pos_context sugar in
         program
     in
-      (dumper#program program)#get_vars()    
+      (dumper#program program)#get_vars()

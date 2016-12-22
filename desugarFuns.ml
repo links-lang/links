@@ -34,12 +34,13 @@ let dp = Sugartypes.dummy_position
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def ((f, Some ft, fpos), lin, (tyvars, lam), location, t) =
+let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
+  let ft = val_of ft in
   let rt = TypeUtils.return_type ft in
   let lam =
     let rec make_lam t : funlit -> funlit =
       function
-        | ([ps], body) as lam -> lam
+        | ([_ps], _body) as lam -> lam
         | (ps::pss, body) ->
             let g = gensym ~prefix:"_fun_" () in
             let rt = TypeUtils.return_type t in
@@ -51,6 +52,7 @@ let unwrap_def ((f, Some ft, fpos), lin, (tyvars, lam), location, t) =
                           location,
                           None), dp],
                    ((`Var g), dp)), dp))
+        | _, _ -> assert false
     in
       make_lam rt lam
   in
@@ -69,7 +71,7 @@ class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+  method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `FunLit (Some argss, lin, lam, location) ->
         let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
@@ -89,7 +91,7 @@ object (o : 'self_type)
           (o, e, ft)
     | `Section (`Project name) ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
         let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
@@ -109,7 +111,7 @@ object (o : 'self_type)
           (o, e, ft)
     | e -> super#phrasenode e
 
-  method bindingnode = function
+  method! bindingnode = function
     | `Fun _ as b ->
         let (o, b) = super#bindingnode b in
           begin
@@ -136,11 +138,11 @@ object
   val has_no_funs = true
   method satisfied = has_no_funs
 
-  method phrasenode = function
+  method! phrasenode = function
     | `FunLit _ -> {< has_no_funs = false >}
     | e -> super#phrasenode e
 
-  method bindingnode = function
+  method! bindingnode = function
     | `Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
         super#bindingnode b
     | `Fun _ -> {< has_no_funs = false >}

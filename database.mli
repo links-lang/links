@@ -13,6 +13,7 @@ val execute_command : (string -> Value.database -> Value.t)
 val execute_select_result : (string * Types.datatype) list -> string -> Value.database -> Value.dbvalue * (string * (Types.datatype * int)) list
 
 val build_result : Value.dbvalue * (string * (Types.datatype * int)) list -> Value.t
+
 (** [execute_select \[row1; row2; ...\] sql db] runs the query [sql]
     on the database [db] and interprets the results according to the
     field types of the [row]i. This should really take an alist of

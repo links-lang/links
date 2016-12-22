@@ -1,9 +1,6 @@
 (** Web interface *)
 
 open Webserver_types
-open Ir
-open Proc
-open Value
 
 val realpages : bool Settings.setting
 

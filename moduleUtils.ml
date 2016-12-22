@@ -37,25 +37,25 @@ object
   val has_no_modules = true
   method satisfied = has_no_modules
 
-  method bindingnode = function
+  method! bindingnode = function
     | `QualifiedImport _
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
 
-  method datatype = function
+  method! datatype = function
     | `QualifiedTypeApplication _ -> {< has_no_modules = false >}
     | dt -> super#datatype dt
 
-  method phrasenode = function
+  method! phrasenode = function
     | `QualifiedVar _ -> {< has_no_modules = false >}
     | pn -> super#phrasenode pn
 end
 
 
-let rec separate_modules =
+let separate_modules =
   List.fold_left (fun (mods, binds) b ->
     match b with
-      | (`Module x, pos) as m -> (m :: mods, binds)
+      | (`Module _, _) as m -> (m :: mods, binds)
       | b -> (mods, b :: binds)) ([], [])
 
 type module_info = {
@@ -69,9 +69,6 @@ let make_module_info simple_name inner_modules type_names decl_names =
   { simple_name = simple_name; inner_modules = inner_modules;
     type_names = type_names; decl_names = decl_names }
 
-type module_info_map = module_info stringmap
-
-
 let get_pat_vars () =
   object(self)
     inherit SugarTraversals.fold as super
@@ -79,7 +76,7 @@ let get_pat_vars () =
     method add_binding x = {< bindings = x :: bindings >}
     method get_bindings = bindings (* Order doesn't matter *)
 
-    method patternnode = function
+    method! patternnode = function
       | `Variant (_n, p_opt) ->
            self#option (fun o p -> o#pattern p) p_opt
       (* | `Negative ns -> self#list (fun o p -> o#add_binding p) ns *)
@@ -147,15 +144,15 @@ let create_module_info_map program =
   create_and_add_module_info [] "" bindings;
   !module_map
 
-let print_mod_info k mi =
+let _print_mod_info k mi =
    printf "MODULE: %s\n" k;
    printf "Inner modules: %s\n" (print_list mi.inner_modules);
    printf "Type names: %s\n" (print_list mi.type_names);
    printf "Decl names: %s\n" (print_list mi.decl_names)
 
-let print_mt mt =
+let _print_mt mt =
   printf "MT:\n";
-  List.iter (fun (k, mi) -> print_mod_info k mi) (StringMap.bindings mt)
+  List.iter (fun (k, mi) -> _print_mod_info k mi) (StringMap.bindings mt)
 
 (* Given a binding name and fully-qualified name, adds it to the top of
  * the binding stack in the name shadowing table. For example, shadowing name foo with A.foo,

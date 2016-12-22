@@ -1,5 +1,3 @@
-open Notfound
-
 open Utility
 open Types
 
@@ -205,7 +203,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
         let tys = List.rev tys in
         let qs = List.rev qs in
         let body = instantiate_datatype (tenv, renv, penv) t in
-          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " Types.string_of_type_arg tys);
+          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
             (* EXPERIMENTAL *)
 
             (* HACK: currently we appear to need to strip the quantifiers
@@ -319,7 +317,7 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
              | _ ->
                failwith("Kind mismatch in type application: " ^
                         Types.string_of_datatype pt ^ " applied to type arguments: " ^
-                        mapstrcat ", " Types.string_of_type_arg tyargs))
+                        mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
       instantiate_datatype (tenv, renv, penv) t

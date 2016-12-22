@@ -1,6 +1,5 @@
 open Utility
 open Sugartypes
-open List
 
 let rec is_raw (phrase, pos) =
   match phrase with
@@ -9,7 +8,7 @@ let rec is_raw (phrase, pos) =
     | `FormBinding _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
-    | e ->
+    | _ ->
         raise (Errors.SugarError (pos, "Invalid element in formlet literal"))
 
 let tt =
@@ -131,7 +130,7 @@ object (o : 'self_type)
                         let (e, _), et =
                           List.fold_right
                             (fun arg (base, ft) ->
-                               let [arg_type] = TypeUtils.arg_types ft in
+                               let arg_type = List.hd (TypeUtils.arg_types ft) in
                                let ft = TypeUtils.return_type ft in
                                let base : phrase =
                                  (`FnAppl
@@ -166,14 +165,14 @@ object (o : 'self_type)
     fun (e, pos) ->
       let (o, e, t) = o#formlet_body_node e in (o, (e, pos), t)
 
-  method phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
+  method! phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
     | `Formlet (body, yields) ->
         (* pure (fun q^ -> [[e]]* ) <*> q^o *)
-        let e_in = `Formlet (body, yields) in
+        (* let e_in = `Formlet (body, yields) in *)
         let dp = Sugartypes.dummy_position in
         let empty_eff = Types.make_empty_closed_row () in
         let (ps, _, ts) = o#formlet_patterns body in
-        let (o, body, body_type) = o#formlet_body body in
+        let (o, body, _body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
         let (o, yields, yields_type) = o#phrase yields in
 
@@ -206,7 +205,7 @@ object
   val has_no_formlets = true
   method satisfied = has_no_formlets
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Formlet _ -> {< has_no_formlets = false >}
     | e -> super#phrasenode e
 end

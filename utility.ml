@@ -132,7 +132,7 @@ struct
     include Map.Make(Ord)
 
     exception Not_disjoint of key * string
-    module S = Deriving_Show.Show_map(Ord)(Ord.Show_t)
+    (* module S = Deriving_Show.Show_map(Ord)(Ord.Show_t) *)
 
     let find elem map =
       try find elem map
@@ -822,8 +822,11 @@ let xml_unescape s =
 (** (0 base64 Routines) *)
 let base64decode s =
   try B64.decode (Str.global_replace (Str.regexp " ") "+" s)
-  with Invalid_argument "B64.decode"
-      -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
+  with Invalid_argument s as e ->
+    if s = "B64.decode" then
+      raise (Invalid_argument ("base64 decode gave error: " ^ s))
+    else
+      raise e
 
 let base64encode = B64.encode
 

@@ -13,11 +13,11 @@ object (self)
   val all_desugared = true
   method satisfied = all_desugared
 
-  method datatype' = function
+  method! datatype' = function
       (_, None) -> {< all_desugared = false >}
     | _ -> self
 
-  method phrasenode = function
+  method! phrasenode = function
     | `TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
 end
@@ -44,9 +44,9 @@ object (self)
   method tyvar_list =
     List.map (fun name -> fill (StringMap.find name tyvars)) (List.rev tyvar_list)
 
-  method private add_name name = {< tyvar_list = name :: tyvar_list >}
-  method private register ((name, _, _) as tv) = {< tyvars = StringMap.add name tv tyvars >}
-  method private bind tv = self#register tv
+  method add_name name = {< tyvar_list = name :: tyvar_list >}
+  method register ((name, _, _) as tv) = {< tyvars = StringMap.add name tv tyvars >}
+  method bind tv = self#register tv
 
   method add ((name, (pk, sk), freedom) as tv) =
     if StringMap.mem name tyvars then
@@ -69,13 +69,13 @@ object (self)
       (self#register tv)#add_name name
 
 
-  method bindingnode = function
+  method! bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
     | `Type _    -> self
     | b          -> super#bindingnode b
 
-  method datatype = function
+  method! datatype = function
     | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
     | `Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
     | `Forall (qs, t)  ->
@@ -89,12 +89,12 @@ object (self)
           o#datatype t
     | dt                  -> super#datatype dt
 
-  method row_var = function
+  method! row_var = function
     | `Closed               -> self
     | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
     | `Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
 
-  method fieldspec = function
+  method! fieldspec = function
     | `Absent -> self
     | `Present t -> self#datatype t
     | `Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
@@ -134,7 +134,7 @@ struct
               `MetaTypeVar point
         | `Forall (qs, t) ->
             let desugar_quantifier (var_env, qs) =
-              fun (name, kind, freedom) ->
+              fun (name, kind, _freedom) ->
                 match kind with
                 | `Type, subkind ->
                     let subkind = concrete_subkind subkind in
@@ -188,7 +188,7 @@ struct
         | `DB -> `Primitive `DB
         | (`Input _ | `Output _ | `Select _ | `Choice _ | `Dual _ | `End) as s -> session_type var_env alias_env s
   and session_type var_env alias_env =
-    let lookup_type t = StringMap.find t var_env.tenv in
+    (* let lookup_type t = StringMap.find t var_env.tenv in  -- used only in commented code *)
     (* HACKY *)
     function
     | `Input (t, s) -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
@@ -269,7 +269,11 @@ struct
                  (var, subkind, `Row r)::vars, addr x r envs
              | (`Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
-                 (var, subkind, `Presence f)::vars, addf x f envs)
+                 (var, subkind, `Presence f)::vars, addf x f envs
+             | (_, None), _ ->
+               (* Shouldn't occur; we are assuming that all subkinds have been 
+                * filled in*)
+               assert false)
         ([], empty_env)
         vars
     in
@@ -321,7 +325,9 @@ struct
     We generate both read and write types by looking for readonly constraints *)
   let tableLit alias_env constraints dt =
     try
-      let (_, Some read_type) = datatype' empty_env alias_env (dt, None) in
+      let read_type = match datatype' empty_env alias_env (dt, None) with
+        | (_, Some read_type) -> read_type
+        | _ -> assert false in
       let write_row, needed_row =
         match TypeUtils.concrete_type read_type with
         | `Record (fields, _, _) ->
@@ -356,14 +362,14 @@ object (self)
 
   val alias_env = initial_alias_env
 
-  method patternnode = function
+  method! patternnode = function
     | `HasType (pat, dt) ->
         let o, pat = self#pattern pat in
           o, `HasType (pat, Desugar.datatype' map alias_env dt)
     | p -> super#patternnode p
 
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Block (bs, p) ->
         (* aliases bound in `bs'
            should not escape the scope of the block *)
@@ -390,10 +396,14 @@ object (self)
        this point, so we ignore them.  *)
     | p -> super#phrasenode p
 
-  method bindingnode = function
+  method! bindingnode = function
     | `Type (t, args, dt) ->
         let args, dt' = Desugar.typename alias_env t args dt in
-        let (name, vars, (t, Some dt)) = (t, args, dt') in
+        let (name, vars) = (t, args) in
+        let (t, dt) =
+            (match dt' with
+                 | (t, Some dt) -> (t, dt)
+                 | _ -> assert false) in
           (* NB: type aliases are scoped; we allow shadowing.
              We also allow type aliases to shadow abstract types. *)
           ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
@@ -422,18 +432,18 @@ object (self)
             binds
         in o, `Funs binds
     | `Foreign (bind, lang, dt) ->
-        let o, bind = self#binder bind in
+        let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
           self, `Foreign (bind, lang, dt')
     | b -> super#bindingnode b
 
-  method sentence =
+  method! sentence =
     (* return any aliases bound to the interactive loop so that they
        are available to future input.  The default definition will
        do fine here *)
     super#sentence
 
-  method program (bindings, e) =
+  method! program (bindings, e) =
     (* as with a block, bindings should not escape here *)
     let o           = {<>} in
     let o, bindings = o#list (fun o -> o#binding) bindings in

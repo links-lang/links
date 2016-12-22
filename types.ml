@@ -1966,9 +1966,7 @@ let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_v
     existing pool of type variable names.
  *)
 let add_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
-  List.map (fun t -> Vars.make_names (f t)) tys;
-  Vars.tyvar_name_map;
-  ()
+  List.iter (fun t -> let _ = Vars.make_names (f t) in ()) tys
 
 (** Builds a fresh set of type variable names for a given list of things.  This
     function is called:
@@ -2005,35 +2003,35 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
   let policy = policy () in
   let t = if policy.Print.quantifiers then t
           else Print.strip_quantifiers t in
-  if refresh_tyvar_names then build_tyvar_names free_bound_type_vars [t];
+  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
   Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
-  if refresh_tyvar_names then build_tyvar_names free_bound_row_type_vars [row];
+  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
   Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
 
 let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
   if refresh_tyvar_names then
-    build_tyvar_names free_bound_field_spec_type_vars [f];
+    build_tyvar_names (fun x -> free_bound_field_spec_type_vars x) [f];
   Print.presence TypeVarSet.empty (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   if refresh_tyvar_names then
-    build_tyvar_names free_bound_type_arg_type_vars [arg];
+    build_tyvar_names (fun x -> free_bound_type_arg_type_vars x) [arg];
   Print.type_arg TypeVarSet.empty (policy (), Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
   if refresh_tyvar_names then
-    build_tyvar_names free_bound_row_var_vars [row_var];
+    build_tyvar_names (fun x -> free_bound_row_var_vars x) [row_var];
   match Print.row_var "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   if refresh_tyvar_names then
-    build_tyvar_names free_bound_tycon_type_vars [tycon];
+    build_tyvar_names (fun x -> free_bound_tycon_type_vars x) [tycon];
   Print.tycon_spec TypeVarSet.empty (policy (), Vars.tyvar_name_map) tycon
 
 module Show_datatype =

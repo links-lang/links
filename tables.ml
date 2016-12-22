@@ -1,4 +1,3 @@
-open Notfound
 open Utility
 
 let init_size = 10000

@@ -119,7 +119,7 @@ sig
   object ('self_type)
     val tyenv : environment
 
-    method private lookup_type : var -> Types.datatype
+    method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
     method optionu :
       'a.

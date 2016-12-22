@@ -27,11 +27,11 @@ struct
         Value.env *            (* closure environment *)
         Value.t list           (* arguments *)
     | EvalMain
-        deriving (Show)
+        (* deriving (Show) *)
 
   (** Does at least one of the functions have to run on the client? *)
   let is_client_program : Ir.program -> bool =
-    fun (bs, main) ->
+    fun (bs, _main) ->
       exists
         (function
            | `Fun (_, _, _, `Client)
@@ -48,7 +48,7 @@ struct
   (* let serialize_call_to_client (continuation, name, arg) = *)
   (*   Json.jsonize_call continuation name arg *)
 
-  let parse_remote_call (valenv, nenv, tyenv) cgi_args =
+  let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
     (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
@@ -114,7 +114,7 @@ struct
 
   let get_cgi_args() =
     if is_multipart() then
-      map (fun (name, {Cgi.value=value}) -> (name, value))
+      map (fun (name, { Cgi.value=value; _ }) -> (name, value))
         (Cgi.parse_multipart_args())
     else
       Cgi.parse_args()
@@ -133,7 +133,7 @@ struct
       call to renderPage. We also return the resulting continuation so
       that we can use it elsewhere (i.e. in processing ServerCont).
   *)
-  let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; Types.var_env=_})
+  let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; _ })
                             (bs, body) =
     let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
     let render_page = Env.String.lookup nenv "renderPage" in
@@ -141,7 +141,7 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
-  let perform_request cgi_args valenv run render_cont =
+  let perform_request valenv run render_cont =
     function
       | ServerCont t ->
         Debug.print("Doing ServerCont");
@@ -157,7 +157,6 @@ struct
         Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
-        let result = Eval.apply_toplevel env (func, args) in
         Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
@@ -172,7 +171,7 @@ struct
          Debug.print("Doing EvalMain");
          run ()
 
-  let run_main ((valenv, _, _) as envs) (globals, (locals, main)) cgi_args () =
+  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args () =
     ("text/html",
      if is_client_program (globals @ locals, main) then
        if Settings.get_value realpages then
@@ -204,7 +203,7 @@ struct
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request cgi_args valenv run render_cont request)
+      (fun () -> perform_request valenv run render_cont request)
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -214,7 +213,7 @@ struct
     >>= fun (content_type, content) ->
     response_printer [("Content-type", content_type)] content
 
-  let serve_request_program ((valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
+  let serve_request_program ((_valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
@@ -271,7 +270,7 @@ struct
     (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
 
   (* wrapper for ordinary uses of serve_request_program *)
-  let serve_request ((valenv, nenv, tyenv) as envs) prelude filename =
+  let serve_request ((valenv, _, _) as envs) prelude filename =
 
     let cgi_args = get_cgi_args() in
     Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);

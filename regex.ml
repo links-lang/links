@@ -37,6 +37,7 @@ let string_of_regex : regex -> string = fun s ->
     | Alternate (r1,r2) -> (compile r1) ^ "\\|" ^ (compile r2)
     | Group s -> group (compile s)
     | Repeat (s, r) ->  (compile r ^ compile_repeat s)
+    | Replace _ -> assert false
   in 
     compile s
 

@@ -1,6 +1,3 @@
-open Notfound
-
-open Types
 open Lexing
 open Utility
 
@@ -22,22 +19,6 @@ let show_pos : SourceCode.pos -> string =
 
 let prefix_lines prefix s =
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
-
-let indent n str = String.make n ' ' ^ str
-
-let get_mailbox_msg add_code_tags =
-  let wrap =
-    if add_code_tags then
-      (fun s -> "<code>"^s^"</code>")
-    else
-      (fun s -> s)
-  in
-    function
-      | None -> ""
-      | Some mbtype ->
-	  " (mailbox type "^ string_of_datatype mbtype ^ ") "
-
-
 
 let format_exception = function
   | RichSyntaxError s ->

@@ -1,4 +1,3 @@
-open Notfound
 open Utility
 
 let show_json = Settings.add_bool("show_json", false, `User)
@@ -69,8 +68,8 @@ struct
   let rec value : t -> Value.t -> t = fun env -> function
     | `PrimitiveFunction _
     | `Continuation _ -> assert false
-    | `FunctionPtr (f, None) -> env
-    | `FunctionPtr (f, Some fvs) -> value env fvs
+    | `FunctionPtr (_f, None) -> env
+    | `FunctionPtr (_f, Some fvs) -> value env fvs
     | `ClientFunction _ -> env
     | #Value.primitive_value as v -> primitive env v
     | `Variant (_label, v) -> value env v
@@ -158,7 +157,7 @@ let rec jsonize_value : Value.t -> string * json_state =
       "[" ^ String.concat "," ss ^ "]", state
   | `Pid (pid, `Client) ->
     "{\"pid\":" ^ string_of_int pid ^ "}", pid_state pid
-  | `Pid (pid, _) -> failwith "Cannot yet jsonize non-client proceses"
+  | `Pid (_pid, _) -> failwith "Cannot yet jsonize non-client proceses"
   | `Socket _ -> failwith "Cannot jsonize sockets"
 and jsonize_primitive : Value.primitive_value -> string * json_state = function
   | `Bool value -> string_of_bool value, empty_state

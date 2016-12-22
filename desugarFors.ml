@@ -52,11 +52,11 @@ let dp = Sugartypes.dummy_position
 let results :  Types.row ->
   (Sugartypes.phrase list * Sugartypes.name list * Types.datatype list) -> Sugartypes.phrase =
   fun eff (es, xs, ts) ->
-    let results_type = Types.make_tuple_type ts in
+    (* let results_type = Types.make_tuple_type ts in *)
     let rec results =
       function
         | ([], [], []) -> `ListLit ([`TupleLit [], dp], Some Types.unit_type), dp
-        | ([e], [x], [t]) -> e
+        | ([e], [_x], [_t]) -> e
         | (e::es, x::xs, t::ts) ->
             let r = results (es, xs, ts) in
             let qt = t in
@@ -96,6 +96,7 @@ let results :  Types.row ->
               `FnAppl
                 ((`TAppl ((`Var "concatMap", dp), [a; `Row eff; b]), dp),
                  [outer; e]), dp
+        | _, _, _ -> assert false
     in
       results (es, xs, ts)
 
@@ -147,7 +148,7 @@ object (o : 'self_type)
       in
         o, (List.rev es, List.rev ps, List.rev xs, List.rev ts)
 
-  method phrasenode : Sugartypes.phrasenode ->
+  method! phrasenode : Sugartypes.phrasenode ->
     ('self_type * Sugartypes.phrasenode * Types.datatype) =
     function
     | `Iteration (generators, body, filter, sort) ->
@@ -198,14 +199,14 @@ object (o : 'self_type)
                 in
                   `FnAppl
                     ((`TAppl ((`Var sort_by, dp), [`Type arg_type; `Row eff; sort_type_arg]), dp),
-                     [g; results]), dp in
+                     [g; results]), dp
+            | _, _ -> assert false in
 
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
-             [f; results])
-        in
-          (o, e, body_type)
+             [f; results]) in
+        (o, e, body_type)
     | e -> super#phrasenode e
 end
 
@@ -219,7 +220,7 @@ object
   val has_no_fors = true
   method satisfied = has_no_fors
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Iteration _ -> {< has_no_fors = false >}
     | e -> super#phrasenode e
 end

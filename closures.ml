@@ -1,5 +1,4 @@
 (*pp deriving *)
-open Notfound
 open Utility
 open Ir
 
@@ -21,17 +20,17 @@ struct
 
       val fenv : (Ir.binder list) IntMap.t = IntMap.empty
 
-      method private register_fun f (zs : binder list) =
+      method register_fun f (zs : binder list) =
         {< fenv = IntMap.add f zs fenv >}
 
-      method private global x =
+      method global x =
         {< globals = IntSet.add x globals >}
 
-      method private bound x =
+      method bound x =
         {< bound_vars = IntSet.add x bound_vars >}
 
       (* recursively gather free variables required by inner closures *)
-      method private close x =
+      method close x =
         if IntSet.mem x bound_vars then
           if IntMap.mem x fenv then
             let zs = IntMap.find x fenv in
@@ -47,7 +46,7 @@ struct
             {< free_vars = IntSet.add x free_vars >}
           end
 
-      method private register_var x =
+      method register_var x =
         if IntSet.mem x globals then
           o
         else
@@ -55,20 +54,20 @@ struct
 
       method private reset =
         {< bound_vars = IntSet.empty; free_vars = IntSet.empty >}
-      method private set bound_vars free_vars =
+      method set bound_vars free_vars =
         {< bound_vars = bound_vars; free_vars = free_vars >}
 
-      method private get_bound_vars = bound_vars
-      method private get_free_vars = free_vars
+      method get_bound_vars = bound_vars
+      method get_free_vars = free_vars
 
       method get_fenv = fenv
 
-      method var =
+      method! var =
         fun var ->
           let var, t, o = super#var var in
           var, t, o#register_var var
 
-      method binder ((_, (_, _, scope)) as b) =
+      method! binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
         match scope with
         | `Global -> b, o#global (Var.var_of_binder b)
@@ -76,9 +75,9 @@ struct
 
       method private super_binding = super#binding
 
-      method private super_binder = super#binder
+      method super_binder = super#binder
 
-      method binding =
+      method! binding =
         function
         | (`Fun (f, (tyvars, xs, body), None, location)) as b when Ir.binding_scope b = `Local ->
           (* reset free and bound variables to be empty *)
@@ -128,7 +127,8 @@ struct
              subsequent ones *)
           let defs, o =
             List.fold_left
-              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), None, location) ->
+              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location) ->
+                 assert (none = None);
                  let xs, o =
                    List.fold_right
                      (fun x (xs, o) ->
@@ -184,7 +184,8 @@ struct
 
           let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), None, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location) ->
+                   assert (none = None);
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -212,7 +213,7 @@ struct
           `Rec defs, o
         | b -> super#binding b
 
-      method program =
+      method! program =
         fun (bs, tc) ->
           let bs, o = o#bindings bs in
           let tc, t, o = o#tail_computation tc in
@@ -231,7 +232,7 @@ end
 (* mark top-level bindings as global *)
 module Globalise =
 struct
-  let binder (x, (t, name, scope)) = (x, (t, name, `Global))
+  let binder (x, (t, name, _)) = (x, (t, name, `Global))
   let fun_def (f, lam, z, location) = (binder f, lam, z, location)
   let binding = function
     | `Let (x, body) -> `Let (binder x, body)
@@ -253,7 +254,7 @@ struct
                             zs
                             StringMap.empty, None))
 
-  class visitor tenv globals fenv =
+  class visitor tenv fenv =
     object (o : 'self) inherit Transform.visitor(tenv) as super
       (* currently active mutually recursive functions*)
       val parents : Ir.binder list = []
@@ -264,10 +265,10 @@ struct
 
       val hoisted_bindings = []
 
-      method private push_binding b = {< hoisted_bindings = b :: hoisted_bindings >}
-      method private pop_hoisted_bindings = List.rev hoisted_bindings, {< hoisted_bindings = [] >}
+      method push_binding b = {< hoisted_bindings = b :: hoisted_bindings >}
+      method pop_hoisted_bindings = List.rev hoisted_bindings, {< hoisted_bindings = [] >}
 
-      method value =
+      method! value =
         function
         | `Variable x ->
           let x, t, o = o#var x in
@@ -297,10 +298,10 @@ struct
           var_val x, t, o
         | v -> super#value v
 
-      method private set_context parents parent_env cvars =
+      method set_context parents parent_env cvars =
         {< parents = parents; parent_env = parent_env; cvars = cvars >}
 
-      method bindings =
+      method! bindings =
         function
         | [] -> [], o
         | b :: bs when Ir.binding_scope b = `Global ->
@@ -308,7 +309,7 @@ struct
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
-        | `Fun ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) :: bs ->
+        | `Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
           assert (Var.scope_of_binder fb = `Local);
           let fb = Globalise.binder fb in
           let (xs, o) =
@@ -358,7 +359,8 @@ struct
                 ([], o) in
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self)) ((f, (t, _, _)) as fb, (tyvars, xs, body), None, location) ->
+                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
+                   assert (none = None);
                    assert (Var.scope_of_binder fb = `Local);
                    let fb = Globalise.binder fb in
                    let xs, o =
@@ -403,7 +405,7 @@ struct
           let bs, o = o#bindings bs in
           b :: bs, o
 
-      method program =
+      method! program =
         fun (bs, tc) ->
           let bs, o = o#bindings bs in
           let tc, t, o = o#tail_computation tc in
@@ -411,12 +413,12 @@ struct
           (bs @ bs', tc), t, o
     end
 
-  let bindings tyenv globals fenv bs =
-    let bs, _ = (new visitor tyenv globals fenv)#bindings bs in
+  let bindings tyenv fenv bs =
+    let bs, _ = (new visitor tyenv fenv)#bindings bs in
     bs
 
-  let program tyenv globals fenv e =
-    let e, _, _ = (new visitor tyenv globals fenv)#program e in
+  let program tyenv fenv e =
+    let e, _, _ = (new visitor tyenv fenv)#program e in
     e
 end
 
@@ -427,12 +429,12 @@ let program tyenv globals program =
   let program = Globalise.program program in
   let fenv = ClosureVars.program tyenv globals program in
   (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
-  let program = ClosureConvert.program tyenv globals fenv program in
+  let program = ClosureConvert.program tyenv fenv program in
   (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
   program
 
 let bindings tyenv globals bs =
   let bs = Globalise.bindings bs in
   let fenv = ClosureVars.bindings tyenv globals bs in
-  let bs = ClosureConvert.bindings tyenv globals fenv bs in
+  let bs = ClosureConvert.bindings tyenv fenv bs in
   bs

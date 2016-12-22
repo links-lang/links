@@ -46,8 +46,6 @@ open Ir
 
 let show_compiled_ir = Settings.add_bool ("show_compiled_ir", false, `User)
 
-exception ASTSyntaxError = SourceCode.ASTSyntaxError
-
 let dp = Sugartypes.dummy_position
 
 type datatype = Types.datatype
@@ -64,8 +62,6 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
   let var = NEnv.lookup nenv name in
     var, TEnv.lookup tenv var
 
-let lookup_name name env = fst (lookup_name_and_type name env)
-let lookup_type name env = snd (lookup_name_and_type name env)
 let lookup_effects (_, _, eff)= eff
 
 (* Hmm... shouldn't we need to use something like this? *)
@@ -183,15 +179,9 @@ struct
   let lift_binding b a =
     ([b], a)
 
-  let rec lift_bindings v =
-    function
-      | [] -> lift v
-      | b :: bs ->
-          bind (lift_binding b ()) (fun () -> lift_bindings v bs)
-
   type 'a semt = ('a * datatype) sem
   let sem_type (_, (_, t)) = t
-  let reify (bs, (e, t)) = (bs, e)
+  let reify (bs, (e, _)) = (bs, e)
 end
 
 module BindingContinuationMonad : BINDINGMONAD =
@@ -244,7 +234,6 @@ struct
 
   module S :
   sig
-    val lift_option : ('a sem) option -> ('a option) M.sem
     val lift_list : ('a sem) list -> ('a list) M.sem
 
     val lift_alist : ('a*'b sem) list -> (('a*'b) list) M.sem
@@ -264,12 +253,6 @@ struct
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
   struct
-    let lift_option =
-      function
-        | None -> lift None
-        | Some s ->
-            bind s (fun v -> lift (Some v))
-
     let lift_list ss =
       List.fold_right
         (fun s s' ->
@@ -307,8 +290,9 @@ struct
         lift_binding
           (`Rec
              (List.map
-                (fun (fb, (tyvars, xsb, body), None, location) ->
-                   (fb, (tyvars, xsb, body fs), None, location))
+                (fun (fb, (tyvars, xsb, body), none, location) ->
+                  assert (none = None);
+                   (fb, (tyvars, xsb, body fs), none, location))
                 defs))
           fs
 
@@ -430,8 +414,7 @@ struct
            StringSet.add name names)
         StringSet.empty
         fields in
-    let t = TypeUtils.record_without (sem_type s) names in
-      record (fields, Some (erase (s, names)))
+    record (fields, Some (erase (s, names)))
 
   let inject (name, s, t) =
       bind s (fun v -> lift (`Inject (name, v, t), t))
@@ -680,7 +663,7 @@ struct
                       prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
                       prerr_endline ("name: "^name);
                       prerr_endline ("type: "^Types.string_of_datatype xt);
-                      prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
+                      prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
                       failwith "fatal internal error" in
 
       let rec is_pure_primitive (e, _) =
@@ -753,7 +736,6 @@ struct
               I.apply (ev e, evs es)
           | `TAbstr (tyvars, e) ->
               let v = ev e in
-              let vt = I.sem_type v in
                 cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
           | `TAppl (e, tyargs) ->
               let v = ev e in
@@ -766,7 +748,7 @@ struct
                         prerr_endline ("Arity mismatch in type application (Sugartoir)");
                         prerr_endline ("expression: " ^ Sugartypes.Show_phrasenode.show (`TAppl (e, tyargs)));
                         prerr_endline ("type: "^Types.string_of_datatype vt);
-                        prerr_endline ("tyargs: "^String.concat "," (List.map Types.string_of_type_arg tyargs));
+                        prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
                         failwith "fatal internal error"
                 end
           | `TupleLit [e] ->
@@ -809,7 +791,7 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | `DatabaseLit (name, (None, args)) ->
+          | `DatabaseLit (name, (None, _)) ->
               I.database (ev (`RecordLit ([("name", name)],
                                           Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
           | `DatabaseLit (name, (Some driver, args)) ->
@@ -820,7 +802,7 @@ struct
               in
                 I.database
                   (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
-          | `TableLit (name, (_, Some (readtype, writetype, neededtype)), constraints, keys, db) ->
+          | `TableLit (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) ->
               I.table_handle (ev db, ev name, ev keys, (readtype, writetype, neededtype))
           | `Xml (tag, attrs, attrexp, children) ->
               (* check for duplicates *)
@@ -913,17 +895,24 @@ struct
           | `FormletPlacement _
           | `PagePlacement _
           | `FormBinding _
+          | `ListLit _
+          | `Escape _
+          | `Upcast _
+          | `ConstructorLit _
+          | `Switch _
+          | `TableLit _
+          | `Offer _
+          | `QualifiedVar _
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false
 
   and eval_bindings scope env bs' e =
-    let cofv = I.comp_of_value in
     let ec = eval env in
     let ev = evalv env in
       match bs' with
         | [] -> ec e
-        | (b,bpos)::bs ->
+        | (b,_)::bs ->
             begin
               match b with
                 | `Val (_, (`Variable (x, Some xt, _xpos), _), body, _, _) ->
@@ -939,7 +928,7 @@ struct
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | `Fun ((f, Some ft, _), _, (tyvars, ([ps], body)), location, pos) ->
+                | `Fun ((f, Some ft, _), _, (tyvars, ([ps], body)), location, _) ->
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -957,13 +946,18 @@ struct
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun ((f, Some outer, _), _, ((_tyvars, Some (inner, _extras)), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun ((f, outer_opt, _), _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                          let outer      = OptionUtils.val_of outer_opt in
+                          let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         defs
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun ((f, Some ft, _), _, ((tyvars, _), ([ps], body)), location, t, pos) ->
+                        (fun ((f, ft_opt, _), _, ((tyvars, _), (pss, body)), location, _, _) ->
+                          assert (List.length pss = 1);
+                          let ft = OptionUtils.val_of ft_opt in
+                          let ps = List.hd pss in
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -976,14 +970,14 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), language, t) ->
+                | `Foreign ((x, Some xt, _), language, _) ->
                     I.alien ((xt, x, scope), language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `QualifiedImport _ -> assert false
+                | `QualifiedImport _ | `Fun _ | `Foreign _ | `Module _-> assert false
             end
 
   and evalv env e =

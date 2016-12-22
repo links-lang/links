@@ -1,5 +1,3 @@
-open Notfound
-
 (*** Debugging ***)
 let debugging_enabled = Settings.add_bool ("debug", false, `User)
 

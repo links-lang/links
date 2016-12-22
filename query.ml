@@ -1,34 +1,6 @@
 (*pp deriving *)
 open Utility
 
-module NormalForms =
-struct
-  (*
-     This module gives the datatype of normal forms for query
-     expressions.
-
-     Instead of using normal forms we use a single datatype t as it
-     makes the implementation considerably simpler.
-
-     At some point it might be interesting to try to target the normal
-     form directly.
-  *)
-
-  type base =
-      [ `If of base * base * base
-      | `Project of (Var.var * StringSet.t) * string | `Erase of (Var.var * StringSet.t) * string
-      | `Apply of string * base list
-      | `Constant of Constant.constant ]
-
-  type tail =
-      [ `Where of base * tail
-      | `SingletonRecord of base StringMap.t ]
-
-  type generator = Var.var * Value.table
-  type comprehension = generator list * base list * tail
-  type query = comprehension list
-end
-
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
@@ -91,7 +63,7 @@ let used_database v : Value.database option =
           end
   and used =
     function
-      | `For (gs, os, _body) -> generators gs
+      | `For (gs, _, _body) -> generators gs
       | `Table ((db, _), _, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
@@ -155,7 +127,7 @@ let rec tail_of_t : t -> t = fun v ->
   let tt = tail_of_t in
     match v with
       | `For (_gs, _os, `Singleton (`Record fields)) -> `Record fields
-      | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
+      | `For (_gs, _os, `If (_, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
 (** Return the type associated with an expression *)
@@ -167,17 +139,17 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
     Types.make_record_type (StringMap.map te fields)
   in
     match v with
-      | `Concat (v::vs) -> te v
-      | `For (gens, _os, body) -> te body
+      | `Concat (v::_) -> te v
+      | `For (_, _os, body) -> te body
       | `Singleton (`Record fields) -> record fields
       | `If (_, t, _) -> te t
       | `Table (_, _, _, row) -> `Record row
-      | `Constant (`Bool b) -> Types.bool_type
-      | `Constant (`Int i) -> Types.int_type
-      | `Constant (`Char c) -> Types.char_type
-      | `Constant (`Float f) -> Types.float_type
-      | `Constant (`String s) -> Types.string_type
-      | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
+      | `Constant (`Bool   _) -> Types.bool_type
+      | `Constant (`Int    _) -> Types.int_type
+      | `Constant (`Char   _) -> Types.char_type
+      | `Constant (`Float  _) -> Types.float_type
+      | `Constant (`String _) -> Types.string_type
+      | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
@@ -270,7 +242,7 @@ let table_field_types (_, _, _, (fields, _, _)) =
 
 let rec field_types_of_list =
   function
-    | `Concat (v::vs) -> field_types_of_list v
+    | `Concat (v::_) -> field_types_of_list v
     | `Singleton (`Record fields) -> StringMap.map type_of_expression fields
     | `Table table -> table_field_types table
     | _ -> assert false
@@ -306,7 +278,7 @@ struct
 
   let lookup_fun (f, fvs) =
     match Tables.lookup Tables.fun_defs f with
-    | Some (finfo, (xs, body), z, location) as def ->
+    | Some (finfo, (xs, body), z, location) ->
       Some
       begin
         match Var.name_of_binder (f, finfo) with
@@ -325,7 +297,8 @@ struct
                 let env =
                   match z, fvs with
                   | None, None       -> Value.empty_env
-                  | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env in
+                  | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env
+                  | _, _ -> assert false in
                 `Closure ((xs, body), env_of_value_env env)
             | `Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (f, finfo) ^ " in query")
@@ -385,11 +358,6 @@ struct
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
-
-  let lookup_lib_fun (val_env, _exp_env) var =
-    match Value.lookup var val_env with
-      | Some v -> expression_of_value v
-      | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
 
   let eta_expand_var (x, field_types) =
     `Record
@@ -498,7 +466,7 @@ struct
           | _ -> eval_error "Error erasing from record"
       in
         erase (value env r, labels)
-    | `Inject (label, v, t) -> `Variant (label, value env v)
+    | `Inject (label, v, _) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
 
@@ -521,7 +489,8 @@ struct
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Closure (f, v) ->
-      let (_finfo, (xs, body), Some z, _location) = Tables.find Tables.fun_defs f in
+      let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
+      let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
       let env' = bind (Value.empty_env, Env.Int.empty) (z, value env v) in
@@ -630,20 +599,12 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), _, (`Client | `Native)) ->
+              | `Fun (_, _, _, (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), z, _) ->
+              | `Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 failwith ("Function definition in query: " ^ string_of_int f)
-                (* let args = *)
-                (*   match z with *)
-                (*   | None -> args *)
-                (*   | Some z -> z :: args *)
-                (* in *)
-                (* computation *)
-                (*   (bind env (f, `Closure ((List.map fst args, body), env))) *)
-                (*   (bs, tailcomp) *)
-              | `Rec defs ->
+              | `Rec _ ->
                   eval_error "Recursive function"
               | `Alien _ -> (* just skip it *)
                   computation env (bs, tailcomp)
@@ -741,7 +702,7 @@ struct
     match c with
       | `Constant (`Bool true) -> t
       | `Constant (`Bool false) -> e
-      | `If (c', t', e') ->
+      | `If (c', t', _) ->
         reduce_if_body
           (reduce_or (reduce_and (c', t'),
                       reduce_and (reduce_not c', t')),
@@ -837,7 +798,7 @@ struct
             reduce_eq (a, b)
         | (`Record lfields, `Record rfields) ->
           List.fold_right2
-            (fun (s1, v1) (s2, v2) e ->
+            (fun (_, v1) (_, v2) e ->
               reduce_and (reduce_eq (v1, v2), e))
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
@@ -951,8 +912,6 @@ struct
                ) field_types [])
       | _ -> assert false
 
-  let gens : (Var.var * t) list -> t list = concat_map gen
-
   let base_type_of_expression t =
     match type_of_expression t with
       | `Primitive p -> p
@@ -970,35 +929,13 @@ struct
       function
         | `Val t        -> [t]
         | `Gen g        -> gen g
-        | `TailGen g    -> []
+        | `TailGen _    -> []
         | `DefVal t     -> [default_of_base_type t]
         | `DefGen g     -> List.map default_of_base_value (gen g)
-        | `DefTailGen g -> []
+        | `DefTailGen _ -> []
         | `Branch i     -> [`Constant (`Int i)]
     in
       concat_map long
-
-  (* convert orders to a list of expressions
-
-       - represent generators by projecting all fields
-       - include tail generators
-
-     This gives us a completely deterministic list semantics.  *)
-  let strict_long_orders : orders -> t list =
-    let strict_long =
-      function
-        | `Val t        -> [t]
-        | `Gen g
-        | `TailGen g    -> gen g
-        | `DefVal t     -> [default_of_base_type t]
-        | `DefGen g
-        | `DefTailGen g -> List.map default_of_base_value (gen g)
-        | `Branch i     -> [`Constant (`Int i)]
-    in
-      concat_map strict_long
-
-  let no_orders : orders -> t list =
-    fun _ -> []
 
   let lift_vals = List.map (fun o -> `Val o)
   let lift_gens = List.map (fun g -> `Gen g)
@@ -1025,7 +962,7 @@ struct
         | _ -> assert false
   and queries : context -> t -> t list -> (int * query_tree) list =
     fun gs cond vs ->
-      let i, cs =
+      let _, cs =
         List.fold_left
           (fun (i, cs) v ->
             let c = query gs cond v in
@@ -1079,12 +1016,12 @@ struct
   (* compute the order indexes for the specified query tree along a
      path *)
   let rec flatten_at path active : query_tree -> orders =
-    let box branch = `Constant (`Int branch) in
-      function
+    function
         | `Leaf (_, os) -> os
         | `Node (os, cs) ->
           if active then
-            let (branch :: path) = path in
+            let branch = List.hd path in
+            let path   = List.tl path in
               os @ `Branch branch :: flatten_at_children branch path active cs
           else
             os @ `Branch 0 :: flatten_at_children 0 [] active cs
@@ -1143,53 +1080,14 @@ struct
     fun pick_orders ->
       function
         | (_, _, os) :: _ -> List.length (pick_orders os)
+        | [] -> assert false
 
   let ordered_query v =
     let ss = query v in
     let n = index_length long_orders ss in
     let vs = List.map (query_of_clause long_orders) ss in
       vs, n
-
-  let unordered_query_of_clause (gs, body, os) =
-    match gs with
-      | [] -> body
-      | _  -> `For (gs, [], body)
-
-  let unordered_query v =
-    List.map unordered_query_of_clause (query v)
 end
-
-(* Hoist concatenation to the top-level and lower conditionals to the
-   tails of comprehensions, yielding a collection of canonical
-   comprehensions.
-
-   This process doesn't necessarily respect list ordering. The order
-   module generalises it in order to support various degrees of
-   list-ordering.
-
-   The intention is that Split.query == Order.unordered_query.
-*)
-module Split =
-struct
-  type gen = Var.var * t
-
-  let rec query : gen list -> t list -> t -> t -> t list =
-    fun gs os cond ->
-      function
-        | `Singleton r ->
-          [`For (gs, os, Eval.reduce_where_then (cond, `Singleton r))]
-        | `Concat vs ->
-          concat_map (query gs os cond) vs
-        | `If (cond', v, `Concat []) ->
-          query gs os (Eval.reduce_and (cond, cond')) v
-        | `For (gs', os', body) ->
-          query (gs @ gs') (os @ os') cond body
-        | _ -> assert false
-
-  let query : t -> t list =
-    query [] [] (`Constant (`Bool true))
-end
-
 
     (* TODO: Unify this with Queryshredding.ShreddedSql *)
     
@@ -1224,13 +1122,6 @@ struct
   let fresh_dummy_var () =
     incr dummy_counter;
     "dummy" ^ string_of_int (!dummy_counter)
-
-  let string_of_label label =
-    if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier;
-                                 works in MySQL and PostgreSQL *)
-    else
-      label
 
   module Arithmetic :
   sig
@@ -1558,22 +1449,7 @@ struct
     let q = `UnionAll (List.map (clause db) vs, n) in
       string_of_query db range q
 
-  let unordered_query db range v =
-    (* Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    (*let vs = Order.unordered_query v in*)
-    let vs = Split.query v in
-    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
-    let q = `UnionAll (List.map (clause db) vs, 0) in
-      string_of_query db range q
-
-  let wonky_query db range v =
-(*     Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    let q = outer_query db v in
-      string_of_query db range q
-
-  let update db ((x, table), where, body) =
+  let update db ((_, table), where, body) =
     reset_dummy_counter ();
     let base = (base db) ->- (string_of_base db true) in
     let where =
@@ -1592,7 +1468,7 @@ struct
     in
       "update "^table^" set "^fields^where
 
-  let delete db ((x, table), where) =
+  let delete db ((_, table), where) =
     reset_dummy_counter ();
     let base = base db ->- (string_of_base db true) in
     let where =

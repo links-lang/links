@@ -643,11 +643,11 @@ class fold =
       | `Project _x -> let o = o#name _x in o
       | `Name _x -> let o = o#name _x in o
 
-    method subkind : subkind -> 'self_type = fun x -> o
+    method subkind : subkind -> 'self_type = fun _ -> o
 
-    method kind : kind -> 'self_type = fun x -> o
+    method kind : kind -> 'self_type = fun _ -> o
 
-    method freedom : freedom -> 'self_type = fun x -> o
+    method freedom : freedom -> 'self_type = fun _ -> o
 
     method type_variable : type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->

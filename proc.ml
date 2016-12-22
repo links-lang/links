@@ -1,5 +1,4 @@
 (** Data structures/utilities for process management *)
-open Notfound
 open Utility
 open Lwt
 
@@ -111,7 +110,6 @@ struct
 
   (** Reset (set to 0) the scheduler's step counter. *)
   let reset_step_counter() = state.step_counter := 0
-  let result : (Value.env * Value.t) option ref = ref None
 
   let switch_granularity = 100
 
@@ -120,9 +118,6 @@ struct
    *)
   let yield pstate =
     let step_ctr = count_step () in
-    let pid = get_current_pid () in
-    (* Debug.print ("pid: " ^string_of_int pid); *)
-    (* Debug.print ("step_ctr: "^string_of_int step_ctr); *)
     if not !atomic && step_ctr mod switch_granularity == 0 then
       begin
         (* Debug.print ("yielding"); *)
@@ -195,10 +190,6 @@ struct
         Hashtbl.remove state.angels pid
       end;
     Lwt.fail (Aborted v)
-
-  let is_main pid = pid == main_process_pid
-  (** Is the current process is the main process? *)
-  let current_is_main() = get_current_pid () == main_process_pid
 
   let run' pfun =
    Lwt_main.run (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun r ->
@@ -315,6 +306,7 @@ module Session = struct
         | Accepting cs         -> let c = new_channel () in (c, Accepting (cs @ [c]), true)
         | Requesting [c]       -> (c, Balanced, false)
         | Requesting (c :: cs) -> (c, Requesting cs, false)
+        | Requesting []        -> assert false (* TODO: check that this is impossible *)
       in
         Hashtbl.replace access_points apid state';
         c, blocked
@@ -328,11 +320,12 @@ module Session = struct
         | Requesting cs       -> let c = new_channel () in (c, Requesting (cs @ [c]), true)
         | Accepting [c]       -> (c, Balanced, false)
         | Accepting (c :: cs) -> (c, Accepting cs, false)
+        | Accepting []        -> assert false (* TODO: check that this is impossible *)
       in
         Hashtbl.replace access_points apid state';
         flip_chan c, blocked
 
-  let rec find_active p =
+  let find_active p =
     Unionfind.find (Hashtbl.find forward p)
 
   let forward inp outp =
@@ -341,7 +334,7 @@ module Session = struct
   let block portid pid =
     let portid = find_active portid in
       Hashtbl.add blocked portid pid
-  let rec unblock portid =
+  let unblock portid =
     let portid = find_active portid in
       if Hashtbl.mem blocked portid then
         begin
@@ -352,12 +345,12 @@ module Session = struct
       else
         None
 
-  let rec send msg p =
+  let send msg p =
     (* Debug.print ("Sending along: " ^ string_of_int p); *)
     let p = find_active p in
       Queue.push msg (Hashtbl.find buffers p)
 
-  let rec receive p =
+  let receive p =
     (* Debug.print ("Receiving on: " ^ string_of_int p); *)
     let p = find_active p in
     let buf = Hashtbl.find buffers p in

@@ -1,8 +1,6 @@
 open Webserver_types
 open Ir
-open List
 open Lwt
-open Notfound
 open Utility
 open Proc
 
@@ -29,7 +27,7 @@ struct
     in
       Value.db_connect driver params
 
-  let lookup_fun_def env f =
+  let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
     | Some (finfo, _, None, location) ->
@@ -42,10 +40,12 @@ struct
           Some (`FunctionPtr (f, None))
         | `Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
+        | `Native -> assert false
       end
+    | _ -> assert false
 
-  let find_fun_def env f =
-    val_of (lookup_fun_def env f)
+  let find_fun_def f =
+    val_of (lookup_fun_def f)
 
   (* TODO: explicitly distinguish functions and variables in the
      IR so we don't have to do this check every time we look up a
@@ -53,7 +53,7 @@ struct
   let lookup_var var env =
     if Lib.is_primitive_var var then Lib.primitive_stub_by_code var
     else
-      match lookup_fun_def env var with
+      match lookup_fun_def var with
       | None ->
         Value.find var env
       | Some v -> v
@@ -132,7 +132,7 @@ struct
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
             | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
         end
-    | `Inject (label, v, t) -> `Variant (label, value env v)
+    | `Inject (label, v, _) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
     | `XmlNode (tag, attrs, children) ->
@@ -152,34 +152,30 @@ struct
     | `ApplyPure (f, args) ->
       Proc.atomically (fun () -> apply [] env (value env f, List.map (value env) args))
     | `Closure (f, v) ->
-      let (finfo, _, z, location) = find_fun f in
-      let z =
-        match z with
-        | None -> failwith ("Closure without environment variable: " ^ Ir.Show_value.show (`Closure (f, v)));
-        | Some z -> z
-      in
       (* begin *)
 
       (* TODO: consider getting rid of `ClientFunction *)
       (* Currently, it's only necessary for built-in client
          functions *)
 
+      (* let (finfo, _, z, location) = find_fun f in *)
       (* match location with *)
       (* | `Server | `Unknown | `Client -> *)
       `FunctionPtr (f, Some (value env v))
       (* | `Client -> *)
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
-    | `Coerce (v, t) -> value env v
+    | `Coerce (v, _) -> value env v
 
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
     | `FunctionPtr (f, fvs), ps ->
-      let (_finfo, (xs, body), z, _location) as def = find_fun f in
+      let (_finfo, (xs, body), z, _location) = find_fun f in
       let env =
         match z, fvs with
         | None, None            -> env
-        | Some z, Some fvs -> Value.bind z (fvs, `Local) env in
+        | Some z, Some fvs -> Value.bind z (fvs, `Local) env
+        | _, _ -> assert false in
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
@@ -192,12 +188,12 @@ struct
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
         else
-          let (pid, location) = Value.unbox_pid pid in
+          let (pid, _location) = Value.unbox_pid pid in
             (try
                Mailbox.send_message msg pid;
                Proc.awaken pid
              with
-                 UnknownProcessID pid ->
+                 UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
@@ -214,7 +210,6 @@ struct
             apply_cont cont env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("spawnClient",_), [func] ->
-      let var = Var.dummy_var in
       let new_pid = Proc.create_client_process func in
       apply_cont cont env (`Pid (new_pid, `Client))
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
@@ -376,7 +371,7 @@ struct
     (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args)
-    | `PrimitiveFunction (n,Some code), args ->
+    | `PrimitiveFunction (_, Some code), args ->
        apply_cont cont env (Lib.apply_pfun_by_code code args)
     | `ClientFunction name, args -> client_call name cont args
     | `Continuation c,      [p] -> apply_cont c env p
@@ -548,7 +543,7 @@ struct
       begin
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let (out', in') = Session.unbox_chan' chan in
+        let (_, in') = Session.unbox_chan' chan in
         let inp = in' in
           match Session.receive inp with
           | Some v ->
@@ -615,8 +610,5 @@ struct
     try snd (Proc.run (fun () -> eval env program)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
-
-  let eval_fun env f =
-    find_fun_def env f
 
 end

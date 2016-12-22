@@ -179,7 +179,7 @@ let type_variables_of_type_args =
                | `Var (var, _, freedom) -> (var, freedom, `Presence point)
                | _ -> assert false
            end
-       | `Presence _ -> assert false)
+       | `Presence _ | `Row _ -> assert false)
 
 let get_type_variables bound_vars = type_variables_of_type_args -<- (get_type_args `All bound_vars)
 let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_args `All bound_vars)

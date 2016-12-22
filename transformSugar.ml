@@ -9,7 +9,7 @@ let type_section env =
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
         let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
 
         let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
@@ -34,7 +34,9 @@ let type_binary_op env tycon_env =
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
-           | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool")
+           | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
+           | _,     _,     true  -> assert false)
+ 
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
   | `Cons         -> TyEnv.lookup env "Cons"
@@ -299,6 +301,9 @@ class transform (env : Types.typing_environment) =
           let envs = o#backup_envs in
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
+          (* FIXME: this looks deeply suspicious (why would we back up
+          the environment, restore it, and then throw the resulting
+          object away?) *)
           let o = o#restore_envs envs in
             {< var_env=var_env >}, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
@@ -397,13 +402,13 @@ class transform (env : Types.typing_environment) =
       | `TypeAnnotation (e, ann_type) ->
           let (o, e, _) = o#phrase e in
           let (o, ann_type) = o#datatype' ann_type in
-          let (_, Some t) = ann_type in
-            (o, `TypeAnnotation (e, ann_type), t)
+          let t = val_of (snd ann_type) in
+          (o, `TypeAnnotation (e, ann_type), t)
       | `Upcast (e, to_type, from_type) ->
           let (o, e, _) = o#phrase e in
           let (o, to_type) = o#datatype' to_type in
           let (o, from_type) = o#datatype' from_type in
-          let (_, Some t) = to_type in
+          let t = val_of (snd to_type) in
             (o, `Upcast (e, to_type, from_type), t)
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
@@ -486,7 +491,8 @@ class transform (env : Types.typing_environment) =
                yields clause *)
           let o = {< var_env=TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ());
                      formlet_env=formlet_env >} in
-          let (o, yields, t) = o#phrase yields in
+          (* TODO: is this really the behaviour we want? *)
+          let (_o, yields, t) = o#phrase yields in
           let o = {< var_env=var_env >} in
             (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
       | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
@@ -498,6 +504,7 @@ class transform (env : Types.typing_environment) =
       | `PagePlacement e ->
           let (o, e, _) = o#phrase e in (o, `PagePlacement e, Types.xml_type)
       | `FormBinding (f, p) ->
+         (* FIXME: this doesn't look right *)
           let (o, f, _) = o#phrase f in
             (* add the formlet bindings to the formlet environment *)
           let o = {< var_env=TyEnv.empty >} in
@@ -595,6 +602,7 @@ class transform (env : Types.typing_environment) =
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
                 (o, (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+          | _ :: _ -> assert false
       in
         list o
 
@@ -623,55 +631,62 @@ class transform (env : Types.typing_environment) =
           | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
               let (o, _) = o#binder (bt f inner) in
                 list o defs
+          | _ :: _ -> assert false
       in
         list o
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-        | `Val (tyvars, p, e, location, t) ->
-            let outer_tyvars = o#backup_quantifiers in
-            let (o, tyvars) = o#quantifiers tyvars in
-            let (o, e, _) = o#phrase e in
-            let o = o#restore_quantifiers outer_tyvars in
-            let (o, p) = o#pattern p in
-            let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Val (tyvars, p, e, location, t))
-        | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
-            let outer_tyvars = o#backup_quantifiers in
-            let (o, tyvars) = o#quantifiers tyvars in
-            let inner_effects = fun_effects ft (fst lam) in
-            let (o, lam, _) = o#funlit inner_effects lam in
-            let o = o#restore_quantifiers outer_tyvars in
-            let (o, f) = o#binder f in
-            let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Fun (f, lin, (tyvars, lam), location, t))
-        | `Funs defs ->
-            (* put the inner bindings in the environment *)
-            let o = o#rec_activate_inner_bindings defs in
-
-            (* transform the function bodies *)
-            let (o, defs) = o#rec_bodies defs in
-
-            (* put the outer bindings in the environment *)
-            let o, defs = o#rec_activate_outer_bindings defs in
-              (o, (`Funs defs))
+      | `Val (tyvars, p, e, location, t) ->
+         let outer_tyvars = o#backup_quantifiers in
+         let (o, tyvars) = o#quantifiers tyvars in
+         let (o, e, _) = o#phrase e in
+         let o = o#restore_quantifiers outer_tyvars in
+         let (o, p) = o#pattern p in
+         let (o, t) = optionu o (fun o -> o#datatype') t in
+         (o, `Val (tyvars, p, e, location, t))
+      | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
+         let outer_tyvars = o#backup_quantifiers in
+         let (o, tyvars) = o#quantifiers tyvars in
+         let inner_effects = fun_effects ft (fst lam) in
+         let (o, lam, _) = o#funlit inner_effects lam in
+         let o = o#restore_quantifiers outer_tyvars in
+         let (o, f) = o#binder f in
+         let (o, t) = optionu o (fun o -> o#datatype') t in
+         (o, `Fun (f, lin, (tyvars, lam), location, t))
+      | `Fun _ -> failwith "Unannotated non-recursive function binding"
+      | `Funs defs ->
+         (* put the inner bindings in the environment *)
+         let o = o#rec_activate_inner_bindings defs in
+         
+         (* transform the function bodies *)
+         let (o, defs) = o#rec_bodies defs in
+         
+         (* put the outer bindings in the environment *)
+         let o, defs = o#rec_activate_outer_bindings defs in
+         (o, (`Funs defs))
       | `Foreign (f, language, t) ->
-          let (o, f) = o#binder f in
-            (o, `Foreign (f, language, t))
+         let (o, f) = o#binder f in
+         (o, `Foreign (f, language, t))
       | `Type (name, vars, (_, Some dt)) as e ->
-          let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
-            {< tycon_env=tycon_env >}, e
+         let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
+         {< tycon_env=tycon_env >}, e
+      | `Type _ -> failwith "Unannotated type alias"
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
-
+      | `Module _ -> assert false
+      | `QualifiedImport _ -> assert false
+         
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
         let (o, b) = o#bindingnode b in (o, (b, pos))
 
     method binder : binder -> ('self_type * binder) =
-      fun (name, Some t, pos) ->
-        let var_env = TyEnv.bind var_env (name, t) in
-          ({< var_env=var_env >}, (name, Some t, pos))
+      function
+      | (name, Some t, pos) ->
+         let var_env = TyEnv.bind var_env (name, t) in
+         ({< var_env=var_env >}, (name, Some t, pos))
+      | _ -> assert false
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
       fun (p, pos) ->
@@ -684,12 +699,13 @@ class transform (env : Types.typing_environment) =
          let envs = o#backup_envs in
          let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
+         (* FIXME: this doesn't look right (o is thrown away) *)
          let o = o#restore_envs envs in
          {< var_env=var_env >}, `Unquote (bs, e), t
       | `Grab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, `Grab (cbind, None, p), t
-      | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+      | `Grab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
          let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
@@ -723,8 +739,12 @@ class transform (env : Types.typing_environment) =
                                            let o, _ = o#binder b in
                                            let (o, p, t) = o#cp_phrase p in
                                            (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
-         let (cases, t :: ts) = List.split cases in
-         o, `Offer (b, cases), t
+         begin
+           match List.split cases with
+           | cases, t :: _ts ->
+              o, `Offer (b, cases), t
+           | _ -> assert false
+         end
       | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
       | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
@@ -733,4 +753,5 @@ class transform (env : Types.typing_environment) =
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
          o, `Comp (cbind, left, right), t
+      | `Comp _ -> assert false
   end
