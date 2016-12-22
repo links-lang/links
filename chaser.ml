@@ -95,16 +95,15 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
   let mt = create_module_info_map module_prog in
   let ics = find_external_refs module_prog mt in
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
-  List.fold_right (
-    fun name (visited_acc, deps_acc, dep_map_acc) ->
+  List.fold_left (
+    fun (visited_acc, deps_acc, dep_map_acc) name ->
       (* Given the top-level module name, try and parse wrt the paths *)
       let filename = top_level_filename name in
       let prog = parse_module filename in
       let (visited_acc', deps_acc', dep_map_acc') =
-        add_dependencies_inner name prog visited_acc deps_acc dep_map_acc in
+        add_dependencies_inner name prog visited_acc [] dep_map_acc in
       (visited_acc', deps_acc @ deps_acc', dep_map_acc')
-  ) ics (visited1, (module_name, ics) :: deps, dep_map1)
-
+  ) (visited1, (module_name, ics) :: deps, dep_map1) ics
 
 (* Top-level function: given a module name + program, return a program with
  * all necessary files added to the binding list as top-level modules. *)
@@ -117,7 +116,6 @@ let add_dependencies module_prog =
   let sorted_deps = Graph.topo_sort_sccs deps in
   (* Each entry should be *precisely* one element (otherwise we have cycles) *)
   assert_no_cycles sorted_deps;
-  (* Printf.printf "Sorted deps: %s\n" (print_list (List.map List.hd sorted_deps)); *)
   (* Now, build up binding list where each opened dependency is mapped to a `Module containing
    * its list of inner bindings. *)
   (* FIXME: This isn't reassigning positions! What we'll want is to retain the positions, but modify

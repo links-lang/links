@@ -106,3 +106,9 @@ Infix operators
 filemode : args
 args : -m --path=tests/modules
 stdout : 150 : Int
+
+Lots of modules
+./tests/modules/overflow-test/test.links
+filemode : args
+args : -m --path=tests/modules/overflow-test
+stdout : () : ()
