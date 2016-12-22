@@ -1,15 +1,15 @@
-# dict-suggest-update.links
+open DictSuggestUpdate
 open Draggable
 open Progress
 
 open Factorial
-# dict-suggest.links
-# dict-suggest-lite.links
+open DictSuggest
+open DictSuggestLite
 open DraggableDb
 
 open Buttons
 open FormsTest
-# broken because type resolution doesn't work for modules (#110)
+# still issues with type alias resolution in modules
 #open Validate
 
 open LoginFlow
@@ -20,157 +20,26 @@ open Todo
 open TodoDb
 open Crop
 open Wine
-#open Filter
-#open Citations
+open Filter
+open Citations
 
+# still issues with type alias resolution in modules
 #open Twentyfortyeight
 #open Breakout
 #open Tetris
 #open Pacman
 
 
-# fun examplesPage() {
-#   page
-#     <html>
-#     <head>
-#       <title>Links examples</title>
-#       <link rel="stylesheet" type="text/css" href="http://homepages.inf.ed.ac.uk/wadler/style.css" />
-#     </head>
-#     <body>
-#       <h1>Links examples</h1>
-
-#       The following examples are described in <a href="../papers/links-fmco06.pdf">Links: Web Programming Without Tiers</a>
-#       <ul>
-#       <li>
-#         <a href="dictionary/dictSuggestUpdate.links">dictionary suggestion with database update</a>
-#         (<a href="../examplessrc/dictionary/dictSuggestUpdate.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="draggable.links">draggable lists (with styles)</a>
-#         (<a href="../examplessrc/draggable.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="progress.links">progress bar</a>
-#         (<a href="../examplessrc/progress.links">source</a>)
-#       </li>
-#       </ul>
-#       The following examples appeared in earlier drafts of the same paper
-#       <ul>
-#       <li>
-#         <a href="factorial.links">factorial</a>
-#         (<a href="../examplessrc/factorial.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="dictionary/dictSuggest.links">dictionary suggestion (with styles)</a>
-#         (<a href="../examplessrc/dictionary/dictSuggest.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="dictionary/dictSuggestLite.links">dictionary suggestion (no styles)</a>
-#         (<a href="../examplessrc/dictionary/dictSuggestLite.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="draggableDb.links">draggable lists (database version)</a>
-#         (<a href="../examplessrc/draggableDb.links">source</a>)
-#       </li>
-#       </ul>
-
-#       Formlets examples
-#       <ul>
-#       <li>
-#         <a href="buttons.links">buttons</a>
-#         (<a href="../examplessrc/buttons.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="formsTest.links">a simple test formlet</a>
-#         (<a href="../examplessrc/formsTest.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="validate.links">validation</a>
-#         (<a href="../examplessrc/validate.links">source</a>)
-#       </li>
-#       </ul>
-
-#       Other examples
-#       <ul>
-#       <li>
-#         <a href="loginFlow.links">login flow using sendSuspend</a>
-#         (<a href="../examplessrc/loginFlow.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="paginate.links">pagination</a>
-#         (<a href="../examplessrc/paginate.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="mandelbrot.links">mandelbrot sets</a>
-#         (<a href="../examplessrc/mandelbrot.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="mandelcolor.links">multi-coloured mandelbrot set</a>
-#         (<a href="../examplessrc/mandelcolor.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="todo.links">todo list (client)</a>
-#         (<a href="../examplessrc/todo.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="todoDb.links">todo list (server)</a>
-#         (<a href="../examplessrc/todoDb.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="crop.links">draggable Cropping Frame</a>
-#         (<a href="../examplessrc/crop.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="wine.links">winestore</a>
-#         (<a href="../examplessrc/wine.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="filter.links">dynamic wine filtering</a>
-#         (<a href="../examplessrc/filter.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="citations.links">citeseer data</a>
-#         (<a href="../examplessrc/citations.links">source</a>)
-#       </li>
-#       </ul>
-
-#       Game examples
-#       <ul>
-#       <li>
-#         <a href="./games/twentyfortyeight.links">2048 in Links</a>
-#         (<a href="../examplessrc/games/twentyfortyeight.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="./games/breakout.links">Breakout in Links</a>
-#         (<a href="../examplessrc/games/breakout.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="./games/tetris.links">Tetris in Links</a>
-#         (<a href="../examplessrc/games/tetris.links">source</a>)
-#       </li>
-#       <li>
-#         <a href="./games/pacman.links">Pillman</a>
-#         (<a href="../examplessrc/games/pacman.links">source</a>)
-#       </li>
-#       </ul>
-
-#       <p><a href="http://groups.inf.ed.ac.uk/links/">Links homepage</a></p>
-#     </body>
-#     </html>
-# }
-
 fun main() {
-#  addRoute("/examples", fun (_) {examplesPage()});
-#  addStaticRoute("/examples", "examples/index.html");
   addStaticRoute("/examples/", "examples/");
 
-  # dict-suggest-update
+  addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_){DictSuggestUpdate.main()});
   addRoute("/examples/draggable.links", fun (_) {Draggable.main()});
   addRoute("/examples/progress.links", fun (_) {Progress.main()});
 
   addRoute("/examples/factorial.links", fun (_) {Factorial.main()});
-  # dictSuggest
-  # dictSuggestLite
+  addRoute("/examples/dictionary/dictSuggest.links", fun (_){DictSuggest.main()});
+  addRoute("/examples/dictionary/dictSuggestLite.links", fun (_){DictSuggestLite.main()});
   addRoute("/examples/draggableDb.links", fun (_) {DraggableDb.main()});
 
   addRoute("/examples/buttons.links", fun (_) {Buttons.main()});
@@ -186,8 +55,8 @@ fun main() {
   addRoute("/examples/todoDb.links", fun (_) {TodoDb.showList()});
   addRoute("/examples/crop.links", fun (_) {Crop.main()});
   addRoute("/examples/wine.links", fun (_) {Wine.main()});
-  # addRoute("/examples/filter.links", fun (_) {Filter.main()});
-  # addRoute("/examples/citations.links", fun (_) {Citations.main()});
+  addRoute("/examples/filter.links", fun (_) {Filter.main()});
+  addRoute("/examples/citations.links", fun (_) {Citations.main()});
 
   # games
 #  addRoute("/examples/2048", fun (_) {Twentyfortyeight.main()});
