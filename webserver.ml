@@ -71,7 +71,14 @@ struct
         Lwt.return ("text/html", page) in
 
       let serve_static base uri_path mime_types =
-          let fname = base / uri_path in
+          let fname =
+            let fname = base / uri_path in
+            let n = String.length fname in
+            if n > 1 && String.get fname (n-1) = '/' then
+              fname / "index.html"
+            else
+              base / uri_path in
+
           let headers =
             (* Filename.extension not defined until 4.04, because who would want such a thing *)
             let rec loop = function
