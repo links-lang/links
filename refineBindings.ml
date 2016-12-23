@@ -35,15 +35,15 @@ let refine_bindings : binding list -> binding list =
               | `Foreign _
               | `Type _
               | `Val _ ->
-                  (* collapse the group we're collecting, then start a
+                 (* collapse the group we're collecting, then start a
                      new empty group *)
-                  ([], add [bind] (add thisgroup othergroups))
-                | `Fun _ ->
-                     (* Add binding to group *)
-                  (bind::thisgroup, othergroups)
-                | `Infix ->
-                     (* discard binding *)
-                  (thisgroup, othergroups))
+                 ([], add [bind] (add thisgroup othergroups))
+              | `Fun _ ->
+                 (* Add binding to group *)
+                 (bind::thisgroup, othergroups)
+              | `Infix ->
+                 (* discard binding *)
+                 (thisgroup, othergroups))
             bindings ([], [])
       in
         add group groups
@@ -258,14 +258,14 @@ module RefineTypeBindings = struct
           match binding with
           | `Module _ -> assert false
           | `QualifiedImport _ -> assert false
-          | `Funs _
+          | `Funs _ -> assert false
           | `Fun _
           | `Foreign _
           | `Val _
           | `Exp _
           | `Infix ->
               (* Collapse and start a new group *)
-              ([], (currentGroup :: [bind] :: otherGroups))
+              ([], add [bind] (add currentGroup otherGroups))
           | `Type _ ->
               (* Add to this group *)
               (bind :: currentGroup, otherGroups)

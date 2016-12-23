@@ -32,8 +32,4 @@ fun remove(name) server {
  showList()
 }
 
-fun main() {
-    showList()
-}
-
-main()
+showList()

@@ -43,14 +43,14 @@ fun main() {
   addRoute("/examples/buttons.links", fun (_) {Buttons.main()});
   addRoute("/examples/formsTest.links", fun (_) {FormsTest.main()});
 
-  addRoute("/examples/validate", fun (_) {Validate.main()});
+  addRoute("/examples/validate.links", fun (_) {Validate.main()});
 
   addRoute("/examples/loginFlow.links", fun (_) {LoginFlow.main()});
   addRoute("/examples/paginate.links", fun (_) {Paginate.main()});
   addRoute("/examples/mandelbrot.links", fun (_) {Mandelbrot.main()});
   addRoute("/examples/mandelcolor.links", fun (_) {Mandelcolor.main()});
   addRoute("/examples/todo.links", fun (_) {Todo.main()});
-  addRoute("/examples/todoDb.links", fun (_) {TodoDb.main()});
+  addRoute("/examples/todoDb.links", fun (_) {TodoDb.showList()});
   addRoute("/examples/crop.links", fun (_) {Crop.main()});
   addRoute("/examples/wine.links", fun (_) {Wine.main()});
   addRoute("/examples/filter.links", fun (_) {Filter.main()});
