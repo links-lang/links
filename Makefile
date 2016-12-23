@@ -40,7 +40,7 @@ endif
 #OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
 OCAMLYACC := ocamlyacc -v
 
-OCAMLFLAGS=-dtypes -w Ae-44-45 -g -cclib -lunix
+OCAMLFLAGS=-dtypes -w Ae-44-45-60 -g -cclib -lunix
 #OCAMLDOCFLAGS=-pp deriving
 
 # additional files to clean

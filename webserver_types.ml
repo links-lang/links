@@ -1,5 +1,3 @@
-open Ir
-open Proc
 open Utility
 
 let webs_running = Settings.add_bool ("webs_running", false, `System)

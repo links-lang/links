@@ -27,7 +27,6 @@ open Breakout
 open Tetris
 #open Pacman
 
-
 fun main() {
   addStaticRoute("/examples/", "examples/");
 
