@@ -39,6 +39,9 @@ object ('self)
   method backup_envs     : Types.environment * Types.tycon_environment * Types.environment * Types.row
   method restore_envs    : (Types.environment * Types.tycon_environment * Types.environment * Types.row) -> 'self
 
+  method with_var_env : Types.environment -> 'self
+  method with_formlet_env : Types.environment -> 'self
+
   method lookup_type     : name -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self

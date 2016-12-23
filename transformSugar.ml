@@ -137,6 +137,12 @@ class transform (env : Types.typing_environment) =
       {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
          effect_row = effect_row >}
 
+    method with_var_env var_env =
+      {< var_env = var_env >}
+
+    method with_formlet_env formlet_env =
+      {< formlet_env = formlet_env >}
+
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
@@ -301,11 +307,8 @@ class transform (env : Types.typing_environment) =
           let envs = o#backup_envs in
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
-          (* FIXME: this looks deeply suspicious (why would we back up
-          the environment, restore it, and then throw the resulting
-          object away?) *)
           let o = o#restore_envs envs in
-            {< var_env=var_env >}, `Block (bs, e), t
+            o, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
             check_type_application
@@ -486,15 +489,14 @@ class transform (env : Types.typing_environment) =
             (o, `Xml (tag, attrs, attrexp, children), Types.xml_type)
       | `TextNode s -> (o, `TextNode s, Types.xml_type)
       | `Formlet (body, yields) ->
-          let (o, body, _) = o#phrase body in
-            (* ensure that the formlet bindings are only in scope in the
-               yields clause *)
-          let o = {< var_env=TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ());
-                     formlet_env=formlet_env >} in
-          (* TODO: is this really the behaviour we want? *)
-          let (_o, yields, t) = o#phrase yields in
-          let o = {< var_env=var_env >} in
-            (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
+         let envs = o#backup_envs in
+         let (o, body, _) = o#phrase body in
+         (* ensure that the formlet bindings are only in scope in the
+            yields clause *)
+         let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
+         let (o, yields, t) = o#phrase yields in
+         let o = o#restore_envs envs in
+         (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
       | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
       | `FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in
@@ -504,14 +506,16 @@ class transform (env : Types.typing_environment) =
       | `PagePlacement e ->
           let (o, e, _) = o#phrase e in (o, `PagePlacement e, Types.xml_type)
       | `FormBinding (f, p) ->
-         (* FIXME: this doesn't look right *)
-          let (o, f, _) = o#phrase f in
-            (* add the formlet bindings to the formlet environment *)
-          let o = {< var_env=TyEnv.empty >} in
-          let (o, p) = o#pattern p in
-          let o = {< var_env=var_env;
-                     formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
-            (o, `FormBinding (f, p), Types.xml_type)
+         let envs = o#backup_envs in
+         let (o, f, _) = o#phrase f in
+         (* HACK: add the formlet bindings to the formlet environment *)
+         let o = o#with_var_env TyEnv.empty in
+         let (o, p) = o#pattern p in
+         let formlet_env = TyEnv.extend formlet_env (o#get_var_env()) in
+         let o = o#restore_envs envs in
+         let o = o#with_formlet_env formlet_env in
+         (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
+         (o, `FormBinding (f, p), Types.xml_type)
       | e -> failwith ("oops: "^Show_phrasenode.show  e)
       
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
@@ -699,9 +703,8 @@ class transform (env : Types.typing_environment) =
          let envs = o#backup_envs in
          let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
-         (* FIXME: this doesn't look right (o is thrown away) *)
          let o = o#restore_envs envs in
-         {< var_env=var_env >}, `Unquote (bs, e), t
+         o, `Unquote (bs, e), t
       | `Grab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, `Grab (cbind, None, p), t

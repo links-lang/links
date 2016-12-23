@@ -258,12 +258,12 @@ let rec perform_type_renaming module_table path ht =
           let fqn = resolve n shadow_table in
           let (o, args') = self#list (fun o -> o#type_arg) args in
           (o, `TypeApplication (fqn, args'))
-      | `QualifiedTypeApplication (ns, args) ->
-          let hd :: tl = ns in
+      | `QualifiedTypeApplication (hd :: tl, args) ->
           let prefix = resolve hd shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
           let (o, args') = self#list (fun o -> o#type_arg) args in
           (o, `TypeApplication (fqn, args'))
+      | `QualifiedTypeApplication ([], _args) -> assert false
       | dt -> super#datatype dt
   end
 
