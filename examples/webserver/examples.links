@@ -25,7 +25,7 @@ open Citations
 open Twentyfortyeight
 open Breakout
 open Tetris
-#open Pacman
+open Pacman
 
 fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
@@ -57,10 +57,10 @@ fun main() {
   addRoute("/examples/citations.links", fun (_) {Citations.main()});
 
   # games
-  addRoute("/examples/2048", fun (_) {Twentyfortyeight.main()});
-  addRoute("/examples/breakout", fun (_) {Breakout.main()});
-  addRoute("/examples/tetris", fun (_) {Tetris.main()});
-  #addRoute("/examples/pillman", fun (_) {Pacman.main()});
+  addRoute("/examples/games/twentyfortyeight.links", fun (_) {Twentyfortyeight.main()});
+  addRoute("/examples/games/breakout.links", fun (_) {Breakout.main()});
+  addRoute("/examples/games/tetris.links", fun (_) {Tetris.main()});
+  addRoute("/examples/games/pacman.links", fun (_) {Pacman.main()});
 
   servePages()
 }
