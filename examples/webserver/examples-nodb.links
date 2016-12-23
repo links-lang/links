@@ -31,6 +31,7 @@ open Pacman
 
 fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
+  addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
 
 #  addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_){DictSuggestUpdate.main()});
   addRoute("/examples/draggable.links", fun (_) {Draggable.main()});
