@@ -1,5 +1,3 @@
-open Ir
-open Proc
 open Utility
 
 val webs_running : bool Settings.setting

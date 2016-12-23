@@ -15,7 +15,7 @@ struct
   module Webif = Webif.WebIf(Webserver)
 
   type routing_table = (bool * string * (string, Value.env * Value.t) either) list
-  type t = routing_table * Ir.binding list * Value.env
+  (* type t = routing_table * Ir.binding list * Value.env *)
 
   let rt : routing_table ref = ref []
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref = ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
@@ -33,7 +33,7 @@ struct
   let add_route is_directory path thread_starter =
     rt := (is_directory, path, thread_starter) :: !rt
 
-  let rec start tl_valenv =
+  let start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
     let ( / ) = Filename.concat in
 
@@ -60,8 +60,8 @@ struct
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
-      let run_page (dir, s, (valenv, v)) () =
-        Eval.apply (render_cont ()) (Value.shadow tl_valenv valenv) (v, [`String path]) >>= fun (valenv, v) ->
+      let run_page (_dir, _s, (valenv, v)) () =
+        Eval.apply (render_cont ()) (Value.shadow tl_valenv ~by:valenv) (v, [`String path]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
@@ -79,11 +79,11 @@ struct
         | [] ->
            Debug.print "No cases matched!\n";
            Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
-        | ((_, s, Left file_path) :: rest) when is_prefix_of s path ->
+        | ((_, s, Left file_path) :: _rest) when is_prefix_of s path ->
            Debug.print (Printf.sprintf "Matched static case %s\n" s);
            let uri_path = String.sub path (String.length s) (String.length path - String.length s) in
            serve_static file_path uri_path
-        | ((dir, s, Right (valenv, v)) :: rest) when (dir && is_prefix_of s path) || (s = path) ->
+        | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
            Webif.do_request (Value.shadow tl_valenv ~by:valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
