@@ -5,6 +5,10 @@ let module_sep = "."
 
 let path_sep = ":"
 
+type term_shadow_table = string list stringmap
+type type_shadow_table = string list stringmap
+type shadow_table = string list stringmap
+
 let try_parse_file filename =
   (* First, get the list of directories, with trailing slashes stripped *)
   let poss_dirs =
@@ -94,6 +98,21 @@ let make_path_string xs name =
     let xs1 = xs @ [name] in
     String.concat module_sep xs1
 
+(* Need to get data constructors from type declarations *)
+let get_data_constructors init_constrs =
+    object (self)
+        inherit SugarTraversals.fold as super
+        val constrs = init_constrs
+        method add_constr constr =
+            {< constrs = StringSet.add constr constrs >}
+        method get_constrs = StringSet.elements constrs
+
+        method! datatype = function
+            | `Variant (xs, _) ->
+                self#list (fun o (lbl, _) -> o#add_constr lbl) xs
+            | dt -> super#datatype dt
+    end
+
 let create_module_info_map program =
   (* Helper functions *)
   let module_map = ref StringMap.empty in
@@ -127,16 +146,20 @@ let create_module_info_map program =
       | (`Type (n, _, _), _) :: bs -> n :: (get_type_names bs)
       | _ :: bs -> get_type_names bs in
 
+    (* Gets data constructors for variants *)
+    let get_constrs bs = ((get_data_constructors StringSet.empty)#list
+        (fun o -> o#binding) bs)#get_constrs in
+
     (* Next, separate out bindings *)
     let (inner_modules, other_bindings) = separate_modules bindings in
     (* Next, use our helper functions *)
     let inner_module_names = traverse_modules inner_modules in
-    let binding_names = get_binding_names other_bindings in
+    let constrs = get_constrs other_bindings in
+    let binding_names = get_binding_names other_bindings @ constrs in
     let type_names = get_type_names other_bindings in
     (* Finally, construct the module info, and add to the table. *)
     let path_str = make_path_string parent_path name in
     let mod_info = make_module_info name inner_module_names type_names binding_names in
-
     add_module_info path_str mod_info in
 
   (* Toplevel *)
@@ -144,7 +167,7 @@ let create_module_info_map program =
   create_and_add_module_info [] "" bindings;
   !module_map
 
-let _print_mod_info k mi =
+let print_mod_info k mi =
    printf "MODULE: %s\n" k;
    printf "Inner modules: %s\n" (print_list mi.inner_modules);
    printf "Type names: %s\n" (print_list mi.type_names);
@@ -152,7 +175,7 @@ let _print_mod_info k mi =
 
 let _print_mt mt =
   printf "MT:\n";
-  List.iter (fun (k, mi) -> _print_mod_info k mi) (StringMap.bindings mt)
+  List.iter (fun (k, mi) -> print_mod_info k mi) (StringMap.bindings mt)
 
 (* Given a binding name and fully-qualified name, adds it to the top of
  * the binding stack in the name shadowing table. For example, shadowing name foo with A.foo,
@@ -190,30 +213,39 @@ let shadow_binding : string -> string -> (string list) stringmap -> (string list
  *  B   |-> [B]
  *  C   |-> [B.C]
  *)
-let shadow_open module_plain module_fqn module_table ht is_shadow_terms =
+let shadow_open module_plain module_fqn module_table term_ht type_ht =
   (* print_mt module_table; *)
   try
     let mod_info = StringMap.find module_fqn module_table in
-    (* Firstly, shadow either bindings (if shadow_bindings is true), or types (if SB is false) *)
-    let shadowed_binding_ht =
-      let name_list = if is_shadow_terms then mod_info.decl_names else mod_info.type_names in
+    (* Shadows bindings in a given table *)
+    let shadow_all_bindings lst ht =
         List.fold_left (fun acc plain_binding_name ->
-        let fq_binding_name = String.concat module_sep (module_fqn :: [plain_binding_name]) in
-        shadow_binding plain_binding_name fq_binding_name acc) ht name_list in
+            let fq_binding_name =
+                String.concat module_sep (module_fqn :: [plain_binding_name]) in
+            shadow_binding plain_binding_name fq_binding_name acc) ht lst in
+
+    (* Shadow both term and type tables *)
+    let shadowed_term_ht = shadow_all_bindings mod_info.decl_names term_ht in
+    let shadowed_type_ht = shadow_all_bindings mod_info.type_names type_ht in
     (* Next, do the modules *)
-    let shadowed_module_ht = List.fold_left (fun acc plain_module_name ->
-      let fq_module_name = String.concat module_sep (module_fqn :: [plain_module_name]) in
-      shadow_binding plain_module_name fq_module_name acc) shadowed_binding_ht mod_info.inner_modules in
+    let shadow_modules ht mods =
+        List.fold_left (fun acc plain_module_name ->
+              let fq_module_name =
+                  String.concat module_sep (module_fqn :: [plain_module_name]) in
+               shadow_binding plain_module_name fq_module_name acc) ht mods in
+
+    let shadowed_term_ht =
+        shadow_modules shadowed_term_ht mod_info.inner_modules in
+    let shadowed_type_ht =
+        shadow_modules shadowed_type_ht mod_info.inner_modules in
+
     (* Finally, need to add this module of course! *)
-    let shadowed_ht = shadow_binding module_plain module_fqn shadowed_module_ht in
-    shadowed_ht
+    let shadowed_term_ht =
+        shadow_binding module_plain module_fqn shadowed_term_ht in
+    let shadowed_type_ht =
+        shadow_binding module_plain module_fqn shadowed_type_ht in
+    (shadowed_term_ht, shadowed_type_ht)
   with Notfound.NotFound _ -> failwith ("Error: Trying to import nonexistent module " ^ module_plain)
-
-let shadow_open_types module_plain module_fqn module_table ht =
-  shadow_open module_plain module_fqn module_table ht false
-
-let shadow_open_terms module_plain module_fqn module_table ht =
-  shadow_open module_plain module_fqn module_table ht true
 
 let lst_to_path = String.concat module_sep
 
