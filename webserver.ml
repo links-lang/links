@@ -14,7 +14,7 @@ struct
   module Eval = Evalir.Eval(Webserver)
   module Webif = Webif.WebIf(Webserver)
 
-  type routing_table = (bool * string * (string, Value.env * Value.t) either) list
+  type routing_table = (bool * string * (string * (string * string) list, Value.env * Value.t) either) list
   (* type t = routing_table * Ir.binding list * Value.env *)
 
   let rt : routing_table ref = ref []
@@ -70,19 +70,29 @@ struct
         in
         Lwt.return ("text/html", page) in
 
-      let serve_static base uri_path =
+      let serve_static base uri_path mime_types =
           let fname = base / uri_path in
+          let headers =
+            (* Filename.extension not defined until 4.04, because who would want such a thing *)
+            let rec loop = function
+              | [] -> Cohttp.Header.init ()
+              | ((ext, content_type) :: rest) ->
+                 if Filename.check_suffix fname ("." ^ ext) then
+                   Cohttp.Header.init_with "content-type" content_type
+                 else
+                   loop rest in
+            loop mime_types in
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
-          Server.respond_file ~fname () in
+          Server.respond_file ~headers ~fname () in
 
       let rec route = function
         | [] ->
            Debug.print "No cases matched!\n";
            Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
-        | ((_, s, Left file_path) :: _rest) when is_prefix_of s path ->
+        | ((_, s, Left (file_path, mime_types)) :: _rest) when is_prefix_of s path ->
            Debug.print (Printf.sprintf "Matched static case %s\n" s);
            let uri_path = String.sub path (String.length s) (String.length path - String.length s) in
-           serve_static file_path uri_path
+           serve_static file_path uri_path mime_types
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
@@ -102,7 +112,7 @@ struct
                 | Some path -> path) / "lib" / "js"
              end
           | s -> s in
-        serve_static linkslib uri_path
+        serve_static linkslib uri_path []
       else
         route rt in
 

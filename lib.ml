@@ -99,7 +99,7 @@ let string_to_xml : Value.t -> Value.t = function
 let char_test_op fn pure =
   (`PFun (fun args ->
       match args with
-        | [c] -> (`Bool (fn (unbox_char c))) 
+        | [c] -> (`Bool (fn (unbox_char c)))
         | _ -> assert false),
    datatype "(Char) ~> Bool",
    pure)
@@ -1522,7 +1522,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "addStaticRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, String) ~> ()",
+     datatype "(String, String, [(String, String)]) ~> ()",
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),

@@ -355,14 +355,12 @@ struct
             apply_cont cont env (`Record [])
          | _ -> assert false
        end
-    | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv] ->
-       begin
-         match uriv, pathv with
-         | `String uri, `String path ->
-           Webs.add_route true uri (Left path);
-           apply_cont cont env (`Record [])
-         | _ ->  assert false
-       end
+    | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
+       let uri = Value.unbox_string uriv in
+       let path = Value.unbox_string pathv in
+       let mime_types = List.map (fun v -> let (x, y) = Value.unbox_pair v in (Value.unbox_string x, Value.unbox_string y)) (Value.unbox_list mime_typesv) in
+       Webs.add_route true uri (Left (path, mime_types));
+       apply_cont cont env (`Record [])
     | `PrimitiveFunction ("servePages", _), [] ->
        begin
          Webs.start env >>= fun () ->
