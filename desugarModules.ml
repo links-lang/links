@@ -25,7 +25,12 @@
 *)
 open Utility
 open Sugartypes
+open Printf
 open ModuleUtils
+
+let _print_shadow_table st =
+    List.iter (fun (n, fqns) -> printf "%s: %s\n" n (print_list fqns))
+    (StringMap.bindings st)
 
 (* After renaming, we can simply discard modules and imports. *)
 let rec flatten_simple = fun () ->
@@ -100,24 +105,36 @@ let group_bindings : binding list -> binding list list = fun bindings ->
   * - Get shadow table for the binding list
   * - Perform renaming
 *)
-let rec rename_binders_get_shadow_tbl module_table path ht =
+let rec rename_binders_get_shadow_tbl module_table
+            path term_ht type_ht =
   object (self)
     inherit SugarTraversals.fold_map as super
 
-    val shadow_table = ht
-    method get_shadow_table = shadow_table
-    method bind_shadow name fqn = {< shadow_table = shadow_binding name fqn shadow_table >}
-    method bind_open name fqn = {< shadow_table = shadow_open_terms name fqn module_table shadow_table >}
+    val term_shadow_table = term_ht
+    val type_shadow_table = type_ht
+    method get_term_shadow_table = term_shadow_table
+    method get_type_shadow_table = type_shadow_table
+
+    method bind_shadow_term name fqn =
+        {< term_shadow_table = shadow_binding name fqn term_shadow_table >}
+    method bind_shadow_type name fqn =
+        {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
+
+    method bind_open name fqn =
+        let (term_ht, type_ht) =
+            shadow_open name fqn module_table term_shadow_table type_shadow_table in
+        {< term_shadow_table = term_ht; type_shadow_table = type_ht >}
 
     method! binder = function
       | (n, dt_opt, pos) ->
           let fqn = make_path_string path n in
-          (self#bind_shadow n fqn, (fqn, dt_opt, pos))
+          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
 
     method! bindingnode = function
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
           (o, `Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
+      | `Type t -> (self, `Type t)
       | `Val v -> (self, `Val v)
       | `Exp b -> (self, `Exp b)
       | `QualifiedImport [] -> assert false
@@ -126,160 +143,193 @@ let rec rename_binders_get_shadow_tbl module_table path ht =
            * to a prefix. Once we have the prefix, we can construct the FQN. *)
           (* Qualified names must (by parser construction) be of at least length 1. *)
           let final = List.hd (List.rev ns) in
-          let prefix = resolve hd shadow_table in
+          let prefix = resolve hd term_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
           (self#bind_open final fqn, `QualifiedImport ns)
       | `Module (n, bs) ->
           let new_path = path @ [n] in
           let fqn = lst_to_path new_path in
           (* New FQN for module must shadow n *)
-          let o = self#bind_shadow n fqn in
-          let o_ht = o#get_shadow_table in
+          let o = self#bind_shadow_term n fqn in
+          let o = o#bind_shadow_type n fqn in
+          let o_term_ht = o#get_term_shadow_table in
+          let o_type_ht = o#get_type_shadow_table in
           (* Recursively get *and rename* inner scope *)
-          let (_, bindings') = process_binding_list bs module_table new_path o_ht in
+          let (_, _, bindings') =
+              process_binding_list bs module_table new_path o_term_ht o_type_ht in
           (* Finally, return `Module with updated bindings. The module itself
            * will be flattened out on the flattening pass. *)
-          (* Now, this has the same effect as opening the module *)
-          (self#bind_open n fqn, `Module (n, bindings'))
-      | `Type t -> (self, `Type t)
+          (o, `Module (n, bindings'))
       | b -> super#bindingnode b
   end
 
-and perform_term_renaming module_table path ht =
+and perform_renaming module_table path term_ht type_ht =
   object(self)
     inherit SugarTraversals.fold_map as super
 
-    val shadow_table = ht
-    method get_shadow_table = shadow_table
-    method bind_shadow name fqn = {< shadow_table = shadow_binding name fqn shadow_table >}
+    val term_shadow_table = term_ht
+    val type_shadow_table = type_ht
+    method get_term_shadow_table = term_shadow_table
+    method get_type_shadow_table = type_shadow_table
+    method bind_shadow_term name fqn =
+        {< term_shadow_table = shadow_binding name fqn term_shadow_table >}
+    method bind_shadow_type name fqn =
+        {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
 
     method! binder = function
       | (n, dt_opt, pos) ->
           let fqn = make_path_string path n in
-          (self#bind_shadow n fqn, (fqn, dt_opt, pos))
+          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
+
+    method! patternnode = function
+      | `Variant (n, p_opt) ->
+          let fqn = resolve n term_shadow_table in
+          let (o, p_opt') = self#option (fun o -> o#pattern) p_opt in
+          (o, `Variant (fqn, p_opt'))
+      | p -> super#patternnode p
+
+    method! row = function
+      | (xs, rv) ->
+          let (o, xs') =
+            self#list (fun o (name, fspec) ->
+              let (o, fspec') = o#fieldspec fspec in
+              (o, (name, fspec'))) xs in
+          let (_, rv') = o#row_var rv in
+          (self, (xs', rv'))
 
     method! bindingnode = function
       | `Module (n, bs) -> (self, `Module (n, bs))
-      | `Type t -> (self, `Type t)
+      | `Type (n, tvs, dt) ->
+          (* Add type binding *)
+          let fqn = make_path_string path n in
+          let o = self#bind_shadow_type n fqn in
+          let (o, dt') = o#datatype' dt in
+          (o, `Type (fqn, tvs, dt'))
       | `Val (tvs, pat, phr, loc, dt_opt) ->
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
-          (o, `Val (tvs, pat', phr', loc, dt_opt))
+          let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
+          (o, `Val (tvs, pat', phr', loc, dt_opt'))
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           (* Binder will have been changed. We need to add the funlit pattern
            * to the env. *)
           let (_, fnlit') = self#funlit fnlit in
-          (self, `Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt))
+          let (o, dt_opt') = self#option (fun o -> o#datatype') dt_opt in
+          (o, `Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt'))
       | b -> super#bindingnode b
 
     method! binop = function
-      | `Name n -> (self, `Name (resolve n shadow_table))
+      | `Name n -> (self, `Name (resolve n term_shadow_table))
       | bo -> super#binop bo
 
     method! unary_op = function
-      | `Name n -> (self, `Name (resolve n shadow_table))
+      | `Name n -> (self, `Name (resolve n term_shadow_table))
       | uo -> super#unary_op uo
 
     method! phrasenode = function
       | `Block (bs, phr) ->
           (* Process bindings, then process the phrase using
            * updated shadow table. *)
-          let (ht, bs') = process_binding_list bs module_table path shadow_table in
-          let (_, phr') = (perform_term_renaming module_table path ht)#phrase phr in
+          let (term_ht, type_ht, bs') =
+              process_binding_list bs module_table path
+                term_shadow_table type_shadow_table in
+          let (_, phr') =
+              (perform_renaming module_table path
+                term_ht type_ht)#phrase phr in
           (self, `Block (bs', phr'))
-      | `Var n -> (self, `Var (resolve n shadow_table))
+      | `Var n -> (self, `Var (resolve n term_shadow_table))
+      | `RecordLit (xs, p_opt) ->
+          let (_, xs') =
+            self#list (fun o (n, p) ->
+              let (o, p') = o#phrase p in
+              (o, (n, p'))) xs in
+          let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
+          (self, `RecordLit (xs', p_opt'))
+      | `Projection (p, n) ->
+          let (_, p') = self#phrase p in
+          (self, `Projection (p', n))
+      | `ConstructorLit (n, p_opt, dt_opt) ->
+          (* Resolve constructor name using term table *)
+          let fqn = resolve n term_shadow_table in
+          let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
+          (self, `ConstructorLit (fqn, p_opt', dt_opt))
       | `QualifiedVar [] -> assert false
       | `QualifiedVar (hd :: tl) ->
           (* Similar to qualified imports. *)
-          let prefix = resolve hd shadow_table in
+          let prefix = resolve hd term_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
           (self, `Var fqn)
       | phr -> super#phrasenode phr
 
-    method! datatype dt = (self, dt)
-    method! datatype' dt' = (self, dt')
+    method! datatype = function
+      | `Function (dts, row, dt) ->
+          let (_, dts') = self#list (fun o -> o#datatype) dts in
+          let (_, dt') = self#datatype dt in
+          (self, `Function (dts', row, dt'))
+      | `TypeApplication (n, args) ->
+          let fqn = resolve n type_shadow_table in
+          let (_, args') = self#list (fun o -> o#type_arg) args in
+          (self, `TypeApplication (fqn, args'))
+      | `QualifiedTypeApplication ([], _args) -> assert false
+      | `QualifiedTypeApplication (hd :: tl, args) ->
+          let prefix = resolve hd type_shadow_table in
+          let fqn = String.concat module_sep (prefix :: tl) in
+          let (_, args') = self#list (fun o -> o#type_arg) args in
+          (self, `TypeApplication (fqn, args'))
+      | `Variant (xs, rv) ->
+          (* Variants need to have constructors renamed *)
+          let (o, xs') =
+            self#list (fun o (name, fspec) ->
+              let fqn = make_path_string path name in
+              let o = o#bind_shadow_term name fqn in
+              let (o, fspec') = o#fieldspec fspec in
+              (o, (fqn, fspec'))) xs in
+          let (o, rv') = o#row_var rv in
+          (o, `Variant (xs', rv'))
+      | dt -> super#datatype dt
+
   end
 
   and process_binding_list : binding list -> module_info stringmap ->
-    string list -> string list stringmap ->
-      (string list stringmap * binding list) = fun binding_list mt path ht ->
+    string list -> string list stringmap -> string list stringmap ->
+      (string list stringmap * string list stringmap * binding list) =
+          fun binding_list mt path term_ht type_ht ->
     (* Group bindings *)
     let binding_group_list = group_bindings binding_list in
     (* For each binding group, get the shadowing table, and then use the shadowing
      * table to do the renaming *)
-    let (ht, bnds_rev) = List.fold_left (fun (ht, bnd_acc) bnds ->
-      let (o, bnds') =
-        (rename_binders_get_shadow_tbl mt path ht)#list (fun o -> o#binding) bnds in
-      let ht = o#get_shadow_table in
-      let (o, bnds') =
-        (perform_term_renaming mt path ht)#list (fun o -> o#binding) bnds' in
-      let ht = o#get_shadow_table in
-      (* Keep everything in reverse order -- more efficient *)
-      (ht, (List.rev bnds') @ bnd_acc)) (ht, []) binding_group_list in
-    (ht, List.rev bnds_rev)
+    let (term_ht, type_ht, bnds_rev) =
+        List.fold_left (fun (term_ht, type_ht, bnd_acc) bnds ->
+          (* Rename functions and create shadow table *)
+          let (o, bnds') =
+            (rename_binders_get_shadow_tbl mt path
+                term_ht type_ht)#list (fun o -> o#binding) bnds in
+          (* Get shadow tables *)
+          let term_ht = o#get_term_shadow_table in
+          let type_ht = o#get_type_shadow_table in
+          (* Rename each of the bindings *)
+          let (o, bnds') =
+            (perform_renaming mt path
+                term_ht type_ht)#list (fun o -> o#binding) bnds' in
+          (* Get final shadow tables *)
+          let term_ht = o#get_term_shadow_table in
+          let type_ht = o#get_type_shadow_table in
+          (* Keep everything in reverse order -- more efficient *)
+          (term_ht, type_ht, (List.rev bnds') @ bnd_acc))
+      (term_ht, type_ht, []) binding_group_list in
+    (term_ht, type_ht, List.rev bnds_rev)
 
-let rec perform_type_renaming module_table path ht =
-  object(self)
-    inherit SugarTraversals.fold_map as super
-
-    val shadow_table = ht
-    method get_shadow_table = shadow_table
-    method bind_shadow name fqn = {< shadow_table = shadow_binding name fqn shadow_table >}
-    method bind_open name fqn = {< shadow_table = shadow_open_types name fqn module_table shadow_table >}
-
-    method! bindingnode = function
-      | `Type (n, tvs, dt) ->
-          (* Add type binding *)
-          let fqn = make_path_string path n in
-          let o = self#bind_shadow n fqn in
-          let (o, dt') = o#datatype' dt in
-          (o#bind_shadow n fqn, `Type (fqn, tvs, dt'))
-      | `QualifiedImport [] -> assert false
-      | `QualifiedImport ((hd :: tl) as ns) ->
-          let final = List.hd (List.rev ns) in
-          let prefix = resolve hd shadow_table in
-          let fqn = String.concat module_sep (prefix :: tl) in
-          (self#bind_open final fqn, `QualifiedImport ns)
-      | `Module (n, bs) ->
-          let new_path = path @ [n] in
-          let fqn = lst_to_path new_path in
-          let o = self#bind_shadow n fqn in
-          let o_ht = o#get_shadow_table in
-          let inner_o = (perform_type_renaming module_table new_path o_ht) in
-          let (_, bs') =
-            List.fold_left (fun (o, bs_acc) b ->
-              let (o', b') = o#binding b in (o', b' :: bs_acc)) (inner_o, []) bs in
-          let bs' = List.rev bs' in
-          (self#bind_open n fqn, `Module (n, bs'))
-      | bn -> super#bindingnode bn
-
-    method! datatype = function
-      | `TypeApplication (n, args) ->
-          let fqn = resolve n shadow_table in
-          let (o, args') = self#list (fun o -> o#type_arg) args in
-          (o, `TypeApplication (fqn, args'))
-      | `QualifiedTypeApplication (hd :: tl, args) ->
-          let prefix = resolve hd shadow_table in
-          let fqn = String.concat module_sep (prefix :: tl) in
-          let (o, args') = self#list (fun o -> o#type_arg) args in
-          (o, `TypeApplication (fqn, args'))
-      | `QualifiedTypeApplication ([], _args) -> assert false
-      | dt -> super#datatype dt
-  end
-
-let rename_terms mt (bindings, phr_opt) =
-  let (ht, bindings') = process_binding_list bindings mt [] StringMap.empty in
-  let (_, phr') = (perform_term_renaming mt [] ht)#option (fun o -> o#phrase ) phr_opt in
+let rename mt (bindings, phr_opt) =
+  let (term_ht, ty_ht, bindings') =
+      process_binding_list bindings mt [] StringMap.empty StringMap.empty in
+  let (_, phr') =
+      (perform_renaming mt [] term_ht ty_ht)#option
+        (fun o -> o#phrase ) phr_opt in
   (bindings', phr')
-
-let rename_prog mt prog =
-  let prog' = rename_terms mt prog in
-  let (_, prog') = (perform_type_renaming mt [] (StringMap.empty))#program prog' in
-  prog'
 
 let desugarModules prog =
   let module_map = create_module_info_map prog in
-  let renamed_prog = rename_prog module_map prog in
+  let renamed_prog = rename module_map prog in
   let flattened_prog = flatten_prog renamed_prog in
   (* printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
   flattened_prog

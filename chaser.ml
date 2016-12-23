@@ -6,16 +6,19 @@ open ModuleUtils
 let top_level_filename module_name =
   (String.uncapitalize_ascii module_name) ^ ".links"
 
+let _print_sorted_deps xs =
+  print_list (List.map print_list xs)
+
 (* Given a module name and unique AST, try and locate / parse the module file *)
 let parse_module module_name =
   let (prog, _) = try_parse_file module_name in
   prog
 
-let rec assert_no_cycles = function
+let assert_no_cycles = function
   | [] -> ()
-  | [] :: ys -> assert_no_cycles ys
-  | [_x]:: ys -> assert_no_cycles ys
-  | (x :: xs) :: _ -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
+  | []::_ys -> ()
+  | [_x]::_ys -> ()
+  | (x::xs)::_ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
 
 (* Traversal to find module import references in the current file *)
 let rec find_module_refs mt path ht =
@@ -35,7 +38,8 @@ object(self)
     {< shadow_table = shadow_binding name fqn shadow_table >}
 
   method bind_open name fqn =
-    {< shadow_table = shadow_open_terms name fqn mt shadow_table >}
+    let (shadow_table, _) = shadow_open name fqn mt shadow_table shadow_table in
+    {< shadow_table = shadow_table >}
 
   method! bindingnode = function
     | `QualifiedImport ns ->
@@ -74,9 +78,9 @@ let rec add_module_bindings deps dep_map =
         let (bindings, _) = StringMap.find module_name dep_map in
         (* TODO: Fix dummy position to be more meaningful, if necessary *)
         (`Module (module_name, bindings), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
-       with Notfound.NotFound _ ->
-         failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
-           module_name (print_list (List.map fst (StringMap.bindings dep_map)))))
+      with Notfound.NotFound _ ->
+        (failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
+          module_name (print_list (List.map fst (StringMap.bindings dep_map))))));
     | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
 
 

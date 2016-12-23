@@ -113,8 +113,15 @@ filemode : args
 args : -m --path=tests/modules/overflow-test
 stdout : () : ()
 
-Type resolution renaming in presence of type application (#110)
-./tests/modules/type-res110/foo.links
+Constructor in module
+./tests/modules/constructor-test-good.links
 filemode : args
-args : -m --path=tests/modules/type-res110
-stdout : () : ()
+args : -m --path=tests/modules
+stdout : 15 : Int
+
+Constructor out of scope
+./tests/modules/constructor-test-bad.links
+filemode : args
+args : -m --path=tests/modules
+stderr : *** Fatal error : Unbound type constructor DT
+exit : 1
