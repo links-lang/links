@@ -34,7 +34,7 @@ fun mainpage(_) {
 }
 
 fun main() {
-  addRoute("/", mainpage);
+  addRoute("", mainpage);
   servePages()
 }
 

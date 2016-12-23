@@ -348,15 +348,14 @@ struct
         apply cont env (value env end_bang, [])
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
-       begin
-         match pathv with
-         | `String path ->
-            Webs.add_route (path.[String.length path - 1] = '/') path (Right (env, handler));
-            apply_cont cont env (`Record [])
-         | _ -> assert false
-       end
+       let path = Value.unbox_string pathv in
+       let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
+       let path = if String.length path == 0 or path.[0] <> '/' then "/" ^ path else path in
+       Webs.add_route is_dir_handler path (Right (env, handler));
+       apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
        let uri = Value.unbox_string uriv in
+       let uri = if String.length uri == 0 or uri.[0] <> '/' then "/" ^ uri else uri in
        let path = Value.unbox_string pathv in
        let mime_types = List.map (fun v -> let (x, y) = Value.unbox_pair v in (Value.unbox_string x, Value.unbox_string y)) (Value.unbox_list mime_typesv) in
        Webs.add_route true uri (Left (path, mime_types));
