@@ -51,6 +51,7 @@ OPC = unionfind.ml unionfind.mli \
       getopt.ml getopt.mli PP.ml
 
 SOURCES = $(OPC)                                \
+          multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
           env.mli env.ml                        \

@@ -49,10 +49,22 @@ struct
       List.map one_assoc assocs in
 
     let callback rt render_cont _ req body =
-      let query_args = List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req)) in
+      let req_hs = Request.headers req in
+      let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
-      let body_args = parse_post_body body_string in
-      let cgi_args = body_args @ query_args @ Header.to_list (Request.headers req) in
+
+      let cgi_args : (string * string) list =
+        match req.meth, content_type with
+        | `POST, Some content_type when string_starts_with content_type "multipart/form-data" ->
+           List.map (fun (name, { Multipart.value=value; _ }) -> (name, value))
+                    (Multipart.parse_multipart_args content_type body_string)
+        | `POST, _ ->
+           parse_post_body body_string
+        | `GET, _ ->
+           List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req))
+        | _, _ -> [] (* FIXME: should possibly do something else here *) in
+      (* Add headers as cgi args. Is this reall what we want to do? *)
+      let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       Lib.cgi_parameters := cgi_args;
       Lib.cookies := Cohttp.Cookie.Cookie_hdr.extract (Request.headers req);
       Lib.http_response_code := 200;
