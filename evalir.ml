@@ -7,6 +7,9 @@ open Proc
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
+let dynamic_static_routes = Settings.add_bool ("dynamic_static_routes", false, `User)
+let allow_static_routes = ref true
+
 module Eval = functor (Webs : WEBSERVER) ->
 struct
 
@@ -354,6 +357,8 @@ struct
        Webs.add_route is_dir_handler path (Right (env, handler));
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
+       if not (!allow_static_routes) then
+         eval_error "Attempt to add a static route after they have been disabled";
        let uri = Value.unbox_string uriv in
        let uri = if String.length uri == 0 || uri.[0] <> '/' then "/" ^ uri else uri in
        let path = Value.unbox_string pathv in
@@ -361,6 +366,8 @@ struct
        Webs.add_route true uri (Left (path, mime_types));
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("servePages", _), [] ->
+       if not (Settings.get_value(dynamic_static_routes)) then
+         allow_static_routes := false;
        begin
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
