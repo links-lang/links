@@ -1,14 +1,5 @@
 KNOWN ISSUES
 
- * Support for IE is limited.
-
- * The following web features have not yet been implemented.
-   - URLs
-   - Arbitrary HTTP headers, response codes
-   - Accessibility standards
-
- * Linked stylesheets don't work (use embedded styles instead).
-
  * XML support is incomplete, e.g.:
    - Ill-formed XML can sometimes be accepted
    - CDATA literals are not accepted.

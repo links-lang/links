@@ -400,8 +400,8 @@ let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []
 
 let set_web_mode() = (
-  (* When forcing web mode using the command-line argument, default the
-     required CGI environment variables to a GET request with no params--
+    (* When forcing web mode using the command-line argument, default
+     the CGI environment variables to a GET request with no params--
      i.e. start running with the main expression. *)
   if not(is_some(getenv "REQUEST_METHOD")) then
     Unix.putenv "REQUEST_METHOD" "GET";
@@ -418,10 +418,10 @@ let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
-    ('w',     "web-mode",            Some set_web_mode,                None);
-    (noshort, "optimise",            set BS.optimise true,                None);
+    ('w',     "web_mode",            Some set_web_mode,                None);
+    (noshort, "optimise",            set BS.optimise true,             None);
     (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set BS.printing_types false,         None);
+    ('n',     "no-types",            set BS.printing_types false,      None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     ('m',     "modules",             set BS.modules true,              None);
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
