@@ -1,7 +1,7 @@
 # Installing Links
 
-Links requires OCaml 4.04.0. We strongly recommend installing using the Opam
-tool.
+Links requires OCaml 4.04.0. We strongly recommend installing using
+the OPAM tool.
 
 If you wish to use Links' database functionality, use your system's package
 manager to install postgresql, the supported DBMS.
@@ -22,14 +22,13 @@ To invoke a Links application using the application server, use a command
 similar to the following:
 
   links --config=config -m
-  --path=examples:examples/mods:examples/games:examples/dictionary
+  --path=examples:examples/games:examples/dictionary
   examples/webserver/examples.links
 
 * The --config flag sets the location of the config file to the file "config"
 * The -m flag enables support for Links' module system, new in Gorgie.
 * The --path flag says that files can be found in the following directories:
   - examples
-  - examples/mods
   - examples/games
   - examples/dictionary
 * Finally examples/webserver/examples.links is the file to run, which imports
@@ -55,12 +54,24 @@ configuration arguments:
   4) Run ulimit -s 16384 (8192 is the default on Linux) to get a big enough
   stack to pretty-print the JavaScript that results from putting all the
   examples together. We will fix this issue in the next release by making the
-  JavaScript pretty-printer tail recursive. 
-  
-  You should be able to run
+  JavaScript pretty-printer tail recursive!
 
-    links --config=config -m --path=examples:examples/mods:examples/games
-      examples/webserver/examples-nodb.links
+You should be able to run
 
-  without needing to install a database or run ulimit.
+  links --config=config -m --path=examples:examples/games
+    examples/webserver/examples-nodb.links
 
+without needing to install a database or run ulimit.
+
+The default port is 8080, so having run either of the above examples
+you should be able to access them by pointing your browser at:
+
+  http://localhost:8080/examples/
+
+Some (outdated) documentation can be built by running the Makefile in
+the doc directory.
+
+Some very incomplete but more up-to-date documentation is available on
+the links wiki:
+
+  https://github.com/links-lang/links/wiki
