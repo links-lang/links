@@ -2,11 +2,11 @@ var db = database "organisation";
 
 var departments = table "departments" with (dpt:String)
     		  tablekeys [["dpt"]] from db;
-var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
     	      	tablekeys [["emp"]] from db;
-var tasks = table "tasks" with (id:Int,emp:String,tsk:String) 
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
     	  tablekeys [["id"]] from db;
-var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool) 
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
     	  tablekeys [["id"]] from db;
 
 sig iter : ((a) ~e~> (), [a]) ~e~> ()
@@ -50,7 +50,7 @@ fun test(t) {
 
 
 fun queryg1() {
-    for ((y,xs) <- groupByFlat(fun (x) {x.emp}, asList(tasks))) 
+    for ((y,xs) <- groupByFlat(fun (x) {x.emp}, asList(tasks)))
     [(emp=y,num=length(xs))]
 }
 
@@ -58,9 +58,9 @@ fun queryg1() {
 
 
 fun queryg1a() {
-    for(t <-- tasks) 
+    for(t <-- tasks)
     [(t.emp,length(for (u <-- tasks) where (t.emp == u.emp) [u]))]
-}   
+}
 
 
 # QG2: Group by, using side knowledge about db
@@ -77,11 +77,11 @@ fun queryg2() {
 # QG3: Number of employees in each department that can abstract
 
 fun queryg3() {
-  for(x <-- departments) 
-  [(a=x.dpt, b= length(for (e <-- employees,t <-- tasks) 
+  for(x <-- departments)
+  [(a=x.dpt, b= length(for (e <-- employees,t <-- tasks)
   	     	       where (e.dpt == x.dpt && t.emp == e.emp && t.tsk == "abstract")
 		       [()]))]
-  
+
 }
 
 
@@ -91,8 +91,8 @@ fun queryg3() {
 # QG4: Number of employees in each department and list of employees and number of tasks
 
 fun queryg4() {
-  for(x <-- departments) 
-  [(a=x.dpt, size= length(for (e <-- employees) 
+  for(x <-- departments)
+  [(a=x.dpt, size= length(for (e <-- employees)
   	     	       where (e.dpt == x.dpt)
 		       [()]),
 	     emps = for(e <-- employees)

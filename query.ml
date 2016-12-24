@@ -221,7 +221,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
           | Some y -> `Var (y, ts)
         end
       | `Constant c -> `Constant c
-	    
+
 let labels_of_field_types field_types =
   StringMap.fold
     (fun name _ labels' ->
@@ -234,7 +234,7 @@ let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
   StringMap.map (function
                   | `Present t -> t
                   | _ -> assert false) field_spec_map
-  
+
 let table_field_types (_, _, _, (fields, _, _)) =
   StringMap.map (function
                   | `Present t -> t
@@ -256,10 +256,10 @@ let is_list =
     | `Concat _
     | `If (_, _, `Concat []) -> true
     | _ -> false
-	  
+
 
 	  (* TODO: Clean up and unify with Queryshredding.Eval *)
-	  
+
 module Eval =
 struct
   exception DbEvaluationError of string
@@ -1090,7 +1090,7 @@ struct
 end
 
     (* TODO: Unify this with Queryshredding.ShreddedSql *)
-    
+
 module Sql =
 struct
   type query =

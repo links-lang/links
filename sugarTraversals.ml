@@ -297,7 +297,7 @@ class map =
                  let _x_i1 = o#list (fun o -> o#fieldconstraint) _x_i1
                  in (_x, _x_i1))
               _x_i2 in
-          let _x_i3 = o#phrase _x_i3 in 
+          let _x_i3 = o#phrase _x_i3 in
 	  let _x_i4 = o#phrase _x_i4 in `TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
           let _x = o#pattern _x in
@@ -850,7 +850,7 @@ class fold =
                  let o = o#name _x in
                  let o = o#list (fun o -> o#fieldconstraint) _x_i1 in o)
               _x_i2 in
-          let o = o#phrase _x_i3 in 
+          let o = o#phrase _x_i3 in
 	  let o = o#phrase _x_i4 in
 	    o
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
@@ -1435,7 +1435,7 @@ class fold_map =
                  in (o, (_x, _x_i1)))
               _x_i2 in
           let (o, _x_i3) = o#phrase _x_i3 in
-          let (o, _x_i4) = o#phrase _x_i4 
+          let (o, _x_i4) = o#phrase _x_i4
           in (o, (`TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
       | `DBDelete ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#pattern _x in

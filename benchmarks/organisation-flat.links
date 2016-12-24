@@ -2,11 +2,11 @@ var db = database "organisation";
 
 var departments = table "departments" with (dpt:String)
     		  tablekeys [["dpt"]] from db;
-var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
     	      	tablekeys [["emp"]] from db;
-var tasks = table "tasks" with (id:Int,emp:String,tsk:String) 
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
     	  tablekeys [["id"]] from db;
-var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool) 
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
     	  tablekeys [["id"]] from db;
 
 fun time(f) {
@@ -73,10 +73,10 @@ fun employeesJoin() {
 # QF4 - union of selections
 
 fun employeesUnion() {
-  (for (e <-- employees) 
+  (for (e <-- employees)
    where (e.salary > 50000)
-   [(emp=e.emp)]) 
-  ++ 
+   [(emp=e.emp)])
+  ++
   (for(t <-- tasks)
    where (t.tsk == "abstract")
    [(emp=t.emp)])
@@ -85,7 +85,7 @@ fun employeesUnion() {
 # QF5 - difference of selections
 
 fun diff(t,u) {
-  for(x <- t) 
+  for(x <- t)
   where (empty(for(y <- u) where (x == y) [()]))
   [x]
 }
@@ -95,25 +95,25 @@ fun employeesDiff() {
    for(t <-- tasks)
    where (t.tsk == "abstract")
    [(emp=t.emp)],
-   for (e <-- employees) 
+   for (e <-- employees)
    where (e.salary < 50000)
    [(emp=e.emp)])
 }
 
-# QF6 
+# QF6
 
 fun employeesUnionDiff() {
   diff(
    (for(t <-- tasks)
    where (t.tsk == "abstract")
-   [(emp=t.emp)]) ++ 
-   (for (e <-- employees) 
+   [(emp=t.emp)]) ++
+   (for (e <-- employees)
    where (e.salary < 50000)
    [(emp=e.emp)]),
    (for(t <-- tasks)
    where (t.tsk <> "enthuse")
-   [(emp=t.emp)]) ++ 
-   (for (e <-- employees) 
+   [(emp=t.emp)]) ++
+   (for (e <-- employees)
    where (e.salary > 10000)
    [(emp=e.emp)])
    )

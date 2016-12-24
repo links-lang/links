@@ -138,8 +138,8 @@ fun receiveBody(s, socket) {
       var smtpAnswer = read(socket);
       print("S: " ^^ smtpAnswer);
       receiveMail(s, socket)
-   } 
-} 
+   }
+}
 ###
 
 ### helper functions ###

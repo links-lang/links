@@ -241,7 +241,7 @@ struct
         List.map
           (fun (k, p) ->
             (k, fieldspec var_env alias_env p))
-          fields 
+          fields
     in
       fold_right Types.row_with fields seed
   and type_arg var_env alias_env =
@@ -249,7 +249,7 @@ struct
       | `Type t -> `Type (datatype var_env alias_env t)
       | `Row r -> `Row (row var_env alias_env r)
       | `Presence f -> `Presence (fieldspec var_env alias_env f)
-            
+
   (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
     let addt x t envs = {envs with tenv = StringMap.add x t envs.tenv} in
@@ -271,7 +271,7 @@ struct
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Presence f)::vars, addf x f envs
              | (_, None), _ ->
-               (* Shouldn't occur; we are assuming that all subkinds have been 
+               (* Shouldn't occur; we are assuming that all subkinds have been
                 * filled in*)
                assert false)
         ([], empty_env)
@@ -319,7 +319,7 @@ struct
   let foreign alias_env dt =
     let tvars = (typevars#datatype' dt)#tyvar_list in
       datatype' (snd (generate_var_mapping tvars)) alias_env dt
-        
+
 
  (* Desugar a table literal.  No free variables are allowed here.
     We generate both read and write types by looking for readonly constraints *)
@@ -386,7 +386,7 @@ object (self)
     | `Upcast (p, dt1, dt2) ->
         let o, p = self#phrase p in
           o, `Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
-    | `TableLit (t, (dt, _), cs, keys, p) -> 
+    | `TableLit (t, (dt, _), cs, keys, p) ->
         let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
 	let o, keys = o#phrase keys in

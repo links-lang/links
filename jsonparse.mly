@@ -13,7 +13,7 @@ open Utility
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
-%token COLON COMMA UNDERSCORE TRUE FALSE NULL 
+%token COLON COMMA UNDERSCORE TRUE FALSE NULL
 %token <string> STRING
 %token <int> INT
 %token <float> FLOAT
@@ -21,14 +21,14 @@ open Utility
 %start parse_json
 %type <Value.t> parse_json
 
-%% 
+%%
 
 parse_json:
 | value { $1 }
 
 object_:
 | LBRACE RBRACE         { `Record [] }
-| LBRACE members RBRACE { match $2 with 
+| LBRACE members RBRACE { match $2 with
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
@@ -41,7 +41,7 @@ object_:
                                           Value.reconstruct_db_string
                                             (Value.unbox_string (List.assoc "name" bs),
                                              Value.unbox_string (List.assoc "args" bs)) in
-                                          `Database (Value.db_connect driver params) 
+                                          `Database (Value.db_connect driver params)
                                     | _ -> failwith ("jsonparse: database value must be a record")
                                 end
                             | ["_table", t] ->
@@ -97,7 +97,7 @@ object_:
                                               let body =
                                                 match body with
                                                   | `List body -> List.map
-                                                      (function 
+                                                      (function
                                                          | `XML body -> body
                                                          | _ -> failwith ("jsonparse: xml body should be a list of xmlitems"))
                                                         body
@@ -139,7 +139,7 @@ value:
 | array                              { $1 }
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
-| NULL                               { `Record [] (* Or an error? *) } 
+| NULL                               { `Record [] (* Or an error? *) }
 
 string:
 | STRING                             { Value.box_string $1 }

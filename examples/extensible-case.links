@@ -1,6 +1,6 @@
 # From "Extensible Programming with First-Class Cases"
 # Matthias Blume et al
-# ICFP 2006 
+# ICFP 2006
 
 
 # sig add_A : (([|A- |a|]) -> String) -> ([|A:()|a|]) -> String
@@ -53,14 +53,14 @@ var f = add_A(add_B(add_C(nocases)));
 #       case -A -> e2
 #     }
 #   }
-# 
+#
 #   nocases
 # -->
 #   fun nocases(e:[||]) {
 #     switch (e) { }      # unreachable
 #   }
-# 
-#   match 
+#
+#   match
 # -->
 #   fun (c)(v) {
 #     c(v)
@@ -82,6 +82,6 @@ var f = add_A(add_B(add_C(nocases)));
 
 ###
 # ((|r) -> c) -> c
-# 
+#
 # sig subtract_l : ((((l:a|r)) -> c) -> c) -> ((((|r)) -> c) -> c)
 # fun subtract_l(h)(k) {h(fun (x) {k(x : (|r) <- (l:a|r))})}

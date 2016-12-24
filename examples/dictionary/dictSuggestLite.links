@@ -5,9 +5,9 @@ fun lowercase(s) {
 fun suggest(pre) client {
  replaceChildren(
   format(completions(lowercase(pre))),
-  getNodeById("suggestions") 
+  getNodeById("suggestions")
  )
-} 
+}
 
 fun format(words) {
  for (w <- words)
@@ -21,8 +21,8 @@ fun format(words) {
 
 fun completions(pre) server {
  var wordlist = table "wordlist" with (
-   word : String, 
-   type : String, 
+   word : String,
+   type : String,
    meaning : String
  ) from (database "dictionary");
 

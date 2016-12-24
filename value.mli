@@ -32,7 +32,7 @@ class virtual database :
   end
 
 module Eq_database : Deriving_Eq.Eq with type a = database
-module Typeable_database : Deriving_Typeable.Typeable with type a = database 
+module Typeable_database : Deriving_Typeable.Typeable with type a = database
 module Show_database : Deriving_Show.Show with type a = database
 
 type db_constructor = string -> database * string
@@ -118,7 +118,7 @@ val box_list : t list -> t
 val unbox_list : t -> t list
 val box_record : (string * t) list -> t
 val unbox_record : t -> (string * t) list
-val box_unit : unit -> t 
+val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)

@@ -1,10 +1,10 @@
 (* Christian Lindig's OCaml pretty-printer [1].
    Based on Phil Wadler's Haskell pretty-printer [2].
 
-[1] Lindig, Christian. Strictly Pretty. Available at 
+[1] Lindig, Christian. Strictly Pretty. Available at
     http://citeseer.ist.psu.edu/lindig00strictly.hml.
 
-[2] 
+[2]
 *)
 
 let strlen = String.length
@@ -90,7 +90,7 @@ let rec unsnoc = function
   | x::xs -> let (ys, y) = unsnoc xs in
       (x::ys, y)
 
-let punctuate punc = 
+let punctuate punc =
   let punc = text punc in
   function
     [] -> []
@@ -98,7 +98,7 @@ let punctuate punc =
       (List.map (fun x -> x ^^ punc) xs) @ [x]
 
 let doc_concat sep l =
-  match l with 
+  match l with
       [] -> empty
     | (h::t) -> h ^^ List.fold_right (fun d a -> sep ^^ d ^^ a) t empty
 
@@ -121,13 +121,13 @@ let trinop left op1 middle op2 right =
            )
         )
 
-let parens doc = 
+let parens doc =
   text "(" ^^ group doc ^^ text ")"
 
-let braces doc = 
+let braces doc =
   text "{" ^^ group doc ^^ text "}"
 
-let brackets doc = 
+let brackets doc =
   text "[" ^^ group doc ^^ text "]"
 
 let arglist xs =

@@ -212,9 +212,9 @@ let keywords = [
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "values"   , VALUES;
- "var"      , VAR; 
- "where"    , WHERE; 
- "with"     , WITH; 
+ "var"      , VAR;
+ "where"    , WHERE;
+ "with"     , WITH;
 (* SAND *)
  "tablekeys"     , TABLEKEYS;
 ]

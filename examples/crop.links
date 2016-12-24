@@ -1,6 +1,6 @@
 fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value))}
 
-fun dragging(offsetLeft, offsetTop, left, top, width, height, 
+fun dragging(offsetLeft, offsetTop, left, top, width, height,
              mdownX, mdownY) client {
   receive {
     case MouseMove(x, y) -> {
@@ -10,7 +10,7 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
 
       var pictureFrame = getNodeById("picture-frame");
 
-      # FIXME: should actually be a method that sums up the offsetXxxxs 
+      # FIXME: should actually be a method that sums up the offsetXxxxs
       # of all ancestor nodes.
       var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
       var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
@@ -25,7 +25,7 @@ fun dragging(offsetLeft, offsetTop, left, top, width, height,
       frameMgr(offsetLeft, offsetTop,
                left + x - mdownX, top + y - mdownY,
                width, height)
-    case _ -> 
+    case _ ->
       dragging(offsetLeft, offsetTop, left, top, width, height, mdownX, mdownY)
   }
 }
@@ -40,7 +40,7 @@ fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
 
       var frame = getNodeById("cropping-frame");
       var frameSizer = getNodeById("white-border");
-      var (l, t, w, h) = 
+      var (l, t, w, h) =
         switch (corner) {
           case NW -> (x, y, width - (x - left), height - y + top)
           case NE -> (left, y, x - left, height - y + top)
@@ -87,8 +87,8 @@ fun makeCroppingFrame(left, top, width, height) {
     style="position: absolute;
            display: block;
            left: {intToString(left)}px;
-           top: {intToString(top)}px; 
-           z-index: 1000; 
+           top: {intToString(top)}px;
+           z-index: 1000;
            cursor: pointer"
     l:onmousedown="{frameMgr ! MouseDown(getPageX(event),
                                          getPageY(event))}"
@@ -99,9 +99,9 @@ fun makeCroppingFrame(left, top, width, height) {
 >
     <div id="black-border"
       style="border: 1px solid black; ">
-      <div id="white-border" 
+      <div id="white-border"
         style="position: relative; border: 1px dashed white;
-               width: {intToString(width)}px; 
+               width: {intToString(width)}px;
                height: {intToString(height)}px; " />
     </div>
     <div id="nw-resize"

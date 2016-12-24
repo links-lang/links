@@ -12,5 +12,5 @@ val keywords : (string * Parser.token) list
 
 (** The entry point to the lexer. *)
 val lexer : lexer_context
-         -> newline_hook:(unit -> unit) 
+         -> newline_hook:(unit -> unit)
          -> (Lexing.lexbuf -> Parser.token)

@@ -54,7 +54,7 @@ fun product(xs) {
 #  } else {
 #    fun sel(xs, i) {
 #      switch (xs, i) {
-#        case (x::xs, 0) -> x; 
+#        case (x::xs, 0) -> x;
 #        case (x::xs, i) -> sel(xs, i-1);
 #        case ([], i) -> error ("unreachable");
 #      }
@@ -69,7 +69,7 @@ fun select(xs, i) {
 
 fun insertItems(itemsTable, itemsList) {
   var n = length(itemsList);
-  
+
   ignore(mapi(
     fun (item, i) {
       update (r <-- itemsTable)
@@ -87,5 +87,5 @@ fun insertItems(itemsTable, itemsList) {
 
 # `diff` is list difference
 
-insertItems(itemsTable, ["Pooh", "Paddington", "Rupert", "Edward"]) 
+insertItems(itemsTable, ["Pooh", "Paddington", "Rupert", "Edward"])
 

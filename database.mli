@@ -1,6 +1,6 @@
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
-class virtual db_args : string -> object 
+class virtual db_args : string -> object
   val strval : string
   method virtual from_string : string -> unit
 end
@@ -24,5 +24,5 @@ val execute_untyped_select : string -> Value.database -> Value.t
 
 val execute_insert : (string * string list * string list list) ->  Value.database -> Value.t
 
-val execute_insert_returning : (string * string list * string list list * string) ->  Value.database -> Value.t 
+val execute_insert_returning : (string * string list * string list list * string) ->  Value.database -> Value.t
 

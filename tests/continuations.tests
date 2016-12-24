@@ -24,7 +24,7 @@ continuation typing [3]
 stdout : 1 : Int
 ignore : Mismatch between IR and surface representation of continuations
 
-continuation mailbox typing (see r321) 
+continuation mailbox typing (see r321)
 fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
 stderr : @..*
 exit : 1

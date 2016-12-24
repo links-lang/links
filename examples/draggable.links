@@ -27,7 +27,7 @@ fun dragging(id, elem) client {
 }
 
 fun format(text) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; 
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
                border:1px solid #C5DEA1; cursor: move; margin: 0px;">
     {stringToXml(text)}</li>
 }
@@ -36,7 +36,7 @@ fun draggableList(id, items)
 {
   var x = id;
   var dragger = spawnClient { waiting(id) };
-   <ul id="{id}" style="width: 200px; 
+   <ul id="{id}" style="width: 200px;
         list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{dragger ! MouseUp}"
       l:onmouseuppage = "{dragger ! MouseUp}"

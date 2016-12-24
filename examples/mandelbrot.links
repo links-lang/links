@@ -10,7 +10,7 @@ fun draw(colour, id) client {
     case Point(x,y) ->
      appendChildren(
                  <div style="position: absolute;
-                             background-color: {colour}; 
+                             background-color: {colour};
                              width: 2px;
                              height: 2px;
                              left: {intToString(2*x)}px;

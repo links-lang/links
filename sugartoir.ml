@@ -446,7 +446,7 @@ struct
     bind database
       (fun database ->
          bind table
-           (fun table -> 
+           (fun table ->
 	     bind keys
 		(fun keys ->  lift (`Special (`Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))

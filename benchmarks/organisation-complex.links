@@ -2,11 +2,11 @@ var db = database "organisation";
 
 var departments = table "departments" with (dpt:String)
     		  tablekeys [["dpt"]] from db;
-var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
     	      	tablekeys [["emp"]] from db;
-var tasks = table "tasks" with (id:Int,emp:String,tsk:String) 
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
     	  tablekeys [["id"]] from db;
-var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool) 
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
     	  tablekeys [["id"]] from db;
 
 fun time(f) {
@@ -51,8 +51,8 @@ fun queryx2() {
   for(x <-- employees,y <-- employees)
   where (x.dpt == y.dpt && x.emp <> y.emp && x.salary < y.salary &&
   	 not(empty(for (t <-- tasks)
-	 	   where (t.emp == x.emp && 
-		          empty(for(u <-- tasks) 
+	 	   where (t.emp == x.emp &&
+		          empty(for(u <-- tasks)
 			        where(u.emp == y.emp && t.tsk == u.tsk)
 				[()]))
 		   [()])))
@@ -71,10 +71,10 @@ fun queryx3() {
   var tbl =
   for(x <-- employees,y <-- employees)
   where (x.dpt == y.dpt &&  x.emp <> y.emp && x.salary < y.salary)
-  [(a=x,b=y,c= for (t <-- tasks) 
-  	       where (x.emp == t.emp && 
-	       	      empty(for(u <-- tasks) 
-		            where (y.emp == u.emp && t.tsk == u.tsk) 
+  [(a=x,b=y,c= for (t <-- tasks)
+  	       where (x.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (y.emp == u.emp && t.tsk == u.tsk)
 			    [()]))
 	       [t.tsk])];
   for(r <- tbl)
@@ -94,11 +94,11 @@ var x = print("\nQX4\n");
 fun queryx4() {
   for(x <-- employees,y <-- employees)
   where (x.dpt == y.dpt && x.emp <> y.emp)
-  [(a=x,b=y,c= (for (t <-- tasks) 
+  [(a=x,b=y,c= (for (t <-- tasks)
   	       where (x.emp == t.emp)
 	       [(doer="a",task=t.tsk)])
 	       ++
-	       (for (t <-- tasks) 
+	       (for (t <-- tasks)
   	       where (y.emp == t.emp)
 	       [(doer="b",task=t.tsk)]))]
 }
@@ -115,17 +115,17 @@ fun queryx5() {
   var tbl =
   for(x <-- employees,y <-- employees)
   where (x.dpt == y.dpt && x.emp <> y.emp)
-  [(a=x,b=y,c= (for (t <-- tasks) 
-  	       where (x.emp == t.emp && 
-	       	      empty(for(u <-- tasks) 
-		            where (y.emp == u.emp && t.tsk == u.tsk) 
+  [(a=x,b=y,c= (for (t <-- tasks)
+  	       where (x.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (y.emp == u.emp && t.tsk == u.tsk)
 			    [()]))
 	       [(doer="a",task=t.tsk)])
 	       ++
-	       (for (t <-- tasks) 
-  	       where (y.emp == t.emp && 
-	       	      empty(for(u <-- tasks) 
-		            where (x.emp == u.emp && t.tsk == u.tsk) 
+	       (for (t <-- tasks)
+  	       where (y.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (x.emp == u.emp && t.tsk == u.tsk)
 			    [()]))
 	       [(doer="b",task=t.tsk)]))];
   for(r <- tbl)

@@ -1,5 +1,5 @@
 Record printing
-(x=1, y="two") 
+(x=1, y="two")
 stdout : (x=1,y="two") : (x:Int,y:String)
 
 Record comparisons

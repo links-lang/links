@@ -9,7 +9,7 @@ fun radioGroupVertical(items) {
     </#>
 }
 
-var theFormlet = 
+var theFormlet =
  formlet
    <#>
      <div>
@@ -37,7 +37,7 @@ var theFormlet =
      <div>
        Upload a file: { inputFile -> file }
      </div>
-       { submitButton("Check Out") -> checkout }  
+       { submitButton("Check Out") -> checkout }
        { submitButton("Cancel") -> cancel }
    </#>
  yields
@@ -63,8 +63,8 @@ fun renderer (formData) {
    <html>
     <body>
     {if (formData.cmd == Checkout)
-      <#> 
-       <div> Bike style code: {intToXml(formData.bikeStyle)} </div> 
+      <#>
+       <div> Bike style code: {intToXml(formData.bikeStyle)} </div>
        <div> Add-ons: {stringToXml(stringConcat(", ", map(intToString, formData.addons)))} </div>
        <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
        <div> Comments: {stringToXml(formData.comments)} </div>
@@ -74,7 +74,7 @@ fun renderer (formData) {
      else
       <#>Order Cancelled. Thanks for visiting!</#>}
     </body>
-   </html>  
+   </html>
 }
 
 fun main() {

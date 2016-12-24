@@ -105,7 +105,7 @@ module IntPair = struct
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
 end
 
-module Char = 
+module Char =
 struct
   include Char
   module Show_t = Deriving_Show.Show_char

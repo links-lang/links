@@ -41,10 +41,10 @@ struct
 (*    not (Lib.is_primitive name) && *)
       List.exists (not -<- Utility.Char.isWord) (explode name)
 
-  let wordify name = 
-    if has_symbols name then 
-      ("_" ^ 
-         mapstrcat "_" 
+  let wordify name =
+    if has_symbols name then
+      ("_" ^
+         mapstrcat "_"
          (fun ch ->
             if (Utility.Char.isWord ch) then
               String.make 1 ch
@@ -58,7 +58,7 @@ struct
            then we would not split apart words in partly-symbolic idents. *)
     else if List.mem name js_keywords then
       "_" ^ name (* FIXME: this could conflict with Links names. *)
-    else name  
+    else name
 
 end
 

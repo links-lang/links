@@ -2,11 +2,11 @@ var db = database "organisation";
 
 var departments = table "departments" with (dpt:String)
     		  tablekeys [["dpt"]] from db;
-var employees = table "employees" with (emp:String, dpt:String, salary : Int) 
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
     	      	tablekeys [["emp"]] from db;
-var tasks = table "tasks" with (id:Int,emp:String,tsk:String) 
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
     	  tablekeys [["id"]] from db;
-var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool) 
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
     	  tablekeys [["id"]] from db;
 
 fun time(f) {
@@ -53,7 +53,7 @@ fun iter(f,l) {
 fun expertise_prime(u) {
   for (d <-- departments)
   where (empty( for (e <-- employees)
-                where (d.dpt == e.dpt && 
+                where (d.dpt == e.dpt &&
 		       empty( for (t <-- tasks)
 		       	      where (e.emp == t.emp && t.tsk == u)
 			      [()]))
@@ -62,17 +62,17 @@ fun expertise_prime(u) {
 }
 
 
-typename NestedOrg = [(dpt:String, 
+typename NestedOrg = [(dpt:String,
                        employees: [(name:String,salary:Int,tasks:[String])],
 		       contacts: [(name:String,"client":Bool)])];
 
 sig nestedOrg : () -> NestedOrg
 fun nestedOrg() {
-  for (d <-- departments) 
-  [(dpt=d.dpt, 
+  for (d <-- departments)
+  [(dpt=d.dpt,
     employees= for (e <-- employees)
                where (d.dpt == e.dpt)
-               [(name= e.emp, 
+               [(name= e.emp,
 	         salary=e.salary,
 	         tasks= for (t <-- tasks)
                       	where (e.emp == t.emp)
@@ -103,7 +103,7 @@ fun employeesOfDepartment(d) {
 
 fun nestedOrgFactored() {
   query {
-  for (d <-- departments) 
+  for (d <-- departments)
   [(dpt=d.dpt,
     employees=employeesOfDepartment(d),
     contacts=contactsOfDepartment(d))]
@@ -127,10 +127,10 @@ fun contains(xs,u) {
 
 fun expertise(nestedOrg,u) {
   for (d <- nestedOrg)
-  where (all(d.employees, 
+  where (all(d.employees,
    	     fun (e) {contains(e.tasks,u)}))
   [(dpt=d.dpt)]
-} 
+}
 
 fun outliersQ() {
   for (x <-- departments)
@@ -158,7 +158,7 @@ fun outliersQFactored(organisation) {
   query {
     for (x <- organisation)
     [(department=x.dpt,
-      people=get(outliers(x.employees), fun (y) {y.tasks}) ++ 
+      people=get(outliers(x.employees), fun (y) {y.tasks}) ++
              get(clients(x.contacts), fun (y) {["buy"]}))]
   }
 }
@@ -178,7 +178,7 @@ fun q2 () {expertise(nestedOrg(),"abstract")}
 
 fun tasksByEmployee() {
   query {
-    for(e <-- employees) 
+    for(e <-- employees)
     [(emp=(e.emp),b=tasksOfEmployee(e))]
   }
 }
@@ -190,7 +190,7 @@ var q3 = tasksByEmployee;
 
 fun q4() {
   query {
-    for(d <-- departments) 
+    for(d <-- departments)
     [(dpt=(d.dpt),emps=for (e <-- employees) where ((d.dpt) == (e.dpt)) [(e.emp)])]
   }
 }

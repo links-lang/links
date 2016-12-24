@@ -1,6 +1,6 @@
 (* Some of the errors that Links produces, and ways of displaying them. *)
 
-type synerrspec = {filename : string; linespec : string; 
+type synerrspec = {filename : string; linespec : string;
                    message : string; linetext : string;
                    marker : string}
 
@@ -8,7 +8,7 @@ type synerrspec = {filename : string; linespec : string;
 exception Runtime_error of string
 exception UndefinedVariable of string
 
-exception MultiplyDefinedToplevelNames of 
+exception MultiplyDefinedToplevelNames of
   ((SourceCode.pos list) Utility.stringmap)
 exception Type_error of (SourceCode.pos * string)
 exception RichSyntaxError of synerrspec

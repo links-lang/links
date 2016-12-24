@@ -43,7 +43,7 @@ fun generateData(x, y, z) {
 fun time(f) {
   var start = serverTimeMilliseconds();
   ignore(query {f()});
-  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")  
+  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")
 }
 
 fun test() {

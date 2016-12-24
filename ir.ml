@@ -79,7 +79,7 @@ and binding =
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
-  | `Database of value 
+  | `Database of value
   | `Table of (value * value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation

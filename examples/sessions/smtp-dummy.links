@@ -176,8 +176,8 @@ fun receiveBody(s) {
       var smtpAnswer = "250 2.0.0 <dummy> Message accepted for delivery";
       print("S: " ^^ smtpAnswer);
       receiveMail(s)
-   } 
-} 
+   }
+}
 ###
 
 ### helper functions ###
@@ -192,7 +192,7 @@ fun extractDomain(address) {
 }
 ###
 
-var message = 
+var message =
   (sender="foo@bar.com",
    recipients=[],
    subject="Links SMTP test",

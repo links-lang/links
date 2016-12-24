@@ -8,7 +8,7 @@ var db = database "organisation";
 
 var keytasks    = table "keytasks"    with (task : String)                from db;
 var tasks       = table "tasks"       with (employee : String, task : String)  from db;
-var employees   = table "employees"  
+var employees   = table "employees"
                   with (dept : String, employee : String, salary : Int)        from db;
 var contacts    = table "contacts"
                   with (dept : String, contact : String, "client" : Bool) from db;
@@ -42,7 +42,7 @@ fun organisation() {
 sig departmentTasks : (() {}-> (Organisation)) -> [(name:String, tasks:[String])]
 fun departmentTasks(org) {
   query {
-  for (x <- org()) 
+  for (x <- org())
     [(name = x.name,
       tasks = for (y <- x.employees)
               for (z <- y.tasks)

@@ -15,16 +15,16 @@
     method push_lexer (lexer : Lexing.lexbuf -> XmlParser.token) =
       Stack.push lexer lexers
 
-    method pop_lexer = 
+    method pop_lexer =
       Stack.pop lexers
 
-    method next_lexer = 
+    method next_lexer =
       Stack.top lexers
   end
 
   let fresh_context () = new lexer_context
 
-  let bump_lines lexbuf n = 
+  let bump_lines lexbuf n =
     lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_lnum = lexbuf.lex_curr_p.pos_lnum + n}
 
   let count_newlines = StringUtils.count '\n'
@@ -47,7 +47,7 @@ let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
 (* Each lexer when called must return exactly one token and possibly
-   modify the stack of remaining lexers.  The lexer on top of the stack 
+   modify the stack of remaining lexers.  The lexer on top of the stack
    will be called next;  when each action starts it's the current lexer.
 
    Each rule takes two arguments: the currently operative precedence
@@ -106,7 +106,7 @@ and cdata ctxt nl = parse
   | _ as c                              { CHAR c }
 
 {
- let lexer ctxt ~newline_hook = 
+ let lexer ctxt ~newline_hook =
    ctxt#push_lexer (lex ctxt newline_hook);
    fun lexbuf -> ctxt#next_lexer lexbuf
 }

@@ -2,13 +2,13 @@
 let measuring = Settings.add_bool("measure_performance", false, `User)
 let noisy = Settings.add_bool("noisy_garbage_collection", false, `User)
 
-let notify_gc () = 
+let notify_gc () =
   Debug.if_set noisy (fun _ -> "Completing GC cycle")
 
-let measure_diff_l obtain diff e = 
+let measure_diff_l obtain diff e =
   let start = obtain () in
-  let result = Lazy.force e in 
-  let finish = obtain () in 
+  let result = Lazy.force e in
+  let finish = obtain () in
     result, diff finish start
 
 let statdiff (major, minor, promoted) (major', minor', promoted') =
@@ -18,22 +18,22 @@ let statdiff (major, minor, promoted) (major', minor', promoted') =
 let time_l e          = measure_diff_l Sys.time (-.) e
 let measure_memory_l e = measure_diff_l Gc.counters statdiff e
 
-let write_begin s = 
+let write_begin s =
   Printf.fprintf stderr "%.20s : started\n" s;
   flush stderr
 
-let write_time s t = 
+let write_time s t =
   Printf.fprintf stderr "%.20s : %3f seconds taken\n" s t;
   flush stderr
 
-let write_memory s t = 
+let write_memory s t =
   Printf.fprintf stderr "%.20s : %d words allocated\n" s t;
   flush stderr
 
-let measure_l name (e) : 'b = 
-  if Settings.get_value measuring then 
+let measure_l name (e) : 'b =
+  if Settings.get_value measuring then
     let _ = write_begin name in
-    let (result, time_taken), memory_allocated = 
+    let (result, time_taken), memory_allocated =
       measure_memory_l (lazy (time_l e))
     in
       write_time name time_taken;
@@ -43,10 +43,10 @@ let measure_l name (e) : 'b =
   else
     Lazy.force e
 
-let measure name (f : 'a -> 'b) (a : 'a) : 'b = 
+let measure name (f : 'a -> 'b) (a : 'a) : 'b =
   measure_l name (lazy (f a))
 
 let measure_as name thunk = measure_l thunk name
-      
-let _ = 
+
+let _ =
   Gc.create_alarm notify_gc

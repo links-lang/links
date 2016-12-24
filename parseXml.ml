@@ -1,6 +1,6 @@
 open Lexing
 
-(* 
+(*
    This module is a copied, pasted and hacked version of parse.ml
 *)
 
@@ -26,7 +26,7 @@ fun ~context ?nlhook ~parse ~infun ~name ->
         (p, code)
 
     with
-      | Parsing.Parse_error -> 
+      | Parsing.Parse_error ->
           let line, column = code#find_line lexbuf.lex_curr_p in
             raise
               (Errors.RichSyntaxError
@@ -36,14 +36,14 @@ fun ~context ?nlhook ~parse ~infun ~name ->
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
       | Sugartypes.ConcreteSyntaxError (msg, (start, finish, _)) ->
-          let linespec = 
-            if start.pos_lnum = finish.pos_lnum 
+          let linespec =
+            if start.pos_lnum = finish.pos_lnum
             then string_of_int start.pos_lnum
             else (string_of_int start.pos_lnum  ^ "..."
                   ^ string_of_int finish.pos_lnum) in
           let line = code#extract_line_range (start.pos_lnum-1) finish.pos_lnum in
           let _, column = code#find_line finish in
-            raise 
+            raise
               (Errors.RichSyntaxError
                  {Errors.filename = name;
                   Errors.linespec = linespec;

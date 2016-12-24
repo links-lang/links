@@ -2,10 +2,10 @@ typename Date = [|Date:(Int,Int)|];
 typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 
 sig date : Formlet(Date)
-var date = 
+var date =
   formlet
    <#>
-     { inputInt -> day } / { inputInt -> mo } 
+     { inputInt -> day } / { inputInt -> mo }
    </#>
   yields Date(day, mo);
 
@@ -28,8 +28,8 @@ var travelForm =
       <td> Departure:</td> <td> { date -> dep }</td>
      </tr>
      <tr><td>{ submit("Submit") }</td></tr>
-    </table>   
-  yields 
+    </table>
+  yields
     (person=person, age=age, arrival=arr, departure=dep);
 
 fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {

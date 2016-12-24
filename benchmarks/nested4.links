@@ -5,7 +5,7 @@ fun rand(x) {
 fun time(f) {
   var start = serverTimeMilliseconds();
   ignore(query {f()});
-  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")  
+  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")
 }
 
 var db = database "nested4";

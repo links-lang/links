@@ -26,7 +26,7 @@ val if_set : bool Settings.setting -> (unit -> string) -> unit
 val if_set_l : bool Settings.setting -> string lazy_t -> unit
 
 
-(** [debug_time msg f]: 
+(** [debug_time msg f]:
       run [f()] and measure running time; print [msg] with time and return result
 *)
 val debug_time : string -> (unit -> 'a) -> 'a

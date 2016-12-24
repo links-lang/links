@@ -35,7 +35,7 @@ fun dragging(id, elem, s) {
 }
 
 fun format(text) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; 
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
                border:1px solid #C5DEA1; cursor: move; margin: 0px;">
     {stringToXml(text)}</li>
 }
@@ -47,14 +47,14 @@ fun draggableList(id, items)
 
   var manager = spawn {
     fun manage(c) {
-      var s = accept(ap); 
+      var s = accept(ap);
       manage(<|case s {
         MouseUp   : MouseUp c.{c};
         MouseDown : s(elem).MouseDown c.c[elem].{c};
         MouseOut  : s(elem).MouseOut c.c[elem].{c}
       }|>)
     }
-    
+
     manage(fork (linfun (s) {waiting(id, s)}));
   };
 

@@ -4,7 +4,7 @@ fun enterNumbers(n) {
      <h1>Enter {intToXml(n)} numbers:</h1>
      {withSubmit(formlets(replicate(n, inputInt))) =>
         fun (xs) {page <html><body>{intToXml(sum(xs))}</body></html>}}
-   </html> 
+   </html>
 }
 
 fun withSubmit(f) {

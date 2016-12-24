@@ -13,7 +13,7 @@ fun step(state, id, items) client {
   case MouseOut(toElem) ->
    switch (state) {
     case Waiting -> step(Waiting, id, items)
-    case Dragging(elem) -> 
+    case Dragging(elem) ->
      if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
       var items = swap(items,
                        getTextContent(getValue(firstChild(elem))),
@@ -22,7 +22,7 @@ fun step(state, id, items) client {
        step(Dragging(elem), id, items)
      } else step(Dragging(elem), id, items)
    }
- } 
+ }
 }
 
 fun draw(id, items) {

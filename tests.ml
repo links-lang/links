@@ -42,7 +42,7 @@ let working_tests = [
   "Mutually recurisve nested functions",
   "{ fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20) }",
   result "true" ~with_type:"Bool";
-        
+
   "Closures using anonymous functions",
   "fun addn(n) { fun(x) { x + n } } addn(3)(4)",
   result "7" ~with_type:"Int";
@@ -745,7 +745,7 @@ let working_tests = [
   "Recursive variant types [2]",
   "fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment",
   is_function ~with_type: "(mu d . [|Succ:d | Zero:()|]) -> [|Zero:()|(mu c . Succ:[|Zero:()|c|]|a)|]";
-  
+
   "Recursive variant types [3]",
   "fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev",
   is_function ~with_type: "(mu e . [|Cons:(a, e) | Empty:()|], mu f . [|Cons:(a, f)|b|]) -> mu d . [|Cons:(a, d)|b|]";
@@ -881,14 +881,14 @@ let working_tests = [
   is_function ~with_type:"(a) -> Int";
 
   "Polymorphic mutual recursion [1]",
-  "sig f : (a) -> Int 
+  "sig f : (a) -> Int
    fun f(x) {
       var x = g(\"a\");
       var y = g(1); 1
    }
 
    sig g : (a) -> Int
-   fun g(x) { 
+   fun g(x) {
       var x = f(\"a\");
       var y = f(1);
       1
@@ -933,7 +933,7 @@ let working_tests = [
       var z = g(1);
       1
     }
-   
+
    f",
   is_function ~with_type: "(a) -> Int";
 
@@ -1054,37 +1054,37 @@ let working_tests = [
   "fun (x) {x} : ((a)-{b}->a) -> ((a)-{b}->a)",
   is_function ~with_type: "((a) -{b}-> a) -> ((a) -{b}-> a)";
 
-   "Redundant pattern [1]", 
-   "fun (x) { switch (x) { case x -> x case A -> A }}", 
-  has_syntaxerror;
-
-   "Redundant pattern [2]", 
-   "fun (x) { switch (x) { case x -> A(1) case A -> A('2') } }", 
-  has_syntaxerror;
-
-   "Redundant pattern [3]", 
+   "Redundant pattern [1]",
    "fun (x) { switch (x) { case x -> x case A -> A }}",
   has_syntaxerror;
 
-  "Redundant pattern [4]", 
-  "fun (x) {switch (x) { case(A(B(C(1,2,3)))) -> 0 case(A(B(C(1,2,3)))) -> 1}}", 
+   "Redundant pattern [2]",
+   "fun (x) { switch (x) { case x -> A(1) case A -> A('2') } }",
+  has_syntaxerror;
+
+   "Redundant pattern [3]",
+   "fun (x) { switch (x) { case x -> x case A -> A }}",
+  has_syntaxerror;
+
+  "Redundant pattern [4]",
+  "fun (x) {switch (x) { case(A(B(C(1,2,3)))) -> 0 case(A(B(C(1,2,3)))) -> 1}}",
   has_syntaxerror;
 
 
-  "Reject multiple occurrences of a name in a pattern [1]", 
-  "fun (x,x) { x }", 
-  has_syntaxerror;
-  
-  "Reject multiple occurrences of a name in a pattern [2]", 
-  "fun () { var (x,x) = (1,2); x }", 
-  has_syntaxerror;
-  
-  "Reject multiple occurrences of a name in a pattern [3]", 
-  "fun () { var (a=x,b=x) = (a=1,b=2); x }", 
+  "Reject multiple occurrences of a name in a pattern [1]",
+  "fun (x,x) { x }",
   has_syntaxerror;
 
-   "No value recursion", 
-   "{fun f() { g() } var x = f(); fun g() { x } ()}", 
+  "Reject multiple occurrences of a name in a pattern [2]",
+  "fun () { var (x,x) = (1,2); x }",
+  has_syntaxerror;
+
+  "Reject multiple occurrences of a name in a pattern [3]",
+  "fun () { var (a=x,b=x) = (a=1,b=2); x }",
+  has_syntaxerror;
+
+   "No value recursion",
+   "{fun f() { g() } var x = f(); fun g() { x } ()}",
   has_typeerror;
 ]
 
@@ -1116,7 +1116,7 @@ let known_failures = [
   is_function ~with_type: "a";
 
 
-  (* Next two fail because we're not loading the prelude at present *) 
+  (* Next two fail because we're not loading the prelude at present *)
   "Test that prelude is loaded",
   "map",
   result "fun" ~with_type: "((a) -> c, [a]) -> [c]";

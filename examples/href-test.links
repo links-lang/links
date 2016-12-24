@@ -2,7 +2,7 @@ fun f(n) client {
   var n = n + 1 - 1;
   page
    <body>
-     on client   
+     on client
      <a l:href="{f(n+1)}">inc client {intToXml(n)}</a> <br />
      <a l:href="{g(n+1)}">inc server {intToXml(n)}</a>
    </body>

@@ -25,7 +25,7 @@ let json_of_table ((db, params), name, keys, row) =
       "\",row:\"" ^ Types.string_of_datatype (`Record row) ^
       "\",keys:\"" ^ json_of_keylist keys ^ "\"}}"
 
-let js_dq_escape_string str = 
+let js_dq_escape_string str =
   (* escape for placement in double-quoted string *)
   Str.global_replace (Str.regexp_string "\"") "\\\""
     (Str.global_replace (Str.regexp_string "\n") "\\n"

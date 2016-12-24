@@ -32,7 +32,7 @@ fun completions(s) server {
 
 fun suggest(s) client {
   replaceChildren(format(completions(s)), getNodeById("suggestions"))
-} 
+}
 
 fun editDef(def) client {
   redraw(
@@ -114,7 +114,7 @@ fun main() {
     <head>
      <title>Dictionary suggest</title>
      <style>
-       body {{ font-family: trebuchet, "trebuchet ms", helvetica, 
+       body {{ font-family: trebuchet, "trebuchet ms", helvetica,
                             arial, sans-serif; }}
        h3 {{ padding: 4px 0 4px 0; margin: 0px; }}
        td {{ vertical-align: top; }}
@@ -129,7 +129,7 @@ fun main() {
                    padding: 12px;
                    margin-top: 4pc; }}
        .edit-def {{ border: 1px solid gray;
-                    background-color: #c8c8dd; 
+                    background-color: #c8c8dd;
                     padding: 4px; }}
      </style>
     </head>

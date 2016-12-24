@@ -36,7 +36,7 @@ let type_binary_op env tycon_env =
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
            | _,     _,     true  -> assert false)
- 
+
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
   | `Cons         -> TyEnv.lookup env "Cons"
@@ -517,7 +517,7 @@ class transform (env : Types.typing_environment) =
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
          (o, `FormBinding (f, p), Types.xml_type)
       | e -> failwith ("oops: "^Show_phrasenode.show  e)
-      
+
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
         let (o, e, t) = o#phrasenode e in (o, (e, pos), t)
@@ -662,10 +662,10 @@ class transform (env : Types.typing_environment) =
       | `Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
-         
+
          (* transform the function bodies *)
          let (o, defs) = o#rec_bodies defs in
-         
+
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (`Funs defs))
@@ -680,7 +680,7 @@ class transform (env : Types.typing_environment) =
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
       | `Module _ -> assert false
       | `QualifiedImport _ -> assert false
-         
+
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
         let (o, b) = o#bindingnode b in (o, (b, pos))
