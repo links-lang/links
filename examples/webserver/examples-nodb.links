@@ -1,29 +1,16 @@
-# (db) open DictSuggestUpdate
 open Draggable
 open Progress
 
-# (db) open Factorial
-# (db) open DictSuggest
-# (db) open DictSuggestLite
-# (db) open DraggableDb
-
 open Buttons
 open FormsTest
-# still issues with type alias resolution in modules
 open Validate
 
 open LoginFlow
-# (db) open Paginate
 open Mandelbrot
 open Mandelcolor
 open Todo
-# (db) open TodoDb
 open Crop
-# (db) open Wine
-# (db) open Filter
-# (db) open Citations
 
-# still issues with type alias resolution in modules
 open Twentyfortyeight
 open Breakout
 open Tetris
@@ -33,14 +20,8 @@ fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
   addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
 
-#  addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_){DictSuggestUpdate.main()});
   addRoute("/examples/draggable.links", fun (_) {Draggable.main()});
   addRoute("/examples/progress.links", fun (_) {Progress.main()});
-
-#  addRoute("/examples/factorial.links", fun (_) {Factorial.main()});
-#  addRoute("/examples/dictionary/dictSuggest.links", fun (_){DictSuggest.main()});
-#  addRoute("/examples/dictionary/dictSuggestLite.links", fun (_){DictSuggestLite.main()});
-#  addRoute("/examples/draggableDb.links", fun (_) {DraggableDb.main()});
 
   addRoute("/examples/buttons.links", fun (_) {Buttons.main()});
   addRoute("/examples/formsTest.links", fun (_) {FormsTest.main()});
@@ -48,15 +29,10 @@ fun main() {
   addRoute("/examples/validate.links", fun (_) {Validate.main()});
 
   addRoute("/examples/loginFlow.links", fun (_) {LoginFlow.main()});
-#  addRoute("/examples/paginate.links", fun (_) {Paginate.main()});
   addRoute("/examples/mandelbrot.links", fun (_) {Mandelbrot.main()});
   addRoute("/examples/mandelcolor.links", fun (_) {Mandelcolor.main()});
   addRoute("/examples/todo.links", fun (_) {Todo.main()});
-#  addRoute("/examples/todoDb.links", fun (_) {TodoDb.showList()});
   addRoute("/examples/crop.links", fun (_) {Crop.main()});
-#  addRoute("/examples/wine.links", fun (_) {Wine.main()});
-#  addRoute("/examples/filter.links", fun (_) {Filter.main()});
-#  addRoute("/examples/citations.links", fun (_) {Citations.main()});
 
   # games
   addRoute("/examples/games/twentyfortyeight.links", fun (_) {Twentyfortyeight.main()});

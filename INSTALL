@@ -25,6 +25,9 @@ similar to the following:
   --path=examples:examples/games:examples/dictionary
   examples/webserver/examples.links
 
+(This program provides an application server for a number of example
+programs.)
+
 * The --config flag sets the location of the config file to the file "config"
 * The -m flag enables support for Links' module system, new in Gorgie.
 * The --path flag says that files can be found in the following directories:
@@ -61,7 +64,8 @@ You should be able to run
   links --config=config -m --path=examples:examples/games
     examples/webserver/examples-nodb.links
 
-without needing to install a database or run ulimit.
+without needing to install a database or run ulimit. (This version
+just displays the source code for examples that use the database.)
 
 The default port is 8080, so having run either of the above examples
 you should be able to access them by pointing your browser at:
