@@ -60,17 +60,19 @@ let rec fits w = function
   | (_,Break,DocBreak _) :: _ -> true
   | (i,_,DocGroup x) :: z -> fits w ((i,Flat,x)::z)
 
-let rec format w k = function
-  | [] -> SNil
-  | (_,_,DocNil) :: z -> format w k z
-  | (i,m,DocCons(x,y)) :: z -> format w k ((i,m,x)::(i,m,y)::z)
-  | (i,m,DocNest(j,x)) :: z -> format w k ((i+j,m,x)::z)
-  | (_,_,DocText s) :: z -> SText(s,format w (k + strlen s) z)
-  | (_,Flat, DocBreak s) :: z -> SText(s,format w (k + strlen s) z)
-  | (i,Break,DocBreak _) :: z -> SLine(i,format w i z)
-  | (i,_,DocGroup x) :: z -> if fits (w-k) ((i,Flat,x)::z)
-                              then format w k ((i,Flat ,x)::z)
-                              else format w k ((i,Break,x)::z)
+(* CPS-transformed to make tail-recursive and avoid stack-overflow! *)
+let rec format w l r k =
+  match r with
+  | []                        -> k SNil
+  | (_,_,DocNil) :: z         -> format w l z k
+  | (i,m,DocCons(x,y)) :: z   -> format w l ((i,m,x)::(i,m,y)::z) k
+  | (i,m,DocNest(j,x)) :: z   -> format w l ((i+j,m,x)::z) k
+  | (_,_,DocText s) :: z      -> format w (l + strlen s) z (fun d -> k @@ SText (s, d))
+  | (_,Flat, DocBreak s) :: z -> format w (l + strlen s) z (fun d -> k @@ SText (s, d))
+  | (i,Break,DocBreak _) :: z -> format w i z (fun d -> k @@ SLine(i, d))
+  | (i,_,DocGroup x) :: z     -> if fits (w-l) ((i,Flat,x)::z)
+                              then format w l ((i,Flat ,x)::z) k
+                              else format w l ((i,Break,x)::z) k
 
 let (^|) x y = match x,y with
   | DocNil, _ -> y
@@ -147,6 +149,6 @@ let ifthen c e1 e2 = group ( group (nest 2 (text "if" ^| c ))
 let doc = ifthen cond expr1 expr2
 
 let pretty w doc =
-  let sdoc = format w 0 [0,Flat, DocGroup doc] in
+  let sdoc = format w 0 [0,Flat, DocGroup doc] (fun d -> d) in
   let str = sdocToString sdoc in
-    str
+  str
