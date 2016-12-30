@@ -7,36 +7,38 @@ Version 0.6 of Links brings many changes.
 ### Session Types
 
 Session types are a type system for communication channels, allowing
-conformance to communication protocols to be checked at compile-time. Links
-supports session types natively; for more information, see the
-examples/sessions directory.
+conformance to communication protocols to be checked at
+compile-time. Links supports session types natively; for more
+information, see the examples/sessions directory.
 
-### Server-sided concurrency
+### Server-side concurrency
 
-Links now supports message-passing concurrency on the server-side using OCaml's
-light-weight threading (lwt) library.
+Links now implements message-passing concurrency on the server-side
+using OCaml's light-weight threading (Lwt) library.
 
 ### Application Server
 
-A major addition in the Gorgie release is the ability to run Links applications
-using a standalone web server, as opposed to using Links as a CGI interpreter.
-This allows Links to be set up more quickly, and for the easier development of
-applications where state must persist over multiple requests. For more
-information, see the examples/webserver directory.
+A major addition in the Gorgie release is the ability to run Links
+applications using a standalone web server, as opposed to using Links
+as a CGI interpreter.  This allows Links to be set up more quickly,
+and for the easier development of applications where state must
+persist over multiple requests. For more information, see the
+examples/webserver directory.
 
 ### Modules
 
 Links now supports an experimental simple modules system, allowing the
-development of modular code over multiple files. To enable modules, either run
-Links with the -m flag, or set the "modules" setting to true in the
-configuration file.
+development of modular code over multiple files. To enable modules,
+either run Links with the -m flag, or set the "modules" setting to
+true in the configuration file.
 
 To see examples of modules in action, check examples/webserver/examples.links.
 
 ### Recursive Type Inlining
 
-Recursive types can now be written without explicitly writing recursive type
-variables. For example, whereas before a list could be defined as:
+Recursive types can now be written without explicitly writing
+recursive type variables. For example, whereas before a list could be
+defined as:
 
 > typename List(a) = mu X . [| Nil : (), Cons : (a, X) |]
 
