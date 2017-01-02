@@ -210,4 +210,4 @@ var message =
    subject="Links SMTP test",
    body="Hello ABCD.\nHow are you?");
 
-smtpClient(fork(smtpServer), message)
+smtpClient(forkSync(smtpServer), message)

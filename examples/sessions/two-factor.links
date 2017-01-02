@@ -127,7 +127,7 @@ fun badMe(c) {
 
 sig serveData : ((~TwoFactor) ~e~> Data) ~e~> Data
 fun serveData(user) {
-  user(fork(fun (s) {serve(s, "secret data")}))
+  user(forkSync(fun (s) {serve(s, "secret data")}))
 }
 
 serveData(goodMe)

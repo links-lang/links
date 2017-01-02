@@ -233,5 +233,5 @@ var message =
    subject="Links SMTP test",
    body="Hello ABCD.\nHow are you?");
 
-smtpClient(knife(smtpServer), message)
+smtpClient(fork(smtpServer), message)
 

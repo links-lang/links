@@ -1,10 +1,10 @@
 fun main() {
   fun giver(x,y,s) {
-    <| s[x].s[y].s(z).{z} |>
+    <| s[x].s[y].s(z).s().{z} |>
   }
 
   fun grabber(s) {
-    <| s(x).s(y).s[x+y].{()} |>
+    <| s(x).s(y).s[x+y].{s} |>
   }
 
 

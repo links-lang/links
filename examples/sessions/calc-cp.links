@@ -12,4 +12,4 @@ fun user(s) {
   <| Mul s.s[6].s[7].s(z).{z} |>
 }
 
-user(knife (calc))
+user(fork (calc))

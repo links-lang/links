@@ -20,10 +20,10 @@ fun calc(s) {
 }
 
 sig sel_Add : (~Calc) ~> !Int.!Int.?Int.End
-fun sel_Add(c) {linknife (linfun (d) {ignore(send(Add(d), c))})}
+fun sel_Add(c) {linFork (linfun (d) {ignore(send(Add(d), c))})}
 
 sig sel_Mul : (~Calc) ~> !Int.!Int.?Int.End
-fun sel_Mul(c) {linknife (linfun (d) {ignore(send(Mul(d), c))})}
+fun sel_Mul(c) {linFork (linfun (d) {ignore(send(Mul(d), c))})}
 
 sig user : (~Calc) ~> Int
 fun user(s) {

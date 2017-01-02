@@ -161,7 +161,7 @@ fun receiveBody(s) {
       print("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
-        receiveMail(select REJECT s)
+        receiveBody(select REJECT s)
       } else {
         receiveBody(select ACCEPT s)
       }
@@ -194,8 +194,8 @@ fun extractDomain(address) {
 
 var message =
   (sender="foo@bar.com",
-   recipients=[],
+   recipients=["baz"],
    subject="Links SMTP test",
    body="Hello ABCD.\nHow are you?");
 
-smtpClient(fork(smtpServer), message)
+smtpClient(forkSync(smtpServer), message)
