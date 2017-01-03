@@ -1081,9 +1081,7 @@ fun connect(f, g) {
   result
 }
 
-
 ### sessions with split ends ###
-
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
@@ -1131,22 +1129,20 @@ fun linForkSync(f) {
   request(ap)
 }
 
-# FIXME: link should return () in the first place and we should define
-# linkSync(c, d) as makeEndBang(link(c, d))
-sig fuse : forall s::Session.(s, ~s) ~> ()
-fun fuse(s, c) {
-  close(link(s, c))
+sig linkSync : forall s::Session.(s, ~s) ~> EndBang
+fun linkSync(s, c) {
+  link(s, c);
+  makeEndBang()
 }
 
-sig run : ((!a.EndBang) ~e~> EndBang) ~e~> a
-fun run(f) {
+sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+fun runSync(f) {
   var c = forkSync(f);
   var (v, c) = receive(c);
   wait(c);
   v
 }
 ### end of sessions with split ends ###
-
 
 ####
 sig lf : ((a) -e-> b) -> (a) -e-@ b
@@ -1178,6 +1174,6 @@ fun assertEq (actual, expected) server {
   }
 }
 
-####
+#### APP SERVER ####
 sig addRoute : (String, (String) ~> Page) ~> ()
 fun addRoute(path,f) { unsafeAddRoute(path, fun(p){f(p)}) }

@@ -388,7 +388,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "link",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session),e::Row(Unl, Any).(s, ~s) ~e~> EndBang",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(s, ~s) ~e~> ()",
    IMPURE);
 
   (* access points *)

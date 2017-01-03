@@ -285,8 +285,8 @@ sig
 
   val splice_exp : griper
 
-  (* val fuse_session : griper *)
-  (* val fuse_dual : griper *)
+  (* val link_session : griper *)
+  (* val link_dual : griper *)
 
   val offer_variant : griper
   val offer_patterns : griper
@@ -300,8 +300,8 @@ sig
   val cp_offer_choice : string -> griper
   val cp_offer_branches : griper
   val cp_comp_left : griper
-  val cp_fuse_session : griper
-  val cp_fuse_dual : griper
+  val cp_link_session : griper
+  val cp_link_dual : griper
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
 end
@@ -1007,18 +1007,18 @@ end
 
 
 (* session stuff *)
-(*     let fuse_session ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ = *)
+(*     let link_session ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ = *)
 (*       die pos ("\ *)
-(* Only session types can be fused, but \ *)
+(* Only session types can be linkd, but \ *)
 (* the expression" ^ nl() ^ *)
 (* tab() ^ code lexpr ^ nl() ^ *)
 (* "has type" ^ nl() ^ *)
 (* tab() ^ code (show_type lt) ^ nl() ^ *)
 (* "which is not a session type") *)
 
-(*     let fuse_dual ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ = *)
+(*     let link_dual ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ = *)
 (*       die pos ("\ *)
-(* Only dual session types can be fused, but \ *)
+(* Only dual session types can be linkd, but \ *)
 (* the dual of the type of expression" ^ nl() ^ *)
 (* tab() ^ code lexpr ^ nl() ^ *)
 (* "is" ^ nl() ^ *)
@@ -1122,19 +1122,19 @@ end
                "and"                              ^ nli () ^
                 code ppr_rt)
 
-    let cp_fuse_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
+    let cp_link_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
       build_tyvar_names [lt];
       let ppr_lt = show_type lt in
-      die pos ("Only session types can be fused, " ^
+      die pos ("Only session types can be linked, " ^
                "but the type"             ^ nli () ^
                 code ppr_lt               ^ nl  () ^
                "is not a session type")
 
-    let cp_fuse_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let cp_link_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
-      die pos ("Only dual session types can be fused, " ^
+      die pos ("Only dual session types can be linked, " ^
                "but the type"                  ^ nli () ^
                 code ppr_lt                    ^ nl  () ^
                "is not the dual of the type"   ^ nli () ^
@@ -1143,7 +1143,7 @@ end
     let cp_comp_left ~pos ~t1:_ ~t2:(_, rt) ~error:_ =
       build_tyvar_names [rt];
       let ppr_rt = show_type rt in
-      die pos ("The left-hand computation in a composition must have" ^
+      die pos ("The left-hand computation in a composition must have " ^
                "EndBang type, but has type"                  ^ nli () ^
                 code ppr_rt                                  ^ nl  () ^
                "instead.")
@@ -2219,16 +2219,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               `Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
 
         (* session-based concurrency *)
-        (* | `Fuse (l, r) -> *)
+        (* | `Link (l, r) -> *)
         (*   let l = tc l in *)
         (*   let r = tc r in *)
-        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*     unify ~handle:Gripers.cp_link_session *)
         (*       (pos_and_typ l, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
-        (*     unify ~handle:Gripers.cp_fuse_session *)
+        (*     unify ~handle:Gripers.cp_link_session *)
         (*       (pos_and_typ r, no_pos (Types.fresh_type_variable (`Any, `Session))); *)
-        (*     unify ~handle:Gripers.cp_fuse_dual *)
+        (*     unify ~handle:Gripers.cp_link_dual *)
         (*       ((exp_pos l, Types.dual_type (typ l)), pos_and_typ r); *)
-        (*     `Fuse (erase l, erase r), Types.unit_type, merge_usages [usages l; usages r] *)
+        (*     `Link (erase l, erase r), Types.unit_type, merge_usages [usages l; usages r] *)
         | `Select (l, e) ->
            let e = tc e in
            let selected_session = Types.fresh_type_variable (`Any, `Session) in
@@ -3180,15 +3180,15 @@ and type_cp (context : context) = fun (p, pos) ->
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
-    | `Fuse ((c, _, cpos), (d, _, dpos)) ->
+    | `Link ((c, _, cpos), (d, _, dpos)) ->
       let (_, tc, uc) = type_check context (`Var c, pos) in
       let (_, td, ud) = type_check context (`Var d, pos) in
-        unify ~pos:pos ~handle:Gripers.cp_fuse_session
+        unify ~pos:pos ~handle:Gripers.cp_link_session
           (tc, Types.fresh_type_variable (`Any, `Session));
-        unify ~pos:pos ~handle:Gripers.cp_fuse_session
+        unify ~pos:pos ~handle:Gripers.cp_link_session
           (td, Types.fresh_type_variable (`Any, `Session));
-        unify ~pos:pos ~handle:Gripers.cp_fuse_dual (Types.dual_type tc, td);
-        `Fuse ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
+        unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
+        `Link ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
     | `Comp ((c, _, binder_pos), left, right) ->
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in

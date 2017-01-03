@@ -442,7 +442,7 @@ cp_expression:
 | cp_name LBRACKET RBRACKET                                    { `GiveNothing $1, pos () }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
-| cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }
+| cp_name LRARROW cp_name                                      { `Link ($1, $3), pos () }
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
 
 primary_expression:

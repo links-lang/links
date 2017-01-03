@@ -16,4 +16,4 @@ fun twoB(c, return) {
   <| c(y).c().return[y].return[] |>
 }
 
-(oneB(forkSync(oneA(1))), run (fun (return) {<|nu c.({twoA(2)(c)}|{twoB(c, return)})|>}))
+(oneB(forkSync(oneA(1))), runSync (fun (return) {<|nu c.({twoA(2)(c)}|{twoB(c, return)})|>}))

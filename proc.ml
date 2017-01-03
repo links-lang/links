@@ -359,7 +359,7 @@ module Session = struct
       else
         None
 
-  let fuse (out1, in1) (out2, in2) =
+  let link (out1, in1) (out2, in2) =
     let out1 = find_active out1 in
     let in1 = find_active in1 in
     let out2 = find_active out2 in

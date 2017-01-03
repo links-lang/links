@@ -12,7 +12,7 @@ fun srv(c) {
 }
 
 fun bar() {
-  var c = fork(srv);
+  var c = forkSync(srv);
   var c = send(5, c);
   wait(c)
 }

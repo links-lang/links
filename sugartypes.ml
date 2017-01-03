@@ -278,7 +278,7 @@ and cp_phrasenode = [
 | `GiveNothing of binder
 | `Select of binder * string * cp_phrase
 | `Offer of binder * (string * cp_phrase) list
-| `Fuse of binder * binder
+| `Link of binder * binder
 | `Comp of binder * cp_phrase * cp_phrase ]
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
@@ -474,6 +474,6 @@ struct
     | `GiveNothing (c, _, _) -> singleton c
     | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
+    | `Link ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
     | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end

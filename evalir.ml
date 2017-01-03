@@ -343,12 +343,10 @@ struct
       Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
       let (out1, in1) = Session.unbox_chan chanl in
       let (out2, in2) = Session.unbox_chan chanr in
-      (* HACK *)
-      let end_bang = `Variable (Env.String.lookup (val_of !Lib.prelude_nenv) "makeEndBang") in
-        Session.fuse (out1, in1) (out2, in2);
-        unblock out1;
-        unblock out2;
-        apply cont env (value env end_bang, [])
+      Session.link (out1, in1) (out2, in2);
+      unblock out1;
+      unblock out2;
+      apply_cont cont env (`Record [])
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
        let path = Value.unbox_string pathv in

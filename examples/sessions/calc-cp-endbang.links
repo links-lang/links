@@ -12,4 +12,4 @@ fun user(s, return) {
   <| Mul s.s[6].s[7].s(z).s().return[z].return[] |>
 }
 
-run (fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>})
+runSync (fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>})

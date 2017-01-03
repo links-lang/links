@@ -748,7 +748,7 @@ class transform (env : Types.typing_environment) =
               o, `Offer (b, cases), t
            | _ -> assert false
          end
-      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
+      | `Link (c, d) -> o, `Link (c, d), Types.unit_type
       | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in

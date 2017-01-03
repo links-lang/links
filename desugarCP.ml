@@ -87,9 +87,9 @@ object (o : 'self_type)
                     o, `Offer (add_pos (`Var c),
                                cases,
                                Some t), t)
-         | `Fuse ((c, Some ct, _), (d, Some _dt, _)) ->
-            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "link", [`Type ct; `Row o#lookup_effects])),
-                        [add_pos (`Var c); add_pos (`Var d)]), Types.unit_type
+         | `Link ((c, Some ct, _), (d, Some _dt, _)) ->
+            o, `FnAppl (add_pos (Sugartypes.tappl (`Var "linkSync", [`Type ct; `Row o#lookup_effects])),
+                        [add_pos (`Var c); add_pos (`Var d)]), Types.make_endbang_type
          | `Comp ((c, Some s, _), left, right) ->
             let envs = o#backup_envs in
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in

@@ -58,7 +58,7 @@ sig
   val send : Value.t -> portid -> unit
   val receive : portid -> Value.t option
 
-  val fuse : chan -> chan -> unit
+  val link : chan -> chan -> unit
 
   val unbox_port : Value.t -> portid
   val unbox_chan' : Value.t -> int * int
