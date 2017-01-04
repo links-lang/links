@@ -54,7 +54,7 @@ struct
       Cohttp_lwt_body.to_string body >>= fun body_string ->
 
       let cgi_args : (string * string) list =
-        match req.meth, content_type with
+        match Request.meth req, content_type with
         | `POST, Some content_type when string_starts_with content_type "multipart/form-data" ->
            List.map (fun (name, { Multipart.value=value; _ }) -> (name, value))
                     (Multipart.parse_multipart_args content_type body_string)
