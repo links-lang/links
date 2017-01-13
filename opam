@@ -11,7 +11,7 @@ build: [
   [ make "nc" ]
 ]
 install: [
-  [ "cp" "links" "%{links:bin}%"            ]
+  [ "cp" "links" "%{links:bin}%/linx"       ]
   [ "mkdir" "-p" "%{links:lib}%"            ]
   [ "cp" "prelude.links" "%{links:lib}%"    ]
   [ "./links" "%{links:lib}%/prelude.links" ]
