@@ -1,5 +1,17 @@
 # Changes
 
+## Version 0.6.1 (Gorgie update release)
+
+Bugfix release:
+
+  * install required JavaScript libraries, examples and a default configuration
+    file
+
+  * Automatically locate config file inside the current directory or inside OPAM
+    installation
+
+  * Correctly support multiple remote clients
+
 ## Version 0.6 (Gorgie)
 
 Version 0.6 of Links brings many changes.

@@ -51,6 +51,28 @@ let prelude_file =
             executable_dir
   in Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
 
+(** Path to config file *)
+let config_file_path = match Utility.getenv "LINKS_CONFIG" with
+    (* If user defined LINKS_CONFIG then it takes the highest priority *)
+    | Some path -> Some (Filename.concat path "config")
+    | None ->
+        (* If LINKS_CONFIG is not defined then we search in current directory *)
+        let executable_dir = Filename.dirname Sys.executable_name in
+        if Sys.file_exists (Filename.concat executable_dir "config") then
+          Some (Filename.concat executable_dir "config")
+        else
+          try
+            (* If all else failed we search for OPAM installation of Links and
+               use a config that it provides *)
+            let opam_links_etc =
+              input_line (Unix.open_process_in "opam config var links:etc 2>/dev/null") in
+            if Sys.file_exists (Filename.concat opam_links_etc "config") then
+              Some (Filename.concat opam_links_etc "config")
+            else
+              None
+          with End_of_file ->
+            None
+
 (** The banner *)
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
@@ -58,7 +80,7 @@ let welcome_note = Settings.add_string ("welcome_note",
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links version 0.6 (Gorgie)", `System)
+Welcome to Links version 0.6.1 (Gorgie)", `System)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)

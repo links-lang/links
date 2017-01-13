@@ -412,7 +412,7 @@ let set_web_mode() = (
 let print_keywords =
   Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
 
-let config_file   : string option ref = ref None
+let config_file   : string option ref = ref BS.config_file_path
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
@@ -505,8 +505,6 @@ let _ =
     | Some _ -> Settings.set_value BS.web_mode true
     | None -> ()
   end;
-
-  config_file := (try Some (Unix.getenv "LINKS_CONFIG") with _ -> !config_file);
 
   Errors.display_fatal_l (lazy
      (parse_cmdline options (fun i -> push_back i file_list)));
