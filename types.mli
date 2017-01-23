@@ -368,3 +368,7 @@ val build_tyvar_names : ('a -> Vars.vars_list)
 val add_tyvar_names : ('a -> Vars.vars_list)
                    -> ('a list)
                    -> unit
+(* Function type constructors *)
+val make_pure_function_type : datatype -> datatype -> datatype		   
+val make_function_type      : datatype -> row -> datatype -> datatype
+val make_thunk_type : row -> datatype -> datatype  

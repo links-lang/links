@@ -68,6 +68,7 @@ SOURCES = $(OPC)                                \
           parser.mly                            \
           lexer.mli lexer.mll                   \
           typeUtils.mli typeUtils.ml            \
+	  handlerUtils.ml                       \
           errors.mli errors.ml                  \
           instantiate.mli instantiate.ml        \
           generalise.mli generalise.ml          \
@@ -78,11 +79,11 @@ SOURCES = $(OPC)                                \
           tables.ml                             \
           closures.ml                           \
           parse.mli parse.ml                    \
-          sugarTraversals.mli  sugarTraversals.ml       \
-					moduleUtils.mli moduleUtils.ml \
-					chaser.mli chaser.ml \
-					desugarModules.mli desugarModules.ml \
-          desugarDatatypes.mli desugarDatatypes.ml      \
+          sugarTraversals.mli  sugarTraversals.ml \
+	  moduleUtils.mli moduleUtils.ml       \
+          chaser.mli chaser.ml                 \
+	  desugarModules.mli desugarModules.ml \
+          desugarDatatypes.mli desugarDatatypes.ml \
           defaultAliases.ml                     \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
@@ -102,6 +103,7 @@ SOURCES = $(OPC)                                \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
 	  desugarCP.mli desugarCP.ml                     \
+	  desugarHandlers.mli desugarHandlers.ml         \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \
@@ -133,7 +135,6 @@ SOURCES = $(OPC)                                \
 #
 #          test.ml                               \
 #          tests.ml                              \
-
 
 LIBS    = $(DB_LIBS)
 

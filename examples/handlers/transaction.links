@@ -1,0 +1,41 @@
+# Transaction example
+# links> runState(1, transBool(transaction(comp)));
+
+# Closed state handler
+handler state(m) {
+     case Get(_,k)  -> fun(s) { k(s)(s)  }
+     case Put(p,k)  -> fun(s) { k(())(p) }
+     case Return(x) -> fun(s) { x }
+}
+
+# State runner
+fun runState(s0, m) {
+    state(m)(s0)
+}
+
+# The transaction handler utilitises state API to maintain the transaction-state.
+open handler transaction(m) {
+     case Commit(p,k) -> { do Put(p); k(p) }
+     case Abort(p,k)  -> (do Get(), "Aborted: " ^^ p)
+     case Return(x)   -> (do Get(), "Committed")
+}
+
+# Perharps we only want to know whether the transaction was successful.
+# 
+open handler transBool(m) {
+     case Return((_,"Committed")) -> true
+     case Return(_)               -> false
+}
+
+# Some computation
+# Fails to commit when the initial state s = 0
+fun comp() {
+    var s = do Get();
+    # Some critical work
+    # Check computation state
+    if (s == 0) {
+       do Abort("Unexpected state.")
+    } else {
+       do Commit(s+2)
+    }
+}

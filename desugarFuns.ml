@@ -54,10 +54,10 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
                    ((`Var g), dp)), dp))
         | _, _ -> assert false
     in
-      make_lam rt lam
+    make_lam rt lam
   in
     ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
-
+      
 (*
   unwrap a curried function definition
   with a position attached
@@ -82,6 +82,8 @@ object (o : 'self_type)
             argss
             rt in
         let f = gensym ~prefix:"_fun_" () in
+	let rett = Types.fresh_type_variable (`Unl, `Any) in
+	let (flpatterns, flphrase) = lam in
         let e =
           `Block
             ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), location, None)),

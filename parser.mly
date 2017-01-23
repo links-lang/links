@@ -53,7 +53,10 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+          `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+      | `Handler ((name,_,_) as m, spec, hnlit, dpos) ->
+	 let _ = checksig signame name in
+	 `Handler (m, spec, hnlit, Some datatype), dpos
 
 let primary_kind_of_string pos =
   function
@@ -171,7 +174,9 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT
+%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token OFFER SELECT
+%token DOOP       
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -314,7 +319,19 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+| signature typed_handler_binding                              { annotate $1 (`Handler $2) }
+| typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in
+								 `Handler (b, spec, hnlit, None), pos }
 
+typed_handler_binding:
+| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
+			   						     let hnlit  = ($2, fst $4, snd $4) in
+ 									     (binder, $1, hnlit, pos()) }
+
+optional_computation_parameter:
+| /* empty */                                                 { (`Any, pos()) }
+| LBRACKET pattern RBRACKET                                   { $2 }
+  
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
@@ -459,7 +476,24 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| handler_specialization optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
+										      let hnlit = ($2, body, args) in						  
+											`HandlerLit ($1, hnlit), pos() } 
+    
+handler_specialization:
+| handler_depth                        { $1 }
 
+handler_parameterization:
+| handler_body                         { ($1, None) }
+| arg_lists handler_body               { ($2, Some $1) }
+
+handler_depth:
+| HANDLER                    { `Deep, `Unrestricted }
+| SHALLOWHANDLER             { `Shallow, `Unrestricted }
+
+handler_body:	  
+| LBRACE cases RBRACE    	                               { $2 }
+  
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
@@ -525,7 +559,8 @@ postfix_expression:
                                                                          (`Block $5, pos ()), None), pos () }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
-| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
+| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }		     
+		     
 
 arg_spec:
 | LPAREN RPAREN                                                { [] }
@@ -541,6 +576,9 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
+| DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, Some $3, None), pos() }
+| DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }       
+	
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -738,7 +776,18 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
+| handle_specialisation LPAREN exp RPAREN LBRACE cases RBRACE  {
+                                                                 let descriptor = ($1, None) in
+                                                                 `Handle ($3, $6, descriptor), pos() }
 
+handle_specialisation:
+| handle_depth                                                 { $1 }
+    
+handle_depth:
+| LINEARHANDLE                                                 { (`Deep, `Linear) }              
+| HANDLE                                                       { (`Deep, `Unrestricted) }
+| SHALLOWHANDLE                                                { (`Shallow, `Unrestricted) }
+    
 iteration_expression:
 | case_expression                                              { $1 }
 | FOR LPAREN perhaps_generators RPAREN
@@ -855,6 +904,8 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
+| typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in
+                                                                 `Handler (b, spec, hnlit, None), pos }
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 

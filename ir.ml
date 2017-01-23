@@ -4,6 +4,12 @@
 
 open Utility
 
+(* Handlers *)
+type handler_spec   = handler_depth * [`Linear | `Unrestricted]
+and handler_depth   = [ `Deep | `Shallow ]
+  deriving (Show)
+
+  
 type scope = Var.scope
   deriving (Show)
 (* term variables *)
@@ -86,8 +92,11 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of (value)
   | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map)
+  | `Handle of (value * clause name_map * handler_spec)
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`Effect of binder | `Exception | `Regular] * binder * computation                        
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -120,7 +129,7 @@ let rec is_atom =
 (*
   This can only be an atom if
   Erase is just an upcast, and our language
-  is properly parameteric.
+  is properly parametric.
 *)
 (*    | `Erase (_, v) *)
     | `Coerce (v, _) -> is_atom v
@@ -465,6 +474,32 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
+	(* Input arguments: (value, (binder, computation)) 
+         * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
+	| `Handle (v, bs, isclosed) ->
+	   let (v, _, o) = o#value v in
+	   let (bs, branch_types, o) =
+	     o#name_map
+               (fun o (cc, b, c) ->
+                 let (cc, o) =
+                   match cc with
+                   | `Effect b ->
+                      let (b, o) = o#binder b in
+                      `Effect b, o
+                   | _ -> (cc, o)
+                 in
+		 let (b, o) = o#binder b in
+		 let (c, t, o) = o#computation c in
+		 (cc, b, c), t, o)
+	       bs
+	   in
+    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+	   `Handle (v, bs, isclosed), t, o
+	| `DoOperation (name, vs, t) ->
+	   (* FIXME: the typing isn't right here for non-zero argument
+	   operations *)
+	   let (vs, _, o) = o#list (fun o -> o#value) vs in
+	   (`DoOperation (name, vs, t), t, o)
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

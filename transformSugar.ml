@@ -231,6 +231,12 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
+	 (*| `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->*)
+      | `HandlerLit _ -> assert false
+	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
+	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
+	   let (o, effects) = o#row effects in
+           (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
       | `Spawn (`Wait, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -330,8 +336,8 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in
                    (o, `UnaryAppl ((tyargs, op), e), t))
       | `FnAppl (f, args) ->
-          let (o, f, ft) = o#phrase f in
-          let (o, args, _) = list o (fun o -> o#phrase) args in
+         let (o, f, ft) = o#phrase f in
+         let (o, args, _) = list o (fun o -> o#phrase) args in
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
@@ -416,7 +422,32 @@ class transform (env : Types.typing_environment) =
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
-            (o, `ConstructorLit (name, e, Some t), t)
+          (o, `ConstructorLit (name, e, Some t), t)
+
+      (* NOTE: the reason we need the Some [] case for DoOperation is
+      that None gets turned into Some [] and transformSugar gets
+      called more than once. It isn't clear whether this is entirely
+      sensible. *)
+      | `DoOperation (name, Some [], Some t)
+      | `DoOperation (name, None, Some t) ->
+	 (o, `DoOperation (name, Some [], Some t), t)
+      | `DoOperation (name, Some ps, Some t) ->
+	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
+	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
+      | `Handle (expr, cases, desc) ->
+         let module SD = HandlerUtils.SugarDescriptor in
+	  let Some (t, effects) = SD.type_info desc in
+          let (o, expr, _) = o#phrase expr in
+          let (o, cases) =
+            listu o
+              (fun o (p, e) ->
+                 let (o, p) = o#pattern p in
+                 let (o, e, _) = o#phrase e in (o, (p, e)))
+              cases in	  
+          let (o, t) = o#datatype t in
+	  let (o, effects) = o#row effects in
+	  let desc = SD.update_type_info (t, effects) desc in
+            (o, `Handle (expr, cases, desc), t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -575,7 +606,25 @@ class transform (env : Types.typing_environment) =
         let o = o#with_effects inner_eff in
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
-          (o, (pss, e), t)
+        (o, (pss, e), t)
+
+    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
+      fun t (m, cases, params) -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      let envs = o#backup_envs in
+      let (o, m) =
+	match m with
+	  `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
+	| `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
+      in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#restore_envs envs in
+													 (o, (m, cases, params), t)*)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
       function
@@ -669,6 +718,7 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (`Funs defs))
+      | `Handler _ -> assert false
       | `Foreign (f, language, t) ->
          let (o, f) = o#binder f in
          (o, `Foreign (f, language, t))

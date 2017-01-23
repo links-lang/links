@@ -157,6 +157,7 @@ fun replicate(n, item) {
   else item :: replicate(n-1, item)
 }
 
+
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }
@@ -168,6 +169,10 @@ fun curry(f) {
 fun uncurry(f) {
   fun (x, y) { f(x)(y) }
 }
+
+# Curried flip
+sig cflip : ((a::Any) -e-> (b::Any) -e-> c::Any) -> (b::Any) -> (a::Any) -e-> c::Any
+fun cflip(h) { curry(flip(uncurry(h))) }
 
 fun compose(f, g) {
   fun (x) { f(g(x)) }
@@ -1150,6 +1155,45 @@ fun lf(f) {
   linfun (x) {
     f(x)
   }
+}
+
+### handler stuff
+typename Comp(e::Row, a) = () ~e~> a;
+
+typename Zero = [||];
+
+# Handler composition operator
+# Data flows from right to left (or inside-out)
+#sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+op f -<- g {
+  fun(x) { f(g(x)) }
+}
+
+# Plugs a computation into sequence of handlers
+#sig -< : ((a) -e-> b, a) -e-> b
+op f -< m {
+  f(m)
+}
+
+
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+sig elemIndex : (a, [a]) ~> Maybe(Int)
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
 }
 
 ####

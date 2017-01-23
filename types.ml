@@ -1690,6 +1690,10 @@ struct
              (* to guarantee termination it's crucial that we
                 invoke row on the original wrapped version of
                 the effect row *)
+           if FieldEnv.mem "wild" fields &&
+             is_present (FieldEnv.find "wild" fields) then
+             "{" ^ row ~strip_wild:true "," bound_vars p effects ^ "}~" ^ ah
+           else
              "{" ^ row "," bound_vars p effects ^ "}-" ^ ah
          in begin match concrete_type args with
             | `Record row when is_tuple ~allow_onetuples:true row ->
@@ -1796,7 +1800,7 @@ struct
                   presence bound_vars p f
           end
 
-  and row sep bound_vars p (field_env, rv, dual) =
+  and row ?(strip_wild=false) sep bound_vars p (field_env, rv, dual) =
     (* FIXME:
 
        should quote labels when necessary, i.e., when they
@@ -1805,7 +1809,10 @@ struct
     let field_strings =
       FieldEnv.fold
         (fun label f field_strings ->
-          (label ^ presence bound_vars p f) :: field_strings)
+          if strip_wild && label = "wild" then
+            field_strings
+          else
+            (label ^ presence bound_vars p f) :: field_strings)
         field_env [] in
 
     let row_var_string = row_var sep bound_vars p rv in
@@ -2325,6 +2332,19 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+				   
+let make_function_type : datatype -> row -> datatype -> datatype
+  = fun domain effs range ->
+  let domain = 
+    match domain with
+      `Record _ as r -> r
+    | _ -> make_record_type (StringMap.add "1" domain StringMap.empty)
+  in
+    `Function (domain, effs, range)
 
-
-
+let make_pure_function_type : datatype -> datatype -> datatype
+  = fun domain range -> make_function_type domain (make_empty_closed_row ()) range  
+			      
+let make_thunk_type : row -> datatype -> datatype
+  = fun effs rtype ->
+  make_function_type unit_type effs rtype

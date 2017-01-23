@@ -137,19 +137,20 @@ struct
                             (bs, body) =
     let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
     let render_page = Env.String.lookup nenv "renderPage" in
-    let tail = `Apply (`Variable render_page, [`Variable x]) in
-    let cont = [(`Global, x, Value.empty_env, ([], tail))] in
+    let (tail : Ir.tail_computation) = `Apply (`Variable render_page, [`Variable x]) in
+    let (frame : Value.frame) = (`Global, x, Value.empty_env, ([], tail)) in
+    let (cont : Value.continuation) = [[frame]] in (* (Ir.scope * Ir.var * env * Ir.computation) *)
       (bs @ [`Let (xb, ([], body))], tail), cont
 
   let perform_request valenv run render_cont =
     function
       | ServerCont t ->
         Debug.print("Doing ServerCont");
-        Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
+        Eval.apply render_cont Value.toplevel_hs valenv (t, []) >>= fun (_, v) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
         Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn ");
-        Eval.apply_cont cont valenv arg >>= fun (_, result) ->
+        Eval.apply_cont cont Value.toplevel_hs valenv arg >>= fun (_, result) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
         let result_json = Json.jsonize_value result in
         Lwt.return ("text/plain",
                     Utility.base64encode result_json)
@@ -157,7 +158,7 @@ struct
         Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
-        Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
+        Eval.apply Value.toplevel_cont Value.toplevel_hs env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
@@ -213,7 +214,7 @@ struct
     >>= fun (content_type, content) ->
     response_printer [("Content-type", content_type)] content
 
-  let serve_request_program ((_valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
+  let serve_request_program ((_valenv, _, _) as env) (globals, ((locals : Ir.binding list), main), (render_cont : Value.continuation)) response_printer cgi_args =
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
@@ -291,7 +292,7 @@ struct
       end;
 
     (* Compute cacheable stuff in one call *)
-    let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
+    let (render_cont, (nenv,tyenv), ((globals : Ir.binding list), ((locals : Ir.binding list), main))) =
       Loader.wpcache "program" (fun () ->
         make_program envs prelude filename
      )
@@ -301,8 +302,8 @@ struct
     let valenv = Eval.run_defs valenv globals in
 
     Errors.display (lazy (serve_request_program
-  			  (valenv, nenv, tyenv)
-  			  (globals, (locals, main), render_cont)
+  			    (valenv, nenv, tyenv)
+  			    (globals, (locals, main), render_cont)
                             Lib.print_http_response
                             cgi_args))
 end

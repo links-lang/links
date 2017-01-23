@@ -188,7 +188,10 @@ and regex = [
 | `Splice    of phrase
 | `Replace   of regex * replace_rhs
 ]
+and clause = pattern * phrase
 and funlit = pattern list list * phrase
+and handlerlit = pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
+and handler    = phrase  * clause list * hdescriptor (* computation, cases, descriptor *)
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -200,6 +203,7 @@ and phrasenode = [
 | `Var              of name
 | `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
+| `HandlerLit       of handler_spec * handlerlit 
 | `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
@@ -224,6 +228,8 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
+| `DoOperation      of name * phrase list option * Types.datatype option
+| `Handle           of handler
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
@@ -258,6 +264,7 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
+| `Handler of binder * handler_spec * handlerlit * datatype' option
 | `Foreign of binder * name * datatype'
 | `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
@@ -266,6 +273,9 @@ and bindingnode = [
 | `Module  of name * binding list
 ]
 and binding = bindingnode * position
+and handler_spec    = handler_depth * [`Linear | `Unrestricted]
+and handler_depth   = [ `Deep | `Shallow ]
+and hdescriptor     = handler_spec * (Types.datatype * Types.row) option (* handler specialisation, optional (output type and input effects) *)
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -392,6 +402,7 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
+    | `HandlerLit (_, hnlit) -> handlerlit hnlit				      
     | `FunLit (_, _, fnlit, _) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
@@ -411,6 +422,7 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
+    | `Handle (p, cases, _)
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp
@@ -424,11 +436,13 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
+    | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
     | `QualifiedVar _ -> failwith "Freevars for qualified vars not implemented yet"
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Handler ((name,_,_), _, hnlit, _) -> singleton name, (diff (handlerlit hnlit) (singleton name))
     | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
     | `Funs funs ->
         let names, rhss =
@@ -446,6 +460,8 @@ struct
     | `Module _ -> failwith "Freevars for modules not implemented yet"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and handlerlit (m, cases, params : handlerlit) : StringSet.t =
+    union_all [diff (union_map case cases) (option_map (union_map (union_map pattern)) params); pattern m]
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

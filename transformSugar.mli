@@ -52,6 +52,7 @@ object ('self)
   method binop           : binop -> 'self * binop * Types.datatype
   method constant        : constant -> 'self * constant * Types.datatype
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
+  method handlerlit      : Types.datatype -> handlerlit -> 'self * handlerlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
   method quantifiers     : Types.quantifier list -> 'self * Types.quantifier list

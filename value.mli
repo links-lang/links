@@ -72,14 +72,26 @@ type t = [
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-| `Continuation of continuation
+| `Continuation of continuation * handlers
+| `DeepContinuation of continuation * handlers
+| `ShallowContinuation of delim_continuation * continuation * handlers    
 | `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
-and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+and frame = (Ir.scope * Ir.var * env * Ir.computation)
+and delim_continuation = frame list (* Delimited continuation *)
+and continuation = delim_continuation list (* (Generalised) continuation *)
+and handler  = env * Ir.clause Ir.name_map * Ir.handler_spec
+and handlers = handler list				 
 and env
     deriving (Show)
 
+(** Continuation helpers **)    
+val append_cont_frame : frame -> continuation -> continuation
+val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> frame
+val append_delim_cont : delim_continuation -> continuation -> continuation
+    
+val toplevel_hs   : handlers
 val toplevel_cont : continuation
 
 val empty_env : env
@@ -126,6 +138,8 @@ val box_pid : int * Sugartypes.location -> t
 val unbox_pid : t -> int * Sugartypes.location
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
+val box_op : t list -> t -> t
+val box    : t list -> t                              
 
 val intmap_of_record : t -> t Utility.intmap option
 
