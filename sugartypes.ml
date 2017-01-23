@@ -1,5 +1,4 @@
 (*pp deriving *)
-open Utility
 
 (** The syntax tree created by the parser. *)
 
@@ -67,6 +66,11 @@ type tyarg = Types.type_arg
 type location = [`Client | `Server | `Native | `Unknown]
     deriving (Show)
 
+let string_of_location = function
+| `Client -> "client"
+| `Server -> "server"
+| `Native -> "native"
+| `Unknown -> "unknown"
 
 type restriction = [ `Any | `Base | `Session ]
     deriving (Eq, Show)
@@ -76,19 +80,22 @@ type linearity   = [ `Any | `Unl ]
 type subkind = linearity * restriction
     deriving (Eq, Show)
 
+let default_subkind = (`Unl, `Any)
+
 type freedom = [`Flexible | `Rigid]
     deriving (Show)
 
 type primary_kind = [`Type | `Row | `Presence]
     deriving (Show)
 
-type kind = primary_kind * subkind
+type kind = primary_kind * subkind option
     deriving (Show)
 
 type type_variable = name * kind * freedom
     deriving (Show)
 
-type known_type_variable = name * subkind * freedom
+(* type variable of primary kind Type? *)
+type known_type_variable = name * subkind option * freedom
     deriving (Show)
 
 type quantifier = type_variable
@@ -101,6 +108,7 @@ type fieldconstraint = [ `Readonly | `Default ]
 
 type datatype =
   [ `TypeVar         of known_type_variable
+  | `QualifiedTypeApplication of (name list * type_arg list)
   | `Function        of datatype list * row * datatype
   | `Lolli           of datatype list * row * datatype
   | `Mu              of name * datatype
@@ -159,7 +167,7 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [
@@ -193,9 +201,10 @@ and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
+| `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `HandlerLit       of handler_spec * handlerlit 
-| `Spawn            of spawn_kind * phrase * Types.row option
+| `Spawn            of spawn_kind * location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -224,7 +233,8 @@ and phrasenode = [
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase
+(* | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase *)
+| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
@@ -256,10 +266,11 @@ and bindingnode = [
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handler_spec * handlerlit * datatype' option
 | `Foreign of binder * name * datatype'
-| `Include of string
+| `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
+| `Module  of name * binding list
 ]
 and binding = bindingnode * position
 and handler_spec    = handler_depth * [`Linear | `Unrestricted]
@@ -277,11 +288,10 @@ and cp_phrasenode = [
 | `GiveNothing of binder
 | `Select of binder * string * cp_phrase
 | `Offer of binder * (string * cp_phrase) list
-| `Fuse of binder * binder
+| `Link of binder * binder
 | `Comp of binder * cp_phrase * cp_phrase ]
 and cp_phrase = cp_phrasenode * position
     deriving (Show)
-
 
 type program = binding list * phrase option
   deriving (Show)
@@ -345,7 +355,7 @@ struct
     | `TextNode _
     | `Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (_, p, _)
+    | `Spawn (_, _, p, _)
     | `TAbstr (_, p)
     | `TAppl (p, _)
     | `FormBinding (p, _)
@@ -383,7 +393,7 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | `DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, p2) -> union (phrase p1) (phrase p2)
+    | `TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
     | `Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;
@@ -392,8 +402,8 @@ struct
     | `Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `FunLit (_, _, fnlit, location) -> funlit fnlit
     | `HandlerLit (_, hnlit) -> handlerlit hnlit				      
+    | `FunLit (_, _, fnlit, _) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | `List (_, source)
@@ -427,6 +437,7 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
+    | `QualifiedVar _ -> failwith "Freevars for qualified vars not implemented yet"
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with
@@ -442,10 +453,11 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _) -> singleton name, empty
-    | `Include _
+    | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
+    | `Module _ -> failwith "Freevars for modules not implemented yet"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (m, cases, params : handlerlit) : StringSet.t =
@@ -478,6 +490,6 @@ struct
     | `GiveNothing (c, _, _) -> singleton c
     | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
     | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | `Fuse ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
+    | `Link ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
     | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
 end

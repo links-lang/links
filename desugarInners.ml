@@ -9,14 +9,14 @@ open Sugartypes
    stores a single type for each recursive function.
 *)
 
-let dp = Sugartypes.dummy_position
-
 let rec add_extras =
   function
     | [], [] -> []
     | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
     | Some q::extras, tyargs ->
       (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
+    | _, _ ->
+      failwith "Mismatch in number of quantifiers and type arguments"
 
 class desugar_inners env =
 object (o : 'self_type)
@@ -33,7 +33,7 @@ object (o : 'self_type)
   method unbind f =
     {< extra_env = StringMap.remove f extra_env >}
 
-  method phrasenode = function
+  method! phrasenode = function
     | `TAppl (((`Var name), pos), tyargs) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
@@ -61,23 +61,26 @@ object (o : 'self_type)
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
 
-  method funlit =
+  method! funlit =
     (* HACK: manage the lexical scope of extras *)
     fun inner_mb lam ->
       let extra_env = extra_env in
       let (o, lam, t) = super#funlit inner_mb lam in
         (o#with_extra_env extra_env, lam, t)
 
-  method bindingnode = function
-    | `Funs defs as b ->
+  method! bindingnode = function
+    | `Funs defs ->
         (* put the outer bindings in the environment *)
         let o, defs = o#rec_activate_outer_bindings defs in
 
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o ((f, _, _), _, ((_tyvars, Some (_, extras)), _), _, _, _) ->
-               o#bind f extras)
+            (fun o ((f, _, _), _, ((_tyvars, dt_opt), _), _, _, _) ->
+               match dt_opt with
+                 | Some (_, extras) -> o#bind f extras
+                 | None -> assert false
+            )
             o defs in
 
         (* unify inner and outer types for each def *)
@@ -85,10 +88,11 @@ object (o : 'self_type)
           let rec list o =
             function
               | [] -> (o, [])
-              | ((_, Some outer, _) as f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+              | ((_, Some outer, _) as f, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
                   let (o, defs) = list o defs in
                   let extras = List.map (fun _ -> None) extras in
                     (o, (f, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+              | _ -> assert false
           in
             list o defs in
 
@@ -112,10 +116,11 @@ object (o : 'self_type)
           (o, (`Funs defs))
     | b -> super#bindingnode b
 
-  method binder : binder -> ('self_type * binder) =
-    fun (name, Some t, pos) ->
-      let var_env = Env.String.bind var_env (name, t) in
-        ({< var_env=var_env; extra_env=extra_env >}, (name, Some t, pos))
+  method! binder : binder -> ('self_type * binder) = function
+      | (_, None, _) -> assert false
+      | (name, Some t, pos) ->
+          let var_env = Env.String.bind var_env (name, t) in
+            ({< var_env=var_env; extra_env=extra_env >}, (name, Some t, pos))
 end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)
@@ -127,14 +132,17 @@ object
   val has_no_inners = true
   method satisfied = has_no_inners
 
-  method bindingnode = function
+  method! bindingnode = function
     | `Funs defs ->
         {< has_no_inners =
             List.for_all
-              (fun (_f, _, ((_tyvars, Some (_inner, extras)), _), _, _, _) ->
-                 List.for_all (function
-                                 | None -> true
-                                 | Some _ -> false) extras)
+              (fun (_f, _, ((_tyvars, dt_opt), _), _, _, _) ->
+                 match dt_opt with
+                    | None -> assert false
+                    | Some (_inner, extras) ->
+                         List.for_all (function
+                                         | None -> true
+                                         | Some _ -> false) extras)
               defs >}
     | b -> super#bindingnode b
 end

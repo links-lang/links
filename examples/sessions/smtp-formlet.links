@@ -138,8 +138,8 @@ fun receiveBody(s, socket) {
       var smtpAnswer = read(socket);
       print("S: " ^^ smtpAnswer);
       receiveMail(s, socket)
-   } 
-} 
+   }
+}
 ###
 
 ### helper functions ###
@@ -238,7 +238,7 @@ fun sendBody(c, message) {
 
 sig startCommunication : (Message) ~> ()
 fun startCommunication(message) server {
-  mailClient(fork(mailServer), message)
+  mailClient(forkSync(mailServer), message)
 }
 
 var emailFormlet =

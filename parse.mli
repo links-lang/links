@@ -27,5 +27,5 @@ val parse_file    : ?pp:string
 val parse_channel : ?interactive:(unit -> unit)
                   -> ?in_context:context
                   -> 'a grammar
-                  -> (in_channel * string) 
+                  -> (in_channel * string)
                   -> 'a * position_context

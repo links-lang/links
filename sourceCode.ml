@@ -12,7 +12,7 @@ let trim_initial_newline s =
 
 class source_code =
 object (self)
-  val lines = 
+  val lines =
     let tbl = Hashtbl.create default_lines in
       Hashtbl.add tbl 0 0;
       tbl
@@ -20,14 +20,13 @@ object (self)
 
   (* Return the portion of source code that falls between two positions *)
   method private extract_substring (start : Lexing.position) (finish : Lexing.position) =
-    if start == Lexing.dummy_pos || finish == Lexing.dummy_pos then
-      "*** DUMMY POSITION ****"
-    else
+    try
       Buffer.sub text start.Lexing.pos_cnum (finish.Lexing.pos_cnum - start.Lexing.pos_cnum)
+    with Invalid_argument _ -> "*** DUMMY POSITION ****"
 
   (* Return some lines of the source code *)
   method extract_line_range (startline : int) (finishline : int) =
-    try 
+    try
       let start  = Hashtbl.find lines startline
       and finish = (if finishline = Hashtbl.length lines
                     (* handle the last line of input *)
@@ -36,7 +35,7 @@ object (self)
       in
         trim_initial_newline (Buffer.sub text (start) (finish - start))
     with NotFound _ -> "<unknown>"
-      
+
   (* Return one line of the source code *)
   method private extract_line (line : int) =
     self#extract_line_range (line - 1) line
@@ -48,7 +47,7 @@ object (self)
     fun buffer nchars ->
       let nchars = infun buffer nchars in
         List.iter (fun linepos ->
-                     Hashtbl.add lines 
+                     Hashtbl.add lines
                        (Hashtbl.length lines)
                        (linepos + Buffer.length text))
           (Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
@@ -57,7 +56,7 @@ object (self)
 
   (* Retrieve the last line of source code read. *)
   method find_line (pos : Lexing.position) : (string * int) =
-    (self#extract_line pos.Lexing.pos_lnum, 
+    (self#extract_line pos.Lexing.pos_lnum,
      pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
 
   (* Create a `lookup function' that given start and finish positions
@@ -65,12 +64,12 @@ object (self)
   *)
   method lookup =
     fun (start, finish) ->
-      (start, 
+      (start,
        self#extract_line start.Lexing.pos_lnum,
        self#extract_substring start finish)
 end
 
-type lexpos = Lexing.position 
+type lexpos = Lexing.position
 module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
 module Show_lexpos = Deriving_Show.Show_unprintable(struct type a = lexpos end)
 module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end

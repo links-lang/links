@@ -38,13 +38,13 @@ fun forever() {
 }
 
 
-# Landin's knot - this function loops forever
-sig forever0 : () ~> ()
-fun forever0() {
-  var x = newCell(linfun () {()});
-  put(x, linfun () {get(x)()});
-  get(x)()
-}
+## Landin's knot - this function loops forever
+#sig forever0 : () ~> ()
+#fun forever0() {
+#  var x = newCell(linfun () {()});
+#  put(x, linfun () {get(x)()});
+#  get(x)()
+#}
 
 
 forever()

@@ -23,4 +23,4 @@ fun user(s) {
   x
 }
 
-user(knife (calc))
+user(fork (calc))

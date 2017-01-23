@@ -1,0 +1,19 @@
+sudo: required
+dist: trusty
+language: c
+services:
+  - postgresql
+before_install:
+  - sudo add-apt-repository -y ppa:avsm/ppa
+  - sudo apt-get -qq update
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam
+  - opam init -a
+  - opam switch 4.04.0
+  - eval `opam config env`
+  - psql -c 'create database links;' -U postgres
+install:
+  - opam install -y deriving lwt postgresql sqlite3 mysql cgi base64 cohttp
+script:
+  - make -j2 nc
+  - make tests
+  - ./run-tests db-only shredding

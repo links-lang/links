@@ -1,0 +1,14 @@
+module A {
+
+  module B {
+    fun bar() {
+      "hi"
+    }
+  }
+
+  fun foo() {
+    "hello"
+  }
+}
+
+A.B.bar()

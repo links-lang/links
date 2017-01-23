@@ -22,5 +22,25 @@ xmlParser.mli
 ._ncdi
 ._bcdi
 *.links.cache
-Makefile.config
-\#*\#
+
+# Emacs temporary and backup files
+\#*
+.#*
+
+# documentation
+quick-help.html
+doc/*.aux
+doc/*.log
+doc/*.pdf
+doc/*.toc
+
+# ocamlbuild artefacts
+_build
+links.byte
+links.native
+
+# database configuration
+tests/database/config
+
+# shredding configuration
+tests/shredding/config

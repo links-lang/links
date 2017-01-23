@@ -1,34 +1,6 @@
 (*pp deriving *)
 open Utility
 
-module NormalForms =
-struct
-  (*
-     This module gives the datatype of normal forms for query
-     expressions.
-
-     Instead of using normal forms we use a single datatype t as it
-     makes the implementation considerably simpler.
-
-     At some point it might be interesting to try to target the normal
-     form directly.
-  *)
-
-  type base =
-      [ `If of base * base * base
-      | `Project of (Var.var * StringSet.t) * string | `Erase of (Var.var * StringSet.t) * string
-      | `Apply of string * base list
-      | `Constant of Constant.constant ]
-
-  type tail =
-      [ `Where of base * tail
-      | `SingletonRecord of base StringMap.t ]
-
-  type generator = Var.var * Value.table
-  type comprehension = generator list * base list * tail
-  type query = comprehension list
-end
-
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
@@ -91,8 +63,8 @@ let used_database v : Value.database option =
           end
   and used =
     function
-      | `For (gs, os, _body) -> generators gs
-      | `Table ((db, _), _, _) -> Some db
+      | `For (gs, _, _body) -> generators gs
+      | `Table ((db, _), _, _, _) -> Some db
       | _ -> None in
   let rec comprehensions =
     function
@@ -155,7 +127,7 @@ let rec tail_of_t : t -> t = fun v ->
   let tt = tail_of_t in
     match v with
       | `For (_gs, _os, `Singleton (`Record fields)) -> `Record fields
-      | `For (_gs, _os, `If (c, t, `Concat [])) -> tt (`For (_gs, _os, t))
+      | `For (_gs, _os, `If (_, t, `Concat [])) -> tt (`For (_gs, _os, t))
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
 (** Return the type associated with an expression *)
@@ -167,22 +139,22 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
     Types.make_record_type (StringMap.map te fields)
   in
     match v with
-      | `Concat (v::vs) -> te v
-      | `For (gens, _os, body) -> te body
+      | `Concat (v::_) -> te v
+      | `For (_, _os, body) -> te body
       | `Singleton (`Record fields) -> record fields
       | `If (_, t, _) -> te t
-      | `Table (_, _, row) -> `Record row
-      | `Constant (`Bool b) -> Types.bool_type
-      | `Constant (`Int i) -> Types.int_type
-      | `Constant (`Char c) -> Types.char_type
-      | `Constant (`Float f) -> Types.float_type
-      | `Constant (`String s) -> Types.string_type
-      | `Project (`Var (x, field_types), name) -> StringMap.find name field_types
+      | `Table (_, _, _, row) -> `Record row
+      | `Constant (`Bool   _) -> Types.bool_type
+      | `Constant (`Int    _) -> Types.int_type
+      | `Constant (`Char   _) -> Types.char_type
+      | `Constant (`Float  _) -> Types.float_type
+      | `Constant (`String _) -> Types.string_type
+      | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
-let default_of_base_type : Types.primitive -> t =
+let default_of_base_type =
   function
     | `Bool   -> `Constant (`Bool false)
     | `Int    -> `Constant (`Int 42)
@@ -191,7 +163,7 @@ let default_of_base_type : Types.primitive -> t =
     | `String -> `Constant (`String "")
     | _       -> assert false
 
-let rec value_of_expression : t -> Value.t = fun v ->
+let rec value_of_expression = fun v ->
   let ve = value_of_expression in
   let value_of_singleton = fun s ->
     match s with
@@ -257,17 +229,36 @@ let labels_of_field_types field_types =
     field_types
     StringSet.empty
 
-let table_field_types (_, _, (fields, _, _)) =
+let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+  let (field_spec_map, _, _) = TypeUtils.extract_row t in
+  StringMap.map (function
+                  | `Present t -> t
+                  | _ -> assert false) field_spec_map
+
+let table_field_types (_, _, _, (fields, _, _)) =
   StringMap.map (function
                   | `Present t -> t
                   | _ -> assert false) fields
 
 let rec field_types_of_list =
   function
-    | `Concat (v::vs) -> field_types_of_list v
+    | `Concat (v::_) -> field_types_of_list v
     | `Singleton (`Record fields) -> StringMap.map type_of_expression fields
     | `Table table -> table_field_types table
     | _ -> assert false
+
+	  (* takes a normal form expression and returns true iff it has list type *)
+let is_list =
+  function
+    | `For _
+    | `Table _
+    | `Singleton _
+    | `Concat _
+    | `If (_, _, `Concat []) -> true
+    | _ -> false
+
+
+	  (* TODO: Clean up and unify with Queryshredding.Eval *)
 
 module Eval =
 struct
@@ -275,15 +266,7 @@ struct
 
   let nil = `Concat []
 
-  (* takes a normal form expression and returns true iff it has list type *)
-  let is_list =
-    function
-      | `For _
-      | `Table _
-      | `Singleton _
-      | `Concat _
-      | `If (_, _, `Concat []) -> true
-      | _ -> false
+
 
   let eval_error fmt =
     let error msg = raise (DbEvaluationError msg) in
@@ -292,6 +275,44 @@ struct
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
     Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'
+
+  let lookup_fun (f, fvs) =
+    match Tables.lookup Tables.fun_defs f with
+    | Some (finfo, (xs, body), z, location) ->
+      Some
+      begin
+        match Var.name_of_binder (f, finfo) with
+        | "concatMap" ->
+          `Primitive "ConcatMap"
+        | "map" ->
+          `Primitive "Map"
+        | "empty" ->
+          `Primitive "Empty"
+        | "sortByBase" ->
+          `Primitive "SortBy"
+        | _ ->
+          begin
+            match location with
+            | `Server | `Unknown ->
+                let env =
+                  match z, fvs with
+                  | None, None       -> Value.empty_env
+                  | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env
+                  | _, _ -> assert false in
+                `Closure ((xs, body), env_of_value_env env)
+            | `Client ->
+              failwith ("Attempt to use client function: " ^ Js.var_name_binder (f, finfo) ^ " in query")
+            | `Native ->
+              failwith ("Attempt to use native function: " ^ Var.Show_binder.show (f, finfo) ^ " in query")
+          end
+      end
+    | None -> None
+
+  let find_fun (f, fvs) =
+    match lookup_fun (f, fvs) with
+    | Some v -> v
+    | None ->
+      failwith ("Attempt to find undefined function: " ^ string_of_int f)
 
   let rec expression_of_value : Value.t -> t =
     function
@@ -311,10 +332,9 @@ struct
                fields)
       | `Variant (name, v) -> `Variant (name, expression_of_value v)
       | `XML xmlitem -> `XML xmlitem
-      | `FunctionPtr (f, env) ->
+      | `FunctionPtr (f, fvs) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        let (_finfo, (xs, body), _z, _location) as def = Tables.find Tables.fun_defs f in
-        `Closure ((xs, body), env_of_value_env env)
+        find_fun (f, fvs)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -324,30 +344,8 @@ struct
     (val_env, Env.Int.bind exp_env (x, v))
 
   let lookup (val_env, exp_env) var =
-    match Tables.lookup Tables.fun_defs var with
-    | Some (finfo, (xs, body), None, location) ->
-      begin
-        match Var.name_of_binder (var, finfo) with
-        | "concatMap" ->
-          `Primitive "ConcatMap"
-        | "map" ->
-          `Primitive "Map"
-        | "empty" ->
-          `Primitive "Empty"
-        | "sortByBase" ->
-          `Primitive "SortBy"
-        | _ ->
-          begin
-            match location with
-            | `Server | `Unknown ->
-              (* Debug.print ("looked up function: "^Var.Show_binder.show (var, finfo)); *)
-              `Closure ((xs, body), env_of_value_env Value.empty_env)
-            | `Client ->
-              failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
-            | `Native ->
-              failwith ("Attempt to use native function: " ^ Var.Show_binder.show (var, finfo) ^ " in query")
-          end
-      end
+    match lookup_fun (var, None) with
+    | Some v -> v
     | None ->
       begin
         match Value.lookup var val_env, Env.Int.find exp_env var with
@@ -360,11 +358,6 @@ struct
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
-
-  let lookup_lib_fun (val_env, _exp_env) var =
-    match Value.lookup var val_env with
-      | Some v -> expression_of_value v
-      | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
 
   let eta_expand_var (x, field_types) =
     `Record
@@ -473,7 +466,7 @@ struct
           | _ -> eval_error "Error erasing from record"
       in
         erase (value env r, labels)
-    | `Inject (label, v, t) -> `Variant (label, value env v)
+    | `Inject (label, v, _) -> `Variant (label, value env v)
     | `TAbs (_, v) -> value env v
     | `TApp (v, _) -> value env v
 
@@ -496,7 +489,8 @@ struct
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | `Closure (f, v) ->
-      let (_finfo, (xs, body), Some z, _location) = Tables.find Tables.fun_defs f in
+      let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
+      let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
       let env' = bind (Value.empty_env, Env.Int.empty) (z, value env v) in
@@ -605,20 +599,12 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun ((f, _) as fb, (_, args, body), _, (`Client | `Native)) ->
+              | `Fun (_, _, _, (`Client | `Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _) as fb, (_, args, body), z, _) ->
+              | `Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 failwith ("Function definition in query: " ^ string_of_int f)
-                (* let args = *)
-                (*   match z with *)
-                (*   | None -> args *)
-                (*   | Some z -> z :: args *)
-                (* in *)
-                (* computation *)
-                (*   (bind env (f, `Closure ((List.map fst args, body), env))) *)
-                (*   (bs, tailcomp) *)
-              | `Rec defs ->
+              | `Rec _ ->
                   eval_error "Recursive function"
               | `Alien _ -> (* just skip it *)
                   computation env (bs, tailcomp)
@@ -716,7 +702,7 @@ struct
     match c with
       | `Constant (`Bool true) -> t
       | `Constant (`Bool false) -> e
-      | `If (c', t', e') ->
+      | `If (c', t', _) ->
         reduce_if_body
           (reduce_or (reduce_and (c', t'),
                       reduce_and (reduce_not c', t')),
@@ -812,7 +798,7 @@ struct
             reduce_eq (a, b)
         | (`Record lfields, `Record rfields) ->
           List.fold_right2
-            (fun (s1, v1) (s2, v2) e ->
+            (fun (_, v1) (_, v2) e ->
               reduce_and (reduce_eq (v1, v2), e))
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
@@ -926,8 +912,6 @@ struct
                ) field_types [])
       | _ -> assert false
 
-  let gens : (Var.var * t) list -> t list = concat_map gen
-
   let base_type_of_expression t =
     match type_of_expression t with
       | `Primitive p -> p
@@ -945,35 +929,13 @@ struct
       function
         | `Val t        -> [t]
         | `Gen g        -> gen g
-        | `TailGen g    -> []
+        | `TailGen _    -> []
         | `DefVal t     -> [default_of_base_type t]
         | `DefGen g     -> List.map default_of_base_value (gen g)
-        | `DefTailGen g -> []
+        | `DefTailGen _ -> []
         | `Branch i     -> [`Constant (`Int i)]
     in
       concat_map long
-
-  (* convert orders to a list of expressions
-
-       - represent generators by projecting all fields
-       - include tail generators
-
-     This gives us a completely deterministic list semantics.  *)
-  let strict_long_orders : orders -> t list =
-    let strict_long =
-      function
-        | `Val t        -> [t]
-        | `Gen g
-        | `TailGen g    -> gen g
-        | `DefVal t     -> [default_of_base_type t]
-        | `DefGen g
-        | `DefTailGen g -> List.map default_of_base_value (gen g)
-        | `Branch i     -> [`Constant (`Int i)]
-    in
-      concat_map strict_long
-
-  let no_orders : orders -> t list =
-    fun _ -> []
 
   let lift_vals = List.map (fun o -> `Val o)
   let lift_gens = List.map (fun g -> `Gen g)
@@ -1000,7 +962,7 @@ struct
         | _ -> assert false
   and queries : context -> t -> t list -> (int * query_tree) list =
     fun gs cond vs ->
-      let i, cs =
+      let _, cs =
         List.fold_left
           (fun (i, cs) v ->
             let c = query gs cond v in
@@ -1054,12 +1016,12 @@ struct
   (* compute the order indexes for the specified query tree along a
      path *)
   let rec flatten_at path active : query_tree -> orders =
-    let box branch = `Constant (`Int branch) in
-      function
+    function
         | `Leaf (_, os) -> os
         | `Node (os, cs) ->
           if active then
-            let (branch :: path) = path in
+            let branch = List.hd path in
+            let path   = List.tl path in
               os @ `Branch branch :: flatten_at_children branch path active cs
           else
             os @ `Branch 0 :: flatten_at_children 0 [] active cs
@@ -1118,53 +1080,16 @@ struct
     fun pick_orders ->
       function
         | (_, _, os) :: _ -> List.length (pick_orders os)
+        | [] -> assert false
 
   let ordered_query v =
     let ss = query v in
     let n = index_length long_orders ss in
     let vs = List.map (query_of_clause long_orders) ss in
       vs, n
-
-  let unordered_query_of_clause (gs, body, os) =
-    match gs with
-      | [] -> body
-      | _  -> `For (gs, [], body)
-
-  let unordered_query v =
-    List.map unordered_query_of_clause (query v)
 end
 
-(* Hoist concatenation to the top-level and lower conditionals to the
-   tails of comprehensions, yielding a collection of canonical
-   comprehensions.
-
-   This process doesn't necessarily respect list ordering. The order
-   module generalises it in order to support various degrees of
-   list-ordering.
-
-   The intention is that Split.query == Order.unordered_query.
-*)
-module Split =
-struct
-  type gen = Var.var * t
-
-  let rec query : gen list -> t list -> t -> t -> t list =
-    fun gs os cond ->
-      function
-        | `Singleton r ->
-          [`For (gs, os, Eval.reduce_where_then (cond, `Singleton r))]
-        | `Concat vs ->
-          concat_map (query gs os cond) vs
-        | `If (cond', v, `Concat []) ->
-          query gs os (Eval.reduce_and (cond, cond')) v
-        | `For (gs', os', body) ->
-          query (gs @ gs') (os @ os') cond body
-        | _ -> assert false
-
-  let query : t -> t list =
-    query [] [] (`Constant (`Bool true))
-end
-
+    (* TODO: Unify this with Queryshredding.ShreddedSql *)
 
 module Sql =
 struct
@@ -1197,13 +1122,6 @@ struct
   let fresh_dummy_var () =
     incr dummy_counter;
     "dummy" ^ string_of_int (!dummy_counter)
-
-  let string_of_label label =
-    if Str.string_match (Str.regexp "[0-9]+") label 0 then
-      "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier;
-                                 works in MySQL and PostgreSQL *)
-    else
-      label
 
   module Arithmetic :
   sig
@@ -1368,7 +1286,7 @@ struct
       | `Concat _ -> assert false
       | `For ([], _, body) ->
           clause db body
-      | `For ((x, `Table (_db, table, _row))::gs, os, body) ->
+      | `For ((x, `Table (_db, table, _, _row))::gs, os, body) ->
           let body = clause db (`For (gs, [], body)) in
           let os = List.map (base db) os in
             begin
@@ -1398,7 +1316,7 @@ struct
                   `Select (fields, tables, c, os)
               | _ -> assert false
           end
-      | `Table (_db, table, (fields, _, _)) ->
+      | `Table (_db, table, _keys, (fields, _, _)) ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
@@ -1457,7 +1375,7 @@ struct
       | `Project (`Var (x, _field_types), name) ->
           `Project (x, name)
       | `Constant c -> `Constant c
-      | _ -> assert false
+      | v -> failwith ("Bad base value: " ^ string_of_t v)
 
   (* convert a regexp to a like if possible *)
   and likeify v =
@@ -1531,22 +1449,7 @@ struct
     let q = `UnionAll (List.map (clause db) vs, n) in
       string_of_query db range q
 
-  let unordered_query db range v =
-    (* Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    (*let vs = Order.unordered_query v in*)
-    let vs = Split.query v in
-    (* Debug.print ("concat vs: "^string_of_t (`Concat vs)); *)
-    let q = `UnionAll (List.map (clause db) vs, 0) in
-      string_of_query db range q
-
-  let wonky_query db range v =
-(*     Debug.print ("v: "^string_of_t v); *)
-    reset_dummy_counter ();
-    let q = outer_query db v in
-      string_of_query db range q
-
-  let update db ((x, table), where, body) =
+  let update db ((_, table), where, body) =
     reset_dummy_counter ();
     let base = (base db) ->- (string_of_base db true) in
     let where =
@@ -1565,7 +1468,7 @@ struct
     in
       "update "^table^" set "^fields^where
 
-  let delete db ((x, table), where) =
+  let delete db ((_, table), where) =
     reset_dummy_counter ();
     let base = base db ->- (string_of_base db true) in
     let where =

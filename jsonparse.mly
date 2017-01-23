@@ -13,7 +13,7 @@ open Utility
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
-%token COLON COMMA UNDERSCORE TRUE FALSE NULL 
+%token COLON COMMA UNDERSCORE TRUE FALSE NULL
 %token <string> STRING
 %token <int> INT
 %token <float> FLOAT
@@ -21,14 +21,14 @@ open Utility
 %start parse_json
 %type <Value.t> parse_json
 
-%% 
+%%
 
 parse_json:
 | value { $1 }
 
 object_:
 | LBRACE RBRACE         { `Record [] }
-| LBRACE members RBRACE { match $2 with 
+| LBRACE members RBRACE { match $2 with
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
@@ -41,7 +41,7 @@ object_:
                                           Value.reconstruct_db_string
                                             (Value.unbox_string (List.assoc "name" bs),
                                              Value.unbox_string (List.assoc "args" bs)) in
-                                          `Database (Value.db_connect driver params) 
+                                          `Database (Value.db_connect driver params)
                                     | _ -> failwith ("jsonparse: database value must be a record")
                                 end
                             | ["_table", t] ->
@@ -54,15 +54,27 @@ object_:
                                               | `Database db -> db
                                               | _ -> failwith ("jsonparse: first argument to a table must be a database")
                                           end
-                                        and name = Value.unbox_string (List.assoc "name" bs)
+					and name = Value.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
                                             match DesugarDatatypes.read ~aliases:Env.String.empty (Value.unbox_string (List.assoc "row" bs)) with
                                                 | `Record row -> row
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end
+                                        and keys =
+					  begin
+					    match List.assoc "keys" bs with
+					      | `List keys ->
+						  List.map
+						    (function
+						       | `List part_keys ->
+							   List.map Value.unbox_string part_keys
+						       | _ -> failwith "jsonparse: keys must be lists of strings")
+						    keys
+					      | _ -> failwith ("jsonparse: table keys must have list type")
+					  end
                                         in
-                                          `Table (db, name, row)
+                                          `Table (db, name, keys, row)
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | ["_xml", t] ->
@@ -85,7 +97,7 @@ object_:
                                               let body =
                                                 match body with
                                                   | `List body -> List.map
-                                                      (function 
+                                                      (function
                                                          | `XML body -> body
                                                          | _ -> failwith ("jsonparse: xml body should be a list of xmlitems"))
                                                         body
@@ -98,17 +110,13 @@ object_:
                                   end
                             | ["_closureTable", id] ->
                               `ClientFunction("_closureTable["^Value.string_of_value id^"]")
-                            | ["_serverFunc", id] ->
-                              `FunctionPtr(Value.unbox_int id, Value.empty_env)
-                            | ["_serverFunc", id; "_env", env]
-                            | ["_env", env; "_serverFunc", id] ->
-                              let env' =
-                                Value.extend Value.empty_env
-                                  (Utility.IntMap.map
-                                     (fun v -> (v, `Local))
-                                     (Utility.val_of (Value.intmap_of_record env)))
-                              in
-                              `FunctionPtr(Value.unbox_int id, env')
+                            | ["_serverFunc", id]
+                            | ["_serverFunc", id; "_env", `Record []]
+                            | ["_env", `Record []; "_serverFunc", id] ->
+                              `FunctionPtr(Value.unbox_int id, None)
+                            | ["_serverFunc", id; "_env", fvs]
+                            | ["_env", fvs; "_serverFunc", id] ->
+                              `FunctionPtr(Value.unbox_int id, Some fvs)
                             | _ -> `Record (List.rev $2)
                         }
 
@@ -131,7 +139,7 @@ value:
 | array                              { $1 }
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
-| NULL                               { `Record [] (* Or an error? *) } 
+| NULL                               { `Record [] (* Or an error? *) }
 
 string:
 | STRING                             { Value.box_string $1 }

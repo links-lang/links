@@ -11,4 +11,4 @@ create table wordlist (
 -- dict-suggest-update.links
 
 create sequence def_id_seq;
-create table definitions (id bigint default (nextval('def_id_seq')), word varchar(80), meaning text); 
+create table definitions (id bigint default (nextval('def_id_seq')), word varchar(80), meaning text);

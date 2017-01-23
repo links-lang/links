@@ -179,13 +179,14 @@ let keywords = [
  "handler"  , HANDLER; "linearhandler", LINEARHANDLER;
  "if"       , IF;
  "in"       , IN;
- "include"  , INCLUDE;
+ "open"     , OPEN;
  "yields"   , YIELDS;
 (*  "infix"    , INFIX; *)
 (*  "infixl"   , INFIXL; *)
 (*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
+ "module"   , MODULE;
  "mu"       , MU;
  "native"   , NATIVE;
  "nu"       , NU;
@@ -207,6 +208,7 @@ let keywords = [
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;
+ "spawnClient" , SPAWNCLIENT;
  "spawnDemon" , SPAWNDEMON;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
@@ -219,13 +221,15 @@ let keywords = [
  "var"      , VAR;
  "where"    , WHERE;
  "with"     , WITH;
+(* SAND *)
+ "tablekeys"     , TABLEKEYS;
 ]
 
 exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
-let def_kind = ['A'-'Z'] def_id*
+let module_name = (['A'-'Z'] (['A'-'Z' 'a'-'z'])*)
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
 let def_qname = ('#' | def_id (':' def_id)*)

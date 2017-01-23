@@ -1,0 +1,81 @@
+var db = database "people";
+
+var couples = table "couples" with (her:String, him:String)
+    	      tablekeys [["him"]] from db;
+var people = table "people" with (name:String, age:Int)
+    	     tablekeys [["name"]] from db;
+
+
+var q1 = query {
+  for (c <-- couples)
+  for (w <-- people)
+  for (m <-- people)
+  where (c.her == w.name && c.him == m.name && w.age > m.age)
+  [(name=w.name, diff=w.age-m.age)]
+};
+
+fun range(a,b) {
+  for (w <-- people)
+  where (a <= w.age && w.age < b)
+  [(name=w.name)]
+}
+
+var q2 = query {range(30,40)};
+
+fun satisfies(p) {
+  for (w <-- people)
+  where (p(w.age))
+  [(name=w.name)]
+}
+
+var q3 = query {satisfies (fun (x) {30 <= x && x < 40})};
+
+var q4 = query {satisfies (fun (x) {x `mod` 2 == 0})};
+
+fun getAge(s) {
+  for (u <-- people)
+  where (u.name == s)
+  [u.age]
+}
+
+fun compose(s,t) {
+  for (a <- getAge(s))
+  for (b <- getAge(t))
+  range(a,b)
+}
+
+var q5 = compose("Edna","Bert");
+
+typename Predicate = mu p. [| Above : Int
+                        | Below : Int
+                        | And : (p, p)
+                        | Or : (p, p)
+                        | Not : p|];
+
+sig eval : (Predicate) ~> (Int) -> Bool
+fun eval(t) {
+  switch (t) {
+    case Above(a) -> fun (x) {a <= x}
+    case Below(a) -> fun (x) {x < a}
+    case And(t1,t2) -> var b1 = eval(t1);
+                       var b2 = eval(t2);
+                       fun(x) {b1(x) && b2(x)}
+    case Or(t1,t2) -> var b1 = eval(t1);
+                       var b2 = eval(t2);
+                       fun(x) {b1(x) || b2(x)}
+    case Not(t) -> var b = eval(t); fun (x) {not(b(x))}
+  }
+}
+
+var p1 = eval (And (Above(30),Below(40)));
+var p2 = eval (Not(Or (Below(30),Above(40))));
+
+var q6 = query {
+  satisfies (p1)
+};
+
+var q7 = query {
+  satisfies (p2)
+};
+
+(q1,q2,q3,q4,q5,q6,q7)

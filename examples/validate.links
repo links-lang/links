@@ -4,10 +4,10 @@ typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
 var checkedInt = inputInt;
 
 sig date : Formlet(Date)
-var date = 
+var date =
   formlet
     <#>
-      { checkedInt -> day } / { checkedInt -> mo } 
+      { checkedInt -> day } / { checkedInt -> mo }
     </#>
   yields Date(day, mo);
 
@@ -30,8 +30,8 @@ var travelForm =
      <td> Departure:</td> <td> { date -> dep }</td>
     </tr>
     <tr><td>{ submit("Submit") }</td></tr>
-   </table>   
-  yields 
+   </table>
+  yields
     (person=person, age=age, arrival = arr, departure = dep);
 
 
@@ -60,8 +60,12 @@ fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
    </html>
 }
 
-page
- <html>
-  <h1>Date:</h1>
-  { checkedForm => showBookingInformation }
- </html>
+fun main() {
+  page
+   <html>
+    <h1>Date:</h1>
+    { checkedForm => showBookingInformation }
+   </html>
+}
+
+main()

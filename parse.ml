@@ -27,8 +27,8 @@ fun ~context ?nlhook ~parse ~infun ~name ->
     try
       let p = parse (Lexer.lexer context ~newline_hook:(from_option identity nlhook)) lexbuf in
         (p, code)
-    with 
-      | Parsing.Parse_error -> 
+    with
+      | Parsing.Parse_error ->
           let line, column = code#find_line lexbuf.lex_curr_p in
             raise
               (Errors.RichSyntaxError
@@ -38,14 +38,14 @@ fun ~context ?nlhook ~parse ~infun ~name ->
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
       | Sugartypes.ConcreteSyntaxError (msg, (start, finish, _)) ->
-          let linespec = 
-            if start.pos_lnum = finish.pos_lnum 
+          let linespec =
+            if start.pos_lnum = finish.pos_lnum
             then string_of_int start.pos_lnum
             else (string_of_int start.pos_lnum  ^ "..."
                   ^ string_of_int finish.pos_lnum) in
           let line = code#extract_line_range (start.pos_lnum-1) finish.pos_lnum in
           let _, column = code#find_line finish in
-            raise 
+            raise
               (Errors.RichSyntaxError
                  {Errors.filename = name;
                   Errors.linespec = linespec;
@@ -66,11 +66,11 @@ fun ~context ?nlhook ~parse ~infun ~name ->
    Lexing.from_function that reads characters from the channel.
 *)
 let reader_of_channel channel buffer = input channel buffer 0
-  
+
 (* Given a string, return a function suitable for input to
    Lexing.from_function that reads characters from the string.
 *)
-let reader_of_string ?pp string = 
+let reader_of_string ?pp string =
   let string = match pp with
     | None -> string
     | Some command -> Utility.filter_through ~command string in
@@ -100,10 +100,10 @@ let normalize_context = function
   | None -> fresh_context ()
   | Some c -> c
 
-let default_preprocessor () = (Settings.get_value Basicsettings.pp) 
+let default_preprocessor () = (Settings.get_value Basicsettings.pp)
 
 (** Public functions: parse some data source containing Links source
-    code and return a list of ASTs. 
+    code and return a list of ASTs.
 
     We use Lexing.from_function in every case rather than
     Lexing.from_channel, Lexing.from_string etc. so that we can
@@ -112,7 +112,7 @@ let default_preprocessor () = (Settings.get_value Basicsettings.pp)
 **)
 let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar string =
   let pp = normalize_pp pp
-  and context = normalize_context context in 
+  and context = normalize_context context in
     read ?nlhook:None ~parse:grammar ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
 
 let parse_channel ?interactive ?in_context:context grammar (channel, name) =
@@ -129,7 +129,7 @@ let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filenam
              read ~nlhook:ignore
                   ~parse:grammar
                   ~infun:(reader_of_string ~pp (String.concat "\n" (Utility.lines channel)))
-                  ~name:filename 
+                  ~name:filename
                   ~context)
 
 type position_context = SourceCode.source_code

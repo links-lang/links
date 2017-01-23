@@ -1,7 +1,7 @@
 fun change() client {
   replaceDocument(
    <html>
-    <body> 
+    <body>
        new page
     </body>
    </html>

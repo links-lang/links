@@ -93,7 +93,7 @@ fun sendBody(c, message) {
 ### the server
 sig smtpServer : (~SMTPClient) ~> ()
 fun smtpServer(s) {
-  var socket = 
+  var socket =
     switch (connectSocket("smtp.inf.ed.ac.uk", 25)) {
       case Just(socket) -> socket
       case Nothing      -> error("Failed to connect to SMTP server")
@@ -174,8 +174,8 @@ fun receiveBody(s, socket) {
       print("C: .");
       var acceptMessage = read(socket);
       receiveMail(s, socket)
-   } 
-} 
+   }
+}
 ###
 
 ### helper functions ###
@@ -203,11 +203,11 @@ fun extractDomain(address) {
 }
 ###
 
-var message = 
+var message =
   (sender="foo@bar.com",
    recipients=[],
    subject="Links SMTP test",
    body="Hello ABCD.\nHow are you?");
 
-smtpClient(knife(smtpServer), message)
+smtpClient(fork(smtpServer), message)
 

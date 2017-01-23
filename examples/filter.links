@@ -44,19 +44,19 @@ fun makePredicate(atomss) server {
       case [] -> fun (_) {true}
       case [a] -> atomicPredicate(a)
       case a::atoms ->
-        var f = atomicPredicate(a); 
+        var f = atomicPredicate(a);
         var g = clause(atoms);
         fun (r) {f(r) && g(r)}
-    } 
+    }
   }
 
   switch (atomss) {
     case [] -> fun (_) {false}
-    case [atoms] -> clause(atoms)      
+    case [atoms] -> clause(atoms)
     case (atoms::atomss) ->
       var f = clause(atoms);
       var g = makePredicate(atomss);
-       
+
       fun (r) {f(r) || g(r)}
   }
 }
@@ -94,12 +94,12 @@ fun renderAtom(pre, a) {
 # fetch the results filtered by a predicate
 fun fetchResults(pred) server {
   var db = database "winestore";
-  var wineTable = table "wine" 
+  var wineTable = table "wine"
                   with (wine_id : Int, wine_name : String, wine_type : Int,
                         year : Int, winery_id : Int)
                   from db;
 
-  var wineTypeTable = table "wine_type" 
+  var wineTypeTable = table "wine_type"
                       with (wine_type_id : Int, wine_type : String)
                       from db;
 
@@ -111,13 +111,13 @@ fun fetchResults(pred) server {
                        (wine_id : Int, cost : Float)
                        from db;
 
-  var wineryTable = table "winery" with 
+  var wineryTable = table "winery" with
                     (winery_id : Int, winery_name : String,
                      region_id : Int)
                     from db;
 
   for (w <-- wineTable, i <-- inventoryTable, t <-- wineTypeTable, r <-- regionTable, y <-- wineryTable)
-   where (w.wine_id == i.wine_id && 
+   where (w.wine_id == i.wine_id &&
           w.wine_type == t.wine_type_id &&
           w.winery_id == y.winery_id &&
           y.region_id == r.region_id &&
@@ -128,12 +128,12 @@ fun fetchResults(pred) server {
 
 fun fetchResultsFactored(pred) server {
   var db = database "winestore";
-  var wineTable = table "wine" 
+  var wineTable = table "wine"
                   with (wine_id : Int, wine_name : String, wine_type : Int,
                         year : Int, winery_id : Int)
                   from db;
 
-  var wineTypeTable = table "wine_type" 
+  var wineTypeTable = table "wine_type"
                       with (wine_type_id : Int, wine_type : String)
                       from db;
 
@@ -145,7 +145,7 @@ fun fetchResultsFactored(pred) server {
                        (wine_id : Int, cost : Float)
                        from db;
 
-  var wineryTable = table "winery" with 
+  var wineryTable = table "winery" with
                     (winery_id : Int, winery_name : String,
                      region_id : Int)
                     from db;
@@ -309,7 +309,7 @@ fun lookupRegion() client {
 ### fetch the types and regions from the database for display in the dropdowns ###
 fun fetchTypesAndRegions() server {
   var db = database "winestore";
-  var wineTypeTable = table "wine_type" 
+  var wineTypeTable = table "wine_type"
                       with (wine_type_id : Int, wine_type : String)
                       from db;
   var regionTable = table "region"
@@ -330,7 +330,7 @@ fun fetchTypesAndRegions() server {
 }
 
 fun main() {
-  var p = spawn {manager([], [])};
+  var p = spawnClient {manager([], [])};
   var (wineTypes, regions) = fetchTypesAndRegions();
 
   page

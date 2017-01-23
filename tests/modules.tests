@@ -1,0 +1,127 @@
+Modules hide inner definitions
+./tests/modules/basic-hide.links
+filemode : args
+stderr : @.*
+exit : 1
+
+Basic qualified binding resolution
+./tests/modules/basic-qual-resolution.links
+filemode : args
+args : -m
+stdout : "hello" : String
+
+Inner module qualified binding resolution
+./tests/modules/basic-inner-qual-resolution.links
+filemode : args
+args : -m
+stdout : "hi" : String
+
+Open allows basic unqualified binding access
+./tests/modules/basic-open.links
+filemode : args
+args : -m
+stdout : "hello!" : String
+
+Module nesting allows partially-qualified names to be used for resolution
+./tests/modules/basic-partial-qualification.links
+filemode : args
+args : -m
+stdout : "hello" : String
+
+Open allows partially-qualified names to be used for resolution
+./tests/modules/basic-partial-qualification-open.links
+filemode : args
+args : -m
+stdout : "hello" : String
+
+Open still allows fully-qualified names to be used
+./tests/modules/basic-open-fully-qual.links
+filemode : args
+args : -m
+stdout : "hello" : String
+
+Opened module does not shadow bindings after opening
+./tests/modules/basic-open-shadow.links
+filemode : args
+args : -m
+stdout : "hi" : String
+
+Opened module shadows previous bindings after opening
+./tests/modules/basic-open-no-shadow.links
+filemode : args
+stdout : "greetings" : String
+args : -m
+
+Cyclic dependencies outlawed
+./tests/modules/runmulti cyclicA.links
+filemode : args
+args : -m
+stderr : @.*
+exit : 1
+
+Module chasing
+./tests/modules/moduleA.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "hello from c!" : String
+
+Basic types in modules
+./tests/modules/type-sig.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 5 : A.AInt
+
+Basic type in session type
+./tests/modules/session-type.links
+filemode : args
+args : -m --path=tests/modules
+stdout : () : ()
+
+Mutually-recursive functions (1)
+./tests/modules/mutualfn.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!Hello!" : String
+
+Mutually-recursive functions (2)
+./tests/modules/mutualfn2.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!" : String
+
+Mutually-recursive functions (3)
+./tests/modules/mutualfn3.links
+filemode : args
+args : -m --path=tests/modules
+stdout : "Hello!" : String
+
+Type signatures in inner modules
+./tests/modules/typesigInner.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 11 : A.B.Foo
+
+Infix operators
+./tests/modules/infix.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 150 : Int
+
+Lots of modules
+./tests/modules/overflow-test/test.links
+filemode : args
+args : -m --path=tests/modules/overflow-test
+stdout : () : ()
+
+Constructor in module
+./tests/modules/constructor-test-good.links
+filemode : args
+args : -m --path=tests/modules
+stdout : 15 : Int
+
+Constructor out of scope
+./tests/modules/constructor-test-bad.links
+filemode : args
+args : -m --path=tests/modules
+stderr : *** Fatal error : Unbound type constructor DT
+exit : 1

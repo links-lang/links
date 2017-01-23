@@ -1,32 +1,77 @@
-Changes
+# Changes
 
-Version 0.3
------------
+## Version 0.6 (Gorgie)
 
-New features
+Version 0.6 of Links brings many changes.
 
- * Deep pattern matching
- * Type signatures
- * Rigid type variables
- * Polymorphic recursion
- * Refinement of polymorphic variant typing to make use of absence
-information
- * User defineable operators, precedence and associativity
- * Partial support for Internet Explorer
- * Configuration files
- * Database operations: insert, update and delete
+### Session Types
 
-Syntax
+Session types are a type system for communication channels, allowing
+conformance to communication protocols to be checked at
+compile-time. Links supports session types natively; for more
+information, see the examples/sessions directory.
 
- * Tables are now handles rather than lists
- * Tables and databases are first class
- * Changes to DOM API
-  * get and set attributes
+### Server-side concurrency
 
-Miscellaneous bug fixes in
+Links now implements message-passing concurrency on the server-side
+using OCaml's light-weight threading (Lwt) library.
 
- * mysql driver
- * SQLite driver
- * JavaScript generation
- * type inference
- * database optimisation
+### Application Server
+
+A major addition in the Gorgie release is the ability to run Links
+applications using a standalone web server, as opposed to using Links
+as a CGI interpreter.  This allows Links to be set up more quickly,
+and for the easier development of applications where state must
+persist over multiple requests. For more information, see the
+examples/webserver directory.
+
+### Modules
+
+Links now supports an experimental simple modules system, allowing the
+development of modular code over multiple files. To enable modules,
+either run Links with the -m flag, or set the "modules" setting to
+true in the configuration file.
+
+To see examples of modules in action, check examples/webserver/examples.links.
+
+### Recursive Type Inlining
+
+Recursive types can now be written without explicitly writing
+recursive type variables. For example, whereas before a list could be
+defined as:
+
+> typename List(a) = mu X . [| Nil : (), Cons : (a, X) |]
+
+It is now possible to write:
+
+> typename List(a) = [| Nil : (), Cons : (a, List(a)) |]
+
+
+### Real Pages
+
+Previously Links offered two web modes: server mode and client
+mode. In server mode web pages were built on the server and it was not
+possible to generate any JavaScript in the web page. In client mode a
+stub was generated on the server. The stub contained JavaScript which
+generated the actual content of the web page dynamically using the DOM
+API.
+
+Now, web pages are always generated on the server, but they may
+contain JavaScript. In particular, they may include embedded event
+handlers implemented by processes which are spawned on the server,
+serialised, and sent to the server along with the body of the web
+page.
+
+In order to spawn a process on the server that needs to run on the
+client, use the spawnClient keyword in place of spawn. This is the
+primary change that needs to be made when adapting old code to work
+with the realpages feature.
+
+### Shredding
+
+Links now includes experimental support for query shredding. This
+allows queries with nested result types to be written. A nested query
+is guaranteed to translate to at most n SQL queries, where n is the
+nesting depth of the source query. It currently only works for the
+postgresql database back end. The shredding extension is enabled by
+configuring the shredding setting to the value true.

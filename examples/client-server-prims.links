@@ -3,7 +3,7 @@ fun f() client {
   alertDialog(intToString(serverTime()))
 }
 
-fun g() server { 
+fun g() server {
   alertDialog("this is the server talking.")
 }
 

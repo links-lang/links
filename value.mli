@@ -12,6 +12,12 @@ class virtual dbvalue :
     method virtual fname : int -> string
     method virtual get_all_lst : string list list
     method virtual nfields : int
+    method virtual ntuples : int
+    method map : 'a. ((int -> string) -> 'a) -> 'a list
+    method map_array : 'a. (string array -> 'a) -> 'a list
+    method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
+    method virtual getvalue : int -> int -> string
+    method virtual gettuple : int -> string array
     method virtual status : db_status
   end
 
@@ -26,7 +32,7 @@ class virtual database :
   end
 
 module Eq_database : Deriving_Eq.Eq with type a = database
-module Typeable_database : Deriving_Typeable.Typeable with type a = database 
+module Typeable_database : Deriving_Typeable.Typeable with type a = database
 module Show_database : Deriving_Show.Show with type a = database
 
 type db_constructor = string -> database * string
@@ -42,7 +48,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   deriving (Show)
 
-type table = (database * string) * string * Types.row
+type table = (database * string) * string * string list list * Types.row
   deriving (Show)
 
 type primitive_value = [
@@ -63,12 +69,17 @@ type t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
+<<<<<<< HEAD
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
+=======
+| `Continuation of continuation
+| `Pid of int * Sugartypes.location
+>>>>>>> origin/sessions
 | `Socket of in_channel * out_channel
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
@@ -121,10 +132,14 @@ val box_string : string -> t
 val unbox_string : t -> string
 val box_list : t list -> t
 val unbox_list : t -> t list
+val box_record : (string * t) list -> t
+val unbox_record : t -> (string * t) list
 val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_pid : int * Sugartypes.location -> t
+val unbox_pid : t -> int * Sugartypes.location
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 val box_op : t list -> t -> t
@@ -135,6 +150,7 @@ val intmap_of_record : t -> t Utility.intmap option
 val string_as_charlist : string -> t
 val charlist_as_string : t -> string
 val string_of_value : t -> string
+val string_of_xml : ?close_tags:bool -> xml -> string
 val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
 val string_of_cont : continuation -> string
@@ -150,3 +166,6 @@ val expr_to_contframe : env -> Ir.tail_computation ->
 
 val value_of_xml : xml -> t
 val value_of_xmlitem : xmlitem -> t
+
+val split_html : xml -> xml * xml
+

@@ -1,0 +1,5 @@
+module A {
+    var x = (firstname="Links", lastname="Modules");
+}
+
+(A.x).firstname ^^ (A.x).lastname

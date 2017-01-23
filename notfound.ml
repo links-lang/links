@@ -1,5 +1,5 @@
 (* The purpose of this module is to override all functions in the
-   standard library that raise the almost-useless function 
+   standard library that raise the almost-useless function
 
       exception Not_found
 
@@ -15,10 +15,10 @@
 
 exception NotFound of string
 
-let not_found fn v = 
+let not_found fn v =
   let nasty_is_string x = Obj.tag (Obj.repr x) = Obj.string_tag in
     raise
-    (NotFound 
+    (NotFound
        (if nasty_is_string v then
           (Obj.magic v : string) ^ " (in "^fn^")"
         else
@@ -42,11 +42,11 @@ struct
   include Hashtbl
 
   let lookup (tbl : ('a,'b) t) (key : 'a) : 'b option =
-    try Some (find tbl key) 
+    try Some (find tbl key)
     with Not_found -> None
 
-  let find tbl key = 
-    try find tbl key 
+  let find tbl key =
+    try find tbl key
     with Not_found -> not_found "Hashtbl.find" key
 end
 
@@ -57,7 +57,7 @@ struct
     try find p l
     with Not_found -> not_found "List.find" "<matching predicate>"
 
-  let assoc v l = 
+  let assoc v l =
     try assoc v l
     with Not_found -> not_found "List.assoc" v
 end
@@ -82,10 +82,10 @@ struct
     include Map.Make(Ord)
 
     let lookup (item: key) (map : 'a t) : 'a option =
-      try Some (find item map) 
+      try Some (find item map)
       with Not_found -> None
 
-    let find x m = 
+    let find x m =
       try find x m
       with Not_found -> not_found "Map.find" x
   end
@@ -99,8 +99,8 @@ struct
   module Hashtbl =
   struct
     include Hashtbl
-    let find tbl key = 
-      try find tbl key 
+    let find tbl key =
+      try find tbl key
       with Not_found -> not_found "MoreLabels.Hashtbl.find" key
   end
 
@@ -110,7 +110,7 @@ struct
     module type S = Map.S
     module Make (Ord : OrderedType) = struct
       include Map.Make(Ord)
-      let find x m = 
+      let find x m =
         try find x m
         with Not_found -> not_found "MoreLabels.Map.find" x
     end
@@ -122,7 +122,7 @@ struct
     module type S = Set.S
     module Make (Ord : OrderedType) = struct
       include Set.Make(Ord)
-      let min_elt t = 
+      let min_elt t =
         try min_elt t
         with Not_found -> invalid_arg "Set.min_elt"
 
@@ -143,14 +143,14 @@ struct
   module type S = Set.S
   module Make (Ord : OrderedType) = struct
     include Set.Make(Ord)
-    let min_elt t = 
+    let min_elt t =
       try min_elt t
       with Not_found -> invalid_arg "Set.min_elt"
-        
+
     let max_elt t =
       try max_elt t
       with Not_found -> invalid_arg "Set.max_elt"
-        
+
     let choose t =
       try choose t
       with Not_found -> invalid_arg "Set.choose"
@@ -163,11 +163,11 @@ struct
   let search_forward r s start =
     try search_forward r s start
     with Not_found -> not_found "Str.search_forward" "<some regex>"
-      
+
   let search_backward r s last =
     try search_backward r s last
     with Not_found -> not_found "Str.search_backward" "<some regex>"
-      
+
   let matched_group n s =
     try matched_group n s
     with Not_found -> not_found "Str.matched_group" "<some regex>"
@@ -185,7 +185,7 @@ module String =
 struct
   include String
 
-  let index s c = 
+  let index s c =
     try index s c
     with Not_found -> not_found "String.index" (String.make 1 c)
 
@@ -206,7 +206,7 @@ module StringLabels =
 struct
   include StringLabels
 
-  let index s c = 
+  let index s c =
     try index s c
     with Not_found -> not_found "StringLabels.index" (String.make 1 c)
 
@@ -227,7 +227,7 @@ module Sys =
 struct
   include Sys
 
-  let getenv name = 
+  let getenv name =
     try getenv name
     with Not_found -> not_found "Sys.getenv" name
 end
@@ -236,7 +236,7 @@ module Unix =
 struct
   include Unix
 
-  let getenv name = 
+  let getenv name =
     try getenv name
     with Not_found -> not_found "Unix.getenv" name
 
@@ -289,7 +289,7 @@ module UnixLabels =
 struct
   include Unix
 
-  let getenv name = 
+  let getenv name =
     try getenv name
     with Not_found -> not_found "Unix.getenv" name
 

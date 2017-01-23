@@ -70,7 +70,7 @@ fun repeatReceive(d, p)() {
 ##sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
 #sig rep : (Proc) {}~> Proc
 #fun rep(p)() {
-#  reproduce(new(), fun (s) {p()}) 
+#  reproduce(new(), fun (s) {p()})
 #}
 
 

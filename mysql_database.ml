@@ -203,8 +203,8 @@ end
 
 let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   let rec obtain output =
-    match fn source with 
-      | None -> output 
+    match fn source with
+      | None -> output
       | Some value -> obtain (value :: output)
   in
     List.rev (obtain [])
@@ -212,25 +212,33 @@ let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
 class mysql_result (result : result) db = object
   inherit Value.dbvalue
   val rows = ref None
-  method status : Value.db_status = 
-    match status db with 
+  method status : Value.db_status =
+    match status db with
       | StatusOK | StatusEmpty -> `QueryOk
       | StatusError c          -> `QueryError (string_of_error_code c)
-  method nfields : int = 
+  method nfields : int =
     fields result
-  method fname  n : string = 
+  method ntuples : int =
+    Int64.to_int(size result)
+  method fname  n : string =
     (Utility.val_of (fetch_field_dir result n)).name
   method get_all_lst : string list list =
     match !rows with
       | None ->
-          let toList row = 
+          let toList row =
             List.map (Utility.from_option "!!NULL!!") (Array.to_list row) in
           let r = List.map toList (slurp fetch result)
           in
             rows := Some r;
             r
       | Some r -> r
-  method error : string = 
+  method getvalue : int -> int -> string = fun n f ->
+    to_row result (Int64.of_int n);
+    Utility.val_of ((Utility.val_of (fetch result)).(f))
+  method gettuple : int -> string array = fun n ->
+    to_row result (Int64.of_int n);
+    Array.map Utility.val_of (Utility.val_of(fetch result))
+  method error : string =
     Utility.val_of (errmsg db)
 end
 
@@ -238,7 +246,7 @@ class mysql_database spec = object(self)
   inherit Value.database
   val connection = connect spec
   method driver_name () = "mysql"
-  method exec query : Value.dbvalue = 
+  method exec query : Value.dbvalue =
     try
       new mysql_result (exec connection query) connection
     with
@@ -247,15 +255,21 @@ class mysql_database spec = object(self)
   method escape_string = Mysql.escape
   method quote_field f =
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
-  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun (table_name, field_names, vss, returning) ->
+  method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
+    fun (table_name, field_names, vss, _returning) ->
       [self#make_insert_query(table_name, field_names, vss);
        "select last_insert_id()"]
 end
 
 let parse_args (args : string) : db =
-  match Utility.split_string args ':' with 
-    | (name::host::port::user::pass::others) ->
+  match Utility.split_string args ':' with
+    | (name::host::port::user::pass::_) ->
+       (* If "user" field was left empty then get the name of user running the
+          process.  This has to be done by acquiring UID, finding corresponding
+          entry in passwd table and reading user's login name. *)
+	let user = if user = ""
+                   then let open Unix in (getpwuid (getuid ())).pw_name
+                   else user in
         (try
           {
             dbname = Some name;
@@ -265,8 +279,8 @@ let parse_args (args : string) : db =
             dbpwd  = Some pass;
             dbsocket = None;
           }
-         with Failure "int_of_string" -> 
-           failwith ("Couldn't parse mysql port number : " ^ port))
+         with Failure msg ->
+           failwith ("[" ^ msg ^ "] Couldn't parse mysql port number : " ^ port))
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
 let driver_name = "mysql"

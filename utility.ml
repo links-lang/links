@@ -93,8 +93,16 @@ module Int = struct
   type t = int
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
-  let compare i j = i-j 
+  let compare i j = i-j
   module Show_t = Deriving_Show.Show_int
+end
+
+module IntPair = struct
+  type t = int * int
+	deriving (Show)
+  (*let compare = Pervasives.compare*)
+  (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
+  let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
 end
 
 module Char =
@@ -124,11 +132,11 @@ struct
     include Map.Make(Ord)
 
     exception Not_disjoint of key * string
-    module S = Deriving_Show.Show_map(Ord)(Ord.Show_t)
+    (* module S = Deriving_Show.Show_map(Ord)(Ord.Show_t) *)
 
-    let find elem map = 
-      try find elem map 
-      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^ 
+    let find elem map =
+      try find elem map
+      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^
                                   " (in Map.find)"))
     let filterv f map =
       filter (fun _ -> f) map
@@ -160,8 +168,8 @@ struct
 
     let union_disjoint a b =
       fold
-        (fun k v r -> 
-           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k)) 
+        (fun k v r ->
+           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k))
            else
              add k v r) b a
 
@@ -183,7 +191,7 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    module Show_t (V : Deriving_Show.Show) = 
+    module Show_t (V : Deriving_Show.Show) =
       Deriving_Show.Show_map(Ord)(Ord.Show_t)(V)
   end
 end
@@ -222,6 +230,8 @@ module type INTSET = Set with type elt = int
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
+module IntPairMap = Map.Make(IntPair)
+
 module type STRINGMAP = Map with type key = string
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
@@ -234,7 +244,7 @@ type stringset = StringSet.t
     deriving (Show)
 
 module Typeable_stringset : Deriving_Typeable.Typeable
-  with type a = stringset = 
+  with type a = stringset =
   Deriving_Typeable.Primitive_typeable(struct
     type t = stringset
     let magic = "stringset"
@@ -412,6 +422,19 @@ struct
 
   let drop_nth xs n =
     (take n xs) @ (drop (n+1) xs)      
+
+  let rec filter_map pred f = function
+    | [] -> []
+    | x::xs ->
+        if pred x then (f x)::(filter_map pred f xs) else
+          (filter_map pred f xs)
+
+  let print_list xs =
+    let rec print_list_inner = function
+        | [] -> ""
+        | e::[] -> e
+        | e::xs -> e ^ ", " ^ (print_list_inner xs) in
+    "[" ^ print_list_inner xs ^ "]"
 end
 include ListUtils
 
@@ -474,6 +497,10 @@ struct
 
   let string_of_alist = String.concat ", " -<- List.map (fun (x,y) -> x ^ " => " ^ y)
 
+  (* FIXME: consolidate split_string and split (suspicion:
+   split_string doesn't properly deal with failure whereas split
+   does) *)
+
   let rec split_string source delim =
     if String.contains source delim then
       let delim_index = String.index source delim in
@@ -481,6 +508,22 @@ struct
           (split_string (String.sub source (delim_index+1)
                            ((String.length source) - delim_index - 1)) delim)
     else source :: []
+
+  (* taken from the internals of cgi *)
+  let split separator text =
+    let len = String.length text in
+    let rec loop pos =
+      if pos < len then
+        try
+          let last = String.index_from text pos separator in
+          let str = String.sub text pos (last-pos) in
+          str::(loop (succ last))
+        with NotFound _ ->
+          if pos < len then [String.sub text pos (len-pos)]
+          else []
+      else []
+    in
+    loop 0
 
   let explode : string -> char list =
     let rec explode' list n string =
@@ -507,6 +550,10 @@ struct
     in List.rev (aux 0 [])
 
   let mapstrcat glue f list = String.concat glue (List.map f list)
+
+  let string_starts_with s pref =
+    String.length s >= String.length pref &&
+    String.sub s 0 (String.length pref) = pref
 
   let start_of ~is s =
     Str.string_match (Str.regexp_string is) s 0
@@ -776,31 +823,14 @@ let xml_unescape s =
 
 (** (0 base64 Routines) *)
 let base64decode s =
-  try Netencoding.Base64.decode (Str.global_replace (Str.regexp " ") "+" s)
-  with Invalid_argument "Netencoding.Base64.decode"
-      -> raise (Invalid_argument ("base64 decode gave error: " ^ s))
+  try B64.decode (Str.global_replace (Str.regexp " ") "+" s)
+  with Invalid_argument s as e ->
+    if s = "B64.decode" then
+      raise (Invalid_argument ("base64 decode gave error: " ^ s))
+    else
+      raise e
 
-let base64encode = Netencoding.Base64.encode
-
-(** (0 Ocaml Version Comparison) ***)		     
-let ocaml_version_number =
-  (* OCaml version numbers have the format "MAJOR.MINOR.REVISION<+experimental-compiler-name>" *)
-  let version = Sys.ocaml_version in
-  let re = Str.regexp "[0-9]\\([.0-9]\\)*" in
-  if Str.string_match re version 0
-  then Some (List.map int_of_string (split_string (Str.matched_string version) '.'))
-  else None
-
-(* Ocaml team says string comparison would work here. Do we believe them? *)
-let rec version_atleast a b =
-  match a, b with
-      _, [] -> true
-    | [], _ -> false
-    | (ah::at), (bh::bt) -> ah > bh || (ah = bh && version_atleast at bt)
-let ocaml_version_atleast min_vsn =
-  match ocaml_version_number with
-  | Some v -> version_atleast v min_vsn
-  | None -> false
+let base64encode = B64.encode
 
 let gensym_counter = ref 0
 
@@ -844,6 +874,13 @@ let getenv : string -> string option =
     try Some (Sys.getenv name)
     with NotFound _ -> None
 
+(** Get an environment variable, return its value if it is defined, or
+    raise an exception if it is not in the environment. *)
+let safe_getenv s =
+  try Sys.getenv s
+  with NotFound _ ->
+    failwith ("The environment variable " ^ s ^ " is not set")
+
 (** Initialise the random number generator *)
 let _ = Random.self_init()
 
@@ -868,7 +905,7 @@ exception NotFound = Notfound.NotFound
 let rec pow a = function
   | 0 -> 1
   | 1 -> a
-  | n -> 
+  | n ->
     let b = pow a (n / 2) in
     b * b * (if n mod 2 = 0 then 1 else a)
 
@@ -880,4 +917,6 @@ let string_of_float' : float -> string =
       s ^ "0"
     else
       s
-	
+
+let time_seconds() = int_of_float (Unix.time())
+let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)

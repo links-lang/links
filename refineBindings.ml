@@ -1,7 +1,5 @@
 open Utility
 open Sugartypes
-open Printf
-
 
 (* Helper function: add a group to a list of groups *)
 let add group groups = match group with
@@ -27,24 +25,27 @@ let refine_bindings : binding list -> binding list =
       let group, groups =
         List.fold_right
           (fun (binding,_ as bind) (thisgroup, othergroups) ->
-           match binding with
-	   | `Handler _
-           | `Funs _ -> assert false
-           | `Exp _
-           | `Foreign _
-           | `Include _
-           | `Type _
-           | `Val _ ->
-              (* collapse the group we're collecting, then start a
+            match binding with
+              (* Modules & qualified imports will have been eliminated by now. Funs
+               * aren't introduced yet. *)
+              | `Handler _
+              | `Module _ 
+              | `QualifiedImport 
+              | `Funs _ -> assert false
+              | `Exp _
+              | `Foreign _
+              | `Type _
+              | `Val _ ->
+                 (* collapse the group we're collecting, then start a
                      new empty group *)
-              ([], add [bind] (add thisgroup othergroups))
-           | `Fun _ ->
-              (* Add binding to group *)
-              (bind::thisgroup, othergroups)
-           | `Infix ->
-              (* discard binding *)
-              (thisgroup, othergroups))
-          bindings ([], [])
+                 ([], add [bind] (add thisgroup othergroups))
+              | `Fun _ ->
+                 (* Add binding to group *)
+                 (bind::thisgroup, othergroups)
+              | `Infix ->
+                 (* discard binding *)
+                 (thisgroup, othergroups))
+            bindings ([], [])
       in
         add group groups
     in
@@ -111,17 +112,17 @@ object (self)
   method references =
     StringSet.elements (StringSet.from_list (List.rev references))
 
-  method datatype = function
-    | `TypeApplication (tyAppName, argList) as tyApp ->
+  method! datatype = function
+    | `TypeApplication (tyAppName, argList) ->
           let o =
             List.fold_left (fun acc ta -> acc#type_arg ta) self argList
           in
             o#add tyAppName
     | x -> super#datatype x
 
-  method row_var = function
+  method! row_var = function
     | `Open (x, _, _) -> self#add x
-    | `Recursive (x, row) as rrv ->
+    | `Recursive (x, row) ->
         let o = self#add x in o#row row
     | x -> super#row_var x
 
@@ -133,12 +134,12 @@ let findTyRefs ty =
 
 (* Type application substitution *)
 let subst_ty_app refFrom refTo =
-object(self)
+object(_self)
   inherit SugarTraversals.map as super
 
-  method datatype : datatype -> datatype = function
-    | `TypeApplication (tyAppName, argList) as tyApp ->
-        if tyAppName = refFrom then `TypeVar (refTo, (`Unl, `Any), `Rigid)
+  method! datatype : datatype -> datatype = function
+    | `TypeApplication (tyAppName, _) as tyApp ->
+        if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
         else super#datatype tyApp
     | dt -> super#datatype dt
 end
@@ -158,7 +159,7 @@ object(self)
    *  - This is the one found in the application
    *)
 
-  method datatype : datatype -> datatype =
+  method! datatype : datatype -> datatype =
     fun dt ->
       match dt with
         | `TypeVar (n, _, _) when n = varFrom ->
@@ -176,7 +177,7 @@ object(self)
               | _ -> super#datatype dt)
         | _ -> super#datatype dt
 
-  method fieldspec : fieldspec -> fieldspec =
+  method! fieldspec : fieldspec -> fieldspec =
     fun fs ->
       match fs with
         | `Var (n, _, _) when n = varFrom ->
@@ -185,7 +186,7 @@ object(self)
               | _ -> super#fieldspec fs)
         | _ -> super#fieldspec fs
 
-  method row_var : row_var -> row_var = function
+  method! row_var : row_var -> row_var = function
     | `Open (n, _, _) as rv when n = varFrom ->
         (match taTo with
           | `Row (_, (`Open _ as rv2)) -> rv2
@@ -199,10 +200,10 @@ let substTyArg varFrom taTo ty =
 
 (* Type inlining *)
 let inline_ty toFind inlineArgs toInline =
-object(self)
+object(_self)
   inherit SugarTraversals.map as super
 
-  method datatype : datatype -> datatype =
+  method! datatype : datatype -> datatype =
     fun dt ->
       match dt with
         | `TypeApplication (tyAppName, argList) as tyApp ->
@@ -245,7 +246,6 @@ module RefineTypeBindings = struct
 
   (* Type synonyms for substitution environments *)
   type alias_env = (type_name * mu_alias) list
-  type type_env = (type_variable * type_arg) list
 
   (*
    * Split binding list into groups for the purposes of type refinement.
@@ -257,16 +257,17 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
 	  match binding with
-    	    `Handler _ -> assert false (* Desugared at this point *)
-          | `Funs _
+    	    `Handler _  (* Desugared at this point *)
+          | `Module _ 
+          | `QualifiedImport _ 
+          | `Funs _ -> assert false
           | `Fun _
           | `Foreign _
-          | `Include _
           | `Val _
           | `Exp _
           | `Infix ->
               (* Collapse and start a new group *)
-              ([], (currentGroup :: [bind] :: otherGroups))
+              ([], add [bind] (add currentGroup otherGroups))
           | `Type _ ->
               (* Add to this group *)
               (bind :: currentGroup, otherGroups)
@@ -281,7 +282,7 @@ module RefineTypeBindings = struct
 
   (* Does a type refer to itself? *)
   let refersToSelf : type_ty -> type_name list -> bool =
-    fun (name, tyVars, (sugaredDT, _)) refs ->
+    fun (name, tyVars, (_sugaredDT, _)) refs ->
       let qExists =
         List.exists (fun (quant, _) ->
             let (qName, _, _) = quant in name = qName
@@ -381,15 +382,12 @@ module RefineTypeBindings = struct
       let getPos name =
         thd3 (Hashtbl.find ri name) in
       List.map (fun name ->
-        let rts = isSelfReferential name ri in
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        let (_, _, (res_dt, _)) = res in
-        (* printf "Refined type %s: \n %s \n\n" name (Sugartypes.Show_datatype.show res_dt); *)
         (`Type res, getPos name)
       ) sccs
 
   let isTypeGroup : binding list -> bool = function
-    | (`Type _, _) :: xs -> true
+    | (`Type _, _) :: _xs -> true
     | _ -> false
 
   (* Performs type refinement on a binding group. *)
@@ -399,7 +397,7 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun (x, _) ->
         match x with
-          | `Type (name, _, _ as tyTy) as ty ->
+          | `Type (name, _, _ as tyTy) ->
             Hashtbl.add ht name tyTy;
           | _ -> assert false;
       ) binds;
@@ -423,7 +421,7 @@ end
 let refine_bindings =
 object (self)
   inherit SugarTraversals.map as super
-  method phrasenode : phrasenode -> phrasenode = function
+  method! phrasenode : phrasenode -> phrasenode = function
     |`Block (bindings, body) ->
        let bindings = self#list (fun o -> o#binding) bindings in
        let body = self#phrase body in
@@ -433,7 +431,7 @@ object (self)
        `Block (refined_bindings, body)
     | p -> super#phrasenode p
 
-  method program : program -> program =
+  method! program : program -> program =
     fun (bindings, body) ->
       let bindings = self#list (fun o -> o#binding) bindings in
       let body = self#option (fun o -> o#phrase) body in
@@ -442,7 +440,7 @@ object (self)
         refine_bindings) bindings in
       refined_bindings, body
 
-  method sentence : sentence -> sentence = function
+  method! sentence : sentence -> sentence = function
     |`Definitions defs ->
        let defs = self#list (fun o -> o#binding) defs in
        let refined_bindings =

@@ -1,0 +1,48 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+fun deleteAll() {
+  delete (x <-- factorials);
+}
+
+fun insertNone() {
+  insert factorials
+  values (i, f)
+    [];
+}
+
+fun insertOne() {
+  insert factorials
+  values (f, i)
+    [(f=1, i=1)];
+}
+
+fun insertTwoThree() {
+  insert factorials
+  values (f, i)
+    [(f=2, i=2),
+     (f=6, i=3)];
+}
+
+fun lookupFactorials(n) server {
+  query {
+    for (row <-- factorials)
+    where (row.i <= n)
+    orderby (row.i)
+      [(i=row.i, f=row.f)]
+  }
+}
+
+fun test() {
+  insertOne();
+  deleteAll();
+  assertEq(lookupFactorials(10), []);
+  insertNone();
+  insertOne();
+  assertEq(lookupFactorials(1), [(f=1,i=1)]);
+  insertTwoThree();
+  ## The order is wrong.
+  assertEq(lookupFactorials(3), [(i=3, f=6), (i=2, f=2), (f=1,i=1)]);
+}
+
+test()

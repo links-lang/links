@@ -1,0 +1,177 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (emp:String,tsk:String)
+    	  tablekeys [["emp","tsk"]] from db;
+var contacts = table "contacts" with (name:String,dpt:String,"client":Bool)
+    	  tablekeys [["name"]] from db;
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter (cmd,l) {
+  switch (l) {
+    case x::xs -> cmd(x); iter(cmd,xs)
+    case [] -> ()
+  }
+}
+
+
+fun dropTables() {
+  delete (x <-- departments);
+  delete (x <-- employees);
+  delete (x <-- tasks);
+  delete (x <-- contacts);
+}
+
+fun createTables () {
+  insert departments
+  values (dpt)
+  [ (dpt = "Product"),
+    (dpt = "Quality"),
+    (dpt = "Research"),
+    (dpt = "Sales")];
+  insert employees
+  values (dpt,emp,salary)
+  [ (dpt = "Product", emp = "Alex", salary=20000),
+    (dpt = "Product", emp = "Bert",salary=900),
+    (dpt = "Research", emp = "Cora",salary=50000),
+    (dpt = "Research", emp = "Drew",salary=60000),
+    (dpt = "Research", emp = "Edna",salary=2000000),
+    (dpt = "Sales", emp = "Fred",salary=700),
+    (dpt = "Sales", emp = "Gina",salary=100000)];
+  insert tasks
+  values (emp,tsk)
+  [ (emp = "Alex", tsk = "build"),
+    (emp = "Bert", tsk = "build"),
+    (emp = "Cora", tsk = "abstract"),
+    (emp = "Cora", tsk = "build"),
+    (emp = "Cora", tsk = "design"),
+    (emp = "Drew", tsk = "abstract"),
+    (emp = "Drew", tsk = "design"),
+    (emp = "Edna", tsk = "abstract"),
+    (emp = "Edna", tsk = "call"),
+    (emp = "Edna", tsk = "design"),
+    (emp = "Fred", tsk = "call"),
+    (emp="Gina", tsk="call"),
+    (emp="Gina",tsk="dissemble")];
+  insert contacts
+  values (name,dpt,"client")
+  [(dpt="Product",name="Pam","client"=false),
+   (dpt="Product",name="Pat","client"=true),
+   (dpt="Research",name="Rob","client"=false),
+   (dpt="Research",name="Roy","client"=false),
+   (dpt="Sales",name="Sam","client"=false),
+   (dpt="Sales",name="Sid","client"=false),
+   (dpt="Sales",name="Sue","client"=true)]
+}
+
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun addDepts(ds) {
+  iter (fun (d) {
+    insert departments
+    values (dpt)
+    [(dpt=d)]
+  }, ds)
+}
+
+fun addEmployees(es) {
+  iter (fun (e) {
+    insert employees
+    values (emp,dpt,salary)
+    [e]
+  }, es)
+}
+
+fun addTasks(ts) {
+  iter (fun (t) {
+    insert tasks
+    values (emp,tsk)
+    [t]
+  }, ts)
+}
+
+fun addContacts(cs) {
+  iter (fun (c) {
+    insert contacts
+    values (name,dpt,"client")
+    [c]
+  }, cs)
+}
+
+fun nth(n,l) {
+  if (n == 0)  {hd(l)}
+  else {nth(n-1,tl(l))}
+}
+
+fun randomList(l) {
+  nth(rand(length(l)),l)
+}
+
+fun randomName() {
+  var name = randomList(["alan","bert","charlie","david","edward",
+	      "alice","betty","clara","dora","eve"]);
+  name ^^ intToString(gensym())
+}
+
+fun randomTask() {
+  randomList( ["abstract","buy","call","dissemble","enthuse"])
+}
+
+fun randomDepartment() {
+  randomList( ["Sales","Research","Quality","Product"])
+}
+
+fun tabulate(f,n) {
+  fun g(m) {
+    if (m < n) { f(m)::g(m+1) } else { [] }
+  }
+  g(0)
+}
+
+fun randomEmployees(n,depts) {
+  tabulate (fun (_) { (emp=randomName(), dpt=randomList (depts), salary = randomList([700,900,20000,50000,60000,100000,2000000])) }, n)
+}
+
+
+fun randomContacts(n,depts) {
+  tabulate (fun (_) { (name=randomName(), dpt=randomList (depts), "client" = randomList([true,false])) }, n)
+}
+
+
+fun randomEmployeesInDepartments(depts,n) {
+  for(d <- depts)
+  randomEmployees(n,[d])
+}
+
+fun randomTasks(emps) {
+  for (r <- emps)
+  tabulate(fun (x) { (emp=r.emp,tsk=randomTask()) }, 1+rand(3))
+}
+
+
+fun addRandom (ds,n) {
+  var depts = tabulate (fun (x) {randomDepartment() ^^ intToString(gensym())},
+      	      	        ds);
+  addDepts(depts);
+  var employees = randomEmployees(n,depts);
+  addEmployees(employees);
+  var tasks = randomTasks(employees);
+  addTasks(tasks);
+  var contacts = randomContacts(n*10,depts);
+  addContacts(contacts)
+}
+
+
+fun go(n) {dropTables(); addRandom(n,n*100)}
+
+fun gonm(n,m) {
+  if (m > 0) {
+    var _ = addRandom(n,n*100);
+    gonm(n,m-1)
+  } else {}
+}

@@ -1,5 +1,3 @@
-open Utility
-
 (*
   Desugaring database stuff
   -------------------------
@@ -44,7 +42,7 @@ class desugar_dbs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+  method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
 (*     | `DBDelete (pattern, table, condition) -> *)
 (*         let eff = o#lookup_effects in *)
 (*         let o, table, table_type = o#phrase table in *)
@@ -175,7 +173,7 @@ object
   val has_no_dbs = true
   method satisfied = has_no_dbs
 
-  method phrasenode = function
+  method! phrasenode = function
 (*     | `DBDelete _ -> {< has_no_dbs = false >} *)
 (*     | `DBUpdate _ -> {< has_no_dbs = false >} *)
     | `DBInsert _ -> {< has_no_dbs = false >}

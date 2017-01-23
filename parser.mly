@@ -1,34 +1,33 @@
 %{
 
 open Utility
-open List
 open Sugartypes
 
 (* Generation of fresh type variables *)
 
 let type_variable_counter = ref 0
 
-let fresh_type_variable : subkind -> datatype =
+let fresh_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_type_variable : subkind -> datatype =
+let fresh_rigid_type_variable : subkind option -> datatype =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_row_variable : subkind -> row_var =
+let fresh_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_row_variable : subkind -> row_var =
+let fresh_rigid_row_variable : subkind option -> row_var =
   function subkind ->
     incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let fresh_presence_variable : subkind -> fieldspec =
+let fresh_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_presence_variable : subkind -> fieldspec =
+let fresh_rigid_presence_variable : subkind option -> fieldspec =
   function subkind ->
     incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
@@ -83,12 +82,12 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  p, (l, r)
+  p, Some (l, r)
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string pos lin in
   let r = restriction_of_string pos rest in
-  (l, r)
+  Some (l, r)
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
@@ -102,50 +101,41 @@ perhaps. *)
 let kind_of pos =
   function
   (* primary kind abbreviation  *)
-  | "Type" -> `Type, (`Unl, `Any)
-  | "Row" -> `Row, (`Unl, `Any)
-  | "Presence" -> `Presence, (`Unl, `Any)
+  | "Type" -> `Type, None
+  | "Row" -> `Row, None
+  | "Presence" -> `Presence, None
   (* subkind of type abbreviations *)
-  | "Any" -> `Type, (`Any, `Any)
-  | "Base" -> `Type, (`Unl, `Base)
-  | "Session" -> `Type, (`Any, `Session)
+  | "Any" -> `Type, Some (`Any, `Any)
+  | "Base" -> `Type, Some (`Unl, `Base)
+  | "Session" -> `Type, Some (`Any, `Session)
   | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos))
 
 let subkind_of pos =
   function
   (* subkind abbreviations *)
-  | "Any" -> (`Any, `Any)
-  | "Base" -> (`Unl, `Base)
-  | "Session" -> (`Any, `Session)
+  | "Any" -> Some (`Any, `Any)
+  | "Base" -> Some (`Unl, `Base)
+  | "Session" -> Some (`Any, `Session)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
-let attach_kind pos (t, k) = (t, k, `Rigid)
+let attach_kind _pos (t, k) = (t, k, `Rigid)
 
-let attach_subkind_helper update pos (l, r) = update l r
+let attach_subkind_helper update _pos sk = update sk
 
 let attach_subkind pos (t, subkind) =
-  let update lin rest =
+  let update sk =
     match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
-    | _ -> assert false
-  in
-    attach_subkind_helper update pos subkind
-
-let attach_session_subkind pos (t, subkind) =
-  let update lin rest =
-    match t with
-    | `TypeVar (x, (_linearity, _restriction), freedom) ->
-       `TypeVar (x, (lin, rest), freedom)
+    | `TypeVar (x, _, freedom) ->
+       `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
 
 let attach_row_subkind pos (r, subkind) =
-  let update lin rest =
+  let update sk =
     match r with
-    | `Open (x, (_linearity, _restriction), freedom) ->
-       `Open (x, (lin, rest), freedom)
+    | `Open (x, _, freedom) ->
+       `Open (x, sk, freedom)
     | _ -> assert false
   in
     attach_subkind_helper update pos subkind
@@ -166,10 +156,15 @@ let parseRegexFlags f =
       List.rev l
     else
       asList f (i+1) ((String.get f i)::l) in
-    List.map (function 'l' -> `RegexList | 'n' -> `RegexNative | 'g' -> `RegexGlobal) (asList f 0 [])
+    List.map (function
+                'l' -> `RegexList
+              | 'n' -> `RegexNative
+              | 'g' -> `RegexGlobal
+              | _ -> assert false) (asList f 0 [])
 
 let datatype d = d, None
 
+let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %}
 
 %token END
@@ -178,7 +173,7 @@ let datatype d = d, None
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNDEMON SPAWNWAIT OPEN
+%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT
 %token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token OFFER SELECT
 %token DOOP       
@@ -191,7 +186,7 @@ let datatype d = d, None
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token READONLY DEFAULT
 %token ESCAPE
@@ -206,7 +201,8 @@ let datatype d = d, None
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG INCLUDE
+%token MU FORALL ALIEN SIG OPEN
+%token MODULE
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -252,7 +248,6 @@ let datatype d = d, None
 %%
 
 interactive:
-| preamble_declaration                                         { `Definitions [$1] }
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
 | SEMICOLON                                                    { `Definitions [] }
@@ -285,7 +280,6 @@ var:
 | VARIABLE                                                     { $1, pos() }
 
 preamble:
-| preamble_declaration preamble                                { $1 :: $2 }
 | /* empty */                                                  { [] }
 
 declarations:
@@ -295,9 +289,6 @@ declarations:
 declaration:
 | fun_declaration                                              { $1 }
 | nofun_declaration                                            { $1 }
-
-preamble_declaration:
-| INCLUDE STRING                                               { `Include $2, pos() }
 
 nofun_declaration:
 | ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
@@ -309,6 +300,16 @@ nofun_declaration:
                                                                  in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
+
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
+
+
+links_module:
+| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
+                                                                 `Module (mod_name, $3), name_pos }
+module_name:
+| CONSTRUCTOR                                                  { $1 , pos () }
 
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
@@ -372,7 +373,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of (pos()) $2 }
 
 typearg:
-| VARIABLE                                                     { (($1, (`Type, (`Unl, `Any)), `Rigid), None) }
+| VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
 
 varlist:
@@ -400,7 +401,24 @@ constant:
 | FALSE                                                        { `Bool false, pos() }
 | CHAR                                                         { `Char $1   , pos() }
 
+qualified_name:
+| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+
+qualified_name_inner:
+| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| VARIABLE                                                     { [$1] }
+
+qualified_type_name:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+
+qualified_type_name_inner:
+| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
+| CONSTRUCTOR                                                  { [$1] }
+
+
+
 atomic_expression:
+| qualified_name                                               { `QualifiedVar $1, pos() }
 | VARIABLE                                                     { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
@@ -439,11 +457,14 @@ perhaps_exp:
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
+| cp_name LPAREN perhaps_name RPAREN                           { `Grab ((fst3 $1, None), $3, cp_unit(pos())), pos () }
 | cp_name LBRACKET exp RBRACKET DOT cp_expression              { `Give ((fst3 $1, None), Some $3, $6), pos () }
+| cp_name LBRACKET exp RBRACKET                                { `Give ((fst3 $1, None), Some $3, cp_unit(pos())), pos () }
 | cp_name LBRACKET RBRACKET                                    { `GiveNothing $1, pos () }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { `Offer ($2, $4), pos () }
 | cp_label cp_name DOT cp_expression                           { `Select ($2, $1, $4), pos () }
-| cp_name LRARROW cp_name                                      { `Fuse ($1, $3), pos () }
+| cp_label cp_name                                             { `Select ($2, $1, cp_unit(pos())), pos () }
+| cp_name LRARROW cp_name                                      { `Link ($1, $3), pos () }
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
 
 primary_expression:
@@ -527,10 +548,11 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN block                                                  { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNANGEL block                                             { `Spawn (`Angel, (`Block $2, pos()), None), pos () }
-| SPAWNDEMON block                                             { `Spawn (`Demon, (`Block $2, pos()), None), pos () }
-| SPAWNWAIT block                                              { `Spawn (`Wait, (`Block $2, pos()), None), pos () }
+| SPAWN perhaps_location block                                 { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNCLIENT perhaps_location block                           { `Spawn (`Client, $2, (`Block $3, pos()), None), pos () }
+| SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
+| SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int 0), pos ())),
@@ -810,7 +832,9 @@ formlet_expression:
 
 table_expression:
 | formlet_expression                                           { $1 }
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, $7), pos()}
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { `TableLit ($2, datatype $4, $5, (`ListLit ([], None),pos()), $7), pos()}
+/* SAND */
+| TABLE exp WITH datatype perhaps_table_constraints TABLEKEYS exp FROM exp   { `TableLit ($2, datatype $4, $5, $7, $9), pos()}
 
 perhaps_table_constraints:
 | WHERE table_constraints                                      { $2 }
@@ -870,6 +894,10 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
+links_open:
+| OPEN qualified_type_name                                     { `QualifiedImport $2, pos () }
+| OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
+
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
@@ -877,11 +905,15 @@ binding:
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { let (m, spec, hnlit, pos) = $1 in
-								 `Handler (m, spec, hnlit, None), pos }
+| links_module                                                 { $1 }
+| links_open                                                   { $1 }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
+
+moduleblock:
+| LBRACE declarations RBRACE                                   { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
@@ -952,9 +984,9 @@ straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { `Function ($1,
-                                                                               ([], fresh_rigid_row_variable (`Unl, `Any)),
+                                                                               ([], fresh_rigid_row_variable None),
                                                                                $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable (`Unl, `Any)), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable None), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -974,11 +1006,11 @@ squiggly_arrow:
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
                                                                                ([("wild", `Present `Unit)],
-                                                                                 fresh_rigid_row_variable (`Unl, `Any)),
+                                                                                 fresh_rigid_row_variable None),
                                                                                 $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
                                                                             ([("wild", `Present `Unit)],
-                                                                             fresh_rigid_row_variable (`Unl, `Any)),
+                                                                             fresh_rigid_row_variable None),
                                                                             $3) }
 
 mu_datatype:
@@ -989,6 +1021,15 @@ forall_datatype:
 | FORALL varlist DOT datatype                                  { `Forall (List.map fst $2, $4) }
 | session_datatype                                             { $1 }
 
+/* Parenthesised dts disambiguate between sending qualified types and recursion variables.
+   e.g:
+
+     S = !ModuleA.ModuleB.Type.S
+     should be written
+     S = !(ModuleA.ModuleB.Type).S
+
+     Parenthesised versions take priority over non-parenthesised versions.
+*/
 session_datatype:
 | BANG datatype DOT datatype                                   { `Output ($2, $4) }
 | QUESTION datatype DOT datatype                               { `Input ($2, $4) }
@@ -1000,6 +1041,7 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
+| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, [])] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:
@@ -1029,10 +1071,10 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `TypeVar ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_type_variable (`Unl, `Any) }
+| VARIABLE                                                     { `TypeVar ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_type_variable None }
+| PERCENT                                                      { fresh_type_variable None }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
@@ -1131,16 +1173,16 @@ fieldspec:
 | LBRACE COLON datatype RBRACE                                 { `Present $3 }
 | MINUS                                                        { `Absent }
 | LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `Var ($2, (`Unl, `Any), `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, (`Unl, `Any), `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable (`Unl, `Any) }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable (`Unl, `Any) }
+| LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable None }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, (`Unl, `Any), `Rigid) }
-| PERCENTVAR                                                   { `Open ($1, (`Unl, `Any), `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable (`Unl, `Any) }
-| PERCENT                                                      { fresh_row_variable (`Unl, `Any) }
+| VARIABLE                                                     { `Open ($1, None, `Rigid) }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable None }
+| PERCENT                                                      { fresh_row_variable None }
 
 /* FIXME:
  *

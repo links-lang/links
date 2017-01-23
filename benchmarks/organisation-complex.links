@@ -1,0 +1,140 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
+    	  tablekeys [["id"]] from db;
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
+    	  tablekeys [["id"]] from db;
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  var total = serverTimeMilliseconds()-start;
+  print("Time: " ^^ intToString(total));
+  total
+}
+
+fun throttle (f,x) {
+  if (length(asList(departments)) <= 1) {f()} else {x}
+}
+
+
+
+
+# QX1: Pairs of employees in same department with common task
+
+
+
+fun queryx1() {
+  for(x <-- employees, y <-- employees)
+  where (x.dpt == y.dpt &&
+         not(empty(for(t <-- tasks, u <-- tasks)
+	 	   where (t.emp == x.emp && u.emp == y.emp && t.tsk == u.tsk)
+		   [(t,u)])))
+  [(a=x.emp,b=y.emp)]
+
+}
+var x = print("\nQX1\n");
+
+var qx1 =  time (fun () {query {queryx1()}});
+var qx1 =  time (fun () {query {queryx1()}});
+
+
+#QX2: pairs of employees in same department where x earns less than y and x can do task y cannot do
+
+var x = print("\nQX2\n");
+
+fun queryx2() {
+  for(x <-- employees,y <-- employees)
+  where (x.dpt == y.dpt && x.emp <> y.emp && x.salary < y.salary &&
+  	 not(empty(for (t <-- tasks)
+	 	   where (t.emp == x.emp &&
+		          empty(for(u <-- tasks)
+			        where(u.emp == y.emp && t.tsk == u.tsk)
+				[()]))
+		   [()])))
+  [(a=x,b=y)]
+}
+
+
+var qx2 = throttle(fun () {time (queryx2)}, -1);
+var qx2 = throttle(fun () {time (queryx2)}, -1);
+
+# QX3: employees (x,y) where x can do task y cannot do, and x earns less than y, along with lists of tasks
+
+var x = print("\nQX3\n");
+
+fun queryx3() {
+  var tbl =
+  for(x <-- employees,y <-- employees)
+  where (x.dpt == y.dpt &&  x.emp <> y.emp && x.salary < y.salary)
+  [(a=x,b=y,c= for (t <-- tasks)
+  	       where (x.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (y.emp == u.emp && t.tsk == u.tsk)
+			    [()]))
+	       [t.tsk])];
+  for(r <- tbl)
+  where (not(empty(r.c)))
+  [(a=r.a,b=r.b,c=r.c)]
+}
+
+
+var qx3 = throttle(fun () {time (queryx3)}, -1);
+var qx3 = throttle(fun () {time (queryx3)}, -1);
+
+
+# QX4: employees (x,y) where x and y do different tasks, with tagged union of tasks
+
+var x = print("\nQX4\n");
+
+fun queryx4() {
+  for(x <-- employees,y <-- employees)
+  where (x.dpt == y.dpt && x.emp <> y.emp)
+  [(a=x,b=y,c= (for (t <-- tasks)
+  	       where (x.emp == t.emp)
+	       [(doer="a",task=t.tsk)])
+	       ++
+	       (for (t <-- tasks)
+  	       where (y.emp == t.emp)
+	       [(doer="b",task=t.tsk)]))]
+}
+
+
+var qx4 = time (queryx4);
+var qx4 = time (queryx4);
+
+#  QX5: employees (x,y) in same department where x and y do different tasks, with tagged symmetric difference of tasks
+
+var x = print("\nQX5\n");
+
+fun queryx5() {
+  var tbl =
+  for(x <-- employees,y <-- employees)
+  where (x.dpt == y.dpt && x.emp <> y.emp)
+  [(a=x,b=y,c= (for (t <-- tasks)
+  	       where (x.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (y.emp == u.emp && t.tsk == u.tsk)
+			    [()]))
+	       [(doer="a",task=t.tsk)])
+	       ++
+	       (for (t <-- tasks)
+  	       where (y.emp == t.emp &&
+	       	      empty(for(u <-- tasks)
+		            where (x.emp == u.emp && t.tsk == u.tsk)
+			    [()]))
+	       [(doer="b",task=t.tsk)]))];
+  for(r <- tbl)
+  where (not(empty(r.c)))
+  [(a=r.a,b=r.b,c=r.c)]
+}
+
+
+var qx5 = time (queryx5);
+var qx5 = time (queryx5);
+
+(qx1=qx1,qx2=qx2,qx3=qx3,qx4=qx4,qx5=qx5)

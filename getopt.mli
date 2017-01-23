@@ -17,7 +17,7 @@ web:   {{:http://www.eleves.ens.fr/home/frisch}http://www.eleves.ens.fr/home/fri
 (**
 {1 Layout of the command line}
    There are two types of argument on the command line: options and
-   anonymous arguments. Options may have two forms: a short one introduced 
+   anonymous arguments. Options may have two forms: a short one introduced
    by a single dash character (-) and a long one introduced by a double
    dash (--).
 
@@ -36,7 +36,7 @@ web:   {{:http://www.eleves.ens.fr/home/frisch}http://www.eleves.ens.fr/home/fri
    when they are found; it also gives the action for anonymous arguments
    and for the special option - (a single dash alone).
 *)
-   
+
 type opt = char * string * ((unit -> unit) option) * ((string -> unit) option)
 
 (**
@@ -63,7 +63,7 @@ type opt = char * string * ((unit -> unit) option) * ((string -> unit) option)
 
    - [(Some _, Some _)] : the option may have an argument; the short form can't be
      concatenated with other options (even if the user does not want to provide
-     an argument). The behaviour (handler/action) is determined by the 
+     an argument). The behaviour (handler/action) is determined by the
      presence of the argument.
 
    - [(Some _, None)] : the option must not have an argument; the short form, if

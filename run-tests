@@ -1,5 +1,99 @@
 #!/bin/bash
 
-make test-raw | perl -lne \
-  '($f) = /(\d+) failures/;\
-   print "1 failure" if ($f == 1); print "$f failures" if ($f > 1); $F += $f; ($s) = /(\d+) successes/; $S += $s; END { print "$F total failures\n$S total successes\n"}'
+# If you modify the behaviour of this file please remember to update the
+# relevant wiki page:
+#
+# https://github.com/links-lang/links/wiki/Running-the-test-suite
+
+
+DATABASE_TEST_DIR=tests/database   # Location of database tests
+SHREDDING_TEST_DIR=tests/shredding # Location of database tests
+ret=0                              # Return code. If <> 0 then some tests failed
+STARTCOLOR="\e[31m"                # Control sequence to enable red text
+ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
+
+# Don't run normal tests if user passed in "db-only" flag
+if [[ "$1" != "db-only" ]]; then
+    for i in tests/*.tests; do
+        cmnd="./test-harness $i"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            ret=1
+        fi
+    done
+fi
+
+# Run database tests stored in a directory passed in as argument.
+# Assumes that the directory contains:
+#  1. either `config` containing actual database configuration or
+#     `config.sample` containing a default database configuration.
+#  2. `testsuite.config` containing a list of tests to run
+run_database_testsuite () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.sample $1/config
+    fi
+
+    # Check whether the config file specifies a user name to access the
+    # database.  If so, use it with psql.
+    user_string=""
+    user=`grep database_args $1/config \
+          | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
+    if [ "$user" != "" ]; then
+        user_string="-U $user"
+    fi
+
+    # Prepare the database by running all the *.sql files
+    for s in $1/*.sql; do
+        cmnd="psql -v $user_string ON_ERROR_STOP=1 -q -d links -f $s"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            echo -e "$STARTCOLOR\rFAILED DATABASE PREPARATION $s$ENDCOLOR"
+            ret=1
+        fi
+    done
+
+    # Run tests specified in testsuite.config
+    while read t; do
+        expect_broken=0
+        line=($t)
+        # Check if a test is specified as broken.  This doesn't check that the
+        # word preceeding test name is actually "BROKEN". So putting any word
+        # before the test name will turn that test into "expected broken".
+        if (( ${#line[@]} > 1 )); then
+          t=${line[1]}
+          expect_broken=1
+        fi
+        cmnd="./links --config=$1/config $1/$t.links"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        # Fail if a test should pass but didn't or shouldn't pass but did
+        if [[ ($ret_code -ne 0 && expect_broken -eq 0) || ($ret_code -eq 0 && expect_broken -ne 0) ]]; then
+            echo -e "$STARTCOLOR\rFAILED TEST $t$ENDCOLOR"
+            ret=1
+        fi
+    done < "$1/testsuite.config"
+}
+
+# Don't run database tests if user passed in "no-db" flag
+if [[ "$1" != "no-db" ]]; then
+    run_database_testsuite $DATABASE_TEST_DIR
+fi
+
+# Run shredding tests only if user called for them explicitly
+if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
+    run_database_testsuite $SHREDDING_TEST_DIR
+fi
+
+exit $ret

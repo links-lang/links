@@ -14,22 +14,22 @@ let index_option s c =
 
 let extract_arg_handle opt = function
   | (_,_,_,Some handle) -> handle
-  | _ -> raise (Error (Printf.sprintf 
+  | _ -> raise (Error (Printf.sprintf
 			 "Option %s does not accept argument" opt))
 
 let extract_handle opt = function
   | (_,_,Some handle,_) -> handle
-  | _ -> raise (Error (Printf.sprintf 
+  | _ -> raise (Error (Printf.sprintf
 			 "Option %s must have an argument" opt))
 
 let parse opts others args first last =
   let find_long opt =
-    try List.find (fun (_,l,_,_) -> opt = l) opts 
+    try List.find (fun (_,l,_,_) -> opt = l) opts
     with Not_found ->
       raise (Error (Printf.sprintf "Unknown option --%s" opt))
   in
   let find_short opt =
-    try List.find (fun (l,_,_,_) -> opt = l) opts 
+    try List.find (fun (l,_,_,_) -> opt = l) opts
     with Not_found ->
       raise (Error (Printf.sprintf "Unknown option -%c" opt))
   in
@@ -68,7 +68,7 @@ let parse opts others args first last =
 		for i = 2 to (l - 1) do
 		  match find_short s.[i] with
 		    | (_,_,Some handle,None) -> handle ()
-		    | _ -> raise (Error (Printf.sprintf 
+		    | _ -> raise (Error (Printf.sprintf
 					   "Only non-argument short-options can be concatenated (error with option %c in %s)"  s.[i] s))
 		done;
 		aux (succ no)
@@ -79,7 +79,7 @@ let parse opts others args first last =
 		else if (no+1 <= last) && (args.(no+1).[0] <> '-') then
 		  (* non-immediate argument *)
 		  (handle args.(no+1); aux (no+2))
-		else 
+		else
 		  (* no argument *)
 		  let handle = extract_handle s o in
 		  (handle (); aux (succ no))

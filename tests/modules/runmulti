@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+pushd tests/modules/ &> /dev/null
+links $@
+popd &> /dev/null

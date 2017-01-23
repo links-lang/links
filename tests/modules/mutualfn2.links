@@ -1,0 +1,11 @@
+module A {
+  fun foo(bool_val) { if (bool_val) { baz() } else { bar() } }
+  fun bar() { "Hello!" }
+  fun baz() { foo(false) }
+}
+
+fun foo() {
+  A.foo(true)
+}
+
+foo()

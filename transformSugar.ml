@@ -9,7 +9,7 @@ let type_section env =
     | `FloatMinus -> TyEnv.lookup env "-."
     | `Project label ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, false) = Types.fresh_row_quantifier (`Any, `Any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
         let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
 
         let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
@@ -34,7 +34,9 @@ let type_binary_op env tycon_env =
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
-           | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool")
+           | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
+           | _,     _,     true  -> assert false)
+
   | `And
   | `Or           -> datatype "(Bool,Bool) -> Bool"
   | `Cons         -> TyEnv.lookup env "Cons"
@@ -135,6 +137,12 @@ class transform (env : Types.typing_environment) =
       {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
          effect_row = effect_row >}
 
+    method with_var_env var_env =
+      {< var_env = var_env >}
+
+    method with_formlet_env formlet_env =
+      {< formlet_env = formlet_env >}
+
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
@@ -229,7 +237,7 @@ class transform (env : Types.typing_environment) =
 	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
 	   let (o, effects) = o#row effects in
            (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
-      | `Spawn (`Wait, body, Some inner_effects) ->
+      | `Spawn (`Wait, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -237,8 +245,8 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, body, Some inner_effects), body_type)
-      | `Spawn (k, body, Some inner_effects) ->
+            (o, `Spawn (`Wait, location, body, Some inner_effects), body_type)
+      | `Spawn (k, location, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -247,7 +255,7 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, body, Some inner_effects)), process_type)
+            (o, (`Spawn (k, location, body, Some inner_effects)), process_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
          (o, (`Select (l, e)), TypeUtils.select_type l t)
@@ -306,7 +314,7 @@ class transform (env : Types.typing_environment) =
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
           let o = o#restore_envs envs in
-            {< var_env=var_env >}, `Block (bs, e), t
+            o, `Block (bs, e), t
       | `InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
             check_type_application
@@ -403,13 +411,13 @@ class transform (env : Types.typing_environment) =
       | `TypeAnnotation (e, ann_type) ->
           let (o, e, _) = o#phrase e in
           let (o, ann_type) = o#datatype' ann_type in
-          let (_, Some t) = ann_type in
-            (o, `TypeAnnotation (e, ann_type), t)
+          let t = val_of (snd ann_type) in
+          (o, `TypeAnnotation (e, ann_type), t)
       | `Upcast (e, to_type, from_type) ->
           let (o, e, _) = o#phrase e in
           let (o, to_type) = o#datatype' to_type in
           let (o, from_type) = o#datatype' from_type in
-          let (_, Some t) = to_type in
+          let t = val_of (snd to_type) in
             (o, `Upcast (e, to_type, from_type), t)
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
@@ -464,14 +472,14 @@ class transform (env : Types.typing_environment) =
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
             (o, `DatabaseLit (name, (driver, args)), `Primitive `DB)
-      | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db) ->
+      | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
           let (o, name, _) = o#phrase name in
           let (o, db, _) = o#phrase db in
           let (o, dtype) = o#sugar_datatype dtype in
           let (o, read_row) = o#datatype read_row in
           let (o, write_row) = o#datatype write_row in
           let (o, needed_row) = o#datatype needed_row in
-            (o, `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, db), `Table (read_row, write_row, needed_row))
+            (o, `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), `Table (read_row, write_row, needed_row))
       | `DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
@@ -512,14 +520,14 @@ class transform (env : Types.typing_environment) =
             (o, `Xml (tag, attrs, attrexp, children), Types.xml_type)
       | `TextNode s -> (o, `TextNode s, Types.xml_type)
       | `Formlet (body, yields) ->
-          let (o, body, _) = o#phrase body in
-            (* ensure that the formlet bindings are only in scope in the
-               yields clause *)
-          let o = {< var_env=TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ());
-                     formlet_env=formlet_env >} in
-          let (o, yields, t) = o#phrase yields in
-          let o = {< var_env=var_env >} in
-            (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
+         let envs = o#backup_envs in
+         let (o, body, _) = o#phrase body in
+         (* ensure that the formlet bindings are only in scope in the
+            yields clause *)
+         let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
+         let (o, yields, t) = o#phrase yields in
+         let o = o#restore_envs envs in
+         (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
       | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
       | `FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in
@@ -529,15 +537,18 @@ class transform (env : Types.typing_environment) =
       | `PagePlacement e ->
           let (o, e, _) = o#phrase e in (o, `PagePlacement e, Types.xml_type)
       | `FormBinding (f, p) ->
-          let (o, f, _) = o#phrase f in
-            (* add the formlet bindings to the formlet environment *)
-          let o = {< var_env=TyEnv.empty >} in
-          let (o, p) = o#pattern p in
-          let o = {< var_env=var_env;
-                     formlet_env=TyEnv.extend formlet_env (o#get_var_env())>} in
-            (o, `FormBinding (f, p), Types.xml_type)
+         let envs = o#backup_envs in
+         let (o, f, _) = o#phrase f in
+         (* HACK: add the formlet bindings to the formlet environment *)
+         let o = o#with_var_env TyEnv.empty in
+         let (o, p) = o#pattern p in
+         let formlet_env = TyEnv.extend formlet_env (o#get_var_env()) in
+         let o = o#restore_envs envs in
+         let o = o#with_formlet_env formlet_env in
+         (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
+         (o, `FormBinding (f, p), Types.xml_type)
       | e -> failwith ("oops: "^Show_phrasenode.show  e)
-      
+
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun (e, pos) ->
         let (o, e, t) = o#phrasenode e in (o, (e, pos), t)
@@ -644,6 +655,7 @@ class transform (env : Types.typing_environment) =
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
                 (o, (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+          | _ :: _ -> assert false
       in
         list o
 
@@ -672,58 +684,63 @@ class transform (env : Types.typing_environment) =
           | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
               let (o, _) = o#binder (bt f inner) in
                 list o defs
+          | _ :: _ -> assert false
       in
         list o
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-        | `Val (tyvars, p, e, location, t) ->
-            let outer_tyvars = o#backup_quantifiers in
-            let (o, tyvars) = o#quantifiers tyvars in
-            let (o, e, _) = o#phrase e in
-            let o = o#restore_quantifiers outer_tyvars in
-            let (o, p) = o#pattern p in
-            let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Val (tyvars, p, e, location, t))
-        | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
-            let outer_tyvars = o#backup_quantifiers in
-            let (o, tyvars) = o#quantifiers tyvars in
-            let inner_effects = fun_effects ft (fst lam) in
-            let (o, lam, _) = o#funlit inner_effects lam in
-            let o = o#restore_quantifiers outer_tyvars in
-            let (o, f) = o#binder f in
-            let (o, t) = optionu o (fun o -> o#datatype') t in
-              (o, `Fun (f, lin, (tyvars, lam), location, t))
-        | `Funs defs ->
-            (* put the inner bindings in the environment *)
-            let o = o#rec_activate_inner_bindings defs in
+      | `Val (tyvars, p, e, location, t) ->
+         let outer_tyvars = o#backup_quantifiers in
+         let (o, tyvars) = o#quantifiers tyvars in
+         let (o, e, _) = o#phrase e in
+         let o = o#restore_quantifiers outer_tyvars in
+         let (o, p) = o#pattern p in
+         let (o, t) = optionu o (fun o -> o#datatype') t in
+         (o, `Val (tyvars, p, e, location, t))
+      | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
+         let outer_tyvars = o#backup_quantifiers in
+         let (o, tyvars) = o#quantifiers tyvars in
+         let inner_effects = fun_effects ft (fst lam) in
+         let (o, lam, _) = o#funlit inner_effects lam in
+         let o = o#restore_quantifiers outer_tyvars in
+         let (o, f) = o#binder f in
+         let (o, t) = optionu o (fun o -> o#datatype') t in
+         (o, `Fun (f, lin, (tyvars, lam), location, t))
+      | `Fun _ -> failwith "Unannotated non-recursive function binding"
+      | `Funs defs ->
+         (* put the inner bindings in the environment *)
+         let o = o#rec_activate_inner_bindings defs in
 
-            (* transform the function bodies *)
-            let (o, defs) = o#rec_bodies defs in
+         (* transform the function bodies *)
+         let (o, defs) = o#rec_bodies defs in
 
-            (* put the outer bindings in the environment *)
-            let o, defs = o#rec_activate_outer_bindings defs in
-            (o, (`Funs defs))
-	| `Handler _ -> assert false
+         (* put the outer bindings in the environment *)
+         let o, defs = o#rec_activate_outer_bindings defs in
+         (o, (`Funs defs))
+      | `Handler _ -> assert false
       | `Foreign (f, language, t) ->
-          let (o, f) = o#binder f in
-            (o, `Foreign (f, language, t))
-      | `Include _ ->
-          failwith "Includes aren't supported yet"
+         let (o, f) = o#binder f in
+         (o, `Foreign (f, language, t))
       | `Type (name, vars, (_, Some dt)) as e ->
-          let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
-            {< tycon_env=tycon_env >}, e
+         let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
+         {< tycon_env=tycon_env >}, e
+      | `Type _ -> failwith "Unannotated type alias"
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
+      | `Module _ -> assert false
+      | `QualifiedImport _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       fun (b, pos) ->
         let (o, b) = o#bindingnode b in (o, (b, pos))
 
     method binder : binder -> ('self_type * binder) =
-      fun (name, Some t, pos) ->
-        let var_env = TyEnv.bind var_env (name, t) in
-          ({< var_env=var_env >}, (name, Some t, pos))
+      function
+      | (name, Some t, pos) ->
+         let var_env = TyEnv.bind var_env (name, t) in
+         ({< var_env=var_env >}, (name, Some t, pos))
+      | _ -> assert false
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
       fun (p, pos) ->
@@ -737,11 +754,11 @@ class transform (env : Types.typing_environment) =
          let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
          let o = o#restore_envs envs in
-         {< var_env=var_env >}, `Unquote (bs, e), t
+         o, `Unquote (bs, e), t
       | `Grab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, `Grab (cbind, None, p), t
-      | `Grab ((c, Some (`Input (_a, s), grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+      | `Grab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
          let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
@@ -775,14 +792,19 @@ class transform (env : Types.typing_environment) =
                                            let o, _ = o#binder b in
                                            let (o, p, t) = o#cp_phrase p in
                                            (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
-         let (cases, t :: ts) = List.split cases in
-         o, `Offer (b, cases), t
-      | `Fuse (c, d) -> o, `Fuse (c, d), Types.unit_type
+         begin
+           match List.split cases with
+           | cases, t :: _ts ->
+              o, `Offer (b, cases), t
+           | _ -> assert false
+         end
+      | `Link (c, d) -> o, `Link (c, d), Types.unit_type
       | `Comp ((c, Some s, _ as cbind), left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (cbind, left, right), t    					  
+         o, `Comp (cbind, left, right), t
+      | `Comp _ -> assert false
   end

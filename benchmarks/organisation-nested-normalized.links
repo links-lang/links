@@ -1,0 +1,218 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
+    	  tablekeys [["id"]] from db;
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
+    	  tablekeys [["id"]] from db;
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  var total = serverTimeMilliseconds()-start;
+  print("Time: " ^^ intToString(total));
+  total
+}
+
+fun throttle (f,x) {
+  if (length(asList(departments)) <= 16) {f()} else {x}
+}
+
+# Supporting code
+
+
+fun expertise_prime(u) {
+  for (d <-- departments)
+  where (empty( for (e <-- employees)
+                where (d.dpt == e.dpt &&
+		       empty( for (t <-- tasks)
+		       	      where (e.emp == t.emp && t.tsk == u)
+			      [()]))
+		[()]))
+  [(dpt=d.dpt)]
+}
+
+
+typename NestedOrg = [(dpt:String,
+                       employees: [(name:String,salary:Int,tasks:[String])],
+		       contacts: [(name:String,"client":Bool)])];
+
+sig nestedOrg : () -> NestedOrg
+fun nestedOrg() {
+  for (d <-- departments)
+  [(dpt=d.dpt,
+    employees= for (e <-- employees)
+               where (d.dpt == e.dpt)
+               [(name= e.emp,
+	         salary=e.salary,
+	         tasks= for (t <-- tasks)
+                      	where (e.emp == t.emp)
+			[t.tsk])],
+    contacts= for(y <-- contacts)
+              where (d.dpt==y.dpt)
+              [(name=y.name,"client"=y."client")])]
+}
+
+fun tasksFactored(e) {
+  for(t <-- tasks)
+  where(e.emp == t.emp)
+  [t.tsk]
+}
+
+fun contactsFactored(d) {
+  for(y <-- contacts)
+  where (d.dpt==y.dpt)
+  [(name=y.name,"client"=y."client")]
+}
+
+fun employeesFactored(d) {
+  for (e <-- employees)
+  where (d.dpt == e.dpt)
+  [(emp=e.emp,
+    tasks= tasksFactored(e))]
+}
+
+fun nestedOrgFactored() {
+  query {
+  for (d <-- departments)
+  [(dpt=d.dpt,
+    employees=employeesFactored(d),
+    contacts=contactsFactored(d))]
+  }
+}
+
+sig any : ([a],(a) -a-> Bool) -a-> Bool
+fun any(xs,p) {
+  not(empty(for (x <- xs) where (p(x)) [()]))
+}
+
+sig all : ([a],(a) -a-> Bool) -a-> Bool
+fun all(xs,p) {
+  not(any(xs,fun (x) {not(p(x))}))
+}
+
+sig contains : ([a],a) -> Bool
+fun contains(xs,u) {
+  any(xs,fun (x) {x==u})
+}
+
+fun expertise(nestedOrg,u) {
+  for (d <- nestedOrg)
+  where (all(d.employees,
+   	     fun (e) {contains(e.tasks,u)}))
+  [(dpt=d.dpt)]
+}
+
+fun outliersQ() {
+  for (x <-- departments)
+  [(department=x.dpt,
+    people=(for (y <-- employees)
+           where(x.dpt == y.dpt && (y.salary < 1000 || y.salary > 1000000))
+           [(name=y.emp,
+             tasks=for(z <-- tasks)
+                    where(z.emp == y.emp)
+                    [z.tsk])])
+           ++
+           (for (y <-- contacts)
+            where (x.dpt == y.dpt && y."client")
+            [(name=y.dpt,tasks=["buy"])]))]
+}
+
+fun isPoor(x) {x.salary < 1000}
+fun isRich(x) {x.salary > 1000000}
+fun filter(p,xs) {for(x <- xs) where (p(x)) [x]}
+fun get(xs,f) {for(x <- xs) [(name=x.name,tasks=f(x))]}
+fun outliers(xs) {filter (fun (x) {isRich(x) || isPoor(x)},xs)}
+fun clients(xs) {filter (fun (x) {x."client"},xs)}
+
+fun outliersQFactored(organisation) {
+  query {
+    for (x <- organisation)
+    [(department=x.dpt,
+      people=get(outliers(x.employees), fun (y) {y.tasks}) ++
+             get(clients(x.contacts), fun (y) {["buy"]}))]
+  }
+}
+
+
+# QN1: nestedOrg (monolithic)
+
+var x = print("\nQN1\n");
+
+var qn1 = throttle(fun () {time (nestedOrg)},-1);
+var qn1 = throttle(fun () {time (nestedOrg)},-1);
+
+# QN2: expertise (monolithic)
+
+var x = print("\nQN2\n");
+
+var qn2 = throttle(fun () {time (fun () {expertise_prime("abstract")})},-1);
+var qn2 = throttle(fun () {time (fun () {expertise_prime("abstract")})},-1);
+
+
+
+### Nesting
+#
+
+# QN3: employees with lists of tasks
+var x = print("\nQN3\n");
+
+fun employeeTasks() {
+  query {
+    for(t <-- employees)
+    [(emp=(t.emp),b=for (u <-- tasks) where ((t.emp) == (u.emp)) [(u.tsk)])]
+  }
+}
+
+var qn3 = time (employeeTasks);
+var qn3 = time (employeeTasks);
+
+# QN4: departments with lists of employees
+
+var x = print("\nQN4\n");
+
+fun departmentEmployees() {
+  query {
+    for(d <-- departments)
+    [(dpt=(d.dpt),emps=for (e <-- employees) where ((d.dpt) == (e.dpt)) [(e.emp)])]
+  }
+}
+
+var qn4 = time (departmentEmployees);
+var qn4 = time (departmentEmployees);
+
+# QN5: Tasks with employees and departments
+
+fun tasksEmployeesDepartments() {
+  for(t <-- tasks)
+  [(a=t.tsk, b=for(e <-- employees, d <-- departments)
+  	       where (e.emp == t.emp && e.dpt == d.dpt)
+	       [(b=e.emp, c=d.dpt)])]
+}
+
+var x = print("\nQN5\n");
+
+var qn5 =  time (fun () {query {tasksEmployeesDepartments()}});
+var qn5 =  time (fun () {query {tasksEmployeesDepartments()}});
+
+# QN6: shredding paper example (monolithic)
+
+var x = print("\nQN6\n");
+
+var qn6 =  throttle(fun () {time (fun () {query {outliersQ()}})},-1);
+var qn6 =  throttle(fun () {time (fun () {query {outliersQ()}})},-1);
+
+
+
+
+var x = print("QN1:\t" ^^ (intToString(qn1)) );
+var x = print("QN2:\t" ^^ (intToString(qn2)) );
+var x = print("QN3:\t" ^^ (intToString(qn3)) );
+var x = print("QN4:\t" ^^ (intToString(qn4)) );
+var x = print("QN5:\t" ^^ (intToString(qn5)) );
+var x = print("QN6:\t" ^^ (intToString(qn6)) );
+()
+

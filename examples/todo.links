@@ -7,7 +7,11 @@ fun remove(item, items) {
 }
 
 
-fun todo(items) client {
+fun dummy() client {
+  ()
+}
+
+fun todo(items) {
    <html>
     <body>
      <form l:onsubmit="{replaceDocument(todo(item::items))}">
@@ -27,5 +31,9 @@ fun todo(items) client {
    </html>
 }
 
-page
- <#>{todo(["add items to todo list"])}</#>
+fun main() {
+  page
+   <#>{todo(["add items to todo list"])}</#>
+}
+
+main()

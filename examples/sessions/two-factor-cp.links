@@ -100,7 +100,7 @@ fun badMe(c, return) {
 
 sig serveData : ((~TwoFactor, !Data.EndBang) ~e~> EndBang) ~e~> Data
 fun serveData(user) {
-  run (fun (return) {<| nu x.({serve(x, "secret data")} | {user(x, return)}) |>})
+  runSync (fun (return) {<| nu x.({serve(x, "secret data")} | {user(x, return)}) |>})
 }
 
 serveData(goodMe)

@@ -8,7 +8,7 @@ let rec is_raw (phrase, pos) =
     | `PagePlacement _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
-    | e ->
+    | _e ->
         raise (Errors.SugarError (pos, "Invalid element in page literal"))
 
 (* DODGEYNESS:
@@ -38,7 +38,7 @@ let rec desugar_page (o, page_type) =
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (`Any, `Any) in
             let b = Types.fresh_type_variable (`Any, `Any) in
-            let template = `Alias (("Formlet", [`Type a]), b) in
+            let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
                         [formlet; handler; attributes]), pos)
@@ -62,9 +62,9 @@ and desugar_pages env =
 object
   inherit (TransformSugar.transform env) as super
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Page e ->
-        let (o, e, t) = super#phrase e in
+        let (o, e, _t) = super#phrase e in
         let page_type = Instantiate.alias "Page" [] env.Types.tycon_env in
         let (e, _) = desugar_page (o, page_type) e in
           (o, e, page_type)
@@ -78,7 +78,7 @@ object
   val pageless = true
   method satisfied = pageless
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Page _ -> {< pageless = false >}
     | e -> super#phrasenode e
 end

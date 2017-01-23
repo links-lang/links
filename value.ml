@@ -19,11 +19,41 @@ module Show_otherfield =
 type db_status = [ `QueryOk | `QueryError of string ]
   deriving (Show)
 
-class virtual dbvalue = object
+class virtual dbvalue = object (self)
   method virtual status : db_status
   method virtual nfields : int
+  method virtual ntuples : int
   method virtual fname : int -> string
   method virtual get_all_lst : string list list
+  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc =
+	if n < max
+	then (
+	  do_map (n+1) (f (self#getvalue n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
+      let max = self#ntuples in
+      let rec do_map n acc =
+	if n < max
+	then (
+	  do_map (n+1) (f (self#gettuple n)::acc)
+	 )
+	else acc
+      in do_map 0 []
+  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
+      let max = self#ntuples in
+      let rec do_fold n acc =
+	if n < max
+	then (
+	  do_fold (n+1) (f (self#gettuple n) acc)
+	 )
+	else acc
+      in do_fold 0 x	    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+  method virtual getvalue : int -> int -> string
+  method virtual gettuple : int -> string array
   method virtual error : string
 end
 
@@ -101,7 +131,7 @@ class null_database =
 object
   inherit database
   method driver_name () = "null"
-  method exec query : dbvalue = assert false
+  method exec _query : dbvalue = assert false
   method escape_string = assert false
   method quote_field = assert false
 end
@@ -121,24 +151,44 @@ let is_attr = function
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
 
-let rec string_of_xml xml : string
-    = String.concat "" (List.map string_of_item xml)
-and string_of_item : xmlitem -> string =
-  let format_attrs attrs = match String.concat " " (List.map string_of_item attrs) with
-    | "" -> ""
-    | a -> " " ^ a in
-  let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
+let rec string_of_xml : ?close_tags:bool -> xml -> string =
+  fun ?(close_tags=false) x -> String.concat "" (List.map (string_of_item ~close_tags:close_tags) x)
+and string_of_item : ?close_tags:bool -> xmlitem -> string =
+  fun ?(close_tags=false) ->
+    let format_attrs attrs = match String.concat " " (List.map (string_of_item ~close_tags:close_tags) attrs) with
+      | "" -> ""
+      | a -> " " ^ a in
+    let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
     function
-      | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
-      | Text s -> xml_escape s
-      | Node (tag, children) -> let attrs, nodes = attrs children, nodes children in
-          match nodes with
-            | [] -> "<" ^ tag ^ format_attrs attrs ^ "/>"
-            | _  -> ("<" ^ tag ^ format_attrs attrs ^ ">"
-                     ^ string_of_xml nodes
-                     ^ "</" ^ tag ^ ">")
+    | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
+    | Text s -> xml_escape s
+    | Node (tag, children) ->
+      begin
+        let attrs, nodes = attrs children, nodes children in
+        match nodes with
+        | [] when not close_tags ->
+          "<" ^ tag ^ format_attrs attrs ^ "/>"
+        | _  ->
+          "<" ^ tag ^ format_attrs attrs ^ ">" ^ string_of_xml ~close_tags:close_tags nodes ^ "</" ^ tag ^ ">"
+      end
 
-type table = (database * string) * string * Types.row
+(* split top-level HTML into head and body components *)
+let split_html : xml -> xml * xml =
+  function
+  | [Node ("html", xs)] ->
+    List.fold_left
+      (fun (hs, bs) ->
+         function
+         | Node ("body", ys) ->
+           hs, bs @ ys
+         | Node ("head", ys) ->
+           hs @ ys, bs
+         | x -> hs, bs @ [x])
+      ([], []) xs
+  | [Node ("body", xs)] -> [], xs
+  | xs -> [], xs
+
+type table = (database * string) * string * string list list * Types.row
   deriving (Show)
 
 (* type number = num *)
@@ -188,12 +238,17 @@ and t = [
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
-| `FunctionPtr of (Ir.var * env)
+| `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
+<<<<<<< HEAD
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
+=======
+| `Continuation of continuation
+| `Pid of int * Sugartypes.location
+>>>>>>> origin/sessions
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
@@ -237,12 +292,12 @@ let shadow env ~by:(by, _globals') =
     IntMap.fold (fun name v env -> bind name v env) by env
 
 let fold f (env, _globals) a = IntMap.fold f env a
-let globals (env, genv) = (genv, genv)
+let globals (_env, genv) = (genv, genv)
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
 | primitive_value_basis
-| `Table of string * string * string
+| `Table of string * string * string list list * string
 | `Database of string
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
@@ -254,7 +309,7 @@ and compressed_t = [
 | `List of compressed_t list
 | `Record of (string * compressed_t) list
 | `Variant of string * compressed_t
-| `FunctionPtr of (Ir.var * compressed_env)
+| `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation
@@ -265,8 +320,8 @@ and compressed_env = (Ir.var * compressed_t) list
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
     | #primitive_value_basis as v -> v
-    | `Table ((_database, db), table, row) ->
-        `Table (db, table, Types.string_of_datatype (`Record row))
+    | `Table ((_database, db), table, keys, row) ->
+        `Table (db, table, keys, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
 let localise env var =
@@ -300,12 +355,18 @@ and compress_t (v : t) : compressed_t =
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
-      | `FunctionPtr(x, env) ->
-        `FunctionPtr (x, compress_env env)
+      | `FunctionPtr(x, fvs) ->
+        `FunctionPtr (x, opt_map compress_t fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
+<<<<<<< HEAD
       | `Continuation (cont,_) -> `Continuation (compress_continuation cont) (* TODO: Compress handlers *)
       | `Socket (inc, outc) -> assert false (* wheeee! *)
+=======
+      | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `Pid (_pid, _location) -> assert false
+      | `Socket (_inc, _outc) -> assert false (* wheeee! *)
+>>>>>>> origin/sessions
 and compress_env env : compressed_env =
   List.rev
     (fold
@@ -322,14 +383,14 @@ and compress_env env : compressed_env =
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
     | #primitive_value_basis as v -> v
-    | `Table (db_name, table_name, t) ->
+    | `Table (db_name, table_name, keys, t) ->
         let row =
           match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
             | `Record row -> row
             | _ -> assert false in
         let driver, params = parse_db_string db_name in
         let database = db_connect driver params in
-          `Table (database, table_name, row)
+          `Table (database, table_name, keys, row)
     | `Database s ->
         let driver, params = parse_db_string s in
         let database = db_connect driver params in
@@ -352,7 +413,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `List vs -> `List (List.map uv vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, uv v)) fields)
       | `Variant (name, v) -> `Variant (name, uv v)
-      | `FunctionPtr (x, locals) -> `FunctionPtr (x, uncompress_env globals locals)
+      | `FunctionPtr (x, fvs) -> `FunctionPtr (x, opt_map uv fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont, []) (* TODO: Uncompress handlers *)
@@ -368,12 +429,12 @@ and uncompress_env globals env : env =
 let string_as_charlist s : t =
   `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
 
-let escape =
+let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
 
 (** {1 Pretty-printing values} *)
 
-let string_of_cont = Show_continuation.show 
+(* let string_of_cont = Show_continuation.show *)
 
 exception Not_tuple
 
@@ -393,9 +454,9 @@ and charlist_as_string chlist =
 
 and string_of_value : t -> string = function
   | #primitive_value as p -> string_of_primitive p
-  | `FunctionPtr (x, env) ->
+  | `FunctionPtr (x, fvs) ->
     if Settings.get_value (Basicsettings.printing_functions) then
-      string_of_int x ^ string_of_environment env
+      string_of_int x ^ opt_app string_of_value "" fvs
     else
       "fun"
   | `PrimitiveFunction (name,_op) -> name
@@ -422,9 +483,14 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
+<<<<<<< HEAD
   | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
   | `DeepContinuation _ -> "\"DeepContinuation\""
   | `ShallowContinuation _ -> "\"ShallowContinuation\""     
+=======
+  | `Continuation cont -> "Continuation" ^ string_of_cont cont
+  | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
+>>>>>>> origin/sessions
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -433,7 +499,7 @@ and string_of_primitive : primitive_value -> string = function
   | `Char c -> "'"^ Char.escaped c ^"'"
   | `XML x -> string_of_item x
   | `Database (_, params) -> "(database " ^ params ^")"
-  | `Table (_, table_name, _) -> "(table " ^ table_name ^")"
+  | `Table (_, table_name, _, _) -> "(table " ^ table_name ^")"
   | `String s -> "\"" ^ s ^ "\""
 
 and string_of_tuple (fields : (string * t) list) : string =
@@ -448,7 +514,7 @@ and string_of_tuple (fields : (string * t) list) : string =
 
 and numberp s = try ignore(int_of_string s); true with _ -> false
 
-and string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
+and _string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
 and string_of_cont : continuation -> string =
   fun cont -> failwith "string_of_continuation not yet implemented!"
@@ -489,7 +555,7 @@ and unbox_bool : t -> bool   = function
 and box_int i = `Int i
 and unbox_int  : t -> int    = function
   | `Int i   -> i
-  | other -> failwith("Type error unboxing int")
+  | _other -> failwith("Type error unboxing int")
 and box_float f = `Float f
 and unbox_float : t -> float = function
   | `Float f -> f | _ -> failwith "Type error unboxing float"
@@ -506,7 +572,10 @@ and unbox_string : t -> string = function
      failwith ("Type error unboxing string: " ^ string_of_value v)
 and box_list l = `List l
 and unbox_list : t -> t list = function
-  | `List l -> l | _ -> failwith "Type error unboxing list"
+  | `List l -> l | v -> failwith ("Type error unboxing list: " ^ string_of_value v)
+and box_record fields = `Record fields
+and unbox_record : t -> (string * t) list = function
+  | `Record fields -> fields | _ -> failwith "Type error unboxing record"
 and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
@@ -526,6 +595,10 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
+let box_pid (pid, _location) = `Pid (pid, `Unknown)
+let unbox_pid = function
+  | `Pid (pid, location) -> (pid, location)
+  | _ -> failwith "Type error unboxing pid"
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
@@ -600,7 +673,7 @@ let value_serialiser : unit -> compressed_t serialiser =
 
 let marshal_continuation (c : continuation) : string =
   let cs = compress_continuation c in
-  let { save = save } = continuation_serialiser () in
+  let save = (continuation_serialiser ()).save in
   let pickle = save cs in
     if String.length pickle > 4096 then
       prerr_endline "Marshalled continuation larger than 4K:";
@@ -608,17 +681,17 @@ let marshal_continuation (c : continuation) : string =
 
 let marshal_value : t -> string =
   fun v ->
-    let { save = save } = value_serialiser () in
+    let save = (value_serialiser ()).save in
     (* Debug.print ("marshalling: "^Show_t.show v); *)
       base64encode (save (compress_t v))
 
 let unmarshal_continuation env : string -> continuation =
-    let { load = load } = continuation_serialiser () in
+    let load = (continuation_serialiser ()).load in
     base64decode ->- load ->- uncompress_continuation (globals env)
 
 let unmarshal_value env : string -> t =
   fun s ->
-    let { load = load } = value_serialiser () in
+    let load = (value_serialiser ()).load in
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
     (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)

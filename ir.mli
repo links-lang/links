@@ -80,7 +80,7 @@ and binding =
 and special =
   [ `Wrong of Types.datatype
   | `Database of value
-  | `Table of (value * value * (Types.datatype * Types.datatype * Types.datatype))
+  | `Table of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation
   | `Delete of (binder * value) * computation option
@@ -126,7 +126,7 @@ sig
   object ('self_type)
     val tyenv : environment
 
-    method private lookup_type : var -> Types.datatype
+    method lookup_type : var -> Types.datatype
     method constant : constant -> (constant * Types.datatype * 'self_type)
     method optionu :
       'a.

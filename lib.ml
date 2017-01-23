@@ -1,7 +1,4 @@
-open Sys
 open List
-
-open Notfound
 
 open Value
 open Types
@@ -22,7 +19,8 @@ let alias_env : Types.tycon_environment =
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 let cgi_parameters = ref []
-(** http_response_headers: this is state for the webif interface. I hope we can
+let cookies = ref []
+(*  http_response_headers: this is state for the webif interface. I hope we can
     find a better way for library functions to communicate with the web
     interface. *)
 let http_response_headers = ref []
@@ -37,14 +35,6 @@ let value_as_string db =
   function
     | `String s -> "\'" ^ db # escape_string s ^ "\'"
     | v -> string_of_value v
-
-let cond_from_field db (k, v) =
-  "("^ k ^" = "^ value_as_string db v ^")"
-
-let single_match db =
-  function
-    | `Record fields -> "("^ (String.concat " AND " (map (cond_from_field db) fields)) ^")"
-    | r -> failwith ("Internal error: forming query from non-row (single_match): "^string_of_value r)
 
 let row_columns = function
   | `List ((`Record fields)::_) -> map fst fields
@@ -72,25 +62,28 @@ type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
+let mk_binop_fn impl unbox_fn constr = function
+    | [x; y] -> constr (impl (unbox_fn x) (unbox_fn y))
+    | _ -> failwith "arity error in integer operation"
+
 let int_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (fun [x;y] -> `Int (impl (unbox_int x) (unbox_int y)))),
+  (`PFun (mk_binop_fn impl unbox_int (fun x -> `Int x))),
   datatype "(Int, Int) -> Int",
   pure
 
 let float_op impl pure : located_primitive * Types.datatype * pure =
-  `PFun (fun [x; y] -> `Float (impl (unbox_float x) (unbox_float y))),
+  (`PFun (mk_binop_fn impl unbox_float (fun x -> `Float x))),
   datatype "(Float, Float) -> Float",
   pure
 
 let string_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (fun [x; y] -> `String (impl (unbox_string x) (unbox_string y)))),
+  (`PFun (mk_binop_fn impl unbox_string (fun x -> `String x))),
   datatype "(String, String) -> String",
   pure
 
-let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t =
-  fun [x] -> (box (conv (unbox x)))
-
-let make_type_variable = Types.make_type_variable
+let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = function
+    | [x] -> box (conv (unbox x))
+    | _ -> assert false
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
@@ -102,32 +95,48 @@ let string_to_xml : Value.t -> Value.t = function
   | `String s -> `List [`XML (Text s)]
   | _ -> failwith "internal error: non-string value passed to xml conversion routine"
 
+(* The following functions expect 1 argument. Assert false otherwise. *)
 let char_test_op fn pure =
-  (`PFun (fun [c] -> (`Bool (fn (unbox_char c)))),
+  (`PFun (fun args ->
+      match args with
+        | [c] -> (`Bool (fn (unbox_char c)))
+        | _ -> assert false),
    datatype "(Char) ~> Bool",
-  pure)
+   pure)
 
 let char_conversion fn pure =
-  (`PFun (fun [c] ->  (box_char (fn (unbox_char c)))),
+  (`PFun (fun args ->
+      match args with
+        | [c] -> (box_char (fn (unbox_char c)))
+        | _ -> assert false),
    datatype "(Char) -> Char",
-  pure)
+   pure)
 
 let float_fn fn pure =
-  (`PFun (fun [c] ->  (box_float (fn (unbox_float c)))),
+  (`PFun (fun args ->
+      match args with
+        | [c] -> (box_float (fn (unbox_float c)))
+        | _ -> assert false),
    datatype "(Float) -> Float",
   pure)
 
 let p1 fn =
-  `PFun (fun ([a]) -> fn a)
-and p2 fn =
-  `PFun (fun [a;b] -> fn a b)
-and p3 fn =
-  `PFun (fun [a;b;c] -> fn a b c)
+  `PFun (fun args ->
+      match args with
+        | ([a]) -> fn a
+        | _ -> assert false)
 
-let client_only_1 fn =
-  p1 (fun _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
-let client_only_2 fn =
-  p2 (fun _ _ -> failwith (Printf.sprintf "%s is not implemented on the server" fn))
+let p2 fn =
+  `PFun (fun args ->
+      match args with
+        | [a; b] -> fn a b
+        | _ -> assert false)
+
+let p3 fn =
+  `PFun (fun args ->
+      match args with
+        | [a;b;c] -> fn a b c
+        | _ -> assert false)
 
 let rec equal l r =
   match l, r with
@@ -203,7 +212,7 @@ let prelude_nenv = ref None (* :-( *)
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
   "-", int_op (-) PURE;
-  "*", int_op ( *) PURE;
+  "*", int_op ( * ) PURE;
   "/", int_op (/) IMPURE;
   "^", int_op pow PURE;
   "mod", int_op (mod) IMPURE;
@@ -214,7 +223,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "^.", float_op ( ** ) PURE;
   "^^", string_op ( ^ ) PURE;
 
-  (** Comparisons *)
+  (* Comparisons *)
   "==",
   (p2 (fun v1 v2 -> box_bool (equal v1 v2)),
    datatype "(a,a) -> Bool",
@@ -246,7 +255,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(a,a) -> Bool",
    PURE);
 
-  (** Conversions (any missing?) **)
+  (* Conversions (any missing?) *)
   "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:string_of_int ~box:box_string ~into:Types.string_type PURE;
   "stringToInt",   conversion_op ~from:Types.string_type ~unbox:unbox_string ~conv:int_of_string ~box:box_int ~into:(`Primitive `Int) IMPURE;
   "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:unbox_int ~conv:float_of_int ~box:box_float ~into:(`Primitive `Float) PURE;
@@ -269,7 +278,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (string_to_xml -<-
             (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string)),
    datatype "(Float) -> Xml",
-  PURE);
+   PURE);
+
+  "sysexit",
+  (p1 (fun ret -> Pervasives.exit (unbox_int ret)),
+   datatype "(Int) ~> a",
+   IMPURE);
+
+  "show",
+  (p1 (fun v -> box_string (Value.string_of_value v)),
+   datatype "(a) ~> String",
+   PURE);
 
   "exit",
   (`Continuation (Value.toplevel_cont, Value.toplevel_hs),
@@ -291,13 +310,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   "Send",
-  (p2 (fun pid msg ->
+  (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
    datatype "(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Int (Proc.get_current_pid())),
+  (`PFun (fun _ -> `Pid (Proc.get_current_pid(), `Unknown)),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
@@ -315,13 +334,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (Ultimately, it should perhaps be a true primitive (an AST node),
      because it uses a different evaluation mechanism from functions.
      -- jdy) *)
-    (`PFun (fun ([]) -> assert false),
+    (`PFun (fun (_) -> assert false),
      datatype "() {:a|_}~> a",
   IMPURE);
 
   "spawn",
   (* This should also be a primitive, as described in the ICFP paper. *)
   (* And now it is *)
+  (`PFun (fun _ -> assert false),
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   IMPURE);
+
+  "spawnClient",
   (`PFun (fun _ -> assert false),
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
@@ -350,7 +374,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      wait : Process (a, {wild{_},hear{_}:_|e}) {hear{_}:_}~> a
   *)
 
-  (** Sessions *)
+  (* Sessions *)
 
   "send",
   (`PFun (fun _ -> assert false),
@@ -364,7 +388,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "link",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session),e::Row(Unl, Any).(s, ~s) ~e~> EndBang",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(s, ~s) ~e~> ()",
    IMPURE);
 
   (* access points *)
@@ -383,7 +407,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "forall s::Type(Any, Session).(AP(s)) ~> ~s",
    IMPURE);
 
-  (** Lists and collections **)
+  (* Lists and collections *)
   "Nil",
   (`List [],
    datatype "[a]",
@@ -402,21 +426,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   "hd",
-  (p1 (fun list ->
-         try
-           (List.hd(unbox_list list))
-         with
-             Failure "hd" -> failwith "hd() of empty list"
+  (p1 (fun lst ->
+        match (unbox_list lst) with
+          | [] -> failwith "hd() of empty list"
+          | x :: _ -> x
       ),
    datatype "([a]) ~> a",
   IMPURE);
 
   "tl",
-  (p1 (fun list ->
-         try
-           box_list(List.tl(unbox_list list))
-         with
-             Failure "tl" -> failwith "tl() of empty list"
+  (p1 (fun lst ->
+         match (unbox_list lst) with
+            | [] -> failwith "tl() of empty list"
+            | _x :: xs -> box_list xs
       ),
    datatype "([a]) ~> [a]",
   IMPURE);
@@ -456,7 +478,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
-  (** XML **)
+  (* XML *)
   "childNodes",
   (p1 (function
          | `List [`XML (Node (_, children))] ->
@@ -639,8 +661,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          match v with
            | `List [`XML(Node(_, children))] ->
                `List (map
-                        (fun (Attr (name, value)) ->
-                                `Record [("1", box_string name); ("2", box_string value)])
+                        (function
+                           | (Attr (name, value)) ->
+                               `Record [("1", box_string name); ("2", box_string value)]
+                           | _ -> assert false)
                         (filter (function (Attr _) -> true | _ -> false) children))
            | _ -> failwith "non-element given to getAttributes"),
    datatype "(Xml) ~> [(String,String)]",
@@ -738,8 +762,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(Event) ~> DomNode",
   PURE);
 
+  (* event handlers *)
+  (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
-  (`Client, datatype "([(String,(Event) -> ())]) ~> String",
+  (`PFun (fun _ -> assert false),
+  datatype "([(String, (Event) ~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -821,22 +848,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun name ->
          let name = unbox_string name in
          let value =
-           match getenv "HTTP_COOKIE" with
-             | Some header ->
-                 let cookies = Str.split (Str.regexp "[ \t]*;[ \t]*") header in
-                 let cookies =
-                   concat_map
-                     (fun str ->
-                        match Str.split (Str.regexp "[ \t]*=[ \t]*") str with
-                          | [nm; vl] -> [nm, vl]
-                          | _ -> Debug.print ("Warning: ill-formed cookie: "^str); [])
-                     cookies
-                 in
-                   if List.mem_assoc name cookies then
-                     List.assoc name cookies
-                   else
-                     ""
-             | None -> ""
+           if List.mem_assoc name !cookies then
+             List.assoc name !cookies
+           else
+             ""
          in
            box_string value),
    datatype "(String) ~> String",
@@ -902,6 +917,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+  "serverTimeMilliseconds",
+  (`Server
+     (`PFun (fun _ ->
+               box_int(time_milliseconds()))),
+   datatype "() ~> Int",
+   IMPURE);
+
   "dateToInt",
   (p1 (fun r ->
          match r with
@@ -939,7 +961,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   datatype "(Int) ~> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
   IMPURE);
 
-  (** Database functions **)
+  (* Database functions *)
   "AsList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
    datatype "(TableHandle(r, w, n)) -> [r]",
@@ -950,10 +972,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      (p2 (fun table rows ->
             match table, rows with
               | `Table _, `List [] -> `Record []
-              | `Table ((db, params), table_name, _), _ ->
+              | `Table ((db, _params), table_name, _, _), _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
-                    prerr_endline("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
+                    Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
                     (Database.execute_insert (table_name, field_names, vss) db)
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s]) ~> ()",
@@ -975,12 +997,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             match table, rows, returning with
               | `Table _, `List [], _ ->
                   failwith "InsertReturning: undefined for empty list of rows"
-              | `Table ((db, params), table_name, _), _, _ ->
+              | `Table ((db, _params), table_name, _, _), _, _ ->
                   let field_names = row_columns rows in
                   let vss = row_values db rows in
 
                   let returning = unbox_string returning in
-                    prerr_endline("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                    Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                                     String.concat "\n"
                                     (db#make_insert_returning_query(table_name, field_names, vss, returning)));
                     (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
@@ -1035,7 +1057,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
 
-  (** some char functions **)
+  (* some char functions *)
   "isAlpha",  char_test_op Char.isAlpha PURE;
   "isAlnum",  char_test_op Char.isAlnum PURE;
   "isLower",  char_test_op Char.isLower PURE;
@@ -1045,8 +1067,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "isBlank",  char_test_op Char.isBlank PURE;
   (* isCntrl, isGraph, isPrint, isPunct, isSpace *)
 
-  "toUpper", char_conversion Char.uppercase PURE;
-  "toLower", char_conversion Char.lowercase PURE;
+  "toUpper", char_conversion Char.uppercase_ascii PURE;
+  "toLower", char_conversion Char.lowercase_ascii PURE;
 
   "ord",
   (p1 (fun c -> box_int (Char.code (unbox_char c))),
@@ -1108,10 +1130,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",
    (`Server (p2 (fun s r ->
-	let Regex.Replace (l, t) = Linksregex.Regex.ofLinks r in
-	let (regex, tmpl) = Regex.compile_ocaml l, t in
-        let string = unbox_string s in
-        box_string (Utility.decode_escapes (Str.replace_first regex tmpl string)))),
+        let open Regex in
+        match Linksregex.Regex.ofLinks r with
+	| Replace (l, t) ->
+	   let (regex, tmpl) = Regex.compile_ocaml l, t in
+           let string = unbox_string s in
+           box_string (Utility.decode_escapes (Str.replace_first regex tmpl string))
+        | Any | StartAnchor | EndAnchor | Simply _ | Seq _ | Quote _ | Group _
+          | Range _ | Alternate _ | Repeat _ -> assert false)),
     datatype "(String, Regex) ~> String",
     PURE));
 
@@ -1148,11 +1174,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (p1 (fun l ->
 		   let chars = List.map unbox_char (unbox_list l) in
 		   let len = List.length chars in
-		   let s = String.create len in
+		   let s = Bytes.create len in
 		   let rec aux i l =
 		     match l with
 		       | [] -> ()
-		       | c :: cs -> s.[i] <- c; aux (i + 1) cs
+		       | c :: cs -> Bytes.set s i c; aux (i + 1) cs
 		   in
 		     aux 0 chars;
 		     box_string s),
@@ -1208,14 +1234,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "(a) ~> b",
     PURE));
 
-  (** xml parser *)
+  (* xml parser *)
   "parseXml",
   (`Server (p1 (fun v ->
                   `List [`XML(ParseXml.parse_xml (unbox_string v))])),
    datatype "(String) -> Xml",
    IMPURE);
 
-  (** non-deterministic random number generator *)
+  (* non-deterministic random number generator *)
   "random",
   (`PFun (fun _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",
@@ -1414,15 +1440,20 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	(* END OF EQUALITY FUNCTIONS *)
 
+        "gensym",
+        (let idx = ref 0 in
+         `PFun (fun _ -> let i = !idx in idx := i+1; (box_int i)),
+         datatype "() -> Int",
+         IMPURE);
 
     "dumpTypes",
   (`Server (p1 (fun code ->
                   try
                     let ts = DumpTypes.program (val_of (!prelude_tyenv)) (unbox_string code) in
 
-                    let line ({Lexing.pos_lnum=l}, _, _) = l in
-                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c}, _, _) = c-b in
-                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c}, _) = c-b in
+                    let line ({Lexing.pos_lnum=l; _}, _, _) = l in
+                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c; _ }, _, _) = c-b in
+                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c; _}, _) = c-b in
 
                     let resolve (name, t, pos) =
                       (* HACK: we need to be more principled about foralls  *)
@@ -1451,7 +1482,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     let port = unbox_int portv in
                     let server_addr =
                       try  Unix.inet_addr_of_string server
-                      with Failure("inet_addr_of_string") ->
+                      with Failure _ ->
                         (Unix.gethostbyname server).Unix.h_addr_list.(0) in
                     let sockaddr = Unix.ADDR_INET(server_addr, port) in
                     let domain = Unix.domain_of_sockaddr sockaddr in
@@ -1459,7 +1490,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     Unix.connect sock sockaddr;
                     Unix.set_nonblock sock;
                     `Variant ("Just", box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
-                  with exn -> `Variant ("Nothing", `Record []))),
+                  with _ -> `Variant ("Nothing", `Record []))),
      datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
      IMPURE);
     "writeToSocket",
@@ -1488,6 +1519,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
                   `Record [])),
      datatype "(Socket) ~> ()",
+     IMPURE);
+    "addStaticRoute",
+    (`PFun (fun _ -> assert false),
+     datatype "(String, String, [(String, String)]) ~> ()",
+     IMPURE);
+    "unsafeAddRoute",
+    (`PFun (fun _ -> assert false),
+     datatype "(String,(String) ~> a) ~> ()",
+     IMPURE);
+    "servePages",
+    (`PFun (fun _ -> assert false),
+     datatype "() ~> ()",
      IMPURE)
 ]
 
@@ -1534,16 +1577,16 @@ let value_env : primitive option Env.Int.t =
 
 let maxvar =
   Env.String.fold
-    (fun name var x -> max var x)
+    (fun _name var x -> max var x)
     nenv 0
 
 let minvar =
   Env.String.fold
-    (fun name var x -> min var x)
+    (fun _name var x -> min var x)
     nenv maxvar
 
 let value_array : primitive option array =
-  let array = Array.create (maxvar+1) None in
+  let array = Array.make (maxvar+1) None in
   List.iter (fun (name, (p, _, _)) ->
     Array.set array (Env.String.lookup nenv name) (impl p)) env;
   array
@@ -1558,7 +1601,7 @@ let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 
-let primitive_vars = Env.String.fold (fun name var vars -> IntSet.add var vars) nenv IntSet.empty
+let primitive_vars = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty
 
 let primitive_name = Env.Int.lookup venv
 
@@ -1608,7 +1651,7 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 (* jcheney: added to expose lookup by var *)
 let apply_pfun_by_code var args =
   match primitive_by_code var with
-  | Some (#Value.t as r) ->
+  | Some #Value.t ->
       failwith("Attempt to apply primitive non-function "
 	       ^ "(#" ^string_of_int var^ ").")
   | Some (`PFun p) -> p args
@@ -1619,8 +1662,6 @@ let apply_pfun name args =
   match Env.String.find nenv name with
     | Some var -> apply_pfun_by_code var args
     | None -> assert false
-
-
 
 let is_primitive name = List.mem_assoc name env
 
@@ -1636,6 +1677,15 @@ let is_pure_primitive name =
     arguments [args]. *)
 let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
                                   args)
+
+let cohttp_server_response headers body =
+  (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
+  let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ !http_response_headers) in
+  Cohttp_lwt_unix.Server.respond_string
+    ?headers:(Some h)
+    ~status:(Cohttp.Code.status_of_code !http_response_code)
+    ~body:body
+    ()
 
 (** Output the headers and content to stdout *)
 let print_http_response headers body =

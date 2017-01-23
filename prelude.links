@@ -1039,81 +1039,22 @@ fun sendSuspend(pagef) {
 
 #### SESSION TYPING STUFF ####
 
-typename EndBang = !().End;
-typename EndQuery = ?().End;
-
-sig wait : (?().End) ~> ()
-fun wait(s) {
-  ignore(receive(s))
-}
-
-sig close : (!().End) ~> ()
-fun close(s) {
-  ignore(send((), s))
-}
-
-sig makeEndBang : () ~> EndBang
-fun makeEndBang() {
-  var ap = new();
-  var _ = spawn {
-     var c = accept(ap);
-     wait(c)
-  };
-  request(ap)
-}
-
-sig fork : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new();
-  var _ = spawn {
-    var c = accept(ap);
-    var c = f(c);
-    close(c)
-  };
-  request(ap)
-}
-
-sig linfork : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-fun linfork(f) {
-  var ap = new();
-  var _ = spawn {
-    var c = accept(ap);
-    var c = f(c);
-    close(c)
-  };
-  request(ap)
-}
-
-sig run : ((!a.EndBang) ~e~> EndBang) ~e~> a
-fun run(f) {
-  var c = fork(f);
-  var (v, c) = receive(c);
-  wait(c);
-  v
-}
-
-
-sig knife : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-fun knife(f) {
-  var ap = new();
   var _ = spawnAngel {
     f(accept(ap))
   };
   request(ap)
 }
 
-sig linknife : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-fun linknife(f) {
+sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+fun linFork(f) {
   var ap = new();
   var _ = spawnAngel {
     f(accept(ap))
   };
   request(ap)
-}
-
-sig fuse : forall s::Session.(s, ~s) ~> ()
-fun fuse(s, c) {
-  close(link(s, c))
 }
 
 sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
@@ -1145,13 +1086,76 @@ fun connect(f, g) {
   result
 }
 
+### sessions with split ends ###
+typename EndBang = !().End;
+typename EndQuery = ?().End;
+
+sig wait : (EndQuery) ~> ()
+fun wait(s) {
+  ignore(receive(s))
+}
+
+sig close : (EndBang) ~> ()
+fun close(s) {
+  ignore(send((), s))
+}
+
+sig makeEndBang : () ~> EndBang
+fun makeEndBang() {
+  var ap = new();
+  var _ = spawn {
+     var c = accept(ap);
+     wait(c)
+  };
+  request(ap)
+}
+
+# with split ends we synchronise on the termination of each spawned
+# child process
+sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+fun forkSync(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c)
+  };
+  request(ap)
+}
+
+sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+fun linForkSync(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    close(c)
+  };
+  request(ap)
+}
+
+sig linkSync : forall s::Session.(s, ~s) ~> EndBang
+fun linkSync(s, c) {
+  link(s, c);
+  makeEndBang()
+}
+
+sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+fun runSync(f) {
+  var c = forkSync(f);
+  var (v, c) = receive(c);
+  wait(c);
+  v
+}
+### end of sessions with split ends ###
+
+####
 sig lf : ((a) -e-> b) -> (a) -e-@ b
 fun lf(f) {
   linfun (x) {
     f(x)
   }
 }
-
 
 ### handler stuff
 typename Comp(e::Row, a) = () ~e~> a;
@@ -1191,3 +1195,29 @@ fun maximum(a,b) {
   if (a > b) { a }
   else { b }
 }
+
+####
+sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupByFlat(project, ts) {
+  for(t <- ts)
+    [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
+}
+
+####
+sig assertEq : (a, a) ~> ()
+fun assertEq (actual, expected) server {
+  if (expected == actual)
+      ()
+  else {
+      print("Assertion failed.");
+      print("Expected:");
+      print(show(expected));
+      print("but got:");
+      print(show(actual));
+      sysexit(2);
+  }
+}
+
+#### APP SERVER ####
+sig addRoute : (String, (String) ~> Page) ~> ()
+fun addRoute(path,f) { unsafeAddRoute(path, fun(p){f(p)}) }

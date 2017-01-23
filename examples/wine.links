@@ -3,7 +3,7 @@ var db = database "winestore";
 var page_size = 12;
 
 var usersTable = table "users"
-                  with (cust_id : Int, user_name : String, 
+                  with (cust_id : Int, user_name : String,
                         password : String) from db;
 
 var orderTable = table "orders"
@@ -17,7 +17,7 @@ var shortOrderTable = table "orders"
                        from db;
 
 var cartItemsTable = table "items"
-                      with (item_id : Int, cust_id : Int, order_id : Int, 
+                      with (item_id : Int, cust_id : Int, order_id : Int,
                             price : Float, qty : Int,
                             wine_id : Int)
                       from db;
@@ -26,12 +26,12 @@ var shortCartItemsTable = table "items"
                       with (cust_id : Int, order_id : Int)
                       from db;
 
-var wineTable = table "wine" 
+var wineTable = table "wine"
                  with (wine_id : Int, wine_name : String, wine_type : Int,
                        year : Int, winery_id : Int)
                  from db;
 
-var wineTypeTable = table "wine_type" 
+var wineTypeTable = table "wine_type"
                      with (wine_type_id : Int, wine_type : String)
                      from db;
 
@@ -43,7 +43,7 @@ var inventoryTable = table "inventory" with
                      (wine_id : Int, cost : Float)
                      from db;
 
-var wineryTable = table "winery" with 
+var wineryTable = table "winery" with
                   (winery_id : Int, winery_name : String,
                    region_id : Int)
                   from db;
@@ -85,7 +85,7 @@ fun sum_int(l) {
 fun maximum(result, l) {
   switch (l) {
     case [] -> result
-    case hd::tl -> if (result >= hd)  
+    case hd::tl -> if (result >= hd)
                        maximum(result, tl)
                    else
                        maximum(hd, tl)
@@ -96,7 +96,7 @@ fun maximum(result, l) {
 fun minimum(result, l) {
   switch (l) {
     case [] -> result
-    case hd::tl -> if (result <= hd)  
+    case hd::tl -> if (result <= hd)
                        maximum(result, tl)
                    else
                        maximum(hd, tl)
@@ -162,7 +162,7 @@ fun cust_id_next() {  # WARNING: race condition here
 }
 
 fun claimCart(order_id, to_cust_id) {
- # FIXME: This normally fails to do an update, because Links is 
+ # FIXME: This normally fails to do an update, because Links is
  # trying to select NULL-valued rows by checking against ''.
  update (x <-- shortOrderTable)
   where (x.order_id == order_id && x.cust_id == -1)
@@ -370,14 +370,14 @@ fun getOrder(cust_id, order_id) {
 }
 
 fun checkout(cust_id, order_id, card_no, expiry, instr) {
-  if (cust_id == -1) 
+  if (cust_id == -1)
     errorPage("You must have an account to make a purchase!")
   else {
     var total = order_total(cust_id, order_id);
     if (valid_cc_details(card_no, expiry)) {
       var the_order = getOrder(cust_id, order_id);
       switch (the_order) {
-        case None -> errorPage("Internal error: You have no shopping cart. (**This may be due to a bug with claiming your cart; try signing in before adding items to your cart**) (" 
+        case None -> errorPage("Internal error: You have no shopping cart. (**This may be due to a bug with claiming your cart; try signing in before adding items to your cart**) ("
                ^^ intToString(cust_id) ^^ ", " ^^ intToString(order_id) ^^ ")")
         case Some(order) -> {
           update (x <-- orderTable)
@@ -414,12 +414,12 @@ fun begin_checkout(cust_id, order_id) {
           <input type="text" l:name="card_no" value="" />
         </td></tr>
         <tr><td class="label mandatory">
-          Expiry Date (mm/yy): 	
+          Expiry Date (mm/yy):
         </td><td>
           <input type="text" l:name="expiry" value="" />
         </td></tr>
         <tr><td class="label">
-          Delivery Instructions: 	
+          Delivery Instructions:
         </td><td>
           <input type="text" l:name="instr" value="" />
         </td></tr>
@@ -447,7 +447,7 @@ fun update_cart(cust_id, order_id, qtys) {
   # Gosh, here's an ugly idiom:
   ignore(for ((item_id, newQty) <- qtys) {
     update (item <-- cartItemsTable)
-     where (item.cust_id == cust_id && item.order_id == order_id 
+     where (item.cust_id == cust_id && item.order_id == order_id
              && item.item_id == item_id)
        set (qty = newQty,
             item_id = item.item_id,
@@ -522,7 +522,7 @@ fun cart_itemlist(cust_id, order_id) {
               <td></td>
               <td class="total-col"> ${stringToXml(total_cost)} </td>
             </tr>
-          </table> 
+          </table>
         yields
           item_qtys) =>
       # handler
@@ -537,7 +537,7 @@ fun cart_itemlist(cust_id, order_id) {
         <form method="POST" l:action="{begin_checkout(cust_id, order_id)}">
           <input type="submit" value="Check out" />
         </form>
-       else {<div>To make a purchase, you must be a member. 
+       else {<div>To make a purchase, you must be a member.
                You may <a l:href="{sign_in_form(order_id)}">sign in</a> or
                <a l:href="{sign_up_form(order_id)}">create an account</a>.
              </div>}}</#>;
@@ -563,7 +563,7 @@ fun show_cart(cust_id, order_id, msg) {
 
 sig cartStats : (Int, Int) ~> (Float, Int)
 fun cartStats(cust_id, order_id) {
-  var cart_items = 
+  var cart_items =
     for (cart_item <-- cartItemsTable)
     where (cart_item.order_id == order_id &&
            cart_item.cust_id == cust_id)
@@ -590,7 +590,7 @@ fun add_to_cart(cust_id, order_id, wine_id) {
             [(1=cart_item.item_id)])
         );
   var new_item_id = max_item_id + 1;
-        
+
   insert (cartItemsTable) values
         [( cust_id = cust_id,
            order_id = order_id,
@@ -600,7 +600,7 @@ fun add_to_cart(cust_id, order_id, wine_id) {
            price = price )];
 
   freshResource();
- 
+
   show_cart(cust_id, order_id,
             "Added " ^^ wine_name(wine_id) ^^ " to your cart.")
 }
@@ -615,7 +615,7 @@ fun create_cart(cust_id) {
     for (cart <-- shortOrderTable)
       [(1=cart.order_id)];
   var order_id = 1 + maximum(0, map ((.1), orders));
-  insert (shortOrderTable) values 
+  insert (shortOrderTable) values
          [(cust_id = cust_id, order_id = order_id)];
   setCookie("order_id", intToString(order_id));
   setCookie("cust_id", intToString(cust_id));
@@ -623,7 +623,7 @@ fun create_cart(cust_id) {
 }
 
 fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
-  var result = 
+  var result =
     query [page_size, pageNum * page_size] {
       for (wine <-- wineTable )
       where (wine_type == 1 || wine.wine_type == wine_type)
@@ -631,7 +631,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
         for (winery <-- wineryTable)
            where (winery.winery_id == wine.winery_id
                   && (region_id == 1 || winery.region_id == region_id))
-           { 
+           {
                for (cost_rec <-- inventoryTable)
                where (wine.wine_id == cost_rec.wine_id)
                  [(wine.wine_id, wine.wine_name, cost_rec.cost,
@@ -640,7 +640,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
       }
     };
 
-  var (order_id, cust_id) = 
+  var (order_id, cust_id) =
     if (order_id <> -1) (order_id, cust_id)
     else create_cart(cust_id);
 
@@ -653,7 +653,7 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
         {stringToXml(winery)}
         <span class="wine-name">{stringToXml(name)}</span>
         <br/>
-        <span class="price-label">Our price</span>: 
+        <span class="price-label">Our price</span>:
           <span class="bottle-price">${floatToXml(cost)}</span>
           (${floatToXml(cost *. 12.0)} a dozen)
         <a l:href="{add_to_cart(cust_id, order_id, id)}">Add to cart</a>
@@ -663,14 +663,14 @@ fun wine_listing(cust_id, order_id, region_id, wine_type, pageNum) {
 
 
 fun wine_count(region_id, wine_type) {
-  var result = 
+  var result =
     for (wine <-- wineTable)
     where (wine_type == 1 || wine.wine_type == wine_type)
     {
       for (winery <-- wineryTable)
          where (winery.winery_id == wine.winery_id
                 && (region_id == 1 || winery.region_id == region_id))
-         { 
+         {
              for (cost_rec <-- inventoryTable)
              where (wine.wine_id == cost_rec.wine_id)
                [(wine.wine_id, wine.wine_name, cost_rec.cost,
@@ -689,7 +689,7 @@ fun cartSummary(cust_id, order_id) {
   <div>
     <a l:href="{show_cart(cust_id, order_id, "")}">
     <img border="0" src="cart_off.jpg"  align="middle" /></a>
-    Total in cart: ${floatToXml(total)} 
+    Total in cart: ${floatToXml(total)}
       ({intToXml(count)} items)
      <a l:href="{show_cart(cust_id, order_id, "")}">View cart</a>.
   </div>
@@ -729,7 +729,7 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
              </tr>
             </table>
            </#>
-         yields 
+         yields
            search_results(cust_id, order_id,
             search_region_id,
             search_wine_type,
@@ -748,9 +748,9 @@ fun search_results(cust_id, order_id, region_id, wine_type, pageNum) {
        <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum-1)}">Previous</a> else []}
      {for (i <- range(numPages-1)) {
         (if (i == pageNum) {intToXml(i+1)}
-        else 
+        else
           <a l:href="{search_results(cust_id, order_id, region_id, wine_type, i)}">{intToXml(i+1)}</a>)
-        ++ <span> </span> 
+        ++ <span> </span>
      }}
      {if (pageNum < numPages-1)
        <a l:href="{search_results(cust_id, order_id, region_id, wine_type, pageNum+1)}">Next</a> else []

@@ -1,0 +1,59 @@
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")
+}
+
+var db = database "nested4";
+
+var t1 = table "t1" with (v:Int, a:Int) from db;
+var t2 = table "t2" with (a:Int, b:Int) from db;
+var t3 = table "t3" with (b:Int, v:Int) from db;
+
+
+
+fun generateData(x, y, z) {
+  fun rv() {rand(1000000)}
+
+  delete (_ <-- t1);
+  delete (_ <-- t2);
+  delete (_ <-- t3);
+
+  var _ =
+    for (i <- [0..x-1]) {
+      insert t1 values [(v=i, a=i)];
+      [()]
+    };
+  var _ =
+    for (i <- [0..x-1]) {
+      insert t2 values (a,b) for (j <- [0..y-1]) [(a=i, b=2*((y*i)+j)), (a=i, b=2*((y*i)+j)+1)];
+      [()]
+    };
+  var _ =
+    for (i <- [0..(x*y)-1]) {
+      insert t3 values (b,v) (for (j <- [0..z-1]) [(b=2*i, v=rv())]);
+      [()]
+    };
+  ()
+}
+
+
+
+fun test() {
+  for (x <-- t1)
+    [for (y <-- t2) where (x.a == y.a)
+       [if (empty (for (z <-- t3) where (y.b == z.b) [z.v])) {
+          [1,2,3,4,5]
+        } else {
+          for (z <-- t3) where (y.b == z.b) [z.v]
+        }]]
+}
+
+
+#generateData(10, 10, 10)
+time(test)
+

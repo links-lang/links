@@ -20,10 +20,10 @@ typename Address = (street:String, houseNo:Int, city:String);
 typename OrderSummary = String;
 
 # Session types for mother's choice.
-typename Shop = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].End|&];
+typename Shop = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].EndBang|&];
 
 # Session types for son's choice.
-typename Son = [&|Choice:!Product.End|&];
+typename Son = [&|Choice:!Product.EndBang|&];
 
 
 # A shop. Accepts orders and allows checkout.
@@ -44,8 +44,7 @@ fun waitForClient(s, orderedProducts, removedProducts) client
         case Checkout -> s(card).
           nu c.({shipper(c)} |
                 c[s].c(addressFull).c(s).
-                s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
-                {()}) } |>
+                s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].c().s[]) } |>
 }
 
 # Turns order summary into a single readable string.
@@ -81,8 +80,7 @@ fun shipper(c) {
   <| c(s).s(address).
      c["Street: " ^^ address.street ^^ ", House number: " ^^
 intToString(address.houseNo) ^^ ", City: " ^^ address.city].
-     c[s].
-     {()} |>
+     c[s].c[] |>
 }
 
 # Removes given element.
@@ -102,7 +100,7 @@ fun removeProduct(item, products) client
 fun waitForSon(c) client
 {
         <| offer c {
-                case Choice -> c[Gadget("LED Water Speakers")].{()}
+                case Choice -> c[Gadget("LED Water Speakers")].c[]
         } |>
 }
 
@@ -110,7 +108,7 @@ fun waitForSon(c) client
 #sig getSonBook : (~Son) ~> (Product)
 fun getSonBook(s) client
 {
-        <| Choice s.s(choice).{choice} |>
+        <| Choice s.s(choice).s().{choice} |>
 }
 
 
@@ -127,7 +125,7 @@ fun orderBooks(c) client
        <| Add c.c[choice].
            Remove c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].
            Remove c.c[Book("Rainbow Ponies")].
-           Checkout c.c[8753].c[myAddress].c(summary).{summary} |> } |>
+           Checkout c.c[8753].c[myAddress].c(summary).c().{summary} |> } |>
 
 }
 

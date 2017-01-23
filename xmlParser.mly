@@ -32,7 +32,7 @@ xml:
 | IGNORE xml                                                   { $2 }
 | xml_tree                                                     { $1 }
 
-xmlid: 
+xmlid:
 | VARIABLE                                                     { $1 }
 
 attrs:
@@ -52,10 +52,10 @@ attr_val:
 xml_tree:
 | LXML SLASHRXML                                               { Node ($1, []) }
 | LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (Node ($1, [])) }
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (Node ($1, $3)) } 
-| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (Node ($1, $2)) } 
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (Node ($1, $3)) }
+| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (Node ($1, $2)) }
 | LXML attrs SLASHRXML                                         { Node ($1, $2) }
-| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (Node ($1, $2 @ $4)) } 
+| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (Node ($1, $2 @ $4)) }
 
 xml_contents_list:
 | IGNORE                                                       { [] }

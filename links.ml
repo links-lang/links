@@ -1,4 +1,4 @@
-open Notfound
+open Webserver
 
 open Performance
 open Getopt
@@ -6,6 +6,8 @@ open Utility
 open List
 
 module BS = Basicsettings
+module Eval = Evalir.Eval(Webserver)
+module Webif = Webif.WebIf(Webserver)
 
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
@@ -56,8 +58,10 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let program = Closures.program tenv Lib.primitive_vars program in
   Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
   BuildTables.program tenv Lib.primitive_vars program;
+  let (globals, _) = program in
+  Webserver.init (valenv, nenv, tyenv) globals;
 
-  let valenv, v = lazy (Evalir.run_program valenv program) <|measure_as|> "run_program" in
+  let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
   lazy (printer t v) <|measure_as|> "print";
   valenv, v
 
@@ -126,7 +130,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, _, {Types.var_env = typeenv; Types.tycon_env = tycon_env}) as envs) _ ->
+    ((fun ((_, _, { Types.var_env = typeenv; _ }) as envs) _ ->
         StringSet.iter
           (fun k ->
              let t = Env.String.lookup typeenv k in
@@ -138,7 +142,7 @@ let rec directives
      "display the current type environment");
 
     "tyconenv",
-    ((fun ((_, _, {Types.tycon_env = tycon_env}) as envs) _ ->
+    ((fun ((_, _, {Types.tycon_env = tycon_env; _ }) as envs) _ ->
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
@@ -173,7 +177,7 @@ let rec directives
      "load in a Links source file, extending the current environment");
 
     "withtype",
-    ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases} as envs) args ->
+    ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases; _} as envs) args ->
         match args with
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
@@ -212,7 +216,7 @@ let interact envs =
         flush stdout in
   let rec interact envs =
     let evaluate_replitem parse envs input =
-      let valenv, nenv, tyenv = envs in
+      let _, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
           (lazy
              (match parse input with
@@ -246,11 +250,13 @@ let interact envs =
                                let v =
                                  match location with
                                  | `Server | `Unknown ->
-                                   `FunctionPtr (var, Value.empty_env)
+                                   `FunctionPtr (var, None)
                                  | `Client ->
-                                   `ClientFunction (Js.var_name_binder (var, finfo)) in
-                               let t = Var.info_type finfo in
-                               v, t in
+                                   `ClientFunction (Js.var_name_binder (var, finfo))
+                                 | `Native -> assert false in
+                               let t = Var.info_type finfo in v, t
+                             | _ -> assert false
+                           in
                            prerr_endline(name
                                          ^" = "^Value.string_of_value v
                                          ^" : "^Types.string_of_datatype t))
@@ -311,6 +317,7 @@ let invert_env env =
 
 let run_file prelude envs filename =
   Settings.set_value BS.interacting false;
+  Webserver.set_prelude prelude;
   let parse_and_desugar (nenv, tyenv) filename =
     let (nenv, tyenv), (globals, (locals, main), t) =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
@@ -356,7 +363,7 @@ let load_prelude () =
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   BuildTables.bindings tenv Lib.primitive_vars globals;
 
-  let valenv = Evalir.run_defs Value.empty_env globals in
+  let valenv = Eval.run_defs Value.empty_env globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
@@ -380,7 +387,7 @@ let cache_load_prelude () =
   Loader.wpcache "prelude.closures" (fun () ->
     (* TODO: either scrap whole program caching or add closure
        conversion code here *)
-    let valenv = Evalir.run_defs Value.empty_env globals in
+    let valenv = Eval.run_defs Value.empty_env globals in
     let envs =
       (valenv,
        Env.String.extend Lib.nenv nenv,
@@ -389,19 +396,12 @@ let cache_load_prelude () =
     globals, envs)
 
 
-
-let run_tests tests () =
-  begin
-(*    Test.run tests;*)
-    exit 0
-  end
-
 let to_evaluate : string list ref = ref []
 let to_precompile : string list ref = ref []
 
 let set_web_mode() = (
-  (* When forcing web mode using the command-line argument, default the
-     required CGI environment variables to a GET request with no params--
+    (* When forcing web mode using the command-line argument, default
+     the CGI environment variables to a GET request with no params--
      i.e. start running with the main expression. *)
   if not(is_some(getenv "REQUEST_METHOD")) then
     Unix.putenv "REQUEST_METHOD" "GET";
@@ -410,16 +410,20 @@ let set_web_mode() = (
   Settings.set_value BS.web_mode true
   )
 
+let print_keywords =
+  Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
+
 let config_file   : string option ref = ref None
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
-    ('w',     "web-mode",            Some set_web_mode,                None);
-    (noshort, "optimise",            set BS.optimise true,                None);
+    ('w',     "web_mode",            Some set_web_mode,                None);
+    (noshort, "optimise",            set BS.optimise true,             None);
     (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set BS.printing_types false,         None);
+    ('n',     "no-types",            set BS.printing_types false,      None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
+    ('m',     "modules",             set BS.modules true,              None);
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
      Some(fun filename -> Loader.print_cache filename;
@@ -428,7 +432,9 @@ let options : opt list =
 (*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
 (*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
 (*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
+    (noshort, "print-keywords",      print_keywords,                   None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
+    (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
     ]
 
 let file_list = ref []
@@ -449,7 +455,6 @@ let main () =
       print_endline (Settings.get_value BS.welcome_note);
       interact envs
     end
-
 
 (* jcheney:
    Implementation of "cache_whole_program" setting.

@@ -1,0 +1,233 @@
+var db = database "organisation";
+
+var departments = table "departments" with (dpt:String)
+    		  tablekeys [["dpt"]] from db;
+var employees = table "employees" with (emp:String, dpt:String, salary : Int)
+    	      	tablekeys [["emp"]] from db;
+var tasks = table "tasks" with (id:Int,emp:String,tsk:String)
+    	  tablekeys [["id"]] from db;
+var contacts = table "contacts" with (id:Int,name:String,dpt:String,"client":Bool)
+    	  tablekeys [["id"]] from db;
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  var total = serverTimeMilliseconds()-start;
+  total
+}
+
+fun throttle (f,x) {
+  if (length(asList(departments)) <= 16) {f()} else {x}
+}
+
+fun repeat(n,f) {
+  if (n == 0) { [] }
+  else f()::repeat(n-1,f)
+}
+
+fun median(xs) {
+  var ys = sortBy(id, xs);
+  hd(drop(length(ys)/2,ys))
+}
+
+fun test(t) {
+  print(t.msg);
+  var ts = repeat(t.iters, fun () {time(t.q)});
+  var time = median(ts);
+  print("Time: " ^^ intToString(time));
+  (msg=t.msg,time=time)
+}
+
+sig iter : ((a) ~e~> (), [a]) ~e~> ()
+fun iter(f,l) {
+  switch(l) {
+    case [] -> ();
+    case (x::xs) -> f(x); iter(f,xs)
+  }
+}
+
+
+# Supporting code
+
+
+fun expertise_prime(u) {
+  for (d <-- departments)
+  where (empty( for (e <-- employees)
+                where (d.dpt == e.dpt &&
+		       empty( for (t <-- tasks)
+		       	      where (e.emp == t.emp && t.tsk == u)
+			      [()]))
+		[()]))
+  [(dpt=d.dpt)]
+}
+
+
+typename NestedOrg = [(dpt:String,
+                       employees: [(name:String,salary:Int,tasks:[String])],
+		       contacts: [(name:String,"client":Bool)])];
+
+sig nestedOrg : () -> NestedOrg
+fun nestedOrg() {
+  for (d <-- departments)
+  [(dpt=d.dpt,
+    employees= for (e <-- employees)
+               where (d.dpt == e.dpt)
+               [(name= e.emp,
+	         salary=e.salary,
+	         tasks= for (t <-- tasks)
+                      	where (e.emp == t.emp)
+			[t.tsk])],
+    contacts= for(y <-- contacts)
+              where (d.dpt==y.dpt)
+              [(name=y.name,"client"=y."client")])]
+}
+
+fun tasksOfEmployee(e) {
+  for(t <-- tasks)
+  where(e.emp == t.emp)
+  [t.tsk]
+}
+
+fun contactsOfDepartment(d) {
+  for(y <-- contacts)
+  where (d.dpt==y.dpt)
+  [(name=y.name,"client"=y."client")]
+}
+
+fun employeesOfDepartment(d) {
+  for (e <-- employees)
+  where (d.dpt == e.dpt)
+  [(emp=e.emp,
+    tasks= tasksOfEmployee(e))]
+}
+
+fun nestedOrgFactored() {
+  query {
+  for (d <-- departments)
+  [(dpt=d.dpt,
+    employees=employeesOfDepartment(d),
+    contacts=contactsOfDepartment(d))]
+  }
+}
+
+sig any : ([a],(a) -a-> Bool) -a-> Bool
+fun any(xs,p) {
+  not(empty(for (x <- xs) where (p(x)) [()]))
+}
+
+sig all : ([a],(a) -a-> Bool) -a-> Bool
+fun all(xs,p) {
+  not(any(xs,fun (x) {not(p(x))}))
+}
+
+sig contains : ([a],a) -> Bool
+fun contains(xs,u) {
+  any(xs,fun (x) {x==u})
+}
+
+fun expertise(nestedOrg,u) {
+  for (d <- nestedOrg)
+  where (all(d.employees,
+   	     fun (e) {contains(e.tasks,u)}))
+  [(dpt=d.dpt)]
+}
+
+fun outliersQ() {
+  for (x <-- departments)
+  [(department=x.dpt,
+    people=(for (y <-- employees)
+           where(x.dpt == y.dpt && (y.salary < 1000 || y.salary > 1000000))
+           [(name=y.emp,
+             tasks=for(z <-- tasks)
+                    where(z.emp == y.emp)
+                    [z.tsk])])
+           ++
+           (for (y <-- contacts)
+            where (x.dpt == y.dpt && y."client")
+            [(name=y.dpt,tasks=["buy"])]))]
+}
+
+fun isPoor(x) {x.salary < 1000}
+fun isRich(x) {x.salary > 1000000}
+fun filter(p,xs) {for(x <- xs) where (p(x)) [x]}
+fun get(xs,f) {for(x <- xs) [(name=x.name,tasks=f(x))]}
+fun outliers(xs) {filter (fun (x) {isRich(x) || isPoor(x)},xs)}
+fun clients(xs) {filter (fun (x) {x."client"},xs)}
+
+fun outliersQFactored(organisation) {
+  query {
+    for (x <- organisation)
+    [(department=x.dpt,
+      people=get(outliers(x.employees), fun (y) {y.tasks}) ++
+             get(clients(x.contacts), fun (y) {["buy"]}))]
+  }
+}
+
+
+# Q1: nestedOrg (factored)
+
+
+var q1 = nestedOrgFactored;
+
+# Q2: expertise (factored)
+
+fun q2 () {expertise(nestedOrg(),"abstract")}
+
+
+# Q3: employees with lists of tasks
+
+fun tasksByEmployee() {
+  query {
+    for(e <-- employees)
+    [(emp=(e.emp),b=tasksOfEmployee(e))]
+  }
+}
+
+var q3 = tasksByEmployee;
+
+# Q4: departments with lists of employees
+
+
+fun q4() {
+  query {
+    for(d <-- departments)
+    [(dpt=(d.dpt),emps=for (e <-- employees) where ((d.dpt) == (e.dpt)) [(e.emp)])]
+  }
+}
+
+# Q5: Tasks with employees and departments
+
+fun employeesByTask(t) {
+  for(e <-- employees, d <-- departments)
+  	       where (e.emp == t.emp && e.dpt == d.dpt)
+	       [(b=e.emp, c=d.dpt)]
+}
+
+fun q5() {
+  for(t <-- tasks)
+  [(a=t.tsk, b=employeesByTask(t))]
+}
+
+
+
+# Q6: shredding paper example (factored)
+
+fun q6() { outliersQFactored(nestedOrg())}
+
+
+
+
+
+var iters = 5;
+var tests = [
+    	     test((iters=iters,msg="Q2",q=q2)),
+	     test((iters=iters,msg="Q3",q=q3)),
+	     test((iters=iters,msg="Q4",q=q4)),
+	     test((iters=iters,msg="Q5",q=q5)),
+             test((iters=iters,msg="Q1",q=q1)),
+	     test((iters=iters,msg="Q6",q=q6))
+];
+
+iter(fun (u) {
+  print(u.msg ^^ ":\t" ^^ intToString(u.time))
+},tests)

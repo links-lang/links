@@ -1,4 +1,3 @@
-open Notfound
 open Utility
 
 module FunDefs =
@@ -32,7 +31,7 @@ end
 module ScopesAndContDefs =
 struct
   class visitor tyenv scopes cont_defs =
-  object (o)
+  object (_)
     inherit Ir.Transform.visitor(tyenv) as super
 
     method bind_scope xb =
@@ -41,19 +40,19 @@ struct
     method bind_cont (xb, e) =
       Hashtbl.add cont_defs (Var.var_of_binder xb) e
 
-    method binder =
+    method! binder =
       fun b ->
         let b, o = super#binder b in
         o#bind_scope b;
         b, o
 
-    method computation =
+    method! computation =
       fun e ->
         let (bs, main), t, o = super#computation e in
         let rec bind o =
           function
             | [] -> o
-            | (`Let (x, (_tyvars, e)))::bs ->
+            | (`Let (x, _))::bs ->
               o#bind_cont (x, (bs, main));
               bind o bs
             | _::bs -> bind o bs
@@ -88,12 +87,12 @@ struct
       if IntSet.mem x bound_vars then o
       else {< free_vars = IntSet.add x free_vars >}
 
-    method binder =
+    method! binder =
       fun b ->
         let b, o = super#binder b in
           b, o#bound (Var.var_of_binder b)
 
-    method var =
+    method! var =
       fun x ->
         let x, t, o = super#var x in
           x, t, o#free x
@@ -167,7 +166,7 @@ struct
     method global x =
       {< globals = IntSet.add x globals >}
 
-    method binder b =
+    method! binder b =
       let b, o = super#binder b in
         if Var.scope_of_binder b = `Global then
           b, o#global (Var.var_of_binder b)
@@ -186,7 +185,7 @@ struct
     method close_cont fvs =
       function
         | [] -> o
-        | `Let (x, (tyvars, body))::bs ->
+        | `Let (x, (_tyvars, body))::bs ->
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
             let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
             (* we record the relevant free variables of the body *)
@@ -231,10 +230,10 @@ struct
         | `Alien (f, _language)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
               o#close_cont fvs bs
-        | `Module _::bs ->
+        | `Module _::_ ->
             assert false
 
-    method computation : Ir.computation -> (Ir.computation * Types.datatype * 'self_type) =
+    method! computation : Ir.computation -> (Ir.computation * Types.datatype * 'self_type) =
       fun (bs, tc) ->
         let bs, o = o#bindings bs in
         let tc, t, o = o#tail_computation tc in

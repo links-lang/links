@@ -1,0 +1,85 @@
+# An ugly page that exercises the various types of input fields in a form.
+
+fun radioGroupVertical(items) {
+  for((xml, label) <- items)
+    <#>
+    <label>
+      {xml} {stringToXml(label)}
+    </label> <br/>
+    </#>
+}
+
+var theFormlet =
+ formlet
+   <#>
+     <div>
+       <label>Style of bike: { choice([(1, "Road bike"),
+                                       (2, "Mountain Bike"),
+                                       (77, "Hybrid")]) -> bikeStyle }
+       </label>
+     </div>
+     <div>
+       Add-ons: <br />{ choicesNone([(2, "Bell"),
+                                     (3, "Rack"),
+                                     (6, "Glow-in-the-dark handlebar tape")]) -> addons }
+     </div>
+     <div>
+        { inputRadiogroup(["Red", "Green", "Blue"], "Blue", radioGroupVertical)
+           -> colour }
+     </div>
+     <div><label>
+       Comments about your order: <br />
+       { textarea("Comments") -> comments }
+     </label></div>
+     <div>
+       <label>Over 65? { checkbox -> over65 }</label>
+     </div>
+     <div>
+       Upload a file: { inputFile -> file }
+     </div>
+       { submitButton("Check Out") -> checkout }
+       { submitButton("Cancel") -> cancel }
+   </#>
+ yields
+    (bikeStyle=bikeStyle,
+     comments=comments,
+     over65=over65,
+     cmd=if (checkout) Checkout else if (cancel) Cancel else NoButton,
+     addons=addons,
+     colour=colour,
+     file=file);
+
+sig stringConcat : (String, [String]) ~> String
+fun stringConcat(delimiter, ss) {
+  switch (ss) {
+    case [] -> ""
+    case [s] -> s
+    case s::ss -> s ^^ delimiter ^^ stringConcat(delimiter, ss)
+  }
+}
+
+fun renderer (formData) {
+  page
+   <html>
+    <body>
+    {if (formData.cmd == Checkout)
+      <#>
+       <div> Bike style code: {intToXml(formData.bikeStyle)} </div>
+       <div> Add-ons: {stringToXml(stringConcat(", ", map(intToString, formData.addons)))} </div>
+       <div> Colour: <span style="color:{formData.colour}">{stringToXml(formData.colour)} </span></div>
+       <div> Comments: {stringToXml(formData.comments)} </div>
+       <div> {stringToXml(if (formData.over65) "A senior cyclist! Way to go!" else "")} </div>
+       <div> File: {stringToXml(formData.file)}</div>
+      </#>
+     else
+      <#>Order Cancelled. Thanks for visiting!</#>}
+    </body>
+   </html>
+}
+
+fun main() {
+  page
+   <#>{theFormlet => renderer with multipart}</#>
+}
+
+main()

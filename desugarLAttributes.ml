@@ -70,10 +70,10 @@ let desugar_laction : phrasenode -> phrasenode = function
   | e -> e
 
 let desugar_lonevent : phrasenode -> phrasenode =
-  let pair pos = function
+  let event_handler_pair pos = function
     | (name, [rhs]) ->
-        let event = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
-          `TupleLit [`Constant (`String event), pos;
+        let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
+          `TupleLit [`Constant (`String event_name), pos;
                      `FunLit (None, `Unl, ([[`Variable ("event", None, pos), pos]], rhs), `Client), pos], pos
     | _ -> assert false
   in function
@@ -83,7 +83,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
         let idattr =
           ("key",
            [apply dummy_pos "registerEventHandlers"
-              [`ListLit (List.map (pair dummy_pos) lons, None), dummy_pos]]) in
+              [`ListLit (List.map (event_handler_pair dummy_pos) lons, None), dummy_pos]]) in
           `Xml (tag, idattr::others, attrexp, children)
     | e -> e
 
@@ -148,20 +148,20 @@ let replace_lattrs : phrasenode -> phrasenode = desugar_form ->- desugar_laction
 let desugar_lattributes =
 object
   inherit SugarTraversals.map as super
-  method phrasenode = function
+  method! phrasenode = function
     | `Xml _ as x when has_lattrs x ->
         super#phrasenode (replace_lattrs x)
     | e -> super#phrasenode e
 end
 
 let has_no_lattributes =
-object (self)
+object (_self)
   inherit SugarTraversals.predicate as super
 
   val no_lattributes = true
   method satisfied = no_lattributes
 
-  method phrasenode = function
+  method! phrasenode = function
     | `Xml _ as x when has_lattrs x -> {< no_lattributes = false >}
     | e -> super#phrasenode e
 end

@@ -1,0 +1,7 @@
+module A {
+  fun foo() {
+    "hello"
+  }
+}
+
+A.foo()

@@ -52,7 +52,7 @@ let fresh_global_var_of_type = info_of_type ->- fresh_var
 
 let var_of_binder (var, _ : binder) = var
 let info_of_binder (_, info : binder) = info
-let type_of_binder (var, (t, _, _) : binder) = t
+let type_of_binder (_, (t, _, _) : binder) = t
 let name_of_binder (_, (_, name, _) : binder) = name
 let scope_of_binder (_, (_, _, scope) : binder) = scope
 

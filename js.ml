@@ -41,10 +41,10 @@ struct
 (*    not (Lib.is_primitive name) && *)
       List.exists (not -<- Utility.Char.isWord) (explode name)
 
-  let wordify name = 
-    if has_symbols name then 
-      ("_" ^ 
-         mapstrcat "_" 
+  let wordify name =
+    if has_symbols name then
+      ("_" ^
+         mapstrcat "_"
          (fun ch ->
             if (Utility.Char.isWord ch) then
               String.make 1 ch
@@ -58,13 +58,13 @@ struct
            then we would not split apart words in partly-symbolic idents. *)
     else if List.mem name js_keywords then
       "_" ^ name (* FIXME: this could conflict with Links names. *)
-    else name  
+    else name
 
 end
 
 (** Generate a JavaScript name from a binder *)
 let name_binder (x, info) =
-  let (_, name, scope) = info in
+  let (_, name, _) = info in
   if String.length name = 0 then
     "_" ^ string_of_int x
   else
@@ -83,4 +83,4 @@ let var_name_var x = "_" ^ string_of_int x
 
 (** Generate a JavaScript name from a binder based on the unique
     integer for that binder. *)
-let var_name_binder (x, info) = var_name_var x
+let var_name_binder (x, _) = var_name_var x

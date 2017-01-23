@@ -13,13 +13,13 @@ and  regex = | Range of (char * char)
              | EndAnchor
              | Seq of regex list
              | Alternate of (regex * regex)
-	     | Group of regex 
+	     | Group of regex
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
 	          deriving (Show)
 
 let string_of_regex : regex -> string = fun s ->
-  (* Using points-free style here (i.e. omitting the s) triggers a bug in 
+  (* Using points-free style here (i.e. omitting the s) triggers a bug in
      versions of OCaml before about 3.09.0, so don't do that. *)
   let group s = Printf.sprintf "\\(%s\\)" s  in
   let compile_repeat = function
@@ -28,7 +28,7 @@ let string_of_regex : regex -> string = fun s ->
     | Question -> "?" in
   let rec compile = function (* got rid of gratuituous grouping. this matters for replace *)
     | Range (f, t) -> Printf.sprintf "[%s-%s]" (Str.quote (String.make 1 f)) (Str.quote (String.make 1 t))
-    | Simply s ->  s 
+    | Simply s ->  s
     | Quote s ->  Str.quote (compile s)
     | Any -> "."
     | StartAnchor -> "^"
@@ -37,16 +37,17 @@ let string_of_regex : regex -> string = fun s ->
     | Alternate (r1,r2) -> (compile r1) ^ "\\|" ^ (compile r2)
     | Group s -> group (compile s)
     | Repeat (s, r) ->  (compile r ^ compile_repeat s)
-  in 
+    | Replace _ -> assert false
+  in
     compile s
 
 let compile_ocaml : regex -> Str.regexp = Str.regexp -<- string_of_regex
-	
-let tests : (string * regex * string * bool) list = 
+
+let tests : (string * regex * string * bool) list =
   [
     (let s = "some .*string$\" ++?" in
        "splicing", Simply s, s, true);
-    
+
     "range 0", Range ('0', '9'), "3", true;
     "range 1", Range ('0', '9'), "0", true;
     "range 2", Range ('0', '9'), "9", true;
@@ -85,7 +86,7 @@ let tests : (string * regex * string * bool) list =
 
 let run_tests = List.iter
   (fun (n, r, s, b) ->
-     if Str.string_match (compile_ocaml r) s 0 = b 
+     if Str.string_match (compile_ocaml r) s 0 = b
      then prerr_endline ("PASS: " ^ n)
      else prerr_endline ("FAIL: " ^ n))
 

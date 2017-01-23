@@ -16,16 +16,7 @@ fun (x:a) { x:a } : (a) -> a
 stdout : @fun : \(([a-z]+)\) -> \1
 
 Annotations inside functions [2]
-fun (x:a) { x:a } : (b) -> b
-stdout : @.+
-
-Annotations inside functions [3]
 fun (x:a) { error("boo") } : (a) ~> b
-stdout : @.+
-
-
-Annotations inside functions [4]
-fun (g : ((a) -b-> a)) { g : ((a) -b-> a) } : ((a) -b-> a) -> ((a) -b-> a)
 stdout : @.+
 
 Inferred kind

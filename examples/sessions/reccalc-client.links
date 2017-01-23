@@ -29,7 +29,7 @@ fun user(s) client {
 }
 
 fun main() client {
-  user(knife(calc))
+  user(fork(calc))
 }
 
 

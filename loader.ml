@@ -42,7 +42,8 @@ let read_program filename : (envs * program) =
     the IR *)
 let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
-    Parse.parse_file Parse.program filename  in
+    ModuleUtils.try_parse_file filename in
+  (* printf "AST: \n %s \n" (Sugartypes.Show_program.show sugar); *)
   let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program
@@ -62,8 +63,6 @@ let cachefile_path_tag filename tag =
           let cache_filename = (Filename.basename filename) ^ "-" ^
                                  path_hash ^ suffix in
             Filename.concat cachedir cache_filename
-
-let cachefile_path filename = cachefile_path_tag filename ""
 
 exception No_cache
 
@@ -94,7 +93,7 @@ let cache : string -> string -> (unit -> 'a) -> 'a =
 	    try  (* to write to the cache *)
 	      Debug.print("Caching "^cachename);
 	      write_a cachename x
-	    with exn -> (Debug.print("Caching failed"))
+	    with _ -> (Debug.print("Caching failed"))
 		(* Ignore errors writing the cache file *)
 	in x
 ;;

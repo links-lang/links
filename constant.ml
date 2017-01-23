@@ -25,6 +25,6 @@ let string_of_constant =
   function
     | `Bool value  -> string_of_bool value
     | `Int value   -> string_of_int value
-    | `Char c      -> "'"^ Char.escaped c ^"'" 
+    | `Char c      -> "'"^ Char.escaped c ^"'"
     | `String s    -> "'" ^ escape_string s ^ "'"
     | `Float value -> string_of_float' value

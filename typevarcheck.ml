@@ -1,6 +1,5 @@
 open Utility
 open Types
-open Instantiate
 
 module FieldEnv = Utility.StringMap
 
@@ -51,7 +50,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
             begin
               (* HACK: silly 1-tuple test *)
               match row with
-                | (fields, row_var, dual)
+                | (fields, row_var, _dual)
                     when
                       (FieldEnv.mem "1" fields &&
                          FieldEnv.size fields = 1 &&
@@ -77,7 +76,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Dual s -> isg s
         | `End -> true
 and is_guarded_row : bool -> TypeVarSet.t -> int -> row -> bool =
-  fun check_fields bound_vars var (fields, row_var, dual) ->
+  fun check_fields bound_vars var (fields, row_var, _dual) ->
     (if check_fields then
        (StringMap.fold
           (fun _ f b ->
@@ -141,7 +140,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
 	| `End -> false
         | `Dual s -> isn s
 and is_negative_row : TypeVarSet.t -> int -> row -> bool =
-  fun bound_vars var (field_env, row_var, dual) ->
+  fun bound_vars var (field_env, row_var, _dual) ->
     is_negative_field_env bound_vars var field_env || is_negative_row_var bound_vars var row_var
 and is_negative_field_env : TypeVarSet.t -> int -> field_spec_map -> bool =
   fun bound_vars var field_env ->
@@ -195,7 +194,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `Variant row -> ispr row
         | `Table (f, d, r) -> isp f || isp d || isp r
         | `Alias (_, t) -> isp t
-        | `Application (s, ts) ->
+        | `Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars var) ts
         | `Input (t, s)
         | `Output (t, s) -> isp t && isp s
@@ -204,7 +203,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `End -> false
         | `Dual s -> isp s
 and is_positive_row : TypeVarSet.t -> int -> row -> bool =
-  fun bound_vars var (field_env, row_var, dual) ->
+  fun bound_vars var (field_env, row_var, _dual) ->
     is_positive_field_env bound_vars var field_env || is_positive_row_var bound_vars var row_var
 and is_positive_presence : TypeVarSet.t -> int -> field_spec -> bool =
   fun bound_vars var ->

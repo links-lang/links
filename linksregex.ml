@@ -1,13 +1,11 @@
-open Notfound
-
 open Regex
 open Utility
 
 let unit = `Record []
 
-module type Links_type = 
+module type Links_type =
 sig
-  type a 
+  type a
   val datatype : string
   val ofLinks : Value.t -> a
   val ofLinksNGroups : Value.t -> (a * int)
@@ -16,7 +14,7 @@ end
 
 (* These conversions (and conversions from OCaml values generally)
 could be derived automatically using "deriving" *)
-module Repeat : Links_type with type a = repeat = 
+module Repeat : Links_type with type a = repeat =
 struct
   type a = repeat
 
@@ -29,13 +27,13 @@ struct
   and ofLinks : Value.t -> repeat = function
     | `Variant ("Star", _)     -> Star
     | `Variant ("Plus", _)     -> Plus
-    | `Variant ("Question", _) -> Question 
-    | v                        -> failwith ("Internal error: attempt to treat " 
+    | `Variant ("Question", _) -> Question
+    | v                        -> failwith ("Internal error: attempt to treat "
                                            ^ Value.Show_t.show v ^ " as a repeat value")
   and ofLinksNGroups r = ofLinks r, 0
 end
 
-module Regex : Links_type with type a = regex = 
+module Regex : Links_type with type a = regex =
 struct
   type a = regex
   let datatype = "                                      \
@@ -72,8 +70,8 @@ struct
     | Replace(re, tmpl) -> `Variant ("Replace", `Record [("1", asLinks re);
 							  ("2", Value.box_string tmpl)])
 
-  let ofLinksNGroups res = 
-    let rec ofLinksCount count : Value.t -> (regex*int) = function 
+  let ofLinksNGroups res =
+    let rec ofLinksCount count : Value.t -> (regex*int) = function
       | `Variant ("Range", `Record ( [("1", `Char f); ("2", `Char t)]
       | [("2", `Char t); ("1", `Char f)]))
 	-> (Range (f,t), count)
@@ -90,23 +88,23 @@ struct
       | `Variant ("Alternate", `Record([("1", r1); ("2", r2)])) ->
 	  let ((r1', c1), (r2', c2)) = (ofLinksCount 0 r1, ofLinksCount 0 r2)  in
 	    Alternate(r1', r2'), count + c1 + c2
-      | `Variant ("Group", s) -> 
+      | `Variant ("Group", s) ->
 	  let (s', count')  = ofLinksCount (count+1) s in
 	    Group s', count'
       | `Variant ("Repeat", `Record ([("1", repeat); ("2", r)]
       | [("2", r); ("1", repeat)]))
-	-> 
+	->
 	  let (re, count)  = ofLinksCount count r in
 	     Repeat (Repeat.ofLinks repeat, re), count
       | `Variant ("Replace", `Record ([("1", re); ("2", tmpl)]))
-	-> 
+	->
 	  let (re, count) = ofLinksCount count re in
 	  Replace(re, Value.unbox_string tmpl), count
-      | v  -> failwith ("Internal error: attempt to treat " 
+      | v  -> failwith ("Internal error: attempt to treat "
 			^ Value.Show_t.show v ^ " as a regex value") in
     ofLinksCount 0 res
-      
-      
-  let ofLinks = fst -<- ofLinksNGroups 
+
+
+  let ofLinks = fst -<- ofLinksNGroups
 
 end

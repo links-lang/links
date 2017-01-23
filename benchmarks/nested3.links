@@ -1,0 +1,67 @@
+var db = database "nested3";
+
+var t1 = table "t1" with (v:Int, a1:Int, a2:Int) from db;
+var t2 = table "t2" with (a:Int, v:Int, b1:Int, b2:Int) from db;
+var t3 = table "t3" with (b:Int, v:Int) from db;
+var t4 = table "t4" with (b:Int, v:Int) from db;
+
+fun rand(x) {
+  floatToInt(random() *. intToFloat(x))
+}
+
+fun generateData(x, y, z) {
+  fun rv() {rand(1000000)}
+
+  delete (_ <-- t1);
+  delete (_ <-- t2);
+  delete (_ <-- t3);
+  delete (_ <-- t4);
+
+  var _ =
+    for (i <- [0..x-1]) {
+      insert t1 values [(v=rv(), a1=i, a2=(9-i))];
+      [()]
+    };
+  var _ =
+    for (i <- [0..x-1]) {
+      insert t2 values (a,v,b1,b2) for (j <- [0..y-1]) [(a=i, v=rv(), b1=(y*i)+j, b2=(y*i)+j)];
+      [()]
+    };
+  var _ =
+    for (i <- [0..(x*y)-1]) {
+      insert t3 values (b,v) (for (j <- [0..z-1]) [(b=i, v=rv())]);
+      [()]
+    };
+  var _ =
+    for (i <- [0..(x*y)-1]) {
+      insert t4 values (b,v) (for (j <- [0..z-1]) [(b=i, v=rv())]);
+      [()]
+    };
+  ()
+}
+
+fun time(f) {
+  var start = serverTimeMilliseconds();
+  ignore(query {f()});
+  print("Time: " ^^ intToString(serverTimeMilliseconds()-start) ^^ " ms")
+}
+
+fun test() {
+  (for (x <-- t1)
+     [(v=x.v,
+       a=(for (y <-- t2) where (x.a1 == y.a)
+            [(v=y.a, b=(for (z <-- t3) where (y.b1 == z.b) [z.v])
+                       ++
+                       (for (z <-- t4) where (y.b2 == z.b) [z.v]))]))])
+  ++
+  (for (x <-- t1)
+     [(v=x.v,
+       a=(for (y <-- t2) where (x.a2 == y.a)
+            [(v=y.a, b=(for (z <-- t3) where (y.b1 == z.b) [z.v])
+                       ++
+                       (for (z <-- t4) where (y.b2 == z.b) [z.v]))]))])
+}
+
+#generateData(10, 10, 200)
+time(test)
+

@@ -13,6 +13,6 @@ fun user(c, return) {
   <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
 }
 
-var x = run (fun (return) {<| nu c.(nu s.(s <-> c | {calc(s)}) | {user(c,return)}) |>});
-var y = run (fun (return) {<| nu s.(nu c.(s <-> c | {user(c,return)}) | {calc(s)}) |>});
+var x = runSync (fun (return) {<| nu c.(nu s.(s <-> c | {calc(s)}) | {user(c,return)}) |>});
+var y = runSync (fun (return) {<| nu s.(nu c.(s <-> c | {user(c,return)}) | {calc(s)}) |>});
 (x, y)
