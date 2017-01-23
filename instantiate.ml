@@ -304,7 +304,14 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
         | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
         | t -> t, [] in
     let tenv, renv, penv =
-      if (List.length vars <> List.length tyargs) then raise ArityMismatch;
+      if (List.length vars <> List.length tyargs) then        
+        (Debug.print (Printf.sprintf "# Type variables (total %d)" (List.length vars));
+         let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.Show_quantifier.show t) vars in
+         Debug.print tyvars;
+         Debug.print (Printf.sprintf "\n# Type arguments (total %d)" (List.length tyargs));
+         let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.Show_type_arg.show arg) tyargs in
+         Debug.print tyargs';
+         raise ArityMismatch);
       List.fold_right2
         (fun var tyarg (tenv, renv, penv) ->
            match (var, tyarg) with

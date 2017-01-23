@@ -2959,8 +2959,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let make_operations_presence_polymorphic : Types.row -> Types.row
 	     = fun (signatures,row_var,dual) ->
 	       let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" = 0) signatures in
-	       let signatures = StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures in
-	       let signatures = StringMap.map (fun _ -> Types.fresh_presence_variable (`Unl, `Any)) signatures in
+	       let signatures =
+                 Pervasives.(
+                   StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures (* filter out wild *)
+                |> StringMap.map (fun _ -> Types.fresh_presence_variable (`Unl, `Any)))        (* make every operation polymorphic in its presence *)
+               in
 	       let row = (signatures, row_var, dual) in
 	       if has_wild then allow_wild row
 	       else row
