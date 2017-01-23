@@ -1690,6 +1690,10 @@ struct
              (* to guarantee termination it's crucial that we
                 invoke row on the original wrapped version of
                 the effect row *)
+           if FieldEnv.mem "wild" fields &&
+             is_present (FieldEnv.find "wild" fields) then
+             "{" ^ row ~strip_wild:true "," bound_vars p effects ^ "}~" ^ ah
+           else
              "{" ^ row "," bound_vars p effects ^ "}-" ^ ah
          in begin match concrete_type args with
             | `Record row when is_tuple ~allow_onetuples:true row ->
@@ -1796,7 +1800,7 @@ struct
                   presence bound_vars p f
           end
 
-  and row sep bound_vars p (field_env, rv, dual) =
+  and row ?(strip_wild=false) sep bound_vars p (field_env, rv, dual) =
     (* FIXME:
 
        should quote labels when necessary, i.e., when they
@@ -1805,7 +1809,10 @@ struct
     let field_strings =
       FieldEnv.fold
         (fun label f field_strings ->
-          (label ^ presence bound_vars p f) :: field_strings)
+          if strip_wild && label = "wild" then
+            field_strings
+          else
+            (label ^ presence bound_vars p f) :: field_strings)
         field_env [] in
 
     let row_var_string = row_var sep bound_vars p rv in
