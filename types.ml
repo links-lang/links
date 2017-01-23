@@ -1805,10 +1805,7 @@ struct
     let field_strings =
       FieldEnv.fold
         (fun label f field_strings ->
-         if strip_wild && label = "wild" then
-           field_strings
-         else
-           (label ^ presence bound_vars p f) :: field_strings)
+          (label ^ presence bound_vars p f) :: field_strings)
         field_env [] in
 
     let row_var_string = row_var sep bound_vars p rv in
@@ -2328,7 +2325,7 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
-					   
+				   
 let make_function_type : datatype -> row -> datatype -> datatype
   = fun domain effs range ->
   let domain = 

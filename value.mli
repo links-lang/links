@@ -72,14 +72,10 @@ type t = [
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-<<<<<<< HEAD
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
-=======
-| `Continuation of continuation
 | `Pid of int * Sugartypes.location
->>>>>>> origin/sessions
 | `Socket of in_channel * out_channel
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)

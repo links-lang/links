@@ -30,7 +30,7 @@ let refine_bindings : binding list -> binding list =
                * aren't introduced yet. *)
               | `Handler _
               | `Module _ 
-              | `QualifiedImport 
+              | `QualifiedImport _
               | `Funs _ -> assert false
               | `Exp _
               | `Foreign _

@@ -79,11 +79,11 @@ SOURCES = $(OPC)                                \
           tables.ml                             \
           closures.ml                           \
           parse.mli parse.ml                    \
-          sugarTraversals.mli  sugarTraversals.ml       \
-					moduleUtils.mli moduleUtils.ml \
-					chaser.mli chaser.ml \
-					desugarModules.mli desugarModules.ml \
-          desugarDatatypes.mli desugarDatatypes.ml      \
+          sugarTraversals.mli  sugarTraversals.ml \
+	  moduleUtils.mli moduleUtils.ml       \
+          chaser.mli chaser.ml                 \
+	  desugarModules.mli desugarModules.ml \
+          desugarDatatypes.mli desugarDatatypes.ml \
           defaultAliases.ml                     \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
@@ -136,27 +136,9 @@ SOURCES = $(OPC)                                \
 #          test.ml                               \
 #          tests.ml                              \
 
-
-# Set-up the testsuite as a subproject s.t.
-# $ make testsuite
-# generates a binary "testsuite" which runs the tests.
-define PROJ_testsuite
-  SOURCES=$(SOURCE_FILES) \
-          testsuite.ml
-  RESULT="testsuite"
-endef
-export PROJ_testsuite
-
-ifndef SUBPROJS
-  export SUBPROJS = testsuite
-endif
-
-# Replicate previous makefile
-SOURCES=$(SOURCE_FILES) links.ml
-RESULT="links"
-
 LIBS    = $(DB_LIBS)
 
+RESULT  = links
 CLIBS 	= $(DB_CLIBS)
 
 INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
@@ -189,14 +171,11 @@ prelude.links.cache: prelude.links links
 cache-clean:
 	-rm -f prelude.links.cache
 
-testsuite-clean:
-	rm -f testsuite
-
 byte-code: cache-clean
 
 native-code: cache-clean
 
-clean :: docs-clean cache-clean testsuite-clean
+clean :: docs-clean cache-clean
 
 .PHONY: install
 install: nc

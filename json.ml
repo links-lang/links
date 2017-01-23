@@ -290,7 +290,7 @@ let jsonize_value_with_state value =
     type so we can't inspect it here. Consider changing this.
 *)
 
-let jsonize_call continuation name args =
+let jsonize_call continuation (hs : Value.handlers) name args = (* FIXME: serialize handler [hs] *)
   let vs, state = jsonize_values args in
   let v =
     "{\"__continuation\":\"" ^ (encode_continuation continuation) ^"\"," ^

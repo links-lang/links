@@ -232,7 +232,7 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
  
 type delim_continuation = frame list
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
-and continuation = delim_continuation list							       
+and continuation = delim_continuation list						       
 and t = [
 | primitive_value
 | `List of t list
@@ -241,14 +241,10 @@ and t = [
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
-<<<<<<< HEAD
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
-=======
-| `Continuation of continuation
 | `Pid of int * Sugartypes.location
->>>>>>> origin/sessions
 | `Socket of in_channel * out_channel
 ]
 and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
@@ -359,14 +355,10 @@ and compress_t (v : t) : compressed_t =
         `FunctionPtr (x, opt_map compress_t fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
-<<<<<<< HEAD
       | `Continuation (cont,_) -> `Continuation (compress_continuation cont) (* TODO: Compress handlers *)
       | `Socket (inc, outc) -> assert false (* wheeee! *)
-=======
-      | `Continuation cont -> `Continuation (compress_continuation cont)
       | `Pid (_pid, _location) -> assert false
       | `Socket (_inc, _outc) -> assert false (* wheeee! *)
->>>>>>> origin/sessions
 and compress_env env : compressed_env =
   List.rev
     (fold
@@ -483,14 +475,10 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-<<<<<<< HEAD
   | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
   | `DeepContinuation _ -> "\"DeepContinuation\""
   | `ShallowContinuation _ -> "\"ShallowContinuation\""     
-=======
-  | `Continuation cont -> "Continuation" ^ string_of_cont cont
   | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
->>>>>>> origin/sessions
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value

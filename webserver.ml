@@ -73,7 +73,7 @@ struct
       let path = Uri.path (Request.uri req) in
 
       let run_page (_dir, _s, (valenv, v)) () =
-        Eval.apply (render_cont ()) (Value.shadow tl_valenv ~by:valenv) (v, [`String path]) >>= fun (valenv, v) ->
+        Eval.apply (render_cont ()) Value.toplevel_hs (Value.shadow tl_valenv ~by:valenv) (v, [`String path]) >>= fun (valenv, v) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
@@ -145,7 +145,7 @@ struct
         Hashtbl.add Tables.scopes x `Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;
-        [(`Global, x, Value.empty_env, ([], tail))] in
+        [[(`Global, x, Value.empty_env, ([], tail))]] in
 
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix_net.init ~ctx () in
