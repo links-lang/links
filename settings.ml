@@ -81,7 +81,7 @@ let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind 
 		        output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
 	            end
 	        | `String setting ->
-	            set_value setting value
+	            set_value setting (Utility.Sys.expand value)
             end
         | _ ->
 	    output_string stderr ("Cannot change system setting '" ^ name ^ "'\n"); flush stderr;
@@ -176,7 +176,7 @@ let from_argv : string array -> string list =
 
 
 let load_file filename =
-  let file = open_in filename in
+  let file = open_in (Utility.Sys.expand filename) in
 
   let strip_comment s =
     if String.contains s '#' then
