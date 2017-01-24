@@ -42,7 +42,7 @@ struct
     | `DatabaseLit _
     | `TableLit _
     | `TextNode _
-    | `HandlerLit _ -> false
+    | `HandlerLit _
     | `Section _ -> true
 
     | `ListLit (ps, _)
