@@ -166,3 +166,7 @@ stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(d) {}-> d|e}~> f) -> () 
 Parameterised handlers (anonymous parameters) [2]
 { handler(_ : Float,_ : String,_ : Int) { case Op(p,k) -> k(p)(3.14,"Bar",99) case Return(x) -> x } }
 stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b|c}~> d) -> () {Op{_}|c}~> d
+
+Instantiate.ArityMismatch #132 (RESOLVED)
+sig f : (() {Foo:Int|a}~> b) {Foo{_}|a}~> b fun f(m) { error("N/A") } fun g(m) { var x = f(m); x }
+stdout : () : ()
