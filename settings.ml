@@ -81,7 +81,12 @@ let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind 
 		        output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
 	            end
 	        | `String setting ->
-	            set_value setting value
+                   let expanded_value =
+                     try Utility.Sys.expand value
+                     with Utility.Sys.Unknown_environment_variable v ->
+                       failwith (Printf.sprintf "failed to expand environment variable '%s' in value '%s' while setting '%s'.\n" v value setting.name)
+                   in
+	           set_value setting expanded_value
             end
         | _ ->
 	    output_string stderr ("Cannot change system setting '" ^ name ^ "'\n"); flush stderr;
