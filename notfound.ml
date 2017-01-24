@@ -226,11 +226,11 @@ end
 module Sys =
 struct
   include Sys
-
   let getenv name =
     try getenv name
     with Not_found -> not_found "Sys.getenv" name
 
+  exception Unknown_environment_variable of string      
   (* Windows shell identifier names: [][A-Za-z0-9#~.,$'()*+?@_`{} -]+
      Portable Unix shell identifier names: $[A-Za-z_][A-Za-z0-9_]*
   *)
@@ -248,11 +248,14 @@ struct
       
   (*  Expands any environmental variables in [string] *)
   let expand string =
-    Pervasives.(
-      Str.full_split shell_var_regexp string
-   |> List.map (function | Str.Delim v -> Sys.getenv @@ normalize_env_var v | Str.Text v -> v)
-   |> String.concat ""
-    )
+    let getenv v =
+      try Sys.getenv v with Not_found -> raise (Unknown_environment_variable v)
+    in
+    let open Pervasives in
+    Str.full_split shell_var_regexp string
+    |> List.map (function | Str.Delim v -> getenv (normalize_env_var v) | Str.Text v -> v)
+    |> String.concat ""    
+
 
 end
 
