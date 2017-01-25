@@ -148,7 +148,7 @@ include $(OCAMLMAKEFILE)
 
 .PHONY: tests
 tests: $(RESULT)
-	@./run-tests
+	@OCAMLRUNPARAM="" ./run-tests
 
 fixmes:
 	@grep FIXME *.ml *.mli *.mly *.mll
