@@ -382,7 +382,6 @@ struct
     (*| `Continuation c,      [p] -> apply_cont c env p
       | `Continuation _,       _  ->*)
     | `ShallowContinuation (delim, cont', hs'), [p] ->
-       (** *)
        let cont = Value.append_delim_cont delim cont in
        apply_cont (cont' @ cont) (hs' @ hs) env p
     | `DeepContinuation (cont', hs'), [p] ->
@@ -390,7 +389,7 @@ struct
     | `Continuation (cont, hs), [p] -> apply_cont cont hs env p
     | `Continuation _,       _    ->
        eval_error "Continuation applied to multiple (or zero) arguments"
-    | (v,vs)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
+    | (v,_)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v)
   and apply_cont cont hs env v =
     Proc.yield (fun () -> apply_cont' cont hs env v)
   and apply_cont' cont hs env v : Proc.thread_result Lwt.t =
@@ -550,7 +549,7 @@ struct
        let cont = [] :: cont in
        let comp = value env v in
        apply cont hs env (comp, [])
-    | `DoOperation (name, v, t) ->
+    | `DoOperation (name, v, _) ->
        let vs = List.map (value env) v in
        handle env cont hs (name,vs)
     (* Session stuff *)
@@ -590,9 +589,9 @@ struct
               Proc.block (fun () -> apply_cont cont hs env (`Record []))
       end
   (*****************)
-  and handle env cont hs (opname, vs) =
+  and handle _env cont hs (opname, vs) = (* TODO: Is _env really supposed to be unused? *)
     let depth = fst in    
-    (** handle operations, forwarding appropriately, where
+    (* handle operations, forwarding appropriately, where
         [cont'] and [hs'] are reversed stacks of
         delimited continuations and handlers
         used for restoring the stacks when [k] is invoked  *)
@@ -610,7 +609,6 @@ struct
                    `DeepContinuation (List.rev cont', List.rev hs')
                 | `Shallow ->
                    `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs'))
-                | _ -> assert false
 	      in
               let henv =
                 match kb with
@@ -623,9 +621,10 @@ struct
               handle' (cont', hs') (cont, hs)              
          end
       | _, [] -> eval_error "Unhandled operation: %s" opname
+      | _, _  -> assert false (* Avoids a warning from being generated due to incomplete pattern matching *)
     in
     handle' ([], []) (cont, hs)
-  and invoke_return_clause cont hs env (henv, h, _) v =
+  and invoke_return_clause cont hs _env (henv, h, _) v =
     match StringMap.lookup "Return" h with
     | Some (_, (var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp
     | None -> eval_error "Pattern matching failed on Return"      
@@ -650,9 +649,6 @@ struct
         | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                      " while interpreting.")
         | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
-
-        | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                     " while interpreting.")
 
   let run_defs : Value.env -> Ir.binding list -> Value.env =
     fun env bs ->

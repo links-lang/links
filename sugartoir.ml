@@ -630,8 +630,12 @@ struct
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
                 let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in
-		let Some (t, _) = HandlerUtils.SugarDescriptor.type_info desc in
-                  reflect (bs, (tc, t))))
+		let t =
+                  match HandlerUtils.SugarDescriptor.type_info desc with
+                  | Some (t, _) ->  t
+                  | None -> assert false
+                in
+                reflect (bs, (tc, t))))
     
 	     
   let switch env (v, cases, t) =
@@ -811,7 +815,7 @@ struct
 	     (* FIXME: the type is only right here for 0-argument operations! *)
 	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
-
+          | `DoOperation _ -> assert false (* Avoids a warning from being generated due to incomplete pattern matching *)
           | `Handle (e, cases, desc) ->
               let cases =
                 List.map
@@ -943,6 +947,7 @@ struct
           | `TableLit _
           | `Offer _
           | `QualifiedVar _
+          | `HandlerLit _
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false	  
@@ -1017,7 +1022,7 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `QualifiedImport _ | `Fun _ | `Foreign _ | `Module _-> assert false
+                | `Handler _ | `QualifiedImport _ | `Fun _ | `Foreign _ | `Module _-> assert false
             end
 
   and evalv env e =

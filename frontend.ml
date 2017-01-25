@@ -19,7 +19,7 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
     program
 
-  let show_sentence s sentence =
+  let _show_sentence s sentence =
     Debug.print (s ^ ": " ^ Sugartypes.Show_sentence.show sentence);
     sentence
 
