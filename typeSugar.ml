@@ -101,6 +101,7 @@ struct
     | `Funs _
     | `Infix
     | `Type _
+    | `Handler _
     | `Foreign _ -> true
     | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
@@ -185,7 +186,6 @@ sig
   val switch_branches : griper
 
   val handle_patterns : griper
-  val handle_patterns' : pos:SourceCode.pos -> t1:(string * Types.datatype) -> 'a
   val handle_branches : griper			  
   val handle_computation : griper
   val continuation_codomains : griper
@@ -196,7 +196,6 @@ sig
   val type_continuation_with_annotation : griper                                            
   val should_not_go_wrong : griper                                            
     
-  val operation_case_cont_param	: griper
   val do_operation : griper
     
   val extend_record : griper
@@ -452,14 +451,11 @@ end
                   "while the subsequent expressions have type" ^ nli () ^
                   code ppr_rt)
 
-    let handle_patterns' ~pos ~t1:(lexpr,lt) =
+    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:_ ~error:_ =
       die pos ("\
 		Handler cases may only pattern match on operation names, but the pattern" ^ nl () ^
 		  tab () ^ code lexpr ^ " of type " ^ code (show_type lt) ^ nl() ^
 	          "is not an operation name.")
-	
-    let handle_patterns ~pos ~t1:(lexpr,lt) ~t2:_ ~error:_ =
-      handle_patterns' ~pos:pos ~t1:(lexpr,lt)
 
     let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
       die pos ("\
@@ -471,7 +467,7 @@ end
 		  "while the subsequent clauses have type" ^ nl() ^
 		  tab() ^ code (show_type rt))
 	
-    let handle_computation ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
+    let handle_computation ~pos ~t1:(_, lt) ~t2:(rexpr, rt) ~error:_ =
       die pos ("The inferred input type of the handler " ^ nl () ^
 		  tab() ^ code rexpr ^ nl() ^
   		  "is " ^ nl() ^
@@ -487,14 +483,14 @@ end
 		  tab() ^ code (show_row (TypeUtils.extract_row rt))
       )	  
         
-    let output_effect_row ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ =
+    let output_effect_row ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       die pos ("The current effect context " ^ nl() ^
 		  tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
 		  "is not unifiable with" ^ nl() ^
 		  tab() ^ code (show_row (TypeUtils.extract_row rt))
       )	  
 
-    let continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(body_expr,body_type) ~error:_ =
+    let continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(_,body_type) ~error:_ =
       die pos ("The codomain of continuation " ^ code kexpr ^ " has type" ^ nl() ^
 		  tab() ^ code (show_type kt) ^ nl() ^
 		  "but a type compatible with" ^ nl() ^
@@ -509,21 +505,13 @@ end
       )
 
 
-    let operation_case_cont_param ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
-      die pos ("Continuation parameter " ^ nl() ^
-		  tab() ^ code rexpr ^ nl() ^
-		  "has type" ^ nl() ^
-		  tab() ^ code (show_type rt) ^ nl() ^
-		  "which is not unifiable with" ^ nl()
-	       ^ tab() ^ code (show_type lt))	
-
-    let type_continuation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+    let type_continuation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
       die pos ("Continuation typing error: the type " ^nl() ^
                   tab () ^ code (show_type lt) ^ nl()^
                   "is not unifiable with" ^ nl() ^
                   tab() ^ code (show_type rt))
         
-    let type_continuation_with_annotation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+    let type_continuation_with_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
       die pos ("\
                 The inferred type of the continuation" ^ nl() ^
                   tab() ^ code lexpr ^ nl() ^
@@ -532,10 +520,10 @@ end
                   "but it is annotated with type" ^ nl() ^
                   tab() ^ code (show_type rt))
 
-    let should_not_go_wrong ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+    let should_not_go_wrong ~pos ~t1:_ ~t2:_ ~error:_ =
       die pos "Unification error: This is unexpected!"
         
-    let do_operation ~pos ~t1:(lexpr,lt) ~t2:(rexpr,rt) ~error:_ =
+    let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
       let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
       let operation = dropDoPrefix (code rexpr) in      
       die pos ("Invocation of the operation " ^ nl() ^
@@ -1855,10 +1843,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
     and erase_cases = List.map (fun ((p, _, _t), (e, _, _)) -> p, e)
-    (* Convenient functions for working with rows *)
-    and fmapPresent f = function
-      | `Present x -> `Present (f x)
-      | _ -> assert false
+    (* Convenient function for working with rows *)
     and unPresent = function
       | `Present x -> x
       | _ -> assert false
@@ -1876,10 +1861,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           match fst pat with
           | `Any        -> ()           
           | `Variable b ->
-             let (Some kt') = Env.find tenv (fst3 b) in
+             let kt' =
+               match Env.find tenv (fst3 b) with
+               | Some t -> t
+               | None -> assert false
+             in
              unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt)
           | `As (b,pat') ->
-             let (Some kt') = Env.find tenv (fst3 b) in
+             let kt' =
+               match Env.find tenv (fst3 b) with
+               | Some t -> t
+               | None -> assert false
+             in
              let _ = unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt) in
              type_continuation tenv kt pat'
           | `HasType (pat',t) ->
@@ -1891,7 +1884,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	     type_continuation tenv kt pat'
           | _ -> Gripers.die (snd pat) "Improper pattern matching on continuation parameter."
         in
-        let (pat,tenv,dt) as p' = tpo pat in
+        let (pat,tenv,_) as p' = tpo pat in
         let kenv =
           match fst pat with
           | `Variant (_, None) -> Gripers.die (snd pat) "Arity mismatch."
@@ -3040,7 +3033,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            let desc = HandlerUtils.SugarDescriptor.update_type_info (body_type, effects) desc in 
            `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
-        | `DoOperation (opname, args, None) ->
+        | `DoOperation (opname, args, _) ->
            (* Strategy: 
               1. List.map tc args
               2. Construct operation type
@@ -3372,6 +3365,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           `Exp (erase e), empty_context, usages e
+      | `Handler _
       | `QualifiedImport _
       | `Module _ -> assert false
     in

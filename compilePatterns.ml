@@ -866,31 +866,37 @@ let compile_cases
 (* Handler cases compilation *)
 let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescriptor) -> Ir.computation =
   fun (nenv, tenv, eff) (var, raw_clauses, desc) ->
-    let Some (output_type, effects) = snd desc in
+    let (output_type, effects) =
+      match snd desc with
+      | Some v -> v
+      | None -> assert false
+    in
     let clauses = List.map reduce_clause raw_clauses in
     (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
     (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
      Afterwards we transform the `Case to a `Handle construct. *)
-    let (bs,tc) =  (* The compiled cases *)
+    let (_,tc) =  (* The compiled cases *)
       let t' = TEnv.lookup tenv var in (* Backup original type *)
       let tenv = TEnv.bind tenv (var, `Variant effects) in (* Override the type with a variant type s.t. match_cases is happy *)
       let initial_env = (nenv, tenv, eff, PEnv.empty) in   
       let compiled_cases = match_cases [var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env in
-      let tenv = TEnv.bind tenv (var, t') in (* Restore original type (probably not necessary) *)
+      ignore(TEnv.bind tenv (var, t')); (* Restore original type (probably not necessary) *)
       compiled_cases
     in
     (* Urgh *)
     let arities =
       List.fold_left
-        (fun xs ([(_, pattern)], _) ->
-          let (opname, arity) =
-            match pattern with
-            | `Variant (name, `Any)        -> (name, 0)
-            | `Variant (name, `Record (r,_))   -> (name, StringMap.size r)
-            | `Variant (name, _)           -> (name, 1)
-            | _ -> assert false
-          in
-          (opname, arity) :: xs)
+        (fun xs -> function
+        | ([(_, pattern)], _) ->
+           let (opname, arity) =
+             match pattern with
+             | `Variant (name, `Any)        -> (name, 0)
+             | `Variant (name, `Record (r,_))   -> (name, StringMap.size r)
+             | `Variant (name, _)           -> (name, 1)
+             | _ -> assert false
+           in
+           (opname, arity) :: xs
+        | _ -> assert false)
         [] clauses
     in
     let fix_continuation_param opname (bs,tc) =

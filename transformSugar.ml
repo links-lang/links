@@ -436,7 +436,11 @@ class transform (env : Types.typing_environment) =
 	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
       | `Handle (expr, cases, desc) ->
          let module SD = HandlerUtils.SugarDescriptor in
-	  let Some (t, effects) = SD.type_info desc in
+	 let (t, effects) =
+           match SD.type_info desc with
+           | Some v -> v
+           | None -> assert false
+         in
           let (o, expr, _) = o#phrase expr in
           let (o, cases) =
             listu o
@@ -609,7 +613,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun t (m, cases, params) -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      fun _ _ -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
       let (o, m) =
 	match m with

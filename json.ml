@@ -67,6 +67,7 @@ struct
 
   let rec value : t -> Value.t -> t = fun env -> function
     | `PrimitiveFunction _
+    | `DeepContinuation _ | `ShallowContinuation _ 
     | `Continuation _ -> assert false
     | `FunctionPtr (_f, None) -> env
     | `FunctionPtr (_f, Some fvs) -> value env fvs
@@ -126,6 +127,7 @@ let auxiliaries_of_state : json_state -> auxiliary list =
 let rec jsonize_value : Value.t -> string * json_state =
   function
   | `PrimitiveFunction _
+  | `DeepContinuation _ | `ShallowContinuation _
   | `Continuation _
       as r ->
       failwith ("Can't yet jsonize " ^ Value.string_of_value r);
@@ -290,7 +292,7 @@ let jsonize_value_with_state value =
     type so we can't inspect it here. Consider changing this.
 *)
 
-let jsonize_call continuation (hs : Value.handlers) name args = (* FIXME: serialize handler [hs] *)
+let jsonize_call continuation (_ : Value.handlers) name args = (* FIXME: serialize handler [hs] *)
   let vs, state = jsonize_values args in
   let v =
     "{\"__continuation\":\"" ^ (encode_continuation continuation) ^"\"," ^

@@ -1,6 +1,3 @@
-open Utility
-open TypeUtils
-
 let return_case = "Return"
 
 type depth = Sugartypes.handler_depth

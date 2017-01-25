@@ -82,8 +82,6 @@ object (o : 'self_type)
             argss
             rt in
         let f = gensym ~prefix:"_fun_" () in
-	let rett = Types.fresh_type_variable (`Unl, `Any) in
-	let (flpatterns, flphrase) = lam in
         let e =
           `Block
             ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), location, None)),

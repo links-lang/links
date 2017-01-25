@@ -675,6 +675,8 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
              Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
+      | `DoOperation _
+      | `Handle _ -> failwith "irtojs.ml: Translation of `DoOperation and `Handle are not yet implemented."
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa ->

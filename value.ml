@@ -356,7 +356,7 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation (cont,_) -> `Continuation (compress_continuation cont) (* TODO: Compress handlers *)
-      | `Socket (inc, outc) -> assert false (* wheeee! *)
+      | `ShallowContinuation _ | `DeepContinuation _ -> assert false (* TODO: Compress continuations *)
       | `Pid (_pid, _location) -> assert false
       | `Socket (_inc, _outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
@@ -475,7 +475,7 @@ and string_of_value : t -> string = function
   | `List [] -> "[]"
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-  | `Continuation (cont,hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
+  | `Continuation (cont,_hs) -> "Continuation" ^ string_of_cont cont (* TODO: String of handlers *)
   | `DeepContinuation _ -> "\"DeepContinuation\""
   | `ShallowContinuation _ -> "\"ShallowContinuation\""     
   | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
@@ -505,11 +505,13 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 and _string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
 and string_of_cont : continuation -> string =
-  fun cont -> failwith "string_of_continuation not yet implemented!"
-(*    let frame (_scope, var, _env, body) =
+  fun cont ->
+    let enclose f cont = "[" ^ mapstrcat ", " f cont ^ "]" in
+    let frame (_scope, var, _env, body) =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
-    "[" ^ mapstrcat ", " frame cont ^ "]"*)
+    let delim dcont = enclose frame dcont in
+    enclose delim cont
 
 
 (* let string_of_cont : continuation -> string = *)

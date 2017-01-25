@@ -56,8 +56,8 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 	  | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
 	  | `Tuple pats                  -> `Tuple (List.map hide_names pats)
 	  | `List pats                   -> `List (List.map hide_names pats)
-	  | `Negative names              -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
-	  | `As ((name,t,pos') as n,pat) -> let (p,_) as pat = hide_names pat in
+	  | `Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
+	  | `As ((name,_,_) as n,pat) -> let (p,_) as pat = hide_names pat in
 					    if StringSet.mem name conflicts
 					    then p
 					    else `As (n, pat)
@@ -133,7 +133,7 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Cons (hd, tl)               -> `InfixAppl (([], `Cons), phrase_of_pattern hd, phrase_of_pattern tl) (* x :: xs => (phrase_of_pattern x) :: (phrase_of_pattern xs) *)
       | `List ps                     -> `ListLit (List.map phrase_of_pattern ps, None)
       | `Variant (name, pat_opt)     -> `ConstructorLit (name, opt_map phrase_of_pattern pat_opt, None)
-      | `Negative ns                 -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
+      | `Negative _                 -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
       | `Record (name_pats, pat_opt) -> `RecordLit (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats, opt_map phrase_of_pattern pat_opt)
       | `Tuple ps                    -> `TupleLit (List.map phrase_of_pattern ps)
       | `Constant c                  -> `Constant c
@@ -143,7 +143,7 @@ let rec phrase_of_pattern : pattern -> phrase
     end, pos)
 
 (* This function applies the list of parameters to the generated handle. *)      
-let rec apply_params : phrase -> phrase list list -> phrase
+let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
     List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h 
            
@@ -174,14 +174,14 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
 let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
-  method phrasenode = function
+  method! phrasenode = function
     | `HandlerLit (spec, hnlit) ->      
        let handle = make_handle hnlit (spec,None) in
        let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle, `Unknown) in
        super#phrasenode funlit
     | e -> super#phrasenode e
 
-  method bindingnode = function
+  method! bindingnode = function
     | `Handler (binder, spec, hnlit, annotation) ->
        let handle  = make_handle hnlit (spec,None) in
        `Fun (binder, `Unl, ([], handle), `Unknown, annotation)
