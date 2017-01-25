@@ -153,6 +153,8 @@ struct
       Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt render_cont) ()) in
 
     Debug.print ("Starting server?\n");
+    Lwt.async_exception_hook :=
+      (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
     Settings.set_value Basicsettings.web_mode true;
     Settings.set_value webs_running true;
     start_server (Settings.get_value host_name) (Settings.get_value port) !rt
