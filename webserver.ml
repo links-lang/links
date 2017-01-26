@@ -65,15 +65,21 @@ struct
         | _, _ -> [] (* FIXME: should possibly do something else here *) in
       (* Add headers as cgi args. Is this reall what we want to do? *)
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
-      Lib.cgi_parameters := cgi_args;
-      Lib.cookies := Cohttp.Cookie.Cookie_hdr.extract (Request.headers req);
-      Lib.http_response_code := 200;
+      let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
+
+      let req_data = {
+        Lib.cgi_parameters = ref cgi_args;
+        Lib.cookies = ref cookies;
+        Lib.http_response_headers = ref [];
+        Lib.http_response_code = ref 200;
+      } in
+
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
       let run_page (_dir, _s, (valenv, v)) () =
-        Eval.apply (render_cont ()) (Value.shadow tl_valenv ~by:valenv) (v, [`String path]) >>= fun (valenv, v) ->
+        Eval.apply (render_cont ()) (Value.shadow tl_valenv ~by:valenv) req_data (v, [`String path]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
@@ -115,7 +121,13 @@ struct
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
-           Webif.do_request (Value.shadow tl_valenv ~by:valenv, nenv, tyenv) cgi_args (run_page (dir, s, (valenv, v))) (render_cont ()) Lib.cohttp_server_response
+           Webif.do_request
+             (Value.shadow tl_valenv ~by:valenv, nenv, tyenv)
+             cgi_args
+             (run_page (dir, s, (valenv, v)))
+             (render_cont ())
+             req_data
+             (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
         | ((_, s, _) :: rest) ->
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
            route rest in

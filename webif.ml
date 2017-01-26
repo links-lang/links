@@ -1,5 +1,6 @@
 (*pp deriving *)
 
+open Lib
 open Notfound
 open List
 open Proc
@@ -141,15 +142,15 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
-  let perform_request valenv run render_cont =
+  let perform_request valenv run render_cont request_data =
     function
       | ServerCont t ->
         Debug.print("Doing ServerCont");
-        Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
+        Eval.apply render_cont valenv request_data (t, []) >>= fun (_, v) ->
         Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn ");
-        Eval.apply_cont cont valenv arg >>= fun (_, result) ->
+        Eval.apply_cont cont valenv request_data arg >>= fun (_, result) ->
         let result_json = Json.jsonize_value result in
         Lwt.return ("text/plain",
                     Utility.base64encode result_json)
@@ -157,7 +158,7 @@ struct
         Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
-        Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
+        Eval.apply Value.toplevel_cont env request_data (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
@@ -171,13 +172,13 @@ struct
          Debug.print("Doing EvalMain");
          run ()
 
-  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args () =
+  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args request_data () =
     ("text/html",
      if is_client_program (globals @ locals, main) then
        if Settings.get_value realpages then
          begin
            Debug.print "Running client program from server";
-           let (valenv, v) = Eval.run_program valenv (locals, main) in
+           let (valenv, v) = Eval.run_program valenv request_data (locals, main) in
            (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
            Irtojs.generate_real_client_page
              ~cgi_env:cgi_args
@@ -196,14 +197,14 @@ struct
      else
        let program = locals, main in
        Debug.print "Running server program";
-       let (_env, v) = Eval.run_program valenv program in
+       let (_env, v) = Eval.run_program valenv request_data program in
        Value.string_of_value v)
 
-  let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
+  let do_request ((valenv, _, _) as env) cgi_args run render_cont request_data response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont request)
+      (fun () -> perform_request valenv run render_cont request_data request )
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -213,11 +214,18 @@ struct
     >>= fun (content_type, content) ->
     response_printer [("Content-type", content_type)] content
 
-  let serve_request_program ((_valenv, _, _) as env) (globals, (locals, main), render_cont) response_printer cgi_args =
+  let serve_request_program
+      ((_valenv, _, _) as env)
+      (globals, (locals, main), render_cont)
+      response_printer
+      cgi_args
+      request_data : unit =
     Proc.run (fun () -> do_request env cgi_args
-                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
+                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args request_data ()))
                                    render_cont
-                                   (fun headers body -> Lwt.return (response_printer headers body)))
+                                   request_data
+                                   (fun headers body -> Lwt.return (response_printer headers body))
+                                   )
 
   (* does the preprocessing to turn prelude+filename into a program *)
   (* result can be cached *)
@@ -269,13 +277,11 @@ struct
     BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
     (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
 
-  (* wrapper for ordinary uses of serve_request_program *)
-  let serve_request ((valenv, _, _) as envs) prelude filename =
-
+  (* Processes a CGI-based request *)
+  let serve_request ((valenv, _, _) as envs) prelude filename : unit =
     let cgi_args = get_cgi_args() in
     Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
-    Lib.cgi_parameters := cgi_args;
-    Lib.cookies :=
+    let cookies =
       begin
         match getenv "HTTP_COOKIE" with
         | Some header ->
@@ -288,7 +294,18 @@ struct
              cookies
         | None ->
            []
-      end;
+      end in
+
+    (* Set up record containing mutable fields used for primitive library calls.
+     * This record is specific to this request. All fields are mutable since the
+     * library functions may need to modify the environments, and we don't want
+     * to do a state-passing transformation. *)
+    let req_data = {
+      cgi_parameters = ref cgi_args;
+      cookies = ref cookies;
+      http_response_headers = ref [];
+      http_response_code = ref 200;
+    } in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
@@ -298,11 +315,14 @@ struct
     in
 
     (* We can evaluate the definitions here because we know they are pure. *)
-    let valenv = Eval.run_defs valenv globals in
+    let valenv = Eval.run_defs valenv req_data globals in
 
     Errors.display (lazy (serve_request_program
   			  (valenv, nenv, tyenv)
   			  (globals, (locals, main), render_cont)
-                            Lib.print_http_response
-                            cgi_args))
+          (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
+          cgi_args
+          req_data
+      )
+    )
 end

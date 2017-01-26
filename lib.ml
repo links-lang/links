@@ -18,13 +18,19 @@ let alias_env : Types.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
-let cgi_parameters = ref []
-let cookies = ref []
-(*  http_response_headers: this is state for the webif interface. I hope we can
-    find a better way for library functions to communicate with the web
-    interface. *)
-let http_response_headers = ref []
-let http_response_code = ref 200
+type requestData = {
+  cgi_parameters : (string * string) list ref;
+  cookies : (string * string) list ref;
+  http_response_headers : (string * string) list ref;
+  http_response_code : int ref
+}
+
+let empty_request_data () = {
+    cgi_parameters = ref [];
+    cookies = ref [];
+    http_response_headers = ref [];
+    http_response_code = ref 200
+  }
 
 (*
   assumption:
@@ -56,7 +62,7 @@ and row_values db = function
 
 type primitive =
 [ Value.t
-| `PFun of Value.t list -> Value.t ]
+| `PFun of Value.t list -> requestData -> Value.t ]
 
 type pure = PURE | IMPURE
 
@@ -67,17 +73,17 @@ let mk_binop_fn impl unbox_fn constr = function
     | _ -> failwith "arity error in integer operation"
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (mk_binop_fn impl unbox_int (fun x -> `Int x))),
+  (`PFun (mk_binop_fn impl unbox_int (fun x _ -> `Int x))),
   datatype "(Int, Int) -> Int",
   pure
 
 let float_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (mk_binop_fn impl unbox_float (fun x -> `Float x))),
+  (`PFun (mk_binop_fn impl unbox_float (fun x _ -> `Float x))),
   datatype "(Float, Float) -> Float",
   pure
 
 let string_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (mk_binop_fn impl unbox_string (fun x -> `String x))),
+  (`PFun (mk_binop_fn impl unbox_string (fun x _ -> `String x))),
   datatype "(String, String) -> String",
   pure
 
@@ -86,7 +92,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
     | _ -> assert false
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
-  ((`PFun (conversion_op' ~unbox:unbox ~conv:conv ~box:box) : located_primitive),
+  ((`PFun (fun x _ -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
    (let q, r = Types.fresh_row_quantifier (`Any, `Any) in
       (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
    pure)
@@ -97,7 +103,7 @@ let string_to_xml : Value.t -> Value.t = function
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let char_test_op fn pure =
-  (`PFun (fun args ->
+  (`PFun (fun args _ ->
       match args with
         | [c] -> (`Bool (fn (unbox_char c)))
         | _ -> assert false),
@@ -105,7 +111,7 @@ let char_test_op fn pure =
    pure)
 
 let char_conversion fn pure =
-  (`PFun (fun args ->
+  (`PFun (fun args _ ->
       match args with
         | [c] -> (box_char (fn (unbox_char c)))
         | _ -> assert false),
@@ -113,7 +119,7 @@ let char_conversion fn pure =
    pure)
 
 let float_fn fn pure =
-  (`PFun (fun args ->
+  (`PFun (fun args _ ->
       match args with
         | [c] -> (box_float (fn (unbox_float c)))
         | _ -> assert false),
@@ -121,22 +127,45 @@ let float_fn fn pure =
   pure)
 
 let p1 fn =
-  `PFun (fun args ->
+  `PFun (fun args _ ->
       match args with
         | ([a]) -> fn a
         | _ -> assert false)
 
 let p2 fn =
-  `PFun (fun args ->
+  `PFun (fun args _ ->
       match args with
         | [a; b] -> fn a b
         | _ -> assert false)
 
 let p3 fn =
-  `PFun (fun args ->
+  `PFun (fun args _ ->
       match args with
         | [a;b;c] -> fn a b c
         | _ -> assert false)
+
+(* Functions which also take the request data as an argument --
+ * for example those which set cookies, change the headers, etc. *)
+let p1D fn =
+  `PFun (fun args req_data ->
+      match args with
+        | ([a]) -> fn a req_data
+        | _ -> assert false)
+
+let p2D fn =
+  `PFun (fun args req_data ->
+      match args with
+        | [a; b] -> fn a b req_data
+        | _ -> assert false)
+
+(*
+ * Not used at the moment, here if we end up needing it
+let p3D fn =
+  `PFun (fun args req_data ->
+      match args with
+        | [a;b;c] -> fn a b c req_data
+        | _ -> assert false)
+*)
 
 let rec equal l r =
   match l, r with
@@ -269,14 +298,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "intToXml",
-  (`PFun (string_to_xml -<-
-            (conversion_op' ~unbox:unbox_int ~conv:(string_of_int) ~box:box_string)),
+  (`PFun (fun x _ ->
+    string_to_xml (conversion_op' ~unbox:unbox_int ~conv:(string_of_int) ~box:box_string x)),
    datatype "(Int) -> Xml",
   PURE);
 
   "floatToXml",
-  (`PFun (string_to_xml -<-
-            (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string)),
+  (`PFun (fun x _ ->
+    string_to_xml (conversion_op' ~unbox:unbox_float ~conv:(string_of_float') ~box:box_string x)),
    datatype "(Float) -> Xml",
    PURE);
 
@@ -316,7 +345,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ -> `Pid (Proc.get_current_pid(), `Unknown)),
+  (`PFun (fun _ _ -> `Pid (Proc.get_current_pid(), `Unknown)),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
@@ -820,11 +849,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* Cookies *)
   "setCookie",
-  (p2 (fun cookieName cookieVal ->
+  (p2D (fun cookieName cookieVal req_data ->
          let cookieName = unbox_string cookieName in
          let cookieVal = unbox_string cookieVal in
-           http_response_headers :=
-             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: !http_response_headers;
+         let resp_headers = !(req_data.http_response_headers) in
+           req_data.http_response_headers :=
+             ("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: resp_headers;
            `Record []
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
@@ -845,11 +875,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      the Maybe(String) type.
   *)
   "getCookie",
-  (p1 (fun name ->
+  (p1D (fun name req_data ->
          let name = unbox_string name in
+         let cookies = !(req_data.cookies) in
          let value =
-           if List.mem_assoc name !cookies then
-             List.assoc name !cookies
+           if List.mem_assoc name cookies then
+             List.assoc name cookies
            else
              ""
          in
@@ -865,11 +896,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   *)
 
   "redirect",
-  (p1 (fun url ->
+  (p1D (fun url req_data ->
          let url = unbox_string url in
            (* This is all quite hackish, just testing an idea. --ez *)
-           http_response_headers := ("Location", url) :: !http_response_headers;
-           http_response_code := 302;
+           let resp_headers = !(req_data.http_response_headers) in
+           req_data.http_response_headers := ("Location", url) :: resp_headers;
+           req_data.http_response_code := 302;
            `Record []
       ), datatype "(String) ~> ()",
   IMPURE);
@@ -912,14 +944,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "serverTime",
   (`Server
-     (`PFun (fun _ ->
+     (`PFun (fun _ _ ->
                box_int(int_of_float(Unix.time())))),
    datatype "() ~> Int",
    IMPURE);
 
   "serverTimeMilliseconds",
   (`Server
-     (`PFun (fun _ ->
+     (`PFun (fun _ _ ->
                box_int(time_milliseconds()))),
    datatype "() ~> Int",
    IMPURE);
@@ -1046,7 +1078,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "getDatabaseConfig",
   (`PFun
-     (fun _ ->
+     (fun _ _ ->
 	let driver = Settings.get_value Basicsettings.database_driver
 	and args = Settings.get_value Basicsettings.database_args in
 	  if driver = "" then
@@ -1090,10 +1122,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "sqrt",    float_fn sqrt PURE;
 
   ("environment",
-   (`PFun (fun _ ->
+   (`PFun (fun _ req_data ->
+             let cgi_params = !(req_data.cgi_parameters) in
              let makestrpair (x1, x2) = `Record [("1", box_string x1); ("2", box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) !cgi_parameters))),
+               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) cgi_params))),
     datatype "() ~> [(String,String)]",
     IMPURE));
 
@@ -1243,7 +1276,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* non-deterministic random number generator *)
   "random",
-  (`PFun (fun _ -> (box_float (Random.float 1.0))),
+  (`PFun (fun _ _ -> (box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
 
@@ -1442,7 +1475,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
         "gensym",
         (let idx = ref 0 in
-         `PFun (fun _ -> let i = !idx in idx := i+1; (box_int i)),
+         `PFun (fun _ _ -> let i = !idx in idx := i+1; (box_int i)),
          datatype "() -> Int",
          IMPURE);
 
@@ -1649,18 +1682,18 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 
 
 (* jcheney: added to expose lookup by var *)
-let apply_pfun_by_code var args =
+let apply_pfun_by_code var args req_data =
   match primitive_by_code var with
   | Some #Value.t ->
       failwith("Attempt to apply primitive non-function "
 	       ^ "(#" ^string_of_int var^ ").")
-  | Some (`PFun p) -> p args
+  | Some (`PFun p) -> p args req_data
   | None -> assert false
 
 
-let apply_pfun name args =
+let apply_pfun name args req_data =
   match Env.String.find nenv name with
-    | Some var -> apply_pfun_by_code var args
+    | Some var -> apply_pfun_by_code var args req_data
     | None -> assert false
 
 let is_primitive name = List.mem_assoc name env
@@ -1678,20 +1711,24 @@ let is_pure_primitive name =
 let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
                                   args)
 
-let cohttp_server_response headers body =
+let cohttp_server_response headers body req_data =
   (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
-  let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ !http_response_headers) in
+  let resp_headers = !(req_data.http_response_headers) in
+  let resp_code = !(req_data.http_response_code) in
+  let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ resp_headers) in
   Cohttp_lwt_unix.Server.respond_string
     ?headers:(Some h)
-    ~status:(Cohttp.Code.status_of_code !http_response_code)
+    ~status:(Cohttp.Code.status_of_code resp_code)
     ~body:body
     ()
 
 (** Output the headers and content to stdout *)
-let print_http_response headers body =
-  let headers = headers @ !http_response_headers @
-    if (!http_response_code <> 200) then
-      [("Status", string_of_int !http_response_code)] else []
+let print_http_response headers body req_data =
+  let resp_headers = !(req_data.http_response_headers) in
+  let resp_code = !(req_data.http_response_code) in
+  let headers = headers @ resp_headers  @
+    if (resp_code <> 200) then
+      [("Status", string_of_int resp_code)] else []
   in
     for_each headers
       (fun (name, value) -> print_endline(name ^ ": " ^ value));

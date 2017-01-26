@@ -1,7 +1,19 @@
 
+type requestData = {
+  cgi_parameters : (string * string) list ref;
+  cookies : (string * string) list ref;
+  http_response_headers : (string * string) list ref;
+  http_response_code : int ref
+}
+
+val empty_request_data : unit -> requestData
+
+(*
 val http_response_headers : (string * string) list ref
 val http_response_code : int ref
-
+val cgi_parameters : (string * string) list ref
+val cookies : (string * string) list ref
+*)
 val equal : Value.t -> Value.t -> bool
 val less : Value.t -> Value.t -> bool
 val less_or_equal : Value.t -> Value.t -> bool
@@ -23,21 +35,19 @@ val primitive_vars : Utility.IntSet.t
 
 val patch_prelude_funs : Types.typing_environment -> Types.typing_environment
 
-val apply_pfun : string -> Value.t list -> Value.t
+val apply_pfun : string -> Value.t list -> requestData -> Value.t
 val primitive_stub : string -> Value.t
 
 (* jcheney: added to avoid string comparisons at runtime *)
-val apply_pfun_by_code : Var.var -> Value.t list -> Value.t
+val apply_pfun_by_code : Var.var -> Value.t list -> requestData -> Value.t
 val primitive_stub_by_code : Var.var -> Value.t
 
 val primitive_name : Var.var -> string
 val primitive_location : string -> Sugartypes.location
 val primitive_arity : string -> int option
 
-val cohttp_server_response : (string * string) list -> string -> (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
-val print_http_response : (string * string) list -> string -> unit
+val cohttp_server_response : (string * string) list -> string -> requestData -> (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
+val print_http_response : (string * string) list -> string -> requestData -> unit
 
 val prim_appln : Env.String.name -> Ir.value list -> Ir.tail_computation
 
-val cgi_parameters : (string * string) list ref
-val cookies : (string * string) list ref

@@ -12,6 +12,7 @@ sig
     (string * string) list ->
     (unit -> (string * string) Lwt.t) ->
     Value.continuation ->
+    Lib.requestData ->
     ((string * string) list -> string -> 'b Lwt.t) ->
     'b Lwt.t
 
