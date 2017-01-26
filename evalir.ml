@@ -77,8 +77,7 @@ struct
        Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
-  let rec value env : Lib.requestData -> Ir.value ->  Value.t = fun req_data v ->
-    match v with
+  let rec value env : Ir.value -> Value.t = function
     | `Constant `Bool b -> `Bool b
     | `Constant `Int n -> `Int n
     | `Constant `Char c -> `Char c
@@ -94,7 +93,7 @@ struct
 *)
     | `Extend (fields, r) ->
         begin
-          match opt_app (value env req_data) (`Record []) r with
+          match opt_app (value env) (`Record []) r with
             | `Record fs ->
                 (* HACK
 
@@ -111,7 +110,7 @@ struct
                                    eval_error
                                      "Error adding fields: label %s already present" label
                                  else
-                                   (label, value env req_data v)::fs)
+                                   (label, value env v)::fs)
                               fields
                               []) @ fs)
 (*                 `Record (StringMap.fold  *)
@@ -123,38 +122,38 @@ struct
         end
     | `Project (label, r) ->
         begin
-          match value env req_data r with
+          match value env r with
             | `Record fields when List.mem_assoc label fields ->
                 List.assoc label fields
             | _ -> eval_error "Error projecting label %s" label
         end
     | `Erase (labels, r) ->
         begin
-          match value env req_data r with
+          match value env r with
             | `Record fields when
                 StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
             | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
         end
-    | `Inject (label, v, _) -> `Variant (label, value env req_data v)
-    | `TAbs (_, v) -> value env req_data v
-    | `TApp (v, _) -> value env req_data v
+    | `Inject (label, v, _) -> `Variant (label, value env v)
+    | `TAbs (_, v) -> value env v
+    | `TApp (v, _) -> value env v
     | `XmlNode (tag, attrs, children) ->
         let children =
           List.fold_right
             (fun v children ->
-               let v = value env req_data v in
+               let v = value env v in
                  List.map Value.unbox_xml (Value.unbox_list v) @ children)
             children [] in
         let children =
           StringMap.fold
             (fun name v attrs ->
-               Value.Attr (name, Value.unbox_string (value env req_data v)) :: attrs)
+               Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
             attrs children
         in
           Value.box_list [Value.box_xml (Value.Node (tag, children))]
     | `ApplyPure (f, args) ->
-      Proc.atomically (fun () -> apply [] env req_data (value env req_data f, List.map (value env req_data) args) )
+      Proc.atomically (fun () -> apply [] env (value env f, List.map (value env) args))
     | `Closure (f, v) ->
       (* begin *)
 
@@ -165,14 +164,14 @@ struct
       (* let (finfo, _, z, location) = find_fun f in *)
       (* match location with *)
       (* | `Server | `Unknown | `Client -> *)
-      `FunctionPtr (f, Some (value env req_data v))
+      `FunctionPtr (f, Some (value env v))
       (* | `Client -> *)
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
-    | `Coerce (v, _) -> value env req_data v
+    | `Coerce (v, _) -> value env v
 
-  and apply cont env : Lib.requestData -> Value.t * Value.t list -> Proc.thread_result Lwt.t = fun req_data x ->
-    match x with
+  and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
+    function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
       let env =
@@ -183,10 +182,10 @@ struct
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.bind x (p, `Local)) xs ps env in
-      computation env req_data cont body
+      computation env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
-      apply_cont cont env req_data (`String (string_of_int key))
+      apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
@@ -200,7 +199,7 @@ struct
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
-            apply_cont cont env req_data (`Record [])
+            apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
@@ -209,13 +208,13 @@ struct
             let var = Var.dummy_var in
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env req_data func) in
+            let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
             let location = `Unknown in
-            apply_cont cont env req_data (`Pid (new_pid, location))
+            apply_cont cont env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("spawnClient",_), [func] ->
       let new_pid = Proc.create_client_process func in
-      apply_cont cont env req_data (`Pid (new_pid, `Client))
+      apply_cont cont env (`Pid (new_pid, `Client))
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
@@ -226,9 +225,9 @@ struct
             let var = Var.dummy_var in
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env req_data func) in
+            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
             let location = `Unknown in
-            apply_cont cont env req_data (`Pid (new_pid, location))
+            apply_cont cont env (`Pid (new_pid, location))
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -243,18 +242,18 @@ struct
         begin match Mailbox.pop_message () with
             Some message ->
               Debug.print("delivered message.");
-              apply_cont cont env req_data message
+              apply_cont cont env message
           | None ->
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
               in
-              Proc.block (fun () -> apply_cont (recv_frame::cont) env req_data (`Record []))
+              Proc.block (fun () -> apply_cont (recv_frame::cont) env (`Record []))
         end
     (* end of mailbox stuff *)
     (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
-        apply_cont cont env req_data (`Int apid)
+        apply_cont cont env (`Int apid)
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Value.unbox_int ap in
       let (c, d), blocked = Session.accept apid in
@@ -268,7 +267,7 @@ struct
             in
               (* block my end of the channel *)
               Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (accept_frame::cont) env req_data (`Record []))
+              Proc.block (fun () -> apply_cont (accept_frame::cont) env (`Record []))
         else
           begin
             begin
@@ -277,8 +276,9 @@ struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env req_data
-              (Value.box_pair (Value.box_int c) (Value.box_int d))
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int c)
+                                   (Value.box_int d))
           end
     | `PrimitiveFunction ("request", _), [ap] ->
       let apid = Value.unbox_int ap in
@@ -293,7 +293,7 @@ struct
             in
               (* block my end of the channel *)
               Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (request_frame::cont) env req_data (`Record []))
+              Proc.block (fun () -> apply_cont (request_frame::cont) env (`Record []))
         else
           begin
             begin
@@ -302,10 +302,9 @@ struct
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont env req_data
-              (Value.box_pair
-               (Value.box_int c)
-               (Value.box_int d))
+            apply_cont cont env (Value.box_pair
+                                   (Value.box_int c)
+                                   (Value.box_int d))
           end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
@@ -316,7 +315,7 @@ struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env req_data chan
+      apply_cont cont env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
@@ -325,7 +324,7 @@ struct
           match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
-            apply_cont cont env req_data (Value.box_pair v chan)
+            apply_cont cont env (Value.box_pair v chan)
           | None ->
             let grab_frame =
               Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
@@ -333,7 +332,7 @@ struct
                                                                                    StringMap.empty), None)])
             in
               Session.block inp (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (grab_frame::cont) env req_data (`Record []))
+              Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
@@ -347,14 +346,14 @@ struct
       Session.link (out1, in1) (out2, in2);
       unblock out1;
       unblock out2;
-      apply_cont cont env req_data (`Record [])
+      apply_cont cont env (`Record [])
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
        let path = Value.unbox_string pathv in
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
        Webs.add_route is_dir_handler path (Right (env, handler));
-       apply_cont cont env req_data (`Record [])
+       apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
        if not (!allow_static_routes) then
          eval_error "Attempt to add a static route after they have been disabled";
@@ -363,50 +362,50 @@ struct
        let path = Value.unbox_string pathv in
        let mime_types = List.map (fun v -> let (x, y) = Value.unbox_pair v in (Value.unbox_string x, Value.unbox_string y)) (Value.unbox_list mime_typesv) in
        Webs.add_route true uri (Left (path, mime_types));
-       apply_cont cont env req_data (`Record [])
+       apply_cont cont env (`Record [])
     | `PrimitiveFunction ("servePages", _), [] ->
        if not (Settings.get_value(dynamic_static_routes)) then
          allow_static_routes := false;
        begin
          Webs.start env >>= fun () ->
-         apply_cont cont env req_data (`Record [])
+         apply_cont cont env (`Record [])
        end
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-       apply_cont cont env req_data (Lib.apply_pfun n args req_data)
+       apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
-       apply_cont cont env req_data (Lib.apply_pfun_by_code code args req_data)
+       apply_cont cont env (Lib.apply_pfun_by_code code args (Value.request_data env))
     | `ClientFunction name, args -> client_call name cont args
-    | `Continuation c,      [p] -> apply_cont c env req_data p
+    | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
-  and apply_cont cont env req_data v =
-    Proc.yield (fun () -> apply_cont' cont env req_data v)
-  and apply_cont' cont env req_data v : Proc.thread_result Lwt.t =
+  and apply_cont cont env v =
+    Proc.yield (fun () -> apply_cont' cont env v)
+  and apply_cont' cont env v : Proc.thread_result Lwt.t =
     match cont with
     | [] -> Proc.finish (env, v)
     | (scope, var, locals, comp) :: cont ->
        let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in
-       computation env req_data cont comp
-  and computation env req_data cont (bindings, tailcomp) : Proc.thread_result Lwt.t =
+       computation env cont comp
+  and computation env cont (bindings, tailcomp) : Proc.thread_result Lwt.t =
     match bindings with
-      | [] -> tail_computation env req_data cont tailcomp
+      | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
         | `Let ((var, _) as b, (_, tc)) ->
               let locals = Value.localise env var in
               let cont' = (((Var.scope_of_binder b, var, locals, (bs, tailcomp))
                            ::cont) : Value.continuation) in
-              tail_computation env req_data cont' tc
+              tail_computation env cont' tc
           (* function definitions are stored in the global fun map *)
           | `Fun _ ->
-            computation env req_data cont (bs, tailcomp)
+            computation env cont (bs, tailcomp)
           | `Rec _ ->
-            computation env req_data cont (bs, tailcomp)
+            computation env cont (bs, tailcomp)
           | `Alien _ ->
-            computation env req_data cont (bs, tailcomp)
+            computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env req_data cont : Ir.tail_computation -> Proc.thread_result Lwt.t = function
+  and tail_computation env cont : Ir.tail_computation -> Proc.thread_result Lwt.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -414,37 +413,37 @@ struct
     (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
     (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
     (*     apply_cont cont env w *)
-    | `Return v      -> apply_cont cont env req_data (value env req_data v)
+    | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) ->
-        apply cont env req_data (value env req_data f, List.map (value env req_data) ps)
-    | `Special s     -> special env req_data cont s
+        apply cont env (value env f, List.map (value env) ps)
+    | `Special s     -> special env cont s
     | `Case (v, cases, default) ->
-      begin match value env req_data v with
+      begin match value env v with
         | `Variant (label, _) as v ->
           begin
             match StringMap.lookup label cases, default, v with
             | Some ((var,_), c), _, `Variant (_, v)
             | _, Some ((var,_), c), v ->
-              computation (Value.bind var (v, `Local) env) req_data cont c
+              computation (Value.bind var (v, `Local) env) cont c
             | None, _, #Value.t -> eval_error "Pattern matching failed"
             | _ -> assert false (* v not a variant *)
           end
         | _ -> eval_error "Case of non-variant"
       end
     | `If (c,t,e)    ->
-        computation env req_data cont
-          (match value env req_data c with
+        computation env cont
+          (match value env c with
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env req_data cont : Ir.special -> Proc.thread_result Lwt.t = function
+  and special env cont : Ir.special -> Proc.thread_result Lwt.t = function
     | `Wrong _                    -> raise Wrong
-    | `Database v                 -> apply_cont cont env req_data (`Database (db_connect (value env req_data v)))
+    | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
-        match value env req_data db, value env req_data name, value env req_data keys, (TypeUtils.concrete_type readtype) with
+        match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
 	      let unboxed_keys =
 		List.map
@@ -452,7 +451,7 @@ struct
 		    List.map Value.unbox_string (Value.unbox_list key))
 		  (Value.unbox_list keys)
 	      in
-              apply_cont cont env req_data (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
+              apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -460,11 +459,11 @@ struct
          match range with
          | None -> None
          | Some (limit, offset) ->
-            Some (Value.unbox_int (value env req_data limit), Value.unbox_int (value env req_data offset)) in
+            Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
          begin
            match Queryshredding.compile_shredded env (range, e) with
-           | None -> computation env req_data cont e
+           | None -> computation env cont e
            | Some (db, p) ->
                begin
 		 if db#driver_name() <> "postgresql"
@@ -481,14 +480,14 @@ struct
 		   Queryshredding.Shred.pmap execute_shredded_raw p in
 		 let mapped_results =
 		   Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
-                 apply_cont cont env req_data
+                 apply_cont cont env
 		   (Queryshredding.Stitch.stitch_mapped_query mapped_results)
                end
 	 end
        else (* shredding disabled *)
          begin
            match Query.compile env (range, e) with
-           | None -> computation env req_data cont e
+           | None -> computation env cont e
            | Some (db, q, t) ->
                let (fieldMap, _, _), _ =
 		 Types.unwrap_row(TypeUtils.extract_row t) in
@@ -502,11 +501,11 @@ struct
                    fieldMap
                    []
                in
-               apply_cont cont env req_data (Database.execute_select fields q db)
+               apply_cont cont env (Database.execute_select fields q db)
 	 end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
-        match value env req_data source with
+        match value env source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
@@ -515,10 +514,10 @@ struct
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
-        apply_cont cont env req_data (`Record [])
+        apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
       let db, table, field_types =
-        match value env req_data source with
+        match value env source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
             db, table, (StringMap.map (function
                                         | `Present t -> t
@@ -527,12 +526,12 @@ struct
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
-        apply_cont cont env req_data (`Record [])
+        apply_cont cont env (`Record [])
     | `CallCC f                   ->
-      apply cont env req_data (value env req_data f, [`Continuation cont])
+      apply cont env (value env f, [`Continuation cont])
     (* Session stuff *)
     | `Select (name, v) ->
-      let chan = value env req_data v in
+      let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let (outp, _) = Session.unbox_chan chan in
       Session.send (Value.box_string name) outp;
@@ -541,10 +540,10 @@ struct
           Some pid -> Proc.awaken pid
         | None     -> ()
       end;
-      apply_cont cont env req_data chan
+      apply_cont cont env chan
     | `Choice (v, cases) ->
       begin
-        let chan = value env req_data v in
+        let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
         let (_, in') = Session.unbox_chan' chan in
         let inp = in' in
@@ -555,7 +554,7 @@ struct
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->
-                  computation (Value.bind var (chan, `Local) env) req_data cont body
+                  computation (Value.bind var (chan, `Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
           | None ->
@@ -563,53 +562,54 @@ struct
               Value.expr_to_contframe env (`Special (`Choice (v, cases)))
             in
               Session.block inp (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (choice_frame::cont) env req_data (`Record []))
+              Proc.block (fun () -> apply_cont (choice_frame::cont) env (`Record []))
       end
     (*****************)
 
-  let eval : Value.env -> Lib.requestData -> program ->  Proc.thread_result Lwt.t =
-    fun env req_data -> computation env req_data Value.toplevel_cont
+  let eval : Value.env -> program -> Proc.thread_result Lwt.t =
+    fun env -> computation env Value.toplevel_cont
 
-  let run_program_with_cont : Value.continuation -> Value.env -> Lib.requestData -> Ir.program ->
+
+  let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
     (Value.env * Value.t) =
-    fun cont env req_data program ->
+    fun cont env program ->
       try (
-        Proc.run (fun () -> computation env req_data cont program)
+        Proc.run (fun () -> computation env cont program)
       ) with
         | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                      " while interpreting.")
 
-  let run_program : Value.env -> Lib.requestData -> Ir.program -> (Value.env * Value.t) =
-    fun env req_data program ->
+  let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
+    fun env program ->
       try (
-        Proc.run (fun () -> eval env req_data program)
+        Proc.run (fun () -> eval env program)
       ) with
         | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                      " while interpreting.")
         | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
 
-  let run_defs : Value.env -> Lib.requestData -> Ir.binding list -> Value.env =
-    fun env req_data bs ->
-    let (env, _value) = run_program env req_data (bs, `Return(`Extend(StringMap.empty, None))) in env
+  let run_defs : Value.env -> Ir.binding list -> Value.env =
+    fun env bs ->
+    let (env, _value) = run_program env (bs, `Return(`Extend(StringMap.empty, None))) in env
 
   (** [apply_cont_toplevel cont env v] applies a continuation to a value
       and returns the result. Finishing the main thread normally comes
       here immediately. *)
-  let apply_cont_toplevel cont env req_data v =
-    try snd (Proc.run (fun () -> apply_cont cont env req_data v)) with
+  let apply_cont_toplevel cont env v =
+    try snd (Proc.run (fun () -> apply_cont cont env v)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
-  let apply_with_cont cont env req_data (f, vs) =
-    try snd (Proc.run (fun () -> apply cont env req_data (f, vs))) with
+  let apply_with_cont cont env (f, vs) =
+    try snd (Proc.run (fun () -> apply cont env (f, vs))) with
     |  NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                  " while interpreting.")
 
 
-  let apply_toplevel env req_data (f, vs) = apply_with_cont [] env req_data (f, vs)
+  let apply_toplevel env (f, vs) = apply_with_cont [] env (f, vs)
 
-  let eval_toplevel env req_data program =
-    try snd (Proc.run (fun () -> eval env req_data program)) with
+  let eval_toplevel env program =
+    try snd (Proc.run (fun () -> eval env program)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 

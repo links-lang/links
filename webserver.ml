@@ -24,7 +24,6 @@ struct
 
   let set_prelude bs =
     prelude := bs
-
   let init some_env some_globals =
     env := some_env;
     globals := some_globals;
@@ -126,7 +125,6 @@ struct
              cgi_args
              (run_page (dir, s, (valenv, v)))
              (render_cont ())
-             req_data
              (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
         | ((_, s, _) :: rest) ->
            Debug.print (Printf.sprintf "Skipping case for %s\n" s);
