@@ -231,6 +231,22 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
    end)
 
 (*jcheney: Added function component to PrimitiveFunction *)
+
+type client_id = int
+  deriving (Show)
+
+type spawn_location = [
+  | `ClientSpawnLoc of client_id
+  | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
+]
+  deriving (Show)
+
+type dist_pid = [
+  | `ServerPid of int (* Again, will need a server address here later *)
+  | `ClientPid of (client_id * int)
+]
+  deriving (Show)
+
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value
@@ -241,8 +257,9 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `Pid of int * Sugartypes.location
+| `Pid of dist_pid
 | `Socket of in_channel * out_channel
+| `SpawnLocation of spawn_location
 ]
 and env = {
   all : (t * Ir.scope) Utility.intmap;
@@ -350,8 +367,9 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-      | `Pid (_pid, _location) -> assert false
-      | `Socket (_inc, _outc) -> assert false (* wheeee! *)
+      | `Pid _ -> assert false
+      | `Socket (_inc, _outc) -> assert false
+      | `SpawnLocation _sl -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
     (fold
@@ -470,8 +488,12 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
-  | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
+  | `Pid dist_pid -> "Pid " ^ (string_of_dist_pid dist_pid)
   | `Socket (_, _) -> "<socket>"
+  | `SpawnLocation sl -> "Spawn location: " ^
+    (match sl with
+       | `ClientSpawnLoc cid -> "client " ^ (string_of_int cid)
+       | `ServerSpawnLoc -> "server")
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value
@@ -502,6 +524,11 @@ and string_of_cont : continuation -> string =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
       "[" ^ mapstrcat ", " frame cont ^ "]"
+
+and string_of_dist_pid = function
+  | `ServerPid i -> "Server (" ^ (string_of_int i) ^ ")"
+  | `ClientPid (cid, i) ->
+      "Client num " ^ (string_of_int cid) ^ ", process " ^ (string_of_int i)
 
 
 (* let string_of_cont : continuation -> string = *)
@@ -564,14 +591,18 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
-let box_pid (pid, _location) = `Pid (pid, `Unknown)
+let box_pid dist_pid = `Pid dist_pid
 let unbox_pid = function
-  | `Pid (pid, location) -> (pid, location)
+  | `Pid dist_pid -> dist_pid
   | _ -> failwith "Type error unboxing pid"
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
   | _ -> failwith "Type error unboxing socket"
+let box_spawn_loc sl = `SpawnLocation sl
+let unbox_spawn_loc = function
+  | `SpawnLocation sl -> sl
+  | _ -> failwith "Type error unboxing spawn location"
 
 let intmap_of_record = function
   | `Record members ->

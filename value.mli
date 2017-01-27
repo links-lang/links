@@ -64,6 +64,21 @@ type primitive_value = [
 module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
 (* jcheney: Added value function component to PrimitiveFunction *)
+type client_id = int
+  deriving (Show)
+
+type spawn_location = [
+  | `ClientSpawnLoc of client_id
+  | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
+]
+  deriving (Show)
+
+type dist_pid = [
+  | `ServerPid of int (* Again, will need a server address here later *)
+  | `ClientPid of (client_id * int)
+]
+  deriving (Show)
+
 type t = [
 | primitive_value
 | `List of t list
@@ -73,8 +88,9 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `Pid of int * Sugartypes.location
+| `Pid of dist_pid
 | `Socket of in_channel * out_channel
+| `SpawnLocation of spawn_location
 ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env
@@ -124,10 +140,12 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
-val box_pid : int * Sugartypes.location -> t
-val unbox_pid : t -> int * Sugartypes.location
+val box_pid : dist_pid -> t
+val unbox_pid : t -> dist_pid
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
+val box_spawn_loc : spawn_location -> t
+val unbox_spawn_loc : t -> spawn_location
 
 val intmap_of_record : t -> t Utility.intmap option
 

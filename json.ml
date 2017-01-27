@@ -56,6 +56,7 @@ let jsonize_location : Ir.location -> string = function
 *)
 
 (** collect all of the pids and event handlers that occur in a value *)
+(* SJF: Is this dead code? *)
 module PidsAndEventHandlers =
 struct
   type t = IntSet.t * IntSet.t
@@ -76,9 +77,12 @@ struct
     | `Record [] -> env
     | `Record ((_, v)::fs) -> value (value env v) (`Record fs)
     | `List vs -> values env vs
-    | `Pid (pid, `Client) -> add_pid pid env
-    | `Pid (_pid, _) -> assert false
+    | `Pid (`ServerPid _) -> env (* add_pid pid env *)
+    | `Pid (`ClientPid (_client_id, process_id)) ->
+        (* FIXME: Should only add PIDs which are the same as the client to this list *)
+        add_pid process_id env
     | `Socket _ -> assert false
+    | `SpawnLocation _ -> assert false
 
   and values : t -> Value.t list -> t = fun env -> function
     | []      -> env
@@ -155,10 +159,14 @@ let rec jsonize_value : Value.t -> string * json_state =
   | `List (elems) ->
     let ss, state = jsonize_values elems in
       "[" ^ String.concat "," ss ^ "]", state
-  | `Pid (pid, `Client) ->
-    "{\"pid\":" ^ string_of_int pid ^ "}", pid_state pid
-  | `Pid (_pid, _) -> failwith "Cannot yet jsonize non-client proceses"
+  | `Pid (`ClientPid (client_id, process_id)) ->
+      (* FIXME: Should only add to pid_state if client ID matches *)
+      "{\"clientPid\":{\"client_id\":" ^ string_of_int client_id ^
+      ", \"process_id:\"" ^ string_of_int process_id ^ "}}", pid_state process_id
+  | `Pid (`ServerPid (process_id)) ->
+      "{\"serverPid\":" ^ string_of_int process_id ^ "}", empty_state (* pid_state pid *)
   | `Socket _ -> failwith "Cannot jsonize sockets"
+  | `SpawnLocation _ -> failwith "Cannot jsonize spawn locations"
 and jsonize_primitive : Value.primitive_value -> string * json_state = function
   | `Bool value -> string_of_bool value, empty_state
   | `Int value -> string_of_int value, empty_state
@@ -224,6 +232,7 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
           let ps, pstate = jsonize_value process in
           let ms, mstate = jsonize_value (`List messages) in
 
+          (* These are processes which should be running on this client *)
           let s =
             "{\"pid\":" ^ string_of_int pid ^ "," ^
             " \"process\":" ^ ps ^ "," ^
