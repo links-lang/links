@@ -231,8 +231,6 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
    end)
 
 (*jcheney: Added function component to PrimitiveFunction *)
-type client_id = int
-  deriving (Show)
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value

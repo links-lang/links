@@ -110,12 +110,6 @@ let socket = {
   arity = []
 }
 
-let spawn_location = {
-  Abstype.id = "Location";
-  name = "Location";
-  arity = []
-}
-
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't
     | `Output of 't * 't
