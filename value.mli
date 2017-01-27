@@ -80,6 +80,7 @@ and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env
     deriving (Show)
 
+val set_request_data : env -> RequestData.request_data -> env
 val toplevel_cont : continuation
 
 val empty_env : env
@@ -91,6 +92,7 @@ val lookupS : Ir.var -> env -> (t * Ir.scope) option
 val shadow : env -> by:env -> env
 val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
 val globals : env -> env
+val request_data : env -> RequestData.request_data
 (* used only by json.ml, webif.ml ... *)
 val get_parameters : env -> (t*Ir.scope) Utility.intmap
 
