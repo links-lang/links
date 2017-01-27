@@ -5,7 +5,9 @@ exception Aborted of abort_type  (* This sucks *)
 
 module Proc :
 sig
-  type pid = int (* leaky abstraction what *)
+  type pid = int (* leaky abstraction what --- yes, I agree it would be better to properly abstract these.. *)
+  type client_id = int
+
   type thread_result = (Value.env * Value.t)
   type thread = unit -> thread_result Lwt.t
 
@@ -38,6 +40,8 @@ sig
   val pop_all_messages_for : Proc.pid -> Value.t list
   val pop_message : unit -> Value.t option
   val send_message : Value.t -> Proc.pid -> unit
+  val send_client_message : Value.t -> Proc.client_id -> Proc.pid -> unit
+  val send_server_message : Value.t -> Proc.pid -> unit
 end
 
 exception UnknownProcessID of Proc.pid

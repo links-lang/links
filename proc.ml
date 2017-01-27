@@ -9,6 +9,7 @@ module Proc =
 struct
   (** The abstract type of process identifiers *)
   type pid = int
+  type client_id = int
 
   let main_process_pid = 0
   let main_running = ref true
@@ -245,6 +246,14 @@ struct
       Hashtbl.remove message_queues pid;
       List.rev (Queue.fold (fun xs x -> x :: xs) [] mqueue)
     | None        -> []
+
+
+  (** Sends a message to a server process --- that is, a process residing on the
+   * server. Raises [UnknownProcessID pid] if the given [pid] does not exist. *)
+  (* Remember to do Proc.awaken!! *)
+  let send_server_message msg pid = failwith "unimplemented"
+
+  let send_client_message msg client_id pid = failwith "unimplemented"
 
   (** Send a message to the identified process. Raises [UnknownProcessID pid]
     if the given [pid] does not exist (does not have a message queue). *)

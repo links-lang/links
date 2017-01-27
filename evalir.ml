@@ -191,10 +191,15 @@ struct
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_SendWrapper" cont [pid; msg]
         else
-          let (pid, _location) = Value.unbox_pid pid in
-            (try
-               Mailbox.send_message msg pid;
-               Proc.awaken pid
+          let unboxed_pid = Value.unbox_pid pid in
+          (try
+             match unboxed_pid with
+              (* Send a message to a process which lives on the server *)
+              | `ServerPid serv_pid ->
+                  Mailbox.send_server_message msg serv_pid
+              (* Send a message to a process which lives on another client *)
+              | `ClientPid (client_id, process_id) ->
+                  Mailbox.send_client_message msg client_id process_id
              with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
@@ -209,12 +214,11 @@ struct
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
             let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            let location = `Unknown in
-            apply_cont cont env (`Pid (new_pid, location))
+            apply_cont cont env (`Pid (`ServerPid new_pid))
           end
     | `PrimitiveFunction ("spawnClient",_), [func] ->
       let new_pid = Proc.create_client_process func in
-      apply_cont cont env (`Pid (new_pid, `Client))
+      apply_cont cont env (`Pid (`ClientPid (0, new_pid))) (* FIXME: fix with real client ID *)
     | `PrimitiveFunction ("spawnAngel",_), [func] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
            client_call "_spawnWrapper" cont [func]
@@ -226,8 +230,7 @@ struct
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
             let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            let location = `Unknown in
-            apply_cont cont env (`Pid (new_pid, location))
+            apply_cont cont env (`Pid (`ServerPid new_pid))
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
