@@ -61,7 +61,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let (globals, _) = program in
   Webserver.init (valenv, nenv, tyenv) globals;
 
-  let valenv, v = lazy (Eval.run_program valenv (Lib.empty_request_data ()) program) <|measure_as|> "run_program" in
+  let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
   lazy (printer t v) <|measure_as|> "print";
   valenv, v
 
@@ -363,8 +363,7 @@ let load_prelude () =
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   BuildTables.bindings tenv Lib.primitive_vars globals;
 
-  (* TODO: Is it safe to run the global defs without any request data? *)
-  let valenv = Eval.run_defs Value.empty_env (Lib.empty_request_data ()) globals in
+  let valenv = Eval.run_defs Value.empty_env globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
@@ -388,7 +387,7 @@ let cache_load_prelude () =
   Loader.wpcache "prelude.closures" (fun () ->
     (* TODO: either scrap whole program caching or add closure
        conversion code here *)
-    let valenv = Eval.run_defs Value.empty_env (Lib.empty_request_data ()) globals in
+    let valenv = Eval.run_defs Value.empty_env globals in
     let envs =
       (valenv,
        Env.String.extend Lib.nenv nenv,

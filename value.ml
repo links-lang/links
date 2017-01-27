@@ -253,8 +253,10 @@ and env = {
 }
   deriving (Show)
 
-let toplevel_cont : continuation = []
 
+let set_request_data env rd = { env with request_data = rd }
+
+let toplevel_cont : continuation = []
 let request_data env = env.request_data
 
 (** {1 Environment stuff} *)

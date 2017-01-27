@@ -214,12 +214,13 @@ struct
     response_printer [("Content-type", content_type)] content
 
   let serve_request_program
-      ((_valenv, _, _) as env)
+      (valenv, env2, env3)
       (globals, (locals, main), render_cont)
       response_printer
       cgi_args
       req_data =
-        (* TODO TOMORROW: ADD REQ DATA TO VALENV HERE!!!! *)
+    let valenv' = Value.set_request_data valenv req_data in
+    let env = (valenv', env2, env3) in
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont

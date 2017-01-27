@@ -66,19 +66,17 @@ struct
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
 
-      let req_data = {
-        Lib.cgi_parameters = ref cgi_args;
-        Lib.cookies = ref cookies;
-        Lib.http_response_headers = ref [];
-        Lib.http_response_code = ref 200;
-      } in
+      let req_data = RequestData.new_request_data () in
+      RequestData.set_cgi_parameters req_data cgi_args;
+      RequestData.set_cookies req_data cookies;
 
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
       let run_page (_dir, _s, (valenv, v)) () =
-        Eval.apply (render_cont ()) (Value.shadow tl_valenv ~by:valenv) req_data (v, [`String path]) >>= fun (valenv, v) ->
+        let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+        Eval.apply (render_cont ()) req_env (v, [`String path]) >>= fun (valenv, v) ->
         let page = Irtojs.generate_real_client_page
                      ~cgi_env:cgi_args
                      (Lib.nenv, Lib.typing_env)
@@ -120,8 +118,10 @@ struct
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
+           let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+
            Webif.do_request
-             (Value.shadow tl_valenv ~by:valenv, nenv, tyenv)
+             (req_env, nenv, tyenv)
              cgi_args
              (run_page (dir, s, (valenv, v)))
              (render_cont ())
