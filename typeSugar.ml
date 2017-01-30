@@ -2174,7 +2174,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, location, p, _) ->
+        | `Spawn (`Wait, _, p, _) ->
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             (* TODO: check if pid_type is actually needed somewhere *)
@@ -2187,8 +2187,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, location, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, location, p, _) ->
+              `Spawn (`Wait, None, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, location, p, _) -> (* TODO CONTINUE FROM HERE *)
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in

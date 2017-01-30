@@ -174,13 +174,11 @@ let keywords = [
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
+ "h
  "if"       , IF;
  "in"       , IN;
  "open"     , OPEN;
  "yields"   , YIELDS;
-(*  "infix"    , INFIX; *)
-(*  "infixl"   , INFIXL; *)
-(*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
  "module"   , MODULE;

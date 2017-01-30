@@ -167,7 +167,7 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [
@@ -200,7 +200,8 @@ and phrasenode = [
 | `Var              of name
 | `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| `Spawn            of spawn_kind * location * phrase * Types.row option
+(* Expression referring to spawn location (client n, server...), spawn block, row opt *)
+| `Spawn            of phrase option * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option

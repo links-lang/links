@@ -514,11 +514,9 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN perhaps_location block                                 { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
-| SPAWNCLIENT perhaps_location block                           { `Spawn (`Client, $2, (`Block $3, pos()), None), pos () }
-| SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
-| SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
-| SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
+| SPAWN perhaps_exp block                                      { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
+| SPAWNANGEL perhaps_exp block                                 { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
+| SPAWNWAIT block                                              { `Spawn (`Wait,  None, (`Block $2, pos()), None), pos () }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int 0), pos ())),
