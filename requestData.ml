@@ -13,7 +13,7 @@ let new_request_data () = {
     cookies = ref [];
     http_response_headers = ref [];
     http_response_code = ref 200;
-    client_id = ref 0;
+(*    client_id = ref 0; *)
   }
 
 let get_cgi_parameters req_data = !(req_data.cgi_parameters)
@@ -28,5 +28,7 @@ let set_http_response_headers req_data x = req_data.http_response_headers := x
 let get_http_response_code req_data = !(req_data.http_response_code)
 let set_http_response_code req_data x = req_data.http_response_code := x
 
+(*
 let get_client_id req_data = !(req_data.client_id)
 let set_client_id req_data x = req_data.client_id := x
+*)

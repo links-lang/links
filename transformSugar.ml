@@ -231,7 +231,8 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
-      | `Spawn (`Wait, location, body, Some inner_effects) ->
+      | `Spawn (`Wait, lpo, body, Some inner_effects) ->
+          assert (lpo = None);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -239,17 +240,18 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, location, body, Some inner_effects), body_type)
-      | `Spawn (k, location, body, Some inner_effects) ->
+            (o, `Spawn (`Wait, lpo, body, Some inner_effects), body_type)
+      | `Spawn (k, loc_phr_opt, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
+          let (o, loc_phr_opt, _) = option o (fun o -> o#phrase) loc_phr_opt in
           let envs = o#backup_envs in
           let (o, inner_effects) = o#row inner_effects in
           let process_type = `Application (Types.process, [`Row inner_effects]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, location, body, Some inner_effects)), process_type)
+            (o, (`Spawn (k, loc_phr_opt, body, Some inner_effects)), process_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
          (o, (`Select (l, e)), TypeUtils.select_type l t)

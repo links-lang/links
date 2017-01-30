@@ -319,6 +319,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
 
+  "here",
+  (`PFun (fun _ _ -> `SpawnLocation (`ServerSpawnLoc)),
+    datatype "() -> Location",
+    IMPURE
+  );
+
   "haveMail",
   (`PFun(fun _ ->
            failwith "The haveMail function is not implemented on the server yet"),

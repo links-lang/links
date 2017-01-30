@@ -174,7 +174,6 @@ let keywords = [
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
- "h
  "if"       , IF;
  "in"       , IN;
  "open"     , OPEN;
@@ -200,8 +199,6 @@ let keywords = [
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnAngel" , SPAWNANGEL;
- "spawnClient" , SPAWNCLIENT;
- "spawnDemon" , SPAWNDEMON;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;

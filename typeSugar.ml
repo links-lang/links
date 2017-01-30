@@ -215,6 +215,7 @@ sig
 
   val spawn_outer : griper
   val spawn_wait_outer : griper
+  val spawn_location : griper
 
   val query_outer : griper
   val query_base_row : griper
@@ -618,6 +619,9 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
+
+    let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
+      fixed_type pos "Spawn locations" t l
 
     let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
@@ -2188,7 +2192,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
               `Spawn (`Wait, None, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, location, p, _) -> (* TODO CONTINUE FROM HERE *)
+        | `Spawn (k, loc_opt, p, _) ->
+            (* Location -> (() -e-> _) -> Process (e) *)
+            (match loc_opt with
+              | Some loc_phr ->
+                  let target_ty = `Application (Types.spawn_location, []) in
+                  let t = tc loc_phr in
+                  let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
+              | None -> ());
+
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -2201,8 +2213,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
-
+            `Spawn (k, loc_opt, erase p, Some inner_effects), pid_type, usages p
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in
             let effects =
