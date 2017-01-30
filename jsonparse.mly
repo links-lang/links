@@ -36,6 +36,10 @@ object_:
                             | ["_clientPid", pid; "_clientId", client_id]
                             | ["_clientId", client_id; "_clientPid", pid] ->
                                 `Pid (`ClientPid (Value.unbox_int client_id, Value.unbox_int pid))
+                            | ["_clientSpawnLoc", client_id] ->
+                                `SpawnLocation (`ClientSpawnLoc (Value.unbox_int client_id))
+                            | ["_serverSpawnLoc", _] ->
+                                `SpawnLocation (`ServerSpawnLoc)
                             | ["_db", db] ->
                                 begin
                                   match db with

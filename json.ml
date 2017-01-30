@@ -161,12 +161,15 @@ let rec jsonize_value : Value.t -> string * json_state =
       "[" ^ String.concat "," ss ^ "]", state
   | `Pid (`ClientPid (client_id, process_id)) ->
       (* FIXME: Should only add to pid_state if client ID matches *)
-      "{\"clientPid\":" ^ string_of_int process_id ^ ", \"clientId\":" ^ string_of_int client_id ^ "}",
+      "{\"_clientPid\":" ^ string_of_int process_id ^ ", \"_clientId\":" ^ string_of_int client_id ^ "}",
       pid_state process_id
   | `Pid (`ServerPid (process_id)) ->
-      "{\"serverPid\":" ^ string_of_int process_id ^ "}", empty_state (* pid_state pid *)
+      "{\"_serverPid\":" ^ string_of_int process_id ^ "}", empty_state (* pid_state pid *)
   | `Socket _ -> failwith "Cannot jsonize sockets"
-  | `SpawnLocation _ -> failwith "Cannot jsonize spawn locations"
+  | `SpawnLocation (`ClientSpawnLoc client_id) ->
+      "{\"_clientSpawnLoc\":" ^ string_of_int client_id ^ "}", empty_state
+  | `SpawnLocation (`ServerSpawnLoc) ->
+      "{\"_serverSpawnLoc\": [] }", empty_state
 and jsonize_primitive : Value.primitive_value -> string * json_state = function
   | `Bool value -> string_of_bool value, empty_state
   | `Int value -> string_of_int value, empty_state

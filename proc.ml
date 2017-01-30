@@ -248,13 +248,6 @@ struct
     | None        -> []
 
 
-  (** Sends a message to a server process --- that is, a process residing on the
-   * server. Raises [UnknownProcessID pid] if the given [pid] does not exist. *)
-  (* Remember to do Proc.awaken!! *)
-  let send_server_message msg pid = failwith "unimplemented"
-
-  let send_client_message msg client_id pid = failwith "unimplemented"
-
   (** Send a message to the identified process. Raises [UnknownProcessID pid]
     if the given [pid] does not exist (does not have a message queue). *)
   let send_message msg pid =
@@ -264,6 +257,16 @@ struct
       let mqueue = Queue.create () in
       Queue.push msg mqueue;
       Hashtbl.add message_queues pid mqueue
+
+  (** Sends a message to a server process --- that is, a process residing on the
+   * server. Raises [UnknownProcessID pid] if the given [pid] does not exist. *)
+  (* Remember to do Proc.awaken!! *)
+  let send_server_message msg pid =
+    send_message msg pid;
+    Proc.awaken pid
+
+  let send_client_message msg _client_id pid =
+    send_message msg pid (* TODO: will need to use client_id *)
 end
 
 module Session = struct
