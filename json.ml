@@ -161,8 +161,8 @@ let rec jsonize_value : Value.t -> string * json_state =
       "[" ^ String.concat "," ss ^ "]", state
   | `Pid (`ClientPid (client_id, process_id)) ->
       (* FIXME: Should only add to pid_state if client ID matches *)
-      "{\"clientPid\":{\"client_id\":" ^ string_of_int client_id ^
-      ", \"process_id:\"" ^ string_of_int process_id ^ "}}", pid_state process_id
+      "{\"clientPid\":" ^ string_of_int process_id ^ ", \"clientId\":" ^ string_of_int client_id ^ "}",
+      pid_state process_id
   | `Pid (`ServerPid (process_id)) ->
       "{\"serverPid\":" ^ string_of_int process_id ^ "}", empty_state (* pid_state pid *)
   | `Socket _ -> failwith "Cannot jsonize sockets"

@@ -32,6 +32,10 @@ object_:
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
+                            | ["_serverPid", v] -> `Pid (`ServerPid (Value.unbox_int v))
+                            | ["_clientPid", pid; "_clientId", client_id]
+                            | ["_clientId", client_id; "_clientPid", pid] ->
+                                `Pid (`ClientPid (Value.unbox_int client_id, Value.unbox_int pid))
                             | ["_db", db] ->
                                 begin
                                   match db with
