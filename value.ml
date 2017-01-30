@@ -247,7 +247,11 @@ and t = [
 | `Pid of int * Sugartypes.location
 | `Socket of in_channel * out_channel
 ]
-and env = (t * Ir.scope) Utility.intmap  * (t * Ir.scope) Utility.intmap
+and env = {
+  all : (t * Ir.scope) Utility.intmap;
+  globals : (t * Ir.scope) Utility.intmap;
+  request_data : RequestData.request_data
+}
 and handler  = env * Ir.clause Ir.name_map * Ir.handler_spec (* Collection of cases *)
 and handlers = handler list
   deriving (Show)					    
@@ -266,29 +270,42 @@ let append_delim_cont delim cont =
     delim' :: cont -> (delim @ delim') :: cont
   | [] -> assert false   
 
+let set_request_data env rd = { env with request_data = rd }
+let request_data env = env.request_data
+
 (** {1 Environment stuff} *)
 (** {2 IntMap-based implementation with global memoization} *)
 
-let empty_env = (IntMap.empty, IntMap.empty)
-let bind name (v,scope) (env, globals) =
+let empty_env = {
+  all = IntMap.empty;
+  globals = IntMap.empty;
+  request_data = RequestData.new_request_data ()
+}
+let bind name (v,scope) env =
   (* Maintains globals as submap of global bindings. *)
   match scope with
-    `Local -> (IntMap.add name (v,scope) env, globals)
-  | `Global -> (IntMap.add name (v,scope) env, IntMap.add name (v,scope) globals)
-let find name (env, _globals) = fst (IntMap.find name env)
-let mem name (env, _globals) = IntMap.mem name env
-let lookup name (env, _globals) = opt_map fst (IntMap.lookup name env)
-let lookupS name (env, _globals) = IntMap.lookup name env
+    `Local ->
+      { env with all = IntMap.add name (v,scope) env.all }
+  | `Global ->
+      { env with
+          all = IntMap.add name (v,scope) env.all;
+          globals = IntMap.add name (v,scope) env.globals;
+      }
+let find name env = fst (IntMap.find name env.all)
+let mem name env = IntMap.mem name env.all
+let lookup name env = opt_map fst (IntMap.lookup name env.all)
+let lookupS name env = IntMap.lookup name env.all
 let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
 
-let get_parameters (env, _globals) = env
+let get_parameters env = env.all
 
-let shadow env ~by:(by, _globals') =
+let shadow env ~by:env_by =
 (* Assumes that globals never change *)
-    IntMap.fold (fun name v env -> bind name v env) by env
+  let by_all = env_by.all in
+  IntMap.fold (fun name v env -> bind name v env) by_all env
 
-let fold f (env, _globals) a = IntMap.fold f env a
-let globals (_env, genv) = (genv, genv)
+let fold f env a = IntMap.fold f env.all a
+let globals env = { env with all = env.globals }
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [

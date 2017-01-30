@@ -375,9 +375,9 @@ struct
        end
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-       apply_cont cont hs env (Lib.apply_pfun n args)
+       apply_cont cont hs env (Lib.apply_pfun n args (Value.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
-       apply_cont cont hs env (Lib.apply_pfun_by_code code args)
+       apply_cont cont hs env (Lib.apply_pfun_by_code code args (Value.request_data env))
     | `ClientFunction name, args -> client_call name cont hs args
     (*| `Continuation c,      [p] -> apply_cont c env p
       | `Continuation _,       _  ->*)

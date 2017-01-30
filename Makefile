@@ -85,6 +85,7 @@ SOURCES = $(OPC)                                \
 	  desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml \
           defaultAliases.ml                     \
+					requestData.mli requestData.ml        \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \

@@ -56,7 +56,6 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   in
 
   let program = Closures.program tenv Lib.primitive_vars program in
-  Debug.print ("Closure converted program: " ^ Ir.Show_program.show program);
   BuildTables.program tenv Lib.primitive_vars program;
   let (globals, _) = program in
   Webserver.init (valenv, nenv, tyenv) globals;

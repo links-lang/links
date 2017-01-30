@@ -204,7 +204,7 @@ struct
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont request)
+      (fun () -> perform_request valenv run render_cont request )
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -214,11 +214,19 @@ struct
     >>= fun (content_type, content) ->
     response_printer [("Content-type", content_type)] content
 
-  let serve_request_program ((_valenv, _, _) as env) (globals, ((locals : Ir.binding list), main), (render_cont : Value.continuation)) response_printer cgi_args =
+  let serve_request_program
+      (valenv, env2, env3)
+      (globals, (locals, main), render_cont)
+      response_printer
+      cgi_args
+      req_data =
+    let valenv' = Value.set_request_data valenv req_data in
+    let env = (valenv', env2, env3) in
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
-                                   (fun headers body -> Lwt.return (response_printer headers body)))
+                                   (fun headers body -> Lwt.return (response_printer headers body))
+                                   )
 
   (* does the preprocessing to turn prelude+filename into a program *)
   (* result can be cached *)
@@ -270,13 +278,11 @@ struct
     BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
     (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
 
-  (* wrapper for ordinary uses of serve_request_program *)
-  let serve_request ((valenv, _, _) as envs) prelude filename =
-
+  (* Processes a CGI-based request *)
+  let serve_request ((valenv, _, _) as envs) prelude filename : unit =
     let cgi_args = get_cgi_args() in
     Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
-    Lib.cgi_parameters := cgi_args;
-    Lib.cookies :=
+    let cookies =
       begin
         match getenv "HTTP_COOKIE" with
         | Some header ->
@@ -289,7 +295,15 @@ struct
              cookies
         | None ->
            []
-      end;
+      end in
+
+    (* Set up record containing mutable fields used for primitive library calls.
+     * This record is specific to this request. All fields are mutable since the
+     * library functions may need to modify the environments, and we don't want
+     * to do a state-passing transformation. *)
+    let req_data = RequestData.new_request_data () in
+    RequestData.set_cgi_parameters req_data cgi_args;
+    RequestData.set_cookies req_data cookies;
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), ((globals : Ir.binding list), ((locals : Ir.binding list), main))) =
@@ -302,8 +316,11 @@ struct
     let valenv = Eval.run_defs valenv globals in
 
     Errors.display (lazy (serve_request_program
-  			    (valenv, nenv, tyenv)
-  			    (globals, (locals, main), render_cont)
-                            Lib.print_http_response
-                            cgi_args))
+  			  (valenv, nenv, tyenv)
+  			  (globals, (locals, main), render_cont)
+          (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
+          cgi_args
+          req_data
+      )
+    )
 end
