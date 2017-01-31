@@ -14,14 +14,14 @@ You can then install Links simply by issuing the command:
 
 Beginning with the Gorgie release, Links supports two methods of running
 applications: either via the standalone application server, or via the CGI
-interpreter used in previous releases.
+interpreter used in previous releases. The executable name is `linx`.
 
 ## Application Server
 
 To invoke a Links application using the application server, use a command
 similar to the following:
 
-  links --config=config -m
+  linx --config=config -m
   --path=examples:examples/games:examples/dictionary
   examples/webserver/examples.links
 
@@ -56,7 +56,7 @@ configuration arguments:
 
 You should also be able to run
 
-  links --config=config -m --path=examples:examples/games
+  linx --config=config -m --path=examples:examples/games
     examples/webserver/examples-nodb.links
 
 without needing to install a database. (This version just displays the
