@@ -1175,5 +1175,5 @@ fun assertEq (actual, expected) server {
 }
 
 #### APP SERVER ####
-sig addRoute : (String, (String) ~> Page) ~> ()
-fun addRoute(path,f) { unsafeAddRoute(path, fun(p){f(p)}) }
+sig addRoute : (String, (String, Location) ~> Page) ~> ()
+fun addRoute(path,f) { unsafeAddRoute(path, fun(p, loc){f(p, loc)}) }

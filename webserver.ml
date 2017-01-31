@@ -14,11 +14,17 @@ struct
   module Eval = Evalir.Eval(Webserver)
   module Webif = Webif.WebIf(Webserver)
 
-  type routing_table = (bool * string * (string * (string * string) list, Value.env * Value.t) either) list
-  (* type t = routing_table * Ir.binding list * Value.env *)
+  type path = string
+  type mime_type = (string * string)
+  type static_resource = path * mime_type list
+  type request_handler_fn = Value.env * Value.t
+
+  (* Is directory handler * path * handler information *)
+  type routing_table = (bool * string * (static_resource, request_handler_fn) either) list
 
   let rt : routing_table ref = ref []
-  let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref = ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
+  let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
+    ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
 
@@ -76,13 +82,17 @@ struct
 
       let run_page (_dir, _s, (valenv, v)) () =
         let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-        Eval.apply (render_cont ()) req_env (v, [`String path]) >>= fun (valenv, v) ->
-        let page = Irtojs.generate_real_client_page
-                     ~cgi_env:cgi_args
-                     (Lib.nenv, Lib.typing_env)
-                     (!prelude @ !globals)          (* hypothesis: local definitions shouldn't matter, they should all end up in valenv... *)
-                     (valenv, v)
-        in
+        (* FIXME: Add in proper client ID here *)
+        Eval.apply (render_cont ()) req_env
+        (v, [`String path; `SpawnLocation (`ClientSpawnLoc 0)]) >>= fun (valenv, v) ->
+          let page = Irtojs.generate_real_client_page
+                       ~cgi_env:cgi_args
+                       (Lib.nenv, Lib.typing_env)
+                       (* hypothesis: local definitions shouldn't matter,
+                        * they should all end up in valenv... *)
+                       (!prelude @ !globals)
+                       (valenv, v)
+          in
         Lwt.return ("text/html", page) in
 
       let serve_static base uri_path mime_types =

@@ -321,7 +321,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "here",
   (`PFun (fun _ _ -> `SpawnLocation (`ServerSpawnLoc)),
-    datatype "() -> Location",
+    datatype "() ~> Location",
     IMPURE
   );
 
@@ -347,17 +347,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* This should also be a primitive, as described in the ICFP paper. *)
   (* And now it is *)
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
 
   "spawnClient",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngel",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
 
   "spawnWait",
@@ -1535,7 +1535,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String,(String) ~> a) ~> ()",
+     datatype "(String, (String, Location) ~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
