@@ -18,8 +18,8 @@ sig
 
   val lookup_client_process : pid -> Value.t option
 
-  val create_process : bool -> thread -> pid
-  val create_client_process : Value.t -> pid
+  val create_process : bool -> thread -> Value.t-> pid
+  val create_client_process : Value.t -> Value.t -> pid
   val awaken : pid -> unit
 
   val finish : Value.env * Value.t -> thread_result Lwt.t

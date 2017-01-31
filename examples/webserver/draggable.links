@@ -32,10 +32,10 @@ fun format(text) {
     {stringToXml(text)}</li>
 }
 
-fun draggableList(id, items)
+fun draggableList(id, items, loc)
 {
   var x = id;
-  var dragger = spawnClient { waiting(id) };
+  var dragger = spawn(loc, { waiting(id) });
    <ul id="{id}" style="width: 200px;
         list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{dragger ! MouseUp}"
@@ -49,17 +49,17 @@ fun draggableList(id, items)
 
 }
 
-fun mainPage(_) {
+fun mainPage(pg, loc) {
   page
    <html>
    <body>
    <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
-   {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+   {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"], loc)}
    <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
-   {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+   {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"], loc)}
    <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
    {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
-                           "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+                           "Sus scrofa cristatus","Sus scrofa taiwanus"], loc)}
    </body>
    </html>
 }

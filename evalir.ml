@@ -205,23 +205,34 @@ struct
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawn",_), [func] ->
+    | `PrimitiveFunction ("spawn",_), [func; loc] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+            client_call "_spawnWrapper" cont [func; loc]
         else
           begin
-            let var = Var.dummy_var in
-            let cont' = (`Local, var, Value.empty_env,
-                         ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            apply_cont cont env (`Pid (`ServerPid new_pid))
+            match loc with
+              | `SpawnLocation (`ClientSpawnLoc client_id) ->
+                  let new_pid = Proc.create_client_process func loc in
+                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+              | `SpawnLocation (`ServerSpawnLoc) ->
+                  begin
+                    let var = Var.dummy_var in
+                    let cont' = (`Local, var, Value.empty_env,
+                                 ([], `Apply (`Variable var, []))) in
+                    let new_pid = Proc.create_process false
+                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) loc in
+                    apply_cont cont env (`Pid (`ServerPid new_pid))
+                  end
+              | _ -> assert false
           end
-    | `PrimitiveFunction ("spawnClient",_), [func] ->
-      let new_pid = Proc.create_client_process func in
+          (*
+    | `PrimitiveFunction ("spawnClient",_), [func; loc] ->
+      let new_pid = Proc.create_client_process func loc in
       apply_cont cont env (`Pid (`ClientPid (0, new_pid))) (* FIXME: fix with real client ID *)
-    | `PrimitiveFunction ("spawnAngel",_), [func] ->
+      *)
+    | `PrimitiveFunction ("spawnAngel",_), [func; loc] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+            client_call "_spawnWrapper" cont [func; loc]
         else
           begin
             (* if Settings.get_value Basicsettings.web_mode then *)
@@ -229,7 +240,7 @@ struct
             let var = Var.dummy_var in
             let cont' = (`Local, var, Value.empty_env,
                          ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
+            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) loc in
             apply_cont cont env (`Pid (`ServerPid new_pid))
           end
     | `PrimitiveFunction ("recv",_), [] ->

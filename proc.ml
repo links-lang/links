@@ -139,7 +139,7 @@ struct
     t >>= pstate
 
   (** Given a process state, create a new process and return its identifier. *)
-  let create_process angel pstate =
+  let create_process angel pstate _loc =
     let new_pid = fresh_pid () in
     if angel then
       begin
@@ -153,7 +153,7 @@ struct
     new_pid
 
   (** Create a new client process and return its identifier *)
-  let create_client_process func =
+  let create_client_process func _loc =
     let new_pid = fresh_pid () in
     Hashtbl.add state.client_processes new_pid (func, false);
     new_pid
