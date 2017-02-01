@@ -23,9 +23,13 @@ struct
   type thread_result = (Value.env * Value.t)
   type thread = unit -> thread_result Lwt.t (* Thunked to avoid changing evalir.  Because I'm laaaaaaaaaaaaazy. *)
 
+  (* A map from process IDs to (Value.t, bool), where Value.t is the function to run,
+   * and bool is whether or not the process is active *)
+  type client_proc_map = (Value.t * bool) intmap
+
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
-        client_processes : (pid, Value.t * bool) Hashtbl.t;
+        client_processes : (client_id, client_proc_map) Hashtbl.t;
         angels : (pid, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
@@ -70,16 +74,21 @@ struct
 
   (** retrieve the body of a client process (for transmission to the
       client if it hasn't already been) *)
-  let lookup_client_process pid =
+  let lookup_client_process client_id pid =
+    let client_table =
+      try Hashtbl.find state.client_processes client_id with
+        | NotFound client_id -> failwith ("Missing client ID: " ^ client_id) in
+
     let v, active =
-      try Hashtbl.find state.client_processes pid with
-      | NotFound pid ->
-        failwith ("Missing client process: " ^ pid) in
+      try IntMap.find pid client_table with
+        | NotFound pid -> failwith (Printf.sprintf "Missing client process %s in client %d: " pid client_id) in
+
     if active then
       None
     else
       begin
-        Hashtbl.replace state.client_processes pid (v, true);
+        let new_client_map = IntMap.add pid (v, true) client_table in
+        Hashtbl.replace state.client_processes client_id new_client_map;
         Some v
       end
 
@@ -153,9 +162,18 @@ struct
     new_pid
 
   (** Create a new client process and return its identifier *)
-  let create_client_process func _loc =
+  let create_client_process client_id func =
     let new_pid = fresh_pid () in
-    Hashtbl.add state.client_processes new_pid (func, false);
+    let client_table =
+      begin
+        try
+          Hashtbl.find state.client_processes client_id
+        with
+          NotFound _ -> IntMap.empty
+      end in
+    let new_client_table = IntMap.add new_pid (func, false) client_table in
+
+    Hashtbl.add state.client_processes client_id new_client_table;
     new_pid
 
   let finish r =

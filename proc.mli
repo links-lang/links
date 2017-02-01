@@ -5,7 +5,8 @@ exception Aborted of abort_type  (* This sucks *)
 
 module Proc :
 sig
-  type pid = int (* leaky abstraction what --- yes, I agree it would be better to properly abstract these.. *)
+  (* TODO: Can we make these properly abstract? *)
+  type pid = int
   type client_id = int
 
   type thread_result = (Value.env * Value.t)
@@ -16,10 +17,10 @@ sig
   val string_of_pid : pid -> string
   val get_current_pid : unit -> pid
 
-  val lookup_client_process : pid -> Value.t option
+  val lookup_client_process : client_id -> pid -> Value.t option
 
   val create_process : bool -> thread -> Value.t-> pid
-  val create_client_process : Value.t -> Value.t -> pid
+  val create_client_process : client_id -> Value.t -> pid
   val awaken : pid -> unit
 
   val finish : Value.env * Value.t -> thread_result Lwt.t

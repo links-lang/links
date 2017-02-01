@@ -185,7 +185,8 @@ let rec resolve_auxiliaries :
     | [] -> maps
     | `Process pid :: auxs ->
       begin
-        match Proc.Proc.lookup_client_process pid with
+        let client_id = RequestData.get_client_id req_data in
+        match Proc.Proc.lookup_client_process client_id pid with
         | Some process ->
           let messages = Proc.Mailbox.pop_all_messages_for pid in
 
