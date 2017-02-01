@@ -115,7 +115,7 @@ struct
       Cgi.parse_args()
 
   let should_contain_client_id cgi_args =
-    (is_remote_call cgi_args) || (is_client_return cgi_args) || (is_server_cont cgi_args)
+    (is_remote_call cgi_args) || (is_client_return cgi_args)
 
   (* jcheney: lifted from serve_request, to de-clutter *)
   let parse_request env cgi_args  =

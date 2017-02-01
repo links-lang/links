@@ -226,7 +226,8 @@ let rec resolve_auxiliaries :
 let resolve_state : RequestData.request_data -> json_state -> string =
   fun req_data state ->
     let pmap, hmap = resolve_auxiliaries req_data state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
-    "{\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
+    "{\"client_id\":" ^ string_of_int (RequestData.get_client_id req_data) ^ "," ^
+     "\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
      "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
 
 (* FIXME: Currently we only send inactive client processes if they

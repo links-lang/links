@@ -35,7 +35,7 @@ struct
     let counter = client_id_counter in
     fun () ->
       Lwt_mutex.with_lock mutex (fun () ->
-        let ret = !client_id_counter in
+        let ret = !counter in
         counter := ret +1;
         Lwt.return ret)
 
@@ -52,10 +52,14 @@ struct
   let extract_client_id cgi_args =
     Utility.lookup "__client_id" cgi_args
 
-  let get_client_id cgi_args =
+  let get_or_make_client_id cgi_args =
     if (Webif.should_contain_client_id cgi_args) then
       match extract_client_id cgi_args with
-        | Some client_id -> Lwt.return (int_of_string client_id)
+        | Some client_id ->
+            Debug.print ("Found client ID: " ^ client_id);
+            let decoded_client_id = Utility.base64decode client_id in
+            Debug.print ("Decoded client ID: " ^ decoded_client_id);
+            Lwt.return (int_of_string decoded_client_id)
         | None -> failwith "Client ID expected but not found."
     else
       gen_client_id ()
@@ -95,16 +99,13 @@ struct
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
-
-      get_client_id cgi_args >>= fun (cid) ->
-      let req_data = RequestData.new_request_data cgi_args cookies cid in
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
+      (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (_dir, _s, (valenv, v)) () =
-        let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-        (* FIXME: Add in proper client ID here *)
-        Eval.apply (render_cont ()) req_env
+        let cid = RequestData.get_client_id (Value.request_data valenv) in
+        Eval.apply (render_cont ()) valenv
         (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
                        ~cgi_env:cgi_args
@@ -149,12 +150,13 @@ struct
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
+           get_or_make_client_id cgi_args >>= fun (cid) ->
+           let req_data = RequestData.new_request_data cgi_args cookies cid in
            let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-
            Webif.do_request
              (req_env, nenv, tyenv)
              cgi_args
-             (run_page (dir, s, (valenv, v)))
+             (run_page (dir, s, (req_env, v)))
              (render_cont ())
              (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
         | ((_, s, _) :: rest) ->
