@@ -55,58 +55,6 @@ let jsonize_location : Ir.location -> string = function
    whenever we visit the client.
 *)
 
-(** collect all of the pids and event handlers that occur in a value *)
-(* SJF: Is this dead code? *)
-module PidsAndEventHandlers =
-struct
-  type t = IntSet.t * IntSet.t
-
-  let add_pid : int -> t -> t =
-    fun pid (ps, es) -> IntSet.add pid ps, es
-  let add_event_handler : int -> t -> t =
-    fun event_handler (ps, es) -> ps, IntSet.add event_handler es
-
-  let rec value : t -> Value.t -> t = fun env -> function
-    | `PrimitiveFunction _
-    | `Continuation _ -> assert false
-    | `FunctionPtr (_f, None) -> env
-    | `FunctionPtr (_f, Some fvs) -> value env fvs
-    | `ClientFunction _ -> env
-    | #Value.primitive_value as v -> primitive env v
-    | `Variant (_label, v) -> value env v
-    | `Record [] -> env
-    | `Record ((_, v)::fs) -> value (value env v) (`Record fs)
-    | `List vs -> values env vs
-    | `Pid (`ServerPid _) -> env (* add_pid pid env *)
-    | `Pid (`ClientPid (_client_id, process_id)) ->
-        (* FIXME: Should only add PIDs which are the same as the client to this list *)
-        add_pid process_id env
-    | `Socket _ -> assert false
-    | `SpawnLocation _ -> assert false
-
-  and values : t -> Value.t list -> t = fun env -> function
-    | []      -> env
-    | (v::vs) -> values (value env v) vs
-
-  and primitive : t -> Value.primitive_value -> t = fun env -> function
-    | `XML x -> xml env x
-    | _ -> env
-
-  and xml : t -> Value.xmlitem -> t = fun env -> function
-    | Value.Text _ -> env
-    | Value.Node (_tag, xs) ->
-      xmls env xs
-    | Value.Attr (label, v) ->
-      if label = "key" then
-        add_event_handler (int_of_string v) env
-      else
-        env
-
-  and xmls : t -> Value.xmlitem list -> t = fun env -> function
-    | []      -> env
-    | (x::xs) -> xmls (xml env x) xs
-end
-
 (* sets of client processes and event handlers that need to be serialized *)
 type json_state = {processes: IntSet.t; handlers: IntSet.t}
 let empty_state = {processes = IntSet.empty; handlers = IntSet.empty}
