@@ -43,11 +43,6 @@ struct
            | _ -> false)
         bs
 
-  (* SL: dead code *)
-
-  (* let serialize_call_to_client (continuation, name, arg) = *)
-  (*   Json.jsonize_call continuation name arg *)
-
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
@@ -118,6 +113,9 @@ struct
         (Cgi.parse_multipart_args())
     else
       Cgi.parse_args()
+
+  let should_contain_client_id cgi_args =
+    (is_remote_call cgi_args) || (is_client_return cgi_args) || (is_server_cont cgi_args)
 
   (* jcheney: lifted from serve_request, to de-clutter *)
   let parse_request env cgi_args  =
