@@ -174,6 +174,11 @@ type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
 ]
+and given_spawn_location = [
+  | `ExplicitSpawnLocation of phrase (* spawnAt function *)
+  | `SpawnClient (* spawnClient function *)
+  | `NoSpawnLocation (* spawn function *)
+]
 and regex = [
 | `Range     of char * char
 | `Simply    of string
@@ -201,7 +206,7 @@ and phrasenode = [
 | `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
-| `Spawn            of spawn_kind * phrase option * phrase * Types.row option
+| `Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option

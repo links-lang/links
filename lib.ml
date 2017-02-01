@@ -325,6 +325,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     IMPURE
   );
 
+  "there",
+  (`PFun (fun req_data _ ->
+    let client_id = RequestData.get_client_id req_data in
+    `SpawnLocation (`ClientSpawnLoc client_id)),
+    datatype "() ~> Location",
+    IMPURE
+  );
+
   "haveMail",
   (`PFun(fun _ ->
            failwith "The haveMail function is not implemented on the server yet"),
@@ -344,18 +352,26 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "spawn",
-  (* This should also be a primitive, as described in the ICFP paper. *)
-  (* And now it is *)
+  (`PFun (fun _ -> assert false),
+  datatype "(() ~e~@ _) ~> Process ({ |e })",
+  IMPURE);
+
+  "spawnAt",
   (`PFun (fun _ -> assert false),
    datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
 
   "spawnClient",
   (`PFun (fun _ -> assert false),
-   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngel",
+  (`PFun (fun _ -> assert false),
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
+   IMPURE);
+
+  "spawnAngelAt",
   (`PFun (fun _ -> assert false),
    datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
@@ -364,7 +380,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client,
    datatype "(() ~> a) ~> a",
    IMPURE);
-
 
   (* If we add more effects then spawn and spawnWait shouldn't
      necessarily mask them, so we might want to change their types to

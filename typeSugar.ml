@@ -2178,7 +2178,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, _, p, _) ->
+        | `Spawn (`Wait, l, p, _) ->
+            assert (l = `NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             (* TODO: check if pid_type is actually needed somewhere *)
@@ -2191,15 +2192,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, None, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, loc_opt, p, _) ->
+              `Spawn (`Wait, l, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, given_loc, p, _) ->
             (* Location -> (() -e-> _) -> Process (e) *)
-            (match loc_opt with
-              | Some loc_phr ->
+            (match given_loc with
+              | `ExplicitSpawnLocation loc_phr ->
                   let target_ty = `Application (Types.spawn_location, []) in
                   let t = tc loc_phr in
                   let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
-              | None -> ());
+              | _ -> ());
 
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
@@ -2213,7 +2214,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (k, loc_opt, erase p, Some inner_effects), pid_type, usages p
+            `Spawn (k, given_loc, erase p, Some inner_effects), pid_type, usages p
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in
             let effects =

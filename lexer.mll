@@ -198,7 +198,10 @@ let keywords = [
  "set"      , SET;
  "sig"      , SIG;
  "spawn"    , SPAWN;
+ "spawnClient" , SPAWNCLIENT;
+ "spawnAt"  , SPAWNAT;
  "spawnAngel" , SPAWNANGEL;
+ "spawnAngelAt" , SPAWNANGELAT;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;

@@ -19,8 +19,8 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (`Wait, loc_phr_opt, body, Some inner_eff) ->
-        assert (loc_phr_opt = None);
+    | `Spawn (`Wait, spawn_loc, body, Some inner_eff) ->
+        assert (spawn_loc = `NoSpawnLocation);
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
 
@@ -35,7 +35,7 @@ object (o : 'self_type)
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
         in
           (o, e, body_type)
-    | `Spawn (k, loc_phr_opt, body, Some inner_eff) ->
+    | `Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
@@ -46,14 +46,15 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let spawn_loc_phr =
-          match loc_phr_opt with
-            | Some phr -> phr
-            | None -> (`FnAppl ((`Var "here", dp), [(`TupleLit [], dp)]), dp) in
+          match spawn_loc with
+            | `ExplicitSpawnLocation phr -> phr
+            | `SpawnClient -> (`FnAppl ((`Var "there", dp), [(`TupleLit [], dp)]), dp)
+            | `NoSpawnLocation -> (`FnAppl ((`Var "here", dp), [(`TupleLit [], dp)]), dp) in
 
         let spawn_fun =
           match k with
-          | `Demon  -> "spawn"
-          | `Angel  -> "spawnAngel"
+          | `Demon  -> "spawnAt"
+          | `Angel  -> "spawnAngelAt"
           | `Wait   -> assert false in
 
         (* At this point, the location in the funlit doesn't matter -- we'll have an explicit

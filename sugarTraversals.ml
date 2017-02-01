@@ -148,6 +148,11 @@ class map =
         let y = o#unknown y in
           (x,y)
 
+    method given_spawn_location : given_spawn_location -> given_spawn_location =
+      function
+        | `ExplicitSpawnLocation p -> `ExplicitSpawnLocation (o#phrase p)
+        | l -> l
+
     method phrasenode : phrasenode -> phrasenode =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
@@ -156,10 +161,10 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
-      | `Spawn (_spawn_kind, _loc_phr_opt, _block_phr, _dt) ->
-          let _loc_phr_opt = o#option (fun o -> o#phrase) _loc_phr_opt in
+      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+          let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
-          `Spawn (_spawn_kind, _loc_phr_opt, _block_phr, _dt)
+          `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
       | `Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -723,6 +728,10 @@ class fold =
         let o = o#unknown y in
           o
 
+    method given_spawn_location : given_spawn_location -> 'self_type = function
+      | `ExplicitSpawnLocation p -> let o = o#phrase p in o
+      | _ -> o
+
     method phrasenode : phrasenode -> 'self_type =
       function
       | `Constant _x -> let o = o#constant _x in o
@@ -730,9 +739,9 @@ class fold =
       | `QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | `Spawn (_spawn_kind, _loc_phr_opt, _block_phr_opt, _dt) ->
-          let o = o#option (fun o -> o#phrase) _loc_phr_opt in
-          let o = o#phrase _block_phr_opt in
+      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+          let o = o#given_spawn_location _given_spawn_location in
+          let o = o#phrase _block_phr in
           o
       | `Query (_x, _x_i1, _x_i2) ->
           let o =
@@ -1275,6 +1284,10 @@ class fold_map =
         let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
         in (o, (_x, _x_i1, _x_i2))
 
+    method given_spawn_location : given_spawn_location -> ('self_type * given_spawn_location) = function
+      | `ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, `ExplicitSpawnLocation _p)
+      | l -> (o, l)
+
     method phrasenode : phrasenode -> ('self_type * phrasenode) =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
@@ -1285,10 +1298,10 @@ class fold_map =
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
-      | `Spawn (_spawn_kind, _loc_phr_opt, _block_phr, _dt) ->
-          let (o, _loc_phr_opt) = o#option (fun o -> o#phrase) _loc_phr_opt in
-          let (o, _block_phr_opt) = o#phrase _block_phr in
-          (o, (`Spawn (_spawn_kind, _loc_phr_opt, _block_phr, _dt)))
+      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+          let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
+          let (o, _block_phr) = o#phrase _block_phr in
+          (o, (`Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
       | `Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option

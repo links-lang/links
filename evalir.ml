@@ -212,7 +212,7 @@ struct
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawn",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
         let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
             client_call req_data "_spawnWrapper" cont [func; loc]
@@ -233,7 +233,7 @@ struct
                   end
               | _ -> assert false
           end
-    | `PrimitiveFunction ("spawnAngel",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAngelAt",_), [func; loc] ->
         let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
             client_call req_data "_spawnWrapper" cont [func; loc]

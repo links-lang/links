@@ -170,7 +170,8 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNWAIT
+%token SWITCH RECEIVE CASE
+%token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
@@ -507,16 +508,14 @@ op:
 | INFIXL9                                                      { $1, pos() }
 | INFIXR9                                                      { $1, pos() }
 
-block_or_located:
-| block                                                        { (None, $1) }
-| LPAREN exp COMMA block RPAREN                                { (Some $2, $4) }
 
 spawn_expression:
-| SPAWN block_or_located                                       { let (loc_opt, p) = $2 in
-                                                                  `Spawn (`Demon, loc_opt, (`Block p, pos()), None), pos () }
-| SPAWNANGEL block_or_located                                  { let (loc_opt, p) = $2 in
-                                                                  `Spawn (`Angel, loc_opt, (`Block p, pos()), None), pos () }
-| SPAWNWAIT block                                              { `Spawn (`Wait, None, (`Block $2, pos ()), None), pos () }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { `Spawn (`Demon, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
+| SPAWN block                                                  { `Spawn (`Demon, `NoSpawnLocation, (`Block $2, pos()), None), pos () }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { `Spawn (`Angel, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
+| SPAWNANGEL block                                             { `Spawn (`Angel, `NoSpawnLocation, (`Block $2, pos()), None), pos () }
+| SPAWNCLIENT block                                            { `Spawn (`Demon, (`SpawnClient), (`Block $2, pos()), None), pos () }
+| SPAWNWAIT block                                              { `Spawn (`Wait, `NoSpawnLocation, (`Block $2, pos ()), None), pos () }
 
 postfix_expression:
 | primary_expression                                           { $1 }
