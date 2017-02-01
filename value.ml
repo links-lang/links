@@ -280,7 +280,7 @@ let request_data env = env.request_data
 let empty_env = {
   all = IntMap.empty;
   globals = IntMap.empty;
-  request_data = RequestData.new_request_data ()
+  request_data = RequestData.new_empty_request_data ()
 }
 let bind name (v,scope) env =
   (* Maintains globals as submap of global bindings. *)

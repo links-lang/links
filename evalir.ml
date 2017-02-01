@@ -225,11 +225,6 @@ struct
                   end
               | _ -> assert false
           end
-          (*
-    | `PrimitiveFunction ("spawnClient",_), [func; loc] ->
-      let new_pid = Proc.create_client_process func loc in
-      apply_cont cont env (`Pid (`ClientPid (0, new_pid))) (* FIXME: fix with real client ID *)
-      *)
     | `PrimitiveFunction ("spawnAngel",_), [func; loc] ->
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
             client_call "_spawnWrapper" cont [func; loc]

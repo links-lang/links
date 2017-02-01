@@ -6,7 +6,9 @@ type request_data
 (* At the moment, it doesn't make sense for this to be properly abstract. *)
 (* It would be lovely to at some point though? *)
 type client_id = int
+  deriving (Show)
 
+val new_empty_request_data : unit -> request_data
 val new_request_data : (string * string) list -> (string * string) list -> client_id -> request_data
 
 val get_cgi_parameters : request_data -> (string * string) list

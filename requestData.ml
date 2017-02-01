@@ -1,15 +1,24 @@
 (*pp deriving *)
 
 type client_id = int
+  deriving (Show)
 
 type request_data = {
   cgi_parameters : (string * string) list ref;
   cookies : (string * string) list ref;
   http_response_headers : (string * string) list ref;
   http_response_code : int ref;
-  client_id : client_id
+  client_id : client_id ref
 }
   deriving (Show)
+
+let new_empty_request_data () = {
+  cgi_parameters = ref [];
+  cookies = ref [];
+  http_response_headers = ref [];
+  http_response_code = ref 200;
+  client_id = ref (-100);
+}
 
 let new_request_data cgi_params cookies client_id = {
     cgi_parameters = ref cgi_params;

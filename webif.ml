@@ -139,20 +139,23 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
-  let perform_request valenv run render_cont =
-    function
+  let perform_request valenv run render_cont req =
+    let req_data = Value.request_data valenv in
+    let client_id_str = (string_of_int (RequestData.get_client_id req_data)) in
+    match req with
       | ServerCont t ->
-        Debug.print("Doing ServerCont");
+        Debug.print("Doing ServerCont for client ID " ^ client_id_str);
         Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
         Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
-        Debug.print("Doing ClientReturn ");
+        Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let result_json = Json.jsonize_value result in
         Lwt.return ("text/plain",
                     Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
-        Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
+        Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
+          ^ ", client ID: " ^ client_id_str);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
         Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
@@ -160,7 +163,6 @@ struct
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
-
         Lwt.return ("text/plain",
                     (* TODO: we should package up the result with event handlers,
                        client processes, and client messages *)
@@ -298,9 +300,8 @@ struct
      * This record is specific to this request. All fields are mutable since the
      * library functions may need to modify the environments, and we don't want
      * to do a state-passing transformation. *)
-    let req_data = RequestData.new_request_data () in
-    RequestData.set_cgi_parameters req_data cgi_args;
-    RequestData.set_cookies req_data cookies;
+    (* Client ID is always 0 in CGI mode. *)
+    let req_data = RequestData.new_request_data cgi_args cookies 0 in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =

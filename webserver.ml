@@ -37,7 +37,7 @@ struct
       Lwt_mutex.with_lock mutex (fun () ->
         let ret = !client_id_counter in
         counter := ret +1;
-        ret)
+        Lwt.return ret)
 
   let set_prelude bs =
     prelude := bs
@@ -55,7 +55,7 @@ struct
   let get_client_id cgi_args =
     if (Webif.should_contain_client_id cgi_args) then
       match extract_client_id cgi_args with
-        | Some client_id -> Lwt.return client_id
+        | Some client_id -> Lwt.return (int_of_string client_id)
         | None -> failwith "Client ID expected but not found."
     else
       gen_client_id ()
@@ -105,7 +105,7 @@ struct
         let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
         (* FIXME: Add in proper client ID here *)
         Eval.apply (render_cont ()) req_env
-        (v, [`String path; `SpawnLocation (`ClientSpawnLoc 0)]) >>= fun (valenv, v) ->
+        (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
                        ~cgi_env:cgi_args
                        (Lib.nenv, Lib.typing_env)
