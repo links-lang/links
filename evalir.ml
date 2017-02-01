@@ -61,20 +61,26 @@ struct
         Value.find var env
       | Some v -> v
 
-   let serialize_call_to_client (continuation, name, arg) =
-     Json.jsonize_call continuation name arg
+   let serialize_call_to_client req_data (continuation, name, arg) =
+     Json.jsonize_call req_data continuation name arg
 
-   let client_call : string -> Value.continuation -> Value.t list -> Proc.thread_result Lwt.t =
-     fun name cont args ->
-       if not(Settings.get_value Basicsettings.web_mode) then
-         failwith "Can't make client call outside web mode.";
-       if not(Proc.singlethreaded()) then
-         failwith "Remaining procs on server at client call!";
-       Debug.print("Making client call to " ^ name);
-(*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
-       let call_package = Utility.base64encode
-                            (serialize_call_to_client (cont, name, args)) in
-       Proc.abort ("text/plain", call_package)
+   let client_call :
+     RequestData.request_data ->
+     string ->
+     Value.continuation ->
+     Value.t list ->
+     Proc.thread_result Lwt.t =
+
+       fun req_data name cont args ->
+         if not(Settings.get_value Basicsettings.web_mode) then
+           failwith "Can't make client call outside web mode.";
+         if not(Proc.singlethreaded()) then
+           failwith "Remaining procs on server at client call!";
+         Debug.print("Making client call to " ^ name);
+  (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
+         let call_package = Utility.base64encode
+                              (serialize_call_to_client req_data (cont, name, args)) in
+         Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
@@ -188,8 +194,9 @@ struct
       apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_SendWrapper" cont [pid; msg]
+           client_call req_data "_SendWrapper" cont [pid; msg]
         else
           let unboxed_pid = Value.unbox_pid pid in
           (try
@@ -206,8 +213,9 @@ struct
                    failwith("Couldn't deliver message because destination process has no mailbox."));
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawn",_), [func; loc] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [func; loc]
         else
           begin
             match loc with
@@ -226,8 +234,9 @@ struct
               | _ -> assert false
           end
     | `PrimitiveFunction ("spawnAngel",_), [func; loc] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [func; loc]
         else
           begin
             (* if Settings.get_value Basicsettings.web_mode then *)
@@ -245,8 +254,9 @@ struct
            scheduler choose a different thread.  *)
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_recvWrapper" cont []
+           client_call req_data "_recvWrapper" cont []
         else
         begin match Mailbox.pop_message () with
             Some message ->
@@ -384,7 +394,9 @@ struct
        apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
        apply_cont cont env (Lib.apply_pfun_by_code code args (Value.request_data env))
-    | `ClientFunction name, args -> client_call name cont args
+    | `ClientFunction name, args ->
+        let req_data = Value.request_data env in
+        client_call req_data name cont args
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"

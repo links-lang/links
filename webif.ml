@@ -150,7 +150,7 @@ struct
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
-        let result_json = Json.jsonize_value result in
+        let result_json = Json.jsonize_value req_data result in
         Lwt.return ("text/plain",
                     Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
@@ -166,7 +166,7 @@ struct
         Lwt.return ("text/plain",
                     (* TODO: we should package up the result with event handlers,
                        client processes, and client messages *)
-                    Utility.base64encode (Json.jsonize_value r))
+                    Utility.base64encode (Json.jsonize_value req_data r))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()

@@ -75,7 +75,12 @@ let auxiliaries_of_state : json_state -> auxiliary list =
   fun state -> List.map (fun i -> `Handler i) (IntSet.elements state.handlers)
              @ List.map (fun i -> `Process i) (IntSet.elements state.processes)
 
-let rec jsonize_value : Value.t -> string * json_state =
+(* Check if the client ID of a PID matches the current client ID as per the request data *)
+let client_id_matches req_data pid_client_id =
+  let client_id = RequestData.get_client_id req_data in
+  client_id = pid_client_id
+
+let rec jsonize_value req_data : Value.t -> string * json_state =
   function
   | `PrimitiveFunction _
   | `Continuation _
@@ -88,31 +93,31 @@ let rec jsonize_value : Value.t -> string * json_state =
       match fvs with
       | None     -> "", empty_state
       | Some fvs ->
-        let s, state = jsonize_value fvs in
+        let s, state = jsonize_value req_data fvs in
         ", \"environment\":" ^ s, state in
     "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
     " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}", state
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}", empty_state
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
-    let s, state = jsonize_value value in
+    let s, state = jsonize_value req_data value in
     "{\"_label\":\"" ^ label ^ "\",\"_value\":" ^ s ^ "}", state
   | `Record fields ->
     let ls, vs = List.split fields in
-    let ss, state = jsonize_values vs in
+    let ss, state = jsonize_values req_data vs in
       "{" ^
         mapstrcat "," (fun (kj, s) -> "\"" ^ kj ^ "\":" ^ s) (List.combine ls ss)
       ^ "}", state
   | `List [] -> "[]", empty_state
   | `List (elems) ->
-    let ss, state = jsonize_values elems in
+    let ss, state = jsonize_values req_data elems in
       "[" ^ String.concat "," ss ^ "]", state
   | `Pid (`ClientPid (client_id, process_id)) ->
       (* FIXME: Should only add to pid_state if client ID matches *)
       "{\"_clientPid\":" ^ string_of_int process_id ^ ", \"_clientId\":" ^ string_of_int client_id ^ "}",
-      pid_state process_id
+      if client_id_matches req_data client_id then pid_state process_id else empty_state
   | `Pid (`ServerPid (process_id)) ->
-      "{\"_serverPid\":" ^ string_of_int process_id ^ "}", empty_state (* pid_state pid *)
+      "{\"_serverPid\":" ^ string_of_int process_id ^ "}", empty_state
   | `Socket _ -> failwith "Cannot jsonize sockets"
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
       "{\"_clientSpawnLoc\":" ^ string_of_int client_id ^ "}", empty_state
@@ -152,25 +157,30 @@ and json_of_xmlitem = function
         "[\"ELEMENT\",\"" ^ tag ^
             "\",{" ^ String.concat "," attrs ^"},[" ^ String.concat "," body ^ "]]", state
   | Value.Attr _ -> assert false
-and jsonize_values : Value.t list -> string list * json_state =
-  fun vs ->
+and jsonize_values : RequestData.request_data -> Value.t list -> string list * json_state =
+  fun req_data vs ->
     let ss, state =
       List.fold_left
         (fun (ss, state) v ->
-           let s, state' = jsonize_value v in
+           let s, state' = jsonize_value req_data v in
            s::ss, merge_states state state') ([], empty_state) vs in
     List.rev ss, state
 
-let jsonize_value_with : json_state -> Value.t -> string * json_state =
-  fun state v ->
-    let s, state' = jsonize_value v in
+let jsonize_value_with : RequestData.request_data -> json_state -> Value.t -> string * json_state =
+  fun req_data state v ->
+    let s, state' = jsonize_value req_data v in
     s, merge_states state state'
 
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t * string IntMap.t) -> (string IntMap.t * string IntMap.t) =
-  fun state pids ((pmap, hmap) as maps) ->
+let rec resolve_auxiliaries :
+  RequestData.request_data ->
+  json_state ->
+  auxiliary list ->
+  (string IntMap.t * string IntMap.t) ->
+  (string IntMap.t * string IntMap.t) =
+  fun req_data state pids ((pmap, hmap) as maps) ->
     match pids with
     | [] -> maps
     | `Process pid :: auxs ->
@@ -180,8 +190,8 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
           let messages = Proc.Mailbox.pop_all_messages_for pid in
 
           (* jsonizing these values may yield further state *)
-          let ps, pstate = jsonize_value process in
-          let ms, mstate = jsonize_value (`List messages) in
+          let ps, pstate = jsonize_value req_data process in
+          let ms, mstate = jsonize_value req_data (`List messages) in
 
           (* These are processes which should be running on this client *)
           let s =
@@ -192,28 +202,30 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
           let new_state = merge_states pstate mstate in
 
           resolve_auxiliaries
+            req_data
             (merge_states state new_state)
             (auxs @ auxiliaries_of_state (diff_state new_state state))
             (IntMap.add pid s pmap, hmap)
         | None -> (* this process is already active on the client *)
-          resolve_auxiliaries state auxs maps
+          resolve_auxiliaries req_data state auxs maps
       end
     | `Handler key :: auxs ->
       let hs = EventHandlers.find key in
-      let hs_string, new_state = jsonize_value hs in
+      let hs_string, new_state = jsonize_value req_data hs in
 
       let s = "{\"key\": " ^ string_of_int key ^ "," ^
               " \"eventHandlers\":" ^ hs_string ^ "}" in
 
       resolve_auxiliaries
+        req_data
         (merge_states state new_state)
         (auxs @ auxiliaries_of_state (diff_state new_state state))
         (pmap, IntMap.add key s hmap)
 
 (* serialise the json_state as a string *)
-let resolve_state : json_state -> string =
-  fun state ->
-    let pmap, hmap = resolve_auxiliaries state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
+let resolve_state : RequestData.request_data -> json_state -> string =
+  fun req_data state ->
+    let pmap, hmap = resolve_auxiliaries req_data state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
     "{\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
      "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
 
@@ -226,8 +238,8 @@ let resolve_state : json_state -> string =
    connecting multiple clients to the same server.
 *)
 
-let jsonize_state value =
-  let _v, state = jsonize_value value in
+let jsonize_state req_data value =
+  let _v, state = jsonize_value req_data value in
   state
 
   (* let s = resolve_state state in *)
@@ -237,9 +249,9 @@ let jsonize_state value =
 let value_with_state v s =
   "{\"value\":" ^ v ^ ",\"state\":" ^ s ^ "}"
 
-let jsonize_value_with_state value =
-  let v, state = jsonize_value value in
-  value_with_state v (resolve_state state)
+let jsonize_value_with_state req_data value =
+  let v, state = jsonize_value req_data value in
+  value_with_state v (resolve_state req_data state)
 
 (** [jsonize_call] creates the JSON object representing a client call,
     its server-side continuation, and the complete state of the
@@ -249,18 +261,18 @@ let jsonize_value_with_state value =
     is because the [proc.ml] file keeps the scheduler state as an abstract
     type so we can't inspect it here. Consider changing this.
 *)
-let jsonize_call continuation name args =
-  let vs, state = jsonize_values args in
+let jsonize_call req_data continuation name args =
+  let vs, state = jsonize_values req_data args in
   let v =
     "{\"__continuation\":\"" ^ (encode_continuation continuation) ^"\"," ^
     "\"__name\":\"" ^ name ^ "\"," ^
     "\"__args\":[" ^ String.concat ", " vs ^ "]}" in
-  value_with_state v (resolve_state state)
+  value_with_state v (resolve_state req_data state)
 
-let jsonize_value value =
+let jsonize_value req_data value =
   Debug.if_set show_json
     (fun () -> "jsonize_value => " ^ Value.string_of_value value);
-  let rv = jsonize_value_with_state value in
+  let rv = jsonize_value_with_state req_data value in
     Debug.if_set show_json
       (fun () -> "jsonize_value <= " ^ rv);
     rv

@@ -807,7 +807,11 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
       let varenv = VEnv.bind varenv (x, x_name) in
-      let s, state = Json.jsonize_value_with state (Value.find x valenv) in
+      let s, state =
+        Json.jsonize_value_with
+          (Value.request_data valenv)
+          state
+          (Value.find x valenv) in
       (state,
        varenv,
        Some x_name,
@@ -973,7 +977,8 @@ let resolve_toplevel_values : string list -> string =
 
 let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
   (* json state for the final value (event handlers and processes) *)
-  let json_state = Json.jsonize_state v in
+  let req_data = Value.request_data valenv in
+  let json_state = Json.jsonize_state req_data v in
 
   (* divide HTML into head and body secitions (as we need to augment the head) *)
   let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
@@ -981,7 +986,7 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
 
   let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
   let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
-  let js = Json.resolve_state json_state in
+  let js = Json.resolve_state req_data json_state in
 
   let printed_code =
     let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
