@@ -7,6 +7,8 @@ val realpages : bool Settings.setting
 module WebIf : functor (Webs : WEBSERVER) ->
 sig
 
+  val should_contain_client_id : (string * string) list -> bool
+
   val do_request :
     (Value.env * Ir.var Env.String.t * Types.typing_environment) ->
     (string * string) list ->

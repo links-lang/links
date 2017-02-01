@@ -27,6 +27,17 @@ struct
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
+  let client_id_mutex = Lwt_mutex.create ()
+  let client_id_counter = ref 0 (* FIXME: This should be a secure random token. Oh god, I am literally all the stereotypes. *)
+
+  let gen_client_id =
+    let mutex = client_id_mutex in
+    let counter = client_id_counter in
+    fun () ->
+      Lwt_mutex.with_lock mutex (fun () ->
+        let ret = !client_id_counter in
+        counter := ret +1;
+        ret)
 
   let set_prelude bs =
     prelude := bs
@@ -37,6 +48,17 @@ struct
 
   let add_route is_directory path thread_starter =
     rt := (is_directory, path, thread_starter) :: !rt
+
+  let extract_client_id cgi_args =
+    Utility.lookup "__client_id" cgi_args
+
+  let get_client_id cgi_args =
+    if (Webif.should_contain_client_id cgi_args) then
+      match extract_client_id cgi_args with
+        | Some client_id -> Lwt.return client_id
+        | None -> failwith "Client ID expected but not found."
+    else
+      gen_client_id ()
 
   let start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
@@ -68,15 +90,14 @@ struct
         | `GET, _ ->
            List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req))
         | _, _ -> [] (* FIXME: should possibly do something else here *) in
-      (* Add headers as cgi args. Is this reall what we want to do? *)
+
+      (* Add headers as cgi args. Is this really what we want to do? *)
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
-
-      let req_data = RequestData.new_request_data () in
-      RequestData.set_cgi_parameters req_data cgi_args;
-      RequestData.set_cookies req_data cookies;
-
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
+
+      get_client_id cgi_args >>= fun (cid) ->
+      let req_data = RequestData.new_request_data cgi_args cookies cid in
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
