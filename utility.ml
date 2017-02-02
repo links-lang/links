@@ -84,11 +84,6 @@ sig
     with type a = A.a t
 end
 
-module String = struct
-  include String
-  module Show_t = Deriving_Show.Show_string
-end
-
 module Int = struct
   type t = int
   (*let compare = Pervasives.compare*)
@@ -117,7 +112,42 @@ struct
   let isDigit = function '0'..'9' -> true | _ -> false
   let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
   let isBlank = function ' '|'\t' -> true | _ -> false
+  let lowercase_ascii c =
+    let _A = Char.code 'A' in
+    let _a = Char.code 'a' in
+    let c' = Char.code c in    
+      if c' < _a && c' >= _A then
+        Char.chr @@ c' + (_a - _A)
+       else
+        c
+  let uppercase_ascii c =
+    let _A = Char.code 'A' in
+    let _a = Char.code 'a' in
+    let c' = Char.code c in    
+      if c' >= _a && c' <= Char.code 'z' then
+        Char.chr @@ c' - (_a - _A)
+       else
+        c
 end
+
+module String = struct
+  include String
+  module Show_t = Deriving_Show.Show_string
+
+  let uncapitalize_ascii s =    
+    let bs = Bytes.of_string s in
+    ignore (
+      if bs <> Bytes.empty
+      then Bytes.set bs 0 (Char.lowercase_ascii @@ Bytes.get bs 0));
+    Bytes.to_string bs
+
+  let capitalize_ascii s =
+    let bs = Bytes.of_string s in
+    ignore (
+      if bs <> Bytes.empty
+      then Bytes.set bs 0 (Char.uppercase_ascii @@ Bytes.get bs 0));
+    Bytes.to_string bs
+end  
 
 module Map :
 sig
