@@ -112,6 +112,7 @@ struct
   let isDigit = function '0'..'9' -> true | _ -> false
   let isXDigit = function '0'..'9'|'a'..'f'|'A'..'F' -> true | _ -> false
   let isBlank = function ' '|'\t' -> true | _ -> false
+  (* Defined in OCaml 4.03 *)
   let lowercase_ascii c =
     let _A = Char.code 'A' in
     let _a = Char.code 'a' in
@@ -120,6 +121,8 @@ struct
         Char.chr @@ c' + (_a - _A)
        else
         c
+
+  (* Defined in OCaml 4.03 *)
   let uppercase_ascii c =
     let _A = Char.code 'A' in
     let _a = Char.code 'a' in
@@ -134,6 +137,7 @@ module String = struct
   include String
   module Show_t = Deriving_Show.Show_string
 
+  (* Defined in OCaml 4.03 *)
   let uncapitalize_ascii s =    
     let bs = Bytes.of_string s in
     ignore (
@@ -141,6 +145,7 @@ module String = struct
       then Bytes.set bs 0 (Char.lowercase_ascii @@ Bytes.get bs 0));
     Bytes.to_string bs
 
+  (* Defined in OCaml 4.03 *)
   let capitalize_ascii s =
     let bs = Bytes.of_string s in
     ignore (
