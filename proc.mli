@@ -40,9 +40,11 @@ sig
   val pop_message_for : Proc.pid -> Value.t option
   val pop_all_messages_for : Proc.pid -> Value.t list
   val pop_message : unit -> Value.t option
-  val send_message : Value.t -> Proc.pid -> unit
+  val send_message : Value.t -> Value.t -> unit
+  (*
   val send_client_message : Value.t -> Proc.client_id -> Proc.pid -> unit
   val send_server_message : Value.t -> Proc.pid -> unit
+  *)
 end
 
 exception UnknownProcessID of Proc.pid

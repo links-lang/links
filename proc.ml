@@ -234,7 +234,12 @@ exception UnknownProcessID of Proc.pid (* This wouldn't be necessary if pid's we
 
 module Mailbox =
 struct
-  let message_queues : (Proc.pid, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
+  (* Message queues for processes resident on this server. *)
+  let server_message_queues : (Proc.pid, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
+
+  (* Message queues for processes spawned on a client, but migrated over during an RPC call. *)
+  type client_queue_map = Value.t Queue.t intmap
+  let client_message_queues : (Proc.client_id, client_queue_map) Hashtbl.t = Hashtbl.create 10000
 
   (* Create the main process's message queue *)
   let _ = Hashtbl.add message_queues 0 (Queue.create ())
@@ -253,7 +258,7 @@ struct
     else
       None
 
-  (** Pop a message for the current process. *)
+  (** Pop a message for the current process. Used to receive on the server. *)
   let pop_message () = pop_message_for (Proc.get_current_pid ())
 
   (** extract an entire message queue (used in transporting messages
@@ -278,7 +283,6 @@ struct
 
   (** Sends a message to a server process --- that is, a process residing on the
    * server. Raises [UnknownProcessID pid] if the given [pid] does not exist. *)
-  (* Remember to do Proc.awaken!! *)
   let send_server_message msg pid =
     send_message msg pid;
     Proc.awaken pid
