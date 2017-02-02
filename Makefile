@@ -108,6 +108,7 @@ SOURCES = $(OPC)                                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
+		  websockets.mli websockets.ml          \
           proc.mli proc.ml                      \
           jsonparse.mly                         \
           jsonlex.mll                           \

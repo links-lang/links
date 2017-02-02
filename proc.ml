@@ -255,7 +255,7 @@ exception UnknownClientID of Proc.client_id
 module Websockets =
 struct
   let client_websockets :
-    (Proc.client_id, WebsocketOperations.links_websocket) Hashtbl.t =
+    (Proc.client_id, Websockets.links_websocket) Hashtbl.t =
       Hashtbl.create 10000
 
   let register_websocket = Hashtbl.add client_websockets

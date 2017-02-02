@@ -7,6 +7,7 @@ open Utility
 let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
 let host_name = Settings.add_string ("host", "0.0.0.0", `User)
 let port = Settings.add_int ("port", 8080, `User)
+let websocket_path = Settings.add_string ("websocket_path", "_/ws", `User)
 
 module rec Webserver : WEBSERVER =
 struct
@@ -83,7 +84,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont _ req body =
+    let callback rt render_cont conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -183,7 +184,8 @@ struct
         let client_id = get_client_id_or_die cgi_args in
         let req_data = RequestData.new_request_data cgi_args cookies cid in
         let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-        WebsocketOperations.accept (req_env, nenv, tyenv) >>=
+        Cohttp_lwt_body.drain_body body >>= fun () ->
+        Websockets.accept (req_env, nenv, tyenv) req (fst conn) >>=
         fun (wsocket, resp, body) ->
           Proc.Websockets.register_websocket client_id wsocket;
           Lwt.return (resp, body)
