@@ -52,15 +52,19 @@ struct
   let extract_client_id cgi_args =
     Utility.lookup "__client_id" cgi_args
 
+  let get_client_id_or_die cgi_args =
+    match extract_client_id cgi_args with
+      | Some client_id ->
+          Debug.print ("Found client ID: " ^ client_id);
+          let decoded_client_id = Utility.base64decode client_id in
+          Debug.print ("Decoded client ID: " ^ decoded_client_id);
+          Lwt.return (int_of_string decoded_client_id)
+      | None -> failwith "Client ID expected but not found."
+
+
   let get_or_make_client_id cgi_args =
     if (Webif.should_contain_client_id cgi_args) then
-      match extract_client_id cgi_args with
-        | Some client_id ->
-            Debug.print ("Found client ID: " ^ client_id);
-            let decoded_client_id = Utility.base64decode client_id in
-            Debug.print ("Decoded client ID: " ^ decoded_client_id);
-            Lwt.return (int_of_string decoded_client_id)
-        | None -> failwith "Client ID expected but not found."
+      get_client_id_or_die
     else
       gen_client_id ()
 
@@ -175,6 +179,14 @@ struct
              end
           | s -> s in
         serve_static linkslib uri_path []
+      else if path = websocket_path then
+        let client_id = get_client_id_or_die cgi_args in
+        let req_data = RequestData.new_request_data cgi_args cookies cid in
+        let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+        WebsocketOperations.accept (req_env, nenv, tyenv) >>=
+        fun (wsocket, resp, body) ->
+          Proc.Websockets.register_websocket client_id wsocket;
+          Lwt.return (resp, body)
       else
         route rt in
 

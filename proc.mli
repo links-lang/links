@@ -35,6 +35,12 @@ sig
   val run : (unit -> 'a Lwt.t) -> 'a
 end
 
+(* Operations on websockets used to send and receive messages remotely. *)
+module Websockets :
+  sig
+    val register_websocket : Proc.client_id -> WebsocketOperations.links_websocket -> unit
+  end
+
 module Mailbox :
 sig
   val pop_message_for : Proc.pid -> Value.t option

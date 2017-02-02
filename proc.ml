@@ -187,14 +187,10 @@ struct
   let create_client_process client_id func =
     let new_pid = fresh_pid () in
     let client_table =
-      begin
-        try
-          Hashtbl.find state.client_processes client_id
-        with
-          NotFound _ -> IntMap.empty
-      end in
+      try Hashtbl.find state.client_processes client_id
+      with
+        NotFound _ -> IntMap.empty in
     let new_client_table = IntMap.add new_pid (func, false) client_table in
-
     Hashtbl.add state.client_processes client_id new_client_table;
     new_pid
 
@@ -254,6 +250,21 @@ end
 
 exception UnknownProcessID of Proc.pid
 exception UnknownClientID of Proc.client_id
+
+
+module Websockets =
+struct
+  let client_websockets :
+    (Proc.client_id, WebsocketOperations.links_websocket) Hashtbl.t =
+      Hashtbl.create 10000
+
+  let register_websocket = Hashtbl.add client_websockets
+  let lookup_websocket client_id =
+    try Some (Hashtbl.find client_websockets client_id) with
+      | _ -> None
+end
+
+
 
 module Mailbox =
 struct
