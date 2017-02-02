@@ -188,7 +188,7 @@ let rec resolve_auxiliaries :
         let client_id = RequestData.get_client_id req_data in
         match Proc.Proc.lookup_client_process client_id pid with
         | Some process ->
-          let messages = Proc.Mailbox.pop_all_messages_for pid in
+          let messages = Proc.Mailbox.pop_all_messages_for client_id pid in
 
           (* jsonizing these values may yield further state *)
           let ps, pstate = jsonize_value req_data process in

@@ -220,7 +220,7 @@ struct
           begin
             match loc with
               | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                  let new_pid = Proc.create_client_process func loc in
+                  let new_pid = Proc.create_client_process client_id func in
                   apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
                   begin
@@ -228,7 +228,7 @@ struct
                     let cont' = (`Local, var, Value.empty_env,
                                  ([], `Apply (`Variable var, []))) in
                     let new_pid = Proc.create_process false
-                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) loc in
+                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
                     apply_cont cont env (`Pid (`ServerPid new_pid))
                   end
               | _ -> assert false
@@ -239,13 +239,17 @@ struct
             client_call req_data "_spawnWrapper" cont [func; loc]
         else
           begin
-            (* if Settings.get_value Basicsettings.web_mode then *)
-            (*   failwith("Can't spawn at the server in web mode."); *)
-            let var = Var.dummy_var in
-            let cont' = (`Local, var, Value.empty_env,
-                         ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) loc in
-            apply_cont cont env (`Pid (`ServerPid new_pid))
+            match loc with
+              | `SpawnLocation (`ClientSpawnLoc client_id) ->
+                  let new_pid = Proc.create_client_process client_id func in
+                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+              | `SpawnLocation (`ServerSpawnLoc) ->
+                  let var = Var.dummy_var in
+                  let cont' = (`Local, var, Value.empty_env,
+                               ([], `Apply (`Variable var, []))) in
+                  let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
+                  apply_cont cont env (`Pid (`ServerPid new_pid))
+              | _ -> assert false
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the

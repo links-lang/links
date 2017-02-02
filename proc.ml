@@ -27,6 +27,12 @@ struct
    * and bool is whether or not the process is active *)
   type client_proc_map = (Value.t * bool) intmap
 
+  type process_lookup_res = [
+      | `ClientNotFound
+      | `ProcessNotFound
+      | `ProcessFound of bool
+    ]
+
   type scheduler_state =
       { blocked : (pid, unit Lwt.u) Hashtbl.t;
         client_processes : (client_id, client_proc_map) Hashtbl.t;
@@ -42,7 +48,6 @@ struct
   let atomic : bool ref = ref false
 
   (** Test that there is only one thread total (the running one)? *)
-  (* todo: broken *)
   let singlethreaded () =
     Hashtbl.length state.blocked == 0 (* &&
       Queue.length state.suspended == 0 *)
@@ -72,8 +77,25 @@ struct
   (** Convert a PID into a string. *)
   let string_of_pid = string_of_int
 
-  (** retrieve the body of a client process (for transmission to the
-      client if it hasn't already been) *)
+
+  (** Checks whether a client process is active -- that is, has been sent to a client to be spawned. *)
+  let is_process_active client_id pid : process_lookup_res =
+    let client_table_opt =
+      try Some (Hashtbl.find state.client_processes client_id) with
+        | NotFound _ -> None in
+    match client_table_opt with
+      | Some client_table ->
+        let proc_pair_res = IntMap.lookup pid client_table in
+        begin
+          match proc_pair_res with
+            | Some (_v, active) -> `ProcessFound (active)
+            | None -> `ProcessNotFound
+        end
+      | None -> `ClientNotFound
+
+  (** Retrieves the body of a client process for transmission to the client.
+   * This will be done precisely once -- afterwards, the process will be marked
+   * as "active" in the HT. *)
   let lookup_client_process client_id pid =
     let client_table =
       try Hashtbl.find state.client_processes client_id with
@@ -148,7 +170,7 @@ struct
     t >>= pstate
 
   (** Given a process state, create a new process and return its identifier. *)
-  let create_process angel pstate _loc =
+  let create_process angel pstate =
     let new_pid = fresh_pid () in
     if angel then
       begin
@@ -230,7 +252,8 @@ struct
     snd v
 end
 
-exception UnknownProcessID of Proc.pid (* This wouldn't be necessary if pid's were properly abstract.. *)
+exception UnknownProcessID of Proc.pid
+exception UnknownClientID of Proc.client_id
 
 module Mailbox =
 struct
@@ -242,16 +265,19 @@ struct
   let client_message_queues : (Proc.client_id, client_queue_map) Hashtbl.t = Hashtbl.create 10000
 
   (* Create the main process's message queue *)
-  let _ = Hashtbl.add message_queues 0 (Queue.create ())
+  (* SJF Assumption -- this is the main *server* thread, i.e. the entrypoint from running ./links <file>
+   * Where does the request-main's MB get created? (i.e. the entrypoint from evaluating a request) *)
+  let _ = Hashtbl.add server_message_queues 0 (Queue.create ())
 
-  (** Given a PID, return its next queued message (under [Some]) or [None]. *)
+  (** Given a PID, return its next queued message (under [Some]) or [None].
+   * Used for receiving on the server, from server processes. *)
   let pop_message_for pid =
     let mqueue =
-      match Hashtbl.lookup message_queues pid with
+      match Hashtbl.lookup server_message_queues pid with
       | Some mqueue -> mqueue
       | None ->
         let mqueue = Queue.create () in
-        let _ = Hashtbl.add message_queues pid mqueue in
+        let _ = Hashtbl.add server_message_queues pid mqueue in
         mqueue in
     if not (Queue.is_empty mqueue) then
       Some (Queue.pop mqueue)
@@ -263,32 +289,66 @@ struct
 
   (** extract an entire message queue (used in transporting messages
       to the client) *)
-  let pop_all_messages_for pid =
-    match Hashtbl.lookup message_queues pid with
-    | Some mqueue ->
-      Hashtbl.remove message_queues pid;
-      List.rev (Queue.fold (fun xs x -> x :: xs) [] mqueue)
-    | None        -> []
-
-
-  (** Send a message to the identified process. Raises [UnknownProcessID pid]
-    if the given [pid] does not exist (does not have a message queue). *)
-  let send_message msg pid =
-    match Hashtbl.lookup message_queues pid with
-    | Some mqueue -> Queue.push msg mqueue
-    | None ->
-      let mqueue = Queue.create () in
-      Queue.push msg mqueue;
-      Hashtbl.add message_queues pid mqueue
+  let pop_all_messages_for client_id pid =
+    (* Firstly grab the map for the given client ID *)
+    match Hashtbl.lookup client_message_queues client_id with
+      | Some client_queue_map ->
+          (* With the map in hand, we can lookup the PID *)
+          begin
+            match IntMap.lookup pid client_queue_map with
+              | Some queue ->
+                  (* And with the queue in hand, we can pop all of the values
+                   * and update the hashtable, *)
+                  let updated_map = IntMap.remove pid client_queue_map in
+                  Hashtbl.replace client_message_queues client_id updated_map;
+                  List.rev (Queue.fold (fun xs x -> x :: xs) [] queue)
+              | None ->
+                (* No queue? No problem! *)
+                  []
+          end
+      | None ->
+          (* Should we perhaps raise an exception here? Does it matter? *)
+          []
 
   (** Sends a message to a server process --- that is, a process residing on the
-   * server. Raises [UnknownProcessID pid] if the given [pid] does not exist. *)
+   * server. Creates a message queue if one doesn't exist already. *)
   let send_server_message msg pid =
-    send_message msg pid;
-    Proc.awaken pid
+    match Hashtbl.lookup server_message_queues pid with
+    | Some mqueue ->
+        Queue.push msg mqueue;
+        Proc.awaken pid
+    | None ->
+        let mqueue = Queue.create () in
+        Queue.push msg mqueue;
+        Hashtbl.add server_message_queues pid mqueue
 
-  let send_client_message msg _client_id pid =
-    send_message msg pid (* TODO: will need to use client_id *)
+  (* Given a client ID which is not yet active, and a PID, adds the message to the queue.
+   * If either the client ID or PID doesn't exist in the table, creates the appropriate entries. *)
+  let queue_client_message msg client_id pid =
+    let client_queue_map =
+      try Hashtbl.find client_message_queues client_id with
+        | NotFound _ -> IntMap.empty in
+      try
+        let pid_queue = IntMap.find pid client_queue_map in
+        Queue.push msg pid_queue
+      with
+        | NotFound _ ->
+            let new_queue = Queue.create () in
+            Queue.push msg new_queue;
+            let new_queue_map = IntMap.add client_id new_queue client_queue_map in
+            Hashtbl.replace client_message_queues client_id new_queue_map
+
+  let send_client_message msg client_id pid =
+    (* Here, we need to check whether the process is active.
+     * If not, we can add the message to the message queue.
+     * If so, then we will need to send as a websocket request. *)
+    match Proc.is_process_active client_id pid with
+      | `ClientNotFound -> raise (UnknownClientID client_id)
+      | `ProcessNotFound -> raise (UnknownProcessID pid)
+      | `ProcessFound false ->
+          failwith ("Cannot (yet -- soon!) send from the server to a process " ^
+            "which has already been spawned on a client")
+      | `ProcessFound true -> queue_client_message msg client_id pid
 end
 
 module Session = struct

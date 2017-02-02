@@ -19,7 +19,7 @@ sig
 
   val lookup_client_process : client_id -> pid -> Value.t option
 
-  val create_process : bool -> thread -> Value.t-> pid
+  val create_process : bool -> thread -> pid
   val create_client_process : client_id -> Value.t -> pid
   val awaken : pid -> unit
 
@@ -38,16 +38,14 @@ end
 module Mailbox :
 sig
   val pop_message_for : Proc.pid -> Value.t option
-  val pop_all_messages_for : Proc.pid -> Value.t list
+  val pop_all_messages_for : Proc.client_id -> Proc.pid -> Value.t list
   val pop_message : unit -> Value.t option
-  val send_message : Value.t -> Value.t -> unit
-  (*
   val send_client_message : Value.t -> Proc.client_id -> Proc.pid -> unit
   val send_server_message : Value.t -> Proc.pid -> unit
-  *)
 end
 
 exception UnknownProcessID of Proc.pid
+exception UnknownClientID of Proc.client_id
 
 module Session :
 sig
