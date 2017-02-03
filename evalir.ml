@@ -206,7 +206,15 @@ struct
                   Mailbox.send_server_message msg serv_pid
               (* Send a message to a process which lives on another client *)
               | `ClientPid (client_id, process_id) ->
-                  Mailbox.send_client_message msg client_id process_id
+                  let client_send_res =
+                    Mailbox.send_client_message msg client_id process_id in
+                  begin
+                    match client_send_res with
+                      | `LocalSendOK -> ()
+                      | `RemoteSend (ws) ->
+                          let json_val = Json.jsonize_value req_data msg in
+                          Websockets.send_value ws process_id json_val
+                  end
              with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)

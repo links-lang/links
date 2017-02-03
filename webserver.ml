@@ -29,7 +29,7 @@ struct
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
   let client_id_mutex = Lwt_mutex.create ()
-  let client_id_counter = ref 0 (* FIXME: This should be a secure random token. Oh god, I am literally all the stereotypes. *)
+  let client_id_counter = ref 0
 
   let gen_client_id =
     let mutex = client_id_mutex in
@@ -185,7 +185,7 @@ struct
         let req_data = RequestData.new_request_data cgi_args cookies cid in
         let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
         Cohttp_lwt_body.drain_body body >>= fun () ->
-        Websockets.accept (req_env, nenv, tyenv) req (fst conn) >>=
+        Websockets.accept client_id req (fst conn) >>=
         fun (wsocket, resp, body) ->
           Proc.Websockets.register_websocket client_id wsocket;
           Lwt.return (resp, body)

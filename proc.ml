@@ -1,17 +1,19 @@
 (** Data structures/utilities for process management *)
 open Utility
 open Lwt
+open ProcessTypes
 
 type abort_type = string * string
 exception Aborted of abort_type
 
+type client_send_result = [
+  | `LocalSendOK
+  | `RemoteSend of (Websockets.links_websocket)
+]
+
 module Proc =
 struct
-  (** The abstract type of process identifiers *)
-  type pid = int
-  type client_id = int
-
-  let main_process_pid = 0
+  let main_process_pid = ProcessTypes.create_process_id ()
   let main_running = ref true
 
   (*
@@ -25,7 +27,7 @@ struct
 
   (* A map from process IDs to (Value.t, bool), where Value.t is the function to run,
    * and bool is whether or not the process is active *)
-  type client_proc_map = (Value.t * bool) intmap
+  type client_proc_map = (Value.t * bool) pid_map
 
   type process_lookup_res = [
       | `ClientNotFound
@@ -34,9 +36,9 @@ struct
     ]
 
   type scheduler_state =
-      { blocked : (pid, unit Lwt.u) Hashtbl.t;
+      { blocked : (process_id, unit Lwt.u) Hashtbl.t;
         client_processes : (client_id, client_proc_map) Hashtbl.t;
-        angels : (pid, unit Lwt.t) Hashtbl.t;
+        angels : (process_id, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
   let state = {
@@ -61,31 +63,15 @@ struct
     prerr_endline ("blocked processes : " ^
                      string_of_int (Hashtbl.length state.blocked))
 
-  (** [fresh_pid()] returns a new globally-fresh process ID.
-    Proposal: if server-spawned processes are ever implemented;
-    server-spawned processes have even PIDs, client-spawned ones have
-    odd PIDs.
-   *)
-  let fresh_pid =
-    let current_pid = (ref 0 : pid ref) in
-    fun () ->
-    begin
-      incr current_pid;
-      !current_pid
-    end
-
-  (** Convert a PID into a string. *)
-  let string_of_pid = string_of_int
-
-
-  (** Checks whether a client process is active -- that is, has been sent to a client to be spawned. *)
-  let is_process_active client_id pid : process_lookup_res =
+(** Checks whether a client process is active -- that is, has been sent to a client to be spawned. *)
+  let is_process_active : client_id -> process_id -> process_lookup_res =
+    fun client_id pid ->
     let client_table_opt =
       try Some (Hashtbl.find state.client_processes client_id) with
         | NotFound _ -> None in
     match client_table_opt with
       | Some client_table ->
-        let proc_pair_res = IntMap.lookup pid client_table in
+        let proc_pair_res = PidMap.lookup pid client_table in
         begin
           match proc_pair_res with
             | Some (_v, active) -> `ProcessFound (active)
@@ -102,14 +88,18 @@ struct
         | NotFound client_id -> failwith ("Missing client ID: " ^ client_id) in
 
     let v, active =
-      try IntMap.find pid client_table with
-        | NotFound pid -> failwith (Printf.sprintf "Missing client process %s in client %d: " pid client_id) in
+      try PidMap.find pid client_table with
+        | NotFound _pid ->
+            failwith (Printf.sprintf
+              "Missing client process %s in client %s: "
+              (string_of_process_id pid)
+              (string_of_client_id client_id)) in
 
     if active then
       None
     else
       begin
-        let new_client_map = IntMap.add pid (v, true) client_table in
+        let new_client_map = PidMap.add pid (v, true) client_table in
         Hashtbl.replace state.client_processes client_id new_client_map;
         Some v
       end
@@ -131,7 +121,7 @@ struct
     match Hashtbl.lookup state.blocked pid with
     | None -> () (* process not blocked *)
     | Some doorbell ->
-      Debug.print ("Awakening blocked process " ^ string_of_int pid);
+      Debug.print ("Awakening blocked process " ^ string_of_process_id pid);
       Hashtbl.remove state.blocked pid;
       Lwt.wakeup doorbell ()
 
@@ -164,14 +154,14 @@ struct
       blocking suspended (i.e. runnable) processes *)
   let block pstate =
     let pid = get_current_pid () in
-    Debug.print ("Blocking process " ^ string_of_int pid);
+    Debug.print ("Blocking process " ^ string_of_process_id pid);
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =
-    let new_pid = fresh_pid () in
+    let new_pid = create_process_id () in
     if angel then
       begin
         let (t, w) = Lwt.task () in
@@ -185,12 +175,12 @@ struct
 
   (** Create a new client process and return its identifier *)
   let create_client_process client_id func =
-    let new_pid = fresh_pid () in
+    let new_pid = create_process_id () in
     let client_table =
       try Hashtbl.find state.client_processes client_id
       with
-        NotFound _ -> IntMap.empty in
-    let new_client_table = IntMap.add new_pid (func, false) client_table in
+        NotFound _ -> PidMap.empty in
+    let new_client_table = PidMap.add new_pid (func, false) client_table in
     Hashtbl.add state.client_processes client_id new_client_table;
     new_pid
 
@@ -198,7 +188,7 @@ struct
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_int pid);
+      Debug.print ("Finishing process " ^ string_of_process_id pid);
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -215,7 +205,7 @@ struct
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_int pid);
+      Debug.print ("Finishing process " ^ string_of_process_id pid);
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -248,37 +238,82 @@ struct
     snd v
 end
 
-exception UnknownProcessID of Proc.pid
-exception UnknownClientID of Proc.client_id
+exception UnknownProcessID of process_id
+exception UnknownClientID of client_id
 
 
 module Websockets =
 struct
+  type links_websocket = {
+    client_id : client_id;
+    send_fn : Websocket_lwt.Frame.t option -> unit
+  }
+
   let client_websockets :
-    (Proc.client_id, Websockets.links_websocket) Hashtbl.t =
+    (client_id, Websockets.links_websocket) Hashtbl.t =
       Hashtbl.create 10000
 
   let register_websocket = Hashtbl.add client_websockets
+  let deregister_websocket = Hashtbl.remove client_websockets
   let lookup_websocket client_id =
     try Some (Hashtbl.find client_websockets client_id) with
       | _ -> None
+
+  let mk_links_websocket cid send_fn = {
+    client_id = cid;
+    send_fn = send_fn
+  }
+
+  let recvLoop valenv client_id frame =
+    let rec loop () =
+      match frame.Websocket_lwt.Frame.opcode with
+        | Websocket_lwt.Frame.Opcode.Close ->
+            deregister_websocket client_id;
+            Printf.printf "Websocket closed for client %s\n"
+              (string_of_client_id client_id)
+        | _ ->
+            Printf.printf "Received: %s\n" frame.Websocket_lwt.Frame.content;
+            loop ()
+      in
+    loop ()
+
+  let accept client_id req flow =
+      Websocket_cohttp_lwt.upgrade_connection
+        req flow (recvLoop valenv client_id)
+      >>= fun (resp, body, send_fn) ->
+      let links_ws = mk_links_websocket client_id send_fn in
+      Lwt.return (links_ws, resp, body)
+
+  let send_message wsocket pid json_val =
+    let str_val =
+      "__MESSAGE_DELIVERY:" ^ ProcessTypes.string_of_pid ^ ":" ^ json_val in
+    (* Without buffering, does this guarantee in-order delivery? *)
+    (* Websockets *do*, but we might need to maintain an outgoing
+    * buffer in case async scheduling doesn't. *)
+    async @@
+    Lwt.wrap1 (wsocket.send_fn) @@ (
+      Websocket.Frame.of_bytes @@
+      BytesLabels.of_string @@
+      str_val
+    )
 end
-
-
 
 module Mailbox =
 struct
   (* Message queues for processes resident on this server. *)
-  let server_message_queues : (Proc.pid, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
+  let server_message_queues :
+    (process_id, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
 
   (* Message queues for processes spawned on a client, but migrated over during an RPC call. *)
-  type client_queue_map = Value.t Queue.t intmap
-  let client_message_queues : (Proc.client_id, client_queue_map) Hashtbl.t = Hashtbl.create 10000
+  type client_queue_map = Value.t Queue.t pid_map
+  let client_message_queues : (client_id, client_queue_map) Hashtbl.t = Hashtbl.create 10000
 
   (* Create the main process's message queue *)
   (* SJF Assumption -- this is the main *server* thread, i.e. the entrypoint from running ./links <file>
    * Where does the request-main's MB get created? (i.e. the entrypoint from evaluating a request) *)
-  let _ = Hashtbl.add server_message_queues 0 (Queue.create ())
+  let _ = Hashtbl.add server_message_queues
+    (Proc.main_process_pid)
+    (Queue.create ())
 
   (** Given a PID, return its next queued message (under [Some]) or [None].
    * Used for receiving on the server, from server processes. *)
@@ -306,11 +341,11 @@ struct
       | Some client_queue_map ->
           (* With the map in hand, we can lookup the PID *)
           begin
-            match IntMap.lookup pid client_queue_map with
+            match PidMap.lookup pid client_queue_map with
               | Some queue ->
                   (* And with the queue in hand, we can pop all of the values
                    * and update the hashtable, *)
-                  let updated_map = IntMap.remove pid client_queue_map in
+                  let updated_map = PidMap.remove pid client_queue_map in
                   Hashtbl.replace client_message_queues client_id updated_map;
                   List.rev (Queue.fold (fun xs x -> x :: xs) [] queue)
               | None ->
@@ -338,15 +373,16 @@ struct
   let queue_client_message msg client_id pid =
     let client_queue_map =
       try Hashtbl.find client_message_queues client_id with
-        | NotFound _ -> IntMap.empty in
+        | NotFound _ -> PidMap.empty in
       try
-        let pid_queue = IntMap.find pid client_queue_map in
+        let pid_queue = PidMap.find pid client_queue_map in
         Queue.push msg pid_queue
       with
         | NotFound _ ->
             let new_queue = Queue.create () in
             Queue.push msg new_queue;
-            let new_queue_map = IntMap.add client_id new_queue client_queue_map in
+            let new_queue_map =
+              PidMap.add pid new_queue client_queue_map in
             Hashtbl.replace client_message_queues client_id new_queue_map
 
   let send_client_message msg client_id pid =
@@ -357,9 +393,19 @@ struct
       | `ClientNotFound -> raise (UnknownClientID client_id)
       | `ProcessNotFound -> raise (UnknownProcessID pid)
       | `ProcessFound false ->
-          failwith ("Cannot (yet -- soon!) send from the server to a process " ^
-            "which has already been spawned on a client")
-      | `ProcessFound true -> queue_client_message msg client_id pid
+          let ws_opt = Websockets.lookup_websocket client_id in
+          begin
+            match ws_opt with
+              | Some ws ->
+                `RemoteSend ws
+              | None ->
+                  (* TODO: Buffer and send later, instead of failing here *)
+                  failwith ("No websocket for Client ID " ^
+                    (string_of_client_id client_id) ^ ".")
+          end
+      | `ProcessFound true ->
+          queue_client_message msg client_id pid;
+          `LocalSendOK
 end
 
 module Session = struct

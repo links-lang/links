@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -54,6 +54,7 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
+		  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
@@ -108,7 +109,6 @@ SOURCES = $(OPC)                                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
-		  websockets.mli websockets.ml          \
           proc.mli proc.ml                      \
           jsonparse.mly                         \
           jsonlex.mll                           \
