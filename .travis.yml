@@ -8,7 +8,7 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam
   - opam init -a
-  - opam switch 4.02.2
+  - opam switch 4.04
   - eval `opam config env`
   - psql -c 'create database links;' -U postgres
 install:
