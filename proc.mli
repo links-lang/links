@@ -13,7 +13,7 @@ exception Aborted of abort_type  (* This sucks *)
  * *)
 type client_send_result = [
   | `LocalSendOK
-  | `RemoteSend of (Websockets.links_websocket)
+(*  | `RemoteSend of (Websockets.links_websocket) *)
 ]
 
 module Proc :
@@ -27,9 +27,9 @@ sig
 
   val lookup_client_process : ProcessTypes.client_id -> ProcessTypes.process_id -> Value.t option
 
-  val create_process : bool -> thread -> ProcessTypes.process_id 
+  val create_process : bool -> thread -> ProcessTypes.process_id Lwt.t
   val create_client_process : ProcessTypes.client_id -> Value.t ->
-    ProcessTypes.process_id
+    ProcessTypes.process_id Lwt.t
   val awaken : ProcessTypes.process_id -> unit
 
   val finish : Value.env * Value.t -> thread_result Lwt.t
@@ -45,6 +45,7 @@ sig
 end
 
 (* Operations on websockets used to send and receive messages remotely. *)
+(*
 module Websockets :
   sig
     type links_websocket
@@ -65,6 +66,7 @@ module Websockets :
       string ->
       unit
   end
+*)
 
 module Mailbox :
 sig
@@ -76,7 +78,7 @@ sig
     Value.t ->
     ProcessTypes.client_id ->
     ProcessTypes.process_id ->
-    client_send_result 
+    client_send_result
   val send_server_message : Value.t -> ProcessTypes.process_id -> unit
 end
 
@@ -87,15 +89,14 @@ module Session :
 sig
   type apid = int
   type portid = int
-  type pid = int
   type chan = portid * portid
 
   val new_access_point : unit -> apid
   val accept : apid -> chan * bool
   val request : apid -> chan * bool
 
-  val block : portid -> pid -> unit
-  val unblock : portid -> pid option
+  val block : portid -> ProcessTypes.process_id -> unit
+  val unblock : portid -> ProcessTypes.process_id option
 
   val send : Value.t -> portid -> unit
   val receive : portid -> Value.t option

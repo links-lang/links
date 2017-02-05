@@ -211,9 +211,11 @@ struct
                   begin
                     match client_send_res with
                       | `LocalSendOK -> ()
+                      (*
                       | `RemoteSend (ws) ->
                           let json_val = Json.jsonize_value req_data msg in
                           Websockets.send_value ws process_id json_val
+                          *)
                   end
              with
                  UnknownProcessID _ ->
@@ -228,15 +230,15 @@ struct
           begin
             match loc with
               | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                  let new_pid = Proc.create_client_process client_id func in
+                  Proc.create_client_process client_id func >>= fun new_pid ->
                   apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
                   begin
                     let var = Var.dummy_var in
                     let cont' = (`Local, var, Value.empty_env,
                                  ([], `Apply (`Variable var, []))) in
-                    let new_pid = Proc.create_process false
-                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
+                    Proc.create_process false
+                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun new_pid ->
                     apply_cont cont env (`Pid (`ServerPid new_pid))
                   end
               | _ -> assert false
@@ -249,13 +251,14 @@ struct
           begin
             match loc with
               | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                  let new_pid = Proc.create_client_process client_id func in
+                  Proc.create_client_process client_id func >>= fun new_pid ->
                   apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
                   let var = Var.dummy_var in
                   let cont' = (`Local, var, Value.empty_env,
                                ([], `Apply (`Variable var, []))) in
-                  let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
+                  Proc.create_process true
+                    (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun new_pid ->
                   apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end

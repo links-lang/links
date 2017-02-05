@@ -1,4 +1,5 @@
 open Utility
+open ProcessTypes
 
 let show_json = Settings.add_bool("show_json", false, `User)
 
@@ -56,29 +57,29 @@ let jsonize_location : Ir.location -> string = function
 *)
 
 (* sets of client processes and event handlers that need to be serialized *)
-type json_state = {processes: IntSet.t; handlers: IntSet.t}
-let empty_state = {processes = IntSet.empty; handlers = IntSet.empty}
-let add_pid : int -> json_state -> json_state =
-  fun pid state -> {state with processes = IntSet.add pid state.processes}
-let pid_state : int -> json_state =
+type json_state = {processes: pid_set; handlers: IntSet.t}
+let empty_state = {processes = PidSet.empty; handlers = IntSet.empty}
+let add_pid : process_id -> json_state -> json_state =
+  fun pid state -> {state with processes = PidSet.add pid state.processes}
+let pid_state : process_id -> json_state =
   fun pid -> add_pid pid empty_state
 let add_event_handler : int -> json_state -> json_state =
   fun h state -> {state with handlers = IntSet.add h state.handlers}
-let merge_states s1 s2 = {processes = IntSet.union s1.processes s2.processes;
+let merge_states s1 s2 = {processes = PidSet.union s1.processes s2.processes;
                           handlers =  IntSet.union s1.handlers s2.handlers}
-let diff_state s1 s2 = {processes = IntSet.diff s1.processes s2.processes;
+let diff_state s1 s2 = {processes = PidSet.diff s1.processes s2.processes;
                         handlers = IntSet.diff s1.handlers s2.handlers}
 
 
-type auxiliary = [`Process of int | `Handler of int]
+type auxiliary = [`Process of process_id | `Handler of int]
 let auxiliaries_of_state : json_state -> auxiliary list =
   fun state -> List.map (fun i -> `Handler i) (IntSet.elements state.handlers)
-             @ List.map (fun i -> `Process i) (IntSet.elements state.processes)
+             @ List.map (fun i -> `Process i) (PidSet.elements state.processes)
 
 (* Check if the client ID of a PID matches the current client ID as per the request data *)
 let client_id_matches req_data pid_client_id =
   let client_id = RequestData.get_client_id req_data in
-  client_id = pid_client_id
+  ClientID.equal client_id pid_client_id
 
 let rec jsonize_value req_data : Value.t -> string * json_state =
   function
@@ -113,14 +114,14 @@ let rec jsonize_value req_data : Value.t -> string * json_state =
     let ss, state = jsonize_values req_data elems in
       "[" ^ String.concat "," ss ^ "]", state
   | `Pid (`ClientPid (client_id, process_id)) ->
-      (* FIXME: Should only add to pid_state if client ID matches *)
-      "{\"_clientPid\":" ^ string_of_int process_id ^ ", \"_clientId\":" ^ string_of_int client_id ^ "}",
+      "{\"_clientPid\":\"" ^ (ProcessID.to_string process_id) ^
+      "\", \"_clientId\":\"" ^ (ClientID.to_string client_id) ^ "\"}",
       if client_id_matches req_data client_id then pid_state process_id else empty_state
   | `Pid (`ServerPid (process_id)) ->
-      "{\"_serverPid\":" ^ string_of_int process_id ^ "}", empty_state
+      "{\"_serverPid\":\"" ^ (ProcessID.to_string process_id) ^ "\"}", empty_state
   | `Socket _ -> failwith "Cannot jsonize sockets"
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
-      "{\"_clientSpawnLoc\":" ^ string_of_int client_id ^ "}", empty_state
+      "{\"_clientSpawnLoc\":" ^ (ClientID.to_string client_id) ^ "}", empty_state
   | `SpawnLocation (`ServerSpawnLoc) ->
       "{\"_serverSpawnLoc\": [] }", empty_state
 and jsonize_primitive : Value.primitive_value -> string * json_state = function
@@ -178,8 +179,8 @@ let rec resolve_auxiliaries :
   RequestData.request_data ->
   json_state ->
   auxiliary list ->
-  (string IntMap.t * string IntMap.t) ->
-  (string IntMap.t * string IntMap.t) =
+  (string PidMap.t * string IntMap.t) ->
+  (string PidMap.t * string IntMap.t) =
   fun req_data state pids ((pmap, hmap) as maps) ->
     match pids with
     | [] -> maps
@@ -196,7 +197,7 @@ let rec resolve_auxiliaries :
 
           (* These are processes which should be running on this client *)
           let s =
-            "{\"pid\":" ^ string_of_int pid ^ "," ^
+            "{\"pid\":\"" ^ (ProcessID.to_string pid) ^ "\"," ^
             " \"process\":" ^ ps ^ "," ^
             " \"messages\":" ^ ms ^ "}" in
 
@@ -206,7 +207,7 @@ let rec resolve_auxiliaries :
             req_data
             (merge_states state new_state)
             (auxs @ auxiliaries_of_state (diff_state new_state state))
-            (IntMap.add pid s pmap, hmap)
+            (PidMap.add pid s pmap, hmap)
         | None -> (* this process is already active on the client *)
           resolve_auxiliaries req_data state auxs maps
       end
@@ -226,9 +227,9 @@ let rec resolve_auxiliaries :
 (* serialise the json_state as a string *)
 let resolve_state : RequestData.request_data -> json_state -> string =
   fun req_data state ->
-    let pmap, hmap = resolve_auxiliaries req_data state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
-    "{\"client_id\":" ^ string_of_int (RequestData.get_client_id req_data) ^ "," ^
-     "\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
+    let pmap, hmap = resolve_auxiliaries req_data state (auxiliaries_of_state state) (PidMap.empty, IntMap.empty) in
+    "{\"client_id\":\"" ^ ClientID.to_string (RequestData.get_client_id req_data) ^ "\"," ^
+     "\"processes\":" ^ "[" ^ String.concat "," (PidMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
      "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
 
 (* FIXME: Currently we only send inactive client processes if they

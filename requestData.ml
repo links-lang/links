@@ -1,7 +1,5 @@
 (*pp deriving *)
-
-type client_id = int
-  deriving (Show)
+open ProcessTypes
 
 type request_data = {
   cgi_parameters : (string * string) list ref;
@@ -17,7 +15,7 @@ let new_empty_request_data () = {
   cookies = ref [];
   http_response_headers = ref [];
   http_response_code = ref 200;
-  client_id = ref (-100);
+  client_id = ref (dummy_client_id)
 }
 
 let new_request_data cgi_params cookies client_id = {

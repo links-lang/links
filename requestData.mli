@@ -1,11 +1,7 @@
 (*pp deriving *)
+open ProcessTypes
 
 type request_data
-  deriving (Show)
-
-(* At the moment, it doesn't make sense for this to be properly abstract. *)
-(* It would be lovely to at some point though? *)
-type client_id = int
   deriving (Show)
 
 val new_empty_request_data : unit -> request_data

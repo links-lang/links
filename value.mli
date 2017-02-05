@@ -1,5 +1,6 @@
 (*pp deriving *)
 (* Values and environments *)
+open ProcessTypes
 
 class type otherfield
  = object method show : string end
@@ -63,10 +64,6 @@ type primitive_value = [
 
 module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
-(* jcheney: Added value function component to PrimitiveFunction *)
-type client_id = int
-  deriving (Show)
-
 type spawn_location = [
   | `ClientSpawnLoc of client_id
   | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
@@ -74,8 +71,8 @@ type spawn_location = [
   deriving (Show)
 
 type dist_pid = [
-  | `ServerPid of int (* Again, will need a server address here later *)
-  | `ClientPid of (client_id * int)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
+  | `ClientPid of (client_id * process_id)
 ]
   deriving (Show)
 

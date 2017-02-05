@@ -1,6 +1,7 @@
 (*pp deriving *)
 open Utility
 open Notfound
+open ProcessTypes
 
 let serialiser = Settings.add_string ("serialiser", "Dump", `User)
 
@@ -230,11 +231,6 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
     let magic = "out_channel"
    end)
 
-(*jcheney: Added function component to PrimitiveFunction *)
-
-type client_id = int
-  deriving (Show)
-
 type spawn_location = [
   | `ClientSpawnLoc of client_id
   | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
@@ -242,8 +238,8 @@ type spawn_location = [
   deriving (Show)
 
 type dist_pid = [
-  | `ServerPid of int (* Again, will need a server address here later *)
-  | `ClientPid of (client_id * int)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
+  | `ClientPid of (client_id * process_id)
 ]
   deriving (Show)
 
@@ -492,7 +488,7 @@ and string_of_value : t -> string = function
   | `Socket (_, _) -> "<socket>"
   | `SpawnLocation sl -> "Spawn location: " ^
     (match sl with
-       | `ClientSpawnLoc cid -> "client " ^ (string_of_int cid)
+       | `ClientSpawnLoc cid -> "client " ^ (ClientID.to_string cid)
        | `ServerSpawnLoc -> "server")
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -526,9 +522,9 @@ and string_of_cont : continuation -> string =
       "[" ^ mapstrcat ", " frame cont ^ "]"
 
 and string_of_dist_pid = function
-  | `ServerPid i -> "Server (" ^ (string_of_int i) ^ ")"
+  | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")"
   | `ClientPid (cid, i) ->
-      "Client num " ^ (string_of_int cid) ^ ", process " ^ (string_of_int i)
+      "Client num " ^ (ClientID.to_string cid) ^ ", process " ^ (ProcessID.to_string i)
 
 
 (* let string_of_cont : continuation -> string = *)

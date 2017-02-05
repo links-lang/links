@@ -1,5 +1,6 @@
 %{
 open Utility
+open ProcessTypes
 
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
@@ -32,12 +33,16 @@ object_:
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
-                            | ["_serverPid", v] -> `Pid (`ServerPid (Value.unbox_int v))
-                            | ["_clientPid", pid; "_clientId", client_id]
-                            | ["_clientId", client_id; "_clientPid", pid] ->
-                                `Pid (`ClientPid (Value.unbox_int client_id, Value.unbox_int pid))
-                            | ["_clientSpawnLoc", client_id] ->
-                                `SpawnLocation (`ClientSpawnLoc (Value.unbox_int client_id))
+                            | ["_serverPid", v] ->
+                                `Pid (`ServerPid (ProcessID.of_string (Value.unbox_string v)))
+                            | ["_clientPid", pid_str; "_clientId", client_id_str]
+                            | ["_clientId", client_id_str; "_clientPid", pid_str] ->
+                                let client_id = ClientID.of_string (Value.unbox_string client_id_str) in
+                                let pid = ProcessID.of_string (Value.unbox_string pid_str) in
+                                `Pid (`ClientPid (client_id, pid))
+                            | ["_clientSpawnLoc", client_id_str] ->
+                                let client_id = ClientID.of_string (Value.unbox_string client_id_str) in
+                                `SpawnLocation (`ClientSpawnLoc (client_id))
                             | ["_serverSpawnLoc", _] ->
                                 `SpawnLocation (`ServerSpawnLoc)
                             | ["_db", db] ->

@@ -8,12 +8,12 @@ exception Aborted of abort_type
 
 type client_send_result = [
   | `LocalSendOK
-  | `RemoteSend of (Websockets.links_websocket)
+(*  | `RemoteSend of (Websockets.links_websocket) *)
 ]
 
 module Proc =
 struct
-  let main_process_pid = ProcessTypes.create_process_id ()
+  let main_process_pid = ProcessTypes.main_process_pid
   let main_running = ref true
 
   (*
@@ -92,8 +92,8 @@ struct
         | NotFound _pid ->
             failwith (Printf.sprintf
               "Missing client process %s in client %s: "
-              (string_of_process_id pid)
-              (string_of_client_id client_id)) in
+              (ProcessID.to_string pid)
+              (ClientID.to_string client_id)) in
 
     if active then
       None
@@ -121,7 +121,7 @@ struct
     match Hashtbl.lookup state.blocked pid with
     | None -> () (* process not blocked *)
     | Some doorbell ->
-      Debug.print ("Awakening blocked process " ^ string_of_process_id pid);
+      Debug.print ("Awakening blocked process " ^ ProcessID.to_string pid);
       Hashtbl.remove state.blocked pid;
       Lwt.wakeup doorbell ()
 
@@ -154,14 +154,14 @@ struct
       blocking suspended (i.e. runnable) processes *)
   let block pstate =
     let pid = get_current_pid () in
-    Debug.print ("Blocking process " ^ string_of_process_id pid);
+    Debug.print ("Blocking process " ^ ProcessID.to_string pid);
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =
-    let new_pid = create_process_id () in
+    ProcessID.create () >>= fun new_pid ->
     if angel then
       begin
         let (t, w) = Lwt.task () in
@@ -171,25 +171,25 @@ struct
       end
     else
       async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
-    new_pid
+    Lwt.return new_pid
 
   (** Create a new client process and return its identifier *)
   let create_client_process client_id func =
-    let new_pid = create_process_id () in
+    ProcessID.create () >>= fun new_pid ->
     let client_table =
       try Hashtbl.find state.client_processes client_id
       with
         NotFound _ -> PidMap.empty in
     let new_client_table = PidMap.add new_pid (func, false) client_table in
     Hashtbl.add state.client_processes client_id new_client_table;
-    new_pid
+    Lwt.return new_pid
 
   let finish r =
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_process_id pid);
-    if pid == main_process_pid then
+      Debug.print ("Finishing process " ^ ProcessID.to_string pid);
+    if ProcessID.equal pid main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
       begin
@@ -205,7 +205,7 @@ struct
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_process_id pid);
+      Debug.print ("Finishing process " ^ ProcessID.to_string pid);
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -241,7 +241,7 @@ end
 exception UnknownProcessID of process_id
 exception UnknownClientID of client_id
 
-
+(*
 module Websockets =
 struct
   type links_websocket = {
@@ -270,7 +270,7 @@ struct
         | Websocket_lwt.Frame.Opcode.Close ->
             deregister_websocket client_id;
             Printf.printf "Websocket closed for client %s\n"
-              (string_of_client_id client_id)
+              (ClientID.to_string client_id)
         | _ ->
             Printf.printf "Received: %s\n" frame.Websocket_lwt.Frame.content;
             loop ()
@@ -297,6 +297,7 @@ struct
       str_val
     )
 end
+*)
 
 module Mailbox =
 struct
@@ -393,6 +394,7 @@ struct
       | `ClientNotFound -> raise (UnknownClientID client_id)
       | `ProcessNotFound -> raise (UnknownProcessID pid)
       | `ProcessFound false ->
+          (*
           let ws_opt = Websockets.lookup_websocket client_id in
           begin
             match ws_opt with
@@ -401,8 +403,10 @@ struct
               | None ->
                   (* TODO: Buffer and send later, instead of failing here *)
                   failwith ("No websocket for Client ID " ^
-                    (string_of_client_id client_id) ^ ".")
+                    (ClientID.to_string client_id) ^ ".")
           end
+*)
+          failwith "Can't yet send remotely"
       | `ProcessFound true ->
           queue_client_message msg client_id pid;
           `LocalSendOK
@@ -411,7 +415,6 @@ end
 module Session = struct
   type apid = int              (* access point id *)
   type portid = int
-  type pid = int               (* process id *)
   type chan = portid * portid  (* a channel is a pair of ports *)
 
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
@@ -421,7 +424,7 @@ module Session = struct
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
 
   let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
-  let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
+  let blocked = (Hashtbl.create 10000 : (portid, process_id) Hashtbl.t)
   let forward = (Hashtbl.create 10000 : (portid, portid Unionfind.point) Hashtbl.t)
 
   let generator () =

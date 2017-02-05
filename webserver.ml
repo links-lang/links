@@ -28,17 +28,6 @@ struct
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
-  let client_id_mutex = Lwt_mutex.create ()
-  let client_id_counter = ref 0
-
-  let gen_client_id =
-    let mutex = client_id_mutex in
-    let counter = client_id_counter in
-    fun () ->
-      Lwt_mutex.with_lock mutex (fun () ->
-        let ret = !counter in
-        counter := ret +1;
-        Lwt.return ret)
 
   let set_prelude bs =
     prelude := bs
@@ -59,15 +48,15 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (int_of_string decoded_client_id)
+          Lwt.return (ProcessTypes.ClientID.of_string decoded_client_id)
       | None -> failwith "Client ID expected but not found."
 
 
   let get_or_make_client_id cgi_args =
     if (Webif.should_contain_client_id cgi_args) then
-      get_client_id_or_die
+      get_client_id_or_die cgi_args
     else
-      gen_client_id ()
+      ProcessTypes.ClientID.create ()
 
   let start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
@@ -84,7 +73,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont conn req body =
+    let callback rt render_cont _conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -180,15 +169,18 @@ struct
              end
           | s -> s in
         serve_static linkslib uri_path []
-      else if path = websocket_path then
-        let client_id = get_client_id_or_die cgi_args in
-        let req_data = RequestData.new_request_data cgi_args cookies cid in
+      else if path = Settings.get_value websocket_path then
+        (*
+        get_client_id_or_die cgi_args >>= fun client_id ->
+        let req_data = RequestData.new_request_data cgi_args cookies client_id in
         let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
         Cohttp_lwt_body.drain_body body >>= fun () ->
         Websockets.accept client_id req (fst conn) >>=
         fun (wsocket, resp, body) ->
           Proc.Websockets.register_websocket client_id wsocket;
           Lwt.return (resp, body)
+      *)
+        failwith "unimplemented"
       else
         route rt in
 

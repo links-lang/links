@@ -141,7 +141,7 @@ struct
 
   let perform_request valenv run render_cont req =
     let req_data = Value.request_data valenv in
-    let client_id_str = (string_of_int (RequestData.get_client_id req_data)) in
+    let client_id_str = (ProcessTypes.ClientID.to_string (RequestData.get_client_id req_data)) in
     match req with
       | ServerCont t ->
         Debug.print("Doing ServerCont for client ID " ^ client_id_str);
@@ -301,7 +301,8 @@ struct
      * library functions may need to modify the environments, and we don't want
      * to do a state-passing transformation. *)
     (* Client ID is always 0 in CGI mode. *)
-    let req_data = RequestData.new_request_data cgi_args cookies 0 in
+    let req_data =
+      RequestData.new_request_data cgi_args cookies (ProcessTypes.dummy_client_id) in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =

@@ -65,6 +65,7 @@ depends: [
   "base64"
   "cohttp"
   "websocket"
+  "nocrypto"
 ]
 
 depopts: [
