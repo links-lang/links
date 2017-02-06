@@ -35,7 +35,7 @@ let make_name_with_id id =
     Nocrypto.Base64.encode @@
     Nocrypto.Hash.digest `SHA256 @@
     Cstruct.of_string @@
-    (string_of_int id) ^ "_" ^ (string_of_int @@ gen_random_int ())
+    "srv_" ^ (string_of_int id) ^ "_" ^ (string_of_int @@ gen_random_int ())
 
 let create_name_unsafe () =
   make_name_with_id (get_and_increment_id_unsafe ())
