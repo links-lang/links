@@ -7,7 +7,6 @@ open Utility
 let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
 let host_name = Settings.add_string ("host", "0.0.0.0", `User)
 let port = Settings.add_int ("port", 8080, `User)
-let websocket_path = Settings.add_string ("websocket_path", "_/ws", `User)
 
 module rec Webserver : WEBSERVER =
 struct
@@ -24,6 +23,7 @@ struct
   type routing_table = (bool * string * (static_resource, request_handler_fn) either) list
 
   let rt : routing_table ref = ref []
+  let websocket_connection_path : (path option) ref = ref None
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
@@ -38,6 +38,11 @@ struct
 
   let add_route is_directory path thread_starter =
     rt := (is_directory, path, thread_starter) :: !rt
+
+  let accept_websocket_connections : path -> bool = fun ws_path ->
+    match !websocket_connection_path with
+      | Some _ -> false
+      | None -> (websocket_connection_path := (Some ws_path)); true
 
   let extract_client_id cgi_args =
     Utility.lookup "__client_id" cgi_args
@@ -73,7 +78,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont _conn req body =
+    let callback rt render_cont conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -133,6 +138,11 @@ struct
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~headers ~fname () in
 
+      let is_websocket_request path =
+        match !websocket_connection_path with
+          | Some ws_url -> is_prefix_of ws_url path
+          | None -> false in
+
       let rec route = function
         | [] ->
            Debug.print "No cases matched!\n";
@@ -145,7 +155,7 @@ struct
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
            get_or_make_client_id cgi_args >>= fun (cid) ->
-           let req_data = RequestData.new_request_data cgi_args cookies cid in
+           let req_data = RequestData.new_request_data cgi_args cookies cid !websocket_connection_path in
            let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
            Webif.do_request
              (req_env, nenv, tyenv)
@@ -169,18 +179,22 @@ struct
              end
           | s -> s in
         serve_static linkslib uri_path []
-      else if path = Settings.get_value websocket_path then
-        (*
-        get_client_id_or_die cgi_args >>= fun client_id ->
-        let req_data = RequestData.new_request_data cgi_args cookies client_id in
-        let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+      (* Handle websocket connections *)
+      else if (is_websocket_request path) then
+        (* Safe, since this is checked within is_websocket_request, and once set, cannot
+         * be unset *)
+        let websocket_path = OptionUtils.val_of (!websocket_connection_path) in
+        let ws_url_length = String.length websocket_path in
+        (* TODO: Sanity checking of client ID here *)
+        let client_id = ProcessTypes.ClientID.of_string @@
+          String.sub path ws_url_length ((String.length path) - ws_url_length) in
+        Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
+          (ProcessTypes.ClientID.to_string client_id));
         Cohttp_lwt_body.drain_body body >>= fun () ->
-        Websockets.accept client_id req (fst conn) >>=
+        Proc.Websockets.accept client_id req (fst conn) >>=
         fun (wsocket, resp, body) ->
-          Proc.Websockets.register_websocket client_id wsocket;
+          Proc.Websockets.send_raw_string wsocket "Hello from the server!";
           Lwt.return (resp, body)
-      *)
-        failwith "unimplemented"
       else
         route rt in
 

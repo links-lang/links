@@ -7,7 +7,7 @@ module type NAME = sig
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val to_string : t -> string
-  val of_string : string -> t (* Is there a way to not expose this? *)
+  val of_string : string -> t
   module Show_t : Deriving_Show.Show with type a = t
 end
 

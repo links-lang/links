@@ -302,7 +302,7 @@ struct
      * to do a state-passing transformation. *)
     (* Client ID is always 0 in CGI mode. *)
     let req_data =
-      RequestData.new_request_data cgi_args cookies (ProcessTypes.dummy_client_id) in
+      RequestData.new_request_data cgi_args cookies (ProcessTypes.dummy_client_id) None in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =

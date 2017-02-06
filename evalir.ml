@@ -404,6 +404,13 @@ struct
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
        end
+    | `PrimitiveFunction ("serveWebsockets", _), [ws_path] ->
+        let path = Value.unbox_string ws_path in
+        let res = Webs.accept_websocket_connections path in
+        if res then
+          apply_cont cont env (`Record [])
+        else
+          eval_error "Attempt to start accepting websocket requests multiple times."
     (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))

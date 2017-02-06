@@ -228,7 +228,12 @@ let rec resolve_auxiliaries :
 let resolve_state : RequestData.request_data -> json_state -> string =
   fun req_data state ->
     let pmap, hmap = resolve_auxiliaries req_data state (auxiliaries_of_state state) (PidMap.empty, IntMap.empty) in
+    let ws_url_data =
+      (match RequestData.get_websocket_connection_url req_data with
+         | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
+         | None -> "") in
     "{\"client_id\":\"" ^ ClientID.to_string (RequestData.get_client_id req_data) ^ "\"," ^
+    ws_url_data ^
      "\"processes\":" ^ "[" ^ String.concat "," (PidMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
      "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
 

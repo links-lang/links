@@ -45,7 +45,6 @@ sig
 end
 
 (* Operations on websockets used to send and receive messages remotely. *)
-(*
 module Websockets :
   sig
     type links_websocket
@@ -60,13 +59,17 @@ module Websockets :
 
     (** Sends a message to the given PID.
      * The string is a JSONised value -- should abstract this furhter *)
-    val send_message :
+    val deliver_process_message :
       links_websocket ->
       ProcessTypes.process_id ->
       string ->
       unit
+
+    (** Debug: sends a raw string message to the given websocket. *)
+    val send_raw_string : links_websocket -> string -> unit
+
+
   end
-*)
 
 module Mailbox :
 sig

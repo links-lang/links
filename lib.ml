@@ -1555,7 +1555,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "servePages",
     (`PFun (fun _ -> assert false),
      datatype "() ~> ()",
-     IMPURE)
+     IMPURE);
+    "serveWebsockets",
+    (`PFun (fun _ -> assert false),
+    datatype "(String) ~> ()",
+    IMPURE)
 ]
 
 (* HACK

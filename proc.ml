@@ -2,6 +2,7 @@
 open Utility
 open Lwt
 open ProcessTypes
+open Websocket_cohttp_lwt
 
 type abort_type = string * string
 exception Aborted of abort_type
@@ -241,16 +242,15 @@ end
 exception UnknownProcessID of process_id
 exception UnknownClientID of client_id
 
-(*
 module Websockets =
 struct
   type links_websocket = {
     client_id : client_id;
-    send_fn : Websocket_lwt.Frame.t option -> unit
+    send_fn : Websocket_cohttp_lwt.Frame.t option -> unit
   }
 
   let client_websockets :
-    (client_id, Websockets.links_websocket) Hashtbl.t =
+    (client_id, links_websocket) Hashtbl.t =
       Hashtbl.create 10000
 
   let register_websocket = Hashtbl.add client_websockets
@@ -264,40 +264,52 @@ struct
     send_fn = send_fn
   }
 
-  let recvLoop valenv client_id frame =
+  let recvLoop client_id frame =
+    let open Frame in
     let rec loop () =
-      match frame.Websocket_lwt.Frame.opcode with
-        | Websocket_lwt.Frame.Opcode.Close ->
+      match frame.opcode with
+        | Opcode.Close ->
             deregister_websocket client_id;
             Printf.printf "Websocket closed for client %s\n"
               (ClientID.to_string client_id)
         | _ ->
-            Printf.printf "Received: %s\n" frame.Websocket_lwt.Frame.content;
+            Printf.printf "Received: %s from client %s\n" frame.content (ClientID.to_string client_id);
             loop ()
       in
     loop ()
 
   let accept client_id req flow =
       Websocket_cohttp_lwt.upgrade_connection
-        req flow (recvLoop valenv client_id)
+        req flow (recvLoop client_id)
       >>= fun (resp, body, send_fn) ->
       let links_ws = mk_links_websocket client_id send_fn in
+      register_websocket client_id links_ws;
       Lwt.return (links_ws, resp, body)
 
-  let send_message wsocket pid json_val =
-    let str_val =
-      "__MESSAGE_DELIVERY:" ^ ProcessTypes.string_of_pid ^ ":" ^ json_val in
+  let send_message wsocket str_msg =
     (* Without buffering, does this guarantee in-order delivery? *)
     (* Websockets *do*, but we might need to maintain an outgoing
     * buffer in case async scheduling doesn't. *)
-    async @@
-    Lwt.wrap1 (wsocket.send_fn) @@ (
-      Websocket.Frame.of_bytes @@
-      BytesLabels.of_string @@
-      str_val
+    async ( fun () ->
+      Lwt.wrap1 (wsocket.send_fn) @@ (
+        Some (
+        Websocket_cohttp_lwt.Frame.of_bytes @@
+        BytesLabels.of_string @@
+        str_msg)
+      )
     )
+
+  let deliver_process_message wsocket pid json_val =
+    let str_val =
+      "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
+      "\", \"val\":" ^ json_val ^ "\}" in
+    send_message wsocket str_val
+
+  (* Debug *)
+  let send_raw_string wsocket str =
+    send_message wsocket str
+
 end
-*)
 
 module Mailbox =
 struct
