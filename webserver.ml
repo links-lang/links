@@ -191,7 +191,7 @@ struct
         Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ProcessTypes.ClientID.to_string client_id));
         Cohttp_lwt_body.drain_body body >>= fun () ->
-        Proc.Websockets.accept client_id req (fst conn) >>=
+        WebsocketOperations.accept client_id req (fst conn) >>=
         fun (wsocket, resp, body) ->
           Proc.Websockets.send_raw_string wsocket "Hello from the server!";
           Lwt.return (resp, body)

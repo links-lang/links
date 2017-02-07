@@ -3,19 +3,6 @@
 type abort_type = string * string
 exception Aborted of abort_type  (* This sucks *)
 
-(* This seems hacky, but added since otherwise there would
- * be a cyclic dep between proc and JSON.
- * JSON requires Proc to pop messages; websockets requires JSON
- * for serialising values; and proc requires websockets for 
- * remote sends. 
- * To get around this, JSONisation happens at the callsite,
- * and the JSONised value is then sent along the websocket.
- * *)
-type client_send_result = [
-  | `LocalSendOK
-(*  | `RemoteSend of (Websockets.links_websocket) *)
-]
-
 module Proc :
 sig
   type thread_result = (Value.env * Value.t)
@@ -49,13 +36,12 @@ module Websockets :
   sig
     type links_websocket
 
-    (** Accepts a new websocket connection, creates a new socket, as
-     * well as a thread which handles incoming messages. *)
-    val accept :
-      ProcessTypes.client_id ->
-      Cohttp.Request.t ->
-      Conduit_lwt_unix.flow ->
-      (links_websocket * Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
+    (** Again, sucks that these have to be exposed. *)
+    val make_links_websocket :
+      ProcessTypes.client_id -> (Websocket_cohttp_lwt.Frame.t option -> unit) -> links_websocket
+    val register_websocket : ProcessTypes.client_id -> links_websocket -> unit
+    val deregister_websocket : ProcessTypes.client_id -> unit
+    val lookup_websocket : ProcessTypes.client_id -> links_websocket option
 
     (** Sends a message to the given PID.
      * The string is a JSONised value -- should abstract this furhter *)
@@ -67,12 +53,24 @@ module Websockets :
 
     (** Debug: sends a raw string message to the given websocket. *)
     val send_raw_string : links_websocket -> string -> unit
-
-
   end
 
 module Mailbox :
 sig
+  (* This seems hacky, but added since otherwise there would
+   * be a cyclic dep between proc and JSON.
+   * JSON requires Proc to pop messages; websockets requires JSON
+   * for serialising values; and proc requires websockets for
+   * remote sends.
+   * To get around this, JSONisation happens at the callsite,
+   * and the JSONised value is then sent along the websocket.
+   * I hate this. I hate this so, so much. I hate it more than words can describe.
+   * *)
+  type client_send_result = [
+    | `LocalSendOK
+    | `RemoteSend of (Websockets.links_websocket)
+  ]
+
   val pop_message_for : ProcessTypes.process_id -> Value.t option
   val pop_all_messages_for :
     ProcessTypes.client_id -> ProcessTypes.process_id-> Value.t list

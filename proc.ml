@@ -2,15 +2,9 @@
 open Utility
 open Lwt
 open ProcessTypes
-open Websocket_cohttp_lwt
 
 type abort_type = string * string
 exception Aborted of abort_type
-
-type client_send_result = [
-  | `LocalSendOK
-(*  | `RemoteSend of (Websockets.links_websocket) *)
-]
 
 module Proc =
 struct
@@ -33,7 +27,8 @@ struct
   type process_lookup_res = [
       | `ClientNotFound
       | `ProcessNotFound
-      | `ProcessFound of bool
+      | `DeployedProcessFound (* Process found, resides on client *)
+      | `UndeployedProcessFound (* Process found, not yet sent to client *)
     ]
 
   type scheduler_state =
@@ -75,7 +70,8 @@ struct
         let proc_pair_res = PidMap.lookup pid client_table in
         begin
           match proc_pair_res with
-            | Some (_v, active) -> `ProcessFound (active)
+            | Some (_v, active) ->
+                if active then `DeployedProcessFound else `UndeployedProcessFound
             | None -> `ProcessNotFound
         end
       | None -> `ClientNotFound
@@ -259,32 +255,10 @@ struct
     try Some (Hashtbl.find client_websockets client_id) with
       | _ -> None
 
-  let mk_links_websocket cid send_fn = {
+  let make_links_websocket cid send_fn = {
     client_id = cid;
     send_fn = send_fn
   }
-
-  let recvLoop client_id frame =
-    let open Frame in
-    let rec loop () =
-      match frame.opcode with
-        | Opcode.Close ->
-            deregister_websocket client_id;
-            Printf.printf "Websocket closed for client %s\n"
-              (ClientID.to_string client_id)
-        | _ ->
-            Printf.printf "Received: %s from client %s\n" frame.content (ClientID.to_string client_id);
-            loop ()
-      in
-    loop ()
-
-  let accept client_id req flow =
-      Websocket_cohttp_lwt.upgrade_connection
-        req flow (recvLoop client_id)
-      >>= fun (resp, body, send_fn) ->
-      let links_ws = mk_links_websocket client_id send_fn in
-      register_websocket client_id links_ws;
-      Lwt.return (links_ws, resp, body)
 
   let send_message wsocket str_msg =
     (* Without buffering, does this guarantee in-order delivery? *)
@@ -302,7 +276,7 @@ struct
   let deliver_process_message wsocket pid json_val =
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
-      "\", \"val\":" ^ json_val ^ "\}" in
+      "\", \"val\":" ^ json_val ^ "\"}" in
     send_message wsocket str_val
 
   (* Debug *)
@@ -313,6 +287,12 @@ end
 
 module Mailbox =
 struct
+  type client_send_result = [
+    | `LocalSendOK
+    | `RemoteSend of (Websockets.links_websocket)
+  ]
+
+
   (* Message queues for processes resident on this server. *)
   let server_message_queues :
     (process_id, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
@@ -405,21 +385,20 @@ struct
     match Proc.is_process_active client_id pid with
       | `ClientNotFound -> raise (UnknownClientID client_id)
       | `ProcessNotFound -> raise (UnknownProcessID pid)
-      | `ProcessFound false ->
-          (*
+      | `DeployedProcessFound ->
+          (* If the process has already been sent to the client, we will need
+           * to send the message via the client's websocket *)
           let ws_opt = Websockets.lookup_websocket client_id in
           begin
             match ws_opt with
-              | Some ws ->
-                `RemoteSend ws
+              | Some ws -> `RemoteSend ws
               | None ->
                   (* TODO: Buffer and send later, instead of failing here *)
                   failwith ("No websocket for Client ID " ^
                     (ClientID.to_string client_id) ^ ".")
           end
-*)
-          failwith "Can't yet send remotely"
-      | `ProcessFound true ->
+      | `UndeployedProcessFound ->
+          (* If the process has not yet been sent to the client, queue the message *)
           queue_client_message msg client_id pid;
           `LocalSendOK
 end

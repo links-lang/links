@@ -114,6 +114,7 @@ SOURCES = $(OPC)                                \
           jsonlex.mll                           \
           js.ml                                 \
           json.ml                               \
+					websocketOperations.mli websocketOperations.ml \
           database.mli database.ml              \
           linksregex.ml                         \
 	  lib.mli lib.ml                        \
