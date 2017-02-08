@@ -61,8 +61,15 @@ struct
         Value.find var env
       | Some v -> v
 
-   let serialize_call_to_client req_data (continuation, name, arg) =
-     Json.jsonize_call req_data continuation name arg
+   let serialize_call_to_client req_data (continuation, name, args) =
+     let open Json in
+     let client_id = RequestData.get_client_id req_data in
+     let conn_url_opt = RequestData.get_websocket_connection_url req_data in
+     let st = List.fold_left
+       (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
+       (JsonState.empty client_id conn_url_opt) args in
+     let st = ResolveJsonState.add_process_information client_id st in
+     Json.jsonize_call st continuation name args
 
    let client_call :
      RequestData.request_data ->
@@ -79,7 +86,7 @@ struct
          Debug.print("Making client call to " ^ name);
   (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
          let call_package = Utility.base64encode
-                              (serialize_call_to_client req_data (cont, name, args)) in
+                              (Json.string_of_json @@ serialize_call_to_client req_data (cont, name, args)) in
          Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
@@ -206,18 +213,8 @@ struct
                   Mailbox.send_server_message msg serv_pid
               (* Send a message to a process which lives on another client *)
               | `ClientPid (client_id, process_id) ->
-                  let client_send_res =
-                    Mailbox.send_client_message msg client_id process_id in
-                  begin
-                    match client_send_res with
-                      | `LocalSendOK -> ()
-                      (*
-                      | `RemoteSend (ws) ->
-                          let json_val = Json.jsonize_value req_data msg in
-                          Websockets.send_value ws process_id json_val
-                          *)
-                  end
-             with
+                  Mailbox.send_client_message msg client_id process_id
+           with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
                    failwith("Couldn't deliver message because destination process has no mailbox."));

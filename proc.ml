@@ -2,13 +2,14 @@
 open Utility
 open Lwt
 open ProcessTypes
+open WebsocketMessages
 
 type abort_type = string * string
 exception Aborted of abort_type
 
 module Proc =
 struct
-  let main_process_pid = ProcessTypes.main_process_pid
+  let main_process_pid = main_process_pid
   let main_running = ref true
 
   (*
@@ -76,31 +77,6 @@ struct
         end
       | None -> `ClientNotFound
 
-  (** Retrieves the body of a client process for transmission to the client.
-   * This will be done precisely once -- afterwards, the process will be marked
-   * as "active" in the HT. *)
-  let lookup_client_process client_id pid =
-    let client_table =
-      try Hashtbl.find state.client_processes client_id with
-        | NotFound client_id -> failwith ("Missing client ID: " ^ client_id) in
-
-    let v, active =
-      try PidMap.find pid client_table with
-        | NotFound _pid ->
-            failwith (Printf.sprintf
-              "Missing client process %s in client %s: "
-              (ProcessID.to_string pid)
-              (ClientID.to_string client_id)) in
-
-    if active then
-      None
-    else
-      begin
-        let new_client_map = PidMap.add pid (v, true) client_table in
-        Hashtbl.replace state.client_processes client_id new_client_map;
-        Some v
-      end
-
   let current_pid_key = Lwt.new_key ()
   let angel_done = Lwt.new_key ()
 
@@ -109,6 +85,25 @@ struct
     match Lwt.get current_pid_key with
     | None -> assert false
     | Some pid -> pid
+
+  (** Returns a list of all processes that have been created but not yet
+   * dispatched to a particular client, and marks them all as dispatched. *)
+  let get_and_mark_pending_processes cid =
+    let client_procs_opt = Hashtbl.lookup state.client_processes cid in
+    match client_procs_opt with
+      | Some (client_procs) ->
+          let client_proc_list = PidMap.bindings client_procs in
+          (* Returns a (pid, proc) pairing of each inactive process *)
+          let ret = filter_map
+            (fun (_pid, (_proc, active)) -> not active)
+            (fun (pid, (proc, _active)) -> (pid, proc))
+            client_proc_list
+          in
+          (* Mark all processes as active *)
+          let marked = PidMap.map (fun (proc, _) -> (proc, true)) client_procs in
+          Hashtbl.replace state.client_processes cid marked;
+          ret
+      | None -> [] (* No processes have been created *)
 
   (** Awaken (unblock) a process:
     Move it from the blocked state to the runnable queue ([suspended]).
@@ -238,8 +233,41 @@ end
 exception UnknownProcessID of process_id
 exception UnknownClientID of client_id
 
-module Websockets =
+
+module type WEBSOCKETS =
+  sig
+    (** Accepts a new websocket connection, creates a new socket, as
+     * well as a thread which handles incoming messages. *)
+    val accept :
+      client_id ->
+      Cohttp.Request.t ->
+      Conduit_lwt_unix.flow ->
+      (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
+
+    (** Sends a message to the given PID.
+     * The string is a JSONised value -- should abstract this furhter *)
+    val deliver_process_message :
+      client_id ->
+      process_id ->
+      Value.t ->
+      unit
+  end
+
+module type MAILBOX =
+sig
+  val pop_message_for : process_id -> Value.t option
+  val pop_all_messages_for :
+    client_id -> process_id-> Value.t list
+  val pop_message : unit -> Value.t option
+
+  val send_client_message : Value.t -> client_id ->  process_id -> unit
+  val send_server_message : Value.t -> process_id -> unit
+end
+
+module rec Websockets : WEBSOCKETS =
 struct
+  open Websocket_cohttp_lwt
+
   type links_websocket = {
     client_id : client_id;
     send_fn : Websocket_cohttp_lwt.Frame.t option -> unit
@@ -251,7 +279,7 @@ struct
 
   let register_websocket = Hashtbl.add client_websockets
   let deregister_websocket = Hashtbl.remove client_websockets
-  let lookup_websocket client_id =
+  let lookup_websocket_safe client_id =
     try Some (Hashtbl.find client_websockets client_id) with
       | _ -> None
 
@@ -273,25 +301,72 @@ struct
       )
     )
 
-  let deliver_process_message wsocket pid json_val =
+
+  let decode_message json_str =
+    Jsonparse.parse_websocket_request Jsonlex.jsonlex
+      (Lexing.from_string json_str)
+
+  let decode_and_handle data =
+    match decode_message data with
+      | ClientToClient (cid, pid, msg) ->
+          Mailbox.send_client_message msg cid pid
+      | ClientToServer (serv_pid, msg) ->
+          Mailbox.send_server_message msg serv_pid
+
+  let recvLoop client_id frame =
+    let open Frame in
+    let rec loop () =
+      match frame.opcode with
+        | Opcode.Close ->
+            deregister_websocket client_id;
+            Debug.print @@
+            Printf.sprintf "Websocket closed for client %s\n"
+              (ClientID.to_string client_id)
+        | _ ->
+            let data = frame.content in
+            Debug.print @@
+              Printf.sprintf "Received: %s from client %s\n"
+                data (ClientID.to_string client_id);
+            try decode_and_handle data
+            with
+              | exn -> Debug.print @@
+                  Printf.sprintf "Could not decode websocket request: %s\n"
+                    (Printexc.to_string exn);
+            loop ()
+      in
+    loop ()
+
+  let accept client_id req flow =
+      Websocket_cohttp_lwt.upgrade_connection
+        req flow (recvLoop client_id)
+      >>= fun (resp, body, send_fn) ->
+      let links_ws = make_links_websocket client_id send_fn in
+      register_websocket client_id links_ws;
+      Lwt.return (resp, body)
+
+  let lookup_websocket client_id =
+      match lookup_websocket_safe client_id with
+        | Some ws -> ws
+        | None ->
+          (* TODO: Buffer and send later, instead of failing here *)
+          failwith ("No websocket for Client ID " ^
+            (ClientID.to_string client_id) ^ ".")
+
+  let deliver_process_message client_id pid v =
+    let ws = lookup_websocket client_id in
+    let json_val = Json.jsonize_value v in
+    let js_str = Json.string_of_json json_val in
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
-      "\", \"val\":" ^ json_val ^ "\"}" in
-    send_message wsocket str_val
+      "\", \"val\":" ^ js_str ^ "\"}" in
+    send_message ws str_val
 
   (* Debug *)
-  let send_raw_string wsocket str =
-    send_message wsocket str
-
+  let _send_raw_string wsocket str = send_message wsocket str
 end
 
-module Mailbox =
+and Mailbox : MAILBOX =
 struct
-  type client_send_result = [
-    | `LocalSendOK
-    | `RemoteSend of (Websockets.links_websocket)
-  ]
-
 
   (* Message queues for processes resident on this server. *)
   let server_message_queues :
@@ -378,29 +453,17 @@ struct
               PidMap.add pid new_queue client_queue_map in
             Hashtbl.replace client_message_queues client_id new_queue_map
 
-  let send_client_message msg client_id pid =
+  let send_client_message (msg : Value.t) client_id pid =
     (* Here, we need to check whether the process is active.
      * If not, we can add the message to the message queue.
      * If so, then we will need to send as a websocket request. *)
     match Proc.is_process_active client_id pid with
       | `ClientNotFound -> raise (UnknownClientID client_id)
       | `ProcessNotFound -> raise (UnknownProcessID pid)
-      | `DeployedProcessFound ->
-          (* If the process has already been sent to the client, we will need
-           * to send the message via the client's websocket *)
-          let ws_opt = Websockets.lookup_websocket client_id in
-          begin
-            match ws_opt with
-              | Some ws -> `RemoteSend ws
-              | None ->
-                  (* TODO: Buffer and send later, instead of failing here *)
-                  failwith ("No websocket for Client ID " ^
-                    (ClientID.to_string client_id) ^ ".")
-          end
+      | `DeployedProcessFound -> Websockets.deliver_process_message client_id pid msg
       | `UndeployedProcessFound ->
           (* If the process has not yet been sent to the client, queue the message *)
-          queue_client_message msg client_id pid;
-          `LocalSendOK
+          queue_client_message msg client_id pid
 end
 
 module Session = struct

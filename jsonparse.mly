@@ -1,6 +1,7 @@
 %{
 open Utility
 open ProcessTypes
+open WebsocketMessages
 
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
@@ -11,6 +12,22 @@ open ProcessTypes
    (where they are escaped in json.ml)
 *)
 
+let websocket_req assoc_list =
+  let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
+  (* If we add more opcodes in, we might have to push these inwards *)
+  let pid =
+    ProcessID.of_string @@
+    Value.unbox_string (List.assoc "destPid" assoc_list) in
+  let msg = (List.assoc "msg" assoc_list) in
+
+  match opcode with
+    | "CLIENT_TO_CLIENT" ->
+        let client_id =
+          ClientID.of_string @@
+          Value.unbox_string (List.assoc "destClientId" assoc_list) in
+        ClientToClient (client_id, pid, msg)
+    | "CLIENT_TO_SERVER" -> ClientToServer (pid, msg)
+    | _ -> failwith "Invalid opcode in websocket message"
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
@@ -20,12 +37,17 @@ open ProcessTypes
 %token <float> FLOAT
 
 %start parse_json
+%start parse_websocket_request
 %type <Value.t> parse_json
+%type <WebsocketMessages.incoming_websocket_message> parse_websocket_request
 
 %%
 
 parse_json:
 | value { $1 }
+
+parse_websocket_request:
+| LBRACE members RBRACE { websocket_req $2 }
 
 object_:
 | LBRACE RBRACE         { `Record [] }

@@ -3,6 +3,7 @@
 open Notfound
 open List
 open Proc
+open ProcessTypes
 
 open Webserver_types
 open Performance
@@ -47,7 +48,7 @@ struct
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
     (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
-    let args = Value.untuple (Json.parse_json args) in
+    let args = Value.untuple (Json.parse_json (Json.json_of_string args)) in
 
     let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
 
@@ -139,9 +140,19 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
+  let resolve_json_state req_data v =
+    let client_id = RequestData.get_client_id req_data in
+    let conn_url_opt = RequestData.get_websocket_connection_url req_data in
+    let json_state = Json.JsonState.empty client_id conn_url_opt in
+    (* Add event handlers *)
+    let json_state = ResolveJsonState.add_val_event_handlers v json_state in
+    (* Add process information *)
+    ResolveJsonState.add_process_information client_id json_state
+
   let perform_request valenv run render_cont req =
     let req_data = Value.request_data valenv in
-    let client_id_str = (ProcessTypes.ClientID.to_string (RequestData.get_client_id req_data)) in
+    let client_id = RequestData.get_client_id req_data in
+    let client_id_str = ClientID.to_string client_id in
     match req with
       | ServerCont t ->
         Debug.print("Doing ServerCont for client ID " ^ client_id_str);
@@ -150,9 +161,9 @@ struct
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
-        let result_json = Json.jsonize_value req_data result in
-        Lwt.return ("text/plain",
-                    Utility.base64encode result_json)
+        let json_state = resolve_json_state req_data result in
+        let result_json = Json.jsonize_value_with_state result json_state in
+        Lwt.return ("text/plain", Utility.base64encode (Json.string_of_json result_json))
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);
@@ -163,10 +174,13 @@ struct
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
+        let json_state = resolve_json_state req_data r in
         Lwt.return ("text/plain",
                     (* TODO: we should package up the result with event handlers,
                        client processes, and client messages *)
-                    Utility.base64encode (Json.jsonize_value req_data r))
+                    (* SJF TODO: What's the status of this? Is it still the case?
+                     * Is it easy to fix w/ the refactoring? *)
+                    Utility.base64encode (Json.jsonize_value_with_state r json_state))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -302,7 +316,7 @@ struct
      * to do a state-passing transformation. *)
     (* Client ID is always 0 in CGI mode. *)
     let req_data =
-      RequestData.new_request_data cgi_args cookies (ProcessTypes.dummy_client_id) None in
+      RequestData.new_request_data cgi_args cookies dummy_client_id None in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =

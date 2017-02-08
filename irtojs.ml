@@ -807,15 +807,13 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
       let varenv = VEnv.bind varenv (x, x_name) in
-      let s, state =
-        Json.jsonize_value_with
-          (Value.request_data valenv)
-          state
-          (Value.find x valenv) in
+      let value = Value.find x valenv in
+      let jsonized_val = Json.jsonize_value value in
+      let state = ResolveJsonState.add_val_event_handlers value state in
       (state,
        varenv,
        Some x_name,
-       fun code -> Bind (x_name, Lit s, code))
+       fun code -> Bind (x_name, Lit (Json.string_of_json jsonized_val), code))
     | `Fun ((fb, _, _zs, _location) as def) ->
       let (f, f_name) = name_binder fb in
       let varenv = VEnv.bind varenv (f, f_name) in
@@ -976,9 +974,17 @@ let resolve_toplevel_values : string list -> string =
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
 let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
-  (* json state for the final value (event handlers and processes) *)
+  let open Json in
   let req_data = Value.request_data valenv in
-  let json_state = Json.jsonize_state req_data v in
+  let client_id = RequestData.get_client_id req_data in
+  let json_state =
+    JsonState.empty
+      client_id
+      (RequestData.get_websocket_connection_url req_data) in
+
+  (* Add the event handlers for the final value to be sent *)
+  let json_state = ResolveJsonState.add_val_event_handlers v json_state in
+    (* Json.jsonize_state req_data v in *)
 
   (* divide HTML into head and body secitions (as we need to augment the head) *)
   let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
@@ -986,7 +992,10 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
 
   let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
   let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
-  let js = Json.resolve_state req_data json_state in
+
+  (* Add process information to the JSON state; mark all processes as active *)
+  let json_state = ResolveJsonState.add_process_information client_id json_state in
+  let state_string = string_of_json (JsonState.to_string json_state) in
 
   let printed_code =
     let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
@@ -998,7 +1007,8 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
     ~cgi_env:cgi_env
     ~body:printed_code
     ~html:(Value.string_of_xml ~close_tags:true bs)
-    ~head:(script_tag("  var _jsonState = " ^ js ^ "\n" ^ init_vars) ^ Value.string_of_xml ~close_tags:true hs)
+    ~head:(script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
+      ^ Value.string_of_xml ~close_tags:true hs)
     ~onload:"_startRealPage()"
     []
 

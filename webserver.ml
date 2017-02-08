@@ -1,8 +1,9 @@
-open Webserver_types
 open Cohttp
 open Cohttp_lwt_unix
 open Lwt
+open ProcessTypes
 open Utility
+open Webserver_types
 
 let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
 let host_name = Settings.add_string ("host", "0.0.0.0", `User)
@@ -53,7 +54,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (ProcessTypes.ClientID.of_string decoded_client_id)
+          Lwt.return (ClientID.of_string decoded_client_id)
       | None -> failwith "Client ID expected but not found."
 
 
@@ -61,7 +62,7 @@ struct
     if (Webif.should_contain_client_id cgi_args) then
       get_client_id_or_die cgi_args
     else
-      ProcessTypes.ClientID.create ()
+      ClientID.create ()
 
   let start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
@@ -186,15 +187,12 @@ struct
         let websocket_path = OptionUtils.val_of (!websocket_connection_path) in
         let ws_url_length = String.length websocket_path in
         (* TODO: Sanity checking of client ID here *)
-        let client_id = ProcessTypes.ClientID.of_string @@
+        let client_id = ClientID.of_string @@
           String.sub path ws_url_length ((String.length path) - ws_url_length) in
         Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
-          (ProcessTypes.ClientID.to_string client_id));
+          (ClientID.to_string client_id));
         Cohttp_lwt_body.drain_body body >>= fun () ->
-        WebsocketOperations.accept client_id req (fst conn) >>=
-        fun (wsocket, resp, body) ->
-          Proc.Websockets.send_raw_string wsocket "Hello from the server!";
-          Lwt.return (resp, body)
+        Proc.Websockets.accept client_id req (fst conn)
       else
         route rt in
 

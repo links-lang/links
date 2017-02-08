@@ -103,18 +103,19 @@ SOURCES = $(OPC)                                \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-	  desugarCP.mli desugarCP.ml                     \
+					desugarCP.mli desugarCP.ml                     \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
-          proc.mli proc.ml                      \
+					websocketMessages.mli websocketMessages.ml \
           jsonparse.mly                         \
           jsonlex.mll                           \
           js.ml                                 \
-          json.ml                               \
-					websocketOperations.mli websocketOperations.ml \
+          json.mli json.ml                      \
+          proc.mli proc.ml                      \
+					resolveJsonState.mli resolveJsonState.ml \
           database.mli database.ml              \
           linksregex.ml                         \
 	  lib.mli lib.ml                        \
