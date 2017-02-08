@@ -120,12 +120,6 @@ type session_type = (typ, row) session_type_basis
 type datatype = typ
       deriving (Show)
 
-type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
-      deriving (Show)
-
-type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
-      deriving (Show)
-
 (* base kind stuff *)
 val is_base_type : datatype -> bool
 val is_base_row : row -> bool

@@ -557,12 +557,6 @@ let is_sessionable_row = is_sessionable_row IntSet.empty
 let sessionify_type = sessionify_type IntSet.empty
 let sessionify_row = sessionify_row IntSet.empty
 
-type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
-      deriving (Show)
-
-type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
-      deriving (Show)
-
 type datatype = typ
 
 (* useful for debugging: types tend to be too big to read *)
