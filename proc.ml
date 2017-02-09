@@ -355,10 +355,9 @@ struct
   let deliver_process_message client_id pid v =
     let ws = lookup_websocket client_id in
     let json_val = Json.jsonize_value v in
-    let js_str = Json.string_of_json json_val in
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
-      "\", \"val\":" ^ js_str ^ "\"}" in
+      "\", \"val\":" ^ json_val ^ "\"}" in
     send_message ws str_val
 
   (* Debug *)

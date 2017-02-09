@@ -48,7 +48,7 @@ struct
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
     (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
-    let args = Value.untuple (Json.parse_json (Json.json_of_string args)) in
+    let args = Value.untuple (Json.parse_json args) in
 
     let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
 
@@ -163,7 +163,7 @@ struct
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let json_state = resolve_json_state req_data result in
         let result_json = Json.jsonize_value_with_state result json_state in
-        Lwt.return ("text/plain", Utility.base64encode (Json.string_of_json result_json))
+        Lwt.return ("text/plain", Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);

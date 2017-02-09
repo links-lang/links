@@ -12,9 +12,6 @@ type maybe_connection_url = string option
 (* Types *)
 type json_string = string
 
-let json_of_string x = x
-let string_of_json x = x
-
 let parse_json str =
   Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
 

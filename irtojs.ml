@@ -813,7 +813,7 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       (state,
        varenv,
        Some x_name,
-       fun code -> Bind (x_name, Lit (Json.string_of_json jsonized_val), code))
+       fun code -> Bind (x_name, Lit jsonized_val, code))
     | `Fun ((fb, _, _zs, _location) as def) ->
       let (f, f_name) = name_binder fb in
       let varenv = VEnv.bind varenv (f, f_name) in
@@ -995,7 +995,7 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
 
   (* Add process information to the JSON state; mark all processes as active *)
   let json_state = ResolveJsonState.add_process_information client_id json_state in
-  let state_string = string_of_json (JsonState.to_string json_state) in
+  let state_string = JsonState.to_string json_state in
 
   let printed_code =
     let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in

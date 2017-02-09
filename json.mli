@@ -25,14 +25,6 @@ end
 
 type json_state = JsonState.t
 
-(* Functions on abstract types *)
-
-(** Packs a JSON string representation into a json_string *)
-val json_of_string : string -> json_string
-
-(** Unpacks a string representation from a json_string *)
-val string_of_json : json_string -> string
-
 (* Parsing *)
 
 (** Parses a JSON string into a value *)
