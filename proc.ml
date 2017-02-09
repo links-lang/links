@@ -405,20 +405,28 @@ struct
         req flow (recvLoop client_id)
       >>= fun (resp, body, send_fn) ->
       let links_ws = make_links_websocket client_id send_fn in
+      Debug.print @@ "Registering websocket for client " ^ (ClientID.to_string client_id);
       register_websocket client_id links_ws;
       send_buffered_messages client_id links_ws;
       Lwt.return (resp, body)
 
   let send_or_buffer_message cid msg =
     match lookup_websocket_safe cid with
-      | Some ws -> send_message ws msg
-      | None -> buffer_message cid msg
+      | Some ws ->
+          Debug.print @@ "Sending message " ^ msg ^ " to cid " ^ (ClientID.to_string cid);
+          send_message ws msg
+      | None ->
+          Debug.print
+            @@ "Could not find websocket for client ID " ^
+                 (ClientID.to_string cid) ^ "; buffering";
+          buffer_message cid msg
 
   let deliver_process_message client_id pid v =
     let json_val = Json.jsonize_value v in
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
       "\", \"val\":" ^ json_val ^ "}" in
+    Debug.print @@ "Sending or buffering message " ^ str_val ^ " to client " ^ (ClientID.to_string client_id);
     send_or_buffer_message client_id str_val
 
   (* Debug *)
@@ -523,6 +531,7 @@ struct
       | `DeployedProcessFound -> Websockets.deliver_process_message client_id pid msg
       | `UndeployedProcessFound ->
           (* If the process has not yet been sent to the client, queue the message *)
+          Debug.print "Queueing message, since other process is undeployed";
           queue_client_message msg client_id pid
 end
 
