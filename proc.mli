@@ -21,6 +21,8 @@ sig
 
   val get_and_mark_pending_processes : client_id -> (process_id * Value.t) list
 
+  val resolve_external_processes : Value.t -> unit
+
   val awaken : process_id -> unit
 
   val finish : Value.env * Value.t -> thread_result Lwt.t

@@ -160,6 +160,7 @@ struct
         Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
+        Proc.resolve_external_processes arg;
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let json_state = resolve_json_state req_data result in
         let result_json = Json.jsonize_value_with_state result json_state in
@@ -169,18 +170,19 @@ struct
           ^ ", client ID: " ^ client_id_str);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
+        Proc.resolve_external_processes func;
+        List.iter Proc.resolve_external_processes args;
+        List.iter (Proc.resolve_external_processes -<- fst -<- snd)
+          (IntMap.bindings (Value.get_parameters env));
         Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
         let json_state = resolve_json_state req_data r in
-        Lwt.return ("text/plain",
-                    (* TODO: we should package up the result with event handlers,
-                       client processes, and client messages *)
-                    (* SJF TODO: What's the status of this? Is it still the case?
-                     * Is it easy to fix w/ the refactoring? *)
-                    Utility.base64encode (Json.jsonize_value_with_state r json_state))
+        Lwt.return
+          ("text/plain",
+            Utility.base64encode (Json.jsonize_value_with_state r json_state))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()

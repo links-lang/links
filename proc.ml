@@ -35,12 +35,16 @@ struct
   type scheduler_state =
       { blocked : (process_id, unit Lwt.u) Hashtbl.t;
         client_processes : (client_id, client_proc_map) Hashtbl.t;
+        (* external_processes maps client IDs to a set of processes spawned by the client.
+         * We don't have values to store for these, and they're always active. *)
+        external_processes : (client_id, pid_set) Hashtbl.t;
         angels : (process_id, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
   let state = {
     blocked          = Hashtbl.create 10000;
     client_processes = Hashtbl.create 10000;
+    external_processes = Hashtbl.create 10000;
     angels           = Hashtbl.create 10000;
     step_counter     = ref 0 }
 
@@ -63,19 +67,52 @@ struct
 (** Checks whether a client process is active -- that is, has been sent to a client to be spawned. *)
   let is_process_active : client_id -> process_id -> process_lookup_res =
     fun client_id pid ->
-    let client_table_opt =
-      try Some (Hashtbl.find state.client_processes client_id) with
-        | NotFound _ -> None in
-    match client_table_opt with
-      | Some client_table ->
-        let proc_pair_res = PidMap.lookup pid client_table in
+    let is_in_externals =
+      try
+        let externals_set = Hashtbl.find state.external_processes client_id in
+        PidSet.mem pid externals_set
+      with
+        NotFound _ -> false in
+    if is_in_externals then `DeployedProcessFound else
+      let client_table_opt =
+        try Some (Hashtbl.find state.client_processes client_id) with
+          | NotFound _ -> None in
+      match client_table_opt with
+        | Some client_table ->
+          let proc_pair_res = PidMap.lookup pid client_table in
+          begin
+            match proc_pair_res with
+              | Some (_v, active) ->
+                  if active then `DeployedProcessFound else `UndeployedProcessFound
+              | None -> `ProcessNotFound
+          end
+        | None -> `ClientNotFound
+
+
+  let register_external_process client_id pid =
+    Debug.print @@ "Registering external process " ^ (ProcessID.to_string pid) ^
+      " to client " ^ (ClientID.to_string client_id);
+    let externals_opt = Hashtbl.lookup state.external_processes client_id in
+    match externals_opt with
+      | Some (pidset) ->
+          Hashtbl.replace state.external_processes client_id (PidSet.add pid pidset)
+      | None ->
+          Hashtbl.add state.external_processes client_id (PidSet.singleton pid)
+
+  (** Given a value that has been sent from a client, inspect for
+   * sent process IDs and add to the list of client processes if necessary *)
+  let rec resolve_external_processes = function
+    | `List xs -> List.iter resolve_external_processes xs
+    | `Record xs -> List.iter (resolve_external_processes -<- snd) xs
+    | `Variant (_, x) -> resolve_external_processes x
+    | `FunctionPtr (_, (Some fvs)) -> resolve_external_processes fvs
+    | `Pid (`ClientPid (cid, pid)) ->
         begin
-          match proc_pair_res with
-            | Some (_v, active) ->
-                if active then `DeployedProcessFound else `UndeployedProcessFound
-            | None -> `ProcessNotFound
+        match is_process_active cid pid with
+          | `ProcessNotFound -> register_external_process cid pid
+          | _ -> ()
         end
-      | None -> `ClientNotFound
+    | _ -> ()
 
   let current_pid_key = Lwt.new_key ()
   let angel_done = Lwt.new_key ()
@@ -313,7 +350,7 @@ struct
       | ClientToServer (serv_pid, msg) ->
           Mailbox.send_server_message msg serv_pid
 
-  let recvLoop client_id frame =
+    let recvLoop client_id frame =
     let open Frame in
     let rec loop () =
       match frame.opcode with
@@ -357,7 +394,7 @@ struct
     let json_val = Json.jsonize_value v in
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
-      "\", \"val\":" ^ json_val ^ "\"}" in
+      "\", \"val\":" ^ json_val ^ "}" in
     send_message ws str_val
 
   (* Debug *)
