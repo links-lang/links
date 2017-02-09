@@ -97,12 +97,12 @@ let rec jsonize_value : Value.t -> json_string =
     let ss = jsonize_values elems in
       "[" ^ String.concat "," ss ^ "]"
   | `Pid (`ClientPid (client_id, process_id)) ->
-      "{\"_clientPid\":\"" ^ (ProcessID.to_string process_id) ^
-      "\", \"_clientId\":\"" ^ (ClientID.to_string client_id) ^ "\"}"
+      "{\"_clientPid\":" ^ (ProcessID.to_json process_id) ^
+      ", \"_clientId\":" ^ (ClientID.to_json client_id) ^ "}"
   | `Pid (`ServerPid (process_id)) ->
-      "{\"_serverPid\":\"" ^ (ProcessID.to_string process_id) ^ "\"}"
+      "{\"_serverPid\":" ^ (ProcessID.to_json process_id) ^ "}"
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
-      "{\"_clientSpawnLoc\":" ^ (ClientID.to_string client_id) ^ "}"
+      "{\"_clientSpawnLoc\":" ^ (ClientID.to_json client_id) ^ "}"
   | `SpawnLocation (`ServerSpawnLoc) ->
       "{\"_serverSpawnLoc\": [] }"
 and jsonize_primitive : Value.primitive_value -> string  = function

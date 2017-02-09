@@ -8,6 +8,7 @@ module type NAME = sig
   val equal : t -> t -> bool
   val to_string : t -> string
   val of_string : string -> t
+  val to_json : t -> string
   module Show_t : Deriving_Show.Show with type a = t
 end
 

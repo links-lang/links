@@ -10,6 +10,7 @@ module type NAME = sig
   val equal : t -> t -> bool
   val to_string : t -> string
   val of_string : string -> t
+  val to_json : t -> string
   module Show_t : Deriving_Show.Show with type a = t
 end
 
@@ -53,6 +54,7 @@ module String_name = struct
   let equal n1 n2 = (compare n1 n2) = 0
   let to_string n = n
   let of_string n = n
+  let to_json n = "\"" ^ n ^ "\""
   module Show_t = Deriving_Show.Show_string
 end
 
