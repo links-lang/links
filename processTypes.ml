@@ -14,10 +14,7 @@ module type NAME = sig
   module Show_t : Deriving_Show.Show with type a = t
 end
 
-let _ = Nocrypto_entropy_unix.initialize ()
-  (* ignore @@ Nocrypto_entropy_lwt.initialize () -- this isn't working...*)
-
-let gen_random_int = fun () -> Nocrypto.Rng.Int.gen max_int
+let _ = ignore @@ Nocrypto_entropy_lwt.initialize ()
 
 let name_source : int ref = ref 0
 let name_mutex = Lwt_mutex.create ()
@@ -32,8 +29,9 @@ let get_and_increment_id : unit -> int Lwt.t = fun () ->
     Lwt.return (get_and_increment_id_unsafe ()))
 
   (*
-module String_name = struct
+module Random_string_name = struct
   type t = string
+  let gen_random_int = fun () -> Nocrypto.Rng.Int.gen max_int
 
   let create_name () =
     (get_and_increment_id ()) >>= fun id ->
@@ -58,7 +56,6 @@ module String_name = struct
   let to_json n = "\"" ^ n ^ "\""
   module Show_t = Deriving_Show.Show_string
 end
-*)
 
 module Int_name = struct
   type t = int
@@ -71,13 +68,35 @@ module Int_name = struct
   let to_json = to_string
   module Show_t = Deriving_Show.Show_int
 end
+*)
 
+module Simple_string_name = struct
+  type t = string
 
-module ClientID  : NAME = Int_name
-module ProcessID : NAME = Int_name
+  let make_name_with_id id = "srv_" ^ (string_of_int id)
 
-let main_process_pid = ProcessID.of_string "-99"
-let dummy_client_id = ClientID.of_string "-99" (* (make_name_with_id (-99)) *)
+  let create_name () =
+    (get_and_increment_id ()) >>= fun id ->
+    Lwt.return (make_name_with_id id)
+
+  let create_name_unsafe () =
+    make_name_with_id (get_and_increment_id_unsafe ())
+
+  let create = create_name
+  let create_unsafe = create_name_unsafe
+  let compare n1 n2 = Pervasives.compare n1 n2
+  let equal n1 n2 = (compare n1 n2) = 0
+  let to_string n = n
+  let of_string n = n
+  let to_json n = "\"" ^ n ^ "\""
+  module Show_t = Deriving_Show.Show_string
+end
+
+module ClientID  : NAME = Simple_string_name
+module ProcessID : NAME = Simple_string_name
+
+let main_process_pid = ProcessID.of_string "MAIN"
+let dummy_client_id = ClientID.of_string "MAIN"
 
 module type PIDMAP = Utility.Map with type key = ProcessID.t
 module type CLIENTIDMAP = Utility.Map with type key = ClientID.t
