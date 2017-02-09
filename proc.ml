@@ -310,9 +310,24 @@ struct
     send_fn : Websocket_cohttp_lwt.Frame.t option -> unit
   }
 
-  let client_websockets :
-    (client_id, links_websocket) Hashtbl.t =
-      Hashtbl.create 10000
+  let client_websockets : (client_id, links_websocket) Hashtbl.t =
+    Hashtbl.create 10000
+
+  (* Buffers for messages sent before a socket could be established *)
+  let client_buffered_messages : (client_id, string Queue.t) Hashtbl.t =
+    Hashtbl.create 10000
+
+  let buffer_message cid str_msg =
+    let queue =
+      match (Hashtbl.lookup client_buffered_messages cid) with
+        | Some queue -> queue
+        | None ->
+            let q = Queue.create () in
+            Hashtbl.add client_buffered_messages cid q;
+            q in
+    Queue.push str_msg queue
+
+
 
   let register_websocket = Hashtbl.add client_websockets
   let deregister_websocket = Hashtbl.remove client_websockets
@@ -338,6 +353,18 @@ struct
       )
     )
 
+  let send_buffered_messages cid wsocket =
+    match (Hashtbl.lookup client_buffered_messages cid) with
+      | Some (queue) ->
+          let rec drain () =
+            if Queue.is_empty queue then () else
+            let str_msg = Queue.pop queue in
+            Debug.print @@ "Sending buffered message " ^ str_msg;
+            send_message wsocket str_msg;
+            drain () in
+          drain ();
+          Hashtbl.remove client_buffered_messages cid
+      | None -> ()
 
   let decode_message json_str =
     Jsonparse.parse_websocket_request Jsonlex.jsonlex
@@ -379,23 +406,20 @@ struct
       >>= fun (resp, body, send_fn) ->
       let links_ws = make_links_websocket client_id send_fn in
       register_websocket client_id links_ws;
+      send_buffered_messages client_id links_ws;
       Lwt.return (resp, body)
 
-  let lookup_websocket client_id =
-      match lookup_websocket_safe client_id with
-        | Some ws -> ws
-        | None ->
-          (* TODO: Buffer and send later, instead of failing here *)
-          failwith ("No websocket for Client ID " ^
-            (ClientID.to_string client_id) ^ ".")
+  let send_or_buffer_message cid msg =
+    match lookup_websocket_safe cid with
+      | Some ws -> send_message ws msg
+      | None -> buffer_message cid msg
 
   let deliver_process_message client_id pid v =
-    let ws = lookup_websocket client_id in
     let json_val = Json.jsonize_value v in
     let str_val =
       "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":\"" ^ (ProcessID.to_string pid) ^
       "\", \"val\":" ^ json_val ^ "}" in
-    send_message ws str_val
+    send_or_buffer_message client_id str_val
 
   (* Debug *)
   let _send_raw_string wsocket str = send_message wsocket str
