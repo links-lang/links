@@ -31,23 +31,24 @@ let get_and_increment_id : unit -> int Lwt.t = fun () ->
   Lwt_mutex.with_lock name_mutex (fun () ->
     Lwt.return (get_and_increment_id_unsafe ()))
 
-let make_name_with_id id =
-  Cstruct.to_string @@
-    Nocrypto.Base64.encode @@
-    Nocrypto.Hash.digest `SHA256 @@
-    Cstruct.of_string @@
-    "srv_" ^ (string_of_int id) ^ "_" ^ (string_of_int @@ gen_random_int ())
-
-let create_name_unsafe () =
-  make_name_with_id (get_and_increment_id_unsafe ())
-
-let create_name () =
-  (get_and_increment_id ()) >>= fun id ->
-  Lwt.return (make_name_with_id id)
-
-
+  (*
 module String_name = struct
   type t = string
+
+  let create_name () =
+    (get_and_increment_id ()) >>= fun id ->
+    Lwt.return (make_name_with_id id)
+
+  let make_name_with_id id =
+    Cstruct.to_string @@
+      Nocrypto.Base64.encode @@
+      Nocrypto.Hash.digest `SHA256 @@
+      Cstruct.of_string @@
+      "srv_" ^ (string_of_int id) ^ "_" ^ (string_of_int @@ gen_random_int ())
+
+  let create_name_unsafe () =
+    make_name_with_id (get_and_increment_id_unsafe ())
+
   let create = create_name
   let create_unsafe = create_name_unsafe
   let compare n1 n2 = Pervasives.compare n1 n2
@@ -57,13 +58,26 @@ module String_name = struct
   let to_json n = "\"" ^ n ^ "\""
   module Show_t = Deriving_Show.Show_string
 end
+*)
+
+module Int_name = struct
+  type t = int
+  let create = get_and_increment_id
+  let create_unsafe = get_and_increment_id_unsafe
+  let compare n1 n2 = Pervasives.compare n1 n2
+  let equal n1 n2 = (compare n1 n2) = 0
+  let to_string = string_of_int
+  let of_string = int_of_string
+  let to_json = to_string
+  module Show_t = Deriving_Show.Show_int
+end
 
 
-module ClientID  : NAME = String_name
-module ProcessID : NAME = String_name
+module ClientID  : NAME = Int_name
+module ProcessID : NAME = Int_name
 
-let main_process_pid = ProcessID.of_string (make_name_with_id (-99))
-let dummy_client_id = ClientID.of_string (make_name_with_id (-99))
+let main_process_pid = ProcessID.of_string "-99"
+let dummy_client_id = ClientID.of_string "-99" (* (make_name_with_id (-99)) *)
 
 module type PIDMAP = Utility.Map with type key = ProcessID.t
 module type CLIENTIDMAP = Utility.Map with type key = ClientID.t
