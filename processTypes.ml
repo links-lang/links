@@ -70,10 +70,15 @@ module Int_name = struct
 end
 *)
 
-module Simple_string_name = struct
+module type NAMEINFO = sig
+  val prefix : string
+end
+
+module Simple_string_name = functor ( NameInfo : NAMEINFO ) ->
+struct
   type t = string
 
-  let make_name_with_id id = "srv_" ^ (string_of_int id)
+  let make_name_with_id id = NameInfo.prefix ^ (string_of_int id)
 
   let create_name () =
     (get_and_increment_id ()) >>= fun id ->
@@ -92,8 +97,10 @@ module Simple_string_name = struct
   module Show_t = Deriving_Show.Show_string
 end
 
-module ClientID  : NAME = Simple_string_name
-module ProcessID : NAME = Simple_string_name
+module ClientID  : NAME = Simple_string_name(struct let prefix = "cid_" end)
+module ProcessID : NAME = Simple_string_name(struct let prefix = "srvPid_" end)
+module AccessPointID : NAME = Simple_string_name(struct let prefix = "srvAp_" end)
+module ChannelEndpoint : NAME = Simple_string_name(struct let prefix = "ep_" end)
 
 let main_process_pid = ProcessID.of_string "MAIN"
 let dummy_client_id = ClientID.of_string "MAIN"
@@ -114,6 +121,12 @@ type client_id = ClientID.t
   deriving (Show)
 
 type process_id = ProcessID.t
+  deriving (Show)
+
+type ap_id = AccessPointID.t
+  deriving (Show)
+
+type channel_endpoint = ChannelEndpoint.t
   deriving (Show)
 
 type 'a pid_map = 'a PidMap.t
