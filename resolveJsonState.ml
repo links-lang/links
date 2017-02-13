@@ -13,7 +13,8 @@ let rec event_handlers_from_value : Value.t -> handler_id_set =
       failwith ("Can't create json state for " ^ Value.string_of_value r);
 
   (* Empties *)
-  | `List [] | `SpawnLocation _ | `Pid _ | `ClientFunction _ -> empty_state
+  | `List [] | `SpawnLocation _ | `Pid _
+  | `ClientFunction _ | `SessionChannel _ -> empty_state
 
   (* Homomorphisms *)
   | `FunctionPtr (_f, fvs) ->

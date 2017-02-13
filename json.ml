@@ -62,6 +62,17 @@ let jsonize_location : Ir.location -> string = function
   | `Native  -> "native"
   | `Unknown -> "unknown"
 
+let jsonize_endpoint : Value.endpoint_address -> string = fun ep_addr ->
+  match ep_addr with
+    | `ClientEndpointAddress (cid, epid) ->
+        let cid_json = ClientID.to_json cid in
+        let epid_json = ChannelEndpoint.to_json epid in
+        "{\"_clientID\":" ^ cid_json ^ "," ^
+        "\"clientEPID\": " ^ epid_json ^ "}}"
+    | `ServerEndpointAddress (epid) ->
+        let epid_json = ChannelEndpoint.to_json epid in
+        "{\"_serverEPID\":" ^ epid_json ^ "}"
+
 
 let rec jsonize_value : Value.t -> json_string =
   function
@@ -101,6 +112,9 @@ let rec jsonize_value : Value.t -> json_string =
       ", \"_clientId\":" ^ (ClientID.to_json client_id) ^ "}"
   | `Pid (`ServerPid (process_id)) ->
       "{\"_serverPid\":" ^ (ProcessID.to_json process_id) ^ "}"
+  | `SessionChannel (ep1, ep2) ->
+      "{\"_sessEP1\":" ^ jsonize_endpoint ep1 ^
+      ",\"_sessEP2\":" ^ jsonize_endpoint ep2 ^ "}"
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
       "{\"_clientSpawnLoc\":" ^ (ClientID.to_json client_id) ^ "}"
   | `SpawnLocation (`ServerSpawnLoc) ->

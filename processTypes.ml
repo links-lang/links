@@ -123,10 +123,10 @@ type client_id = ClientID.t
 type process_id = ProcessID.t
   deriving (Show)
 
-type ap_id = AccessPointID.t
+type apid = AccessPointID.t
   deriving (Show)
 
-type channel_endpoint = ChannelEndpoint.t
+type channel_endpoint_id = ChannelEndpoint.t
   deriving (Show)
 
 type 'a pid_map = 'a PidMap.t

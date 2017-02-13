@@ -71,10 +71,24 @@ type spawn_location = [
   deriving (Show)
 
 type dist_pid = [
-  | `ServerPid of process_id (* Again, will need a server address here later *)
   | `ClientPid of (client_id * process_id)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
 ]
   deriving (Show)
+
+type endpoint_address = [
+  | `ClientEndpointAddress of (client_id * channel_endpoint_id)
+  | `ServerEndpointAddress of (channel_endpoint_id)
+]
+  deriving (Show)
+
+type access_point = [
+  | `ClientAccessPoint of (client_id * apid)
+  | `ServerAccessPoint of apid
+]
+  deriving (Show)
+
+type chan = (endpoint_address * endpoint_address)
 
 type t = [
 | primitive_value
@@ -86,6 +100,8 @@ type t = [
 | `ClientFunction of string
 | `Continuation of continuation
 | `Pid of dist_pid
+| `AccessPointID of access_point
+| `SessionChannel of (endpoint_address * endpoint_address)
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
@@ -143,6 +159,10 @@ val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 val box_spawn_loc : spawn_location -> t
 val unbox_spawn_loc : t -> spawn_location
+val box_channel : chan -> t
+val unbox_channel : t -> chan
+val box_access_point : access_point -> t
+val unbox_access_point : t -> access_point
 
 val intmap_of_record : t -> t Utility.intmap option
 
@@ -163,7 +183,6 @@ val unmarshal_value : env -> string -> t
 val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)
 
-val value_of_xml : xml -> t
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml

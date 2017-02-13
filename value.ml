@@ -238,10 +238,24 @@ type spawn_location = [
   deriving (Show)
 
 type dist_pid = [
-  | `ServerPid of process_id (* Again, will need a server address here later *)
   | `ClientPid of (client_id * process_id)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
 ]
   deriving (Show)
+
+type endpoint_address = [
+  | `ClientEndpointAddress of (client_id * channel_endpoint_id)
+  | `ServerEndpointAddress of (channel_endpoint_id)
+]
+  deriving (Show)
+
+type access_point = [
+  | `ClientAccessPoint of (client_id * apid)
+  | `ServerAccessPoint of apid
+]
+  deriving (Show)
+
+type chan = (endpoint_address * endpoint_address)
 
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
@@ -254,6 +268,8 @@ and t = [
 | `ClientFunction of string
 | `Continuation of continuation
 | `Pid of dist_pid
+| `AccessPointID of access_point
+| `SessionChannel of (endpoint_address * endpoint_address)
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
@@ -365,6 +381,8 @@ and compress_t (v : t) : compressed_t =
       | `Continuation cont -> `Continuation (compress_continuation cont)
       | `Pid _ -> assert false
       | `Socket (_inc, _outc) -> assert false
+      | `SessionChannel (_, _) -> assert false (* mmmmm *)
+      | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -486,10 +504,12 @@ and string_of_value : t -> string = function
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
   | `Pid dist_pid -> "Pid " ^ (string_of_dist_pid dist_pid)
   | `Socket (_, _) -> "<socket>"
+  | `SessionChannel c -> "Session channel " ^ (string_of_channel c)
   | `SpawnLocation sl -> "Spawn location: " ^
     (match sl with
        | `ClientSpawnLoc cid -> "client " ^ (ClientID.to_string cid)
        | `ServerSpawnLoc -> "server")
+  | (`AccessPointID _) as apid -> string_of_access_point apid
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value
@@ -525,7 +545,23 @@ and string_of_dist_pid = function
   | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")"
   | `ClientPid (cid, i) ->
       "Client num " ^ (ClientID.to_string cid) ^ ", process " ^ (ProcessID.to_string i)
+and string_of_endpoint = function
+  | `ClientEndpointAddress (cid, epid) ->
+      "Client EP: cid = " ^ (ClientID.to_string cid) ^ ", epid = " ^
+      ChannelEndpoint.to_string epid
+  | `ServerEndpointAddress (epid) ->
+      "Server EP: epid = " ^ (ChannelEndpoint.to_string epid)
+and string_of_channel (ep1, ep2) =
+  let ep1_str = string_of_endpoint ep1 in
+  let ep2_str = string_of_endpoint ep2 in
+  "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
 
+and string_of_access_point = function
+  | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
+      "Client access point on client " ^ (ClientID.to_string cid) ^ ", " ^
+      "APID: " ^ (AccessPointID.to_string apid)
+  | `AccessPointID (`ServerAccessPoint (apid)) ->
+      "Server access point " ^ (AccessPointID.to_string apid)
 
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
@@ -599,7 +635,14 @@ let box_spawn_loc sl = `SpawnLocation sl
 let unbox_spawn_loc = function
   | `SpawnLocation sl -> sl
   | _ -> failwith "Type error unboxing spawn location"
-
+let box_channel ch = `SessionChannel ch
+let unbox_channel = function
+  | `SessionChannel x -> x
+  | _ -> failwith "Type error unboxing session channel"
+let box_access_point ap = `AccessPointID ap
+let unbox_access_point = function
+  | `AccessPointID x -> x
+  | _ -> failwith "Type error unboxing access point"
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(

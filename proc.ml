@@ -536,9 +536,13 @@ struct
 end
 
 module Session = struct
-  type apid = int              (* access point id *)
-  type portid = int
-  type chan = portid * portid  (* a channel is a pair of ports *)
+
+
+  (* Channel: a pair of the local and remote endpoint addresses *)
+  type chan = (Value.endpoint_address * Value.endpoint_address)
+
+  let get_send_endpoint = fst
+  let get_recv_endpoint = snd
 
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
 
@@ -546,61 +550,72 @@ module Session = struct
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
 
-  let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
-  let blocked = (Hashtbl.create 10000 : (portid, process_id) Hashtbl.t)
-  let forward = (Hashtbl.create 10000 : (portid, portid Unionfind.point) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (channel_endpoint_id, Value.t Queue.t) Hashtbl.t)
+  let blocked = (Hashtbl.create 10000 : (channel_endpoint_id, process_id) Hashtbl.t)
+  let forward = (Hashtbl.create 10000 : (channel_endpoint_id, channel_endpoint_id Unionfind.point) Hashtbl.t)
 
-  let generator () =
-    let i = ref 0 in
-      fun () -> incr i; !i
-
-  let fresh_apid = generator ()
-  let fresh_portid = generator ()
+  (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
-    let outp = fresh_portid () in
-    let inp = fresh_portid () in
-      (outp, inp)
+    ChannelEndpoint.create () >>= fun outp ->
+    ChannelEndpoint.create () >>= fun inp ->
+      Lwt.return
+        (`ServerEndpointAddress outp, `ServerEndpointAddress inp)
 
+  let get_endpoint_id = function
+    | `ClientEndpointAddress (_cid, ep_id) -> ep_id
+    | `ServerEndpointAddress (ep_id) -> ep_id
+
+  (** Creates a new channel, adds endpoints into the required
+   * hashtables (output port, input port, forwarding) *)
   let new_channel () =
-    let (outp, inp) as c = fresh_chan () in
-      Hashtbl.add buffers outp (Queue.create ());
-      Hashtbl.add buffers inp (Queue.create ());
-      Hashtbl.add forward outp (Unionfind.fresh outp);
-      Hashtbl.add forward inp (Unionfind.fresh inp);
-      c
+    fresh_chan () >>= fun c ->
+      let (out_addr, in_addr) = c in
+      let (out_ep, in_ep) =
+        (get_endpoint_id out_addr, get_endpoint_id in_addr) in
+      Hashtbl.add buffers out_ep (Queue.create ());
+      Hashtbl.add buffers in_ep (Queue.create ());
+      Hashtbl.add forward out_ep (Unionfind.fresh out_ep);
+      Hashtbl.add forward in_ep (Unionfind.fresh in_ep);
+      Lwt.return c
 
   let new_access_point () =
-    let apid = fresh_apid () in
+    AccessPointID.create () >>= fun apid ->
       Hashtbl.add access_points apid Balanced;
-      apid
+      Lwt.return apid
 
-  let accept : apid -> chan * bool =
+  let accept : apid -> (chan * bool) Lwt.t =
     fun apid ->
       let state = Hashtbl.find access_points apid in
-      let (c, state', blocked) =
+      let res =
         match state with
-        | Balanced             -> let c = new_channel () in (c, Accepting [c], true)
-        | Accepting cs         -> let c = new_channel () in (c, Accepting (cs @ [c]), true)
-        | Requesting [c]       -> (c, Balanced, false)
-        | Requesting (c :: cs) -> (c, Requesting cs, false)
+        | Balanced             ->
+            new_channel () >>= fun ch -> Lwt.return (ch, Accepting [ch], true)
+        | Accepting cs         ->
+            new_channel () >>= fun ch -> Lwt.return (ch, Accepting (cs @ [ch]), true)
+        | Requesting [c]       -> Lwt.return (c, Balanced, false)
+        | Requesting (c :: cs) -> Lwt.return (c, Requesting cs, false)
         | Requesting []        -> assert false (* TODO: check that this is impossible *)
       in
+        res >>= fun (c, state', blocked) ->
         Hashtbl.replace access_points apid state';
-        c, blocked
+        Lwt.return (c, blocked)
 
-  let request : apid -> chan * bool =
+  let request : apid -> (chan * bool) Lwt.t =
     fun apid ->
       let state = Hashtbl.find access_points apid in
-      let (c, state', blocked) =
+      let res =
         match state with
-        | Balanced            -> let c = new_channel () in (c, Requesting [c], true)
-        | Requesting cs       -> let c = new_channel () in (c, Requesting (cs @ [c]), true)
-        | Accepting [c]       -> (c, Balanced, false)
-        | Accepting (c :: cs) -> (c, Accepting cs, false)
+        | Balanced            ->
+            new_channel () >>= fun ch -> Lwt.return (ch, Requesting [ch], true)
+        | Requesting cs       ->
+            new_channel () >>= fun ch -> Lwt.return (ch, Requesting (cs @ [ch]), true)
+        | Accepting [c]       -> Lwt.return (c, Balanced, false)
+        | Accepting (c :: cs) -> Lwt.return (c, Accepting cs, false)
         | Accepting []        -> assert false (* TODO: check that this is impossible *)
       in
+        res >>= fun (c, state', blocked) ->
         Hashtbl.replace access_points apid state';
-        flip_chan c, blocked
+        Lwt.return (flip_chan c, blocked)
 
   let find_active p =
     Unionfind.find (Hashtbl.find forward p)
@@ -622,35 +637,39 @@ module Session = struct
       else
         None
 
-  let send msg p =
-    (* Debug.print ("Sending along: " ^ string_of_int p); *)
-    let p = find_active p in
-      Queue.push msg (Hashtbl.find buffers p)
+  let send msg = function
+    | `ServerEndpointAddress ep ->
+      (* Debug.print ("Sending along: " ^ string_of_int p); *)
+      let p = find_active ep in
+        Queue.push msg (Hashtbl.find buffers p)
+    | `ClientEndpointAddress (_cid, _ep) ->
+        failwith "Sending to remote session endpoints not yet supported"
 
-  let receive p =
-    (* Debug.print ("Receiving on: " ^ string_of_int p); *)
-    let p = find_active p in
-    let buf = Hashtbl.find buffers p in
-      if not (Queue.is_empty buf) then
-        Some (Queue.pop buf)
-      else
-        None
+  let receive = function
+    | `ServerEndpointAddress ep ->
+      (* Debug.print ("Receiving on: " ^ string_of_int p); *)
+      let p = find_active ep in
+      let buf = Hashtbl.find buffers p in
+        if not (Queue.is_empty buf) then
+          Some (Queue.pop buf)
+        else
+          None
+    | `ClientEndpointAddress _ ->
+        failwith "Cannot receive from client endpoint -- how did this happen?"
 
-  let link (out1, in1) (out2, in2) =
-    let out1 = find_active out1 in
-    let in1 = find_active in1 in
-    let out2 = find_active out2 in
-    let in2 = find_active in2 in
-      Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
-      Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
-      forward in1 out2;
-      forward in2 out1
-
-  let unbox_port = Value.unbox_int
-  let unbox_chan' chan =
-    let (outp, inp) = Value.unbox_pair chan in
-      (Value.unbox_int outp, Value.unbox_int inp)
-  let unbox_chan chan =
-    let (outp, inp) = Value.unbox_pair chan in
-      (unbox_port outp, unbox_port inp)
+  (* Currently: all four of these should be server endpoints.
+   * Eventually we'll have to do something a bit cleverer... *)
+  let link c1 c2 =
+    match c1, c2 with
+      | (`ServerEndpointAddress out1, `ServerEndpointAddress in1),
+        (`ServerEndpointAddress out2, `ServerEndpointAddress in2) ->
+        let out1 = find_active out1 in
+        let in1 = find_active in1 in
+        let out2 = find_active out2 in
+        let in2 = find_active in2 in
+          Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
+          Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
+          forward in1 out2;
+          forward in2 out1
+      | _ -> failwith "Can currently only link two server channels."
 end

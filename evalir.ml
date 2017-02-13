@@ -284,60 +284,62 @@ struct
     (* end of mailbox stuff *)
     (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
-      let apid = Session.new_access_point () in
-        apply_cont cont env (`Int apid)
+      Session.new_access_point () >>= fun apid ->
+        apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
     | `PrimitiveFunction ("accept", _), [ap] ->
-      let apid = Value.unbox_int ap in
-      let (c, d), blocked = Session.accept apid in
-      Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
-        if blocked then
-          let accept_frame =
-              Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
-                                     (StringMap.add "2" (`Constant (`Int d))
-                                        StringMap.empty), None)))
-            in
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (accept_frame::cont) env (`Record []))
-        else
-          begin
-            begin
-              (* unblock the other end of the channel *)
-              match Session.unblock d with
-              | Some pid -> Proc.awaken pid
-              | None     -> assert false
-            end;
-            apply_cont cont env (Value.box_pair
-                                   (Value.box_int c)
-                                   (Value.box_int d))
-          end
+      let ap = Value.unbox_access_point ap in
+      begin
+        match ap with
+          | `ClientAccessPoint _ ->
+              (* TODO: Work out the semantics of this *)
+              failwith "Cannot accept on a client AP on the server"
+          | `ServerAccessPoint apid ->
+              Session.accept apid >>= fun (ch, blocked) ->
+              let (c, d) = ch in
+              let boxed_channel = Value.box_channel ch in
+              Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
+              (* ("accepting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");*)
+                if blocked then
+                    (* block my end of the channel *)
+                    (Session.block ch (Proc.get_current_pid ());
+                     Proc.block (fun () -> apply_cont cont env boxed_channel))
+                else
+                    (* unblock the other end of the channel *)
+                    ((match Session.unblock d with
+                    | Some pid -> Proc.awaken pid
+                    | None     -> assert false);
+                  apply_cont cont env boxed_channel)
+      end
     | `PrimitiveFunction ("request", _), [ap] ->
-      let apid = Value.unbox_int ap in
-      let (c, d), blocked = Session.request apid in
-      Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
-        if blocked then
-          let request_frame =
-              Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
-                                     (StringMap.add "2" (`Constant (`Int d))
-                                        StringMap.empty), None)))
-            in
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (request_frame::cont) env (`Record []))
-        else
-          begin
-            begin
-              (* unblock the other end of the channel *)
-              match Session.unblock d with
-              | Some pid -> Proc.awaken pid
-              | None     -> assert false
-            end;
-            apply_cont cont env (Value.box_pair
-                                   (Value.box_int c)
-                                   (Value.box_int d))
-          end
+      let ap = Value.unbox_access_point ap in
+      match ap with
+        | `ClientAccessPoint _ ->
+            (* TODO: Work out the semantics of this *)
+            failwith "Cannot *yet* request from a client-spawned AP"
+        | `ServerAccessPoint apid ->
+            Session.request apid >>= fun (ch, blocked) ->
+            let (c, d) = ch in
+            let boxed_channel = Value.box_channel ch in
+            let epid1_str = SessionEndpoint.to_string @@ Session.get_local_endpoint ch in
+            let epid2_str = SessionEndpoint.to_string @@ Session.get_remote_endpoint ch in
+
+            Debug.print ("requesting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");
+              if blocked then
+                begin
+                  (* block my end of the channel *)
+                  Session.block c (Proc.get_current_pid ());
+                  Proc.block (fun () -> apply_cont (request_frame::cont) env boxed_channel)
+                end
+              else
+                begin
+                  begin
+                    (* unblock the other end of the channel *)
+                    match Session.unblock d with
+                    | Some pid -> Proc.awaken pid
+                    | None     -> assert false
+                  end;
+                  apply_cont cont env boxed_channel
+                end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Session.unbox_chan chan in
@@ -351,20 +353,27 @@ struct
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
-        let (out', in') = Session.unbox_chan' chan in
-        let inp = in' in
-          match Session.receive inp with
-          | Some v ->
-            Debug.print ("grabbed: " ^ Value.string_of_value v);
-            apply_cont cont env (Value.box_pair v chan)
-          | None ->
-            let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
-                                                                                (StringMap.add "2" (`Constant (`Int in'))
-                                                                                   StringMap.empty), None)])
-            in
-              Session.block inp (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
+        let unboxed_chan = Value.unbox_chan in
+        let out_ep = Session.get_send_endpoint chan in
+        let in_ep = Session.get_recv_endpoint chan in
+        match Session.receive in_ep with
+        | Some v ->
+          Debug.print ("grabbed: " ^ Value.string_of_value v);
+          apply_cont cont env (Value.box_pair v chan)
+        | None ->
+          (* Here, we have to extend the environment with a fresh variable
+           * representing the channel, since we can't create an IR application
+           * involving a Value.t (only an Ir.value).
+           * This *should* be safe, but still feels a bit unsatisfactory.
+           * It would be nice to refine this further. *)
+          let fresh_var = Var.fresh_raw_var () in
+          let extended_env = Value.bind fresh_var (chan, `Local) env in
+          let grab_frame =
+            Value.expr_to_contframe extended_env
+              (Lib.prim_appln "receive" [`Variable fresh_var])
+          in
+            Session.block inp (Proc.get_current_pid ());
+            Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
