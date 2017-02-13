@@ -18,6 +18,7 @@ type var_env =
 module Env = Env.String
 
 module Utils : sig
+  val dummy_source_name : unit -> name
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
@@ -29,6 +30,11 @@ module Utils : sig
   val is_generalisable : phrase -> bool
 end =
 struct
+  let counter = ref 0
+  let dummy_source_name () =
+    counter := !counter + 1;
+    "DUMMY(" ^ string_of_int !counter ^ ")"
+
   let unify = Unify.datatypes
   let instantiate = Instantiate.var
   let generalise = Generalise.generalise
@@ -3101,7 +3107,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Val (_, pat, body, location, datatype) ->
+      | `Val (_, pat, body, location, datatype) as binding ->
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -3114,20 +3120,23 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
           let usage = usages body in
           let body = erase body in
-          let ((tyvars, _), _bt), pat, penv =
+          let tyvars, pat, penv =
             if Utils.is_generalisable body then
               let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
               let pat = update_pattern_vars penv (erase_pat pat) in
-                (Utils.generalise context.var_env bt, pat, penv)
+              let ((tyvars, _), _bt) = Utils.generalise context.var_env bt in
+              tyvars, pat, penv
             else
-              let tyvars = Generalise.get_type_variables context.var_env bt in
-                if List.exists (function
-                                  | (_, `Rigid, _) -> true
-                                  | (_, `Flexible, _) -> false) tyvars
-                then
-                  Gripers.value_restriction pos bt
-                else
-                  (([], []), bt), erase_pat pat, penv
+              (* All rigid type variables in bt should appear in the
+                 environment *)
+              let tyvars = Generalise.get_quantifiers context.var_env bt in
+              if List.exists
+                  (fun ((x, _, _) as q) -> Types.is_rigid_quantifier q)
+                  tyvars
+              then
+                Gripers.value_restriction pos bt
+              else
+                [], erase_pat pat, penv
           in
             `Val (tyvars, pat, body, location, datatype),
             {empty_context with
@@ -3141,10 +3150,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let return_type = Types.fresh_type_variable (`Any, `Any) in
 
           (** Check that any annotation matches the shape of the function *)
-          let ft =
+          let context', ft =
             match t with
               | None ->
-                  make_ft lin pats effects return_type
+                  context, make_ft lin pats effects return_type
               | Some (_, Some ft) ->
                   (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                   (* make sure the annotation has the right shape *)
@@ -3153,12 +3162,18 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   (* Debug.print ("fti: " ^ Types.string_of_datatype fti); *)
                   let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos fti) in
                     (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
-                    ft
+                  (* HACK: Place a dummy name in the environment in
+                     order to ensure that the generalisation check
+                     does the right thing (it would be unsound to use
+                     the original name as the function is not
+                     recursive) *)
+                  let v = Utils.dummy_source_name () in
+                  bind_var context (v, fti), ft
               | Some _ -> assert false in
 
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-          let context' = List.fold_left fold_in_envs context pats in
+          let context' = List.fold_left fold_in_envs context' pats in
 
           let body = type_check (bind_effects context' effects) body in
 
@@ -3578,8 +3593,11 @@ struct
     with
         Unify.Failure (`Msg msg) -> failwith msg
 
-  let sentence tyenv =
-    function
+  let sentence tyenv sentence =
+    Debug.if_set show_pre_sugar_typing
+      (fun () ->
+         "before type checking: \n"^ Show_sentence.show sentence);
+    match sentence with
       | `Definitions bindings ->
           let tyenv', bindings, _ = type_bindings tyenv bindings in
           let tyenv' = Types.normalise_typing_environment tyenv' in

@@ -1,34 +1,67 @@
 # Installing Links
 
-Links requires OCaml 4.04.0. We strongly recommend installing using
-the OPAM tool.
+Links requires OCaml 4.04.0. We recommend installing Links using the
+OPAM tool, available from:
 
-If you wish to use Links' database functionality, use your system's package
-manager to install postgresql, the supported DBMS.
+  https://opam.ocaml.org/
+
+If you wish to use Links' database functionality, you should first
+install PostgreSQL, the supported DBMS.
 
 You can then install Links simply by issuing the command:
 
   $ opam install postgresql links
 
+Alternatively, if you don't have PostgreSQL installed then do:
+
+  $ opam install links
+
+This will put Links and its files into your OPAM switch, typically
+located at $HOME/.opam/SWITCH_VERSION, where $HOME is your home
+directory and SWITCH_VERSION is the compiler version that you're using
+(eg. 4.04.0).  Links files install to several locations inside an OPAM
+switch:
+
+* The executable is called `linx` and goes into `bin`
+* The Links prelude and JavaScript libraries go into `lib/links`
+* The example Links programs go into `share/links`
+* Links configuration file goes into `etc/links`
+
 # Running Links.
 
-Beginning with the Gorgie release, Links supports two methods of running
+Beginning with the Gorgie (0.6) release, Links supports two methods of running
 applications: either via the standalone application server, or via the CGI
-interpreter used in previous releases.
+interpreter used in previous releases. The executable name is `linx`.
 
 ## Application Server
 
-To invoke a Links application using the application server, use a command
-similar to the following:
+# Examples (without a database)
 
-  links --config=config -m
-  --path=examples:examples/games:examples/dictionary
-  examples/webserver/examples.links
+To run the examples that don't use the database with the Links
+application server go into share/links directory inside your OPAM
+switch and invoke the following command:
 
-(This program provides an application server for a number of example
-programs.)
+  linx -m --path=examples:examples/games
+    examples/webserver/examples-nodb.links
 
-* The --config flag sets the location of the config file to the file "config"
+(This version just displays the source code for examples that use the
+database.)
+
+The default port is 8080, so you should now be able to access the
+examples by pointing your browser at:
+
+  http://localhost:8080/examples/
+
+# Examples (with a database)
+
+To run the examples using the Links application server go into
+share/links directory inside your OPAM switch and invoke the following
+command:
+
+  linx -m
+    --path=examples:examples/games:examples/dictionary
+    examples/webserver/examples.links
+
 * The -m flag enables support for Links' module system, new in Gorgie.
 * The --path flag says that files can be found in the following directories:
   - examples
@@ -39,38 +72,35 @@ programs.)
 
 But first you need to do a few things.
 
-  1) The config file needs to have an appropriate jsliburl and database
-configuration arguments:
+  1) By default Links uses a config file inside etc/links directory.  Use
+     --config=/custom/config/file flag to use a different configuration file.
 
-  jsliburl=/lib/
-  database_driver=postgresql
-  database_args=:5432:fred:
+  2) The default config file should contain paths to JavaScript libraries:
 
-  2) The database user fred should exist. With postgres, perhaps the easiest
-  way I to do this is to tie fred to the unix username and then no
-  authentication is required.
+       jsliburl=/lib/
+       jslibdir=SWITCH_PATH/lib/links/js
 
-  3) Create appropriate databases. We have some scripts to populate tables for
-  some of the examples, but not all of them. We also don't have the actual
-  data.
+     Where SWITCH_PATH is the actual path on your system. To use
+     database examples you need to add a database configuration to the
+     config file:
 
-You should also be able to run
+       database_driver=postgresql
+       database_args=:5432:fred:
 
-  links --config=config -m --path=examples:examples/games
-    examples/webserver/examples-nodb.links
+     The database user fred should exist. With postgres, perhaps the
+     easiest way to do this is to tie fred to your unix username and
+     then no separate authentication is required.
 
-without needing to install a database. (This version just displays the
-source code for examples that use the database.)
+  3) Create appropriate databases. Scripts are included to populate
+     tables for some of the examples, but not all of them. We also
+     don't have the actual data. We will make sample database dumps
+     available for the next point release.
 
-The default port is 8080, so having run either of the above examples
-you should be able to access them by pointing your browser at:
-
-  http://localhost:8080/examples/
+## Documentation
 
 Some (outdated) documentation can be built by running the Makefile in
 the doc directory.
 
-Some very incomplete but more up-to-date documentation is available on
-the links wiki:
+Some very incomplete documentation is available on the links wiki:
 
   https://github.com/links-lang/links/wiki
