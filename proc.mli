@@ -81,18 +81,17 @@ exception UnknownClientID of client_id
 
 module Session :
 sig
-  open Value
   type chan = Value.chan
 
   val new_access_point : unit -> apid Lwt.t
   val accept : apid -> (chan * bool) Lwt.t
   val request : apid -> (chan * bool) Lwt.t
 
-  val block : endpoint_address -> process_id -> unit
-  val unblock : endpoint_address -> process_id option
+  val block : channel_id -> process_id -> unit
+  val unblock : channel_id -> process_id option
 
-  val send : Value.t -> endpoint_address -> unit
-  val receive : endpoint_address -> Value.t option
+  val send : Value.t -> channel_id -> unit
+  val receive : channel_id -> Value.t option
 
   val link : chan -> chan -> unit
 end

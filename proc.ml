@@ -537,9 +537,16 @@ end
 
 module Session = struct
 
+  type buffer = Value.t Queue.t
 
-  (* Channel: a pair of the local and remote endpoint addresses *)
-  type chan = (Value.endpoint_address * Value.endpoint_address)
+  type channel_state =
+    | Local (* Receive endpoint resides on the server *)
+    | Remote of client_id (* Receive endpoint resides on client_id *)
+    | Delegating of (buffer * client_id) (* Delegation in progress to client_id, storing buffer in the meantime *)
+
+  (* Send channel ID * Receive channel ID *)
+  (* Invariant: receive endpoint must reside on the same VM. *)
+  type chan = Value.chan
 
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
 
@@ -547,32 +554,37 @@ module Session = struct
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
 
-  let buffers = (Hashtbl.create 10000 : (channel_endpoint_id, Value.t Queue.t) Hashtbl.t)
-  let blocked = (Hashtbl.create 10000 : (channel_endpoint_id, process_id) Hashtbl.t)
-  let forward = (Hashtbl.create 10000 : (channel_endpoint_id, channel_endpoint_id Unionfind.point) Hashtbl.t)
+  (* States of all endpoints: local, remote, or in the process of delegating? *)
+  let endpoint_states = (Hashtbl.create 10000 : (channel_id, channel_state) Hashtbl.t)
+
+  (* Buffers of all channels _where the receive endpoint is on this server_ *)
+  let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
+  let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
+  let forward = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
-    ChannelEndpoint.create () >>= fun outp ->
-    ChannelEndpoint.create () >>= fun inp ->
-      Lwt.return
-        (`ServerEndpointAddress outp, `ServerEndpointAddress inp)
-
-  let get_endpoint_id = function
-    | `ClientEndpointAddress (_cid, ep_id) -> ep_id
-    | `ServerEndpointAddress (ep_id) -> ep_id
+    ChannelID.create () >>= fun outp ->
+    ChannelID.create () >>= fun inp ->
+      Lwt.return (outp, inp)
 
   (** Creates a new channel, adds endpoints into the required
    * hashtables (output port, input port, forwarding) *)
   let new_channel () =
     fresh_chan () >>= fun c ->
-      let (out_addr, in_addr) = c in
-      let (out_ep, in_ep) =
-        (get_endpoint_id out_addr, get_endpoint_id in_addr) in
-      Hashtbl.add buffers out_ep (Queue.create ());
-      Hashtbl.add buffers in_ep (Queue.create ());
-      Hashtbl.add forward out_ep (Unionfind.fresh out_ep);
-      Hashtbl.add forward in_ep (Unionfind.fresh in_ep);
+      let (outp, inp) = c in
+      (* Firstly, create the buffers *)
+      Hashtbl.add buffers outp (Queue.create ());
+      Hashtbl.add buffers inp (Queue.create ());
+
+      (* Secondly, create the entries in the channel state table.
+       * Both start out as being local until delivered or delegated. *)
+      Hashtbl.add endpoint_states outp Local;
+      Hashtbl.add endpoint_states inp Local;
+
+      (* Finally, add to the link table -- although this is defunct at the moment *)
+      Hashtbl.add forward outp (Unionfind.fresh outp);
+      Hashtbl.add forward inp (Unionfind.fresh inp);
       Lwt.return c
 
   let new_access_point () =
@@ -620,61 +632,49 @@ module Session = struct
   let forward inp outp =
     Unionfind.union (Hashtbl.find forward inp) (Hashtbl.find forward outp)
 
-  let block ep pid =
-    match ep with
-      | `ServerEndpointAddress portid ->
-        let portid = find_active portid in
-          Hashtbl.add blocked portid pid
-      | _ -> failwith "Can't (yet?) block a channel endpoint" (* la di da di daaa *)
+  let block portid pid =
+    let portid = find_active portid in
+      Hashtbl.add blocked portid pid
 
-  let unblock = function
-    | `ServerEndpointAddress portid ->
-      let portid = find_active portid in
-        begin
-          match (Hashtbl.lookup blocked portid) with
-            | Some pid ->
-                Hashtbl.remove blocked portid;
-                Some pid
-            | None -> None
-        end
-    | _ -> failwith "Can't (yet?) unblock a channel endpoint" (* wheeee *)
+  let unblock portid =
+    let portid = find_active portid in
+    match (Hashtbl.lookup blocked portid) with
+      | Some pid ->
+          Hashtbl.remove blocked portid;
+          Some pid
+      | None -> None
 
-  let send msg = function
-    | `ServerEndpointAddress ep ->
+  let send_local msg send_port =
       (* Debug.print ("Sending along: " ^ string_of_int p); *)
-      let p = find_active ep in
-        Queue.push msg (Hashtbl.find buffers p)
-    | `ClientEndpointAddress (_cid, _ep) ->
-        failwith "Sending to remote session endpoints not yet supported"
+      let p = find_active send_port in
+      Queue.push msg (Hashtbl.find buffers p)
 
-  let receive = function
-    | `ServerEndpointAddress ep ->
+  let send_remote _msg _cid = failwith "lol not yet"
+
+  let send msg send_port =
+    match Hashtbl.find endpoint_states send_port with
+      | Local -> send_local msg send_port
+      | Remote client_id -> send_remote msg client_id
+      | Delegating (buf, _cid) -> Queue.push msg buf
+
+  let receive recv_port =
       (* Debug.print ("Receiving on: " ^ string_of_int p); *)
-      let p = find_active ep in
+      let p = find_active recv_port in
       let buf = Hashtbl.find buffers p in
-        if not (Queue.is_empty buf) then
-          Some (Queue.pop buf)
-        else
-          None
-    | _ ->
-        (* This is a weird case. It depends on how we handle delegation --
-         * does a transfer of the channel via RPC / delivery count as delegation?
-         * Probably! It's design-dependent, in any case. *)
-        failwith "Cannot receive from client endpoint on the server."
+      if not (Queue.is_empty buf) then
+        Some (Queue.pop buf)
+      else
+        None
 
   (* Currently: all four of these should be server endpoints.
    * Eventually we'll have to do something a bit cleverer... *)
-  let link c1 c2 =
-    match c1, c2 with
-      | (`ServerEndpointAddress out1, `ServerEndpointAddress in1),
-        (`ServerEndpointAddress out2, `ServerEndpointAddress in2) ->
-        let out1 = find_active out1 in
-        let in1 = find_active in1 in
-        let out2 = find_active out2 in
-        let in2 = find_active in2 in
-          Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
-          Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
-          forward in1 out2;
-          forward in2 out1
-      | _ -> failwith "Can currently only link two server channels."
+  let link (out1, in1) (out2, in2) =
+    let out1 = find_active out1 in
+    let in1 = find_active in1 in
+    let out2 = find_active out2 in
+    let in2 = find_active in2 in
+      Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
+      Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
+      forward in1 out2;
+      forward in2 out1
 end

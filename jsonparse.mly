@@ -28,26 +28,6 @@ let websocket_req assoc_list =
         ClientToClient (client_id, pid, msg)
     | "CLIENT_TO_SERVER" -> ClientToServer (pid, msg)
     | _ -> failwith "Invalid opcode in websocket message"
-
-let parse_endpoint assoc_list =
-  if List.mem_assoc "clientEPID" assoc_list then
-    let cid =
-      ClientID.of_string @@
-      Value.unbox_string @@
-      List.assoc "_clientID" assoc_list in
-    let c_epid =
-      ChannelEndpoint.of_string @@
-      Value.unbox_string @@
-      List.assoc "clientEPID" assoc_list in
-    `ClientEndpointAddress (cid, c_epid)
-  else if List.mem_assoc "serverEPID" assoc_list then
-    let s_epid =
-      ChannelEndpoint.of_string @@
-      Value.unbox_string @@
-      List.assoc "serverEPID" assoc_list in
-    `ServerEndpointAddress (s_epid)
-  else failwith "Malformed endpoint in jsonparse"
-
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
@@ -87,10 +67,10 @@ object_:
                                 `SpawnLocation (`ClientSpawnLoc (client_id))
                             | ["_serverSpawnLoc", _] ->
                                 `SpawnLocation (`ServerSpawnLoc)
-                            | ["_sessEP1", ep1_dict; "_sessEP2", ep2_dict]
-                            | ["_sessEP2", ep2_dict; "_sessEP1", ep1_dict] ->
-                                let ep1 = parse_endpoint (Value.unbox_record ep1_dict) in
-                                let ep2 = parse_endpoint (Value.unbox_record ep2_dict) in
+                            | ["_sessEP1", ep1_str; "_sessEP2", ep2_str]
+                            | ["_sessEP2", ep2_str; "_sessEP1", ep1_str] ->
+                                let ep1 = ChannelID.of_string @@ Value.unbox_string ep1_str in
+                                let ep2 = ChannelID.of_string @@ Value.unbox_string ep2_str in
                                 `SessionChannel (ep1, ep2)
                             | ["_db", db] ->
                                 begin

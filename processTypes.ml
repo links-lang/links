@@ -100,10 +100,10 @@ end
 module ClientID  : NAME = Simple_string_name(struct let prefix = "cid_" end)
 module ProcessID : NAME = Simple_string_name(struct let prefix = "srvPid_" end)
 module AccessPointID : NAME = Simple_string_name(struct let prefix = "srvAp_" end)
-module ChannelEndpoint : NAME = Simple_string_name(struct let prefix = "ep_" end)
+module ChannelID : NAME = Simple_string_name(struct let prefix = "chan_" end)
 
 let main_process_pid = ProcessID.of_string "MAIN"
-let dummy_client_id = ClientID.of_string "MAIN"
+let dummy_client_id = ClientID.of_string "DUMMY_CLIENT"
 
 module type PIDMAP = Utility.Map with type key = ProcessID.t
 module type CLIENTIDMAP = Utility.Map with type key = ClientID.t
@@ -126,7 +126,7 @@ type process_id = ProcessID.t
 type apid = AccessPointID.t
   deriving (Show)
 
-type channel_endpoint_id = ChannelEndpoint.t
+type channel_id = ChannelID.t
   deriving (Show)
 
 type 'a pid_map = 'a PidMap.t

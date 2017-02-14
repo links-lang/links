@@ -76,19 +76,13 @@ type dist_pid = [
 ]
   deriving (Show)
 
-type endpoint_address = [
-  | `ClientEndpointAddress of (client_id * channel_endpoint_id)
-  | `ServerEndpointAddress of (channel_endpoint_id)
-]
-  deriving (Show)
-
 type access_point = [
   | `ClientAccessPoint of (client_id * apid)
   | `ServerAccessPoint of apid
 ]
   deriving (Show)
 
-type chan = (endpoint_address * endpoint_address)
+type chan = (channel_id * channel_id)
 
 type t = [
 | primitive_value
@@ -101,7 +95,7 @@ type t = [
 | `Continuation of continuation
 | `Pid of dist_pid
 | `AccessPointID of access_point
-| `SessionChannel of (endpoint_address * endpoint_address)
+| `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]

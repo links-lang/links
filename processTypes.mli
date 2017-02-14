@@ -16,7 +16,7 @@ end
 module ClientID : NAME
 module ProcessID : NAME
 module AccessPointID : NAME
-module ChannelEndpoint : NAME
+module ChannelID : NAME
 
 type client_id = ClientID.t
   deriving (Show)
@@ -27,7 +27,7 @@ type process_id = ProcessID.t
 type apid = AccessPointID.t
   deriving (Show)
 
-type channel_endpoint_id = ChannelEndpoint.t
+type channel_id = ChannelID.t
   deriving (Show)
 
 (* Distinguished PID for main thread *)
