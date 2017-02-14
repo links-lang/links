@@ -295,85 +295,81 @@ struct
               failwith "Cannot accept on a client AP on the server"
           | `ServerAccessPoint apid ->
               Session.accept apid >>= fun (ch, blocked) ->
-              let (c, d) = ch in
-              let boxed_channel = Value.box_channel ch in
-              Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
-              (* ("accepting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");*)
-                if blocked then
-                    (* block my end of the channel *)
-                    (Session.block ch (Proc.get_current_pid ());
-                     Proc.block (fun () -> apply_cont cont env boxed_channel))
-                else
-                    (* unblock the other end of the channel *)
-                    ((match Session.unblock d with
-                    | Some pid -> Proc.awaken pid
-                    | None     -> assert false);
-                  apply_cont cont env boxed_channel)
+              (* TODO: can we get this cleaner? So ugly... *)
+              begin
+                match ch with
+                  | (c, d) ->
+                    let boxed_channel = Value.box_channel ch in
+                    Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
+                    (* ("accepting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");*)
+                      if blocked then
+                          (* block my end of the channel *)
+                          (Session.block c (Proc.get_current_pid ());
+                           Proc.block (fun () -> apply_cont cont env boxed_channel))
+                      else
+                          (* unblock the other end of the channel *)
+                          ((match Session.unblock d with
+                          | Some pid -> Proc.awaken pid
+                          | None     -> assert false);
+                        apply_cont cont env boxed_channel)
+              end
       end
     | `PrimitiveFunction ("request", _), [ap] ->
       let ap = Value.unbox_access_point ap in
-      match ap with
-        | `ClientAccessPoint _ ->
-            (* TODO: Work out the semantics of this *)
-            failwith "Cannot *yet* request from a client-spawned AP"
-        | `ServerAccessPoint apid ->
-            Session.request apid >>= fun (ch, blocked) ->
-            let (c, d) = ch in
-            let boxed_channel = Value.box_channel ch in
-            let epid1_str = SessionEndpoint.to_string @@ Session.get_local_endpoint ch in
-            let epid2_str = SessionEndpoint.to_string @@ Session.get_remote_endpoint ch in
-
-            Debug.print ("requesting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");
-              if blocked then
-                begin
-                  (* block my end of the channel *)
-                  Session.block c (Proc.get_current_pid ());
-                  Proc.block (fun () -> apply_cont (request_frame::cont) env boxed_channel)
-                end
-              else
-                begin
-                  begin
-                    (* unblock the other end of the channel *)
-                    match Session.unblock d with
-                    | Some pid -> Proc.awaken pid
-                    | None     -> assert false
-                  end;
-                  apply_cont cont env boxed_channel
-                end
+      begin
+        match ap with
+          | `ClientAccessPoint _ ->
+              (* TODO: Work out the semantics of this *)
+              failwith "Cannot *yet* request from a client-spawned AP"
+          | `ServerAccessPoint apid ->
+              Session.request apid >>= fun (ch, blocked) ->
+              begin
+                match ch with
+                  | (c, d) ->
+                    let boxed_channel = Value.box_channel ch in
+                    Debug.print ("requesting: " ^ Value.string_of_value boxed_channel );
+                      if blocked then
+                        (* block my end of the channel *)
+                        (Session.block c (Proc.get_current_pid ());
+                        Proc.block (fun () -> apply_cont cont env boxed_channel))
+                      else
+                        (* unblock the other end of the channel *)
+                        ((match Session.unblock d with
+                            | Some pid -> Proc.awaken pid
+                            | None     -> assert false);
+                        apply_cont cont env boxed_channel)
+              end
+        end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
-      let (outp, _) = Session.unbox_chan chan in
+      let (outp, _) = Value.unbox_channel chan in
       Session.send v outp;
-      begin
-        match Session.unblock outp with
-          Some pid -> Proc.awaken pid
-        | None     -> ()
-      end;
+      OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
-        let unboxed_chan = Value.unbox_chan in
-        let out_ep = Session.get_send_endpoint chan in
-        let in_ep = Session.get_recv_endpoint chan in
-        match Session.receive in_ep with
-        | Some v ->
-          Debug.print ("grabbed: " ^ Value.string_of_value v);
-          apply_cont cont env (Value.box_pair v chan)
-        | None ->
-          (* Here, we have to extend the environment with a fresh variable
-           * representing the channel, since we can't create an IR application
-           * involving a Value.t (only an Ir.value).
-           * This *should* be safe, but still feels a bit unsatisfactory.
-           * It would be nice to refine this further. *)
-          let fresh_var = Var.fresh_raw_var () in
-          let extended_env = Value.bind fresh_var (chan, `Local) env in
-          let grab_frame =
-            Value.expr_to_contframe extended_env
-              (Lib.prim_appln "receive" [`Variable fresh_var])
-          in
-            Session.block inp (Proc.get_current_pid ());
-            Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
+        let unboxed_chan = Value.unbox_channel chan in
+        let (_outp, inp) = unboxed_chan in
+        match Session.receive inp with
+          | Some v ->
+            Debug.print ("grabbed: " ^ Value.string_of_value v);
+            apply_cont cont env (Value.box_pair v chan)
+          | None ->
+            (* Here, we have to extend the environment with a fresh variable
+             * representing the channel, since we can't create an IR application
+             * involving a Value.t (only an Ir.value).
+             * This *should* be safe, but still feels a bit unsatisfactory.
+             * It would be nice to refine this further. *)
+            let fresh_var = Var.fresh_raw_var () in
+            let extended_env = Value.bind fresh_var (chan, `Local) env in
+            let grab_frame =
+              Value.expr_to_contframe extended_env
+                (Lib.prim_appln "receive" [`Variable fresh_var])
+            in
+              let inp = (snd unboxed_chan) in
+              Session.block inp (Proc.get_current_pid ());
+              Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
@@ -382,8 +378,8 @@ struct
                       Proc.awaken pid
         | None     -> () in
       Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
-      let (out1, in1) = Session.unbox_chan chanl in
-      let (out2, in2) = Session.unbox_chan chanr in
+      let (out1, in1) = Value.unbox_channel chanl in
+      let (out2, in2) = Value.unbox_channel chanr in
       Session.link (out1, in1) (out2, in2);
       unblock out1;
       unblock out2;
@@ -583,21 +579,17 @@ struct
     | `Select (name, v) ->
       let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
-      let (outp, _) = Session.unbox_chan chan in
+      let ch = Value.unbox_channel chan in
+      let (outp, _inp) = ch in
       Session.send (Value.box_string name) outp;
-      begin
-        match Session.unblock outp with
-          Some pid -> Proc.awaken pid
-        | None     -> ()
-      end;
+      OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `Choice (v, cases) ->
       begin
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let (_, in') = Session.unbox_chan' chan in
-        let inp = in' in
-          match Session.receive inp with
+        let (_, inp) = Value.unbox_channel chan in
+        match Session.receive inp with
           | Some v ->
             Debug.print ("chose: " ^ Value.string_of_value v);
             let label = Value.unbox_string v in

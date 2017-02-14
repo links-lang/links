@@ -541,9 +541,6 @@ module Session = struct
   (* Channel: a pair of the local and remote endpoint addresses *)
   type chan = (Value.endpoint_address * Value.endpoint_address)
 
-  let get_send_endpoint = fst
-  let get_recv_endpoint = snd
-
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
 
   let flip_chan (outp, inp) = (inp, outp)
@@ -623,19 +620,24 @@ module Session = struct
   let forward inp outp =
     Unionfind.union (Hashtbl.find forward inp) (Hashtbl.find forward outp)
 
-  let block portid pid =
-    let portid = find_active portid in
-      Hashtbl.add blocked portid pid
-  let unblock portid =
-    let portid = find_active portid in
-      if Hashtbl.mem blocked portid then
+  let block ep pid =
+    match ep with
+      | `ServerEndpointAddress portid ->
+        let portid = find_active portid in
+          Hashtbl.add blocked portid pid
+      | _ -> failwith "Can't (yet?) block a channel endpoint" (* la di da di daaa *)
+
+  let unblock = function
+    | `ServerEndpointAddress portid ->
+      let portid = find_active portid in
         begin
-          let pid = Hashtbl.find blocked portid in
-            Hashtbl.remove blocked portid;
-            Some pid
+          match (Hashtbl.lookup blocked portid) with
+            | Some pid ->
+                Hashtbl.remove blocked portid;
+                Some pid
+            | None -> None
         end
-      else
-        None
+    | _ -> failwith "Can't (yet?) unblock a channel endpoint" (* wheeee *)
 
   let send msg = function
     | `ServerEndpointAddress ep ->
@@ -654,8 +656,11 @@ module Session = struct
           Some (Queue.pop buf)
         else
           None
-    | `ClientEndpointAddress _ ->
-        failwith "Cannot receive from client endpoint -- how did this happen?"
+    | _ ->
+        (* This is a weird case. It depends on how we handle delegation --
+         * does a transfer of the channel via RPC / delivery count as delegation?
+         * Probably! It's design-dependent, in any case. *)
+        failwith "Cannot receive from client endpoint on the server."
 
   (* Currently: all four of these should be server endpoints.
    * Eventually we'll have to do something a bit cleverer... *)
