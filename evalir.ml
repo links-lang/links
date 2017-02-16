@@ -260,55 +260,48 @@ struct
     | `PrimitiveFunction ("accept", _), [ap] ->
       let apid = Value.unbox_int ap in
       let (c, d), blocked = Session.accept apid in
+      let boxed_chan =
+        (Value.box_pair (Value.box_int c) (Value.box_int d)) in
+
       Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
         if blocked then
-          let accept_frame =
-              Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
-                                     (StringMap.add "2" (`Constant (`Int d))
-                                        StringMap.empty), None)))
-            in
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (Value.append_cont_frame accept_frame cont) hs env (`Record []))
+          begin
+            (* block my end of the channel *)
+            Session.block c (Proc.get_current_pid ());
+            Proc.block (fun () -> apply_cont cont hs env boxed_chan)
+          end
         else
           begin
+            (* unblock the other end of the channel *)
             begin
-              (* unblock the other end of the channel *)
-              match Session.unblock d with
+              match (Session.unblock d) with
               | Some pid -> Proc.awaken pid
               | None     -> assert false
             end;
-            apply_cont cont hs env (Value.box_pair
-                                   (Value.box_int c)
-                                   (Value.box_int d))
+            apply_cont cont hs env boxed_chan
           end
     | `PrimitiveFunction ("request", _), [ap] ->
       let apid = Value.unbox_int ap in
       let (c, d), blocked = Session.request apid in
+      let boxed_chan =
+        (Value.box_pair (Value.box_int c) (Value.box_int d)) in
       Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
-        if blocked then
-          let request_frame =
-              Value.expr_to_contframe env
-                (`Return (`Extend (StringMap.add "1" (`Constant (`Int c))
-                                     (StringMap.add "2" (`Constant (`Int d))
-                                        StringMap.empty), None)))
-            in
-              (* block my end of the channel *)
-              Session.block c (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont (Value.append_cont_frame request_frame cont) hs env (`Record []))
-        else
+      if blocked then
+        begin
+          (* block my end of the channel *)
+          Session.block c (Proc.get_current_pid ());
+          Proc.block (fun () -> apply_cont cont hs env boxed_chan)
+        end
+      else
+        begin
           begin
-            begin
-              (* unblock the other end of the channel *)
-              match Session.unblock d with
-              | Some pid -> Proc.awaken pid
-              | None     -> assert false
-            end;
-            apply_cont cont hs env (Value.box_pair
-                                   (Value.box_int c)
-                                   (Value.box_int d))
-          end
+            (* unblock the other end of the channel *)
+            match Session.unblock d with
+            | Some pid -> Proc.awaken pid
+            | None     -> assert false
+          end;
+          apply_cont cont hs env boxed_chan
+        end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Session.unbox_chan chan in
