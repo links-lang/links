@@ -404,6 +404,9 @@ let apply_yielding (f, args, k) =
 let callk_yielding kappa arg =
   Call(Var "_yieldCont", [kappa; arg])
 
+let callk_direct kappa arg =
+  Call(Var "_applyCont", [kappa; arg])
+
 (** [generate]
     Generates JavaScript code for a Links expression
 
@@ -604,7 +607,7 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                                 && not (List.mem f_name cps_prims)
                                 && Lib.primitive_location f_name <> `Server
                               then
-                                Call (kappa, [Call (Var ("_" ^ f_name), List.map gv vs)])
+                                callk_direct kappa (Call (Var ("_" ^ f_name), List.map gv vs))
                               else
                                 apply_yielding (gv (`Variable f), List.map gv vs, kappa)
                       end
@@ -662,7 +665,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
           bind_continuation kappa
             (fun kappa -> apply_yielding (gv v, [kappa], kappa))
       | `Select (l, c) ->
-         Call (kappa, [Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c])])
+         callk_direct kappa (Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]))
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -715,7 +718,9 @@ and generate_function env fs :
     in
     (f_name,
      xs_names @ ["__kappa"],
-     body,
+     Bind ("__k", Call (Var "_lsHead", [Var "__kappa"]),
+       Bind ("__ks", Call (Var "_lsTail", [Var "__kappa"]),
+         body)),
      location)
 
 and generate_binding env : Ir.binding -> (venv * (code -> code)) =
@@ -730,7 +735,13 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let (x, x_name) = name_binder b in
         let env' = VEnv.bind env (x, x_name) in
           (env', fun code ->
-                   generate_tail_computation env tc (Fn ([x_name], code)))
+                   generate_tail_computation env tc
+                     (Call (Var "_lsCons",
+                            [Fn ([x_name; "__ks"],
+                               Bind ("__kappa",
+                                     Call (Var "_lsCons", [Var "__k"; Var "__ks"]), code));
+                             Var "__ks"])))
+                   (* generate_tail_computation env tc (Fn ([x_name], code))) *)
     | `Fun ((fb, _, _zs, _location) as def) ->
         let (f, f_name) = name_binder fb in
         let env' = VEnv.bind env (f, f_name) in
@@ -986,7 +997,9 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
   let js = Json.resolve_state json_state in
 
   let printed_code =
-    let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in
+    let _venv, code =
+      generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Var "_idy") in
+    (* let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (Fn ([], Nothing)) in *)
     let code = f code in
     let code = GenStubs.bindings defs code in
     let code = wrap_with_server_lib_stubs code in
