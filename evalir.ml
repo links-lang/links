@@ -541,7 +541,7 @@ struct
        let hs = (env, cases, spec) :: hs in       
        let cont = [] :: cont in
        let comp = value env v in
-       apply cont hs env (comp, [])
+       apply_cont' cont hs env comp
     | `DoOperation (name, v, _) ->
        let vs = List.map (value env) v in
        handle env cont hs (name,vs)
