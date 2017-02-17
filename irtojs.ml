@@ -691,7 +691,8 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                              (Var "h",
                               [Dict [("label", strlit name); ("ps", box vs)]],
                               Call (Var "_lsCons", [Var "k"; Call (Var "_lsCons", [Var "e"; Var "ks"])]))))))))
-      | `Handle _ -> failwith "irtojs.ml: Translation of `DoOperation and `Handle are not yet implemented."
+      | `Handle (comp, clauses, _) ->
+         failwith "irtojs.ml: Translation of `Handle has not yet been implemented."
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa ->
