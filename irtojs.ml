@@ -678,7 +678,19 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
              Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
-      | `DoOperation _
+      | `DoOperation (name, vs, _t) ->
+        let box vs =
+          Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs) in
+        Bind ("k", Call (Var "_lsHead", [kappa]),
+        Bind ("eks", Call (Var "_lsTail", [kappa]),
+        Bind ("e", Call (Var "_lsHead", [Var "eks"]),
+        Bind ("ks", Call (Var "_lsTail", [Var "eks"]),
+        callk_yielding (Var "eks")
+                       (Fn (["h"; "ks"],
+                           apply_yielding
+                             (Var "h",
+                              [Dict [("label", strlit name); ("ps", box vs)]],
+                              Call (Var "_lsCons", [Var "k"; Call (Var "_lsCons", [Var "e"; Var "ks"])]))))))))
       | `Handle _ -> failwith "irtojs.ml: Translation of `DoOperation and `Handle are not yet implemented."
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
