@@ -691,8 +691,21 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                              (Var "h",
                               [Dict [("label", strlit name); ("ps", box vs)]],
                               Call (Var "_lsCons", [Var "k"; Call (Var "_lsCons", [Var "e"; Var "ks"])]))))))))
-      | `Handle (comp, clauses, _) ->
-         failwith "irtojs.ml: Translation of `Handle has not yet been implemented."
+      | `Handle (m, clauses, _) ->
+         let gb env binder body kappa =
+               let env' = VEnv.bind env (name_binder binder) in
+               snd (generate_computation env' body kappa)
+         in
+         let m = gv m in
+         let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
+         let return =
+           let (_, xb, body) = return_clause in
+           Fn ([snd @@ name_binder xb; "__kappa"],
+               Call (Var "__kappa",
+                     [Fn (["__h_ignored"; "__kappa"],
+                          gb env xb body (Var "__kappa"))]))
+         in
+         Call (Var "_lsCons", [return; kappa])
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa ->
