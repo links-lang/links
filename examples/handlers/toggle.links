@@ -11,11 +11,8 @@ fun put(st) {do Put(st)}
 sig toggle : Comp({Get:Bool,Put:(Bool) {}-> () |_}, Bool)
 fun toggle() client {
   var bit = get();
-  bit
-  #print(boolToString(bit));
-  #put(not(bit));
-  #print(boolToString(get()));
-  #get()
+  put(not(bit));
+  get()
 }
 
 # State handler
@@ -51,8 +48,8 @@ fun stringToBool(s) {
 
 fun toggleButton() client {
   var s0 = stringToBool(domGetAttributeFromRef(getNodeById("state"), "value"));
-  var (b,s1) = runState(toggle)(s0)();
-  if (b == true) {
+  var (bit,s1) = runState(toggle)(s0)();
+  if (bit == true) {
     domRemoveAttributeFromRef(getNodeById("off"), "disabled");
     ignore(domSetAttributeFromRef(getNodeById("on"), "disabled", "disabled"))
   } else {
