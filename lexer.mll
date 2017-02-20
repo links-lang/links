@@ -183,6 +183,10 @@ let keywords = [
  "module"   , MODULE;
  "mu"       , MU;
  "native"   , NATIVE;
+ "new"      , NEW;
+ "newAP"    , NEWAP;
+ "newClientAP", NEWCLIENTAP;
+ "newServerAP", NEWSERVERAP;
  "nu"       , NU;
  "offer"    , OFFER;
  "orderby"  , ORDERBY;

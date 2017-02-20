@@ -417,6 +417,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "forall s::Type(Any, Session).() ~> AP(s)",
    IMPURE);
 
+  "newAP",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session). Location ~> AP(s)",
+   IMPURE);
+
+  "newClientAP",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   IMPURE);
+
+  "newServerAP",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   IMPURE);
+
   "accept",
   (`PFun (fun _ -> assert false),
    datatype "forall s::Type(Any, Session).(AP(s)) ~> s",

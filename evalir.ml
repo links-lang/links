@@ -283,9 +283,22 @@ struct
         end
     (* end of mailbox stuff *)
     (* start of session stuff *)
+    (*
     | `PrimitiveFunction ("new", _), [] ->
-      Session.new_access_point () >>= fun apid ->
-        apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
+      Session.new_server_access_point () >>= fun apid ->
+        apply_cont cont env (`AccessPointID (`ServerAccessPoint apid)) *)
+    | `PrimitiveFunction ("newAP", _), [loc] ->
+        let unboxed_loc = Value.unbox_spawn_loc loc in
+        begin
+        match unboxed_loc with
+          | `ClientSpawnLoc cid ->
+              Session.new_client_access_point cid >>= fun apid ->
+              Lwt.return @@ `AccessPointID (`ClientAccessPoint (cid, apid))
+          | `ServerSpawnLoc ->
+              Session.new_server_access_point () >>= fun apid ->
+              Lwt.return @@ `AccessPointID (`ServerAccessPoint apid)
+        end
+        >>= fun ap -> apply_cont cont env ap
     | `PrimitiveFunction ("accept", _), [ap] ->
       let ap = Value.unbox_access_point ap in
       begin

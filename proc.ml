@@ -592,6 +592,9 @@ module Session = struct
       Hashtbl.add access_points apid Balanced;
       Lwt.return apid
 
+  let new_server_access_point = new_access_point
+  let new_client_access_point _cid = failwith "not implemented yet"
+
   let accept : apid -> (chan * bool) Lwt.t =
     fun apid ->
       let state = Hashtbl.find access_points apid in

@@ -207,6 +207,7 @@ and phrasenode = [
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
 | `Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
+(* | `NewAP            of given_spawn_location *)
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
