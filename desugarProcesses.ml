@@ -42,6 +42,7 @@ object (o : 'self_type)
 
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
+        let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let (o, body, body_type) = o#phrase body in
         let o = o#with_effects outer_eff in
 
