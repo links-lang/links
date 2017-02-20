@@ -95,6 +95,11 @@ let rec jsonize_value : Value.t -> json_string =
   | `List (elems) ->
     let ss = jsonize_values elems in
       "[" ^ String.concat "," ss ^ "]"
+  | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
+      "{\"_clientAPID\": " ^ (AccessPointID.to_json apid) ^
+      ", \"_clientId\":" ^ (ClientID.to_json cid) ^  "}"
+  | `AccessPointID (`ServerAccessPoint (apid)) ->
+      "{\"_serverAPID\": " ^ (AccessPointID.to_json apid) ^ "}"
   | `Pid (`ClientPid (client_id, process_id)) ->
       "{\"_clientPid\":" ^ (ProcessID.to_json process_id) ^
       ", \"_clientId\":" ^ (ClientID.to_json client_id) ^ "}"

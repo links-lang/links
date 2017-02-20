@@ -55,6 +55,14 @@ object_:
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
+                            | ["_clientAPID", apid_str; "_clientId", cid_str]
+                            | ["_clientId", cid_str; "_clientAPID", apid_str] ->
+                                let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in
+                                let cid = ClientID.of_string @@ Value.unbox_string cid_str in
+                                `AccessPointID (`ClientAccessPoint (cid, apid))
+                            | ["_serverAPID", apid_str] ->
+                                let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in
+                                `AccessPointID (`ServerAccessPoint (apid))
                             | ["_serverPid", v] ->
                                 `Pid (`ServerPid (ProcessID.of_string (Value.unbox_string v)))
                             | ["_clientPid", pid_str; "_clientId", client_id_str]
