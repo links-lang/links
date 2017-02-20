@@ -170,3 +170,7 @@ stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b|c}~> d) -> () {Op{_}|c
 Instantiate.ArityMismatch #132 (RESOLVED)
 sig f : (() {Foo:Int|a}~> b) {Foo{_}|a}~> b fun f(m) { error("N/A") } fun g(m) { var x = f(m); x }
 stdout : () : ()
+
+Effect polymorphism
+sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m) { case Fail(k) -> Nothing case Return(x) -> Just(x) } } catch(fun() { 42 })
+stdout : Just(42) : Maybe (Int)
