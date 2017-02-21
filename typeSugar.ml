@@ -2756,7 +2756,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Val (_, pat, body, location, datatype) as binding ->
+      | `Val (_, pat, body, location, datatype) ->
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -2779,9 +2779,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (* All rigid type variables in bt should appear in the
                  environment *)
               let tyvars = Generalise.get_quantifiers context.var_env bt in
-              if List.exists
-                  (fun ((x, _, _) as q) -> Types.is_rigid_quantifier q)
-                  tyvars
+              if List.exists Types.is_rigid_quantifier tyvars
               then
                 Gripers.value_restriction pos bt
               else
