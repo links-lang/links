@@ -509,6 +509,11 @@ op:
 | INFIXL9                                                      { $1, pos() }
 | INFIXR9                                                      { $1, pos() }
 
+ap_expression:
+| NEW exp                                                      { `NewAP (`NoSpawnLocation), pos() }
+| NEWAP LPAREN exp RPAREN                                      { `NewAP (`ExplicitSpawnLocation $3), pos() }
+| NEWCLIENTAP                                                  { `NewAP (`SpawnClient), pos() }
+| NEWSERVERAP                                                  { `NewAP (`NoSpawnLocation), pos() }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { `Spawn (`Demon, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
@@ -522,6 +527,7 @@ postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
+| ap_expression                                                { $1 }
 | spawn_expression                                             { $1 }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,

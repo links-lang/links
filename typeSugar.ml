@@ -86,6 +86,7 @@ struct
     | `Select _
     | `Offer _
     | `CP _
+    | `NewAP _
     (* | `Fork _ *)
     | `DBDelete _
     | `DBInsert _
@@ -2726,6 +2727,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               `Switch (erase e, erase_cases binders, Some body_type), body_type, merge_usages [usages e; usages_cases binders]
+        | `NewAP _ -> assert false
         | `QualifiedVar _ -> assert false
     in (e, pos), t, usages
 
