@@ -54,45 +54,6 @@ and event_handlers_from_values (vs : Value.t list) : handler_id_set =
            let v_handlers = event_handlers_from_value v in
            IntSet.union set_acc v_handlers) IntSet.empty vs
 
-(* Derp, I don't think I need this.
-let empty_ap_state = AccessPointIDSet.empty
-let aps_from_value : client_id -> Value.t -> apid_set = fun cid v ->
-
-  let rec aps_from_value_inner : Value.t -> apid_set = function
-    (* Only interesting one *)
-    | `AccessPointID (`ClientAccessPoint (ap_cid, apid))
-        when (ClientID.equal cid ap_cid) -> AccessPointIDSet.singleton apid
-    | `AccessPointID _ -> empty_ap_state
-    (* Can't-dos *)
-    | `PrimitiveFunction _ | `Socket _ | `Continuation _ as r ->
-        failwith ("Can't create json state for " ^ Value.string_of_value r);
-
-    (* Empties *)
-    | `List [] | `SpawnLocation _ | `Pid _
-    | `ClientFunction _ | `SessionChannel _ -> empty_ap_state
-    | #Value.primitive_value -> empty_ap_state
-
-    (* Homomorphisms *)
-    | `FunctionPtr (_f, fvs) ->
-      begin
-        match fvs with
-          | None     -> empty_ap_state
-          | Some fvs -> aps_from_value_inner fvs
-      end
-    | `Variant (_label, value) -> aps_from_value_inner value
-    | `Record fields ->
-      let _ls, vs = List.split fields in
-      aps_from_values vs
-    | `List (elems) -> aps_from_values elems
-  and aps_from_values (vs : Value.t list) : apid_set =
-      List.fold_left
-          (fun set_acc v ->
-             let v_aps = aps_from_value_inner v in
-             AccessPointIDSet.union set_acc v_aps) (AccessPointIDSet.empty) vs in
-  (* toplevel *)
-  aps_from_value_inner v
-*)
-
 (* External interface *)
 let add_val_event_handlers v json_state =
   let handler_id_list = IntSet.elements @@ event_handlers_from_value v in
