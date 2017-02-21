@@ -587,12 +587,11 @@ module Session = struct
       Hashtbl.add forward inp (Unionfind.fresh inp);
       Lwt.return c
 
-  let new_access_point () =
+  let new_server_access_point () =
     AccessPointID.create () >>= fun apid ->
       Hashtbl.add access_points apid Balanced;
       Lwt.return apid
 
-  let new_server_access_point = new_access_point
   let new_client_access_point _cid = failwith "not implemented yet"
 
   let accept : apid -> (chan * bool) Lwt.t =

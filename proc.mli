@@ -83,7 +83,6 @@ module Session :
 sig
   type chan = Value.chan
 
-  val new_access_point : unit -> apid Lwt.t
   val new_server_access_point : unit -> apid Lwt.t
   val new_client_access_point : client_id -> apid Lwt.t
 
