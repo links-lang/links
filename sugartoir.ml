@@ -883,7 +883,6 @@ struct
 
                   (* These things should all have been desugared already *)
           | `Spawn _
-          | `NewAP _
           | `Receive _
           | `Section (`Project _)
           | `FunLit _

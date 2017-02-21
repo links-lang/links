@@ -183,7 +183,13 @@ struct
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
     | `Coerce (v, _) -> value env v
-
+  and apply_access_point cont env : Value.spawn_location -> Proc.thread_result Lwt.t = function
+      | `ClientSpawnLoc cid ->
+          Session.new_client_access_point cid >>= fun apid ->
+          apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
+      | `ServerSpawnLoc ->
+          Session.new_server_access_point () >>= fun apid ->
+          apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
     | `FunctionPtr (f, fvs), ps ->
@@ -283,22 +289,17 @@ struct
         end
     (* end of mailbox stuff *)
     (* start of session stuff *)
-    (*
     | `PrimitiveFunction ("new", _), [] ->
-      Session.new_server_access_point () >>= fun apid ->
-        apply_cont cont env (`AccessPointID (`ServerAccessPoint apid)) *)
+        apply_access_point cont env `ServerSpawnLoc
     | `PrimitiveFunction ("newAP", _), [loc] ->
         let unboxed_loc = Value.unbox_spawn_loc loc in
-        begin
-        match unboxed_loc with
-          | `ClientSpawnLoc cid ->
-              Session.new_client_access_point cid >>= fun apid ->
-              Lwt.return @@ `AccessPointID (`ClientAccessPoint (cid, apid))
-          | `ServerSpawnLoc ->
-              Session.new_server_access_point () >>= fun apid ->
-              Lwt.return @@ `AccessPointID (`ServerAccessPoint apid)
-        end
-        >>= fun ap -> apply_cont cont env ap
+        apply_access_point cont env unboxed_loc
+    | `PrimitiveFunction ("newClientAP", _), [] ->
+        (* Really this should be desugared properly into "there"... *)
+        let client_id = RequestData.get_client_id @@ Value.request_data env in
+        apply_access_point cont env (`ClientSpawnLoc client_id)
+    | `PrimitiveFunction ("newServerAP", _), [] ->
+        apply_access_point cont env `ServerSpawnLoc
     | `PrimitiveFunction ("accept", _), [ap] ->
       let ap = Value.unbox_access_point ap in
       begin

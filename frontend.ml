@@ -40,7 +40,6 @@ struct
       (DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
        ->- DesugarDatatypes.program tyenv.Types.tycon_env
-       ->- DesugarAPs.desugar_aps
        ->- TypeSugar.Check.program tyenv
        ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)
        ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
