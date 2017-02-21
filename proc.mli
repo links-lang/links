@@ -86,6 +86,8 @@ sig
   val new_server_access_point : unit -> apid Lwt.t
   val new_client_access_point : client_id -> apid Lwt.t
 
+  val get_and_mark_pending_aps : client_id -> apid list
+
   val accept : apid -> (chan * bool) Lwt.t
   val request : apid -> (chan * bool) Lwt.t
 

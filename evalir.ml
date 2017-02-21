@@ -68,6 +68,7 @@ struct
      let st = List.fold_left
        (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
        (JsonState.empty client_id conn_url_opt) args in
+     let st = ResolveJsonState.add_ap_information client_id st in
      let st = ResolveJsonState.add_process_information client_id st in
      Json.jsonize_call st continuation name args
 

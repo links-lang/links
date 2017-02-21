@@ -19,6 +19,9 @@ module JsonState : sig
   (** Adds an event handler to the state *)
   val add_event_handler : handler_id -> Value.t -> t -> t
 
+  (** Adds an access point ID to the state *)
+  val add_ap_id : apid -> t -> t
+
   (** Serialises the state as a JSON string *)
   val to_string : t -> json_string
 end

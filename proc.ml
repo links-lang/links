@@ -552,7 +552,12 @@ module Session = struct
 
   let flip_chan (outp, inp) = (inp, outp)
 
+  (* Access points *)
+  (* Server access points --- APs residing on the server *)
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
+  (* Client access points --- APs residing on the client. Bool refers to whether
+   * this has been delivered to the client yet. *)
+  let client_access_points = (Hashtbl.create 10000 : (client_id, (apid * bool) list) Hashtbl.t)
 
   (* States of all endpoints: local, remote, or in the process of delegating? *)
   let endpoint_states = (Hashtbl.create 10000 : (channel_id, channel_state) Hashtbl.t)
@@ -592,7 +597,24 @@ module Session = struct
       Hashtbl.add access_points apid Balanced;
       Lwt.return apid
 
-  let new_client_access_point _cid = failwith "not implemented yet"
+  let new_client_access_point cid =
+    AccessPointID.create () >>= fun apid ->
+      begin
+      match Hashtbl.lookup client_access_points cid with
+        | Some aps -> Hashtbl.replace client_access_points cid ((apid, false) :: aps)
+        | None -> Hashtbl.add client_access_points cid [(apid, false)]
+      end;
+      Lwt.return apid
+
+  let get_and_mark_pending_aps cid =
+    match Hashtbl.lookup client_access_points cid with
+      | Some aps ->
+          let res = filter_map (not -<- snd) fst aps in
+          (* Mark all as delivered *)
+          Hashtbl.replace client_access_points cid
+            (List.map (fun (apid, _) -> (apid, true)) aps);
+          res
+      | None -> []
 
   let accept : apid -> (chan * bool) Lwt.t =
     fun apid ->

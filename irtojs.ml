@@ -993,8 +993,12 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
   let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
   let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
 
+  (* Add AP information; mark APs as delivered *)
+  let json_state = ResolveJsonState.add_ap_information client_id json_state in
+
   (* Add process information to the JSON state; mark all processes as active *)
   let json_state = ResolveJsonState.add_process_information client_id json_state in
+
   let state_string = JsonState.to_string json_state in
 
   let printed_code =

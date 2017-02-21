@@ -173,13 +173,18 @@ let show_handlers evt_handlers =
   let bnds = IntMap.bindings evt_handlers in
   String.concat "," (List.map show_evt_handler bnds)
 
-let print_json_state client_id conn_opt procs handlers =
+let show_aps aps =
+  let ap_list = AccessPointIDSet.elements aps in
+  String.concat "," (List.map (AccessPointID.to_string) ap_list)
+
+let print_json_state client_id conn_opt procs handlers aps =
     let ws_url_data =
     (match conn_opt with
        | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
        | None -> "") in
   "{\"client_id\":\"" ^ ClientID.to_string client_id ^ "\"," ^
-  ws_url_data ^
+   ws_url_data ^
+   "\"access_points\":" ^ "[" ^ (show_aps aps) ^ "]" ^ "," ^
    "\"processes\":" ^ "[" ^ (show_processes procs) ^ "]" ^ "," ^
    "\"handlers\":" ^ "[" ^ (show_handlers handlers) ^ "]}"
 
@@ -190,7 +195,8 @@ module JsonState = struct
     client_id : client_id;
     ws_conn_url_opt : maybe_connection_url;
     processes: (Value.t * Value.t list) pid_map;
-    handlers: Value.t intmap
+    handlers: Value.t intmap;
+    aps: apid_set
   }
 
   (** Creates an empty JSON state *)
@@ -199,6 +205,7 @@ module JsonState = struct
     ws_conn_url_opt = url;
     processes = PidMap.empty;
     handlers = IntMap.empty;
+    aps = AccessPointIDSet.empty
   }
 
   (** Adds a process and its mailbox to the state. *)
@@ -209,8 +216,12 @@ module JsonState = struct
   let add_event_handler handler_id handler_val state =
     { state with handlers = IntMap.add handler_id handler_val state.handlers }
 
+  (** Adds an access point ID to the state *)
+  let add_ap_id apid state =
+    { state with aps = AccessPointIDSet.add apid state.aps }
+
   (** Serialises the state as a JSON string *)
-  let to_string s = print_json_state s.client_id s.ws_conn_url_opt s.processes s.handlers
+  let to_string s = print_json_state s.client_id s.ws_conn_url_opt s.processes s.handlers s.aps
 end
 
 type json_state = JsonState.t

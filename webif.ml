@@ -146,7 +146,8 @@ struct
     let json_state = Json.JsonState.empty client_id conn_url_opt in
     (* Add event handlers *)
     let json_state = ResolveJsonState.add_val_event_handlers v json_state in
-    (* Add process information *)
+    (* Add AP and process information *)
+    let json_state = ResolveJsonState.add_ap_information client_id json_state in
     ResolveJsonState.add_process_information client_id json_state
 
   let perform_request valenv run render_cont req =

@@ -107,15 +107,24 @@ let dummy_client_id = ClientID.of_string "DUMMY_CLIENT"
 
 module type PIDMAP = Utility.Map with type key = ProcessID.t
 module type CLIENTIDMAP = Utility.Map with type key = ClientID.t
+module type ACCESSPOINTIDMAP = Utility.Map with type key = AccessPointID.t
+module type CHANNELIDMAP = Utility.Map with type key = ChannelID.t
 
 module PidMap : PIDMAP = Map.Make(ProcessID)
 module ClientIDMap : CLIENTIDMAP = Map.Make(ClientID)
+module AccessPointIDMap : ACCESSPOINTIDMAP = Map.Make(AccessPointID)
+module ChannelIDMap : CHANNELIDMAP = Map.Make(ChannelID)
 
 module type PIDSET = Utility.Set with type elt = ProcessID.t
 module type CLIENTIDSET = Utility.Set with type elt = ClientID.t
+module type ACCESSPOINTIDSET = Utility.Set with type elt = AccessPointID.t
+module type CHANNELIDSET = Utility.Set with type elt = ChannelID.t
 
 module PidSet : PIDSET = Set.Make(ProcessID)
 module ClientIDSet : CLIENTIDSET = Set.Make(ClientID)
+module AccessPointIDSet : ACCESSPOINTIDSET = Set.Make(AccessPointID)
+module ChannelIDSet: CHANNELIDSET = Set.Make(ChannelID)
+
 
 type client_id = ClientID.t
   deriving (Show)
@@ -131,7 +140,10 @@ type channel_id = ChannelID.t
 
 type 'a pid_map = 'a PidMap.t
 type 'a client_id_map = 'a ClientIDMap.t
+type 'a apid_map = 'a AccessPointIDMap.t
+type 'a channel_id_map = 'a ChannelIDMap.t
 
 type pid_set = PidSet.t
 type client_id_set = ClientIDSet.t
-
+type apid_set = AccessPointIDSet.t
+type channelid_set = ChannelIDSet.t
