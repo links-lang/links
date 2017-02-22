@@ -25,7 +25,7 @@ fun mainPage(_) {
   page
     <html>
       <body>
-        <form l:onsubmit="{run(10^5)}">
+        <form l:onsubmit="{run(10^6)}">
           <input type="submit" value="Run" />
           <input type="text" id="result" readonly="readonly" value="" />
         </form>
