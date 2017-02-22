@@ -684,11 +684,9 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
          in         
          bind_continuation kappa
            (fun kappa ->
-             Bind ("k", Call (Var "_lsHead", [kappa]),
-             Bind ("eks", Call (Var "_lsTail", [kappa]),
-             Bind ("e", Call (Var "_lsHead", [Var "eks"]),
-             Bind ("ks", Call (Var "_lsTail", [Var "eks"]),
-                generate_op (Dict [("_label", strlit name); ("_value", box vs)]) (Var "k") (Var "e") (Var "eks"))))))
+             Bind ("hks", Call (Var "_lsTail", [kappa]),
+             Bind ("h", Call (Var "_lsHead", [Var "hks"]),
+                generate_op (Dict [("_label", strlit name); ("_value", box vs)]) (Var "h") kappa)))
       | `Handle (m, clauses, _) ->
          let gb env binder body kappa =
                let env' = VEnv.bind env (name_binder binder) in
@@ -699,13 +697,10 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
          let return =
            let (_, xb, body) = return_clause in
            Fn ([snd @@ name_binder xb; "__kappa"],
-               callk_yielding
-                 (Var "__kappa")
-                 (Fn (["__h_ignored"; "__kappa"],
-                      gb env xb body (Var "__kappa"))))
+               gb env xb body (Call (Var "_lsTail", [Var "__kappa"])))
          in
          let operations =
-           let gc env (ct, xb, body) k e ks =
+           let gc env (ct, xb, body) k h ks =
              let env', r_name =
                match ct with
                | `Effect kb ->
@@ -715,7 +710,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
              in
              let r = Fn (["_x"; "__kappa"],
                          callk_yielding
-                           (Call (Var "_lsCons", [k; Call (Var "_lsCons", [e; Var "__kappa"])]))
+                           (Call (Var "_lsCons", [k; Call (Var "_lsCons", [h; Var "__kappa"])]))
                            (Var "_x"))
              in
              let clause_body = Bind (r_name, r, gb env' xb body ks) in
@@ -727,47 +722,39 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                  gc env clause k e ks)
                operation_clauses
            in
-           let forward z k e ks =
+           let forward z k h ks =
              bind_continuation ks
                (fun ks ->
                   Bind ("_k_prime", Call (Var "_lsHead", [ks]),
-                  Bind ("_eks_prime", Call (Var "_lsTail", [ks]),
-                  Bind ("_e_prime", Call (Var "_lsHead", [Var "_eks_prime"]),
-                  Bind ("_ks_prime", Call (Var "_lsTail", [Var "_eks_prime"]),
+                  Bind ("_hks_prime", Call (Var "_lsTail", [ks]),
+                  Bind ("_h_prime", Call (Var "_lsHead", [Var "_hks_prime"]),
+                  Bind ("_ks_prime", Call (Var "_lsTail", [Var "_hks_prime"]),
                         generate_op
                           z
-                          (Fn (["x"; "ks"],
-                               callk_yielding
-                                 (Call (Var "_lsCons",
-                                        [k; Call (Var "_lsCons",
-                                                  [e; Call (Var "_lsCons",
-                                                            [Var "_k_prime"; Var "ks"])])]))
-                                 (Var "x")))
-                          (Var "_e_prime")
-                          (Var "_eks_prime"))))))
+                          (Var "_h_prime")
+                          (Call (Var "_lsCons",
+                                 [Fn (["x"; "ks"],
+                                       callk_yielding
+                                         (Call (Var "_lsCons",
+                                                [k; Call (Var "_lsCons",
+                                                          [h; Call (Var "_lsCons",
+                                                                    [Var "_k_prime"; Var "ks"])])]))
+                                         (Var "x"));
+                                  Var "_hks_prime"])))))))
            in           
-           Fn (["_f"; "__kappa"],
-               apply_yielding
-                 (Var "_f",
-                  [Fn (["_z"; "__kappa"],
-                       Bind ("_k", Call (Var "_lsHead", [Var "__kappa"]),
-                       Bind ("_eks", Call (Var "_lsTail", [Var "__kappa"]),
-                       Bind ("_e", Call (Var "_lsHead", [Var "_eks"]),
-                       Bind ("_ks", Call (Var "_lsTail", [Var "_eks"]),
-                             Case ("_z",
-                                   clauses (Var "_k") (Var "_e") (Var "_ks"),
-                                   Some ("_z", forward (Var "_z") (Var "_k") (Var "_e") (Var "_ks"))))))))],
-                  Var "__kappa"))
+           Fn (["_z"; "__kappa"],
+               Bind ("_k", Call (Var "_lsHead", [Var "__kappa"]),
+               Bind ("_hks", Call (Var "_lsTail", [Var "__kappa"]),
+               Bind ("_h", Call (Var "_lsHead", [Var "_hks"]),
+               Bind ("_ks", Call (Var "_lsTail", [Var "_hks"]),
+                     Case ("_z",
+                           clauses (Var "_k") (Var "_h") (Var "_ks"),
+                           Some ("_z", forward (Var "_z") (Var "_k") (Var "_h") (Var "_ks"))))))))
          in
          Call (m, [Call (Var "_lsCons", [return; Call (Var "_lsCons", [operations; kappa])])])
 
-and generate_op z k e eks =
-  callk_yielding eks
-    (Fn (["h"; "ks"],
-         apply_yielding
-           (Var "h",
-            [z],
-            Call (Var "_lsCons", [k; Call (Var "_lsCons", [e; Var "ks"])]))))
+and generate_op z h ks =
+  apply_yielding (h, [z], ks)
 
 and generate_computation env : Ir.computation -> code -> (venv * code) =
   fun (bs, tc) kappa ->
