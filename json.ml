@@ -158,7 +158,7 @@ let show_processes procs =
   let show_process (pid, (proc, msgs)) =
     let ps = jsonize_value proc in
     let ms = jsonize_value (`List msgs) in
-    "{\"pid\":\"" ^ (ProcessID.to_string pid) ^ "\"," ^
+    "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
     " \"process\":" ^ ps ^ "," ^
     " \"messages\":" ^ ms ^ "}" in
   let bnds = PidMap.bindings procs in
@@ -175,14 +175,14 @@ let show_handlers evt_handlers =
 
 let show_aps aps =
   let ap_list = AccessPointIDSet.elements aps in
-  String.concat "," (List.map (AccessPointID.to_string) ap_list)
+  String.concat "," (List.map (AccessPointID.to_json) ap_list)
 
 let print_json_state client_id conn_opt procs handlers aps =
     let ws_url_data =
     (match conn_opt with
        | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
        | None -> "") in
-  "{\"client_id\":\"" ^ ClientID.to_string client_id ^ "\"," ^
+  "{\"client_id\":" ^ (ClientID.to_json client_id) ^ "," ^
    ws_url_data ^
    "\"access_points\":" ^ "[" ^ (show_aps aps) ^ "]" ^ "," ^
    "\"processes\":" ^ "[" ^ (show_processes procs) ^ "]" ^ "," ^
