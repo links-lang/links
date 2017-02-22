@@ -15,18 +15,34 @@ open WebsocketMessages
 let websocket_req assoc_list =
   let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
   (* If we add more opcodes in, we might have to push these inwards *)
-  let pid =
-    ProcessID.of_string @@
-    Value.unbox_string (List.assoc "destPid" assoc_list) in
-  let msg = (List.assoc "msg" assoc_list) in
+  let get_field field = List.assoc field assoc_list in
+  let get_and_unbox_str = Value.unbox_string -<- get_field in
+
+  let parse_srv_ap_msg () =
+    let blocked_pid =
+          ProcessID.of_string (get_and_unbox_str "blockedClientPid") in
+    let server_apid =
+      AccessPointID.of_string (get_and_unbox_str "serverAPID") in
+    (blocked_pid, server_apid)
+
 
   match opcode with
     | "CLIENT_TO_CLIENT" ->
+        let pid = ProcessID.of_string (get_and_unbox_str "destPid") in
+        let msg = get_field "msg" in
         let client_id =
-          ClientID.of_string @@
-          Value.unbox_string (List.assoc "destClientId" assoc_list) in
+          ClientID.of_string @@ get_and_unbox_str "destClientId" in
         ClientToClient (client_id, pid, msg)
-    | "CLIENT_TO_SERVER" -> ClientToServer (pid, msg)
+    | "CLIENT_TO_SERVER" ->
+        let pid = ProcessID.of_string (get_and_unbox_str "destPid") in
+        let msg = (List.assoc "msg" assoc_list) in
+        ClientToServer (pid, msg)
+    | "SERVER_AP_REQUEST" ->
+        let (pid, apid) = parse_srv_ap_msg () in
+        APRequest (pid, apid)
+    | "SERVER_AP_ACCEPT" ->
+        let (pid, apid) = parse_srv_ap_msg () in
+        APAccept (pid, apid)
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 

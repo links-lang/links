@@ -307,27 +307,18 @@ struct
         match ap with
           | `ClientAccessPoint _ ->
               (* TODO: Work out the semantics of this *)
-              failwith "Cannot accept on a client AP on the server"
+              failwith "Cannot *yet* accept on a client AP on the server"
           | `ServerAccessPoint apid ->
-              Session.accept apid >>= fun (ch, blocked) ->
-              (* TODO: can we get this cleaner? So ugly... *)
-              begin
-                match ch with
-                  | (c, d) ->
-                    let boxed_channel = Value.box_channel ch in
-                    Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
-                    (* ("accepting: (" ^ epid1_str ^ ", " ^ epid2_str ^ ")");*)
-                      if blocked then
-                          (* block my end of the channel *)
-                          (Session.block c (Proc.get_current_pid ());
-                           Proc.block (fun () -> apply_cont cont env boxed_channel))
-                      else
-                          (* unblock the other end of the channel *)
-                          ((match Session.unblock d with
-                          | Some pid -> Proc.awaken pid
-                          | None     -> assert false);
-                        apply_cont cont env boxed_channel)
-              end
+              Session.accept apid >>= fun ((c, d) as ch, blocked) ->
+              let boxed_channel = Value.box_channel ch in
+              Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
+              if blocked then
+                  (* block my end of the channel *)
+                  (Session.block c (Proc.get_current_pid ());
+                   Proc.block (fun () -> apply_cont cont env boxed_channel))
+              else
+                (* other end will have been unblocked in proc *)
+                apply_cont cont env boxed_channel
       end
     | `PrimitiveFunction ("request", _), [ap] ->
       let ap = Value.unbox_access_point ap in
@@ -335,26 +326,19 @@ struct
         match ap with
           | `ClientAccessPoint _ ->
               (* TODO: Work out the semantics of this *)
-              failwith "Cannot *yet* request from a client-spawned AP"
+              failwith "Cannot *yet* request from a client-spawned AP on the server"
           | `ServerAccessPoint apid ->
-              Session.request apid >>= fun (ch, blocked) ->
-              begin
-                match ch with
-                  | (c, d) ->
-                    let boxed_channel = Value.box_channel ch in
-                    Debug.print ("requesting: " ^ Value.string_of_value boxed_channel );
-                      if blocked then
-                        (* block my end of the channel *)
-                        (Session.block c (Proc.get_current_pid ());
-                        Proc.block (fun () -> apply_cont cont env boxed_channel))
-                      else
-                        (* unblock the other end of the channel *)
-                        ((match Session.unblock d with
-                            | Some pid -> Proc.awaken pid
-                            | None     -> assert false);
-                        apply_cont cont env boxed_channel)
-              end
-        end
+              Session.request apid >>= fun ((c, d) as ch, blocked) ->
+              let boxed_channel = Value.box_channel ch in
+              if blocked then
+                (* block my end of the channel *)
+                (Session.block c (Proc.get_current_pid ());
+                Proc.block (fun () -> apply_cont cont env boxed_channel))
+              else
+                (* Otherwise, other end will have been unblocked in proc.ml,
+                 * return new channel EP *)
+                apply_cont cont env boxed_channel
+      end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Value.unbox_channel chan in

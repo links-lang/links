@@ -55,6 +55,13 @@ module type WEBSOCKETS =
       process_id ->
       Value.t ->
       unit
+
+    (** Sends a response to an AP request / accept *)
+    val send_ap_response :
+      client_id ->
+      process_id ->
+      chan ->
+      unit
   end
 
 module type MAILBOX =
@@ -73,13 +80,11 @@ sig
   val send_server_message : Value.t -> process_id -> unit
 end
 
-module rec Websockets : WEBSOCKETS
-and Mailbox : MAILBOX
 
 exception UnknownProcessID of process_id
 exception UnknownClientID of client_id
 
-module Session :
+module type SESSION =
 sig
   type chan = Value.chan
 
@@ -90,6 +95,8 @@ sig
 
   val accept : apid -> (chan * bool) Lwt.t
   val request : apid -> (chan * bool) Lwt.t
+  val ap_request_from_client : client_id -> apid -> unit Lwt.t
+  val ap_accept_from_client : client_id -> apid -> unit Lwt.t
 
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
@@ -99,3 +106,7 @@ sig
 
   val link : chan -> chan -> unit
 end
+
+module rec Websockets : WEBSOCKETS
+and Mailbox : MAILBOX
+and Session : SESSION
