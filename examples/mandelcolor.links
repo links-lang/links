@@ -176,7 +176,7 @@ fun main() {
   var p = spawnClient {goMandelMadness(-.1.0 *. realUnit, -.1.0 *. realUnit, realUnit, realUnit, 512.0)};
 
   # HACK: the reference to p ensures the process is actually sent to the client
-  page <div l:onload="{ignore(p)}"/>
+  page <div />
 }
 
 main()
