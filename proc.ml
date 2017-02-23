@@ -259,12 +259,16 @@ struct
     reset_step_counter ();
     run' pfun
 
-  let atomically pfun =
+  let atomically_inner pfun =
     let previously_atomic = !atomic in
     atomic := true;
     let v = run' pfun in
     atomic := previously_atomic;
-    snd v
+    v
+
+  let atomically pfun =
+    snd @@ atomically_inner pfun
+
 end
 
 exception UnknownProcessID of process_id
@@ -286,14 +290,14 @@ module type WEBSOCKETS =
       client_id ->
       process_id ->
       Value.t ->
-      unit
+      unit Lwt.t
 
     (** Sends a response to an AP request / accept *)
     val send_ap_response :
       client_id ->
       process_id ->
-      chan ->
-      unit
+      Value.chan ->
+      unit Lwt.t
   end
 
 module type MAILBOX =
@@ -303,7 +307,7 @@ sig
     client_id -> process_id-> Value.t list
   val pop_message : unit -> Value.t option
 
-  val send_client_message : Value.t -> client_id ->  process_id -> unit
+  val send_client_message : Value.t -> client_id ->  process_id -> unit Lwt.t
   val send_server_message : Value.t -> process_id -> unit
 end
 
@@ -318,6 +322,8 @@ sig
 
   val accept : apid -> (chan * bool) Lwt.t
   val request : apid -> (chan * bool) Lwt.t
+  val ap_request_from_client : client_id -> process_id -> apid -> unit Lwt.t
+  val ap_accept_from_client : client_id -> process_id -> apid -> unit Lwt.t
 
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
@@ -368,45 +374,47 @@ struct
   }
 
   let send_message wsocket str_msg =
-    (* Without buffering, does this guarantee in-order delivery? *)
-    (* Websockets *do*, but we might need to maintain an outgoing
-    * buffer in case async scheduling doesn't. *)
-    async ( fun () ->
-      Lwt.wrap1 (wsocket.send_fn) @@ (
-        Some (
-        Websocket_cohttp_lwt.Frame.of_bytes @@
-        BytesLabels.of_string @@
-        str_msg)
-      )
+    Lwt.wrap1 (wsocket.send_fn) @@ (
+      Some (
+      Websocket_cohttp_lwt.Frame.of_bytes @@
+      BytesLabels.of_string @@
+      str_msg)
     )
 
   let send_buffered_messages cid wsocket =
     match (Hashtbl.lookup client_buffered_messages cid) with
       | Some (queue) ->
           let rec drain () =
-            if Queue.is_empty queue then () else
+            if Queue.is_empty queue then Lwt.return () else
             let str_msg = Queue.pop queue in
             Debug.print @@ "Sending buffered message " ^ str_msg;
-            send_message wsocket str_msg;
+            send_message wsocket str_msg >>= fun _ ->
             drain () in
-          drain ();
-          Hashtbl.remove client_buffered_messages cid
-      | None -> ()
+          drain () >>= fun _ ->
+          Lwt.return @@ Hashtbl.remove client_buffered_messages cid
+      | None -> Lwt.return ()
 
   let decode_message json_str =
     Jsonparse.parse_websocket_request Jsonlex.jsonlex
       (Lexing.from_string json_str)
 
-  let decode_and_handle data =
+  let decode_and_handle client_id data =
     match decode_message data with
       | ClientToClient (cid, pid, msg) ->
-          Mailbox.send_client_message msg cid pid
+          Proc.atomically_inner
+            (fun () -> Mailbox.send_client_message msg cid pid)
       | ClientToServer (serv_pid, msg) ->
-          Mailbox.send_server_message msg serv_pid
-      | APRequest (blocked_client_pid, apid) ->
-          Session.ap_request_from_client blocked_client_pid apid
-      | APAccept (blocked_client_pid, apid) ->
-          Session.ap_accept_from_client blocked_client_pid apid
+          Proc.atomically_inner
+            (fun () -> Lwt.return @@ Mailbox.send_server_message msg serv_pid)
+      | APRequest (blocked_pid_on_client, apid) ->
+          Proc.atomically_inner
+            (fun () ->
+              Session.ap_request_from_client client_id
+                blocked_pid_on_client apid)
+      | APAccept (blocked_pid_on_client, apid) ->
+          Proc.atomically_inner
+            (fun () -> Session.ap_accept_from_client client_id
+              blocked_pid_on_client apid)
 
     let recvLoop client_id frame =
     let open Frame in
@@ -422,11 +430,14 @@ struct
             Debug.print @@
               Printf.sprintf "Received: %s from client %s\n"
                 data (ClientID.to_string client_id);
-            try decode_and_handle data
+            begin
+            try decode_and_handle client_id data
             with
-              | exn -> Debug.print @@
+              | exn ->
+                  Debug.print @@
                   Printf.sprintf "Could not decode websocket request: %s\n"
-                    (Printexc.to_string exn);
+                    (Printexc.to_string exn)
+            end;
             loop ()
       in
     loop ()
@@ -438,7 +449,7 @@ struct
       let links_ws = make_links_websocket client_id send_fn in
       Debug.print @@ "Registering websocket for client " ^ (ClientID.to_string client_id);
       register_websocket client_id links_ws;
-      send_buffered_messages client_id links_ws;
+      send_buffered_messages client_id links_ws >>= fun _ ->
       Lwt.return (resp, body)
 
   let send_or_buffer_message cid msg =
@@ -450,7 +461,7 @@ struct
           Debug.print
             @@ "Could not find websocket for client ID " ^
                  (ClientID.to_string cid) ^ "; buffering";
-          buffer_message cid msg
+          Lwt.return @@ buffer_message cid msg
 
   let deliver_process_message client_id pid v =
     let json_val = Json.jsonize_value v in
@@ -465,7 +476,7 @@ struct
     let str_val =
       "{\"opcode\":\"AP_RESPONSE\", \"blocked_pid\":" ^ (ProcessID.to_json pid) ^
       ", \"chan\": " ^ json_ch ^ "}" in
-    send_or_buffer_message client_id str_val
+    send_or_buffer_message cid str_val
 
   (* Debug *)
   let _send_raw_string wsocket str = send_message wsocket str
@@ -550,14 +561,14 @@ struct
         | NotFound _ -> PidMap.empty in
       try
         let pid_queue = PidMap.find pid client_queue_map in
-        Queue.push msg pid_queue
+        Lwt.return @@ Queue.push msg pid_queue
       with
         | NotFound _ ->
             let new_queue = Queue.create () in
             Queue.push msg new_queue;
             let new_queue_map =
               PidMap.add pid new_queue client_queue_map in
-            Hashtbl.replace client_message_queues client_id new_queue_map
+            Lwt.return (Hashtbl.replace client_message_queues client_id new_queue_map)
 
   let send_client_message (msg : Value.t) client_id pid =
     (* Here, we need to check whether the process is active.
@@ -662,141 +673,113 @@ and Session : SESSION = struct
           res
       | None -> []
 
-  let accept : apid -> (chan * bool) Lwt.t =
+
+  (* Returns: channel to be returned, whether to block this thread.
+   * Side effects: if an accept happens successfully (i.e. blocked is false), then
+   * the other end of the channel will be unblocked -- in the case of a server request, then
+   * the appropriate stuff will be done within Session.unblock and Proc.unblock.
+   * In the case of a client request, an unblock message will be sent.
+   * Also updates the AP state.
+   * *)
+  let accept_core : apid -> (chan * bool) Lwt.t =
     fun apid ->
       let state = Hashtbl.find access_points apid in
       let res =
         match state with
         | Balanced             ->
             new_channel () >>= fun ch ->
-            let sr = ServerRequest ch in
-            Lwt.return (ch, Accepting [sr], true)
-        | Accepting cs         ->
+            let r = ServerRequest ch in
+            Lwt.return (ch, Accepting [r], true)
+        | Accepting rs         ->
             new_channel () >>= fun ch ->
-            let cr = ServerRequest ch in
-            Lwt.return (ch, Accepting (cs @ [sr]), true)
-        | Requesting [c]       ->
-            Lwt.return (c, Balanced, false)
-        | Requesting (c :: cs) ->
-            Lwt.return (c, Requesting cs, false)
+            let r = ServerRequest ch in
+            Lwt.return (ch, Accepting (rs @ [r]), true)
+        | Requesting [req]       ->
+            begin
+            match req with
+              | ServerRequest ch ->
+                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
+                  Lwt.return (ch, Balanced, false)
+              | ClientRequest (cid, pid, ch) ->
+                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+                  Lwt.return (ch, Balanced, false)
+            end
+        | Requesting (r :: rs) ->
+            begin
+            match r with
+              | ServerRequest ch ->
+                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
+                  Lwt.return (ch, Requesting rs, false)
+              | ClientRequest (cid, pid, ch) ->
+                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+                  Lwt.return (ch, Requesting rs, false)
+            end
         | Requesting []        ->
             assert false (* TODO: check that this is impossible *)
       in
         res >>= fun (c, state', blocked) ->
         Hashtbl.replace access_points apid state';
-        (* If not blocked, then unblock the other end of the channel *)
-        if not blocked then Session.unblock (OptionUtils.val_of (snd c)) else ();
         Lwt.return (c, blocked)
 
-  let ap_accept_from_client cid pid apid =
-    let state = Hashtbl.find access_points apid in
-    let res =
-      match state with
-      | Balanced ->
-          new_channel () >>= fun ch ->
-          let cr = ClientRequest (cid, pid, ch) in
-          Lwt.return (Accepting [cr], None)
-      | Accepting cs ->
-          new_channel () >>= fun ch ->
-          let cr = ClientRequest (cid, pid, ch) in
-          Lwt.return (Accepting (cs @ [cr], None))
-      | Requesting [c] ->
-          Lwt.return (Balanced, Some c)
-      | Requesting (c :: cs) ->
-          Lwt.return (Requesting cs, Some c)
-      | Requesting [] -> assert false in
-    res >>= fun (new_state, existing_req_opt) ->
-    Hashtbl.replace access_points apid new_state;
-    match existing_req_opt with
-       | Some (ClientRequest (other_cid, other_pid, our_end_of_ch)) ->
-           let other_end_of_ch = flip_chan other_end_of_ch in
-           (* Send websocket messages to both clients to notify them of the connection *)
-           send_ap_response other_cid other_pid other_end_of_ch;
-           send_ap_response cid pid our_end_of_ch;
-           Lwt.return ()
-       | Some (ServerRequest (our_end_of_ch)) ->
-           (* Unblock other end of the channel *)
-           begin
-           match Session.unblock (snd our_end_of_ch) with
-            | Some pid -> Proc.awaken pid
-            | None -> assert false
-           end;
-           (* Now, send a message to the websocket with the channel *)
-           send_ap_response cid pid our_end_of_ch;
-           Lwt.return ()
-       | None ->
-           (* Nothing doing *)
-           Lwt.return ()
 
-  let request : apid -> (chan * bool) Lwt.t =
+  let accept : apid -> (chan * bool) Lwt.t = accept_core
+
+  let ap_accept_from_client cid pid apid =
+    accept_core apid >>= fun (ch, blocked) ->
+    if not blocked then
+      Websockets.send_ap_response cid pid ch
+    else
+      Lwt.return ()
+
+  let request_core : apid -> (chan * bool) Lwt.t =
     fun apid ->
       let state = Hashtbl.find access_points apid in
       let res =
         match state with
         | Balanced            ->
             new_channel () >>= fun ch ->
-            let sr = ServerRequest ch in
-            Lwt.return (ch, Requesting [sr], true)
-        | Requesting cs       ->
+            let r = ServerRequest ch in
+            Lwt.return (ch, Requesting [r], true)
+        | Requesting rs       ->
             new_channel () >>= fun ch ->
-            let sr = ServerRequest ch in
-            Lwt.return (ch, Requesting (srs @ [sr]), true)
-        | Accepting [c]       ->
-            Lwt.return (c, Balanced, false)
-        | Accepting (sr :: srs) ->
-            Lwt.return (c, Accepting srs, false)
+            let r = ServerRequest ch in
+            Lwt.return (ch, Requesting (rs @ [r]), true)
+        | Accepting [r]       ->
+            begin
+            match r with
+              | ServerRequest ch ->
+                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
+                  Lwt.return (ch, Balanced, false)
+              | ClientRequest (cid, pid, ch) ->
+                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+                  Lwt.return (ch, Balanced, false)
+            end
+        | Accepting (r :: rs) ->
+            begin
+            match r with
+              | ServerRequest ch ->
+                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
+                  Lwt.return (ch, Accepting rs, false)
+              | ClientRequest (cid, pid, ch) ->
+                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+                  Lwt.return (ch, Accepting rs, false)
+            end
         | Accepting []        ->
             assert false (* TODO: check that this is impossible *)
       in
         res >>= fun (c, state', blocked) ->
-        let our_end_of_chan = flip_chan c in
-        (* If not blocked, then unblock the other end of the channel *)
-        if not blocked then
-          Session.unblock (OptionUtils.val_of (snd our_end_of_chan)) else ();
         Hashtbl.replace access_points apid state';
+        let our_end_of_chan = flip_chan c in
         Lwt.return (our_end_of_chan, blocked)
 
+  let request : apid -> (chan * bool) Lwt.t = request_core
 
   let ap_request_from_client cid pid apid =
-    let state = Hashtbl.find access_points apid in
-    let res =
-      match state with
-      | Balanced ->
-          new_channel () >>= fun ch ->
-          let cr = ClientRequest (cid, pid, ch) in
-          Lwt.return (Requesting [cr], None)
-      | Requesting cs ->
-          new_channel () >>= fun ch ->
-          let cr = ClientRequest (cid, pid, ch) in
-          Lwt.return (Requesting (cs @ [cr], None))
-      | Accepting [c] ->
-          Lwt.return (Balanced, Some c)
-      | Accepting (c :: cs) ->
-          Lwt.return (Accepting cs, Some c)
-      | Accepting [] -> assert false in
-    res >>= fun (new_state, existing_req_opt) ->
-    Hashtbl.replace access_points apid new_state;
-    match existing_req_opt with
-       | Some (ClientRequest (other_cid, other_pid, other_end_of_ch)) ->
-           let our_end_of_ch = flip_chan other_end_of_ch in
-           (* Send websocket messages to both clients to notify them of the connection *)
-           send_ap_response other_cid other_pid other_end_of_ch;
-           send_ap_response cid pid our_end_of_ch;
-           Lwt.return ()
-       | Some (ServerRequest (other_end_of_ch)) ->
-           let our_end_of_ch = flip_chan other_end_of_ch in
-           (* Unblock other end of the channel *)
-           begin
-           match Session.unblock (snd our_end_of_ch) with
-            | Some pid -> Proc.awaken pid
-            | None -> assert false
-           end;
-           (* Now, send a message to the websocket with the channel *)
-           send_ap_response cid pid our_end_of_ch;
-           Lwt.return ()
-       | None ->
-           (* Nothing doing *)
-           Lwt.return ()
+    request_core apid >>= fun (ch, blocked) ->
+    if not blocked then
+      Websockets.send_ap_response cid pid ch
+    else
+      Lwt.return ()
 
   let find_active p =
     Unionfind.find (Hashtbl.find forward p)

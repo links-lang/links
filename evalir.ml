@@ -218,14 +218,14 @@ struct
              match unboxed_pid with
               (* Send a message to a process which lives on the server *)
               | `ServerPid serv_pid ->
-                  Mailbox.send_server_message msg serv_pid
+                  Lwt.return @@ Mailbox.send_server_message msg serv_pid
               (* Send a message to a process which lives on another client *)
               | `ClientPid (client_id, process_id) ->
                   Mailbox.send_client_message msg client_id process_id
            with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
-                   failwith("Couldn't deliver message because destination process has no mailbox."));
+                   failwith("Couldn't deliver message because destination process has no mailbox.")) >>= fun _ ->
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
         let req_data = Value.request_data env in
@@ -309,7 +309,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* accept on a client AP on the server"
           | `ServerAccessPoint apid ->
-              Session.accept apid >>= fun ((c, d) as ch, blocked) ->
+              Session.accept apid >>= fun ((c, _) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
               if blocked then
@@ -328,7 +328,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* request from a client-spawned AP on the server"
           | `ServerAccessPoint apid ->
-              Session.request apid >>= fun ((c, d) as ch, blocked) ->
+              Session.request apid >>= fun ((c, _) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               if blocked then
                 (* block my end of the channel *)

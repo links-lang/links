@@ -54,14 +54,14 @@ module type WEBSOCKETS =
       client_id ->
       process_id ->
       Value.t ->
-      unit
+      unit Lwt.t
 
     (** Sends a response to an AP request / accept *)
     val send_ap_response :
       client_id ->
       process_id ->
-      chan ->
-      unit
+      Value.chan ->
+      unit Lwt.t
   end
 
 module type MAILBOX =
@@ -75,7 +75,7 @@ sig
     Value.t ->
     client_id ->
     process_id ->
-    unit
+    unit Lwt.t
 
   val send_server_message : Value.t -> process_id -> unit
 end
@@ -95,8 +95,8 @@ sig
 
   val accept : apid -> (chan * bool) Lwt.t
   val request : apid -> (chan * bool) Lwt.t
-  val ap_request_from_client : client_id -> apid -> unit Lwt.t
-  val ap_accept_from_client : client_id -> apid -> unit Lwt.t
+  val ap_request_from_client : client_id -> process_id -> apid -> unit Lwt.t
+  val ap_accept_from_client : client_id -> process_id -> apid -> unit Lwt.t
 
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option

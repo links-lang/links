@@ -23,7 +23,7 @@ let websocket_req assoc_list =
           ProcessID.of_string (get_and_unbox_str "blockedClientPid") in
     let server_apid =
       AccessPointID.of_string (get_and_unbox_str "serverAPID") in
-    (blocked_pid, server_apid)
+    (blocked_pid, server_apid) in
 
 
   match opcode with
