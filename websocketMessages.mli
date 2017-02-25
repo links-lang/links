@@ -9,3 +9,5 @@ type incoming_websocket_message =
   | APRequest of (process_id * apid)
   (* Accept on a server access point *)
   | APAccept of (process_id * apid)
+  (* Send a message to a remote channel. *)
+  | ChanSend of (channel_id * Value.t)

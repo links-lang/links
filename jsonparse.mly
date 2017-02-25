@@ -43,6 +43,12 @@ let websocket_req assoc_list =
     | "SERVER_AP_ACCEPT" ->
         let (pid, apid) = parse_srv_ap_msg () in
         APAccept (pid, apid)
+    | "REMOTE_SESSION_SEND" ->
+        let remote_ep =
+          ChannelID.of_string -<- Value.unbox_string @@
+          List.assoc "remoteEP" assoc_list in
+        let msg = List.assoc "msg" assoc_list in
+        ChanSend (remote_ep, msg)
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 

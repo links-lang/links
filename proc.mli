@@ -62,6 +62,14 @@ module type WEBSOCKETS =
       process_id ->
       Value.chan ->
       unit Lwt.t
+
+    (** Delivers a message along a session channel *)
+    val deliver_session_message :
+      client_id ->
+      channel_id ->
+      Value.t ->
+      unit Lwt.t
+
   end
 
 module type MAILBOX =
@@ -101,7 +109,8 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send : Value.t -> channel_id -> unit
+  val send : Value.t -> channel_id -> unit Lwt.t
+  val send_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
   val receive : channel_id -> Value.t option
 
   val link : chan -> chan -> unit
