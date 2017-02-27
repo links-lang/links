@@ -720,6 +720,18 @@ let expr_to_contframe env expr =
    (env           : env),
    (([], expr)    : Ir.computation))
 
+let rec get_contained_channels v =
+  let get_list_contained_channels xs =
+    List.fold_left (fun acc x -> (get_contained_channels x) @ acc) [] xs in
+
+  match v with
+    | `List xs -> get_list_contained_channels xs
+    | `Record xs -> get_list_contained_channels @@ List.map snd xs
+    | `Variant (_, x) -> get_contained_channels x
+    | `FunctionPtr (_, (Some x)) -> get_contained_channels x
+    | `SessionChannel c -> [c]
+    | _ -> []
+
 let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
 and value_of_xmlitem =
   function

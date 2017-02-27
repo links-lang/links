@@ -177,6 +177,9 @@ val unmarshal_value : env -> string -> t
 val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)
 
+(* Given a value, retreives a list of channels that are contained inside *)
+val get_contained_channels : t -> chan list
+
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml

@@ -410,8 +410,10 @@ struct
   let decode_and_handle client_id data =
     match decode_message data with
       | ClientToClient (cid, pid, msg) ->
+          Proc.resolve_external_processes msg;
           Mailbox.send_client_message msg cid pid
       | ClientToServer (serv_pid, msg) ->
+          Proc.resolve_external_processes msg;
           Lwt.return @@ Mailbox.send_server_message msg serv_pid
       | APRequest (blocked_pid_on_client, apid) ->
           Session.ap_request_from_client client_id blocked_pid_on_client apid
@@ -419,6 +421,7 @@ struct
           Session.ap_accept_from_client client_id blocked_pid_on_client apid
       | ChanSend (chan_id, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
+          Proc.resolve_external_processes v;
           Session.send v chan_id
 
     let recvLoop client_id frame =
@@ -600,11 +603,20 @@ end
 and Session : SESSION = struct
 
   type buffer = Value.t Queue.t
+  type delegation_buffer = buffer
+  type value_list = Value.t list
 
   type channel_state =
     | Local (* Receive endpoint resides on the server *)
     | Remote of client_id (* Receive endpoint resides on client_id *)
-    | Delegating of (buffer * client_id) (* Delegation in progress to client_id, storing buffer in the meantime *)
+    (* Delegation in progress to channel_id.
+     * value_list is the buffer sent with the delegation signal.
+     * buffer is the buffer of values that have been queued since delegation started.
+     * The "true" buffer is value_list + lost messages + buffer, where lost messages
+     * are messages that have been sent to the first client after delegation started
+     * but before the server received the message to start delegating the channel.
+     * *)
+    | Delegating of (value_list * buffer * channel_id)
 
   (* Send channel ID * Receive channel ID *)
   (* Invariant: receive endpoint must reside on the same VM. *)
@@ -852,7 +864,7 @@ and Session : SESSION = struct
           OptionUtils.opt_iter Proc.awaken (Session.unblock send_port);
           Lwt.return ()
       | Remote client_id -> send_remote msg client_id send_port
-      | Delegating (buf, _cid) -> Lwt.return @@ Queue.push msg buf
+      | Delegating (_init_buf, buf, _cid) -> Lwt.return @@ Queue.push msg buf
 
   let receive recv_port =
       (* Debug.print ("Receiving on: " ^ string_of_int p); *)
