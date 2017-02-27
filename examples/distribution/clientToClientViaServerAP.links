@@ -24,7 +24,7 @@ module ClientCommon {
     var caption = if (isPinger) { "Send Ping!" } else { "Send Pong!" };
     page
       <html>
-        <head>Links Server AP test</head>
+        <head>Links Server AP test: client to client</head>
         <h1>Hello!</h1>
         <button id="pingButton" l:onclick="{clPid ! SendPingPong}" disabled="disabled" >
           { stringToXml(caption) }
@@ -90,7 +90,7 @@ module Ponger {
     receive {
       case SendPingPong ->
         var ch = send(Pong, ch);
-        logMessage("Send Pong!");
+        logMessage("Sent Pong!");
         disableButton();
         commLoop(ch)
     }
