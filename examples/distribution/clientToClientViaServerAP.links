@@ -38,7 +38,7 @@ module ClientCommon {
 module Pinger {
   open ClientCommon
 
-  sig commThread : (AP(PingPong)) { hear { :[|SendPingPong|] } |e}~> ()
+  sig commThread : (AP(PingPong)) ~%e~> ()
   fun commThread(ap) {
     # Request a channel from the access point
     var ch = request(ap);
@@ -48,7 +48,7 @@ module Pinger {
   }
 
   ## Why does this need this annotation?
-  sig commLoop : (~PingPong) { hear{ :[|SendPingPong|] } | e}~> ()
+  sig commLoop : (~PingPong) ~%e~>()
   fun commLoop(ch) {
     receive {
       case SendPingPong ->
@@ -74,7 +74,7 @@ module Pinger {
 module Ponger {
   open ClientCommon
 
-  sig commThread : (AP(PingPong)) { hear { :[|SendPingPong|] } |e}~> ()
+  sig commThread : (AP(PingPong)) ~%e~> ()
   fun commThread(ap) {
     # Accept a channel from the access point
     var ch = accept(ap);
@@ -82,7 +82,7 @@ module Ponger {
     commLoop(ch)
   }
 
-  sig commLoop : (PingPong) { hear{ :[|SendPingPong|] } | e}~> ()
+  sig commLoop : (PingPong) ~%e~>()
   fun commLoop(ch) {
     var (_, ch) = receive(ch);
     logMessage("Received Ping!");
