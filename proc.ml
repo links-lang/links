@@ -418,6 +418,7 @@ struct
       | APAccept (blocked_pid_on_client, apid) ->
           Session.ap_accept_from_client client_id blocked_pid_on_client apid
       | ChanSend (chan_id, v) ->
+          Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Session.send v chan_id
 
     let recvLoop client_id frame =
@@ -702,6 +703,11 @@ and Session : SESSION = struct
           | Some (cid, pid) -> ClientRequest (cid, pid, ch)
           | None -> ServerRequest ch in
 
+      let register_and_notify_peer their_cid their_pid ch =
+        let their_end_of_chan = flip_chan ch in
+        Hashtbl.replace endpoint_states (snd their_end_of_chan) (Remote their_cid);
+        Websockets.send_ap_response their_cid their_pid their_end_of_chan in
+
       let res =
         match state with
         | Balanced             ->
@@ -718,8 +724,8 @@ and Session : SESSION = struct
               | ServerRequest ch ->
                   OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
                   Lwt.return (ch, Balanced, false)
-              | ClientRequest (cid, pid, ch) ->
-                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+              | ClientRequest (their_cid, their_pid, ch) ->
+                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
                   Lwt.return (ch, Balanced, false)
             end
         | Requesting (r :: rs) ->
@@ -728,8 +734,8 @@ and Session : SESSION = struct
               | ServerRequest ch ->
                   OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
                   Lwt.return (ch, Requesting rs, false)
-              | ClientRequest (cid, pid, ch) ->
-                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+              | ClientRequest (their_cid, their_pid, ch) ->
+                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
                   Lwt.return (ch, Requesting rs, false)
             end
         | Requesting []        ->
@@ -745,11 +751,12 @@ and Session : SESSION = struct
   let ap_accept_from_client cid pid apid =
     accept_core apid (Some (cid, pid)) >>= fun (ch, blocked) ->
     (* Mark endpoint as remote *)
-    Hashtbl.replace endpoint_states (fst ch) (Remote cid);
+    Hashtbl.replace endpoint_states (snd ch) (Remote cid);
     if not blocked then
       Websockets.send_ap_response cid pid ch
     else
       Lwt.return ()
+
 
   let request_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
     fun apid client_info_opt ->
@@ -757,6 +764,10 @@ and Session : SESSION = struct
         match client_info_opt with
           | Some (cid, pid) -> ClientRequest (cid, pid, ch)
           | None -> ServerRequest ch in
+
+      let register_and_notify_peer their_cid their_pid ch =
+        Hashtbl.replace endpoint_states (fst ch) (Remote their_cid);
+        Websockets.send_ap_response their_cid their_pid ch in
 
       let state = Hashtbl.find access_points apid in
       let res =
@@ -775,8 +786,8 @@ and Session : SESSION = struct
               | ServerRequest ch ->
                   OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
                   Lwt.return (ch, Balanced, false)
-              | ClientRequest (cid, pid, ch) ->
-                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+              | ClientRequest (their_cid, their_pid, ch) ->
+                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
                   Lwt.return (ch, Balanced, false)
             end
         | Accepting (r :: rs) ->
@@ -785,8 +796,8 @@ and Session : SESSION = struct
               | ServerRequest ch ->
                   OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
                   Lwt.return (ch, Accepting rs, false)
-              | ClientRequest (cid, pid, ch) ->
-                  Websockets.send_ap_response cid pid ch >>= fun _ ->
+              | ClientRequest (their_cid, their_pid, ch) ->
+                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
                   Lwt.return (ch, Accepting rs, false)
             end
         | Accepting []        ->
