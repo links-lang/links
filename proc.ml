@@ -429,6 +429,9 @@ struct
     let rec loop () =
       match frame.opcode with
         | Opcode.Close ->
+            (* FIXME: Need to be smarter here. Try and reconnect? Schedule a cleanup?
+             * For now, it might be best to just do the nuclear option and delete all
+             * associated state (buffers, entries in access points, etc.) *)
             deregister_websocket client_id;
             Debug.print @@
             Printf.sprintf "Websocket closed for client %s\n"
@@ -494,6 +497,11 @@ struct
         json_val ^ "}" in
     send_or_buffer_message client_id json_str
 
+  let get_lost_msgs_message client_id session_ep v =
+    let json_str = "{\"opcode\": \"GET_LOST_MESSAGES\", \"ep_id\":" ^
+      (ChannelID.to_json session_ep) ^ "}" in
+    send_or_buffer_message client_id json_str
+
   (* Debug *)
   let _send_raw_string wsocket str = send_message wsocket str
 end
@@ -510,8 +518,9 @@ struct
   let client_message_queues : (client_id, client_queue_map) Hashtbl.t = Hashtbl.create 10000
 
   (* Create the main process's message queue *)
-  (* SJF Assumption -- this is the main *server* thread, i.e. the entrypoint from running ./links <file>
-   * Where does the request-main's MB get created? (i.e. the entrypoint from evaluating a request) *)
+  (* FIXME: This no longer makes sense. main_process_pid should be generated based on client ID.
+   * Currently, this will mean that any sends to the main thread for each request will persist over
+   * different requests, which is wholly incorrect behaviour. *)
   let _ = Hashtbl.add server_message_queues
     (Proc.main_process_pid)
     (Queue.create ())
